@@ -109,11 +109,7 @@ class BackgroundProcessor:
             return
 
         try:
-            repo = (
-                self.request_repo
-                if processor_db == self.db
-                else SqliteRequestRepositoryAdapter(processor_db)
-            )
+            repo = self._get_request_repo_for_db(processor_db)
             request = await repo.async_get_request_by_id(request_id)
             if not request:
                 logger.error(
@@ -172,114 +168,144 @@ class BackgroundProcessor:
                 },
             )
         except StageError as exc:
-            error_payload = self._build_error_payload(exc.stage, exc.original)
-            cid = (request or {}).get("correlation_id") or correlation_id
-            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
-            target_repo = (
-                self.request_repo
-                if processor_db == self.db
-                else SqliteRequestRepositoryAdapter(processor_db)
-            )
-            await persist_request_failure(
-                request_repo=target_repo,
-                logger=logger,
+            await self._handle_stage_error(
                 request_id=request_id,
-                correlation_id=cid,
-                stage=exc.stage,
-                component="background_processor",
-                reason_code=error_payload["error_code"],
-                error=exc.original,
-                retryable=True,
-                attempt=self._retry.attempts,
-                max_attempts=self._retry.attempts,
-                processing_time_ms=elapsed_ms,
-            )
-            if request:
-                await self._mark_status(
-                    processor_db,
-                    request_id,
-                    "error",
-                    cid,
-                )
-            await self._publish_update(
-                request_id,
-                "FAILED",
-                exc.stage.upper(),
-                str(exc.original),
-                0.0,
-                error=str(exc.original),
-            )
-            logger.error(
-                "bg_processing_failed",
-                exc_info=True,
-                extra={
-                    "correlation_id": cid,
-                    "request_id": request_id,
-                    **error_payload,
-                },
+                correlation_id=correlation_id,
+                processor_db=processor_db,
+                request=request,
+                stage_error=exc,
+                started_at=started_at,
             )
         except asyncio.CancelledError:
-            # Handle task cancellation explicitly - ensure lock release and re-raise
-            logger.warning(
-                "bg_processing_cancelled",
-                extra={
-                    "correlation_id": correlation_id,
-                    "request_id": request_id,
-                },
-            )
-            if request:
-                await self._mark_status(
-                    processor_db,
-                    request_id,
-                    "cancelled",
-                    correlation_id or request.get("correlation_id"),
-                )
-            await self._publish_update(request_id, "CANCELLED", "CANCELLED", "Task cancelled", 0.0)
-            raise  # Re-raise CancelledError after cleanup
-        except Exception as exc:  # pragma: no cover - defensive
-            error_payload = self._build_error_payload("unknown", exc)
-            cid = (request or {}).get("correlation_id") or correlation_id
-            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
-            target_repo = (
-                self.request_repo
-                if processor_db == self.db
-                else SqliteRequestRepositoryAdapter(processor_db)
-            )
-            await persist_request_failure(
-                request_repo=target_repo,
-                logger=logger,
+            await self._handle_cancelled(
                 request_id=request_id,
-                correlation_id=cid,
-                stage="unknown",
-                component="background_processor",
-                reason_code=REASON_UNKNOWN_EXTRACTION_FAILURE,
-                error=exc,
-                retryable=True,
-                attempt=self._retry.attempts,
-                max_attempts=self._retry.attempts,
-                processing_time_ms=elapsed_ms,
+                correlation_id=correlation_id,
+                processor_db=processor_db,
+                request=request,
             )
-            if request:
-                await self._mark_status(
-                    processor_db,
-                    request_id,
-                    "error",
-                    cid,
-                )
-            await self._publish_update(
-                request_id, "FAILED", "UNKNOWN", str(exc), 0.0, error=str(exc)
-            )
-            logger.error(
-                "bg_processing_failed",
-                exc_info=True,
-                extra={
-                    "correlation_id": cid,
-                    "request_id": request_id,
-                    **error_payload,
-                },
+            raise
+        except Exception as exc:  # pragma: no cover - defensive
+            await self._handle_unexpected_error(
+                request_id=request_id,
+                correlation_id=correlation_id,
+                processor_db=processor_db,
+                request=request,
+                exc=exc,
+                started_at=started_at,
             )
         finally:
             await self._release_lock(lock_handle)
+
+    def _get_request_repo_for_db(
+        self, db: DatabaseSessionManager
+    ) -> SqliteRequestRepositoryAdapter:
+        if db == self.db:
+            return self.request_repo
+        return SqliteRequestRepositoryAdapter(db)
+
+    async def _handle_stage_error(
+        self,
+        *,
+        request_id: int,
+        correlation_id: str | None,
+        processor_db: DatabaseSessionManager,
+        request: dict[str, Any] | None,
+        stage_error: StageError,
+        started_at: float,
+    ) -> None:
+        error_payload = self._build_error_payload(stage_error.stage, stage_error.original)
+        cid = (request or {}).get("correlation_id") or correlation_id
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        target_repo = self._get_request_repo_for_db(processor_db)
+
+        await persist_request_failure(
+            request_repo=target_repo,
+            logger=logger,
+            request_id=request_id,
+            correlation_id=cid,
+            stage=stage_error.stage,
+            component="background_processor",
+            reason_code=error_payload["error_code"],
+            error=stage_error.original,
+            retryable=True,
+            attempt=self._retry.attempts,
+            max_attempts=self._retry.attempts,
+            processing_time_ms=elapsed_ms,
+        )
+        if request:
+            await self._mark_status(processor_db, request_id, "error", cid)
+        await self._publish_update(
+            request_id,
+            "FAILED",
+            stage_error.stage.upper(),
+            str(stage_error.original),
+            0.0,
+            error=str(stage_error.original),
+        )
+        logger.error(
+            "bg_processing_failed",
+            exc_info=True,
+            extra={"correlation_id": cid, "request_id": request_id, **error_payload},
+        )
+
+    async def _handle_cancelled(
+        self,
+        *,
+        request_id: int,
+        correlation_id: str | None,
+        processor_db: DatabaseSessionManager,
+        request: dict[str, Any] | None,
+    ) -> None:
+        logger.warning(
+            "bg_processing_cancelled",
+            extra={"correlation_id": correlation_id, "request_id": request_id},
+        )
+        if request:
+            await self._mark_status(
+                processor_db,
+                request_id,
+                "cancelled",
+                correlation_id or request.get("correlation_id"),
+            )
+        await self._publish_update(request_id, "CANCELLED", "CANCELLED", "Task cancelled", 0.0)
+
+    async def _handle_unexpected_error(
+        self,
+        *,
+        request_id: int,
+        correlation_id: str | None,
+        processor_db: DatabaseSessionManager,
+        request: dict[str, Any] | None,
+        exc: Exception,
+        started_at: float,
+    ) -> None:
+        error_payload = self._build_error_payload("unknown", exc)
+        cid = (request or {}).get("correlation_id") or correlation_id
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        target_repo = self._get_request_repo_for_db(processor_db)
+
+        await persist_request_failure(
+            request_repo=target_repo,
+            logger=logger,
+            request_id=request_id,
+            correlation_id=cid,
+            stage="unknown",
+            component="background_processor",
+            reason_code=REASON_UNKNOWN_EXTRACTION_FAILURE,
+            error=exc,
+            retryable=True,
+            attempt=self._retry.attempts,
+            max_attempts=self._retry.attempts,
+            processing_time_ms=elapsed_ms,
+        )
+        if request:
+            await self._mark_status(processor_db, request_id, "error", cid)
+        await self._publish_update(request_id, "FAILED", "UNKNOWN", str(exc), 0.0, error=str(exc))
+        logger.error(
+            "bg_processing_failed",
+            exc_info=True,
+            extra={"correlation_id": cid, "request_id": request_id, **error_payload},
+        )
 
     def _maybe_override_db(
         self, db_path: str | None

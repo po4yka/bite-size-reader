@@ -88,7 +88,8 @@ class DbWriteQueue:
             try:
                 await self._worker_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("DbWriteQueue worker cancellation acknowledged")
+                return
         finally:
             self._worker_task = None
             logger.info("DbWriteQueue stopped")

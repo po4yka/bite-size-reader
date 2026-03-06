@@ -151,130 +151,50 @@ class BotFactory:
         if ui_lang == "auto":
             ui_lang = "en"
 
-        # Create response formatter (will be wired to telegram_client later)
-        response_formatter = ResponseFormatter(
+        response_formatter = BotFactory._create_response_formatter(
+            cfg=cfg,
             safe_reply_func=safe_reply_func,
             reply_json_func=reply_json_func,
-            telegram_limits=cfg.telegram_limits,
-            telegram_config=cfg.telegram,
             verbosity_resolver=verbosity_resolver,
-            admin_log_chat_id=cfg.telegram.admin_log_chat_id,
-            lang=ui_lang,
+            ui_lang=ui_lang,
         )
 
-        # Determine topic search limit (moved up for URLProcessor dependency)
         topic_search_max_results = BotFactory._get_topic_search_limit(cfg)
 
-        # Create topic search service first (needed by URLProcessor for web search enrichment)
-        # Requires cloud Firecrawl client -- skip if no API key configured
-        topic_searcher = None
-        if clients.firecrawl is not None:
-            topic_searcher = TopicSearchService(
-                firecrawl=clients.firecrawl,
-                max_results=topic_search_max_results,
-                audit_func=audit_func,
-            )
-
-        # Create URL processor with scraper chain (multi-provider fallback)
-        url_processor = URLProcessor(
+        topic_searcher = BotFactory._create_topic_searcher(
+            clients=clients,
+            topic_search_max_results=topic_search_max_results,
+            audit_func=audit_func,
+        )
+        (
+            url_processor,
+            forward_processor,
+            attachment_processor,
+        ) = BotFactory._build_processing_components(
             cfg=cfg,
             db=db,
-            firecrawl=clients.scraper_chain,
-            openrouter=clients.llm_client,
+            clients=clients,
             response_formatter=response_formatter,
+            topic_searcher=topic_searcher,
             audit_func=audit_func,
-            sem=sem_func,
-            topic_search=topic_searcher if cfg.web_search.enabled else None,
+            sem_func=sem_func,
             db_write_queue=db_write_queue,
         )
 
-        # Create forward processor
-        forward_processor = ForwardProcessor(
+        search_stack = BotFactory._build_search_stack(
             cfg=cfg,
             db=db,
-            openrouter=clients.llm_client,
-            response_formatter=response_formatter,
+            clients=clients,
             audit_func=audit_func,
-            sem=sem_func,
-            db_write_queue=db_write_queue,
+            topic_search_max_results=topic_search_max_results,
         )
-
-        # Create attachment processor
-        attachment_processor = AttachmentProcessor(
-            cfg=cfg,
-            db=db,
-            openrouter=clients.llm_client,
-            response_formatter=response_formatter,
-            audit_func=audit_func,
-            sem=sem_func,
-            db_write_queue=db_write_queue,
-        )
-
-        # Initialize vector store with graceful degradation
-        # ChromaDB is optional - bot will function without vector search if unavailable
-        vector_store: ChromaVectorStore | None = None
-        try:
-            vector_store = ChromaVectorStore(
-                host=cfg.vector_store.host,
-                auth_token=cfg.vector_store.auth_token,
-                environment=cfg.vector_store.environment,
-                user_scope=cfg.vector_store.user_scope,
-                collection_version=cfg.vector_store.collection_version,
-                required=cfg.vector_store.required,
-                connection_timeout=cfg.vector_store.connection_timeout,
-            )
-            if not vector_store.available:
-                logger.warning(
-                    "chroma_not_available_continuing",
-                    extra={"host": cfg.vector_store.host},
-                )
-        except Exception as e:
-            logger.warning(
-                "chroma_init_failed_continuing_without_vector_search",
-                extra={"error": str(e), "host": cfg.vector_store.host},
-            )
-            vector_store = None
-
-        # Create local search service
-        local_searcher = LocalTopicSearchService(
-            db=db,
-            max_results=topic_search_max_results,
-            audit_func=audit_func,
-        )
-
-        # Create hybrid search services
-        embedding_service = EmbeddingService()
-        embedding_generator = SummaryEmbeddingGenerator(db=db, embedding_service=embedding_service)
-        query_expansion_service = QueryExpansionService(
-            max_expansions=5,
-            use_synonyms=True,
-        )
-
-        # ChromaVectorSearchService handles None vector_store gracefully
-        chroma_vector_search_service: ChromaVectorSearchService | None = None
-        if vector_store is not None:
-            chroma_vector_search_service = ChromaVectorSearchService(
-                vector_store=vector_store,
-                embedding_service=embedding_service,
-                default_top_k=topic_search_max_results * 2,
-            )
-
-        reranking_service = OpenRouterRerankingService(
-            client=clients.llm_client,
-            top_k=topic_search_max_results * 2,
-            timeout_sec=cfg.runtime.request_timeout_sec,
-        )
-
-        # HybridSearchService can work with FTS-only when vector_service is None
-        hybrid_search_service = HybridSearchService(
-            fts_service=local_searcher,
-            vector_service=chroma_vector_search_service,
-            fts_weight=1.0 if chroma_vector_search_service is None else 0.4,
-            vector_weight=0.0 if chroma_vector_search_service is None else 0.6,
-            max_results=topic_search_max_results,
-            query_expansion=query_expansion_service,
-            reranking=reranking_service,
-        )
+        vector_store = search_stack["vector_store"]
+        local_searcher = search_stack["local_searcher"]
+        embedding_service = search_stack["embedding_service"]
+        embedding_generator = search_stack["embedding_generator"]
+        query_expansion_service = search_stack["query_expansion_service"]
+        chroma_vector_search_service = search_stack["chroma_vector_search_service"]
+        hybrid_search_service = search_stack["hybrid_search_service"]
 
         from app.di.container import Container
 
@@ -303,38 +223,12 @@ class BotFactory:
         # Wire response formatter to telegram client
         response_formatter._telegram_client = telegram_client
 
-        # Initialize forum topic manager if enabled
-        if cfg.telegram.forum_topics_enabled:
-            from app.adapters.telegram.topic_manager import TopicManager
-
-            topic_manager = TopicManager()
-            response_formatter._summary_presenter._topic_manager = topic_manager
-            telegram_client.topic_manager = topic_manager
-            logger.info("forum_topic_manager_initialized")
-
-        # Create adaptive timeout service for intelligent timeout estimation
-        adaptive_timeout_service: AdaptiveTimeoutService | None = None
-        if cfg.adaptive_timeout is not None:
-            try:
-                adaptive_timeout_service = AdaptiveTimeoutService(
-                    config=cfg.adaptive_timeout,
-                    session_manager=db,
-                )
-                logger.info(
-                    "adaptive_timeout_service_initialized",
-                    extra={
-                        "enabled": cfg.adaptive_timeout.enabled,
-                        "default_timeout_sec": cfg.adaptive_timeout.default_timeout_sec,
-                        "min_timeout_sec": cfg.adaptive_timeout.min_timeout_sec,
-                        "max_timeout_sec": cfg.adaptive_timeout.max_timeout_sec,
-                    },
-                )
-            except Exception as e:
-                logger.warning(
-                    "adaptive_timeout_service_init_failed",
-                    extra={"error": str(e)},
-                )
-                adaptive_timeout_service = None
+        BotFactory._configure_forum_topics(
+            cfg=cfg,
+            response_formatter=response_formatter,
+            telegram_client=telegram_client,
+        )
+        adaptive_timeout_service = BotFactory._create_adaptive_timeout_service(cfg=cfg, db=db)
 
         # Create message handler (will be wired with URL processor entrypoint by TelegramBot)
         message_handler = MessageHandler(
@@ -411,3 +305,197 @@ class BotFactory:
             return 10
 
         return limit
+
+    @staticmethod
+    def _build_search_stack(
+        *,
+        cfg: AppConfig,
+        db: DatabaseSessionManager,
+        clients: ExternalClients,
+        audit_func: Callable[[str, str, dict], None],
+        topic_search_max_results: int,
+    ) -> dict[str, Any]:
+        vector_store: ChromaVectorStore | None = None
+        try:
+            vector_store = ChromaVectorStore(
+                host=cfg.vector_store.host,
+                auth_token=cfg.vector_store.auth_token,
+                environment=cfg.vector_store.environment,
+                user_scope=cfg.vector_store.user_scope,
+                collection_version=cfg.vector_store.collection_version,
+                required=cfg.vector_store.required,
+                connection_timeout=cfg.vector_store.connection_timeout,
+            )
+            if not vector_store.available:
+                logger.warning(
+                    "chroma_not_available_continuing",
+                    extra={"host": cfg.vector_store.host},
+                )
+        except Exception as e:
+            logger.warning(
+                "chroma_init_failed_continuing_without_vector_search",
+                extra={"error": str(e), "host": cfg.vector_store.host},
+            )
+            vector_store = None
+
+        local_searcher = LocalTopicSearchService(
+            db=db,
+            max_results=topic_search_max_results,
+            audit_func=audit_func,
+        )
+        embedding_service = EmbeddingService()
+        embedding_generator = SummaryEmbeddingGenerator(db=db, embedding_service=embedding_service)
+        query_expansion_service = QueryExpansionService(max_expansions=5, use_synonyms=True)
+
+        chroma_vector_search_service: ChromaVectorSearchService | None = None
+        if vector_store is not None:
+            chroma_vector_search_service = ChromaVectorSearchService(
+                vector_store=vector_store,
+                embedding_service=embedding_service,
+                default_top_k=topic_search_max_results * 2,
+            )
+
+        reranking_service = OpenRouterRerankingService(
+            client=clients.llm_client,
+            top_k=topic_search_max_results * 2,
+            timeout_sec=cfg.runtime.request_timeout_sec,
+        )
+        hybrid_search_service = HybridSearchService(
+            fts_service=local_searcher,
+            vector_service=chroma_vector_search_service,
+            fts_weight=1.0 if chroma_vector_search_service is None else 0.4,
+            vector_weight=0.0 if chroma_vector_search_service is None else 0.6,
+            max_results=topic_search_max_results,
+            query_expansion=query_expansion_service,
+            reranking=reranking_service,
+        )
+        return {
+            "vector_store": vector_store,
+            "local_searcher": local_searcher,
+            "embedding_service": embedding_service,
+            "embedding_generator": embedding_generator,
+            "query_expansion_service": query_expansion_service,
+            "chroma_vector_search_service": chroma_vector_search_service,
+            "hybrid_search_service": hybrid_search_service,
+        }
+
+    @staticmethod
+    def _configure_forum_topics(
+        *,
+        cfg: AppConfig,
+        response_formatter: ResponseFormatter,
+        telegram_client: TelegramClient,
+    ) -> None:
+        if not cfg.telegram.forum_topics_enabled:
+            return
+        from app.adapters.telegram.topic_manager import TopicManager
+
+        topic_manager = TopicManager()
+        response_formatter._summary_presenter._topic_manager = topic_manager
+        telegram_client.topic_manager = topic_manager
+        logger.info("forum_topic_manager_initialized")
+
+    @staticmethod
+    def _create_adaptive_timeout_service(
+        *, cfg: AppConfig, db: DatabaseSessionManager
+    ) -> AdaptiveTimeoutService | None:
+        if cfg.adaptive_timeout is None:
+            return None
+        try:
+            service = AdaptiveTimeoutService(
+                config=cfg.adaptive_timeout,
+                session_manager=db,
+            )
+            logger.info(
+                "adaptive_timeout_service_initialized",
+                extra={
+                    "enabled": cfg.adaptive_timeout.enabled,
+                    "default_timeout_sec": cfg.adaptive_timeout.default_timeout_sec,
+                    "min_timeout_sec": cfg.adaptive_timeout.min_timeout_sec,
+                    "max_timeout_sec": cfg.adaptive_timeout.max_timeout_sec,
+                },
+            )
+            return service
+        except Exception as e:
+            logger.warning(
+                "adaptive_timeout_service_init_failed",
+                extra={"error": str(e)},
+            )
+            return None
+
+    @staticmethod
+    def _create_response_formatter(
+        *,
+        cfg: AppConfig,
+        safe_reply_func: Callable,
+        reply_json_func: Callable,
+        verbosity_resolver: VerbosityResolver,
+        ui_lang: str,
+    ) -> ResponseFormatter:
+        return ResponseFormatter(
+            safe_reply_func=safe_reply_func,
+            reply_json_func=reply_json_func,
+            telegram_limits=cfg.telegram_limits,
+            telegram_config=cfg.telegram,
+            verbosity_resolver=verbosity_resolver,
+            admin_log_chat_id=cfg.telegram.admin_log_chat_id,
+            lang=ui_lang,
+        )
+
+    @staticmethod
+    def _create_topic_searcher(
+        *,
+        clients: ExternalClients,
+        topic_search_max_results: int,
+        audit_func: Callable[[str, str, dict], None],
+    ) -> TopicSearchService | None:
+        if clients.firecrawl is None:
+            return None
+        return TopicSearchService(
+            firecrawl=clients.firecrawl,
+            max_results=topic_search_max_results,
+            audit_func=audit_func,
+        )
+
+    @staticmethod
+    def _build_processing_components(
+        *,
+        cfg: AppConfig,
+        db: DatabaseSessionManager,
+        clients: ExternalClients,
+        response_formatter: ResponseFormatter,
+        topic_searcher: TopicSearchService | None,
+        audit_func: Callable[[str, str, dict], None],
+        sem_func: Callable[[], asyncio.Semaphore],
+        db_write_queue: DbWriteQueue | None,
+    ) -> tuple[URLProcessor, ForwardProcessor, AttachmentProcessor]:
+        url_processor = URLProcessor(
+            cfg=cfg,
+            db=db,
+            firecrawl=clients.scraper_chain,
+            openrouter=clients.llm_client,
+            response_formatter=response_formatter,
+            audit_func=audit_func,
+            sem=sem_func,
+            topic_search=topic_searcher if cfg.web_search.enabled else None,
+            db_write_queue=db_write_queue,
+        )
+        forward_processor = ForwardProcessor(
+            cfg=cfg,
+            db=db,
+            openrouter=clients.llm_client,
+            response_formatter=response_formatter,
+            audit_func=audit_func,
+            sem=sem_func,
+            db_write_queue=db_write_queue,
+        )
+        attachment_processor = AttachmentProcessor(
+            cfg=cfg,
+            db=db,
+            openrouter=clients.llm_client,
+            response_formatter=response_formatter,
+            audit_func=audit_func,
+            sem=sem_func,
+            db_write_queue=db_write_queue,
+        )
+        return url_processor, forward_processor, attachment_processor

@@ -230,6 +230,7 @@ def _prepare_config(args: argparse.Namespace) -> AppConfig:
                 logger.debug("loaded_env_file", extra={"path": str(candidate)})
         except Exception as exc:
             logger.warning("env_file_error", extra={"path": str(candidate), "error": str(exc)})
+            continue
 
     try:
         cfg = load_config(allow_stub_telegram=True)

@@ -1,0 +1,2571 @@
+{
+  "command": "next",
+  "items": [
+    {
+      "id": "dict_keys::app/mcp/server.py::schema_drift::collections::1295",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "high",
+      "detector": "dict_keys",
+      "file": "app/mcp/server.py",
+      "summary": "Schema drift: 7/8 dict literals use different key, but app/mcp/server.py:1295 uses \"collections\".",
+      "detail": {
+        "kind": "schema_drift",
+        "key": "collections",
+        "line": 1295,
+        "info": "Cluster of 8 similar dict literals. Key \"collections\" appears in only 1. Consensus keys: ['has_more', 'limit', 'offset', 'total']"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"dict_keys::app/mcp/server.py::schema_drift::collections::1295\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "dict_keys::app/mcp/server.py::schema_drift::videos::1438",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "high",
+      "detector": "dict_keys",
+      "file": "app/mcp/server.py",
+      "summary": "Schema drift: 7/8 dict literals use different key, but app/mcp/server.py:1438 uses \"videos\".",
+      "detail": {
+        "kind": "schema_drift",
+        "key": "videos",
+        "line": 1438,
+        "info": "Cluster of 8 similar dict literals. Key \"videos\" appears in only 1. Consensus keys: ['has_more', 'limit', 'offset', 'total']"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"dict_keys::app/mcp/server.py::schema_drift::videos::1438\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "dict_keys::app/migration/pipeline_shadow.py::phantom_read::aggregated::key_ideas",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "high",
+      "detector": "dict_keys",
+      "file": "app/migration/pipeline_shadow.py",
+      "summary": "Dict key \"key_ideas\" read at line 310 but never written to `aggregated`",
+      "detail": {
+        "kind": "phantom_read",
+        "key": "key_ideas",
+        "line": 310,
+        "info": "Created at line 306 in build_python_chunk_synthesis_prompt_snapshot_from_input() \u2014 will raise KeyError or return None via .get()"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"dict_keys::app/migration/pipeline_shadow.py::phantom_read::aggregated::key_ideas\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "dict_keys::app/migration/pipeline_shadow.py::phantom_read::aggregated::summary_250",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "high",
+      "detector": "dict_keys",
+      "file": "app/migration/pipeline_shadow.py",
+      "summary": "Dict key \"summary_250\" read at line 320 but never written to `aggregated`",
+      "detail": {
+        "kind": "phantom_read",
+        "key": "summary_250",
+        "line": 320,
+        "info": "Created at line 306 in build_python_chunk_synthesis_prompt_snapshot_from_input() \u2014 will raise KeyError or return None via .get()"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"dict_keys::app/migration/pipeline_shadow.py::phantom_read::aggregated::summary_250\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "dict_keys::app/migration/pipeline_shadow.py::phantom_read::aggregated::tldr",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "high",
+      "detector": "dict_keys",
+      "file": "app/migration/pipeline_shadow.py",
+      "summary": "Dict key \"tldr\" read at line 319 but never written to `aggregated`",
+      "detail": {
+        "kind": "phantom_read",
+        "key": "tldr",
+        "line": 319,
+        "info": "Created at line 306 in build_python_chunk_synthesis_prompt_snapshot_from_input() \u2014 will raise KeyError or return None via .get()"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"dict_keys::app/migration/pipeline_shadow.py::phantom_read::aggregated::tldr\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "dupes::scripts/migration/generate_m2_contract_fixtures.py::main::scripts/migration/generate_m3_shadow_fixtures.py::main",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "high",
+      "detector": "dupes",
+      "file": "scripts/migration/generate_m2_contract_fixtures.py",
+      "summary": "Exact dupe cluster (3 functions, 100% similar): main (scripts/migration/generate_m2_contract_fixtures.py:105), main (scripts/migration/generate_m3_shadow_fixtures.py:91), ...",
+      "detail": {
+        "fn_a": {
+          "file": "scripts/migration/generate_m2_contract_fixtures.py",
+          "name": "main",
+          "line": 105,
+          "loc": 18
+        },
+        "fn_b": {
+          "file": "scripts/migration/generate_m3_shadow_fixtures.py",
+          "name": "main",
+          "line": 91,
+          "loc": 18
+        },
+        "similarity": 1.0,
+        "kind": "exact",
+        "cluster_size": 3,
+        "cluster": [
+          {
+            "file": "scripts/migration/generate_m2_contract_fixtures.py",
+            "name": "main",
+            "line": 105,
+            "loc": 18
+          },
+          {
+            "file": "scripts/migration/generate_m3_shadow_fixtures.py",
+            "name": "main",
+            "line": 91,
+            "loc": 18
+          },
+          {
+            "file": "scripts/migration/generate_m4_interface_fixtures.py",
+            "name": "main",
+            "line": 72,
+            "loc": 18
+          }
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"dupes::scripts/migration/generate_m2_contract_fixtures.py::main::scripts/migration/generate_m3_shadow_fixtures.py::main\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "facade::app/adapters/content/scraper/__init__.py",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "high",
+      "detector": "facade",
+      "file": "app/adapters/content/scraper/__init__.py",
+      "summary": "Re-export facade (11 LOC): imports from app.adapters.content.scraper.chain, app.adapters.content.scraper.factory, app.adapters.content.scraper.protocol (0 importers)",
+      "detail": {
+        "loc": 11,
+        "importers": 0,
+        "imports_from": [
+          "app.adapters.content.scraper.chain",
+          "app.adapters.content.scraper.factory",
+          "app.adapters.content.scraper.protocol"
+        ],
+        "kind": "file"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"facade::app/adapters/content/scraper/__init__.py\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/openrouter/chat_completions.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/openrouter/chat_completions.py",
+      "summary": "2x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 2,
+        "lines": [
+          618,
+          866
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/openrouter/chat_completions.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/telegram/telegram_bot.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/telegram/telegram_bot.py",
+      "summary": "2x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 2,
+        "lines": [
+          244,
+          493
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/telegram/telegram_bot.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/content/llm_summarizer.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/content/llm_summarizer.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          555
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/content/llm_summarizer.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/external/formatting/export_formatter.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/external/formatting/export_formatter.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          418
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/external/formatting/export_formatter.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/external/formatting/notification_formatter.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/external/formatting/notification_formatter.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          727
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/external/formatting/notification_formatter.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/karakeep/sync/status_updates.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/karakeep/sync/status_updates.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          26
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/karakeep/sync/status_updates.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/openrouter/openrouter_client.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/openrouter/openrouter_client.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          74
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/openrouter/openrouter_client.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/openrouter/request_builder.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/openrouter/request_builder.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          53
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/openrouter/request_builder.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/telegram/bot_factory.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/telegram/bot_factory.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          130
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/telegram/bot_factory.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/telegram/callback_handler.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/telegram/callback_handler.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          327
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/telegram/callback_handler.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/telegram/message_handler.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/telegram/message_handler.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          177
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/telegram/message_handler.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/telegram/message_router_entrypoint.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/telegram/message_router_entrypoint.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          31
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/telegram/message_router_entrypoint.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/telegram/message_router_helpers.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/telegram/message_router_helpers.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          1090
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/telegram/message_router_helpers.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/telegram/telegram_client.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/telegram/telegram_client.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          223
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/telegram/telegram_client.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/twitter/playwright_client.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/twitter/playwright_client.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          142
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/twitter/playwright_client.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/youtube/youtube_downloader.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/youtube/youtube_downloader.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          83
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/youtube/youtube_downloader.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/youtube/youtube_downloader_parts/storage.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/youtube/youtube_downloader_parts/storage.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          24
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/youtube/youtube_downloader_parts/storage.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/youtube/youtube_downloader_parts/yt_dlp_client.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/youtube/youtube_downloader_parts/yt_dlp_client.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          53
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/youtube/youtube_downloader_parts/yt_dlp_client.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/agents/validation_agent.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/agents/validation_agent.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          49
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/agents/validation_agent.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/api/background_processor.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/api/background_processor.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          95
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/api/background_processor.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/api/middleware.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/api/middleware.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          172
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/api/middleware.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/api/middleware.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/api/middleware.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          84
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/api/middleware.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/api/routers/user.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/api/routers/user.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          195
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/api/routers/user.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/api/services/digest_api_service.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/api/services/digest_api_service.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          344
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/api/services/digest_api_service.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/api/services/sync_service.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/api/services/sync_service.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          273
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/api/services/sync_service.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/cli/add_performance_indexes.py::sys_exit_in_library",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/cli/add_performance_indexes.py",
+      "summary": "1x sys.exit() outside CLI entry point \u2014 use exceptions",
+      "detail": {
+        "smell_id": "sys_exit_in_library",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          179
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/cli/add_performance_indexes.py::sys_exit_in_library\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/cli/backfill_chroma_store.py::sys_exit_in_library",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/cli/backfill_chroma_store.py",
+      "summary": "1x sys.exit() outside CLI entry point \u2014 use exceptions",
+      "detail": {
+        "smell_id": "sys_exit_in_library",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          281
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/cli/backfill_chroma_store.py::sys_exit_in_library\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/cli/backfill_embeddings.py::sys_exit_in_library",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/cli/backfill_embeddings.py",
+      "summary": "1x sys.exit() outside CLI entry point \u2014 use exceptions",
+      "detail": {
+        "smell_id": "sys_exit_in_library",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          169
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/cli/backfill_embeddings.py::sys_exit_in_library\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/cli/init_userbot_session.py::sys_exit_in_library",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/cli/init_userbot_session.py",
+      "summary": "1x sys.exit() outside CLI entry point \u2014 use exceptions",
+      "detail": {
+        "smell_id": "sys_exit_in_library",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          60
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/cli/init_userbot_session.py::sys_exit_in_library\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/cli/migrate_db.py::sys_exit_in_library",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/cli/migrate_db.py",
+      "summary": "1x sys.exit() outside CLI entry point \u2014 use exceptions",
+      "detail": {
+        "smell_id": "sys_exit_in_library",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          80
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/cli/migrate_db.py::sys_exit_in_library\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/cli/migrations/migration_runner.py::sys_exit_in_library",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/cli/migrations/migration_runner.py",
+      "summary": "1x sys.exit() outside CLI entry point \u2014 use exceptions",
+      "detail": {
+        "smell_id": "sys_exit_in_library",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          413
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/cli/migrations/migration_runner.py::sys_exit_in_library\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/cli/search.py::sys_exit_in_library",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/cli/search.py",
+      "summary": "1x sys.exit() outside CLI entry point \u2014 use exceptions",
+      "detail": {
+        "smell_id": "sys_exit_in_library",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          335
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/cli/search.py::sys_exit_in_library\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/cli/search_compare.py::sys_exit_in_library",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/cli/search_compare.py",
+      "summary": "1x sys.exit() outside CLI entry point \u2014 use exceptions",
+      "detail": {
+        "smell_id": "sys_exit_in_library",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          245
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/cli/search_compare.py::sys_exit_in_library\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/cli/summary.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/cli/summary.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          231
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/cli/summary.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/core/html_utils.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/core/html_utils.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          249
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/core/html_utils.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/core/summary_contract_impl/contract.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/core/summary_contract_impl/contract.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          777
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/core/summary_contract_impl/contract.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/core/summary_contract_impl/contract.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/core/summary_contract_impl/contract.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          895
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/core/summary_contract_impl/contract.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/core/summary_schema.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/core/summary_schema.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          302
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/core/summary_schema.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/core/url_utils.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/core/url_utils.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          111
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/core/url_utils.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/db/database_diagnostics.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/db/database_diagnostics.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          99
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/db/database_diagnostics.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/db/models.py::mutable_class_var",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/db/models.py",
+      "summary": "1x Class-level mutable default (shared across instances)",
+      "detail": {
+        "smell_id": "mutable_class_var",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          278
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/db/models.py::mutable_class_var\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/db/query_profiler.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/db/query_profiler.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          117
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/db/query_profiler.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/db/topic_search_index.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/db/topic_search_index.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          163
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/db/topic_search_index.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/db/write_queue.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/db/write_queue.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          90
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/db/write_queue.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/grpc/client.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/grpc/client.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          367
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/grpc/client.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/grpc/shutdown.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/grpc/shutdown.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          39
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/grpc/shutdown.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/infrastructure/cache/batch_progress_cache.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/infrastructure/cache/batch_progress_cache.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          223
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/infrastructure/cache/batch_progress_cache.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/infrastructure/persistence/sqlite/repositories/collection_repository.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/infrastructure/persistence/sqlite/repositories/collection_repository.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          652
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/infrastructure/persistence/sqlite/repositories/collection_repository.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/infrastructure/persistence/sqlite/repositories/summary_repository.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/infrastructure/persistence/sqlite/repositories/summary_repository.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          454
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/infrastructure/persistence/sqlite/repositories/summary_repository.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/infrastructure/vector/chroma_store.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/infrastructure/vector/chroma_store.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          369
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/infrastructure/vector/chroma_store.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/models/telegram/telegram_message.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/models/telegram/telegram_message.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          169
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/models/telegram/telegram_message.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/models/telegram/telegram_message.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/models/telegram/telegram_message.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          445
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/models/telegram/telegram_message.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/services/reranking_service.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/services/reranking_service.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          294
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/services/reranking_service.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/services/search_filters.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/services/search_filters.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          116
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/services/search_filters.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/services/trending_cache.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/services/trending_cache.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          275
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/services/trending_cache.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::bot.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "bot.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          19
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::bot.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::scripts/check_class_size.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "scripts/check_class_size.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          125
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::scripts/check_class_size.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::scripts/karakeep_sync.py::import_path_mutation",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "scripts/karakeep_sync.py",
+      "summary": "1x sys.path mutation at import time (boundary purity leak)",
+      "detail": {
+        "smell_id": "import_path_mutation",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          24
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::scripts/karakeep_sync.py::import_path_mutation\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::scripts/karakeep_sync.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "scripts/karakeep_sync.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          35
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::scripts/karakeep_sync.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::scripts/karakeep_sync.py::silent_except",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "scripts/karakeep_sync.py",
+      "summary": "1x Except handler silently suppresses error (pass/continue, no log)",
+      "detail": {
+        "smell_id": "silent_except",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          239
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::scripts/karakeep_sync.py::silent_except\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::scripts/karakeep_sync.py::sys_exit_in_library",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "scripts/karakeep_sync.py",
+      "summary": "1x sys.exit() outside CLI entry point \u2014 use exceptions",
+      "detail": {
+        "smell_id": "sys_exit_in_library",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          251
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::scripts/karakeep_sync.py::sys_exit_in_library\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::scripts/twitter_article_live_smoke.py::import_path_mutation",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "scripts/twitter_article_live_smoke.py",
+      "summary": "1x sys.path mutation at import time (boundary purity leak)",
+      "detail": {
+        "smell_id": "import_path_mutation",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          30
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::scripts/twitter_article_live_smoke.py::import_path_mutation\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::scripts/twitter_article_live_smoke.py::sys_exit_in_library",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "scripts/twitter_article_live_smoke.py",
+      "summary": "1x sys.exit() outside CLI entry point \u2014 use exceptions",
+      "detail": {
+        "smell_id": "sys_exit_in_library",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          352
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::scripts/twitter_article_live_smoke.py::sys_exit_in_library\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "facade::app/adapters/external/firecrawl/__init__.py",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "facade",
+      "file": "app/adapters/external/firecrawl/__init__.py",
+      "summary": "Re-export facade (37 LOC): imports from app.adapters.external.firecrawl.client, app.adapters.external.firecrawl.constants, app.adapters.external.firecrawl.models (2 importers)",
+      "detail": {
+        "loc": 37,
+        "importers": 2,
+        "imports_from": [
+          "app.adapters.external.firecrawl.client",
+          "app.adapters.external.firecrawl.constants",
+          "app.adapters.external.firecrawl.models"
+        ],
+        "kind": "file"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"facade::app/adapters/external/firecrawl/__init__.py\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "facade::app/adapters/karakeep/sync_service.py",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "facade",
+      "file": "app/adapters/karakeep/sync_service.py",
+      "summary": "Re-export facade (48 LOC): imports from __future__, app.adapters.karakeep.sync.constants, app.adapters.karakeep.sync.datetime_utils, +4 (2 importers)",
+      "detail": {
+        "loc": 48,
+        "importers": 2,
+        "imports_from": [
+          "__future__",
+          "app.adapters.karakeep.sync.constants",
+          "app.adapters.karakeep.sync.datetime_utils",
+          "app.adapters.karakeep.sync.hashing",
+          "app.adapters.karakeep.sync.protocols",
+          "app.adapters.karakeep.sync.service",
+          "app.adapters.karakeep.sync.work_items"
+        ],
+        "kind": "file"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"facade::app/adapters/karakeep/sync_service.py\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "facade::app/adapters/telegram/message_persistence.py",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "facade",
+      "file": "app/adapters/telegram/message_persistence.py",
+      "summary": "Re-export facade (10 LOC): imports from app.infrastructure.persistence.message_persistence (2 importers)",
+      "detail": {
+        "loc": 10,
+        "importers": 2,
+        "imports_from": [
+          "app.infrastructure.persistence.message_persistence"
+        ],
+        "kind": "file"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"facade::app/adapters/telegram/message_persistence.py\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "facade::app/api/services/__init__.py",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "facade",
+      "file": "app/api/services/__init__.py",
+      "summary": "Re-export facade (10 LOC): imports from app.api.services.request_service, app.api.services.summary_service (1 importers)",
+      "detail": {
+        "loc": 10,
+        "importers": 1,
+        "imports_from": [
+          "app.api.services.request_service",
+          "app.api.services.summary_service"
+        ],
+        "kind": "file"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"facade::app/api/services/__init__.py\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "facade::app/grpc/__init__.py",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "facade",
+      "file": "app/grpc/__init__.py",
+      "summary": "Re-export facade (27 LOC): imports from app.grpc.client (2 importers)",
+      "detail": {
+        "loc": 27,
+        "importers": 2,
+        "imports_from": [
+          "app.grpc.client"
+        ],
+        "kind": "file"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"facade::app/grpc/__init__.py\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "facade::app/infrastructure/cache/__init__.py",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "facade",
+      "file": "app/infrastructure/cache/__init__.py",
+      "summary": "Re-export facade (17 LOC): imports from app.infrastructure.cache.auth_token_cache, app.infrastructure.cache.batch_progress_cache, app.infrastructure.cache.embedding_cache, +3 (1 importers)",
+      "detail": {
+        "loc": 17,
+        "importers": 1,
+        "imports_from": [
+          "app.infrastructure.cache.auth_token_cache",
+          "app.infrastructure.cache.batch_progress_cache",
+          "app.infrastructure.cache.embedding_cache",
+          "app.infrastructure.cache.karakeep_cache",
+          "app.infrastructure.cache.query_cache",
+          "app.infrastructure.cache.redis_cache"
+        ],
+        "kind": "file"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"facade::app/infrastructure/cache/__init__.py\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "facade::app/infrastructure/messaging/event_handlers.py",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "facade",
+      "file": "app/infrastructure/messaging/event_handlers.py",
+      "summary": "Re-export facade (27 LOC): imports from app.infrastructure.messaging.handlers.analytics, app.infrastructure.messaging.handlers.audit_log, app.infrastructure.messaging.handlers.cache_invalidation, +5 (2 importers)",
+      "detail": {
+        "loc": 27,
+        "importers": 2,
+        "imports_from": [
+          "app.infrastructure.messaging.handlers.analytics",
+          "app.infrastructure.messaging.handlers.audit_log",
+          "app.infrastructure.messaging.handlers.cache_invalidation",
+          "app.infrastructure.messaging.handlers.embedding_generation",
+          "app.infrastructure.messaging.handlers.notification",
+          "app.infrastructure.messaging.handlers.search_index",
+          "app.infrastructure.messaging.handlers.webhook",
+          "app.infrastructure.messaging.handlers.wiring"
+        ],
+        "kind": "file"
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"facade::app/infrastructure/messaging/event_handlers.py\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/adapters/content/llm_response_workflow_execution.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/adapters/content/llm_response_workflow_execution.py",
+      "summary": "No direct tests (312 LOC, 1 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 312,
+        "importer_count": 1,
+        "loc_weight": 17.663521732655695,
+        "complexity_score": 37
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/adapters/content/llm_response_workflow_execution.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/adapters/external/firecrawl/options.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/adapters/external/firecrawl/options.py",
+      "summary": "No direct tests (104 LOC, 2 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 104,
+        "importer_count": 2,
+        "loc_weight": 10.198039027185569,
+        "complexity_score": 25
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/adapters/external/firecrawl/options.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/adapters/external/formatting/export_formatter.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/adapters/external/formatting/export_formatter.py",
+      "summary": "No direct tests (660 LOC, 1 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 660,
+        "importer_count": 1,
+        "loc_weight": 25.69046515733026,
+        "complexity_score": 68
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/adapters/external/formatting/export_formatter.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/adapters/openrouter/chat_completions.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/adapters/openrouter/chat_completions.py",
+      "summary": "No direct tests (1563 LOC, 1 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 1563,
+        "importer_count": 1,
+        "loc_weight": 39.534794801541594,
+        "complexity_score": 33
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/adapters/openrouter/chat_completions.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/adapters/openrouter/request_builder.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/adapters/openrouter/request_builder.py",
+      "summary": "No direct tests (544 LOC, 1 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 544,
+        "importer_count": 1,
+        "loc_weight": 23.323807579381203,
+        "complexity_score": 118
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/adapters/openrouter/request_builder.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/core/async_utils.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/core/async_utils.py",
+      "summary": "No direct tests (11 LOC, 35 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 11,
+        "importer_count": 35,
+        "loc_weight": 3.3166247903554
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/core/async_utils.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/core/logging_utils.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/core/logging_utils.py",
+      "summary": "No direct tests (250 LOC, 52 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 250,
+        "importer_count": 52,
+        "loc_weight": 15.811388300841896
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/core/logging_utils.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/core/summary_contract_impl/contract.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/core/summary_contract_impl/contract.py",
+      "summary": "No direct tests (1062 LOC, 2 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 1062,
+        "importer_count": 2,
+        "loc_weight": 32.58834147360065,
+        "complexity_score": 149
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/core/summary_contract_impl/contract.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/db/database_request_ops.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/db/database_request_ops.py",
+      "summary": "No direct tests (339 LOC, 1 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 339,
+        "importer_count": 1,
+        "loc_weight": 18.411952639521967,
+        "complexity_score": 32
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/db/database_request_ops.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/infrastructure/cache/batch_progress_cache.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/infrastructure/cache/batch_progress_cache.py",
+      "summary": "No direct tests (315 LOC, 1 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 315,
+        "importer_count": 1,
+        "loc_weight": 17.74823934929885,
+        "complexity_score": 38
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/infrastructure/cache/batch_progress_cache.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/infrastructure/cache/karakeep_cache.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/infrastructure/cache/karakeep_cache.py",
+      "summary": "No direct tests (337 LOC, 1 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 337,
+        "importer_count": 1,
+        "loc_weight": 18.35755975068582,
+        "complexity_score": 30
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/infrastructure/cache/karakeep_cache.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/infrastructure/persistence/sqlite/base.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/infrastructure/persistence/sqlite/base.py",
+      "summary": "No direct tests (45 LOC, 16 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 45,
+        "importer_count": 16,
+        "loc_weight": 6.708203932499369
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/infrastructure/persistence/sqlite/base.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "test_coverage::app/infrastructure/persistence/sqlite/repositories/summary_repository.py::transitive_only",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "test_coverage",
+      "file": "app/infrastructure/persistence/sqlite/repositories/summary_repository.py",
+      "summary": "No direct tests (610 LOC, 17 importers) \u2014 covered only via imports from tested modules",
+      "detail": {
+        "kind": "transitive_only",
+        "loc": 610,
+        "importer_count": 17,
+        "loc_weight": 24.698178070456937
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"test_coverage::app/infrastructure/persistence/sqlite/repositories/summary_repository.py::transitive_only\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::tests/test_tier2_error_handling.py::mutable_class_var",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "low",
+      "detector": "smells",
+      "file": "tests/test_tier2_error_handling.py",
+      "summary": "2x Class-level mutable default (shared across instances)",
+      "detail": {
+        "smell_id": "mutable_class_var",
+        "severity": "high",
+        "count": 2,
+        "lines": [
+          148,
+          149
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::tests/test_tier2_error_handling.py::mutable_class_var\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    }
+  ],
+  "queue": {
+    "tier_counts": {
+      "1": 48,
+      "2": 91,
+      "3": 923,
+      "4": 29
+    },
+    "requested_tier": 2,
+    "selected_tier": 2,
+    "fallback_reason": null,
+    "available_tiers": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "total": 91
+  },
+  "narrative": {
+    "phase": "stagnation",
+    "headline": "All T1 items cleared! (48 review findings \u2014 run `desloppify issues`)",
+    "dimensions": {
+      "lowest_dimensions": [
+        {
+          "name": "Cross-module arch",
+          "strict": 44.2,
+          "issues": 5,
+          "impact": 0.0,
+          "subjective": true,
+          "impact_description": "re-review to improve"
+        },
+        {
+          "name": "Structure nav",
+          "strict": 47.4,
+          "issues": 4,
+          "impact": 0.0,
+          "subjective": true,
+          "impact_description": "re-review to improve"
+        },
+        {
+          "name": "Mid elegance",
+          "strict": 48.1,
+          "issues": 8,
+          "impact": 0.0,
+          "subjective": true,
+          "impact_description": "re-review to improve"
+        }
+      ],
+      "biggest_gap_dimensions": [],
+      "stagnant_dimensions": [
+        {
+          "name": "File health",
+          "strict": 82.8,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Code quality",
+          "strict": 92.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Duplication",
+          "strict": 97.1,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Security",
+          "strict": 100.0,
+          "stuck_scans": 5
+        }
+      ]
+    },
+    "actions": [
+      {
+        "type": "issue_queue",
+        "detector": "review",
+        "count": 48,
+        "description": "48 review findings need investigation \u2014 run `desloppify issues` to see the work queue",
+        "command": "desloppify issues",
+        "impact": 0.0,
+        "dimension": "Unknown",
+        "priority": 1,
+        "lane": "refactor_0"
+      },
+      {
+        "type": "reorganize",
+        "detector": "flat_dirs",
+        "count": 7,
+        "description": "7 flat_dirs findings \u2014 create subdirectories and use `desloppify move`",
+        "command": "desloppify show flat_dirs --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 2,
+        "lane": "restructure"
+      },
+      {
+        "type": "reorganize",
+        "detector": "single_use",
+        "count": 2,
+        "description": "2 single_use findings \u2014 inline or relocate with `desloppify move`",
+        "command": "desloppify show single_use --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 3,
+        "lane": "restructure"
+      },
+      {
+        "type": "reorganize",
+        "detector": "coupling",
+        "count": 11,
+        "description": "11 coupling findings \u2014 fix boundary violations with `desloppify move`",
+        "command": "desloppify show coupling --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 4,
+        "lane": "restructure"
+      },
+      {
+        "type": "reorganize",
+        "detector": "facade",
+        "count": 8,
+        "description": "8 facade findings \u2014 flatten re-export facades or consolidate barrel files",
+        "command": "desloppify show facade --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 5,
+        "lane": "restructure"
+      },
+      {
+        "type": "refactor",
+        "detector": "uncalled_functions",
+        "count": 1,
+        "description": "1 uncalled_functions findings \u2014 remove dead functions or document why they're retained",
+        "command": "desloppify show uncalled_functions --status open",
+        "impact": 0.0,
+        "dimension": "Unknown",
+        "priority": 6,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "structural",
+        "count": 164,
+        "description": "164 structural findings \u2014 decompose large files \u2014 extract logic into focused modules",
+        "command": "desloppify show structural --status open",
+        "impact": 0.0,
+        "dimension": "File health",
+        "priority": 7,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "props",
+        "count": 3,
+        "description": "3 props findings \u2014 split bloated components, extract sub-components",
+        "command": "desloppify show props --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 8,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "dupes",
+        "count": 9,
+        "description": "9 dupes findings \u2014 extract shared utility or consolidate duplicates",
+        "command": "desloppify show dupes --status open",
+        "impact": 0.0,
+        "dimension": "Duplication",
+        "priority": 9,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "dict_keys",
+        "count": 48,
+        "description": "48 dict_keys findings \u2014 fix dict key mismatches \u2014 dead writes are likely dead code, schema drift suggests a typo or missed rename",
+        "command": "desloppify show dict_keys --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 10,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "test_coverage",
+        "count": 191,
+        "description": "191 test_coverage findings \u2014 add tests for untested production modules \u2014 prioritize by import count",
+        "command": "desloppify show test_coverage --status open",
+        "impact": 0.0,
+        "dimension": "Test health",
+        "priority": 11,
+        "lane": "test_coverage"
+      },
+      {
+        "type": "refactor",
+        "detector": "responsibility_cohesion",
+        "count": 22,
+        "description": "22 responsibility_cohesion findings \u2014 split modules with too many responsibilities \u2014 extract focused sub-modules",
+        "command": "desloppify show responsibility_cohesion --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 12,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "boilerplate_duplication",
+        "count": 111,
+        "description": "111 boilerplate_duplication findings \u2014 extract shared boilerplate into reusable helpers or base classes",
+        "command": "desloppify show boilerplate_duplication --status open",
+        "impact": 0.0,
+        "dimension": "Duplication",
+        "priority": 13,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "smells",
+        "count": 394,
+        "description": "394 smells findings \u2014 inspect with `desloppify next` and fix manually",
+        "command": "desloppify show smells --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 14,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "global_mutable_config",
+        "count": 30,
+        "description": "30 global_mutable_config findings \u2014 refactor module-level mutable state \u2014 use explicit init functions or dependency injection",
+        "command": "desloppify show global_mutable_config --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 15,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "private_imports",
+        "count": 21,
+        "description": "21 private_imports findings \u2014 stop importing private symbols across module boundaries",
+        "command": "desloppify show private_imports --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 16,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "subjective_review",
+        "count": 11,
+        "description": "11 files need design review \u2014 run design review with dimension templates",
+        "command": "desloppify fix review",
+        "impact": 0.0,
+        "dimension": "Test health",
+        "priority": 17,
+        "lane": "refactor_1"
+      }
+    ],
+    "strategy": {
+      "fixer_leverage": {
+        "auto_fixable_count": 0,
+        "total_count": 1177,
+        "coverage": 0.0,
+        "impact_ratio": 0.0,
+        "recommendation": "none"
+      },
+      "lanes": {
+        "restructure": {
+          "actions": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "file_count": 28,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        },
+        "refactor_0": {
+          "actions": [
+            1
+          ],
+          "file_count": 1,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        },
+        "refactor_1": {
+          "actions": [
+            6,
+            7,
+            8,
+            9,
+            10,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17
+          ],
+          "file_count": 319,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        },
+        "test_coverage": {
+          "actions": [
+            11
+          ],
+          "file_count": 191,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        }
+      },
+      "can_parallelize": true,
+      "hint": "4 independent workstreams, safe to parallelize. Rescan after each phase to verify. Review: 48 finding(s) \u2014 `desloppify issues`."
+    },
+    "tools": {
+      "fixers": [],
+      "move": {
+        "available": true,
+        "relevant": true,
+        "reason": "11 coupling violations + 2 single-use files + 7 flat directories",
+        "usage": "desloppify move <source> <dest> [--dry-run]"
+      },
+      "plan": {
+        "command": "desloppify plan",
+        "description": "Generate prioritized markdown cleanup plan"
+      },
+      "badge": {
+        "generated": true,
+        "in_readme": false,
+        "path": "scorecard.png",
+        "recommendation": "Add to README: <img src=\"scorecard.png\" width=\"100%\">"
+      }
+    },
+    "debt": {
+      "overall_gap": 0.0,
+      "wontfix_count": 4,
+      "worst_dimension": "Test health",
+      "worst_gap": 0.3,
+      "trend": "stable"
+    },
+    "milestone": "All T1 items cleared!",
+    "primary_action": {
+      "command": "desloppify issues",
+      "description": "48 review findings need investigation \u2014 run `desloppify issues` to see the work queue"
+    },
+    "why_now": "4 independent workstreams, safe to parallelize. Rescan after each phase to verify. Review: 48 finding(s) \u2014 `desloppify issues`.",
+    "verification_step": {
+      "command": "desloppify scan",
+      "reason": "revalidate after changes"
+    },
+    "risk_flags": [
+      {
+        "type": "wontfix_gap",
+        "severity": "medium",
+        "message": "Strict/lenient gap is 0.0 pts with 4 wontfix findings"
+      }
+    ],
+    "strict_target": {
+      "target": 95.0,
+      "current": 63.6,
+      "gap": 31.4,
+      "state": "below",
+      "warning": null
+    },
+    "reminders": [],
+    "reminder_history": {
+      "zone_classification": 3,
+      "report_scores": 17,
+      "feedback_nudge": 3,
+      "stagnant_nudge": 15,
+      "badge_recommendation": 1,
+      "review_not_run": 1,
+      "review_findings_pending": 3
+    }
+  },
+  "overall_score": 63.6,
+  "objective_score": 84.7,
+  "strict_score": 63.6,
+  "scorecard_dimensions": [
+    {
+      "name": "File health",
+      "score": 82.8,
+      "strict": 82.8,
+      "checks": 452,
+      "issues": 112,
+      "tier": 3,
+      "subjective": false
+    },
+    {
+      "name": "AI generated debt",
+      "score": 61.2,
+      "strict": 61.2,
+      "checks": 10,
+      "issues": 2,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "ai_generated_debt"
+      ]
+    },
+    {
+      "name": "Abstraction fit",
+      "score": 52.1,
+      "strict": 52.1,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "abstraction_fitness"
+      ]
+    },
+    {
+      "name": "Code quality",
+      "score": 92.0,
+      "strict": 92.0,
+      "checks": 3264,
+      "issues": 497,
+      "tier": 3,
+      "subjective": false
+    },
+    {
+      "name": "Convention drift",
+      "score": 63.9,
+      "strict": 63.9,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "convention_outlier"
+      ]
+    },
+    {
+      "name": "Cross-module arch",
+      "score": 44.2,
+      "strict": 44.2,
+      "checks": 10,
+      "issues": 5,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "cross_module_architecture"
+      ]
+    },
+    {
+      "name": "Dep health",
+      "score": 71.0,
+      "strict": 71.0,
+      "checks": 10,
+      "issues": 1,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "dependency_health"
+      ]
+    },
+    {
+      "name": "Design coherence",
+      "score": 48.3,
+      "strict": 48.3,
+      "checks": 10,
+      "issues": 7,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "design_coherence"
+      ]
+    },
+    {
+      "name": "Duplication",
+      "score": 97.1,
+      "strict": 97.1,
+      "checks": 2772,
+      "issues": 120,
+      "tier": 3,
+      "subjective": false
+    },
+    {
+      "name": "Elegance",
+      "score": 48.5,
+      "strict": 48.5,
+      "checks": 30,
+      "issues": 17,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "high_level_elegance",
+        "mid_level_elegance",
+        "low_level_elegance"
+      ]
+    },
+    {
+      "name": "Error consistency",
+      "score": 54.9,
+      "strict": 54.9,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "error_consistency"
+      ]
+    },
+    {
+      "name": "Security",
+      "score": 100.0,
+      "strict": 100.0,
+      "checks": 905,
+      "issues": 0,
+      "tier": 4,
+      "subjective": false
+    },
+    {
+      "name": "Structure nav",
+      "score": 47.4,
+      "strict": 47.4,
+      "checks": 10,
+      "issues": 4,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "package_organization"
+      ]
+    },
+    {
+      "name": "Test health",
+      "score": 53.3,
+      "strict": 53.0,
+      "checks": 6010,
+      "issues": 202,
+      "tier": 4,
+      "subjective": false
+    },
+    {
+      "name": "Test strategy",
+      "score": 53.3,
+      "strict": 53.3,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "test_strategy"
+      ]
+    }
+  ],
+  "subjective_measures": [
+    {
+      "name": "AI generated debt",
+      "score": 61.2,
+      "strict": 61.2,
+      "checks": 10,
+      "issues": 2,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "ai_generated_debt"
+      ]
+    },
+    {
+      "name": "Abstraction fit",
+      "score": 52.1,
+      "strict": 52.1,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "abstraction_fitness"
+      ]
+    },
+    {
+      "name": "Convention drift",
+      "score": 63.9,
+      "strict": 63.9,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "convention_outlier"
+      ]
+    },
+    {
+      "name": "Cross-module arch",
+      "score": 44.2,
+      "strict": 44.2,
+      "checks": 10,
+      "issues": 5,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "cross_module_architecture"
+      ]
+    },
+    {
+      "name": "Dep health",
+      "score": 71.0,
+      "strict": 71.0,
+      "checks": 10,
+      "issues": 1,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "dependency_health"
+      ]
+    },
+    {
+      "name": "Design coherence",
+      "score": 48.3,
+      "strict": 48.3,
+      "checks": 10,
+      "issues": 7,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "design_coherence"
+      ]
+    },
+    {
+      "name": "Elegance",
+      "score": 48.5,
+      "strict": 48.5,
+      "checks": 30,
+      "issues": 17,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "high_level_elegance",
+        "mid_level_elegance",
+        "low_level_elegance"
+      ]
+    },
+    {
+      "name": "Error consistency",
+      "score": 54.9,
+      "strict": 54.9,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "error_consistency"
+      ]
+    },
+    {
+      "name": "Structure nav",
+      "score": 47.4,
+      "strict": 47.4,
+      "checks": 10,
+      "issues": 4,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "package_organization"
+      ]
+    },
+    {
+      "name": "Test strategy",
+      "score": 53.3,
+      "strict": 53.3,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "test_strategy"
+      ]
+    }
+  ],
+  "config": {
+    "target_strict_score": 95,
+    "review_max_age_days": 30,
+    "review_batch_max_files": 80,
+    "holistic_max_age_days": 30,
+    "generate_scorecard": true,
+    "badge_path": "scorecard.png",
+    "exclude": [],
+    "ignore": [],
+    "ignore_metadata": {},
+    "zone_overrides": {},
+    "review_dimensions": [],
+    "large_files_threshold": 0,
+    "props_threshold": 0,
+    "finding_noise_budget": 10,
+    "finding_noise_global_budget": 0,
+    "languages": {}
+  }
+}

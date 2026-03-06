@@ -23,6 +23,7 @@ def calculate_storage_usage(
                 total += file_path.stat().st_size
     except Exception as exc:
         logger.warning("youtube_storage_calculation_failed", extra={"error": str(exc)})
+        return total
     return total
 
 

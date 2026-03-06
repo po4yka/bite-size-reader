@@ -161,6 +161,7 @@ class TopicSearchIndexManager:
             try:
                 request_id = int(value)
             except (TypeError, ValueError):
+                self._logger.debug("topic_search_request_id_parse_failed", extra={"value": value})
                 continue
             if request_id in seen:
                 continue

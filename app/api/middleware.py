@@ -82,6 +82,7 @@ async def webapp_auth_middleware(request: Request, call_next: Callable):
             request.state.webapp_user = user
             request.state.user_id = str(user["user_id"])
         except Exception as exc:
+            request.state.webapp_auth_error = str(exc)
             logger.debug("webapp_auth_header_parse_failed", extra={"error": str(exc)})
     return await call_next(request)
 
@@ -169,12 +170,7 @@ def _get_user_id_from_auth_header(request: Request) -> str | None:
     return None
 
 
-async def rate_limit_middleware(request: Request, call_next: Callable):
-    """Redis-backed rate limiting middleware with graceful fallback."""
-    cfg = _get_cfg()
-    correlation_id = getattr(request.state, "correlation_id", None)
-
-    # Identify actor (prefer authenticated user ID, fallback to client host)
+def _resolve_rate_limit_actor(request: Request) -> str:
     user_id = getattr(request.state, "user_id", None) or _get_user_id_from_auth_header(request)
     if not user_id:
         webapp_user = getattr(request.state, "webapp_user", None)
@@ -184,8 +180,194 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
                 user_id = str(webapp_user_id)
             elif isinstance(webapp_user_id, str) and webapp_user_id.isdigit():
                 user_id = webapp_user_id
-    if not user_id:
-        user_id = request.client.host if request.client and request.client.host else "unknown"
+    if user_id:
+        return str(user_id)
+    return request.client.host if request.client and request.client.host else "unknown"
+
+
+def _build_rate_limit_response(
+    *,
+    correlation_id: str | None,
+    code: str,
+    message: str,
+    error_type: ErrorType,
+    status_code: int,
+    retry_after: int | None = None,
+    limit: int | None = None,
+    remaining: int | None = None,
+    reset: int | None = None,
+) -> JSONResponse:
+    detail_kwargs: dict[str, Any] = {
+        "code": code,
+        "message": message,
+        "error_type": error_type,
+        "retryable": True,
+    }
+    if retry_after is not None:
+        detail_kwargs["details"] = {"retry_after": retry_after}
+        detail_kwargs["retry_after"] = retry_after
+    detail = make_error(**detail_kwargs)
+    detail.correlation_id = correlation_id
+
+    headers: dict[str, str] = {}
+    if limit is not None:
+        headers["X-RateLimit-Limit"] = str(limit)
+    if remaining is not None:
+        headers["X-RateLimit-Remaining"] = str(remaining)
+    if reset is not None:
+        headers["X-RateLimit-Reset"] = str(reset)
+    if retry_after is not None:
+        headers["Retry-After"] = str(retry_after)
+
+    return JSONResponse(
+        status_code=status_code,
+        content=error_response(detail, correlation_id=correlation_id),
+        headers=headers or None,
+    )
+
+
+def _attach_rate_limit_headers(
+    *,
+    response: Any,
+    limit: int,
+    remaining: int,
+    window_start: int,
+    window: int,
+) -> Any:
+    response.headers["X-RateLimit-Limit"] = str(limit)
+    response.headers["X-RateLimit-Remaining"] = str(max(remaining, 0))
+    response.headers["X-RateLimit-Reset"] = str(window_start + window)
+    return response
+
+
+def _compute_retry_after(now: int, window_start: int, window: int, cfg: AppConfig) -> int:
+    return max((window_start + window) - now, int(window * cfg.api_limits.cooldown_multiplier))
+
+
+def _log_redis_unavailable_once(cfg: AppConfig, correlation_id: str | None, path: str) -> None:
+    global _redis_warning_logged
+    if _redis_warning_logged:
+        return
+    logger.warning(
+        "rate_limit_redis_unavailable",
+        extra={
+            "required": cfg.redis.required,
+            "correlation_id": correlation_id,
+            "path": path,
+        },
+    )
+    _redis_warning_logged = True
+
+
+async def _handle_local_rate_limit(
+    *,
+    request: Request,
+    call_next: Callable,
+    cfg: AppConfig,
+    correlation_id: str | None,
+    user_id: str,
+    bucket_limit: int,
+    window: int,
+    window_start: int,
+    now: int,
+) -> JSONResponse | Any:
+    allowed, remaining = _check_local_rate_limit(user_id, bucket_limit, window)
+    if not allowed:
+        retry_after = _compute_retry_after(now, window_start, window, cfg)
+        logger.info(
+            "rate_limit_exceeded_local",
+            extra={
+                "user_id": user_id,
+                "path": request.url.path,
+                "limit": bucket_limit,
+                "retry_after": retry_after,
+                "correlation_id": correlation_id,
+                "backend": "in-memory",
+            },
+        )
+        return _build_rate_limit_response(
+            correlation_id=correlation_id,
+            code="RATE_LIMIT_EXCEEDED",
+            message=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            error_type=ErrorType.RATE_LIMIT,
+            status_code=429,
+            retry_after=retry_after,
+            limit=bucket_limit,
+            remaining=0,
+            reset=window_start + window,
+        )
+
+    response = await call_next(request)
+    return _attach_rate_limit_headers(
+        response=response,
+        limit=bucket_limit,
+        remaining=remaining,
+        window_start=window_start,
+        window=window,
+    )
+
+
+async def _handle_redis_rate_limit(
+    *,
+    request: Request,
+    call_next: Callable,
+    cfg: AppConfig,
+    correlation_id: str | None,
+    redis_client: Any,
+    user_id: str,
+    bucket_limit: int,
+    window: int,
+    window_start: int,
+    now: int,
+) -> JSONResponse | Any:
+    key = redis_key(cfg.redis.prefix, "rate", user_id, str(window_start))
+    ttl = max(window + 5, int(window * cfg.api_limits.cooldown_multiplier))
+    pipe = redis_client.pipeline()
+    pipe.incr(key)
+    pipe.expire(key, ttl)
+    count, _ = await pipe.execute()
+
+    if count > bucket_limit:
+        retry_after = _compute_retry_after(now, window_start, window, cfg)
+        logger.info(
+            "rate_limit_exceeded",
+            extra={
+                "user_id": user_id,
+                "path": request.url.path,
+                "limit": bucket_limit,
+                "count": count,
+                "retry_after": retry_after,
+                "correlation_id": correlation_id,
+            },
+        )
+        return _build_rate_limit_response(
+            correlation_id=correlation_id,
+            code="RATE_LIMIT_EXCEEDED",
+            message=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            error_type=ErrorType.RATE_LIMIT,
+            status_code=429,
+            retry_after=retry_after,
+            limit=bucket_limit,
+            remaining=0,
+            reset=window_start + window,
+        )
+
+    response = await call_next(request)
+    return _attach_rate_limit_headers(
+        response=response,
+        limit=bucket_limit,
+        remaining=max(bucket_limit - count, 0),
+        window_start=window_start,
+        window=window,
+    )
+
+
+async def rate_limit_middleware(request: Request, call_next: Callable):
+    """Redis-backed rate limiting middleware with graceful fallback."""
+    cfg = _get_cfg()
+    correlation_id = getattr(request.state, "correlation_id", None)
+
+    user_id = _resolve_rate_limit_actor(request)
     try:
         route_decision = await _get_interface_router_runner(cfg).resolve_mobile_route(
             method=request.method,
@@ -198,16 +380,12 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
             "m4_interface_router_resolution_failed",
             extra={"error": str(exc), "path": request.url.path, "correlation_id": correlation_id},
         )
-        detail = make_error(
+        return _build_rate_limit_response(
+            correlation_id=correlation_id,
             code="INTERFACE_ROUTER_UNAVAILABLE",
             message="Interface router unavailable. Please try again later.",
             error_type=ErrorType.INTERNAL,
-            retryable=True,
-        )
-        detail.correlation_id = correlation_id
-        return JSONResponse(
             status_code=503,
-            content=error_response(detail, correlation_id=correlation_id),
         )
 
     request.state.interface_route_key = route_decision.route_key
@@ -220,125 +398,37 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
 
     redis_client = await get_redis(cfg)
     if redis_client is None:
-        global _redis_warning_logged
-        if not _redis_warning_logged:
-            logger.warning(
-                "rate_limit_redis_unavailable",
-                extra={
-                    "required": cfg.redis.required,
-                    "correlation_id": correlation_id,
-                    "path": request.url.path,
-                },
-            )
-            _redis_warning_logged = True
+        _log_redis_unavailable_once(cfg, correlation_id, request.url.path)
 
         if cfg.redis.required:
-            detail = make_error(
+            return _build_rate_limit_response(
+                correlation_id=correlation_id,
                 code="RATE_LIMIT_BACKEND_UNAVAILABLE",
                 message="Rate limit backend unavailable. Please try again later.",
                 error_type=ErrorType.INTERNAL,
-                retryable=True,
-            )
-            detail.correlation_id = correlation_id
-            return JSONResponse(
                 status_code=503,
-                content=error_response(detail, correlation_id=correlation_id),
             )
-
-        # Use in-memory fallback rate limiting instead of bypassing
-        allowed, remaining = _check_local_rate_limit(str(user_id), bucket_limit, window)
-
-        if not allowed:
-            retry_after = max(
-                (window_start + window) - now, int(window * cfg.api_limits.cooldown_multiplier)
-            )
-            logger.info(
-                "rate_limit_exceeded_local",
-                extra={
-                    "user_id": user_id,
-                    "path": request.url.path,
-                    "limit": bucket_limit,
-                    "retry_after": retry_after,
-                    "correlation_id": correlation_id,
-                    "backend": "in-memory",
-                },
-            )
-            detail = make_error(
-                code="RATE_LIMIT_EXCEEDED",
-                message=f"Rate limit exceeded. Try again in {retry_after} seconds.",
-                error_type=ErrorType.RATE_LIMIT,
-                retryable=True,
-                details={"retry_after": retry_after},
-                retry_after=retry_after,
-            )
-            detail.correlation_id = correlation_id
-            return JSONResponse(
-                status_code=429,
-                content=error_response(detail, correlation_id=correlation_id),
-                headers={
-                    "X-RateLimit-Limit": str(bucket_limit),
-                    "X-RateLimit-Remaining": "0",
-                    "X-RateLimit-Reset": str(window_start + window),
-                    "Retry-After": str(retry_after),
-                },
-            )
-
-        response = await call_next(request)
-        response.headers["X-RateLimit-Limit"] = str(bucket_limit)
-        response.headers["X-RateLimit-Remaining"] = str(remaining)
-        response.headers["X-RateLimit-Reset"] = str(window_start + window)
-        return response
-
-    key = redis_key(cfg.redis.prefix, "rate", str(user_id), str(window_start))
-
-    # Increment counter with TTL in a pipeline
-    ttl = max(window + 5, int(window * cfg.api_limits.cooldown_multiplier))
-    pipe = redis_client.pipeline()
-    pipe.incr(key)
-    pipe.expire(key, ttl)
-    count, _ = await pipe.execute()
-
-    if count > bucket_limit:
-        retry_after = max(
-            (window_start + window) - now, int(window * cfg.api_limits.cooldown_multiplier)
-        )
-        logger.info(
-            "rate_limit_exceeded",
-            extra={
-                "user_id": user_id,
-                "path": request.url.path,
-                "limit": bucket_limit,
-                "count": count,
-                "retry_after": retry_after,
-                "correlation_id": correlation_id,
-            },
-        )
-        detail = make_error(
-            code="RATE_LIMIT_EXCEEDED",
-            message=f"Rate limit exceeded. Try again in {retry_after} seconds.",
-            error_type=ErrorType.RATE_LIMIT,
-            retryable=True,
-            details={"retry_after": retry_after},
-            retry_after=retry_after,
-        )
-        detail.correlation_id = correlation_id
-        return JSONResponse(
-            status_code=429,
-            content=error_response(detail, correlation_id=correlation_id),
-            headers={
-                "X-RateLimit-Limit": str(bucket_limit),
-                "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(window_start + window),
-                "Retry-After": str(retry_after),
-            },
+        return await _handle_local_rate_limit(
+            request=request,
+            call_next=call_next,
+            cfg=cfg,
+            correlation_id=correlation_id,
+            user_id=user_id,
+            bucket_limit=bucket_limit,
+            window=window,
+            window_start=window_start,
+            now=now,
         )
 
-    # Process request
-    response = await call_next(request)
-
-    remaining = max(bucket_limit - count, 0)
-    response.headers["X-RateLimit-Limit"] = str(bucket_limit)
-    response.headers["X-RateLimit-Remaining"] = str(remaining)
-    response.headers["X-RateLimit-Reset"] = str(window_start + window)
-
-    return response
+    return await _handle_redis_rate_limit(
+        request=request,
+        call_next=call_next,
+        cfg=cfg,
+        correlation_id=correlation_id,
+        redis_client=redis_client,
+        user_id=user_id,
+        bucket_limit=bucket_limit,
+        window=window,
+        window_start=window_start,
+        now=now,
+    )

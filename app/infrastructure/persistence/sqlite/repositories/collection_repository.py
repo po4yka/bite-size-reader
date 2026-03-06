@@ -7,6 +7,7 @@ and CollectionInvite operations.
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import uuid
 from typing import Any
 
@@ -22,6 +23,8 @@ from app.db.models import (
     model_to_dict,
 )
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+
+logger = logging.getLogger(__name__)
 
 
 def _now() -> dt.datetime:
@@ -650,6 +653,10 @@ class SqliteCollectionRepositoryAdapter(SqliteBaseRepository):
                     moved.append(sid)
                     insert_pos += 1
                 except IntegrityError:
+                    logger.debug(
+                        "collection_move_item_skipped",
+                        extra={"summary_id": sid, "target_collection_id": target.id},
+                    )
                     continue
 
             source.updated_at = _now()

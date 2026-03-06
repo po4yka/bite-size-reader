@@ -17,7 +17,7 @@ try:
 
     uvloop.install()
 except ImportError:  # pragma: no cover
-    pass
+    uvloop = None
 
 
 _log = logging.getLogger(__name__)

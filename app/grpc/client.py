@@ -366,6 +366,7 @@ class ProcessingClient:
                     progress_callback(update)
                 except Exception:
                     logger.warning("progress_callback_failed", exc_info=True)
+                    continue
 
         if last_update is None:
             raise ProcessingClientError("No updates received from server")

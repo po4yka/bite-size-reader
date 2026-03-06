@@ -7,7 +7,7 @@ This script demonstrates usage of the ProcessingClient library.
 import argparse
 import asyncio
 
-from app.grpc import ProcessingClient, ProcessingUpdate, SyncProcessingClient
+from app.grpc.client import ProcessingClient, ProcessingUpdate, SyncProcessingClient
 
 
 async def test_async_client(url: str, target: str) -> bool:

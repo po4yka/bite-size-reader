@@ -38,6 +38,7 @@ class ShutdownCoordinator:
                 await self._shutdown()
             except Exception:
                 logger.exception("grpc_shutdown_failed")
+                return
 
 
 def install_signal_handlers(

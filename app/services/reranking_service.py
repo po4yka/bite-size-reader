@@ -293,4 +293,5 @@ class OpenRouterRerankingService:
                     ]
         except Exception:
             logger.warning("llm_rerank_parse_failed")
+            return []
         return []

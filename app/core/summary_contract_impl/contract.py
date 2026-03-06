@@ -782,27 +782,40 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     through the Pydantic ``SummaryModel`` for type coercion, constraint
     enforcement, and default values.
     """
-    # Security: Validate input
+    _validate_summary_payload_input(payload)
+    p: SummaryJSON = _normalize_field_names(payload)
+
+    _backfill_summary_fields(p, payload)
+    read_src = _shape_base_summary_fields(p)
+    _populate_keywords_if_missing(p, read_src)
+    _shape_extended_summary_fields(p)
+    _shape_rag_fields(p)
+
+    # --- Pass through Pydantic for type coercion and constraint enforcement ---
+    try:
+        model = SummaryModel(**p)
+        return model.model_dump()
+    except Exception as e:
+        logger.warning("pydantic_validation_fallback", extra={"error": str(e)})
+        return p
+
+
+def _validate_summary_payload_input(payload: SummaryJSON) -> None:
     if not payload or not isinstance(payload, dict):
         msg = "Summary payload must be a non-empty dictionary"
         raise ValueError(msg)
-
-    # Security: Prevent extremely large payloads
-    if len(str(payload)) > 100000:  # 100KB limit
+    if len(str(payload)) > 100000:
         msg = "Summary payload too large"
         raise ValueError(msg)
 
-    # Normalize field names first
-    p: SummaryJSON = _normalize_field_names(payload)
 
-    # --- Summary field backfill (before Pydantic, which needs valid values) ---
+def _backfill_summary_fields(p: SummaryJSON, payload: SummaryJSON) -> None:
     tldr = str(p.get("tldr", "")).strip()
     summary_250 = str(p.get("summary_250", "")).strip()
     summary_1000 = str(p.get("summary_1000", "")).strip()
 
     if not summary_1000 and "summary" in p:
         summary_1000 = str(p.get("summary", "")).strip()
-
     if not tldr and summary_1000:
         tldr = summary_1000
     if not summary_1000 and tldr:
@@ -823,12 +836,10 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
 
     summary_250 = _cap_text(summary_250, 250)
     summary_1000 = _cap_text(summary_1000, 1000)
-
     if not summary_1000 and summary_250:
         summary_1000 = summary_250
     if not tldr:
         tldr = summary_1000 or summary_250
-
     if _tldr_needs_enrichment(tldr, summary_1000):
         tldr = _enrich_tldr_from_payload(summary_1000 or tldr, p)
 
@@ -836,69 +847,77 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     p["summary_1000"] = summary_1000
     p["tldr"] = tldr
 
-    # --- Shape complex fields that Pydantic cannot handle alone ---
+
+def _shape_base_summary_fields(p: SummaryJSON) -> str:
     p["key_ideas"] = [str(x).strip() for x in p.get("key_ideas", []) if str(x).strip()]
     p["topic_tags"] = _hash_tagify([str(x) for x in p.get("topic_tags", [])])
     p["entities"] = _normalize_entities_field(p.get("entities"))
 
-    # readability: compute locally
     rb = p.get("readability") or {}
     method = str(rb.get("method") or "Flesch-Kincaid")
     score_val = rb.get("score")
     level = rb.get("level")
     read_src = p.get("tldr") or p.get("summary_1000") or p.get("summary_250") or ""
+    score = _resolve_readability_score(score_val, read_src)
     if score_val is None or not _is_numeric(score_val) or float(score_val or 0.0) == 0.0:
-        score = 0.0
-        try:
-            score = _compute_flesch_reading_ease(read_src)
-            method = "Flesch-Kincaid"
-        except Exception:
-            try:
-                score = float(score_val or 0.0)
-            except Exception:
-                score = 0.0
-    else:
-        try:
-            score = float(score_val or 0.0)
-        except Exception:
-            score = 0.0
-
-    if not level:
-        if score >= 90:
-            level = "Very Easy"
-        elif score >= 80:
-            level = "Easy"
-        elif score >= 70:
-            level = "Fairly Easy"
-        elif score >= 60:
-            level = "Standard"
-        elif score >= 50:
-            level = "Fairly Difficult"
-        elif score >= 30:
-            level = "Difficult"
-        else:
-            level = "Very Confusing"
+        method = "Flesch-Kincaid"
     p["readability"] = {
         "method": method,
         "score": _normalize_readability_score(score),
-        "level": level,
+        "level": level or _readability_level(score),
     }
+    return str(read_src)
 
-    # keyterms: populate seo_keywords/topic_tags if missing (best-effort)
-    if not p.get("seo_keywords") or not p.get("topic_tags"):
-        try:  # pragma: no cover - optional heavy deps
-            terms = _extract_keywords_tfidf(read_src, topn=10)
-            if not p.get("seo_keywords"):
-                p["seo_keywords"] = terms[:10]
-            if not p.get("topic_tags") and terms:
-                p["topic_tags"] = _hash_tagify(terms)
-        except Exception as e:
-            logger.warning("keyword_extraction_failed", extra={"error": str(e)})
 
+def _resolve_readability_score(score_val: Any, read_src: str) -> float:
+    if score_val is None or not _is_numeric(score_val) or float(score_val or 0.0) == 0.0:
+        try:
+            return _compute_flesch_reading_ease(read_src)
+        except Exception:
+            try:
+                return float(score_val or 0.0)
+            except Exception:
+                return 0.0
+    try:
+        return float(score_val or 0.0)
+    except Exception:
+        return 0.0
+
+
+def _readability_level(score: float) -> str:
+    if score >= 90:
+        return "Very Easy"
+    if score >= 80:
+        return "Easy"
+    if score >= 70:
+        return "Fairly Easy"
+    if score >= 60:
+        return "Standard"
+    if score >= 50:
+        return "Fairly Difficult"
+    if score >= 30:
+        return "Difficult"
+    return "Very Confusing"
+
+
+def _populate_keywords_if_missing(p: SummaryJSON, read_src: str) -> None:
+    if p.get("seo_keywords") and p.get("topic_tags"):
+        return
+    terms: list[str] = []
+    try:  # pragma: no cover - optional heavy deps
+        terms = _extract_keywords_tfidf(read_src, topn=10)
+    except Exception as e:
+        logger.warning("keyword_extraction_failed", extra={"error": str(e)})
+        terms = []
+    if not p.get("seo_keywords"):
+        p["seo_keywords"] = terms[:10]
+    if not p.get("topic_tags") and terms:
+        p["topic_tags"] = _hash_tagify(terms)
+
+
+def _shape_extended_summary_fields(p: SummaryJSON) -> None:
     p["insights"] = _shape_insights(p.get("insights"))
     p["quality"] = _shape_quality(p.get("quality"))
-
-    # Clean extractive_quotes before Pydantic
     p["extractive_quotes"] = [
         {
             "text": str(q.get("text", "")).strip(),
@@ -908,56 +927,65 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         if isinstance(q, dict) and str(q.get("text", "")).strip()
     ]
     p["highlights"] = [str(h).strip() for h in (p.get("highlights") or []) if str(h).strip()]
+    p["questions_answered"] = _shape_questions_answered(p.get("questions_answered") or [])
+    p["categories"] = [str(c).strip() for c in (p.get("categories") or []) if str(c).strip()]
+    p["key_points_to_remember"] = [
+        str(kp).strip() for kp in (p.get("key_points_to_remember") or []) if str(kp).strip()
+    ]
+    p["topic_taxonomy"] = _shape_topic_taxonomy(p.get("topic_taxonomy") or [])
 
-    # Clean questions_answered as question-answer pairs
-    clean_qa = []
-    for qa in p.get("questions_answered") or []:
+
+def _shape_questions_answered(raw_items: list[Any]) -> list[dict[str, str]]:
+    clean_qa: list[dict[str, str]] = []
+    qa_patterns = [
+        r"Q:\s*(.+?)\s*A:\s*(.+)",
+        r"Question:\s*(.+?)\s*Answer:\s*(.+)",
+        r"(.+?)\?\s*(.+)",
+    ]
+    for qa in raw_items:
         if isinstance(qa, dict):
             question = str(qa.get("question", "")).strip()
             answer = str(qa.get("answer", "")).strip()
             if question and answer:
                 clean_qa.append({"question": question, "answer": answer})
-        elif isinstance(qa, str):
-            qa_str = str(qa).strip()
-            if qa_str:
-                qa_patterns = [
-                    r"Q:\s*(.+?)\s*A:\s*(.+)",
-                    r"Question:\s*(.+?)\s*Answer:\s*(.+)",
-                    r"(.+?)\?\s*(.+)",
-                ]
-                matched = False
-                for pattern in qa_patterns:
-                    match = re.search(pattern, qa_str, re.IGNORECASE | re.DOTALL)
-                    if match:
-                        question = match.group(1).strip()
-                        answer = match.group(2).strip()
-                        if question and answer:
-                            clean_qa.append({"question": question, "answer": answer})
-                            matched = True
-                            break
-                if not matched:
-                    clean_qa.append({"question": qa_str, "answer": ""})
-    p["questions_answered"] = clean_qa
+            continue
+        if not isinstance(qa, str):
+            continue
+        qa_str = qa.strip()
+        if not qa_str:
+            continue
+        matched = False
+        for pattern in qa_patterns:
+            match = re.search(pattern, qa_str, re.IGNORECASE | re.DOTALL)
+            if not match:
+                continue
+            question = match.group(1).strip()
+            answer = match.group(2).strip()
+            if question and answer:
+                clean_qa.append({"question": question, "answer": answer})
+                matched = True
+                break
+        if not matched:
+            clean_qa.append({"question": qa_str, "answer": ""})
+    return clean_qa
 
-    p["categories"] = [str(c).strip() for c in (p.get("categories") or []) if str(c).strip()]
-    p["key_points_to_remember"] = [
-        str(kp).strip() for kp in (p.get("key_points_to_remember") or []) if str(kp).strip()
-    ]
 
-    # Clean topic_taxonomy
-    clean_taxonomy = []
-    for tax in p.get("topic_taxonomy") or []:
-        if isinstance(tax, dict) and str(tax.get("label", "")).strip():
-            clean_taxonomy.append(
-                {
-                    "label": str(tax["label"]).strip(),
-                    "score": float(tax.get("score", 0.0)) if _is_numeric(tax.get("score")) else 0.0,
-                    "path": str(tax.get("path", "")).strip() or None,
-                }
-            )
-    p["topic_taxonomy"] = clean_taxonomy
+def _shape_topic_taxonomy(raw_taxonomy: list[Any]) -> list[dict[str, Any]]:
+    clean_taxonomy: list[dict[str, Any]] = []
+    for tax in raw_taxonomy:
+        if not isinstance(tax, dict) or not str(tax.get("label", "")).strip():
+            continue
+        clean_taxonomy.append(
+            {
+                "label": str(tax["label"]).strip(),
+                "score": float(tax.get("score", 0.0)) if _is_numeric(tax.get("score")) else 0.0,
+                "path": str(tax.get("path", "")).strip() or None,
+            }
+        )
+    return clean_taxonomy
 
-    # RAG-optimized fields
+
+def _shape_rag_fields(p: SummaryJSON) -> None:
     metadata = p.get("metadata") or {}
     base_text = " ".join(
         [
@@ -976,7 +1004,6 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
 
     p["query_expansion_keywords"] = _shape_query_expansion_keywords(p, base_text)
     p["semantic_boosters"] = _shape_semantic_boosters(p, base_text)
-
     raw_chunks = p.get("semantic_chunks") or p.get("chunks") or []
     p["semantic_chunks"] = _shape_semantic_chunks(
         raw_chunks,
@@ -984,14 +1011,6 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
         topics=topics_clean,
         language=language,
     )
-
-    # --- Pass through Pydantic for type coercion and constraint enforcement ---
-    try:
-        model = SummaryModel(**p)
-        return model.model_dump()
-    except Exception as e:
-        logger.warning("pydantic_validation_fallback", extra={"error": str(e)})
-        return p
 
 
 def get_summary_json_schema() -> dict[str, Any]:

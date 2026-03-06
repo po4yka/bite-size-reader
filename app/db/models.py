@@ -12,6 +12,7 @@ from app.core.time_utils import UTC
 
 # A proxy that will be initialised with the concrete database instance at runtime.
 database_proxy: peewee.Database = peewee.DatabaseProxy()
+TOPIC_SEARCH_INDEX_OPTIONS: dict[str, str] = {"tokenize": "unicode61 remove_diacritics 2"}
 
 
 class BaseModel(peewee.Model):
@@ -275,7 +276,7 @@ class TopicSearchIndex(FTS5Model):
     class Meta:
         table_name = "topic_search_index"
         database = database_proxy
-        options = {"tokenize": "unicode61 remove_diacritics 2"}
+        options = TOPIC_SEARCH_INDEX_OPTIONS
 
 
 class UserInteraction(BaseModel):

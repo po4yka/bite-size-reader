@@ -446,13 +446,16 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
                 value = row.get("rowid") or row.get("request_id")
 
             if value is not None:
+                rid: int | None = None
                 try:
                     rid = int(value)
-                    if rid not in seen:
-                        request_ids.append(rid)
-                        seen.add(rid)
                 except (TypeError, ValueError):
-                    pass
+                    rid = None
+                if rid is None:
+                    continue
+                if rid not in seen:
+                    request_ids.append(rid)
+                    seen.add(rid)
 
         return request_ids
 

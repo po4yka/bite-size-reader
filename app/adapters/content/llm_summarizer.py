@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     from app.core.progress_tracker import ProgressTracker
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
+    from app.models.llm.llm_models import ChatRequest
     from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
@@ -621,18 +622,12 @@ class LLMSummarizer:
             base_model=base_model,
             requests=requests,
         )
-        stream_coordinator = None
-        if self._summary_streaming_enabled(silent=silent):
-            from app.adapters.telegram.summary_draft_streaming import SummaryDraftStreamCoordinator
-
-            stream_coordinator = SummaryDraftStreamCoordinator(
-                response_formatter=self.response_formatter,
-                message=message,
-                correlation_id=correlation_id,
-            )
-            for request in requests:
-                request.stream = True
-                request.on_stream_delta = stream_coordinator.on_delta
+        stream_coordinator = self._configure_summary_streaming(
+            requests=requests,
+            message=message,
+            correlation_id=correlation_id,
+            silent=silent,
+        )
 
         repair_context = self._build_summary_repair_context(system_prompt, user_content)
         notifications = self._build_summary_notifications(
@@ -650,6 +645,71 @@ class LLMSummarizer:
             defer_persistence=defer_persistence,
         )
 
+        return await self._run_summary_pipeline(
+            message=message,
+            content_text=content_text,
+            chosen_lang=chosen_lang,
+            req_id=req_id,
+            correlation_id=correlation_id,
+            url_hash=url_hash,
+            url=url,
+            silent=silent,
+            defer_persistence=defer_persistence,
+            interaction_config=interaction_config,
+            persistence=persistence,
+            repair_context=repair_context,
+            notifications=notifications,
+            requests=requests,
+            progress_tracker=progress_tracker,
+            content_for_summary=content_for_summary,
+            base_model=base_model,
+            stream_coordinator=stream_coordinator,
+        )
+
+    def _configure_summary_streaming(
+        self,
+        *,
+        requests: list[ChatRequest],
+        message: Any,
+        correlation_id: str | None,
+        silent: bool,
+    ) -> Any | None:
+        if not self._summary_streaming_enabled(silent=silent):
+            return None
+        from app.adapters.telegram.summary_draft_streaming import SummaryDraftStreamCoordinator
+
+        stream_coordinator = SummaryDraftStreamCoordinator(
+            response_formatter=self.response_formatter,
+            message=message,
+            correlation_id=correlation_id,
+        )
+        for request in requests:
+            request.stream = True
+            request.on_stream_delta = stream_coordinator.on_delta
+        return stream_coordinator
+
+    async def _run_summary_pipeline(
+        self,
+        *,
+        message: Any,
+        content_text: str,
+        chosen_lang: str,
+        req_id: int,
+        correlation_id: str | None,
+        url_hash: str | None,
+        url: str | None,
+        silent: bool,
+        defer_persistence: bool,
+        interaction_config: dict[str, Any],
+        persistence: dict[str, Any],
+        repair_context: dict[str, Any],
+        notifications: dict[str, Any],
+        requests: list[ChatRequest],
+        progress_tracker: ProgressTracker | None,
+        content_for_summary: str,
+        base_model: str,
+        stream_coordinator: Any | None,
+    ) -> dict[str, Any] | None:
         async def _on_attempt(llm_result: Any) -> None:
             self._last_llm_result = llm_result
 

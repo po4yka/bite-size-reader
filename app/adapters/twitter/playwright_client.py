@@ -31,6 +31,88 @@ _USER_AGENT = (
     "Chrome/120.0.0.0 Safari/537.36"
 )
 
+_ARTICLE_EXPAND_BUTTONS_SCRIPT = """(labels) => {
+    const normalizedLabels = new Set(labels.map(x => x.toLowerCase()));
+    const container = document.querySelector('article') || document.querySelector('main');
+    if (!container) return;
+    const buttons = container.querySelectorAll('button, [role="button"]');
+    buttons.forEach((btn) => {
+        const text = (btn.innerText || btn.textContent || '').trim().toLowerCase();
+        if (!text) return;
+        for (const label of normalizedLabels) {
+            if (text === label || text.includes(label)) {
+                btn.click();
+                break;
+            }
+        }
+    });
+}"""
+
+_ARTICLE_SCRAPE_SCRIPT = """() => {
+    const result = {
+        title: '',
+        author: '',
+        authorHandle: '',
+        content: '',
+        images: [],
+        finalUrl: window.location.href || '',
+        canonicalUrl: '',
+        selectorFallbackUsed: false,
+        contentSelector: 'unknown',
+    };
+
+    const canonicalEl = document.querySelector('link[rel="canonical"]');
+    if (canonicalEl && canonicalEl.href) result.canonicalUrl = canonicalEl.href;
+    if (!result.canonicalUrl) {
+        const ogUrl = document.querySelector('meta[property="og:url"]');
+        if (ogUrl && ogUrl.content) result.canonicalUrl = ogUrl.content;
+    }
+
+    const titleSelectors = [
+        'article h1',
+        '[data-testid="article-cover-title"]',
+        'main h1',
+    ];
+    for (const sel of titleSelectors) {
+        const el = document.querySelector(sel);
+        const value = (el?.innerText || '').trim();
+        if (value) {
+            result.title = value;
+            break;
+        }
+    }
+    if (!result.title) {
+        const ogTitle = document.querySelector('meta[property="og:title"]');
+        if (ogTitle && ogTitle.content) result.title = ogTitle.content;
+    }
+
+    const authorLink = document.querySelector(
+        '[data-testid="User-Name"] a[href*="/"], article a[href*="/"], main a[href*="/"]'
+    );
+    const authorText = (authorLink?.innerText || '').trim();
+    if (authorText) result.author = authorText;
+    const href = (authorLink?.getAttribute('href') || '').trim();
+    const handleMatch = href.match(/^\\/@?([A-Za-z0-9_]{1,32})$/);
+    if (handleMatch) result.authorHandle = handleMatch[1];
+
+    const articleEl = document.querySelector('article');
+    const mainEl = document.querySelector('main [data-testid="primaryColumn"], main');
+    const bodyEl = document.body;
+    const contentEl = articleEl || mainEl || bodyEl;
+    result.contentSelector = articleEl ? 'article' : (mainEl ? 'main' : 'body');
+    result.selectorFallbackUsed = result.contentSelector !== 'article';
+    result.content = (contentEl?.innerText || '').trim();
+
+    const imageEls = contentEl?.querySelectorAll('img[src]') || [];
+    imageEls.forEach((img) => {
+        const src = (img.getAttribute('src') || '').trim();
+        if (!src || src.startsWith('data:')) return;
+        if (!result.images.includes(src)) result.images.push(src);
+    });
+
+    return result;
+}"""
+
 
 def _load_cookies_netscape(cookies_path: Path) -> list[dict[str, Any]]:
     """Parse a Netscape-format cookies.txt file into Playwright cookie dicts."""
@@ -223,93 +305,9 @@ def _scrape_article_sync(
                 "voir plus",
                 "mehr anzeigen",
             ]
-            page.evaluate(
-                """(labels) => {
-                const normalizedLabels = new Set(labels.map(x => x.toLowerCase()));
-                const container = document.querySelector('article') || document.querySelector('main');
-                if (!container) return;
-                const buttons = container.querySelectorAll('button, [role="button"]');
-                buttons.forEach((btn) => {
-                    const text = (btn.innerText || btn.textContent || '').trim().toLowerCase();
-                    if (!text) return;
-                    for (const label of normalizedLabels) {
-                        if (text === label || text.includes(label)) {
-                            btn.click();
-                            break;
-                        }
-                    }
-                });
-            }""",
-                expand_labels,
-            )
+            page.evaluate(_ARTICLE_EXPAND_BUTTONS_SCRIPT, expand_labels)
             page.wait_for_timeout(300)
-
-            return page.evaluate(
-                """() => {
-                const result = {
-                    title: '',
-                    author: '',
-                    authorHandle: '',
-                    content: '',
-                    images: [],
-                    finalUrl: window.location.href || '',
-                    canonicalUrl: '',
-                    selectorFallbackUsed: false,
-                    contentSelector: 'unknown',
-                };
-
-                const canonicalEl = document.querySelector('link[rel="canonical"]');
-                if (canonicalEl && canonicalEl.href) result.canonicalUrl = canonicalEl.href;
-                if (!result.canonicalUrl) {
-                    const ogUrl = document.querySelector('meta[property="og:url"]');
-                    if (ogUrl && ogUrl.content) result.canonicalUrl = ogUrl.content;
-                }
-
-                const titleSelectors = [
-                    'article h1',
-                    '[data-testid="article-cover-title"]',
-                    'main h1',
-                ];
-                for (const sel of titleSelectors) {
-                    const el = document.querySelector(sel);
-                    const value = (el?.innerText || '').trim();
-                    if (value) {
-                        result.title = value;
-                        break;
-                    }
-                }
-                if (!result.title) {
-                    const ogTitle = document.querySelector('meta[property="og:title"]');
-                    if (ogTitle && ogTitle.content) result.title = ogTitle.content;
-                }
-
-                const authorLink = document.querySelector(
-                    '[data-testid="User-Name"] a[href*="/"], article a[href*="/"], main a[href*="/"]'
-                );
-                const authorText = (authorLink?.innerText || '').trim();
-                if (authorText) result.author = authorText;
-                const href = (authorLink?.getAttribute('href') || '').trim();
-                const handleMatch = href.match(/^\\/@?([A-Za-z0-9_]{1,32})$/);
-                if (handleMatch) result.authorHandle = handleMatch[1];
-
-                const articleEl = document.querySelector('article');
-                const mainEl = document.querySelector('main [data-testid="primaryColumn"], main');
-                const bodyEl = document.body;
-                const contentEl = articleEl || mainEl || bodyEl;
-                result.contentSelector = articleEl ? 'article' : (mainEl ? 'main' : 'body');
-                result.selectorFallbackUsed = result.contentSelector !== 'article';
-                result.content = (contentEl?.innerText || '').trim();
-
-                const imageEls = contentEl?.querySelectorAll('img[src]') || [];
-                imageEls.forEach((img) => {
-                    const src = (img.getAttribute('src') || '').trim();
-                    if (!src || src.startsWith('data:')) return;
-                    if (!result.images.includes(src)) result.images.push(src);
-                });
-
-                return result;
-            }"""
-            )
+            return page.evaluate(_ARTICLE_SCRAPE_SCRIPT)
         finally:
             page.close()
             browser.close()

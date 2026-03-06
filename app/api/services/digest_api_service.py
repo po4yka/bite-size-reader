@@ -343,6 +343,7 @@ class DigestAPIService:
             )
         except Exception:
             logger.exception("digest_api_job_failed", extra={"uid": user_id, "cid": correlation_id})
+            return
 
     async def _execute_channel_digest_trigger(
         self,
@@ -374,6 +375,7 @@ class DigestAPIService:
                 "channel_digest_api_job_failed",
                 extra={"uid": user_id, "channel": channel_username, "cid": correlation_id},
             )
+            return
 
     async def _run_digest_task(
         self,

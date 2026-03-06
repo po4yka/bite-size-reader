@@ -16,11 +16,9 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 from app.adapters.karakeep.models import KarakeepBookmark, SyncResult
-from app.adapters.karakeep.sync_service import (
-    KarakeepSyncService,
-    _ensure_datetime,
-    _SyncWorkItem,
-)
+from app.adapters.karakeep.sync.datetime_utils import _ensure_datetime
+from app.adapters.karakeep.sync.service import KarakeepSyncService
+from app.adapters.karakeep.sync.work_items import _SyncWorkItem
 
 # ---------------------------------------------------------------------------
 # _ensure_datetime tests

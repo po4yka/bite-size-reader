@@ -110,12 +110,17 @@ def _record_query(
 ) -> None:
     """Record query execution and log if slow."""
     # Record metrics if prometheus is available
+    record_db_query: Callable[[str, float], None] | None = None
+    metrics_available = True
     try:
         from app.observability.metrics import record_db_query
 
-        record_db_query(operation, elapsed_ms / 1000)
     except ImportError:
-        pass
+        metrics_available = False
+        record_db_query = None
+        logger.debug("db_query_metrics_unavailable")
+    if metrics_available and record_db_query is not None:
+        record_db_query(operation, elapsed_ms / 1000)
 
     # Log slow queries
     if elapsed_ms >= threshold_ms:

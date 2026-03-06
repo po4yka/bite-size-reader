@@ -103,7 +103,53 @@ class DatabaseDiagnostics:
         limit: int | None = None,
     ) -> dict[str, Any]:
         overview = self.get_database_overview()
-        required_default = [
+        required_default = self._required_integrity_fields()
+        required = list(dict.fromkeys(required_fields or required_default))
+
+        posts: dict[str, Any] = {
+            "required_fields": required,
+            "checked": 0,
+            "with_summary": 0,
+            "missing_summary": [],
+            "missing_fields": [],
+            "errors": [],
+            "links": {
+                "total_links": 0,
+                "posts_with_links": 0,
+                "missing_data": [],
+            },
+            "reprocess": [],
+        }
+
+        limit_clause = None
+        if isinstance(limit, int) and limit > 0:
+            limit_clause = limit
+
+        query = self._integrity_query()
+
+        if limit_clause is not None:
+            query = query.limit(limit_clause)
+
+        total_rows = query.count()
+        posts["checked"] = total_rows
+        posts["links"]["posts_with_links"] = total_rows
+
+        reprocess_map: dict[int, dict[str, Any]] = {}
+        for row in query.dicts():
+            self._process_integrity_row(
+                row=row,
+                required=required,
+                posts=posts,
+                reprocess_map=reprocess_map,
+            )
+
+        posts["reprocess"] = self._build_reprocess_entries(reprocess_map)
+
+        return {"overview": overview, "posts": posts}
+
+    @staticmethod
+    def _required_integrity_fields() -> list[str]:
+        return [
             "summary_250",
             "summary_1000",
             "tldr",
@@ -126,28 +172,10 @@ class DatabaseDiagnostics:
             "forwarded_post_extras",
             "key_points_to_remember",
         ]
-        required = list(dict.fromkeys(required_fields or required_default))
 
-        posts: dict[str, Any] = {
-            "required_fields": required,
-            "checked": 0,
-            "with_summary": 0,
-            "missing_summary": [],
-            "missing_fields": [],
-            "errors": [],
-            "links": {
-                "total_links": 0,
-                "posts_with_links": 0,
-                "missing_data": [],
-            },
-            "reprocess": [],
-        }
-
-        limit_clause = None
-        if isinstance(limit, int) and limit > 0:
-            limit_clause = limit
-
-        query = (
+    @staticmethod
+    def _integrity_query() -> Any:
+        return (
             Request.select(
                 Request.id.alias("request_id"),
                 Request.type.alias("request_type"),
@@ -166,131 +194,143 @@ class DatabaseDiagnostics:
             .order_by(Request.id.desc())
         )
 
-        if limit_clause is not None:
-            query = query.limit(limit_clause)
+    def _process_integrity_row(
+        self,
+        *,
+        row: Mapping[str, Any],
+        required: list[str],
+        posts: dict[str, Any],
+        reprocess_map: dict[int, dict[str, Any]],
+    ) -> None:
+        request_id = int(row["request_id"])
+        row_type = str(row.get("request_type") or "unknown")
 
-        total_rows = query.count()
-        posts["checked"] = total_rows
-        posts["links"]["posts_with_links"] = total_rows
-
-        reprocess_map: dict[int, dict[str, Any]] = {}
-
-        def _coerce_int(value: Any) -> int | None:
-            try:
-                return int(value) if value is not None else None
-            except (TypeError, ValueError):
-                return None
-
-        def queue_reprocess(request_id: int, reason: str) -> None:
-            if row_type == "forward":
-                return
-            entry = reprocess_map.get(request_id)
-            if entry is None:
-                entry = {
+        summary_payload, summary_error = decode_json_field(row.get("summary_json"))
+        if summary_payload is not None:
+            posts["with_summary"] += 1
+        else:
+            posts["missing_summary"].append(
+                {
                     "request_id": request_id,
-                    "type": row_type,
-                    "status": row_status,
+                    "status": row.get("request_status"),
+                    "request_type": row.get("request_type"),
                     "source": self._describe_request_source(row),
-                    "normalized_url": (
-                        str(row.get("normalized_url"))
-                        if isinstance(row.get("normalized_url"), str) and row.get("normalized_url")
-                        else None
-                    ),
-                    "input_url": (
-                        str(row.get("input_url"))
-                        if isinstance(row.get("input_url"), str) and row.get("input_url")
-                        else None
-                    ),
-                    "fwd_from_chat_id": _coerce_int(row.get("fwd_from_chat_id")),
-                    "fwd_from_msg_id": _coerce_int(row.get("fwd_from_msg_id")),
-                    "reasons": set(),
                 }
-                reprocess_map[request_id] = entry
-            entry["reasons"].add(reason)
+            )
+            self._queue_reprocess(reprocess_map, row, row_type, request_id, "missing_summary")
+        if summary_error:
+            self._queue_reprocess(reprocess_map, row, row_type, request_id, "invalid_summary_json")
 
-        for row in query.dicts():
-            request_id = int(row["request_id"])
-            row_type = str(row.get("request_type") or "unknown")
-            row_status = str(row.get("request_status") or "unknown")
-            summary_raw = row.get("summary_json")
-            links_raw = row.get("links_json")
+        missing_fields = self._collect_missing_fields(
+            row=row,
+            required=required,
+            summary_payload=summary_payload,
+            summary_error=summary_error,
+            posts=posts,
+        )
+        if missing_fields:
+            posts["missing_fields"].append(
+                {
+                    "request_id": request_id,
+                    "missing": missing_fields,
+                    "status": row.get("request_status"),
+                    "source": self._describe_request_source(row),
+                }
+            )
+            self._queue_reprocess(reprocess_map, row, row_type, request_id, "missing_fields")
 
-            summary_payload, summary_error = decode_json_field(summary_raw)
-            if summary_payload is not None:
-                posts["with_summary"] += 1
+        links_count, has_links, links_error = self._count_links_entries(row.get("links_json"))
+        posts["links"]["total_links"] += links_count
+        if not has_links:
+            reason = links_error or "absent_links_json"
+            posts["links"]["missing_data"].append(
+                {
+                    "request_id": request_id,
+                    "reason": reason,
+                    "status": row.get("request_status"),
+                    "source": self._describe_request_source(row),
+                }
+            )
+            self._queue_reprocess(reprocess_map, row, row_type, request_id, "missing_links")
+
+    def _collect_missing_fields(
+        self,
+        *,
+        row: Mapping[str, Any],
+        required: list[str],
+        summary_payload: Any,
+        summary_error: str | None,
+        posts: dict[str, Any],
+    ) -> list[str]:
+        request_id = int(row["request_id"])
+        missing_fields: list[str] = []
+        if summary_error:
+            posts["errors"].append({"request_id": request_id, "error": summary_error})
+            missing_fields = required[:]
+        elif summary_payload is not None:
+            if isinstance(summary_payload, Mapping):
+                for field in required:
+                    value = summary_payload.get(field)
+                    if value is None or (isinstance(value, str) and not value.strip()):
+                        missing_fields.append(field)
             else:
-                posts["missing_summary"].append(
-                    {
-                        "request_id": request_id,
-                        "status": row.get("request_status"),
-                        "request_type": row.get("request_type"),
-                        "source": self._describe_request_source(row),
-                    }
-                )
-                queue_reprocess(request_id, "missing_summary")
-
-            missing_fields: list[str] = []
-            if summary_error:
-                posts["errors"].append(
-                    {
-                        "request_id": request_id,
-                        "error": summary_error,
-                    }
-                )
-                queue_reprocess(request_id, "invalid_summary_json")
                 missing_fields = required[:]
-            elif summary_payload is not None:
-                if isinstance(summary_payload, Mapping):
-                    for field in required:
-                        value = summary_payload.get(field)
-                        if value is None:
-                            missing_fields.append(field)
-                            continue
-                        if isinstance(value, str) and not value.strip():
-                            missing_fields.append(field)
-                else:
-                    missing_fields = required[:]
-            if missing_fields:
-                if row.get("request_type") != "forward":
-                    missing_fields = [
-                        field for field in missing_fields if field != "forwarded_post_extras"
-                    ]
-                if missing_fields:
-                    posts["missing_fields"].append(
-                        {
-                            "request_id": request_id,
-                            "missing": missing_fields,
-                            "status": row.get("request_status"),
-                            "source": self._describe_request_source(row),
-                        }
-                    )
-                    queue_reprocess(request_id, "missing_fields")
 
-            links_count, has_links, links_error = self._count_links_entries(links_raw)
-            posts["links"]["total_links"] += links_count
-            if not has_links:
-                reason = links_error or "absent_links_json"
-                posts["links"]["missing_data"].append(
-                    {
-                        "request_id": request_id,
-                        "reason": reason,
-                        "status": row.get("request_status"),
-                        "source": self._describe_request_source(row),
-                    }
-                )
-                queue_reprocess(request_id, "missing_links")
+        if row.get("request_type") != "forward":
+            missing_fields = [field for field in missing_fields if field != "forwarded_post_extras"]
+        return missing_fields
 
-        if reprocess_map:
-            reprocess_entries: list[dict[str, Any]] = []
-            for request_id, data in sorted(reprocess_map.items()):
-                reasons = data.get("reasons")
-                entry = dict(data)
-                entry["request_id"] = request_id
-                entry["reasons"] = sorted(reasons) if isinstance(reasons, set) else []
-                reprocess_entries.append(entry)
-            posts["reprocess"] = reprocess_entries
+    def _queue_reprocess(
+        self,
+        reprocess_map: dict[int, dict[str, Any]],
+        row: Mapping[str, Any],
+        row_type: str,
+        request_id: int,
+        reason: str,
+    ) -> None:
+        if row_type == "forward":
+            return
+        entry = reprocess_map.get(request_id)
+        if entry is None:
+            entry = {
+                "request_id": request_id,
+                "type": row_type,
+                "status": str(row.get("request_status") or "unknown"),
+                "source": self._describe_request_source(row),
+                "normalized_url": (
+                    str(row.get("normalized_url"))
+                    if isinstance(row.get("normalized_url"), str) and row.get("normalized_url")
+                    else None
+                ),
+                "input_url": (
+                    str(row.get("input_url"))
+                    if isinstance(row.get("input_url"), str) and row.get("input_url")
+                    else None
+                ),
+                "fwd_from_chat_id": self._coerce_int(row.get("fwd_from_chat_id")),
+                "fwd_from_msg_id": self._coerce_int(row.get("fwd_from_msg_id")),
+                "reasons": set(),
+            }
+            reprocess_map[request_id] = entry
+        entry["reasons"].add(reason)
 
-        return {"overview": overview, "posts": posts}
+    @staticmethod
+    def _coerce_int(value: Any) -> int | None:
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _build_reprocess_entries(reprocess_map: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
+        entries: list[dict[str, Any]] = []
+        for request_id, data in sorted(reprocess_map.items()):
+            reasons = data.get("reasons")
+            entry = dict(data)
+            entry["request_id"] = request_id
+            entry["reasons"] = sorted(reasons) if isinstance(reasons, set) else []
+            entries.append(entry)
+        return entries
 
     def _fetch_single_value(self, sql: str) -> Any:
         params: tuple[Any, ...] = ()

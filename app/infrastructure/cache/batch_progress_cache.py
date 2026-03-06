@@ -220,7 +220,11 @@ class BatchProgressCache:
                         try:
                             data = json.loads(message["data"])
                             yield data
-                        except json.JSONDecodeError:
+                        except json.JSONDecodeError as exc:
+                            logger.debug(
+                                "batch_progress_pubsub_decode_failed",
+                                extra={"session_id": session_id, "error": str(exc)},
+                            )
                             continue
             finally:
                 await pubsub.unsubscribe(channel)

@@ -248,10 +248,9 @@ def split_sentences(text: str, lang: str = "en") -> list[str]:
         return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
     except Exception as exc:
         logger.debug("spacy_sentence_split_fallback", extra={"error": str(exc), "lang": lang})
-
-    # Regex fallback: split on sentence punctuation followed by space/cap
-    parts = re.split(r"(?<=[\.!?])\s+", text)
-    return [p.strip() for p in parts if p.strip()]
+        # Regex fallback: split on sentence punctuation followed by space/cap
+        parts = re.split(r"(?<=[\.!?])\s+", text)
+        return [p.strip() for p in parts if p.strip()]
 
 
 def chunk_sentences(sentences: list[str], max_chars: int = 2000) -> list[str]:

@@ -1,0 +1,1216 @@
+{
+  "command": "next",
+  "items": [
+    {
+      "id": "smells::app/adapters/openrouter/chat_completions.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/openrouter/chat_completions.py",
+      "summary": "2x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 2,
+        "lines": [
+          618,
+          866
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/openrouter/chat_completions.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/content/llm_summarizer.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/content/llm_summarizer.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          555
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/content/llm_summarizer.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/external/formatting/export_formatter.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/external/formatting/export_formatter.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          418
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/external/formatting/export_formatter.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/external/formatting/notification_formatter.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/external/formatting/notification_formatter.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          727
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/external/formatting/notification_formatter.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/karakeep/sync/status_updates.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/karakeep/sync/status_updates.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          26
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/karakeep/sync/status_updates.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/openrouter/openrouter_client.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/openrouter/openrouter_client.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          74
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/openrouter/openrouter_client.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/openrouter/request_builder.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/openrouter/request_builder.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          53
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/openrouter/request_builder.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/telegram/bot_factory.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/telegram/bot_factory.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          130
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/telegram/bot_factory.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/telegram/message_router_content.py::swallowed_error",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/telegram/message_router_content.py",
+      "summary": "1x Catch block that only logs (swallowed error)",
+      "detail": {
+        "smell_id": "swallowed_error",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          82
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/telegram/message_router_content.py::swallowed_error\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/telegram/message_router_entrypoint.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/telegram/message_router_entrypoint.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          31
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/telegram/message_router_entrypoint.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/twitter/playwright_client.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/twitter/playwright_client.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          142
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/twitter/playwright_client.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/youtube/youtube_downloader.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/youtube/youtube_downloader.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          83
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/youtube/youtube_downloader.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/adapters/youtube/youtube_downloader_parts/yt_dlp_client.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/adapters/youtube/youtube_downloader_parts/yt_dlp_client.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          53
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/adapters/youtube/youtube_downloader_parts/yt_dlp_client.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/agents/validation_agent.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/agents/validation_agent.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          49
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/agents/validation_agent.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/api/background_processor.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/api/background_processor.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          95
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/api/background_processor.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/api/middleware.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/api/middleware.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          173
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/api/middleware.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/core/summary_contract_impl/contract.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/core/summary_contract_impl/contract.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          777
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/core/summary_contract_impl/contract.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/core/url_utils.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/core/url_utils.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          111
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/core/url_utils.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/db/database_diagnostics.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/db/database_diagnostics.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          99
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/db/database_diagnostics.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::app/models/telegram/telegram_message.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "app/models/telegram/telegram_message.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          169
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::app/models/telegram/telegram_message.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    },
+    {
+      "id": "smells::scripts/karakeep_sync.py::monster_function",
+      "kind": "finding",
+      "tier": 2,
+      "effective_tier": 2,
+      "confidence": "medium",
+      "detector": "smells",
+      "file": "scripts/karakeep_sync.py",
+      "summary": "1x Monster function (>150 LOC)",
+      "detail": {
+        "smell_id": "monster_function",
+        "severity": "high",
+        "count": 1,
+        "lines": [
+          29
+        ]
+      },
+      "status": "open",
+      "primary_command": "desloppify resolve fixed \"smells::scripts/karakeep_sync.py::monster_function\" --note \"<what you did>\" --attest \"I have actually [DESCRIBE THE CONCRETE CHANGE YOU MADE] and I am not gaming the score by resolving without fixing.\""
+    }
+  ],
+  "queue": {
+    "tier_counts": {
+      "1": 52,
+      "2": 21,
+      "3": 955,
+      "4": 63
+    },
+    "requested_tier": 2,
+    "selected_tier": 2,
+    "fallback_reason": null,
+    "available_tiers": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "total": 21
+  },
+  "narrative": {
+    "phase": "stagnation",
+    "headline": "Score plateaued at 63.8 for 5 scans. Cross-module arch (44.2%) is where the breakthrough is. 4 wontfix items may also be worth revisiting. (48 review findings \u2014 run `desloppify issues`)",
+    "dimensions": {
+      "lowest_dimensions": [
+        {
+          "name": "Cross-module arch",
+          "strict": 44.2,
+          "issues": 5,
+          "impact": 0.0,
+          "subjective": true,
+          "impact_description": "re-review to improve"
+        },
+        {
+          "name": "Structure nav",
+          "strict": 47.4,
+          "issues": 4,
+          "impact": 0.0,
+          "subjective": true,
+          "impact_description": "re-review to improve"
+        },
+        {
+          "name": "Mid elegance",
+          "strict": 48.1,
+          "issues": 8,
+          "impact": 0.0,
+          "subjective": true,
+          "impact_description": "re-review to improve"
+        }
+      ],
+      "biggest_gap_dimensions": [],
+      "stagnant_dimensions": [
+        {
+          "name": "File health",
+          "strict": 82.8,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Code quality",
+          "strict": 92.6,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Duplication",
+          "strict": 97.2,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Security",
+          "strict": 100.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Error consistency",
+          "strict": 54.9,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Abstraction fit",
+          "strict": 52.1,
+          "stuck_scans": 5
+        },
+        {
+          "name": "AI generated debt",
+          "strict": 61.2,
+          "stuck_scans": 5
+        },
+        {
+          "name": "High elegance",
+          "strict": 48.5,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Mid elegance",
+          "strict": 48.1,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Low elegance",
+          "strict": 48.9,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Cross-module arch",
+          "strict": 44.2,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Convention drift",
+          "strict": 63.9,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Dep health",
+          "strict": 71.0,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Test strategy",
+          "strict": 53.3,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Structure nav",
+          "strict": 47.4,
+          "stuck_scans": 5
+        },
+        {
+          "name": "Design coherence",
+          "strict": 48.3,
+          "stuck_scans": 5
+        }
+      ]
+    },
+    "actions": [
+      {
+        "type": "issue_queue",
+        "detector": "review",
+        "count": 48,
+        "description": "48 review findings need investigation \u2014 run `desloppify issues` to see the work queue",
+        "command": "desloppify issues",
+        "impact": 0.0,
+        "dimension": "Unknown",
+        "priority": 1,
+        "lane": "refactor_0"
+      },
+      {
+        "type": "reorganize",
+        "detector": "flat_dirs",
+        "count": 7,
+        "description": "7 flat_dirs findings \u2014 create subdirectories and use `desloppify move`",
+        "command": "desloppify show flat_dirs --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 2,
+        "lane": "restructure"
+      },
+      {
+        "type": "reorganize",
+        "detector": "single_use",
+        "count": 2,
+        "description": "2 single_use findings \u2014 inline or relocate with `desloppify move`",
+        "command": "desloppify show single_use --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 3,
+        "lane": "restructure"
+      },
+      {
+        "type": "reorganize",
+        "detector": "coupling",
+        "count": 11,
+        "description": "11 coupling findings \u2014 fix boundary violations with `desloppify move`",
+        "command": "desloppify show coupling --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 4,
+        "lane": "restructure"
+      },
+      {
+        "type": "refactor",
+        "detector": "uncalled_functions",
+        "count": 1,
+        "description": "1 uncalled_functions findings \u2014 remove dead functions or document why they're retained",
+        "command": "desloppify show uncalled_functions --status open",
+        "impact": 0.0,
+        "dimension": "Unknown",
+        "priority": 5,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "structural",
+        "count": 166,
+        "description": "166 structural findings \u2014 decompose large files \u2014 extract logic into focused modules",
+        "command": "desloppify show structural --status open",
+        "impact": 0.0,
+        "dimension": "File health",
+        "priority": 6,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "props",
+        "count": 3,
+        "description": "3 props findings \u2014 split bloated components, extract sub-components",
+        "command": "desloppify show props --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 7,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "dupes",
+        "count": 8,
+        "description": "8 dupes findings \u2014 extract shared utility or consolidate duplicates",
+        "command": "desloppify show dupes --status open",
+        "impact": 0.0,
+        "dimension": "Duplication",
+        "priority": 8,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "dict_keys",
+        "count": 56,
+        "description": "56 dict_keys findings \u2014 fix dict key mismatches \u2014 dead writes are likely dead code, schema drift suggests a typo or missed rename",
+        "command": "desloppify show dict_keys --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 9,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "test_coverage",
+        "count": 189,
+        "description": "189 test_coverage findings \u2014 add tests for untested production modules \u2014 prioritize by import count",
+        "command": "desloppify show test_coverage --status open",
+        "impact": 0.0,
+        "dimension": "Test health",
+        "priority": 10,
+        "lane": "test_coverage"
+      },
+      {
+        "type": "refactor",
+        "detector": "responsibility_cohesion",
+        "count": 22,
+        "description": "22 responsibility_cohesion findings \u2014 split modules with too many responsibilities \u2014 extract focused sub-modules",
+        "command": "desloppify show responsibility_cohesion --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 11,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "refactor",
+        "detector": "boilerplate_duplication",
+        "count": 110,
+        "description": "110 boilerplate_duplication findings \u2014 extract shared boilerplate into reusable helpers or base classes",
+        "command": "desloppify show boilerplate_duplication --status open",
+        "impact": 0.0,
+        "dimension": "Duplication",
+        "priority": 12,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "unused",
+        "count": 4,
+        "description": "4 unused findings \u2014 inspect with `desloppify next` and fix manually",
+        "command": "desloppify show unused --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 13,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "smells",
+        "count": 358,
+        "description": "358 smells findings \u2014 inspect with `desloppify next` and fix manually",
+        "command": "desloppify show smells --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 14,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "global_mutable_config",
+        "count": 30,
+        "description": "30 global_mutable_config findings \u2014 refactor module-level mutable state \u2014 use explicit init functions or dependency injection",
+        "command": "desloppify show global_mutable_config --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 15,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "private_imports",
+        "count": 17,
+        "description": "17 private_imports findings \u2014 stop importing private symbols across module boundaries",
+        "command": "desloppify show private_imports --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 16,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "stale_wontfix",
+        "count": 4,
+        "description": "4 stale_wontfix findings \u2014 re-evaluate old wontfix decisions \u2014 fix, document, or escalate",
+        "command": "desloppify show stale_wontfix --status open",
+        "impact": 0.0,
+        "dimension": "Unknown",
+        "priority": 17,
+        "lane": "refactor_1"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "subjective_review",
+        "count": 45,
+        "description": "45 files need design review \u2014 run design review with dimension templates",
+        "command": "desloppify fix review",
+        "impact": 0.0,
+        "dimension": "Test health",
+        "priority": 18,
+        "lane": "refactor_1"
+      }
+    ],
+    "strategy": {
+      "fixer_leverage": {
+        "auto_fixable_count": 0,
+        "total_count": 1177,
+        "coverage": 0.0,
+        "impact_ratio": 0.0,
+        "recommendation": "none"
+      },
+      "lanes": {
+        "restructure": {
+          "actions": [
+            2,
+            3,
+            4
+          ],
+          "file_count": 20,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        },
+        "refactor_0": {
+          "actions": [
+            1
+          ],
+          "file_count": 1,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        },
+        "refactor_1": {
+          "actions": [
+            5,
+            6,
+            7,
+            8,
+            9,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18
+          ],
+          "file_count": 327,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        },
+        "test_coverage": {
+          "actions": [
+            10
+          ],
+          "file_count": 189,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        }
+      },
+      "can_parallelize": true,
+      "hint": "4 independent workstreams, safe to parallelize. Rescan after each phase to verify. Review: 48 finding(s) \u2014 `desloppify issues`."
+    },
+    "tools": {
+      "fixers": [],
+      "move": {
+        "available": true,
+        "relevant": true,
+        "reason": "11 coupling violations + 2 single-use files + 7 flat directories",
+        "usage": "desloppify move <source> <dest> [--dry-run]"
+      },
+      "plan": {
+        "command": "desloppify plan",
+        "description": "Generate prioritized markdown cleanup plan"
+      },
+      "badge": {
+        "generated": true,
+        "in_readme": false,
+        "path": "scorecard.png",
+        "recommendation": "Add to README: <img src=\"scorecard.png\" width=\"100%\">"
+      }
+    },
+    "debt": {
+      "overall_gap": 0.0,
+      "wontfix_count": 4,
+      "worst_dimension": "Test health",
+      "worst_gap": 0.2,
+      "trend": "stable"
+    },
+    "milestone": null,
+    "primary_action": {
+      "command": "desloppify issues",
+      "description": "48 review findings need investigation \u2014 run `desloppify issues` to see the work queue"
+    },
+    "why_now": "4 independent workstreams, safe to parallelize. Rescan after each phase to verify. Review: 48 finding(s) \u2014 `desloppify issues`.",
+    "verification_step": {
+      "command": "desloppify scan",
+      "reason": "revalidate after changes"
+    },
+    "risk_flags": [
+      {
+        "type": "wontfix_gap",
+        "severity": "medium",
+        "message": "Strict/lenient gap is 0.0 pts with 4 wontfix findings"
+      }
+    ],
+    "strict_target": {
+      "target": 95.0,
+      "current": 63.8,
+      "gap": 31.2,
+      "state": "below",
+      "warning": null
+    },
+    "reminders": [],
+    "reminder_history": {
+      "zone_classification": 3,
+      "report_scores": 24,
+      "feedback_nudge": 3,
+      "stagnant_nudge": 15,
+      "badge_recommendation": 1,
+      "review_not_run": 1,
+      "review_findings_pending": 3
+    }
+  },
+  "overall_score": 63.9,
+  "objective_score": 85.4,
+  "strict_score": 63.8,
+  "scorecard_dimensions": [
+    {
+      "name": "File health",
+      "score": 82.8,
+      "strict": 82.8,
+      "checks": 458,
+      "issues": 114,
+      "tier": 3,
+      "subjective": false
+    },
+    {
+      "name": "AI generated debt",
+      "score": 61.2,
+      "strict": 61.2,
+      "checks": 10,
+      "issues": 2,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "ai_generated_debt"
+      ]
+    },
+    {
+      "name": "Abstraction fit",
+      "score": 52.1,
+      "strict": 52.1,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "abstraction_fitness"
+      ]
+    },
+    {
+      "name": "Code quality",
+      "score": 92.7,
+      "strict": 92.6,
+      "checks": 3306,
+      "issues": 462,
+      "tier": 3,
+      "subjective": false
+    },
+    {
+      "name": "Convention drift",
+      "score": 63.9,
+      "strict": 63.9,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "convention_outlier"
+      ]
+    },
+    {
+      "name": "Cross-module arch",
+      "score": 44.2,
+      "strict": 44.2,
+      "checks": 10,
+      "issues": 5,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "cross_module_architecture"
+      ]
+    },
+    {
+      "name": "Dep health",
+      "score": 71.0,
+      "strict": 71.0,
+      "checks": 10,
+      "issues": 1,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "dependency_health"
+      ]
+    },
+    {
+      "name": "Design coherence",
+      "score": 48.3,
+      "strict": 48.3,
+      "checks": 10,
+      "issues": 7,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "design_coherence"
+      ]
+    },
+    {
+      "name": "Duplication",
+      "score": 97.2,
+      "strict": 97.2,
+      "checks": 2824,
+      "issues": 118,
+      "tier": 3,
+      "subjective": false
+    },
+    {
+      "name": "Elegance",
+      "score": 48.5,
+      "strict": 48.5,
+      "checks": 30,
+      "issues": 17,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "high_level_elegance",
+        "mid_level_elegance",
+        "low_level_elegance"
+      ]
+    },
+    {
+      "name": "Error consistency",
+      "score": 54.9,
+      "strict": 54.9,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "error_consistency"
+      ]
+    },
+    {
+      "name": "Security",
+      "score": 100.0,
+      "strict": 100.0,
+      "checks": 917,
+      "issues": 0,
+      "tier": 4,
+      "subjective": false
+    },
+    {
+      "name": "Structure nav",
+      "score": 47.4,
+      "strict": 47.4,
+      "checks": 10,
+      "issues": 4,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "package_organization"
+      ]
+    },
+    {
+      "name": "Test health",
+      "score": 56.8,
+      "strict": 56.6,
+      "checks": 6125,
+      "issues": 234,
+      "tier": 4,
+      "subjective": false
+    },
+    {
+      "name": "Test strategy",
+      "score": 53.3,
+      "strict": 53.3,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "test_strategy"
+      ]
+    }
+  ],
+  "subjective_measures": [
+    {
+      "name": "AI generated debt",
+      "score": 61.2,
+      "strict": 61.2,
+      "checks": 10,
+      "issues": 2,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "ai_generated_debt"
+      ]
+    },
+    {
+      "name": "Abstraction fit",
+      "score": 52.1,
+      "strict": 52.1,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "abstraction_fitness"
+      ]
+    },
+    {
+      "name": "Convention drift",
+      "score": 63.9,
+      "strict": 63.9,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "convention_outlier"
+      ]
+    },
+    {
+      "name": "Cross-module arch",
+      "score": 44.2,
+      "strict": 44.2,
+      "checks": 10,
+      "issues": 5,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "cross_module_architecture"
+      ]
+    },
+    {
+      "name": "Dep health",
+      "score": 71.0,
+      "strict": 71.0,
+      "checks": 10,
+      "issues": 1,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "dependency_health"
+      ]
+    },
+    {
+      "name": "Design coherence",
+      "score": 48.3,
+      "strict": 48.3,
+      "checks": 10,
+      "issues": 7,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "design_coherence"
+      ]
+    },
+    {
+      "name": "Elegance",
+      "score": 48.5,
+      "strict": 48.5,
+      "checks": 30,
+      "issues": 17,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "high_level_elegance",
+        "mid_level_elegance",
+        "low_level_elegance"
+      ]
+    },
+    {
+      "name": "Error consistency",
+      "score": 54.9,
+      "strict": 54.9,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "error_consistency"
+      ]
+    },
+    {
+      "name": "Structure nav",
+      "score": 47.4,
+      "strict": 47.4,
+      "checks": 10,
+      "issues": 4,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "package_organization"
+      ]
+    },
+    {
+      "name": "Test strategy",
+      "score": 53.3,
+      "strict": 53.3,
+      "checks": 10,
+      "issues": 3,
+      "tier": 4,
+      "subjective": true,
+      "placeholder": false,
+      "cli_keys": [
+        "test_strategy"
+      ]
+    }
+  ],
+  "config": {
+    "target_strict_score": 95,
+    "review_max_age_days": 30,
+    "review_batch_max_files": 80,
+    "holistic_max_age_days": 30,
+    "generate_scorecard": true,
+    "badge_path": "scorecard.png",
+    "exclude": [],
+    "ignore": [],
+    "ignore_metadata": {},
+    "zone_overrides": {},
+    "review_dimensions": [],
+    "large_files_threshold": 0,
+    "props_threshold": 0,
+    "finding_noise_budget": 10,
+    "finding_noise_global_budget": 0,
+    "languages": {}
+  }
+}

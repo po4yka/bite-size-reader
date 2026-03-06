@@ -63,152 +63,14 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
         corrections: list[str] = []
 
         try:
-            # Required fields check
-            required_fields = [
-                "summary_250",
-                "summary_1000",
-                "tldr",
-                "key_ideas",
-                "topic_tags",
-                "entities",
-                "estimated_reading_time_min",
-                "key_stats",
-                "answered_questions",
-                "readability",
-                "seo_keywords",
-            ]
-
-            missing_fields = [f for f in required_fields if f not in summary]
-            if missing_fields:
-                errors.append(
-                    f"Missing required fields: {', '.join(missing_fields)}. "
-                    "Include all listed fields with non-empty values in the JSON output."
-                )
-
-            # Character limit validation
-            if "summary_250" in summary:
-                length_250 = len(summary["summary_250"])
-                if length_250 > 250:
-                    errors.append(
-                        f"summary_250 exceeds limit: {length_250} chars (max 250). "
-                        "Rewrite as a single sentence under 250 characters ending at . ! or ?"
-                    )
-                elif length_250 < 50:
-                    warnings.append(f"summary_250 very short: {length_250} chars")
-
-            if "summary_1000" in summary:
-                length_1000 = len(summary["summary_1000"])
-                if length_1000 > 1000:
-                    errors.append(
-                        f"summary_1000 exceeds limit: {length_1000} chars (max 1000). "
-                        "Rewrite as 3-5 sentences under 1000 characters total."
-                    )
-                elif length_1000 < 100:
-                    warnings.append(f"summary_1000 very short: {length_1000} chars")
-
-            # Topic tags validation
-            if "topic_tags" in summary:
-                tags = summary["topic_tags"]
-                if not isinstance(tags, list):
-                    errors.append("topic_tags must be a list")
-                else:
-                    invalid_tags = [t for t in tags if not str(t).startswith("#")]
-                    if invalid_tags:
-                        errors.append(
-                            f"Topic tags missing '#' prefix: {', '.join(invalid_tags)}. "
-                            "Each tag must be lowercase with # prefix, e.g. #machine-learning"
-                        )
-
-                    if len(tags) > 10:
-                        warnings.append(f"Many topic tags: {len(tags)} (recommend ≤10)")
-
-            # Entities validation
-            if "entities" in summary:
-                entities = summary["entities"]
-                if not isinstance(entities, dict):
-                    errors.append("entities must be a dictionary")
-                else:
-                    required_entity_types = ["people", "organizations", "locations"]
-                    for entity_type in required_entity_types:
-                        if entity_type not in entities:
-                            errors.append(f"entities.{entity_type} is required")
-                        elif not isinstance(entities[entity_type], list):
-                            errors.append(f"entities.{entity_type} must be a list")
-
-            # Key stats validation
-            if "key_stats" in summary:
-                stats = summary["key_stats"]
-                if not isinstance(stats, list):
-                    errors.append("key_stats must be a list")
-                else:
-                    for idx, stat in enumerate(stats):
-                        if not isinstance(stat, dict):
-                            errors.append(f"key_stats[{idx}] must be a dictionary")
-                            continue
-
-                        if "label" not in stat:
-                            errors.append(f"key_stats[{idx}] missing 'label' field")
-                        if "value" not in stat:
-                            errors.append(f"key_stats[{idx}] missing 'value' field")
-                        elif not isinstance(stat["value"], int | float):
-                            errors.append(
-                                f"key_stats[{idx}].value must be numeric, "
-                                f"got {type(stat['value']).__name__}. "
-                                "value must be a number (42, 3.14), not a string like 'N/A'"
-                            )
-
-            # Readability validation
-            if "readability" in summary:
-                readability = summary["readability"]
-                if not isinstance(readability, dict):
-                    errors.append("readability must be a dictionary")
-                else:
-                    if "score" not in readability:
-                        errors.append(
-                            "readability.score is required. "
-                            "Provide a numeric Flesch-Kincaid score, e.g. 65.0"
-                        )
-                    elif not isinstance(readability["score"], int | float):
-                        errors.append(
-                            "readability.score must be numeric. "
-                            "Provide a Flesch-Kincaid score as a number, e.g. 65.0"
-                        )
-
-                    if "level" not in readability:
-                        warnings.append("readability.level missing (recommended)")
-
-            # Estimated reading time validation
-            if "estimated_reading_time_min" in summary:
-                reading_time = summary["estimated_reading_time_min"]
-                if not isinstance(reading_time, int):
-                    errors.append(
-                        f"estimated_reading_time_min must be integer, "
-                        f"got {type(reading_time).__name__}. "
-                        "Provide a whole number of minutes, e.g. 5"
-                    )
-                elif reading_time < 1:
-                    warnings.append(f"estimated_reading_time_min very low: {reading_time}")
-
-            # Classification fields validation (NEW)
-            valid_source_types = {"news", "blog", "research", "opinion", "tutorial", "reference"}
-            if "source_type" in summary:
-                source_type = str(summary["source_type"]).lower()
-                if source_type not in valid_source_types:
-                    errors.append(
-                        f"source_type must be one of: {', '.join(sorted(valid_source_types))}. "
-                        f"Got: '{summary['source_type']}'. "
-                        "Choose exactly one value from the allowed list."
-                    )
-
-            valid_freshness = {"breaking", "recent", "evergreen"}
-            if "temporal_freshness" in summary:
-                freshness = str(summary["temporal_freshness"]).lower()
-                if freshness not in valid_freshness:
-                    errors.append(
-                        f"temporal_freshness must be one of: {', '.join(sorted(valid_freshness))}. "
-                        f"Got: '{summary['temporal_freshness']}'. "
-                        "Choose exactly one value from the allowed list."
-                    )
+            self._validate_required_fields(summary, errors)
+            self._validate_summary_lengths(summary, errors, warnings)
+            self._validate_topic_tags(summary, errors, warnings)
+            self._validate_entities(summary, errors)
+            self._validate_key_stats(summary, errors)
+            self._validate_readability(summary, errors, warnings)
+            self._validate_reading_time(summary, errors, warnings)
+            self._validate_classification_fields(summary, errors)
 
             # Cross-field validation: summary distinctness
             cross_field_issues = self._validate_summary_distinctness(summary)
@@ -251,6 +113,159 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
             return AgentResult.error_result(
                 f"Validation exception: {e!s}", exception_type=type(e).__name__
             )
+
+    def _validate_required_fields(self, summary: dict[str, Any], errors: list[str]) -> None:
+        required_fields = [
+            "summary_250",
+            "summary_1000",
+            "tldr",
+            "key_ideas",
+            "topic_tags",
+            "entities",
+            "estimated_reading_time_min",
+            "key_stats",
+            "answered_questions",
+            "readability",
+            "seo_keywords",
+        ]
+        missing_fields = [field for field in required_fields if field not in summary]
+        if not missing_fields:
+            return
+        errors.append(
+            f"Missing required fields: {', '.join(missing_fields)}. "
+            "Include all listed fields with non-empty values in the JSON output."
+        )
+
+    def _validate_summary_lengths(
+        self, summary: dict[str, Any], errors: list[str], warnings: list[str]
+    ) -> None:
+        if "summary_250" in summary:
+            length_250 = len(summary["summary_250"])
+            if length_250 > 250:
+                errors.append(
+                    f"summary_250 exceeds limit: {length_250} chars (max 250). "
+                    "Rewrite as a single sentence under 250 characters ending at . ! or ?"
+                )
+            elif length_250 < 50:
+                warnings.append(f"summary_250 very short: {length_250} chars")
+
+        if "summary_1000" in summary:
+            length_1000 = len(summary["summary_1000"])
+            if length_1000 > 1000:
+                errors.append(
+                    f"summary_1000 exceeds limit: {length_1000} chars (max 1000). "
+                    "Rewrite as 3-5 sentences under 1000 characters total."
+                )
+            elif length_1000 < 100:
+                warnings.append(f"summary_1000 very short: {length_1000} chars")
+
+    def _validate_topic_tags(
+        self, summary: dict[str, Any], errors: list[str], warnings: list[str]
+    ) -> None:
+        if "topic_tags" not in summary:
+            return
+        tags = summary["topic_tags"]
+        if not isinstance(tags, list):
+            errors.append("topic_tags must be a list")
+            return
+        invalid_tags = [t for t in tags if not str(t).startswith("#")]
+        if invalid_tags:
+            errors.append(
+                f"Topic tags missing '#' prefix: {', '.join(invalid_tags)}. "
+                "Each tag must be lowercase with # prefix, e.g. #machine-learning"
+            )
+        if len(tags) > 10:
+            warnings.append(f"Many topic tags: {len(tags)} (recommend ≤10)")
+
+    def _validate_entities(self, summary: dict[str, Any], errors: list[str]) -> None:
+        if "entities" not in summary:
+            return
+        entities = summary["entities"]
+        if not isinstance(entities, dict):
+            errors.append("entities must be a dictionary")
+            return
+        for entity_type in ("people", "organizations", "locations"):
+            if entity_type not in entities:
+                errors.append(f"entities.{entity_type} is required")
+            elif not isinstance(entities[entity_type], list):
+                errors.append(f"entities.{entity_type} must be a list")
+
+    def _validate_key_stats(self, summary: dict[str, Any], errors: list[str]) -> None:
+        if "key_stats" not in summary:
+            return
+        stats = summary["key_stats"]
+        if not isinstance(stats, list):
+            errors.append("key_stats must be a list")
+            return
+        for idx, stat in enumerate(stats):
+            if not isinstance(stat, dict):
+                errors.append(f"key_stats[{idx}] must be a dictionary")
+                continue
+            if "label" not in stat:
+                errors.append(f"key_stats[{idx}] missing 'label' field")
+            if "value" not in stat:
+                errors.append(f"key_stats[{idx}] missing 'value' field")
+            elif not isinstance(stat["value"], int | float):
+                errors.append(
+                    f"key_stats[{idx}].value must be numeric, got {type(stat['value']).__name__}. "
+                    "value must be a number (42, 3.14), not a string like 'N/A'"
+                )
+
+    def _validate_readability(
+        self, summary: dict[str, Any], errors: list[str], warnings: list[str]
+    ) -> None:
+        if "readability" not in summary:
+            return
+        readability = summary["readability"]
+        if not isinstance(readability, dict):
+            errors.append("readability must be a dictionary")
+            return
+        if "score" not in readability:
+            errors.append(
+                "readability.score is required. Provide a numeric Flesch-Kincaid score, e.g. 65.0"
+            )
+        elif not isinstance(readability["score"], int | float):
+            errors.append(
+                "readability.score must be numeric. "
+                "Provide a Flesch-Kincaid score as a number, e.g. 65.0"
+            )
+        if "level" not in readability:
+            warnings.append("readability.level missing (recommended)")
+
+    def _validate_reading_time(
+        self, summary: dict[str, Any], errors: list[str], warnings: list[str]
+    ) -> None:
+        if "estimated_reading_time_min" not in summary:
+            return
+        reading_time = summary["estimated_reading_time_min"]
+        if not isinstance(reading_time, int):
+            errors.append(
+                f"estimated_reading_time_min must be integer, got {type(reading_time).__name__}. "
+                "Provide a whole number of minutes, e.g. 5"
+            )
+        elif reading_time < 1:
+            warnings.append(f"estimated_reading_time_min very low: {reading_time}")
+
+    def _validate_classification_fields(self, summary: dict[str, Any], errors: list[str]) -> None:
+        valid_source_types = {"news", "blog", "research", "opinion", "tutorial", "reference"}
+        if "source_type" in summary:
+            source_type = str(summary["source_type"]).lower()
+            if source_type not in valid_source_types:
+                errors.append(
+                    f"source_type must be one of: {', '.join(sorted(valid_source_types))}. "
+                    f"Got: '{summary['source_type']}'. "
+                    "Choose exactly one value from the allowed list."
+                )
+
+        valid_freshness = {"breaking", "recent", "evergreen"}
+        if "temporal_freshness" in summary:
+            freshness = str(summary["temporal_freshness"]).lower()
+            if freshness not in valid_freshness:
+                errors.append(
+                    f"temporal_freshness must be one of: {', '.join(sorted(valid_freshness))}. "
+                    f"Got: '{summary['temporal_freshness']}'. "
+                    "Choose exactly one value from the allowed list."
+                )
 
     def _format_validation_errors(self, errors: list[str]) -> str:
         """Format validation errors into a clear message.

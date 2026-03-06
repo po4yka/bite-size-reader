@@ -20,7 +20,7 @@ def _get_encoder():
         import tiktoken
 
         _encoder = tiktoken.get_encoding("cl100k_base")
-    except Exception:
+    except (ImportError, AttributeError, ValueError, KeyError, RuntimeError):
         logger.debug("encoder package unavailable, using heuristic budget estimation")
         _encoder = None
     return _encoder
@@ -42,7 +42,7 @@ def count_tokens(text: str) -> int:
     if enc is not None:
         try:
             return len(enc.encode(text))
-        except Exception:
-            pass
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return max(1, len(text) // 4)
     # Fallback: ~4 chars per token for English text
     return max(1, len(text) // 4)

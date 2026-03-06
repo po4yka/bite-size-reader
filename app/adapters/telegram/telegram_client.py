@@ -222,6 +222,7 @@ class TelegramClient:
                 )
             except Exception as e:
                 logger.warning("bot_commands_set_failed", extra={"error": str(e)})
+                return
         except Exception:
             return
 

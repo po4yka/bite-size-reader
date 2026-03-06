@@ -90,14 +90,19 @@ def _build_db_dump_response(request: Request, user: dict):
             logger.info(f"Created database backup at {backup_path} for user {user['user_id']}")
         except Exception as e:
             logger.error(f"Database backup failed: {e}", exc_info=True)
+            cleanup_error: str | None = None
 
             if os.path.exists(temp_backup_path):
                 try:
                     os.remove(temp_backup_path)
                 except OSError as cleanup_exc:
                     logger.debug("temp_backup_cleanup_failed", extra={"error": str(cleanup_exc)})
+                    cleanup_error = str(cleanup_exc)
 
-            raise ProcessingError(f"Backup failed: {e!s}") from e
+            details = f"Backup failed: {e!s}"
+            if cleanup_error:
+                details += f" (temporary file cleanup also failed: {cleanup_error})"
+            raise ProcessingError(details) from e
 
     if not os.path.exists(backup_path):
         raise ResourceNotFoundError("Backup file", backup_path)

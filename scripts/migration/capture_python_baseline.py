@@ -14,10 +14,13 @@ import os
 import platform
 import resource
 import subprocess
-import sys
+import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+
+_PARITY_SUITE_TIMEOUT_SEC = 30 * 60
+_GIT_REV_TIMEOUT_SEC = 15
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,14 +46,27 @@ def main() -> int:
     command = ["bash", "scripts/migration/run_parity_suite.sh"]
 
     start = time.perf_counter()
-    proc = subprocess.run(command, cwd=repo_root, check=False)
+    proc = subprocess.run(
+        command,
+        cwd=repo_root,
+        check=False,
+        timeout=_PARITY_SUITE_TIMEOUT_SEC,
+    )
     duration_s = time.perf_counter() - start
     usage = resource.getrusage(resource.RUSAGE_CHILDREN)
 
+    git_commit = os.getenv("GITHUB_SHA")
+    if not git_commit:
+        git_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            text=True,
+            timeout=_GIT_REV_TIMEOUT_SEC,
+        ).strip()
+
     payload = {
         "captured_at_utc": datetime.now(UTC).isoformat(),
-        "git_commit": os.getenv("GITHUB_SHA")
-        or subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_root, text=True).strip(),
+        "git_commit": git_commit,
         "runtime": "python",
         "suite": "m0_parity",
         "command": " ".join(command),
@@ -68,7 +84,17 @@ def main() -> int:
     }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=output_path.parent,
+        prefix=f".{output_path.stem}.",
+        suffix=".tmp",
+        delete=False,
+    ) as tmp:
+        tmp.write(json.dumps(payload, indent=2) + "\n")
+        temp_output = Path(tmp.name)
+    temp_output.replace(output_path)
 
     history_path.parent.mkdir(parents=True, exist_ok=True)
     with history_path.open("a", encoding="utf-8") as fp:
@@ -80,4 +106,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

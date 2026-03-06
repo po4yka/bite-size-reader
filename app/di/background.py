@@ -5,7 +5,7 @@ from typing import Any
 
 from app.adapters.content.scraper.factory import ContentScraperFactory
 from app.adapters.content.url_processor import URLProcessor
-from app.adapters.external.firecrawl import FirecrawlClient
+from app.adapters.external.firecrawl.client import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.llm import LLMClientFactory, LLMClientProtocol
 from app.api.background_processor import BackgroundProcessor

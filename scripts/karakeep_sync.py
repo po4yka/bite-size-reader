@@ -4,10 +4,10 @@
 Run this script via cron to automatically sync between BSR and Karakeep.
 
 Example crontab entry (every 6 hours):
-    0 */6 * * * cd /home/po4yka/bite-size-reader && .venv/bin/python scripts/karakeep_sync.py >> /var/log/karakeep_sync.log 2>&1
+    0 */6 * * * cd /home/po4yka/bite-size-reader && .venv/bin/python -m scripts.karakeep_sync >> /var/log/karakeep_sync.log 2>&1
 
 Usage:
-    python scripts/karakeep_sync.py [--user-id USER_ID] [--limit LIMIT] [--dry-run]
+    python -m scripts.karakeep_sync [--user-id USER_ID] [--limit LIMIT] [--dry-run]
 """
 
 from __future__ import annotations
@@ -16,12 +16,7 @@ import argparse
 import asyncio
 import logging
 import os
-import sys
-from pathlib import Path
-
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+from typing import Any
 
 # Set up logging
 logging.basicConfig(
@@ -30,6 +25,77 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger("karakeep_sync")
+
+
+def _print_preview(preview: dict[str, Any]) -> None:
+    print("\n=== Karakeep Sync Preview (DRY RUN) ===\n")
+
+    bsr_to_kk = preview["bsr_to_karakeep"]
+    print("BSR -> Karakeep:")
+    print(f"  Would sync: {len(bsr_to_kk['would_sync'])} items")
+    print(f"  Would skip: {bsr_to_kk['would_skip']} (already synced)")
+    print(f"  Already in Karakeep: {len(bsr_to_kk['already_exists_in_karakeep'])}")
+    if bsr_to_kk["would_sync"]:
+        print("\n  Items that would be synced:")
+        for item in bsr_to_kk["would_sync"][:10]:
+            title = item.get("title", "")[:50] or "(no title)"
+            print(f"    - [#{item['summary_id']}] {title}...")
+            print(f"      URL: {item['url'][:60]}...")
+        if len(bsr_to_kk["would_sync"]) > 10:
+            print(f"    ... and {len(bsr_to_kk['would_sync']) - 10} more")
+
+    print()
+
+    kk_to_bsr = preview["karakeep_to_bsr"]
+    print("Karakeep -> BSR:")
+    print(f"  Would sync: {len(kk_to_bsr['would_sync'])} items")
+    print(f"  Would skip: {kk_to_bsr['would_skip']} (already synced)")
+    print(f"  Already in BSR: {len(kk_to_bsr['already_exists_in_bsr'])}")
+    if kk_to_bsr["would_sync"]:
+        print("\n  Items that would be synced:")
+        for item in kk_to_bsr["would_sync"][:10]:
+            title = (item.get("title") or "(no title)")[:50]
+            print(f"    - [{item['karakeep_id']}] {title}")
+            print(f"      URL: {item['url'][:60]}...")
+        if len(kk_to_bsr["would_sync"]) > 10:
+            print(f"    ... and {len(kk_to_bsr['would_sync']) - 10} more")
+
+    if preview["errors"]:
+        print(f"\nErrors ({len(preview['errors'])}):")
+        for err in preview["errors"]:
+            print(f"  - {err}")
+
+    print("\n=== End of Preview ===")
+    print("Run without --dry-run to execute the sync.")
+
+
+def _print_sync_summary(result: Any) -> list[str]:
+    bsr = result.bsr_to_karakeep
+    kk = result.karakeep_to_bsr
+    print("\n=== Karakeep Sync Summary ===")
+    print(
+        f"BSR -> Karakeep: {bsr.items_synced} synced, "
+        f"{bsr.items_skipped} skipped, "
+        f"{bsr.items_failed} failed"
+    )
+    if bsr.items_skipped > 0:
+        print("  Skip breakdown:")
+        print(f"    Already synced: {bsr.skipped_already_synced}")
+        print(f"    Already in Karakeep: {bsr.skipped_exists_in_target}")
+        print(f"    Hash errors: {bsr.skipped_hash_failed}")
+        print(f"    No URL: {bsr.skipped_no_url}")
+    print(
+        f"Karakeep -> BSR: {kk.items_synced} synced, "
+        f"{kk.items_skipped} skipped, "
+        f"{kk.items_failed} failed"
+    )
+    print(f"Duration: {result.total_duration_seconds:.1f}s")
+    all_errors = result.bsr_to_karakeep.errors + result.karakeep_to_bsr.errors
+    if all_errors:
+        print(f"\nErrors ({len(all_errors)}):")
+        for err in all_errors[:10]:
+            print(f"  - {err}")
+    return all_errors
 
 
 async def run_sync(
@@ -98,49 +164,7 @@ async def run_sync(
         if dry_run:
             logger.info("DRY RUN - no changes will be made")
             preview = await service.preview_sync(user_id=user_id, limit=limit)
-
-            print("\n=== Karakeep Sync Preview (DRY RUN) ===\n")
-
-            # BSR → Karakeep
-            bsr_to_kk = preview["bsr_to_karakeep"]
-            print("BSR -> Karakeep:")
-            print(f"  Would sync: {len(bsr_to_kk['would_sync'])} items")
-            print(f"  Would skip: {bsr_to_kk['would_skip']} (already synced)")
-            print(f"  Already in Karakeep: {len(bsr_to_kk['already_exists_in_karakeep'])}")
-            if bsr_to_kk["would_sync"]:
-                print("\n  Items that would be synced:")
-                for item in bsr_to_kk["would_sync"][:10]:
-                    title = item.get("title", "")[:50] or "(no title)"
-                    print(f"    - [#{item['summary_id']}] {title}...")
-                    print(f"      URL: {item['url'][:60]}...")
-                if len(bsr_to_kk["would_sync"]) > 10:
-                    print(f"    ... and {len(bsr_to_kk['would_sync']) - 10} more")
-
-            print()
-
-            # Karakeep → BSR
-            kk_to_bsr = preview["karakeep_to_bsr"]
-            print("Karakeep -> BSR:")
-            print(f"  Would sync: {len(kk_to_bsr['would_sync'])} items")
-            print(f"  Would skip: {kk_to_bsr['would_skip']} (already synced)")
-            print(f"  Already in BSR: {len(kk_to_bsr['already_exists_in_bsr'])}")
-            if kk_to_bsr["would_sync"]:
-                print("\n  Items that would be synced:")
-                for item in kk_to_bsr["would_sync"][:10]:
-                    title = (item.get("title") or "(no title)")[:50]
-                    print(f"    - [{item['karakeep_id']}] {title}")
-                    print(f"      URL: {item['url'][:60]}...")
-                if len(kk_to_bsr["would_sync"]) > 10:
-                    print(f"    ... and {len(kk_to_bsr['would_sync']) - 10} more")
-
-            # Errors
-            if preview["errors"]:
-                print(f"\nErrors ({len(preview['errors'])}):")
-                for err in preview["errors"]:
-                    print(f"  - {err}")
-
-            print("\n=== End of Preview ===")
-            print("Run without --dry-run to execute the sync.")
+            _print_preview(preview)
             return 0
 
         # Run actual sync (service already created above)
@@ -160,34 +184,7 @@ async def run_sync(
             },
         )
 
-        # Print summary
-        bsr = result.bsr_to_karakeep
-        kk = result.karakeep_to_bsr
-        print("\n=== Karakeep Sync Summary ===")
-        print(
-            f"BSR -> Karakeep: {bsr.items_synced} synced, "
-            f"{bsr.items_skipped} skipped, "
-            f"{bsr.items_failed} failed"
-        )
-        if bsr.items_skipped > 0:
-            print("  Skip breakdown:")
-            print(f"    Already synced: {bsr.skipped_already_synced}")
-            print(f"    Already in Karakeep: {bsr.skipped_exists_in_target}")
-            print(f"    Hash errors: {bsr.skipped_hash_failed}")
-            print(f"    No URL: {bsr.skipped_no_url}")
-        print(
-            f"Karakeep -> BSR: {kk.items_synced} synced, "
-            f"{kk.items_skipped} skipped, "
-            f"{kk.items_failed} failed"
-        )
-        print(f"Duration: {result.total_duration_seconds:.1f}s")
-
-        # Report errors
-        all_errors = result.bsr_to_karakeep.errors + result.karakeep_to_bsr.errors
-        if all_errors:
-            print(f"\nErrors ({len(all_errors)}):")
-            for err in all_errors[:10]:
-                print(f"  - {err}")
+        all_errors = _print_sync_summary(result)
 
         return 0 if not all_errors else 1
 
@@ -236,8 +233,9 @@ def main() -> None:
         if allowed_ids:
             try:
                 user_id = int(allowed_ids.split(",")[0].strip())
-            except (ValueError, IndexError):
-                pass
+            except (ValueError, IndexError) as exc:
+                logger.warning("invalid_allowed_user_ids_env", extra={"error": str(exc)})
+                user_id = None
 
     exit_code = asyncio.run(
         run_sync(
@@ -248,7 +246,7 @@ def main() -> None:
             reset=args.reset,
         )
     )
-    sys.exit(exit_code)
+    raise SystemExit(exit_code)
 
 
 if __name__ == "__main__":

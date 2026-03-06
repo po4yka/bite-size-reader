@@ -160,18 +160,13 @@ class TwitterExtractor:
         run_firecrawl_tier = self._run_firecrawl_tier()
         run_playwright_tier = self._run_playwright_tier()
 
-        metadata: dict[str, Any] = {
-            "source": "twitter",
-            "tweet_id": tweet_id,
-            "is_article": is_article,
-            "article_id": article_id,
-            "tier_mode": tier_mode,
-            "article_resolution_reason": article_resolution.reason,
-            "article_resolved_url": article_resolution.resolved_url,
-            "article_canonical_url": article_resolution.canonical_url,
-            "article_extraction_stage": None,
-            "tier_outcomes": {"firecrawl": "skipped", "playwright": "skipped"},
-        }
+        metadata = self._build_twitter_metadata(
+            tweet_id=tweet_id,
+            is_article=is_article,
+            article_id=article_id,
+            tier_mode=tier_mode,
+            article_resolution=article_resolution,
+        )
 
         # Tier 1: Try Firecrawl first (if preferred)
         firecrawl_ok = False
@@ -222,35 +217,14 @@ class TwitterExtractor:
             )
 
         if not content_text:
-            error_msg = self._build_extraction_error_message()
-            reason_code = (
-                REASON_RESOLVE_FAILED
-                if metadata.get("article_resolution_reason") == "resolve_failed"
-                else REASON_EXTRACTION_EMPTY_OUTPUT
-            )
-            await persist_request_failure(
-                request_repo=self._message_persistence.request_repo,
-                logger=logger,
-                request_id=req_id,
+            await self._raise_extraction_empty_error(
+                message=message,
+                req_id=req_id,
                 correlation_id=correlation_id,
-                stage="extraction",
-                component="platform_router",
-                reason_code=reason_code,
-                error=ValueError(error_msg),
-                retryable=True,
-                source_url=url_text,
-                resolved_url=metadata.get("article_resolved_url"),
-                canonical_url=metadata.get("article_canonical_url"),
-                article_id=metadata.get("article_id"),
-                content_signals={
-                    "tier_outcomes": metadata.get("tier_outcomes"),
-                    "is_article": is_article,
-                },
+                url_text=url_text,
+                metadata=metadata,
+                is_article=is_article,
             )
-            await self._response_formatter.send_error_notification(
-                message, "twitter_extraction_error", correlation_id, details=error_msg
-            )
-            raise ValueError(error_msg)
 
         detected = detect_language(content_text)
         try:
@@ -264,6 +238,68 @@ class TwitterExtractor:
             )
 
         return req_id, content_text, content_source, detected, metadata
+
+    def _build_twitter_metadata(
+        self,
+        *,
+        tweet_id: str | None,
+        is_article: bool,
+        article_id: str | None,
+        tier_mode: str,
+        article_resolution: TwitterArticleLinkResolution,
+    ) -> dict[str, Any]:
+        return {
+            "source": "twitter",
+            "tweet_id": tweet_id,
+            "is_article": is_article,
+            "article_id": article_id,
+            "tier_mode": tier_mode,
+            "article_resolution_reason": article_resolution.reason,
+            "article_resolved_url": article_resolution.resolved_url,
+            "article_canonical_url": article_resolution.canonical_url,
+            "article_extraction_stage": None,
+            "tier_outcomes": {"firecrawl": "skipped", "playwright": "skipped"},
+        }
+
+    async def _raise_extraction_empty_error(
+        self,
+        *,
+        message: Any,
+        req_id: int,
+        correlation_id: str | None,
+        url_text: str,
+        metadata: dict[str, Any],
+        is_article: bool,
+    ) -> None:
+        error_msg = self._build_extraction_error_message()
+        reason_code = (
+            REASON_RESOLVE_FAILED
+            if metadata.get("article_resolution_reason") == "resolve_failed"
+            else REASON_EXTRACTION_EMPTY_OUTPUT
+        )
+        await persist_request_failure(
+            request_repo=self._message_persistence.request_repo,
+            logger=logger,
+            request_id=req_id,
+            correlation_id=correlation_id,
+            stage="extraction",
+            component="platform_router",
+            reason_code=reason_code,
+            error=ValueError(error_msg),
+            retryable=True,
+            source_url=url_text,
+            resolved_url=metadata.get("article_resolved_url"),
+            canonical_url=metadata.get("article_canonical_url"),
+            article_id=metadata.get("article_id"),
+            content_signals={
+                "tier_outcomes": metadata.get("tier_outcomes"),
+                "is_article": is_article,
+            },
+        )
+        await self._response_formatter.send_error_notification(
+            message, "twitter_extraction_error", correlation_id, details=error_msg
+        )
+        raise ValueError(error_msg)
 
     async def extract_content_pure(
         self,

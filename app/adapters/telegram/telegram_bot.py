@@ -243,6 +243,7 @@ class TelegramBot:
             task.add_done_callback(self._audit_tasks.discard)
         except RuntimeError as exc:
             logger.debug("audit_task_schedule_skipped", extra={"error": str(exc)})
+            return
 
     async def _shutdown(self, drain_timeout: float = 5.0) -> None:
         """Close external clients and drain in-flight tasks."""
@@ -488,14 +489,19 @@ class TelegramBot:
             logger.exception("db_backup_failed", extra={"error": str(exc)})
             return
 
+        cleanup_failed = False
         try:
             self._cleanup_old_backups(backup_directory, base_path.stem, suffix, retention)
         except Exception as exc:
+            cleanup_failed = True
             logger.warning("db_backup_cleanup_failed", extra={"error": str(exc)})
 
         logger.info(
             "db_backup_created",
-            extra={"backup_path": self._mask_path(str(created_path))},
+            extra={
+                "backup_path": self._mask_path(str(created_path)),
+                "cleanup_failed": cleanup_failed,
+            },
         )
 
     def _resolve_backup_dir(self, override: str | None) -> Path:

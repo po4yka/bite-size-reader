@@ -66,39 +66,11 @@ def download_video_sync(
         try:
             info = ydl.extract_info(url, download=False)
         except yt_dlp_module.utils.DownloadError as exc:
-            error_msg = str(exc).lower()
             logger.error(
                 "yt_dlp_extract_info_failed",
                 extra={"url": url, "error": str(exc), "cid": correlation_id},
             )
-
-            if "sign in to confirm your age" in error_msg or "age-restricted" in error_msg:
-                raise ValueError(
-                    "❌ This video is age-restricted and cannot be downloaded. "
-                    "YouTube requires login/age verification for this content."
-                ) from exc
-            if "video is not available" in error_msg or "video unavailable" in error_msg:
-                raise ValueError(
-                    "❌ Video is not available. It may be private, deleted, or geo-blocked in your region."
-                ) from exc
-            if "private video" in error_msg:
-                raise ValueError("❌ This video is private and cannot be accessed.") from exc
-            if "members-only" in error_msg or "join this channel" in error_msg:
-                raise ValueError(
-                    "❌ This video is members-only content. YouTube Premium or channel membership required."
-                ) from exc
-            if "this live event will begin" in error_msg or "premieres in" in error_msg:
-                raise ValueError(
-                    "❌ This video is a scheduled premiere or upcoming live stream. "
-                    "Please try again after it starts."
-                ) from exc
-            if "copyright" in error_msg:
-                raise ValueError("❌ Video unavailable due to copyright restrictions.") from exc
-            if "geo" in error_msg or "not available in your country" in error_msg:
-                raise ValueError(
-                    "❌ This video is geo-blocked and not available in your region."
-                ) from exc
-            raise ValueError(f"❌ Failed to extract video information: {str(exc)[:200]}") from exc
+            _raise_extract_info_error(exc)
         except Exception as exc:
             logger.error(
                 "yt_dlp_extract_info_failed",
@@ -119,33 +91,11 @@ def download_video_sync(
         try:
             ydl.download([url])
         except yt_dlp_module.utils.DownloadError as exc:
-            error_msg = str(exc).lower()
             logger.error(
                 "yt_dlp_download_failed",
                 extra={"url": url, "error": str(exc), "cid": correlation_id},
             )
-
-            if "http error 429" in error_msg or "too many requests" in error_msg:
-                raise ValueError(
-                    "❌ YouTube rate limit exceeded. Please try again in a few minutes."
-                ) from exc
-            if "http error 403" in error_msg:
-                raise ValueError(
-                    "❌ Access forbidden. Video may require authentication or is geo-blocked."
-                ) from exc
-            if "http error 404" in error_msg:
-                raise ValueError(
-                    "❌ Video not found. It may have been deleted or the URL is incorrect."
-                ) from exc
-            if "timed out" in error_msg or "timeout" in error_msg:
-                raise ValueError(
-                    "❌ Download timed out. Please try again or check your internet connection."
-                ) from exc
-            if "connection" in error_msg:
-                raise ValueError(
-                    "❌ Network connection error. Please check your internet connection and try again."
-                ) from exc
-            raise ValueError(f"❌ Download failed: {str(exc)[:200]}") from exc
+            _raise_download_error(exc)
         except Exception as exc:
             logger.error(
                 "yt_dlp_download_failed",
@@ -156,43 +106,19 @@ def download_video_sync(
         video_file = ydl.prepare_filename(info)
         video_path = Path(video_file)
 
-        subtitle_file = None
-        for lang in subtitle_languages:
-            sub_path = video_path.with_suffix(f".{lang}.vtt")
-            if sub_path.exists():
-                subtitle_file = str(sub_path)
-                break
-
-        for vtt_path in video_path.parent.glob(f"{video_id}_*.vtt"):
-            if subtitle_file and str(vtt_path) == subtitle_file:
-                continue
-            try:
-                vtt_path.unlink()
-            except OSError as exc:
-                logger.warning(
-                    "youtube_subtitle_cleanup_failed",
-                    extra={"path": str(vtt_path), "error": str(exc), "cid": correlation_id},
-                )
+        subtitle_file = _find_subtitle_file(
+            video_path=video_path, subtitle_languages=subtitle_languages
+        )
+        _cleanup_extra_subtitles(
+            video_path=video_path,
+            video_id=video_id,
+            subtitle_file=subtitle_file,
+            correlation_id=correlation_id,
+        )
 
         metadata_file = video_path.with_suffix(".info.json")
-        thumbnail_file = None
-        for ext in [".jpg", ".png", ".webp"]:
-            thumb_path = video_path.with_suffix(ext)
-            if thumb_path.exists():
-                thumbnail_file = str(thumb_path)
-                break
-
-        if metadata_file.exists():
-            try:
-                metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError) as exc:
-                logger.warning(
-                    "youtube_metadata_file_corrupt",
-                    extra={"path": str(metadata_file), "error": str(exc)},
-                )
-                metadata = info
-        else:
-            metadata = info
+        thumbnail_file = _find_thumbnail_file(video_path)
+        metadata = _load_metadata_file(metadata_file=metadata_file, fallback=info)
 
         actual_size = video_path.stat().st_size if video_path.exists() else 0
         if actual_size == 0:
@@ -221,3 +147,107 @@ def download_video_sync(
             "acodec": metadata.get("acodec"),
             "format_id": metadata.get("format_id"),
         }
+
+
+def _raise_extract_info_error(exc: Exception) -> None:
+    error_msg = str(exc).lower()
+    if "sign in to confirm your age" in error_msg or "age-restricted" in error_msg:
+        raise ValueError(
+            "❌ This video is age-restricted and cannot be downloaded. "
+            "YouTube requires login/age verification for this content."
+        ) from exc
+    if "video is not available" in error_msg or "video unavailable" in error_msg:
+        raise ValueError(
+            "❌ Video is not available. It may be private, deleted, or geo-blocked in your region."
+        ) from exc
+    if "private video" in error_msg:
+        raise ValueError("❌ This video is private and cannot be accessed.") from exc
+    if "members-only" in error_msg or "join this channel" in error_msg:
+        raise ValueError(
+            "❌ This video is members-only content. YouTube Premium or channel membership required."
+        ) from exc
+    if "this live event will begin" in error_msg or "premieres in" in error_msg:
+        raise ValueError(
+            "❌ This video is a scheduled premiere or upcoming live stream. "
+            "Please try again after it starts."
+        ) from exc
+    if "copyright" in error_msg:
+        raise ValueError("❌ Video unavailable due to copyright restrictions.") from exc
+    if "geo" in error_msg or "not available in your country" in error_msg:
+        raise ValueError("❌ This video is geo-blocked and not available in your region.") from exc
+    raise ValueError(f"❌ Failed to extract video information: {str(exc)[:200]}") from exc
+
+
+def _raise_download_error(exc: Exception) -> None:
+    error_msg = str(exc).lower()
+    if "http error 429" in error_msg or "too many requests" in error_msg:
+        raise ValueError(
+            "❌ YouTube rate limit exceeded. Please try again in a few minutes."
+        ) from exc
+    if "http error 403" in error_msg:
+        raise ValueError(
+            "❌ Access forbidden. Video may require authentication or is geo-blocked."
+        ) from exc
+    if "http error 404" in error_msg:
+        raise ValueError(
+            "❌ Video not found. It may have been deleted or the URL is incorrect."
+        ) from exc
+    if "timed out" in error_msg or "timeout" in error_msg:
+        raise ValueError(
+            "❌ Download timed out. Please try again or check your internet connection."
+        ) from exc
+    if "connection" in error_msg:
+        raise ValueError(
+            "❌ Network connection error. Please check your internet connection and try again."
+        ) from exc
+    raise ValueError(f"❌ Download failed: {str(exc)[:200]}") from exc
+
+
+def _find_subtitle_file(*, video_path: Path, subtitle_languages: list[str]) -> str | None:
+    for lang in subtitle_languages:
+        sub_path = video_path.with_suffix(f".{lang}.vtt")
+        if sub_path.exists():
+            return str(sub_path)
+    return None
+
+
+def _cleanup_extra_subtitles(
+    *,
+    video_path: Path,
+    video_id: str | None,
+    subtitle_file: str | None,
+    correlation_id: str | None,
+) -> None:
+    if not video_id:
+        return
+    for vtt_path in video_path.parent.glob(f"{video_id}_*.vtt"):
+        if subtitle_file and str(vtt_path) == subtitle_file:
+            continue
+        try:
+            vtt_path.unlink()
+        except OSError as exc:
+            logger.warning(
+                "youtube_subtitle_cleanup_failed",
+                extra={"path": str(vtt_path), "error": str(exc), "cid": correlation_id},
+            )
+
+
+def _find_thumbnail_file(video_path: Path) -> str | None:
+    for ext in [".jpg", ".png", ".webp"]:
+        thumb_path = video_path.with_suffix(ext)
+        if thumb_path.exists():
+            return str(thumb_path)
+    return None
+
+
+def _load_metadata_file(*, metadata_file: Path, fallback: dict[str, Any]) -> dict[str, Any]:
+    if not metadata_file.exists():
+        return fallback
+    try:
+        return json.loads(metadata_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning(
+            "youtube_metadata_file_corrupt",
+            extra={"path": str(metadata_file), "error": str(exc)},
+        )
+        return fallback

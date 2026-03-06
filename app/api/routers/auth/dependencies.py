@@ -53,7 +53,8 @@ def _get_auth_token_cache() -> Any:
 
     try:
         from app.config import load_config
-        from app.infrastructure.cache import AuthTokenCache, RedisCache
+        from app.infrastructure.cache.auth_token_cache import AuthTokenCache
+        from app.infrastructure.cache.redis_cache import RedisCache
 
         config = load_config(allow_stub_telegram=True)
         if not config.redis.enabled:

@@ -13,7 +13,7 @@ pytest.importorskip("grpc", reason="grpcio not installed")
 
 import grpc
 
-from app.grpc import (
+from app.grpc.client import (
     ConnectionError,
     ProcessingClient,
     ProcessingClientError,

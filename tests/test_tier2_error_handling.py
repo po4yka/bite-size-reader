@@ -145,12 +145,14 @@ class TestSummaryWorkflowLoopCancelledError:
             error_text: str | None = None
             model = "test"
             endpoint = "test"
-            request_headers: dict[str, Any] = {}
-            request_messages: list[Any] = []
             tokens_prompt = 0
             tokens_completion = 0
             cost_usd = 0.0
             latency_ms = 100
+
+            def __init__(self) -> None:
+                self.request_headers: dict[str, Any] = {}
+                self.request_messages: list[Any] = []
 
             @property
             def error_context(self) -> dict[str, Any] | None:

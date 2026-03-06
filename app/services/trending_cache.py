@@ -272,9 +272,9 @@ def clear_trending_cache() -> None:
         try:
             # Schedule async clear without blocking
             asyncio.get_event_loop().create_task(_clear_redis_trending_cache())
-        except RuntimeError:
+        except RuntimeError as exc:
             # No event loop running, skip Redis clear
-            pass
+            logger.debug("trending_redis_clear_deferred", extra={"error": str(exc)})
 
 
 async def _clear_redis_trending_cache() -> None:

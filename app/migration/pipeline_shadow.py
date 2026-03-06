@@ -301,23 +301,27 @@ def build_python_summary_aggregate_snapshot_from_input(payload: dict[str, Any]) 
 def build_python_chunk_synthesis_prompt_snapshot_from_input(
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    aggregated = payload.get("aggregated")
-    if not isinstance(aggregated, dict):
-        aggregated = {}
+    aggregated_payload = payload.get("aggregated")
+    tldr = ""
+    summary_250 = ""
+    key_ideas: list[Any] = []
+    if isinstance(aggregated_payload, dict):
+        tldr = str(aggregated_payload.get("tldr") or "")
+        summary_250 = str(aggregated_payload.get("summary_250") or "")
+        raw_key_ideas = aggregated_payload.get("key_ideas")
+        if isinstance(raw_key_ideas, list):
+            key_ideas = raw_key_ideas
 
     chosen_lang = str(payload.get("chosen_lang") or "en")
     response_language = "Russian" if chosen_lang.strip().lower() == "ru" else "English"
-    key_ideas = aggregated.get("key_ideas")
     try:
-        key_ideas_dump = json.dumps(
-            key_ideas if isinstance(key_ideas, list) else [], ensure_ascii=False
-        )
+        key_ideas_dump = json.dumps(key_ideas, ensure_ascii=False)
     except Exception:
         key_ideas_dump = "[]"
 
     context_text = (
-        f"TLDR DRAFT:\n{aggregated.get('tldr', '')}\n\n"
-        f"DETAILED SUMMARY DRAFT:\n{aggregated.get('summary_250', '')}\n\n"
+        f"TLDR DRAFT:\n{tldr}\n\n"
+        f"DETAILED SUMMARY DRAFT:\n{summary_250}\n\n"
         f"KEY IDEAS DRAFT:\n{key_ideas_dump}"
     )
     user_content = (

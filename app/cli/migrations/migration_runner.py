@@ -26,7 +26,6 @@ from __future__ import annotations
 import datetime as dt
 import importlib
 import logging
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -410,4 +409,4 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
-    sys.exit(main())
+    raise SystemExit(main())

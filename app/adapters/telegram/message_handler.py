@@ -177,3 +177,4 @@ class MessageHandler:
             task.add_done_callback(self._audit_tasks.discard)
         except RuntimeError as exc:
             logger.debug("audit_task_schedule_skipped", extra={"event": event, "error": str(exc)})
+            return

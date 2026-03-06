@@ -60,6 +60,7 @@ class SecureFileValidator:
                 )
         except (OSError, ValueError, RuntimeError) as e:
             logger.warning("failed_to_resolve_temp_dir", extra={"error": str(e)})
+            return allowed
 
         # Pyrogram download directory (if exists)
         pyrogram_temp = Path.home() / "Downloads" / "pyrogram"

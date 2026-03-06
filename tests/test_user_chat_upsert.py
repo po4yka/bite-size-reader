@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from app.adapters.telegram.message_persistence import MessagePersistence
 from app.db.database import Database
+from app.infrastructure.persistence.message_persistence import MessagePersistence
 
 if TYPE_CHECKING:
     from collections.abc import Generator

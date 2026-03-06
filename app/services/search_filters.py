@@ -111,10 +111,13 @@ class SearchFilters:
             "%Y-%m-%d %H:%M:%S",
             "%Y-%m-%d",
         ):
+            parsed: dt.datetime | None = None
             try:
-                return dt.datetime.strptime(date_str.strip(), fmt)  # noqa: DTZ007
+                parsed = dt.datetime.strptime(date_str.strip(), fmt)  # noqa: DTZ007
             except ValueError:
-                continue
+                parsed = None
+            if parsed is not None:
+                return parsed
 
         # Try dateutil if available (handles more formats)
         try:
@@ -126,6 +129,7 @@ class SearchFilters:
                 "dateutil_parse_failed",
                 extra={"date_str": date_str, "error": str(e)},
             )
+            return None
 
         return None
 

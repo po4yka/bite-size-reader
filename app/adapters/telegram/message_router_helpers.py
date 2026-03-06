@@ -1088,6 +1088,7 @@ async def _build_articles_for_analysis(
             try:
                 domain = urlparse(url).netloc
             except (ValueError, AttributeError):
+                domain = ""
                 logger.debug("domain_parse_failed", extra={"url": url})
 
         articles.append(

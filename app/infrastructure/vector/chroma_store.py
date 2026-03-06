@@ -367,6 +367,10 @@ class ChromaVectorStore:
                     if raw_summary_id is not None:
                         summary_ids.add(int(raw_summary_id))
                 except (TypeError, ValueError):
+                    logger.debug(
+                        "chroma_summary_id_parse_failed",
+                        extra={"raw_summary_id": raw_summary_id},
+                    )
                     continue
             return summary_ids
         except ChromaError as e:

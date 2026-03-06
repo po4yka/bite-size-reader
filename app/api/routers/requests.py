@@ -24,7 +24,7 @@ from app.api.models.responses import (
     success_response,
 )
 from app.api.routers.auth import get_current_user
-from app.api.services import RequestService
+from app.api.services.request_service import RequestService
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import Request as RequestModel

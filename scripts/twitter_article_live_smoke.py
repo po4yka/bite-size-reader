@@ -16,18 +16,9 @@ import json
 import logging
 import os
 import re
-import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
-
-# ruff: noqa: E402
-
-
-# Allow running via `python scripts/twitter_article_live_smoke.py` from any cwd.
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.external.firecrawl_parser import FirecrawlClient
@@ -349,7 +340,7 @@ def main() -> None:
         "not_article": sum(1 for item in results if item.final_status == "not_article"),
     }
     print(json.dumps(summary, ensure_ascii=False))
-    sys.exit(exit_code)
+    raise SystemExit(exit_code)
 
 
 if __name__ == "__main__":

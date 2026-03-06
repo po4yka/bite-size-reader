@@ -369,6 +369,22 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
+def _paginated_payload(
+    *,
+    results: list[dict[str, Any]],
+    total: int,
+    limit: int,
+    offset: int,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    payload["results"] = results
+    payload["total"] = total
+    payload["limit"] = limit
+    payload["offset"] = offset
+    payload["has_more"] = (offset + limit) < total
+    return payload
+
+
 def _tokenize(text: str) -> set[str]:
     """Tokenize text for lightweight lexical scoring."""
     if not text:
@@ -1019,17 +1035,15 @@ def list_articles(
             articles = ordered_query.offset(offset).limit(limit)
             results = [_format_summary_compact(s, s.request) for s in articles]
 
-        return json.dumps(
-            {
-                "results": results,
-                "articles": results,
-                "total": total,
-                "limit": limit,
-                "offset": offset,
-                "has_more": (offset + len(results)) < total,
-            },
-            default=str,
+        payload = _paginated_payload(
+            results=results,
+            total=total,
+            limit=limit,
+            offset=offset,
         )
+        payload["has_more"] = (offset + len(results)) < total
+        payload["articles"] = results
+        return json.dumps(payload, default=str)
 
     except Exception as exc:
         logger.exception("list_articles failed")
@@ -1291,16 +1305,13 @@ def list_collections(limit: int = 20, offset: int = 0) -> str:
                 }
             )
 
-        return json.dumps(
-            {
-                "collections": results,
-                "total": total,
-                "limit": limit,
-                "offset": offset,
-                "has_more": (offset + limit) < total,
-            },
-            default=str,
+        payload = _paginated_payload(
+            results=results,
+            total=total,
+            limit=limit,
+            offset=offset,
         )
+        return json.dumps(payload, default=str)
     except Exception as exc:
         logger.exception("list_collections failed")
         return json.dumps({"error": str(exc)})
@@ -1434,16 +1445,13 @@ def list_videos(limit: int = 20, offset: int = 0, status: str | None = None) -> 
                 }
             )
 
-        return json.dumps(
-            {
-                "videos": results,
-                "total": total,
-                "limit": limit,
-                "offset": offset,
-                "has_more": (offset + limit) < total,
-            },
-            default=str,
+        payload = _paginated_payload(
+            results=results,
+            total=total,
+            limit=limit,
+            offset=offset,
         )
+        return json.dumps(payload, default=str)
     except Exception as exc:
         logger.exception("list_videos failed")
         return json.dumps({"error": str(exc)})

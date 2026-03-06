@@ -106,7 +106,6 @@ class OpenRouterClient:
         cache_system_prompt: bool = True,
         cache_large_content_threshold: int = 4096,
     ) -> None:
-        # Validate core parameters
         self._validate_init_params(
             api_key,
             model,
@@ -119,8 +118,65 @@ class OpenRouterClient:
             structured_output_mode,
             max_response_size_mb,
         )
+        self._set_core_configuration(
+            api_key=api_key,
+            model=model,
+            fallback_models=fallback_models,
+            timeout_sec=timeout_sec,
+            enable_structured_outputs=enable_structured_outputs,
+            max_response_size_mb=max_response_size_mb,
+            max_connections=max_connections,
+            max_keepalive_connections=max_keepalive_connections,
+            keepalive_expiry=keepalive_expiry,
+            enable_prompt_caching=enable_prompt_caching,
+            prompt_cache_ttl=prompt_cache_ttl,
+            cache_system_prompt=cache_system_prompt,
+            cache_large_content_threshold=cache_large_content_threshold,
+        )
+        self._set_pricing_overrides()
+        self._initialize_components(
+            api_key=api_key,
+            http_referer=http_referer,
+            x_title=x_title,
+            provider_order=provider_order,
+            enable_structured_outputs=enable_structured_outputs,
+            structured_output_mode=structured_output_mode,
+            require_parameters=require_parameters,
+            enable_prompt_caching=enable_prompt_caching,
+            prompt_cache_ttl=prompt_cache_ttl,
+            cache_system_prompt=cache_system_prompt,
+            cache_large_content_threshold=cache_large_content_threshold,
+            enable_stats=enable_stats,
+            timeout_sec=timeout_sec,
+            max_retries=max_retries,
+            backoff_base=backoff_base,
+            audit=audit,
+            auto_fallback_structured=auto_fallback_structured,
+            debug_payloads=debug_payloads,
+            log_truncate_length=log_truncate_length,
+        )
+        self._client_key = f"{self._base_url}:{hash((api_key, timeout_sec, max_connections))}"
+        self._client: httpx.AsyncClient | None = None
+        self._circuit_breaker = circuit_breaker
+        self._cleanup_registry.add(self)
 
-        # Store configuration
+    def _set_core_configuration(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        fallback_models: list[str] | tuple[str, ...] | None,
+        timeout_sec: int,
+        enable_structured_outputs: bool,
+        max_response_size_mb: int,
+        max_connections: int,
+        max_keepalive_connections: int,
+        keepalive_expiry: float,
+        enable_prompt_caching: bool,
+        prompt_cache_ttl: str,
+        cache_system_prompt: bool,
+        cache_large_content_threshold: int,
+    ) -> None:
         self._api_key = api_key
         self._model = model
         self._fallback_models = self._validate_fallback_models(fallback_models)
@@ -129,32 +185,52 @@ class OpenRouterClient:
         self._enable_structured_outputs = enable_structured_outputs
         self._closed = False
         self._max_response_size_bytes = int(max_response_size_mb) * 1024 * 1024
-        # Store prompt caching settings
         self._enable_prompt_caching = enable_prompt_caching
         self._prompt_cache_ttl = prompt_cache_ttl
         self._cache_system_prompt = cache_system_prompt
         self._cache_large_content_threshold = cache_large_content_threshold
-
-        # Optional pricing overrides (USD per 1k tokens) for local cost estimation
-        try:
-            self._price_input_per_1k = float(os.getenv("OPENROUTER_PRICE_INPUT_PER_1K", ""))
-        except Exception:
-            self._price_input_per_1k = None
-        try:
-            self._price_output_per_1k = float(os.getenv("OPENROUTER_PRICE_OUTPUT_PER_1K", ""))
-        except Exception:
-            self._price_output_per_1k = None
-
-        # Performance configuration
         self._limits = httpx.Limits(
             max_keepalive_connections=max_keepalive_connections,
             max_connections=max_connections,
             keepalive_expiry=keepalive_expiry,
         )
 
-        # Initialize components with specific error handling
+    def _set_pricing_overrides(self) -> None:
+        self._price_input_per_1k = self._parse_optional_float_env("OPENROUTER_PRICE_INPUT_PER_1K")
+        self._price_output_per_1k = self._parse_optional_float_env("OPENROUTER_PRICE_OUTPUT_PER_1K")
+
+    def _parse_optional_float_env(self, key: str) -> float | None:
         try:
-            self.request_builder = RequestBuilder(
+            return float(os.getenv(key, ""))
+        except Exception:
+            return None
+
+    def _initialize_components(
+        self,
+        *,
+        api_key: str,
+        http_referer: str | None,
+        x_title: str | None,
+        provider_order: list[str] | tuple[str, ...] | None,
+        enable_structured_outputs: bool,
+        structured_output_mode: str,
+        require_parameters: bool,
+        enable_prompt_caching: bool,
+        prompt_cache_ttl: str,
+        cache_system_prompt: bool,
+        cache_large_content_threshold: int,
+        enable_stats: bool,
+        timeout_sec: int,
+        max_retries: int,
+        backoff_base: float,
+        audit: Callable[[str, str, dict[str, Any]], None] | None,
+        auto_fallback_structured: bool,
+        debug_payloads: bool,
+        log_truncate_length: int,
+    ) -> None:
+        self.request_builder = self._init_component(
+            "request_builder",
+            lambda: RequestBuilder(
                 api_key=api_key,
                 http_referer=http_referer,
                 x_title=x_title,
@@ -162,83 +238,52 @@ class OpenRouterClient:
                 enable_structured_outputs=enable_structured_outputs,
                 structured_output_mode=structured_output_mode,
                 require_parameters=require_parameters,
-                # Prompt caching settings
                 enable_prompt_caching=enable_prompt_caching,
                 prompt_cache_ttl=prompt_cache_ttl,
                 cache_system_prompt=cache_system_prompt,
                 cache_large_content_threshold=cache_large_content_threshold,
-            )
-        except Exception as e:
-            raise_if_cancelled(e)
-            msg = f"Failed to initialize request builder: {e}"
-            raise ConfigurationError(
-                msg,
-                context={"component": "request_builder", "original_error": str(e)},
-            ) from e
-
-        try:
-            self.response_processor = ResponseProcessor(
-                enable_stats=enable_stats,
-            )
-        except Exception as e:
-            raise_if_cancelled(e)
-            msg = f"Failed to initialize response processor: {e}"
-            raise ConfigurationError(
-                msg,
-                context={"component": "response_processor", "original_error": str(e)},
-            ) from e
-
-        try:
-            self.model_capabilities = ModelCapabilities(
+            ),
+        )
+        self.response_processor = self._init_component(
+            "response_processor", lambda: ResponseProcessor(enable_stats=enable_stats)
+        )
+        self.model_capabilities = self._init_component(
+            "model_capabilities",
+            lambda: ModelCapabilities(
                 api_key=api_key,
                 base_url=self._base_url,
                 http_referer=http_referer,
                 x_title=x_title,
                 timeout=int(timeout_sec),
-            )
-        except Exception as e:
-            raise_if_cancelled(e)
-            msg = f"Failed to initialize model capabilities: {e}"
-            raise ConfigurationError(
-                msg,
-                context={"component": "model_capabilities", "original_error": str(e)},
-            ) from e
-
-        try:
-            self.error_handler = ErrorHandler(
+            ),
+        )
+        self.error_handler = self._init_component(
+            "error_handler",
+            lambda: ErrorHandler(
                 max_retries=max_retries,
                 backoff_base=backoff_base,
                 audit=audit,
                 auto_fallback_structured=auto_fallback_structured,
-            )
-        except Exception as e:
-            raise_if_cancelled(e)
-            msg = f"Failed to initialize error handler: {e}"
-            raise ConfigurationError(
-                msg,
-                context={"component": "error_handler", "original_error": str(e)},
-            ) from e
-
-        try:
-            self.payload_logger = PayloadLogger(
+            ),
+        )
+        self.payload_logger = self._init_component(
+            "payload_logger",
+            lambda: PayloadLogger(
                 debug_payloads=debug_payloads,
                 log_truncate_length=log_truncate_length,
-            )
+            ),
+        )
+
+    def _init_component(self, component: str, factory: Callable[[], Any]) -> Any:
+        try:
+            return factory()
         except Exception as e:
             raise_if_cancelled(e)
-            msg = f"Failed to initialize payload logger: {e}"
+            msg = f"Failed to initialize {component.replace('_', ' ')}: {e}"
             raise ConfigurationError(
                 msg,
-                context={"component": "payload_logger", "original_error": str(e)},
+                context={"component": component, "original_error": str(e)},
             ) from e
-
-        # Client management
-        self._client_key = f"{self._base_url}:{hash((api_key, timeout_sec, max_connections))}"
-        self._client: httpx.AsyncClient | None = None
-        self._circuit_breaker = circuit_breaker
-
-        # Register for cleanup
-        self._cleanup_registry.add(self)
 
     @property
     def circuit_breaker(self) -> CircuitBreaker | None:

@@ -615,6 +615,258 @@ async def chat(
     )
 
 
+async def _handle_stream_non_200_response(
+    self,
+    *,
+    resp: httpx.Response,
+    status_code: int,
+    latency: int,
+    rf_included: bool,
+    rf_mode_current: str,
+    response_format_current: dict[str, Any] | None,
+    model: str,
+    attempt: int,
+    request_id: int | None,
+    headers: dict[str, str],
+    sanitized_messages: list[dict[str, Any]],
+) -> dict[str, Any]:
+    try:
+        raw_body = await resp.aread()
+        body_text = raw_body.decode("utf-8", errors="replace")
+        data = json.loads(body_text) if body_text else {}
+    except Exception:
+        data = {}
+    result = await self._handle_error_response(
+        status_code=status_code,
+        data=data if isinstance(data, dict) else {},
+        resp=resp,
+        rf_included=rf_included,
+        rf_mode_current=rf_mode_current,
+        response_format_current=response_format_current,
+        model=model,
+        model_reported=model,
+        latency=latency,
+        attempt=attempt,
+        request_id=request_id,
+        headers=headers,
+        sanitized_messages=sanitized_messages,
+    )
+    if status_code in {400, 404, 405, 422, 501}:
+        result["should_retry"] = True
+        result["backoff_needed"] = False
+        result["fallback_to_non_stream"] = True
+    return result
+
+
+async def _consume_stream_sse(
+    resp: httpx.Response,
+    *,
+    process_event_payload: Any,
+) -> None:
+    current_event_data_lines: list[str] = []
+    async for line in resp.aiter_lines():
+        if line == "":
+            if not current_event_data_lines:
+                continue
+            payload = "\n".join(current_event_data_lines).strip()
+            current_event_data_lines.clear()
+            if await process_event_payload(payload):
+                return
+            continue
+
+        if line.startswith("data:"):
+            payload_line = line[5:].lstrip()
+            if current_event_data_lines:
+                buffered_payload = "\n".join(current_event_data_lines).strip()
+                if await process_event_payload(buffered_payload):
+                    return
+                current_event_data_lines.clear()
+            current_event_data_lines.append(payload_line)
+
+    if current_event_data_lines:
+        payload = "\n".join(current_event_data_lines).strip()
+        await process_event_payload(payload)
+
+
+def _build_stream_empty_result(completion_ms: int) -> dict[str, Any]:
+    return {
+        "success": False,
+        "error_text": "stream_empty_completion",
+        "latency": completion_ms,
+        "should_retry": True,
+        "fallback_to_non_stream": True,
+        "backoff_needed": False,
+    }
+
+
+def _build_stream_synthesized_data(
+    *,
+    request_id: int | None,
+    model_reported: str,
+    full_text: str,
+    done_received: bool,
+    finish_reason: str | None,
+    native_finish_reason: str | None,
+    usage: dict[str, Any] | None,
+) -> dict[str, Any]:
+    synthesized_data: dict[str, Any] = {
+        "id": f"stream_{request_id or 'n/a'}",
+        "model": model_reported,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": full_text},
+                "finish_reason": finish_reason or ("stop" if done_received else None),
+                "native_finish_reason": native_finish_reason,
+            }
+        ],
+    }
+    if usage is not None:
+        synthesized_data["usage"] = usage
+    return synthesized_data
+
+
+async def _finalize_stream_success(
+    self,
+    *,
+    attempt: int,
+    request_id: int | None,
+    model: str,
+    request: ChatRequest,
+    rf_included: bool,
+    rf_mode_current: str,
+    response_format_current: dict[str, Any] | None,
+    structured_output_used: bool,
+    structured_output_mode_used: str | None,
+    headers: dict[str, str],
+    sanitized_messages: list[dict[str, Any]],
+    started: float,
+    stream_text_parts: list[str],
+    last_chunk: dict[str, Any] | None,
+    malformed_frames: int,
+    model_reported: str,
+    done_received: bool,
+    finish_reason: str | None,
+    native_finish_reason: str | None,
+    usage: dict[str, Any] | None,
+    stream_delta_count: int,
+    first_token_ms: int | None,
+) -> dict[str, Any]:
+    completion_ms = int((time.perf_counter() - started) * 1000)
+    record_stream_latency_ms("stream_completion_ms", completion_ms)
+
+    full_text = "".join(stream_text_parts)
+    if not full_text and isinstance(last_chunk, dict):
+        full_text = _extract_stream_delta_text(last_chunk)
+    if not full_text:
+        return _build_stream_empty_result(completion_ms)
+
+    if malformed_frames > 0:
+        logger.warning(
+            "openrouter_stream_malformed_frames",
+            extra={
+                "request_id": request_id,
+                "model": model_reported,
+                "malformed_frames": malformed_frames,
+            },
+        )
+
+    synthesized_data = _build_stream_synthesized_data(
+        request_id=request_id,
+        model_reported=model_reported,
+        full_text=full_text,
+        done_received=done_received,
+        finish_reason=finish_reason,
+        native_finish_reason=native_finish_reason,
+        usage=usage,
+    )
+    logger.info(
+        "openrouter_stream_complete",
+        extra={
+            "request_id": request_id,
+            "model": model_reported,
+            "stream_delta_count": stream_delta_count,
+            "stream_first_token_ms": first_token_ms,
+            "stream_completion_ms": completion_ms,
+        },
+    )
+    return await self._handle_successful_response(
+        data=synthesized_data,
+        rf_included=rf_included,
+        rf_mode_current=rf_mode_current,
+        response_format_current=response_format_current,
+        model=model,
+        model_reported=model_reported,
+        latency=completion_ms,
+        attempt=attempt,
+        request_id=request_id,
+        structured_output_used=structured_output_used,
+        structured_output_mode_used=structured_output_mode_used,
+        headers=headers,
+        sanitized_messages=sanitized_messages,
+        max_tokens=request.max_tokens,
+    )
+
+
+async def _process_stream_event_payload(
+    *,
+    payload: str,
+    state: dict[str, Any],
+    model: str,
+    started: float,
+    on_stream_delta: Any | None,
+    request_id: int | None,
+) -> bool:
+    payload = payload.strip()
+    if not payload:
+        return False
+    if payload == "[DONE]":
+        state["done_received"] = True
+        return True
+
+    try:
+        chunk = json.loads(payload)
+    except json.JSONDecodeError:
+        state["malformed_frames"] += 1
+        return False
+    if not isinstance(chunk, dict):
+        state["malformed_frames"] += 1
+        return False
+
+    state["last_chunk"] = chunk
+    state["model_reported"] = chunk.get("model", state["model_reported"] or model)
+    usage_chunk = chunk.get("usage")
+    if isinstance(usage_chunk, dict):
+        state["usage"] = usage_chunk
+
+    choices = chunk.get("choices")
+    if isinstance(choices, list) and choices:
+        first_choice = choices[0] if isinstance(choices[0], dict) else {}
+        state["finish_reason"] = first_choice.get("finish_reason") or state["finish_reason"]
+        state["native_finish_reason"] = (
+            first_choice.get("native_finish_reason") or state["native_finish_reason"]
+        )
+
+    delta_text = _extract_stream_delta_text(chunk)
+    if not delta_text:
+        return False
+    if state["first_token_ms"] is None:
+        state["first_token_ms"] = int((time.perf_counter() - started) * 1000)
+        record_stream_latency_ms("stream_first_token_ms", state["first_token_ms"])
+    state["stream_text_parts"].append(delta_text)
+    state["stream_delta_count"] += 1
+    record_draft_stream_event("stream_delta_count")
+    try:
+        await _dispatch_stream_delta(on_stream_delta, delta_text)
+    except Exception as callback_exc:
+        raise_if_cancelled(callback_exc)
+        logger.warning(
+            "openrouter_stream_delta_callback_failed",
+            extra={"error": str(callback_exc), "request_id": request_id},
+        )
+    return False
+
+
 async def _attempt_stream_request(
     self,
     *,
@@ -635,211 +887,78 @@ async def _attempt_stream_request(
     started: float,
 ) -> dict[str, Any]:
     """Attempt streaming OpenRouter request and reconstruct final completion payload."""
-    stream_text_parts: list[str] = []
-    stream_delta_count = 0
-    malformed_frames = 0
-    done_received = False
-    first_token_ms: int | None = None
-    model_reported = model
-    usage: dict[str, Any] | None = None
-    finish_reason: str | None = None
-    native_finish_reason: str | None = None
-    last_chunk: dict[str, Any] | None = None
-
-    async def _process_event_payload(payload: str) -> bool:
-        nonlocal done_received
-        nonlocal malformed_frames
-        nonlocal last_chunk
-        nonlocal model_reported
-        nonlocal usage
-        nonlocal finish_reason
-        nonlocal native_finish_reason
-        nonlocal first_token_ms
-        nonlocal stream_delta_count
-
-        payload = payload.strip()
-        if not payload:
-            return False
-        if payload == "[DONE]":
-            done_received = True
-            return True
-
-        try:
-            chunk = json.loads(payload)
-        except json.JSONDecodeError:
-            malformed_frames += 1
-            return False
-
-        if not isinstance(chunk, dict):
-            malformed_frames += 1
-            return False
-
-        last_chunk = chunk
-        model_reported = chunk.get("model", model_reported)
-        usage_chunk = chunk.get("usage")
-        if isinstance(usage_chunk, dict):
-            usage = usage_chunk
-
-        choices = chunk.get("choices")
-        if isinstance(choices, list) and choices:
-            first_choice = choices[0] if isinstance(choices[0], dict) else {}
-            finish_reason = first_choice.get("finish_reason") or finish_reason
-            native_finish_reason = first_choice.get("native_finish_reason") or native_finish_reason
-
-        delta_text = _extract_stream_delta_text(chunk)
-        if delta_text:
-            if first_token_ms is None:
-                first_token_ms = int((time.perf_counter() - started) * 1000)
-                record_stream_latency_ms("stream_first_token_ms", first_token_ms)
-            stream_text_parts.append(delta_text)
-            stream_delta_count += 1
-            record_draft_stream_event("stream_delta_count")
-            try:
-                await _dispatch_stream_delta(on_stream_delta, delta_text)
-            except Exception as callback_exc:
-                raise_if_cancelled(callback_exc)
-                logger.warning(
-                    "openrouter_stream_delta_callback_failed",
-                    extra={"error": str(callback_exc), "request_id": request_id},
-                )
-
-        return False
+    state: dict[str, Any] = {
+        "stream_text_parts": [],
+        "stream_delta_count": 0,
+        "malformed_frames": 0,
+        "done_received": False,
+        "first_token_ms": None,
+        "model_reported": model,
+        "usage": None,
+        "finish_reason": None,
+        "native_finish_reason": None,
+        "last_chunk": None,
+    }
 
     try:
-        # Some mocks expose `stream()` as an awaitable that yields the async
-        # context manager, while httpx returns the context manager directly.
         stream_ctx = client.stream("POST", "/chat/completions", headers=headers, json=body)
         if hasattr(stream_ctx, "__await__"):
             stream_ctx = await stream_ctx
+
+        async def _process_event_payload(payload: str) -> bool:
+            return await _process_stream_event_payload(
+                payload=payload,
+                state=state,
+                model=model,
+                started=started,
+                on_stream_delta=on_stream_delta,
+                request_id=request_id,
+            )
 
         async with stream_ctx as resp:
             latency = int((time.perf_counter() - started) * 1000)
             status_code = resp.status_code
             if status_code != 200:
-                try:
-                    raw_body = await resp.aread()
-                    body_text = raw_body.decode("utf-8", errors="replace")
-                    data = json.loads(body_text) if body_text else {}
-                except Exception:
-                    data = {}
-                model_reported = model
-                result = await self._handle_error_response(
-                    status_code=status_code,
-                    data=data if isinstance(data, dict) else {},
+                return await _handle_stream_non_200_response(
+                    self,
                     resp=resp,
+                    status_code=status_code,
+                    latency=latency,
                     rf_included=rf_included,
                     rf_mode_current=rf_mode_current,
                     response_format_current=response_format_current,
                     model=model,
-                    model_reported=model_reported,
-                    latency=latency,
                     attempt=attempt,
                     request_id=request_id,
                     headers=headers,
                     sanitized_messages=sanitized_messages,
                 )
-                # Stream endpoints can fail on provider side; degrade to non-stream path.
-                if status_code in {400, 404, 405, 422, 501}:
-                    result["should_retry"] = True
-                    result["backoff_needed"] = False
-                    result["fallback_to_non_stream"] = True
-                return result
+            await _consume_stream_sse(resp, process_event_payload=_process_event_payload)
 
-            # Parse SSE frames (`data:` lines grouped by blank separator)
-            current_event_data_lines: list[str] = []
-            async for line in resp.aiter_lines():
-                if line == "":
-                    if not current_event_data_lines:
-                        continue
-                    payload = "\n".join(current_event_data_lines).strip()
-                    current_event_data_lines.clear()
-                    if await _process_event_payload(payload):
-                        break
-                    continue
-
-                if line.startswith("data:"):
-                    payload_line = line[5:].lstrip()
-                    # Some streams omit blank separators between events.
-                    # Flush buffered payload whenever a new `data:` line starts.
-                    if current_event_data_lines:
-                        buffered_payload = "\n".join(current_event_data_lines).strip()
-                        if await _process_event_payload(buffered_payload):
-                            break
-                        current_event_data_lines.clear()
-                    current_event_data_lines.append(payload_line)
-
-            if current_event_data_lines and not done_received:
-                payload = "\n".join(current_event_data_lines).strip()
-                await _process_event_payload(payload)
-
-        completion_ms = int((time.perf_counter() - started) * 1000)
-        record_stream_latency_ms("stream_completion_ms", completion_ms)
-
-        full_text = "".join(stream_text_parts)
-        if not full_text and isinstance(last_chunk, dict):
-            full_text = _extract_stream_delta_text(last_chunk)
-
-        if not full_text:
-            return {
-                "success": False,
-                "error_text": "stream_empty_completion",
-                "latency": completion_ms,
-                "should_retry": True,
-                "fallback_to_non_stream": True,
-                "backoff_needed": False,
-            }
-
-        if malformed_frames > 0:
-            logger.warning(
-                "openrouter_stream_malformed_frames",
-                extra={
-                    "request_id": request_id,
-                    "model": model_reported,
-                    "malformed_frames": malformed_frames,
-                },
-            )
-
-        synthesized_data: dict[str, Any] = {
-            "id": f"stream_{request_id or 'n/a'}",
-            "model": model_reported,
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": full_text},
-                    "finish_reason": finish_reason or ("stop" if done_received else None),
-                    "native_finish_reason": native_finish_reason,
-                }
-            ],
-        }
-        if usage is not None:
-            synthesized_data["usage"] = usage
-
-        logger.info(
-            "openrouter_stream_complete",
-            extra={
-                "request_id": request_id,
-                "model": model_reported,
-                "stream_delta_count": stream_delta_count,
-                "stream_first_token_ms": first_token_ms,
-                "stream_completion_ms": completion_ms,
-            },
-        )
-
-        return await self._handle_successful_response(
-            data=synthesized_data,
+        return await _finalize_stream_success(
+            self,
+            attempt=attempt,
+            request_id=request_id,
+            model=model,
+            request=request,
             rf_included=rf_included,
             rf_mode_current=rf_mode_current,
             response_format_current=response_format_current,
-            model=model,
-            model_reported=model_reported,
-            latency=completion_ms,
-            attempt=attempt,
-            request_id=request_id,
             structured_output_used=structured_output_used,
             structured_output_mode_used=structured_output_mode_used,
             headers=headers,
             sanitized_messages=sanitized_messages,
-            max_tokens=request.max_tokens,
+            started=started,
+            stream_text_parts=state["stream_text_parts"],
+            last_chunk=state["last_chunk"],
+            malformed_frames=state["malformed_frames"],
+            model_reported=state["model_reported"],
+            done_received=state["done_received"],
+            finish_reason=state["finish_reason"],
+            native_finish_reason=state["native_finish_reason"],
+            usage=state["usage"],
+            stream_delta_count=state["stream_delta_count"],
+            first_token_ms=state["first_token_ms"],
         )
 
     except Exception as exc:
@@ -861,6 +980,117 @@ async def _attempt_stream_request(
             "fallback_to_non_stream": True,
             "backoff_needed": False,
         }
+
+
+def _log_attempt_request_payload(
+    self,
+    *,
+    model: str,
+    attempt: int,
+    request_id: int | None,
+    message_lengths: list[int],
+    message_roles: list[str],
+    total_chars: int,
+    rf_included: bool,
+    rf_mode_current: str,
+    headers: dict[str, str],
+    body: dict[str, Any],
+    cacheable_messages: list[dict[str, Any]],
+) -> None:
+    self.payload_logger.log_request(
+        model=model,
+        attempt=attempt,
+        request_id=request_id,
+        message_lengths=message_lengths,
+        message_roles=message_roles,
+        total_chars=total_chars,
+        structured_output=rf_included,
+        rf_mode=rf_mode_current,
+        transforms=body.get("transforms"),
+    )
+    if self.payload_logger._debug_payloads:
+        self.payload_logger.log_request_payload(headers, body, cacheable_messages, rf_mode_current)
+
+
+async def _attempt_non_stream_request(
+    self,
+    *,
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    body: dict[str, Any],
+    model: str,
+    attempt: int,
+    request: ChatRequest,
+    request_id: int | None,
+    rf_included: bool,
+    rf_mode_current: str,
+    response_format_current: dict[str, Any] | None,
+    structured_output_used: bool,
+    structured_output_mode_used: str | None,
+    sanitized_messages: list[dict[str, Any]],
+    started: float,
+) -> dict[str, Any]:
+    resp = await client.post("/chat/completions", headers=headers, json=body)
+    try:
+        await validate_response_size(resp, self._max_response_size_bytes, "OpenRouter")
+    except ResponseSizeError as size_exc:
+        latency = int((time.perf_counter() - started) * 1000)
+        return {
+            "success": False,
+            "error_text": f"Response too large: {size_exc}",
+            "latency": latency,
+            "should_try_next_model": True,
+        }
+
+    latency = int((time.perf_counter() - started) * 1000)
+    try:
+        data = resp.json()
+    except Exception as e:
+        raise_if_cancelled(e)
+        return {
+            "success": False,
+            "error_text": f"Failed to parse JSON response: {e}",
+            "latency": latency,
+            "should_try_next_model": True,
+        }
+
+    if self.payload_logger._debug_payloads:
+        self.payload_logger.log_response_payload(data)
+
+    status_code = resp.status_code
+    model_reported = data.get("model", model) if isinstance(data, dict) else model
+    if status_code == 200:
+        return await self._handle_successful_response(
+            data=data,
+            rf_included=rf_included,
+            rf_mode_current=rf_mode_current,
+            response_format_current=response_format_current,
+            model=model,
+            model_reported=model_reported,
+            latency=latency,
+            attempt=attempt,
+            request_id=request_id,
+            structured_output_used=structured_output_used,
+            structured_output_mode_used=structured_output_mode_used,
+            headers=headers,
+            sanitized_messages=sanitized_messages,
+            max_tokens=request.max_tokens,
+        )
+    return await self._handle_error_response(
+        status_code=status_code,
+        data=data,
+        resp=resp,
+        rf_included=rf_included,
+        rf_mode_current=rf_mode_current,
+        response_format_current=response_format_current,
+        model=model,
+        model_reported=model_reported,
+        latency=latency,
+        attempt=attempt,
+        request_id=request_id,
+        headers=headers,
+        sanitized_messages=sanitized_messages,
+    )
 
 
 async def _attempt_request(
@@ -897,22 +1127,20 @@ async def _attempt_request(
     )
     started = time.perf_counter()
     try:
-        self.payload_logger.log_request(
+        _log_attempt_request_payload(
+            self,
             model=model,
             attempt=attempt,
             request_id=request_id,
             message_lengths=message_lengths,
             message_roles=message_roles,
             total_chars=total_chars,
-            structured_output=rf_included,
-            rf_mode=rf_mode_current,
-            transforms=body.get("transforms"),
+            rf_included=rf_included,
+            rf_mode_current=rf_mode_current,
+            headers=headers,
+            body=body,
+            cacheable_messages=cacheable_messages,
         )
-
-        if self.payload_logger._debug_payloads:
-            self.payload_logger.log_request_payload(
-                headers, body, cacheable_messages, rf_mode_current
-            )
 
         if request.stream:
             return await _attempt_stream_request(
@@ -933,71 +1161,22 @@ async def _attempt_request(
                 on_stream_delta=on_stream_delta,
                 started=started,
             )
-
-        resp = await client.post("/chat/completions", headers=headers, json=body)
-        try:
-            await validate_response_size(resp, self._max_response_size_bytes, "OpenRouter")
-        except ResponseSizeError as size_exc:
-            latency = int((time.perf_counter() - started) * 1000)
-            return {
-                "success": False,
-                "error_text": f"Response too large: {size_exc}",
-                "latency": latency,
-                "should_try_next_model": True,
-            }
-
-        latency = int((time.perf_counter() - started) * 1000)
-        try:
-            data = resp.json()
-        except Exception as e:
-            raise_if_cancelled(e)
-            return {
-                "success": False,
-                "error_text": f"Failed to parse JSON response: {e}",
-                "latency": latency,
-                "should_try_next_model": True,
-            }
-
-        if self.payload_logger._debug_payloads:
-            self.payload_logger.log_response_payload(data)
-
-        status_code = resp.status_code
-        model_reported = data.get("model", model) if isinstance(data, dict) else model
-
-        # Handle successful response (200)
-        if status_code == 200:
-            return await self._handle_successful_response(
-                data=data,
-                rf_included=rf_included,
-                rf_mode_current=rf_mode_current,
-                response_format_current=response_format_current,
-                model=model,
-                model_reported=model_reported,
-                latency=latency,
-                attempt=attempt,
-                request_id=request_id,
-                structured_output_used=structured_output_used,
-                structured_output_mode_used=structured_output_mode_used,
-                headers=headers,
-                sanitized_messages=sanitized_messages,
-                max_tokens=request.max_tokens,
-            )
-
-        # Handle error responses
-        return await self._handle_error_response(
-            status_code=status_code,
-            data=data,
-            resp=resp,
+        return await _attempt_non_stream_request(
+            self,
+            client=client,
+            headers=headers,
+            body=body,
+            model=model,
+            attempt=attempt,
+            request=request,
+            request_id=request_id,
             rf_included=rf_included,
             rf_mode_current=rf_mode_current,
             response_format_current=response_format_current,
-            model=model,
-            model_reported=model_reported,
-            latency=latency,
-            attempt=attempt,
-            request_id=request_id,
-            headers=headers,
+            structured_output_used=structured_output_used,
+            structured_output_mode_used=structured_output_mode_used,
             sanitized_messages=sanitized_messages,
+            started=started,
         )
 
     except TimeoutError:

@@ -99,6 +99,249 @@ def _parse_message_entity(entity: Any, *, label: str) -> MessageEntity:
         )
 
 
+_MEDIA_FIELDS: tuple[str, ...] = (
+    "photo",
+    "video",
+    "audio",
+    "document",
+    "sticker",
+    "voice",
+    "video_note",
+    "animation",
+    "contact",
+    "location",
+    "venue",
+    "poll",
+    "dice",
+    "game",
+    "invoice",
+    "successful_payment",
+    "story",
+)
+
+_MEDIA_TYPE_PRIORITY: tuple[tuple[str, MediaType], ...] = (
+    ("photo", MediaType.PHOTO),
+    ("video", MediaType.VIDEO),
+    ("audio", MediaType.AUDIO),
+    ("document", MediaType.DOCUMENT),
+    ("sticker", MediaType.STICKER),
+    ("voice", MediaType.VOICE),
+    ("video_note", MediaType.VIDEO_NOTE),
+    ("animation", MediaType.ANIMATION),
+    ("contact", MediaType.CONTACT),
+    ("location", MediaType.LOCATION),
+    ("venue", MediaType.VENUE),
+    ("poll", MediaType.POLL),
+    ("dice", MediaType.DICE),
+    ("game", MediaType.GAME),
+    ("invoice", MediaType.INVOICE),
+    ("successful_payment", MediaType.SUCCESSFUL_PAYMENT),
+    ("story", MediaType.STORY),
+)
+
+
+def _parse_entity_collection(message: Any, *, attr: str, label: str) -> list[MessageEntity]:
+    return [
+        _parse_message_entity(entity, label=label) for entity in (getattr(message, attr, []) or [])
+    ]
+
+
+def _serialize_photo(photo: Any) -> list[dict[str, Any]] | None:
+    if not photo:
+        return None
+    try:
+        if isinstance(photo, list):
+            return [photo_size.__dict__ for photo_size in photo]
+        return [photo.__dict__]
+    except (AttributeError, TypeError) as exc:
+        log_exception(
+            logger,
+            "telegram_photo_parse_failed",
+            exc,
+            level="warning",
+        )
+        return None
+
+
+def _extract_media_objects(message: Any) -> dict[str, Any]:
+    return {name: getattr(message, name, None) for name in _MEDIA_FIELDS}
+
+
+def _serialize_media_objects(media_objects: dict[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {"photo": _serialize_photo(media_objects.get("photo"))}
+    for field_name in _MEDIA_FIELDS:
+        if field_name == "photo":
+            continue
+        media_value = media_objects.get(field_name)
+        payload[field_name] = media_value.__dict__ if media_value else None
+    return payload
+
+
+def _detect_media_type(media_objects: dict[str, Any]) -> MediaType | None:
+    for field_name, media_type in _MEDIA_TYPE_PRIORITY:
+        if media_objects.get(field_name):
+            return media_type
+    return None
+
+
+def _parse_user(value: Any) -> TelegramUser | None:
+    return TelegramUser.from_dict(_pyrogram_to_dict(value)) if value else None
+
+
+def _parse_chat(value: Any) -> TelegramChat | None:
+    return TelegramChat.from_dict(_pyrogram_to_dict(value)) if value else None
+
+
+def _build_parsed_message_kwargs(message: Any) -> dict[str, Any]:
+    text = getattr(message, "text", None)
+    caption = getattr(message, "caption", None)
+    entities = _parse_entity_collection(message, attr="entities", label="text")
+    caption_entities = _parse_entity_collection(message, attr="caption_entities", label="caption")
+    media_objects = _extract_media_objects(message)
+    media_payload = _serialize_media_objects(media_objects)
+    media_type = _detect_media_type(media_objects)
+
+    forward_from = getattr(message, "forward_from", None)
+    forward_from_chat = getattr(message, "forward_from_chat", None)
+    forward_sender_name = getattr(message, "forward_sender_name", None)
+    forward_date = getattr(message, "forward_date", None)
+    reply_to_message = getattr(message, "reply_to_message", None)
+    edit_date = getattr(message, "edit_date", None)
+    reply_markup = getattr(message, "reply_markup", None)
+    link_preview_options = getattr(message, "link_preview_options", None)
+
+    return {
+        "message_id": getattr(message, "id", 0),
+        "from_user": _parse_user(getattr(message, "from_user", None)),
+        "date": getattr(message, "date", None),
+        "chat": _parse_chat(getattr(message, "chat", None)),
+        "text": text,
+        "entities": entities,
+        "caption": caption,
+        "caption_entities": caption_entities,
+        "photo": media_payload["photo"],
+        "video": media_payload["video"],
+        "audio": media_payload["audio"],
+        "document": media_payload["document"],
+        "sticker": media_payload["sticker"],
+        "voice": media_payload["voice"],
+        "video_note": media_payload["video_note"],
+        "animation": media_payload["animation"],
+        "contact": media_payload["contact"],
+        "location": media_payload["location"],
+        "venue": media_payload["venue"],
+        "poll": media_payload["poll"],
+        "dice": media_payload["dice"],
+        "game": media_payload["game"],
+        "invoice": media_payload["invoice"],
+        "successful_payment": media_payload["successful_payment"],
+        "story": media_payload["story"],
+        "forward_from": _parse_user(forward_from),
+        "forward_from_chat": _parse_chat(forward_from_chat),
+        "forward_from_message_id": getattr(message, "forward_from_message_id", None),
+        "forward_signature": getattr(message, "forward_signature", None),
+        "forward_sender_name": forward_sender_name,
+        "forward_date": forward_date,
+        "reply_to_message": reply_to_message.__dict__ if reply_to_message else None,
+        "edit_date": edit_date,
+        "media_group_id": getattr(message, "media_group_id", None),
+        "author_signature": getattr(message, "author_signature", None),
+        "via_bot": _parse_user(getattr(message, "via_bot", None)),
+        "has_protected_content": getattr(message, "has_protected_content", None),
+        "connected_website": getattr(message, "connected_website", None),
+        "reply_markup": _pyrogram_to_dict(reply_markup) if reply_markup is not None else None,
+        "views": getattr(message, "views", None),
+        "via_bot_user_id": getattr(message, "via_bot_user_id", None),
+        "effect_id": getattr(message, "effect_id", None),
+        "link_preview_options": (
+            _pyrogram_to_dict(link_preview_options) if link_preview_options is not None else None
+        ),
+        "show_caption_above_media": getattr(message, "show_caption_above_media", None),
+        "media_type": media_type,
+        "is_forwarded": bool(
+            forward_from or forward_from_chat or forward_sender_name or forward_date
+        ),
+        "is_reply": bool(reply_to_message),
+        "is_edited": bool(edit_date),
+        "has_media": bool(media_type),
+        "has_text": bool(text),
+        "has_caption": bool(caption),
+    }
+
+
+def _extract_fallback_user(from_user_data: Any) -> TelegramUser | None:
+    if not from_user_data:
+        return None
+    try:
+        user_id = getattr(from_user_data, "id", 0)
+        if user_id:
+            return TelegramUser(
+                id=int(user_id),
+                is_bot=getattr(from_user_data, "is_bot", False),
+                first_name=getattr(from_user_data, "first_name", "Unknown"),
+                last_name=getattr(from_user_data, "last_name", None),
+                username=getattr(from_user_data, "username", None),
+                language_code=getattr(from_user_data, "language_code", None),
+                is_premium=getattr(from_user_data, "is_premium", None),
+                added_to_attachment_menu=getattr(from_user_data, "added_to_attachment_menu", None),
+            )
+    except Exception as user_exc:
+        logger.warning(
+            "Failed to extract user from failed message",
+            extra={"error": str(user_exc)},
+        )
+        try:
+            user_id = getattr(from_user_data, "id", 0)
+            if user_id:
+                return TelegramUser(
+                    id=int(user_id),
+                    is_bot=False,
+                    first_name="Unknown",
+                    last_name=None,
+                    username=None,
+                    language_code=None,
+                    is_premium=None,
+                    added_to_attachment_menu=None,
+                )
+        except Exception as fallback_user_error:
+            logger.debug(
+                "fallback_user_extraction_failed",
+                extra={"error": str(fallback_user_error)},
+            )
+    return None
+
+
+def _build_fallback_message_kwargs(message: Any) -> dict[str, Any]:
+    media_objects = _extract_media_objects(message)
+    photo_raw = media_objects.get("photo")
+    return {
+        "message_id": getattr(message, "id", 0),
+        "from_user": _extract_fallback_user(getattr(message, "from_user", None)),
+        "date": None,
+        "chat": None,
+        "text": getattr(message, "text", None),
+        "caption": getattr(message, "caption", None),
+        "photo": photo_raw,
+        "photo_list": _serialize_photo(photo_raw),
+        "video": media_objects.get("video"),
+        "audio": media_objects.get("audio"),
+        "document": media_objects.get("document"),
+        "sticker": media_objects.get("sticker"),
+        "voice": media_objects.get("voice"),
+        "video_note": media_objects.get("video_note"),
+        "animation": media_objects.get("animation"),
+        "contact": media_objects.get("contact"),
+        "location": media_objects.get("location"),
+        "venue": media_objects.get("venue"),
+        "poll": media_objects.get("poll"),
+        "dice": media_objects.get("dice"),
+        "game": media_objects.get("game"),
+        "invoice": media_objects.get("invoice"),
+        "successful_payment": media_objects.get("successful_payment"),
+        "story": media_objects.get("story"),
+    }
+
+
 class TelegramMessage(BaseModel):
     """Comprehensive Telegram Message model."""
 
@@ -169,347 +412,10 @@ class TelegramMessage(BaseModel):
     def from_pyrogram_message(cls, message: Any) -> TelegramMessage:
         """Create TelegramMessage from Pyrogram Message object."""
         try:
-            # Extract basic fields
-            message_id = getattr(message, "id", 0)
-            date = getattr(message, "date", None)
-
-            # Extract user information
-            from_user_data = getattr(message, "from_user", None)
-            from_user = (
-                TelegramUser.from_dict(_pyrogram_to_dict(from_user_data))
-                if from_user_data
-                else None
-            )
-
-            # Extract chat information
-            chat_data = getattr(message, "chat", None)
-            chat = TelegramChat.from_dict(_pyrogram_to_dict(chat_data)) if chat_data else None
-
-            # Extract text content
-            text = getattr(message, "text", None)
-            caption = getattr(message, "caption", None)
-
-            # Extract entities using _pyrogram_to_dict for nested object handling
-            entities = []
-            entities_data = getattr(message, "entities", []) or []
-            for entity in entities_data:
-                entities.append(_parse_message_entity(entity, label="text"))
-
-            caption_entities = []
-            caption_entities_data = getattr(message, "caption_entities", []) or []
-            for entity in caption_entities_data:
-                caption_entities.append(_parse_message_entity(entity, label="caption"))
-
-            # Extract media information
-            photo = getattr(message, "photo", None)
-            video = getattr(message, "video", None)
-            audio = getattr(message, "audio", None)
-            document = getattr(message, "document", None)
-            sticker = getattr(message, "sticker", None)
-            voice = getattr(message, "voice", None)
-            video_note = getattr(message, "video_note", None)
-            animation = getattr(message, "animation", None)
-            contact = getattr(message, "contact", None)
-            location = getattr(message, "location", None)
-            venue = getattr(message, "venue", None)
-            poll = getattr(message, "poll", None)
-            dice = getattr(message, "dice", None)
-            game = getattr(message, "game", None)
-            invoice = getattr(message, "invoice", None)
-            successful_payment = getattr(message, "successful_payment", None)
-            story = getattr(message, "story", None)
-
-            # Extract forward information
-            forward_from = getattr(message, "forward_from", None)
-            forward_from_chat = getattr(message, "forward_from_chat", None)
-            forward_from_message_id = getattr(message, "forward_from_message_id", None)
-            forward_signature = getattr(message, "forward_signature", None)
-            forward_sender_name = getattr(message, "forward_sender_name", None)
-            forward_date = getattr(message, "forward_date", None)
-
-            # Extract additional fields
-            reply_to_message = getattr(message, "reply_to_message", None)
-            edit_date = getattr(message, "edit_date", None)
-            media_group_id = getattr(message, "media_group_id", None)
-            author_signature = getattr(message, "author_signature", None)
-            via_bot = getattr(message, "via_bot", None)
-            has_protected_content = getattr(message, "has_protected_content", None)
-            connected_website = getattr(message, "connected_website", None)
-            reply_markup = getattr(message, "reply_markup", None)
-            views = getattr(message, "views", None)
-            via_bot_user_id = getattr(message, "via_bot_user_id", None)
-            effect_id = getattr(message, "effect_id", None)
-            link_preview_options = getattr(message, "link_preview_options", None)
-            show_caption_above_media = getattr(message, "show_caption_above_media", None)
-
-            # Convert media objects to dictionaries for serialization
-            photo_list = None
-            if photo:
-                try:
-                    # Handle both single Photo objects and lists of PhotoSize objects
-                    if isinstance(photo, list):
-                        photo_list = [photo_size.__dict__ for photo_size in photo]
-                    else:
-                        # Single Photo object - convert to list with single item
-                        photo_list = [photo.__dict__]
-                except (AttributeError, TypeError) as e:
-                    log_exception(
-                        logger,
-                        "telegram_photo_parse_failed",
-                        e,
-                        level="warning",
-                    )
-                    photo_list = None
-            video_dict = video.__dict__ if video else None
-            audio_dict = audio.__dict__ if audio else None
-            document_dict = document.__dict__ if document else None
-            sticker_dict = sticker.__dict__ if sticker else None
-            voice_dict = voice.__dict__ if voice else None
-            video_note_dict = video_note.__dict__ if video_note else None
-            animation_dict = animation.__dict__ if animation else None
-            contact_dict = contact.__dict__ if contact else None
-            location_dict = location.__dict__ if location else None
-            venue_dict = venue.__dict__ if venue else None
-            poll_dict = poll.__dict__ if poll else None
-            dice_dict = dice.__dict__ if dice else None
-            game_dict = game.__dict__ if game else None
-            invoice_dict = invoice.__dict__ if invoice else None
-            successful_payment_dict = successful_payment.__dict__ if successful_payment else None
-            story_dict = story.__dict__ if story else None
-
-            # Convert user objects using _pyrogram_to_dict to handle nested objects
-            forward_from_user = (
-                TelegramUser.from_dict(_pyrogram_to_dict(forward_from)) if forward_from else None
-            )
-            forward_from_chat_obj = (
-                TelegramChat.from_dict(_pyrogram_to_dict(forward_from_chat))
-                if forward_from_chat
-                else None
-            )
-            via_bot_user = TelegramUser.from_dict(_pyrogram_to_dict(via_bot)) if via_bot else None
-
-            # Convert reply markup / link preview options into dicts for Pydantic validation
-            reply_markup_dict = (
-                _pyrogram_to_dict(reply_markup) if reply_markup is not None else None
-            )
-            link_preview_options_dict = (
-                _pyrogram_to_dict(link_preview_options)
-                if link_preview_options is not None
-                else None
-            )
-
-            # Convert reply message
-            reply_to_message_dict = reply_to_message.__dict__ if reply_to_message else None
-
-            # Determine media type
-            media_type = None
-            if photo:
-                media_type = MediaType.PHOTO
-            elif video:
-                media_type = MediaType.VIDEO
-            elif audio:
-                media_type = MediaType.AUDIO
-            elif document:
-                media_type = MediaType.DOCUMENT
-            elif sticker:
-                media_type = MediaType.STICKER
-            elif voice:
-                media_type = MediaType.VOICE
-            elif video_note:
-                media_type = MediaType.VIDEO_NOTE
-            elif animation:
-                media_type = MediaType.ANIMATION
-            elif contact:
-                media_type = MediaType.CONTACT
-            elif location:
-                media_type = MediaType.LOCATION
-            elif venue:
-                media_type = MediaType.VENUE
-            elif poll:
-                media_type = MediaType.POLL
-            elif dice:
-                media_type = MediaType.DICE
-            elif game:
-                media_type = MediaType.GAME
-            elif invoice:
-                media_type = MediaType.INVOICE
-            elif successful_payment:
-                media_type = MediaType.SUCCESSFUL_PAYMENT
-            elif story:
-                media_type = MediaType.STORY
-
-            # Compute boolean fields
-            is_forwarded = bool(
-                forward_from or forward_from_chat or forward_sender_name or forward_date
-            )
-            is_reply = bool(reply_to_message)
-            is_edited = bool(edit_date)
-            has_media = bool(media_type)
-            has_text = bool(text)
-            has_caption = bool(caption)
-
-            return cls(
-                message_id=message_id,
-                from_user=from_user,
-                date=date,
-                chat=chat,
-                text=text,
-                entities=entities,
-                caption=caption,
-                caption_entities=caption_entities,
-                photo=photo_list,
-                video=video_dict,
-                audio=audio_dict,
-                document=document_dict,
-                sticker=sticker_dict,
-                voice=voice_dict,
-                video_note=video_note_dict,
-                animation=animation_dict,
-                contact=contact_dict,
-                location=location_dict,
-                venue=venue_dict,
-                poll=poll_dict,
-                dice=dice_dict,
-                game=game_dict,
-                invoice=invoice_dict,
-                successful_payment=successful_payment_dict,
-                story=story_dict,
-                forward_from=forward_from_user,
-                forward_from_chat=forward_from_chat_obj,
-                forward_from_message_id=forward_from_message_id,
-                forward_signature=forward_signature,
-                forward_sender_name=forward_sender_name,
-                forward_date=forward_date,
-                reply_to_message=reply_to_message_dict,
-                edit_date=edit_date,
-                media_group_id=media_group_id,
-                author_signature=author_signature,
-                via_bot=via_bot_user,
-                has_protected_content=has_protected_content,
-                connected_website=connected_website,
-                reply_markup=reply_markup_dict,
-                views=views,
-                via_bot_user_id=via_bot_user_id,
-                effect_id=effect_id,
-                link_preview_options=link_preview_options_dict,
-                show_caption_above_media=show_caption_above_media,
-                media_type=media_type,
-                is_forwarded=is_forwarded,
-                is_reply=is_reply,
-                is_edited=is_edited,
-                has_media=has_media,
-                has_text=has_text,
-                has_caption=has_caption,
-            )
-
-        except Exception as e:
-            logger.exception("Failed to parse Telegram message", extra={"error": str(e)})
-            # Return minimal message object with best-effort user extraction
-            from_user_data = getattr(message, "from_user", None)
-            from_user = None
-            if from_user_data:
-                try:
-                    # Extract user ID directly from the raw object
-                    user_id = getattr(from_user_data, "id", 0)
-                    if user_id:
-                        from_user = TelegramUser(
-                            id=int(user_id),
-                            is_bot=getattr(from_user_data, "is_bot", False),
-                            first_name=getattr(from_user_data, "first_name", "Unknown"),
-                            last_name=getattr(from_user_data, "last_name", None),
-                            username=getattr(from_user_data, "username", None),
-                            language_code=getattr(from_user_data, "language_code", None),
-                            is_premium=getattr(from_user_data, "is_premium", None),
-                            added_to_attachment_menu=getattr(
-                                from_user_data, "added_to_attachment_menu", None
-                            ),
-                        )
-                except Exception as user_e:
-                    logger.warning(
-                        "Failed to extract user from failed message", extra={"error": str(user_e)}
-                    )
-                    # Try to extract just the essential user information
-                    try:
-                        user_id = getattr(from_user_data, "id", 0)
-                        if user_id:
-                            from_user = TelegramUser(
-                                id=int(user_id),
-                                is_bot=False,  # Default fallback
-                                first_name="Unknown",  # Default fallback
-                                last_name=None,
-                                username=None,
-                                language_code=None,
-                                is_premium=None,
-                                added_to_attachment_menu=None,
-                            )
-                    except Exception:
-                        pass  # Give up on user extraction
-
-            # Extract media attributes for error case
-            photo_raw = getattr(message, "photo", None)
-
-            # Handle photo serialization for error case
-            photo_list = None
-            if photo_raw:
-                try:
-                    # Handle both single Photo objects and lists of PhotoSize objects
-                    if isinstance(photo_raw, list):
-                        photo_list = [photo_size.__dict__ for photo_size in photo_raw]
-                    else:
-                        # Single Photo object - convert to list with single item
-                        photo_list = [photo_raw.__dict__]
-                except (AttributeError, TypeError) as e:
-                    log_exception(
-                        logger,
-                        "telegram_photo_parse_failed",
-                        e,
-                        level="warning",
-                    )
-                    photo_list = None
-
-            video = getattr(message, "video", None)
-            audio = getattr(message, "audio", None)
-            document = getattr(message, "document", None)
-            sticker = getattr(message, "sticker", None)
-            voice = getattr(message, "voice", None)
-            video_note = getattr(message, "video_note", None)
-            animation = getattr(message, "animation", None)
-            contact = getattr(message, "contact", None)
-            location = getattr(message, "location", None)
-            venue = getattr(message, "venue", None)
-            poll = getattr(message, "poll", None)
-            dice = getattr(message, "dice", None)
-            game = getattr(message, "game", None)
-            invoice = getattr(message, "invoice", None)
-            successful_payment = getattr(message, "successful_payment", None)
-            story = getattr(message, "story", None)
-
-            return cls(
-                message_id=getattr(message, "id", 0),
-                from_user=from_user,
-                date=None,
-                chat=None,
-                text=getattr(message, "text", None),
-                caption=getattr(message, "caption", None),
-                photo=photo_raw,
-                photo_list=photo_list,
-                video=video,
-                audio=audio,
-                document=document,
-                sticker=sticker,
-                voice=voice,
-                video_note=video_note,
-                animation=animation,
-                contact=contact,
-                location=location,
-                venue=venue,
-                poll=poll,
-                dice=dice,
-                game=game,
-                invoice=invoice,
-                successful_payment=successful_payment,
-                story=story,
-            )
+            return cls(**_build_parsed_message_kwargs(message))
+        except Exception as exc:
+            logger.exception("Failed to parse Telegram message", extra={"error": str(exc)})
+            return cls(**_build_fallback_message_kwargs(message))
 
     def _set_computed_fields(self) -> None:
         """Set computed fields based on message content."""

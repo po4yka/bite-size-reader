@@ -122,9 +122,10 @@ def _collect_classes(files: list[Path]) -> list[ClassSpan]:
             continue
         try:
             tree = ast.parse(text)
-        except SyntaxError:
+        except SyntaxError as exc:
             # If the environment Python can't parse the file (e.g. newer syntax),
             # skip here. CI/pre-commit run on the repo's target Python.
+            print(f"warning: failed to parse {file}: {exc}", file=sys.stderr)
             continue
 
         collector = _ClassCollector(file=file)

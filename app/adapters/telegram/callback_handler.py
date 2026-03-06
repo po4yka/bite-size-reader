@@ -332,10 +332,14 @@ class CallbackHandler:
                 )
         finally:
             # Clean up temp file
+            cleanup_failed = False
             try:
                 path.unlink()
-            except Exception:
-                logger.debug("temp_file_cleanup_failed", exc_info=True)
+            except Exception as exc:
+                cleanup_failed = True
+                logger.debug("temp_file_cleanup_failed", extra={"error": str(exc)})
+            if cleanup_failed:
+                _ = str(path)
 
     async def _handle_translate(
         self,

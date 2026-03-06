@@ -12,7 +12,7 @@ from app.application.use_cases.mark_summary_as_unread import MarkSummaryAsUnread
 from app.application.use_cases.search_topics import SearchTopicsUseCase
 from app.domain.services.summary_validator import SummaryValidator
 from app.infrastructure.messaging.event_bus import EventBus
-from app.infrastructure.messaging.event_handlers import wire_event_handlers
+from app.infrastructure.messaging.handlers.wiring import wire_event_handlers
 from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
     SqliteAuthRepositoryAdapter,
 )

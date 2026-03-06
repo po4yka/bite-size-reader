@@ -96,7 +96,6 @@ class YouTubeDownloader:
         Returns:
             (req_id, transcript_text, content_source, detected_lang, video_metadata)
         """
-        # Extract video ID
         video_id = extract_youtube_video_id(url)
         if not video_id:
             raise ValueError("Invalid YouTube URL: could not extract video ID")
@@ -106,434 +105,652 @@ class YouTubeDownloader:
             extra={"video_id": video_id, "url": url, "cid": correlation_id},
         )
 
-        # Check storage limits (may trigger cleanup)
         await self._check_storage_limits()
-
-        # Normalize URL for deduplication
         norm = normalize_url(url)
         dedupe = url_hash_sha256(norm)
+        preparation = await self._prepare_download_entry(
+            message=message,
+            url=url,
+            video_id=video_id,
+            norm=norm,
+            dedupe=dedupe,
+            correlation_id=correlation_id,
+            request_id_override=request_id_override,
+            silent=silent,
+        )
 
-        # Get or create a lock for this URL's dedupe hash to prevent TOCTOU races
+        cached_result = preparation["cached_result"]
+        req_id = preparation["req_id"]
+        if cached_result is not None:
+            return cached_result
+
+        if preparation["wait_for_existing_download"]:
+            return await self._reuse_in_progress_download_result(
+                message=message,
+                req_id=req_id,
+                correlation_id=correlation_id,
+                silent=silent,
+            )
+
+        download_id = preparation["download_id"]
+        return await self._process_fresh_download(
+            message=message,
+            url=url,
+            video_id=video_id,
+            req_id=req_id,
+            download_id=download_id,
+            correlation_id=correlation_id,
+            silent=silent,
+            progress_tracker=progress_tracker,
+        )
+
+    async def _prepare_download_entry(
+        self,
+        message: Any,
+        url: str,
+        video_id: str,
+        norm: str,
+        dedupe: str,
+        correlation_id: str | None,
+        request_id_override: int | None,
+        silent: bool,
+    ) -> dict[str, Any]:
         url_lock = self._url_locks.setdefault(dedupe, asyncio.Lock())
-        wait_for_existing_download = False
-
         async with url_lock:
-            if request_id_override is not None:
-                req_id = request_id_override
-            else:
-                # Fetch existing request by dedupe hash
-                existing_req = await self.request_repo.async_get_request_by_dedupe_hash(dedupe)
-                if isinstance(existing_req, Mapping):
-                    req_id = int(existing_req["id"])
-                    logger.info(
-                        "youtube_dedupe_hit",
-                        extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
-                    )
-                else:
-                    # Create new request
-                    req_id = await self._create_video_request(
-                        message, url, norm, dedupe, correlation_id
-                    )
-
-            # Check for existing download
+            req_id = await self._resolve_request_id_for_download(
+                message=message,
+                url=url,
+                video_id=video_id,
+                norm=norm,
+                dedupe=dedupe,
+                correlation_id=correlation_id,
+                request_id_override=request_id_override,
+            )
             existing_download = await self.video_repo.async_get_video_download_by_request(req_id)
             if existing_download and existing_download.get("status") == "completed":
                 logger.info(
                     "youtube_video_already_downloaded",
                     extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
                 )
-                metadata = self._build_metadata_dict(existing_download)
-                transcript_value = existing_download.get("transcript_text")
-                transcript_text = (
-                    transcript_value
-                    if isinstance(transcript_value, str)
-                    else str(transcript_value or "")
-                )
-                if not transcript_text.strip():
-                    raise ValueError(
+                result = await self._build_reused_download_result(
+                    message=message,
+                    req_id=req_id,
+                    download=existing_download,
+                    correlation_id=correlation_id,
+                    silent=silent,
+                    reuse_message=(
+                        "♻️ Reusing previously downloaded video and transcript. "
+                        "Skipping re-download."
+                    ),
+                    warning_key="youtube_cached_reply_failed",
+                    missing_transcript_error=(
                         "❌ Cached video found but no transcript or subtitles were available. "
                         "Try re-downloading with subtitles enabled."
-                    )
-                transcript_source = existing_download.get("transcript_source") or "cached"
-                detected_lang = existing_download.get("subtitle_language") or detect_language(
-                    transcript_text
+                    ),
                 )
-                combined_text = self._combine_metadata_and_transcript(metadata, transcript_text)
-
-                if not silent:
-                    try:
-                        await self.response_formatter.sender.safe_reply(
-                            message,
-                            "♻️ Reusing previously downloaded video and transcript. Skipping re-download.",
-                        )
-                    except Exception as e:
-                        raise_if_cancelled(e)
-                        logger.warning("youtube_cached_reply_failed", exc_info=True)
-
-                return (
-                    req_id,
-                    combined_text,
-                    transcript_source,
-                    detected_lang,
-                    metadata,
-                )
+                return {
+                    "req_id": req_id,
+                    "download_id": None,
+                    "wait_for_existing_download": False,
+                    "cached_result": result,
+                }
 
             if existing_download and existing_download.get("status") in {"pending", "downloading"}:
-                wait_for_existing_download = True
-                download_id = existing_download.get("id")
                 logger.info(
                     "youtube_download_in_progress_reuse",
                     extra={
                         "video_id": video_id,
                         "request_id": req_id,
-                        "download_id": download_id,
+                        "download_id": existing_download.get("id"),
                         "status": existing_download.get("status"),
                         "cid": correlation_id,
                     },
                 )
-            else:
-                # 1. Create initial download record
-                download_id = await self.video_repo.async_create_video_download(
-                    request_id=req_id, video_id=video_id, status="pending"
-                )
+                return {
+                    "req_id": req_id,
+                    "download_id": existing_download.get("id"),
+                    "wait_for_existing_download": True,
+                    "cached_result": None,
+                }
 
-        if wait_for_existing_download:
-            existing_download = await self._await_existing_download_completion(
-                req_id, correlation_id
+            download_id = await self.video_repo.async_create_video_download(
+                request_id=req_id, video_id=video_id, status="pending"
             )
-            if not silent:
-                try:
-                    await self.response_formatter.sender.safe_reply(
-                        message,
-                        "⏳ Another request is already processing this video. Reusing the result.",
-                    )
-                except Exception as e:
-                    raise_if_cancelled(e)
-                    logger.warning("youtube_in_progress_reply_failed", exc_info=True)
-            metadata = self._build_metadata_dict(existing_download)
-            transcript_value = existing_download.get("transcript_text")
-            transcript_text = (
-                transcript_value
-                if isinstance(transcript_value, str)
-                else str(transcript_value or "")
-            )
-            if not transcript_text.strip():
-                raise ValueError(
-                    "❌ Reused video download has no transcript/subtitles. Try again later."
-                )
-            transcript_source = existing_download.get("transcript_source") or "cached"
-            detected_lang = existing_download.get("subtitle_language") or detect_language(
-                transcript_text
-            )
-            combined_text = self._combine_metadata_and_transcript(metadata, transcript_text)
-            return (
-                req_id,
-                combined_text,
-                transcript_source,
-                detected_lang,
-                metadata,
-            )
-        own_download_record = True
+            return {
+                "req_id": req_id,
+                "download_id": download_id,
+                "wait_for_existing_download": False,
+                "cached_result": None,
+            }
 
+    async def _resolve_request_id_for_download(
+        self,
+        message: Any,
+        url: str,
+        video_id: str,
+        norm: str,
+        dedupe: str,
+        correlation_id: str | None,
+        request_id_override: int | None,
+    ) -> int:
+        if request_id_override is not None:
+            return request_id_override
+
+        existing_req = await self.request_repo.async_get_request_by_dedupe_hash(dedupe)
+        if isinstance(existing_req, Mapping):
+            req_id = int(existing_req["id"])
+            logger.info(
+                "youtube_dedupe_hit",
+                extra={"video_id": video_id, "request_id": req_id, "cid": correlation_id},
+            )
+            return req_id
+
+        return await self._create_video_request(message, url, norm, dedupe, correlation_id)
+
+    async def _build_reused_download_result(
+        self,
+        message: Any,
+        req_id: int,
+        download: dict[str, Any],
+        correlation_id: str | None,
+        silent: bool,
+        reuse_message: str,
+        warning_key: str,
+        missing_transcript_error: str,
+    ) -> tuple[int, str, str, str, dict]:
+        if not silent:
+            try:
+                await self.response_formatter.sender.safe_reply(message, reuse_message)
+            except Exception as exc:
+                raise_if_cancelled(exc)
+                logger.warning(warning_key, exc_info=True)
+
+        metadata = self._build_metadata_dict(download)
+        transcript_value = download.get("transcript_text")
+        transcript_text = (
+            transcript_value if isinstance(transcript_value, str) else str(transcript_value or "")
+        )
+        if not transcript_text.strip():
+            raise ValueError(missing_transcript_error)
+
+        transcript_source = download.get("transcript_source") or "cached"
+        detected_lang = download.get("subtitle_language") or detect_language(transcript_text)
+        combined_text = self._combine_metadata_and_transcript(metadata, transcript_text)
+        return req_id, combined_text, transcript_source, detected_lang, metadata
+
+    async def _reuse_in_progress_download_result(
+        self,
+        message: Any,
+        req_id: int,
+        correlation_id: str | None,
+        silent: bool,
+    ) -> tuple[int, str, str, str, dict]:
+        existing_download = await self._await_existing_download_completion(req_id, correlation_id)
+        return await self._build_reused_download_result(
+            message=message,
+            req_id=req_id,
+            download=existing_download,
+            correlation_id=correlation_id,
+            silent=silent,
+            reuse_message="⏳ Another request is already processing this video. Reusing the result.",
+            warning_key="youtube_in_progress_reply_failed",
+            missing_transcript_error=(
+                "❌ Reused video download has no transcript/subtitles. Try again later."
+            ),
+        )
+
+    async def _process_fresh_download(
+        self,
+        message: Any,
+        url: str,
+        video_id: str,
+        req_id: int,
+        download_id: int,
+        correlation_id: str | None,
+        silent: bool,
+        progress_tracker: ProgressTracker | None,
+    ) -> tuple[int, str, str, str, dict]:
         output_dir: Path | None = None
         download_succeeded = False
-
         try:
-            # 2. Update status to downloading
             await self.video_repo.async_update_video_download_status(
                 download_id, "downloading", download_started_at=datetime.now(UTC)
             )
-
-            async def _draft_stage(text: str, *, force: bool = False) -> None:
-                if silent:
-                    return
-                await self.response_formatter.sender.send_message_draft(
-                    message,
-                    text,
-                    force=force,
-                )
-
-            # Notify user: starting download
-            if not silent:
-                await self.response_formatter.notifications.send_youtube_download_notification(
-                    message, url, silent=silent
-                )
-            await _draft_stage("🎥 YouTube: extracting transcript...")
-
-            # Choose between progress tracker (Reader mode) or typing indicator (Debug mode)
-            use_progress = progress_tracker is not None
-            updater = None
-            typing_ctx = None
-            start_time = time.time()
-            completed_stages: list[tuple[str, float]] = []
-            stage_start = time.time()
-
-            try:
-                if use_progress:
-                    # Reader mode: editable progress message with stage breakdown
-                    updater = ProgressMessageUpdater(progress_tracker, message)
-
-                    def stage1_formatter(elapsed: float) -> str:
-                        return SingleURLProgressFormatter.format_youtube_progress(
-                            video_id=video_id,
-                            stage=1,
-                            stage_name="Extracting transcript",
-                            stage_elapsed_sec=elapsed,
-                            completed_stages=[],
-                            total_elapsed_sec=elapsed,
-                        )
-
-                    await updater.start(stage1_formatter)
-                else:
-                    # Debug mode: typing indicator (existing behavior)
-                    typing_ctx = typing_indicator(
-                        self.response_formatter, message, action="upload_video"
-                    )
-                    await typing_ctx.__aenter__()
-
-                # Step 1: Extract transcript using youtube-transcript-api (with retries)
-                (
-                    transcript_text,
-                    transcript_lang,
-                    auto_generated,
-                    transcript_source,
-                ) = await self._extract_transcript_api(video_id, correlation_id)
-                await _draft_stage("🎥 YouTube: transcript ready, downloading video...")
-
-                # Mark stage 1 complete
-                if use_progress:
-                    stage_duration = time.time() - stage_start
-                    completed_stages.append(("Transcript extracted", stage_duration))
-                    stage_start = time.time()
-
-                    # Update to stage 2
-                    def stage2_formatter(elapsed: float) -> str:
-                        return SingleURLProgressFormatter.format_youtube_progress(
-                            video_id=video_id,
-                            stage=2,
-                            stage_name="Downloading video",
-                            stage_elapsed_sec=elapsed,
-                            completed_stages=completed_stages,
-                            total_elapsed_sec=sum(d for _, d in completed_stages) + elapsed,
-                        )
-
-                    await updater.update_formatter(stage2_formatter)
-
-                # Step 2: Download video with yt-dlp
-                output_dir = self.storage_path / datetime.now().strftime("%Y%m%d")
-                output_dir.mkdir(parents=True, exist_ok=True)
-
-                ydl_opts = self._get_ydl_opts(video_id, output_dir)
-
-                # Download in thread pool (yt-dlp is sync); timeout prevents hangs
-                async with asyncio.timeout(600.0):
-                    video_metadata = await asyncio.to_thread(
-                        self._download_video_sync,
-                        url,
-                        ydl_opts,
-                        download_id,
-                        message,
-                        silent,
-                        correlation_id,
-                    )
-
-                # Mark stage 2 complete
-                if use_progress:
-                    stage_duration = time.time() - stage_start
-                    completed_stages.append(("Video downloaded", stage_duration))
-                    stage_start = time.time()
-
-                # Fallback to downloaded VTT subtitles if API transcript is missing
-                if not transcript_text:
-                    # Update to stage 3 (VTT fallback)
-                    await _draft_stage("🎥 YouTube: processing subtitle fallback...")
-                    if use_progress:
-
-                        def stage3_formatter(elapsed: float) -> str:
-                            return SingleURLProgressFormatter.format_youtube_progress(
-                                video_id=video_id,
-                                stage=3,
-                                stage_name="Processing subtitles",
-                                stage_elapsed_sec=elapsed,
-                                completed_stages=completed_stages,
-                                total_elapsed_sec=sum(d for _, d in completed_stages) + elapsed,
-                            )
-
-                        await updater.update_formatter(stage3_formatter)
-
-                    vtt_text, vtt_lang = self._load_transcript_from_vtt(
-                        video_metadata.get("subtitle_file_path"), correlation_id
-                    )
-                    if vtt_text:
-                        transcript_text = vtt_text
-                        transcript_lang = vtt_lang or transcript_lang
-                        transcript_source = "vtt"
-                        _ = auto_generated  # Mark as used/shadowed if we switch to VTT
-                        logger.info(
-                            "youtube_transcript_vtt_fallback_success",
-                            extra={
-                                "video_id": video_id,
-                                "subtitle_lang": transcript_lang,
-                                "cid": correlation_id,
-                            },
-                        )
-
-                        # Mark stage 3 complete
-                        if use_progress:
-                            stage_duration = time.time() - stage_start
-                            completed_stages.append(("Subtitles processed", stage_duration))
-
-                if not transcript_text:
-                    raise ValueError(
-                        f"❌ No transcript or subtitles available for this video. "
-                        f"Error ID: {correlation_id or 'unknown'}"
-                    )
-
-                # Detect language from transcript
-                detected_lang = detect_language(transcript_text or "")
-                combined_text = self._combine_metadata_and_transcript(
-                    video_metadata, transcript_text
-                )
-
-                # Update database with complete metadata + transcript
-                await self.video_repo.async_update_video_download(
-                    download_id,
-                    title=video_metadata.get("title"),
-                    channel=video_metadata.get("channel"),
-                    channel_id=video_metadata.get("channel_id"),
-                    duration_sec=video_metadata.get("duration"),
-                    upload_date=video_metadata.get("upload_date"),
-                    view_count=video_metadata.get("view_count"),
-                    like_count=video_metadata.get("like_count"),
-                    resolution=video_metadata.get("resolution"),
-                    file_size_bytes=video_metadata.get("file_size"),
-                    video_codec=video_metadata.get("vcodec"),
-                    audio_codec=video_metadata.get("acodec"),
-                    format_id=video_metadata.get("format_id"),
-                    transcript_text=transcript_text,
-                    subtitle_language=transcript_lang,
-                    auto_generated=auto_generated,
-                    transcript_source=transcript_source,
-                )
-
-                # Mark download as completed so cached lookups work
-                await self.video_repo.async_update_video_download_status(download_id, "completed")
-
-                # Update request status
-                await self.request_repo.async_update_request_status(req_id, "ok")
-                await self.request_repo.async_update_request_lang_detected(req_id, detected_lang)
-
-                # Finalize progress message or notify completion
-                total_elapsed = time.time() - start_time
-                await _draft_stage(
-                    "✅ YouTube: transcript and metadata ready. Finalizing summary..."
-                )
-                if use_progress and updater:
-                    success_msg = SingleURLProgressFormatter.format_youtube_complete(
-                        title=video_metadata["title"],
-                        size_mb=video_metadata["file_size"] / (1024 * 1024),
-                        total_elapsed_sec=total_elapsed,
-                        success=True,
-                    )
-                    await updater.finalize(success_msg)
-                elif not silent:
-                    # Debug mode: send completion notification
-                    await self.response_formatter.notifications.send_youtube_download_complete_notification(
-                        message,
-                        video_metadata["title"],
-                        video_metadata["resolution"],
-                        video_metadata["file_size"] / (1024 * 1024),  # MB
-                        silent=silent,
-                    )
-
-                if typing_ctx:
-                    await typing_ctx.__aexit__(None, None, None)
-
-                self._audit(
-                    "INFO",
-                    "youtube_download_complete",
-                    {
-                        "video_id": video_id,
-                        "request_id": req_id,
-                        "download_id": download_id,
-                        "file_size_mb": video_metadata["file_size"] / (1024 * 1024),
-                        "cid": correlation_id,
-                    },
-                )
-
-                download_succeeded = True
-                return req_id, combined_text, transcript_source, detected_lang, video_metadata
-
-            except Exception as e:
-                # Cleanup on error
-                if use_progress and updater:
-                    # Determine which stage failed
-                    num_completed = len(completed_stages)
-                    failed_stage = (
-                        f"Stage {num_completed + 1}/3" if num_completed < 3 else "Processing"
-                    )
-                    error_msg = SingleURLProgressFormatter.format_youtube_complete(
-                        title="",
-                        size_mb=0,
-                        total_elapsed_sec=time.time() - start_time,
-                        success=False,
-                        error_msg=str(e),
-                        correlation_id=correlation_id,
-                        failed_stage=failed_stage,
-                    )
-                    await updater.finalize(error_msg)
-                elif typing_ctx:
-                    await typing_ctx.__aexit__(None, None, None)
-                raise
-
-        except Exception as e:
-            raise_if_cancelled(e)
-            if own_download_record and download_id:
-                await self.video_repo.async_update_video_download_status(
-                    download_id, "error", error_text=str(e)
-                )
-            if own_download_record:
-                await self.request_repo.async_update_request_status(req_id, "error")
-
+            result, output_dir = await self._run_download_pipeline(
+                message=message,
+                url=url,
+                video_id=video_id,
+                req_id=req_id,
+                download_id=download_id,
+                correlation_id=correlation_id,
+                silent=silent,
+                progress_tracker=progress_tracker,
+            )
+            download_succeeded = True
+            return result
+        except Exception as exc:
+            raise_if_cancelled(exc)
+            await self.video_repo.async_update_video_download_status(
+                download_id, "error", error_text=str(exc)
+            )
+            await self.request_repo.async_update_request_status(req_id, "error")
             self._audit(
                 "ERROR",
                 "youtube_download_failed",
                 {
                     "video_id": video_id,
                     "request_id": req_id,
-                    "error": str(e),
+                    "error": str(exc),
                     "cid": correlation_id,
                 },
             )
-
             logger.error(
                 "youtube_download_failed",
-                extra={"video_id": video_id, "error": str(e), "cid": correlation_id},
+                extra={"video_id": video_id, "error": str(exc), "cid": correlation_id},
+            )
+            raise
+        finally:
+            if not download_succeeded and output_dir is not None:
+                self._cleanup_partial_download_files(
+                    output_dir=output_dir,
+                    video_id=video_id,
+                    correlation_id=correlation_id,
+                )
+
+    async def _run_download_pipeline(
+        self,
+        message: Any,
+        url: str,
+        video_id: str,
+        req_id: int,
+        download_id: int,
+        correlation_id: str | None,
+        silent: bool,
+        progress_tracker: ProgressTracker | None,
+    ) -> tuple[tuple[int, str, str, str, dict], Path]:
+        async def _draft_stage(text: str, *, force: bool = False) -> None:
+            if silent:
+                return
+            await self.response_formatter.sender.send_message_draft(message, text, force=force)
+
+        use_progress = progress_tracker is not None
+        updater: ProgressMessageUpdater | None = None
+        typing_ctx: Any | None = None
+        start_time = time.time()
+        completed_stages: list[tuple[str, float]] = []
+        stage_start = time.time()
+
+        if not silent:
+            await self.response_formatter.notifications.send_youtube_download_notification(
+                message, url, silent=silent
+            )
+        await _draft_stage("🎥 YouTube: extracting transcript...")
+
+        try:
+            updater, typing_ctx = await self._enter_download_feedback(
+                progress_tracker=progress_tracker,
+                message=message,
+                video_id=video_id,
+            )
+            (
+                transcript_text,
+                transcript_lang,
+                auto_generated,
+                transcript_source,
+            ) = await self._extract_transcript_api(video_id, correlation_id)
+            await _draft_stage("🎥 YouTube: transcript ready, downloading video...")
+
+            stage_start = await self._advance_to_video_download_stage(
+                use_progress=use_progress,
+                updater=updater,
+                video_id=video_id,
+                completed_stages=completed_stages,
+                stage_start=stage_start,
             )
 
+            output_dir, video_metadata, stage_start = await self._download_video_stage(
+                url=url,
+                video_id=video_id,
+                download_id=download_id,
+                message=message,
+                silent=silent,
+                correlation_id=correlation_id,
+                use_progress=use_progress,
+                completed_stages=completed_stages,
+                stage_start=stage_start,
+            )
+            (
+                transcript_text,
+                transcript_lang,
+                transcript_source,
+            ) = await self._apply_vtt_fallback_if_needed(
+                transcript_text=transcript_text,
+                transcript_lang=transcript_lang,
+                transcript_source=transcript_source,
+                video_metadata=video_metadata,
+                video_id=video_id,
+                correlation_id=correlation_id,
+                use_progress=use_progress,
+                updater=updater,
+                completed_stages=completed_stages,
+                stage_start=stage_start,
+                draft_stage=_draft_stage,
+            )
+
+            if not transcript_text:
+                raise ValueError(
+                    f"❌ No transcript or subtitles available for this video. "
+                    f"Error ID: {correlation_id or 'unknown'}"
+                )
+
+            detected_lang = detect_language(transcript_text or "")
+            combined_text = self._combine_metadata_and_transcript(video_metadata, transcript_text)
+            await self._persist_download_success(
+                req_id=req_id,
+                download_id=download_id,
+                video_metadata=video_metadata,
+                transcript_text=transcript_text,
+                transcript_lang=transcript_lang,
+                auto_generated=auto_generated,
+                transcript_source=transcript_source,
+                detected_lang=detected_lang,
+            )
+            await self._finalize_download_success_feedback(
+                message=message,
+                silent=silent,
+                use_progress=use_progress,
+                updater=updater,
+                video_metadata=video_metadata,
+                start_time=start_time,
+                draft_stage=_draft_stage,
+            )
+            if typing_ctx:
+                await typing_ctx.__aexit__(None, None, None)
+
+            self._audit(
+                "INFO",
+                "youtube_download_complete",
+                {
+                    "video_id": video_id,
+                    "request_id": req_id,
+                    "download_id": download_id,
+                    "file_size_mb": video_metadata["file_size"] / (1024 * 1024),
+                    "cid": correlation_id,
+                },
+            )
+            return (
+                req_id,
+                combined_text,
+                transcript_source,
+                detected_lang,
+                video_metadata,
+            ), output_dir
+        except Exception as exc:
+            await self._finalize_download_error_feedback(
+                error=exc,
+                correlation_id=correlation_id,
+                use_progress=use_progress,
+                updater=updater,
+                typing_ctx=typing_ctx,
+                completed_stages=completed_stages,
+                start_time=start_time,
+            )
             raise
 
-        finally:
-            # Clean up partial download files on ANY failure (including CancelledError)
-            if not download_succeeded and output_dir is not None:
-                try:
-                    if output_dir.exists():
-                        deleted_count = _storage.cleanup_partial_download_files(
-                            output_dir=output_dir,
-                            video_id=video_id,
-                        )
-                        if deleted_count > 0:
-                            logger.info(
-                                "youtube_partial_download_cleaned",
-                                extra={
-                                    "video_id": video_id,
-                                    "cid": correlation_id,
-                                    "files_removed": deleted_count,
-                                },
-                            )
-                except Exception as e:
-                    raise_if_cancelled(e)
-                    logger.warning("youtube_partial_cleanup_failed", exc_info=True)
+    async def _enter_download_feedback(
+        self,
+        progress_tracker: ProgressTracker | None,
+        message: Any,
+        video_id: str,
+    ) -> tuple[ProgressMessageUpdater | None, Any | None]:
+        if progress_tracker is not None:
+            updater = ProgressMessageUpdater(progress_tracker, message)
+
+            def stage1_formatter(elapsed: float) -> str:
+                return SingleURLProgressFormatter.format_youtube_progress(
+                    video_id=video_id,
+                    stage=1,
+                    stage_name="Extracting transcript",
+                    stage_elapsed_sec=elapsed,
+                    completed_stages=[],
+                    total_elapsed_sec=elapsed,
+                )
+
+            await updater.start(stage1_formatter)
+            return updater, None
+
+        typing_ctx = typing_indicator(self.response_formatter, message, action="upload_video")
+        await typing_ctx.__aenter__()
+        return None, typing_ctx
+
+    async def _advance_to_video_download_stage(
+        self,
+        use_progress: bool,
+        updater: ProgressMessageUpdater | None,
+        video_id: str,
+        completed_stages: list[tuple[str, float]],
+        stage_start: float,
+    ) -> float:
+        if not use_progress or updater is None:
+            return stage_start
+
+        stage_duration = time.time() - stage_start
+        completed_stages.append(("Transcript extracted", stage_duration))
+        new_stage_start = time.time()
+
+        def stage2_formatter(elapsed: float) -> str:
+            return SingleURLProgressFormatter.format_youtube_progress(
+                video_id=video_id,
+                stage=2,
+                stage_name="Downloading video",
+                stage_elapsed_sec=elapsed,
+                completed_stages=completed_stages,
+                total_elapsed_sec=sum(d for _, d in completed_stages) + elapsed,
+            )
+
+        await updater.update_formatter(stage2_formatter)
+        return new_stage_start
+
+    async def _download_video_stage(
+        self,
+        url: str,
+        video_id: str,
+        download_id: int,
+        message: Any,
+        silent: bool,
+        correlation_id: str | None,
+        use_progress: bool,
+        completed_stages: list[tuple[str, float]],
+        stage_start: float,
+    ) -> tuple[Path, dict[str, Any], float]:
+        output_dir = self.storage_path / datetime.now().strftime("%Y%m%d")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        ydl_opts = self._get_ydl_opts(video_id, output_dir)
+        async with asyncio.timeout(600.0):
+            video_metadata = await asyncio.to_thread(
+                self._download_video_sync,
+                url,
+                ydl_opts,
+                download_id,
+                message,
+                silent,
+                correlation_id,
+            )
+
+        if not use_progress:
+            return output_dir, video_metadata, stage_start
+
+        stage_duration = time.time() - stage_start
+        completed_stages.append(("Video downloaded", stage_duration))
+        return output_dir, video_metadata, time.time()
+
+    async def _apply_vtt_fallback_if_needed(
+        self,
+        transcript_text: str,
+        transcript_lang: str,
+        transcript_source: str,
+        video_metadata: dict[str, Any],
+        video_id: str,
+        correlation_id: str | None,
+        use_progress: bool,
+        updater: ProgressMessageUpdater | None,
+        completed_stages: list[tuple[str, float]],
+        stage_start: float,
+        draft_stage: Any,
+    ) -> tuple[str, str, str]:
+        if transcript_text:
+            return transcript_text, transcript_lang, transcript_source
+
+        await draft_stage("🎥 YouTube: processing subtitle fallback...")
+        if use_progress and updater is not None:
+
+            def stage3_formatter(elapsed: float) -> str:
+                return SingleURLProgressFormatter.format_youtube_progress(
+                    video_id=video_id,
+                    stage=3,
+                    stage_name="Processing subtitles",
+                    stage_elapsed_sec=elapsed,
+                    completed_stages=completed_stages,
+                    total_elapsed_sec=sum(d for _, d in completed_stages) + elapsed,
+                )
+
+            await updater.update_formatter(stage3_formatter)
+
+        vtt_text, vtt_lang = self._load_transcript_from_vtt(
+            video_metadata.get("subtitle_file_path"), correlation_id
+        )
+        if not vtt_text:
+            return transcript_text, transcript_lang, transcript_source
+
+        transcript_text = vtt_text
+        transcript_lang = vtt_lang or transcript_lang
+        transcript_source = "vtt"
+        logger.info(
+            "youtube_transcript_vtt_fallback_success",
+            extra={"video_id": video_id, "subtitle_lang": transcript_lang, "cid": correlation_id},
+        )
+        if use_progress:
+            stage_duration = time.time() - stage_start
+            completed_stages.append(("Subtitles processed", stage_duration))
+        return transcript_text, transcript_lang, transcript_source
+
+    async def _persist_download_success(
+        self,
+        req_id: int,
+        download_id: int,
+        video_metadata: dict[str, Any],
+        transcript_text: str,
+        transcript_lang: str,
+        auto_generated: bool,
+        transcript_source: str,
+        detected_lang: str,
+    ) -> None:
+        await self.video_repo.async_update_video_download(
+            download_id,
+            title=video_metadata.get("title"),
+            channel=video_metadata.get("channel"),
+            channel_id=video_metadata.get("channel_id"),
+            duration_sec=video_metadata.get("duration"),
+            upload_date=video_metadata.get("upload_date"),
+            view_count=video_metadata.get("view_count"),
+            like_count=video_metadata.get("like_count"),
+            resolution=video_metadata.get("resolution"),
+            file_size_bytes=video_metadata.get("file_size"),
+            video_codec=video_metadata.get("vcodec"),
+            audio_codec=video_metadata.get("acodec"),
+            format_id=video_metadata.get("format_id"),
+            transcript_text=transcript_text,
+            subtitle_language=transcript_lang,
+            auto_generated=auto_generated,
+            transcript_source=transcript_source,
+        )
+        await self.video_repo.async_update_video_download_status(download_id, "completed")
+        await self.request_repo.async_update_request_status(req_id, "ok")
+        await self.request_repo.async_update_request_lang_detected(req_id, detected_lang)
+
+    async def _finalize_download_success_feedback(
+        self,
+        message: Any,
+        silent: bool,
+        use_progress: bool,
+        updater: ProgressMessageUpdater | None,
+        video_metadata: dict[str, Any],
+        start_time: float,
+        draft_stage: Any,
+    ) -> None:
+        total_elapsed = time.time() - start_time
+        await draft_stage("✅ YouTube: transcript and metadata ready. Finalizing summary...")
+        if use_progress and updater is not None:
+            success_msg = SingleURLProgressFormatter.format_youtube_complete(
+                title=video_metadata["title"],
+                size_mb=video_metadata["file_size"] / (1024 * 1024),
+                total_elapsed_sec=total_elapsed,
+                success=True,
+            )
+            await updater.finalize(success_msg)
+            return
+
+        if not silent:
+            await self.response_formatter.notifications.send_youtube_download_complete_notification(
+                message,
+                video_metadata["title"],
+                video_metadata["resolution"],
+                video_metadata["file_size"] / (1024 * 1024),
+                silent=silent,
+            )
+
+    async def _finalize_download_error_feedback(
+        self,
+        error: Exception,
+        correlation_id: str | None,
+        use_progress: bool,
+        updater: ProgressMessageUpdater | None,
+        typing_ctx: Any | None,
+        completed_stages: list[tuple[str, float]],
+        start_time: float,
+    ) -> None:
+        if use_progress and updater is not None:
+            num_completed = len(completed_stages)
+            failed_stage = f"Stage {num_completed + 1}/3" if num_completed < 3 else "Processing"
+            error_msg = SingleURLProgressFormatter.format_youtube_complete(
+                title="",
+                size_mb=0,
+                total_elapsed_sec=time.time() - start_time,
+                success=False,
+                error_msg=str(error),
+                correlation_id=correlation_id,
+                failed_stage=failed_stage,
+            )
+            await updater.finalize(error_msg)
+            return
+
+        if typing_ctx:
+            await typing_ctx.__aexit__(None, None, None)
+
+    def _cleanup_partial_download_files(
+        self,
+        output_dir: Path,
+        video_id: str,
+        correlation_id: str | None,
+    ) -> None:
+        try:
+            if output_dir.exists():
+                deleted_count = _storage.cleanup_partial_download_files(
+                    output_dir=output_dir,
+                    video_id=video_id,
+                )
+                if deleted_count > 0:
+                    logger.info(
+                        "youtube_partial_download_cleaned",
+                        extra={
+                            "video_id": video_id,
+                            "cid": correlation_id,
+                            "files_removed": deleted_count,
+                        },
+                    )
+        except Exception as exc:
+            raise_if_cancelled(exc)
+            logger.warning("youtube_partial_cleanup_failed", exc_info=True)
 
     async def _await_existing_download_completion(
         self,

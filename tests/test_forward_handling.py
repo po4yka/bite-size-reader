@@ -21,9 +21,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.telegram.message_persistence import MessagePersistence
 from app.db.database import Database
 from app.db.models import database_proxy
+from app.infrastructure.persistence.message_persistence import MessagePersistence
 from tests.conftest import make_test_app_config
 
 # ---------------------------------------------------------------------------

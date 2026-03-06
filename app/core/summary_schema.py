@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from enum import StrEnum
 from typing import Any, Literal
 
@@ -12,6 +13,7 @@ from app.core.summary_text_utils import (
 
 # Kept as a constant for backward compatibility with any code that imports it.
 PydanticAvailable = True
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +302,7 @@ class SummaryModel(BaseModel):
             try:
                 value = float(item.get("value"))
             except (TypeError, ValueError):
+                logger.debug("invalid_key_stat_value_skipped", extra={"value": item.get("value")})
                 continue
             unit = item.get("unit")
             source_excerpt = item.get("source_excerpt")

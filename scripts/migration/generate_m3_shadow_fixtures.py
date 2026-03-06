@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
 from typing import Any
 
+from app.migration.fixture_runner import parse_check_flag, run_fixture_cli
 from app.migration.pipeline_shadow import (
     build_python_chunk_sentence_plan_snapshot_from_input,
     build_python_chunk_synthesis_prompt_snapshot_from_input,
@@ -89,23 +89,12 @@ def _process_fixture(input_path: Path, *, check: bool) -> bool:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="Verify fixtures are up to date")
-    args = parser.parse_args()
-
-    input_files = sorted(INPUT_DIR.glob("*.json"))
-    if not input_files:
-        print(f"no input fixtures found in {INPUT_DIR}")
-        return 1
-
-    ok = True
-    for input_path in input_files:
-        ok = _process_fixture(input_path, check=args.check) and ok
-
-    if args.check:
-        print("fixtures up to date" if ok else "fixtures need regeneration")
-
-    return 0 if ok else 1
+    check = parse_check_flag(__doc__)
+    return run_fixture_cli(
+        input_dir=INPUT_DIR,
+        process_fixture=_process_fixture,
+        check=check,
+    )
 
 
 if __name__ == "__main__":

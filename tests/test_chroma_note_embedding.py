@@ -2,7 +2,9 @@ import asyncio
 import types
 from unittest.mock import AsyncMock, MagicMock
 
-from app.infrastructure.messaging.event_handlers import EmbeddingGenerationEventHandler
+from app.infrastructure.messaging.handlers.embedding_generation import (
+    EmbeddingGenerationEventHandler,
+)
 from app.services.metadata_builder import MetadataBuilder
 
 

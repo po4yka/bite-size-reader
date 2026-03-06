@@ -417,133 +417,134 @@ class ExportFormatter:
 
     def _generate_html(self, data: dict[str, Any], for_pdf: bool = False) -> str:
         """Generate HTML content from summary data."""
-        # Get values
         title = html.escape(str(data.get("metadata", {}).get("title") or "Summary"))
+        body_content = self._build_html_sections(data=data, escaped_title=title)
+        return self._render_html_document(
+            title=title,
+            body_content=body_content,
+            for_pdf=for_pdf,
+        )
+
+    def _build_html_sections(self, *, data: dict[str, Any], escaped_title: str) -> str:
+        sections: list[str] = [f"<h1>{escaped_title}</h1>"]
         url = data.get("url")
-        tldr = data.get("summary_250") or data.get("tldr")
-        summary_1000 = data.get("summary_1000")
-        key_ideas = data.get("key_ideas") or []
-        tags = data.get("topic_tags") or []
-        entities = data.get("entities") or {}
-        key_stats = data.get("key_stats") or []
-        reading_time = data.get("estimated_reading_time_min")
-        seo = data.get("seo_keywords") or []
-
-        # Build HTML
-        sections: list[str] = []
-
-        # Header with source
-        sections.append(f"<h1>{title}</h1>")
         if url:
             safe_url = html.escape(str(url))
             sections.append(
                 f'<p class="source"><strong>Source:</strong> <a href="{safe_url}">{safe_url}</a></p>'
             )
 
-        # TL;DR
+        self._append_summary_sections(sections, data)
+        self._append_entities_section(sections, data.get("entities") or {})
+        self._append_key_stats_section(sections, data.get("key_stats") or [])
+        self._append_metadata_section(sections, data)
+        self._append_footer_section(sections, data.get("created_at"))
+        return "\n".join(sections)
+
+    def _append_summary_sections(self, sections: list[str], data: dict[str, Any]) -> None:
+        tldr = data.get("summary_250") or data.get("tldr")
         if tldr:
-            sections.append('<div class="section tldr">')
-            sections.append("<h2>TL;DR</h2>")
-            sections.append(f"<p>{html.escape(str(tldr).strip())}</p>")
-            sections.append("</div>")
+            sections.extend(
+                [
+                    '<div class="section tldr">',
+                    "<h2>TL;DR</h2>",
+                    f"<p>{html.escape(str(tldr).strip())}</p>",
+                    "</div>",
+                ]
+            )
 
-        # Full Summary
+        summary_1000 = data.get("summary_1000")
         if summary_1000:
-            sections.append('<div class="section summary">')
-            sections.append("<h2>Summary</h2>")
-            sections.append(f"<p>{html.escape(str(summary_1000).strip())}</p>")
-            sections.append("</div>")
+            sections.extend(
+                [
+                    '<div class="section summary">',
+                    "<h2>Summary</h2>",
+                    f"<p>{html.escape(str(summary_1000).strip())}</p>",
+                    "</div>",
+                ]
+            )
 
-        # Key Ideas
+        key_ideas = data.get("key_ideas") or []
         if key_ideas:
-            sections.append('<div class="section key-ideas">')
-            sections.append("<h2>Key Ideas</h2>")
-            sections.append("<ul>")
+            sections.extend(['<div class="section key-ideas">', "<h2>Key Ideas</h2>", "<ul>"])
             for idea in key_ideas:
                 sections.append(f"<li>{html.escape(str(idea).strip())}</li>")
-            sections.append("</ul>")
-            sections.append("</div>")
+            sections.extend(["</ul>", "</div>"])
 
-        # Topics
+        tags = data.get("topic_tags") or []
         if tags:
-            sections.append('<div class="section topics">')
-            sections.append("<h2>Topics</h2>")
-            sections.append('<div class="tags">')
+            sections.extend(
+                ['<div class="section topics">', "<h2>Topics</h2>", '<div class="tags">']
+            )
             for tag in tags:
                 sections.append(f'<span class="tag">{html.escape(str(tag))}</span>')
-            sections.append("</div>")
-            sections.append("</div>")
+            sections.extend(["</div>", "</div>"])
 
-        # Entities
-        if isinstance(entities, dict):
-            people = entities.get("people") or []
-            orgs = entities.get("organizations") or []
-            locs = entities.get("locations") or []
+    def _append_entities_section(self, sections: list[str], entities: Any) -> None:
+        if not isinstance(entities, dict):
+            return
+        people = entities.get("people") or []
+        orgs = entities.get("organizations") or []
+        locs = entities.get("locations") or []
+        if not (people or orgs or locs):
+            return
+        sections.extend(['<div class="section entities">', "<h2>Entities</h2>"])
+        if people:
+            sections.append(
+                f"<p><strong>People:</strong> {html.escape(', '.join(str(p) for p in people))}</p>"
+            )
+        if orgs:
+            sections.append(
+                f"<p><strong>Organizations:</strong> {html.escape(', '.join(str(o) for o in orgs))}</p>"
+            )
+        if locs:
+            sections.append(
+                f"<p><strong>Locations:</strong> {html.escape(', '.join(str(loc) for loc in locs))}</p>"
+            )
+        sections.append("</div>")
 
-            if people or orgs or locs:
-                sections.append('<div class="section entities">')
-                sections.append("<h2>Entities</h2>")
-                if people:
-                    sections.append(
-                        f"<p><strong>People:</strong> {html.escape(', '.join(str(p) for p in people))}</p>"
-                    )
-                if orgs:
-                    sections.append(
-                        f"<p><strong>Organizations:</strong> {html.escape(', '.join(str(o) for o in orgs))}</p>"
-                    )
-                if locs:
-                    sections.append(
-                        f"<p><strong>Locations:</strong> {html.escape(', '.join(str(loc) for loc in locs))}</p>"
-                    )
-                sections.append("</div>")
+    def _append_key_stats_section(self, sections: list[str], key_stats: Any) -> None:
+        if not key_stats:
+            return
+        sections.extend(['<div class="section stats">', "<h2>Key Statistics</h2>", "<ul>"])
+        for stat in key_stats:
+            if isinstance(stat, dict):
+                label = html.escape(str(stat.get("label", "")))
+                value = html.escape(str(stat.get("value", "")))
+                unit = html.escape(str(stat.get("unit", "")))
+                sections.append(f"<li><strong>{label}:</strong> {value} {unit}</li>")
+        sections.extend(["</ul>", "</div>"])
 
-        # Key Stats
-        if key_stats:
-            sections.append('<div class="section stats">')
-            sections.append("<h2>Key Statistics</h2>")
-            sections.append("<ul>")
-            for stat in key_stats:
-                if isinstance(stat, dict):
-                    label = html.escape(str(stat.get("label", "")))
-                    value = html.escape(str(stat.get("value", "")))
-                    unit = html.escape(str(stat.get("unit", "")))
-                    sections.append(f"<li><strong>{label}:</strong> {value} {unit}</li>")
-            sections.append("</ul>")
-            sections.append("</div>")
-
-        # Metadata
+    def _append_metadata_section(self, sections: list[str], data: dict[str, Any]) -> None:
         meta_parts: list[str] = []
+        reading_time = data.get("estimated_reading_time_min")
         if reading_time:
             meta_parts.append(f"<li><strong>Reading Time:</strong> ~{reading_time} min</li>")
+        seo = data.get("seo_keywords") or []
         if seo:
             meta_parts.append(
                 f"<li><strong>Keywords:</strong> {html.escape(', '.join(str(k) for k in seo))}</li>"
             )
+        if not meta_parts:
+            return
+        sections.extend(['<div class="section metadata">', "<h2>Metadata</h2>", "<ul>"])
+        sections.extend(meta_parts)
+        sections.extend(["</ul>", "</div>"])
 
-        if meta_parts:
-            sections.append('<div class="section metadata">')
-            sections.append("<h2>Metadata</h2>")
-            sections.append("<ul>")
-            sections.extend(meta_parts)
-            sections.append("</ul>")
-            sections.append("</div>")
-
-        # Footer
-        created = data.get("created_at")
+    def _append_footer_section(self, sections: list[str], created: Any) -> None:
         if created:
-            if isinstance(created, datetime):
-                created_str = created.strftime("%Y-%m-%d %H:%M UTC")
-            else:
-                created_str = str(created)
+            created_str = (
+                created.strftime("%Y-%m-%d %H:%M UTC")
+                if isinstance(created, datetime)
+                else str(created)
+            )
             sections.append(
                 f"<footer><p>Generated on {html.escape(created_str)} by Bite-Size Reader</p></footer>"
             )
-        else:
-            sections.append("<footer><p>Generated by Bite-Size Reader</p></footer>")
+            return
+        sections.append("<footer><p>Generated by Bite-Size Reader</p></footer>")
 
-        body_content = "\n".join(sections)
-
-        # CSS styles
+    def _render_html_document(self, *, title: str, body_content: str, for_pdf: bool) -> str:
         pdf_extra = ""
         if for_pdf:
             pdf_extra = """
@@ -552,7 +553,6 @@ class ExportFormatter:
                 margin: 2cm;
             }
             """
-
         return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
