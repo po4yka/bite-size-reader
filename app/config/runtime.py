@@ -92,6 +92,10 @@ class RuntimeConfig(BaseModel):
     rate_limit_max_requests: int = Field(default=10, validation_alias="RATE_LIMIT_MAX_REQUESTS")
     rate_limit_window_seconds: int = Field(default=60, validation_alias="RATE_LIMIT_WINDOW_SECONDS")
     rate_limit_max_concurrent: int = Field(default=3, validation_alias="RATE_LIMIT_MAX_CONCURRENT")
+    related_reads_enabled: bool = Field(default=True, validation_alias="RELATED_READS_ENABLED")
+    related_reads_min_similarity: float = Field(
+        default=0.75, validation_alias="RELATED_READS_MIN_SIMILARITY"
+    )
 
     @field_validator("llm_provider", mode="before")
     @classmethod
@@ -450,6 +454,20 @@ class RuntimeConfig(BaseModel):
             raise ValueError(msg) from exc
         if parsed < 1 or parsed > 20:
             msg = "Rate limit max concurrent must be between 1 and 20"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("related_reads_min_similarity", mode="before")
+    @classmethod
+    def _validate_related_reads_min_similarity(cls, value: Any) -> float:
+        default = cls.model_fields["related_reads_min_similarity"].default
+        try:
+            parsed = float(str(value if value not in (None, "") else default))
+        except (ValueError, TypeError) as exc:
+            msg = "Related reads min similarity must be a valid number"
+            raise ValueError(msg) from exc
+        if parsed < 0.0 or parsed > 1.0:
+            msg = "Related reads min similarity must be between 0.0 and 1.0"
             raise ValueError(msg)
         return parsed
 

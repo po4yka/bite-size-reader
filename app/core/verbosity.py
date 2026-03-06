@@ -13,9 +13,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-        SqliteUserRepositoryAdapter,
-    )
+    from app.adapters.repository_ports import UserRepositoryPort
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +30,7 @@ class VerbosityLevel(StrEnum):
 class VerbosityResolver:
     """Resolves per-user verbosity from ``User.preferences_json``."""
 
-    def __init__(self, user_repo: SqliteUserRepositoryAdapter) -> None:
+    def __init__(self, user_repo: UserRepositoryPort) -> None:
         self._user_repo = user_repo
         # uid -> (level, timestamp)
         self._cache: dict[int, tuple[VerbosityLevel, float]] = {}

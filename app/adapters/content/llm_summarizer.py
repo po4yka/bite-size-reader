@@ -55,7 +55,6 @@ if TYPE_CHECKING:
     from app.core.progress_tracker import ProgressTracker
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
-    from app.models.llm.llm_models import ChatRequest
     from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
@@ -671,7 +670,7 @@ class LLMSummarizer:
     def _configure_summary_streaming(
         self,
         *,
-        requests: list[ChatRequest],
+        requests: list[LLMRequestConfig],
         message: Any,
         correlation_id: str | None,
         silent: bool,
@@ -702,11 +701,11 @@ class LLMSummarizer:
         url: str | None,
         silent: bool,
         defer_persistence: bool,
-        interaction_config: dict[str, Any],
-        persistence: dict[str, Any],
-        repair_context: dict[str, Any],
-        notifications: dict[str, Any],
-        requests: list[ChatRequest],
+        interaction_config: LLMInteractionConfig,
+        persistence: LLMSummaryPersistenceSettings,
+        repair_context: LLMRepairContext,
+        notifications: LLMWorkflowNotifications,
+        requests: list[LLMRequestConfig],
         progress_tracker: ProgressTracker | None,
         content_for_summary: str,
         base_model: str,

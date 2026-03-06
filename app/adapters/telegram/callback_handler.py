@@ -66,6 +66,7 @@ class CallbackHandler:
         self._registry.register("rate", self._actions.handle_rate)
         self._registry.register("more", self._actions.handle_more)
         self._registry.register("ask", self._handle_followup_entry)
+        self._registry.register("rel", self._actions.handle_show_related_summary)
 
     async def handle_callback(
         self,

@@ -140,7 +140,7 @@ class ResponseFormatter:
             lang=lang,
         )
 
-        self._summary_presenter: SummaryPresenter = SummaryPresenterImpl(
+        self._summary_presenter: SummaryPresenterImpl = SummaryPresenterImpl(
             self._response_sender,
             self._text_processor,
             self._data_formatter,

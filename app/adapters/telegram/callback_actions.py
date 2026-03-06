@@ -621,6 +621,69 @@ class CallbackActionService:
         )
         return True
 
+    async def handle_show_related_summary(
+        self,
+        message: Any,
+        uid: int,
+        parts: list[str],
+        correlation_id: str,
+    ) -> bool:
+        """Handle a click on a related-read button (rel:<request_id>)."""
+        _ = uid
+        if len(parts) < 2:
+            return False
+
+        try:
+            request_id = int(parts[1])
+        except (ValueError, IndexError):
+            return False
+
+        summary_data = await self.load_summary_payload(
+            f"req:{request_id}", correlation_id=correlation_id
+        )
+        if not summary_data:
+            await self.response_formatter.sender.safe_reply(
+                message, t("cb_related_not_found", self._lang)
+            )
+            return True
+
+        title = summary_data.get("title") or ""
+        tldr = summary_data.get("tldr") or ""
+        key_ideas: list[str] = summary_data.get("key_ideas") or []
+        tags: list[str] = summary_data.get("topic_tags") or []
+        url = summary_data.get("url") or ""
+
+        lines: list[str] = []
+        if title:
+            lines.append(f"<b>{html.escape(title)}</b>")
+        if tldr:
+            lines.append(f"\n{html.escape(tldr)}")
+        if key_ideas:
+            lines.append("")
+            for idea in key_ideas[:3]:
+                lines.append(f"  - {html.escape(str(idea))}")
+        if tags:
+            lines.append(f"\n{html.escape(', '.join(str(t_) for t_ in tags[:6]))}")
+        if url:
+            lines.append(f'\n<a href="{html.escape(url)}">Source</a>')
+
+        text = "\n".join(lines).strip()
+        if not text:
+            text = t("cb_no_details", self._lang)
+
+        from app.adapters.external.formatting.summary_presenter_parts.actions import (
+            create_inline_keyboard,
+        )
+
+        summary_id = summary_data.get("id", "")
+        keyboard = create_inline_keyboard(
+            summary_id, correlation_id=correlation_id, lang=self._lang
+        )
+        await self.response_formatter.sender.safe_reply(
+            message, text, parse_mode="HTML", reply_markup=keyboard
+        )
+        return True
+
     async def load_summary_payload(
         self,
         summary_id: str,

@@ -5,7 +5,7 @@ import contextlib
 import io
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -46,6 +46,13 @@ class TelegramBot:
     cfg: AppConfig
     db: DatabaseSessionManager
     db_write_queue: DbWriteQueue | None = None
+
+    # Dynamically assigned by component_wiring.bind_runtime_components()
+    telegram_client: Any = field(default=None, init=False, repr=False)
+    response_formatter: Any = field(default=None, init=False, repr=False)
+    url_processor: Any = field(default=None, init=False, repr=False)
+    forward_processor: Any = field(default=None, init=False, repr=False)
+    message_handler: Any = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         """Initialize bot components using factory pattern."""

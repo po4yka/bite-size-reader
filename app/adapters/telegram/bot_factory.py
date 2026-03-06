@@ -20,9 +20,11 @@ from app.services.chroma_vector_search_service import ChromaVectorSearchService
 from app.services.embedding_service import EmbeddingService
 from app.services.hybrid_search_service import HybridSearchService
 from app.services.query_expansion_service import QueryExpansionService
+from app.services.related_reads_service import RelatedReadsService
 from app.services.reranking_service import OpenRouterRerankingService
 from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
+from app.services.vector_search_service import VectorSearchService
 
 if TYPE_CHECKING:
     import asyncio
@@ -193,6 +195,28 @@ class BotFactory:
         query_expansion_service = search_stack["query_expansion_service"]
         chroma_vector_search_service = search_stack["chroma_vector_search_service"]
         hybrid_search_service = search_stack["hybrid_search_service"]
+
+        # Wire related reads service into processors
+        if cfg.runtime.related_reads_enabled:
+            try:
+                vector_search_service = VectorSearchService(
+                    db=db,
+                    embedding_service=embedding_service,
+                    max_results=10,
+                    min_similarity=0.3,
+                )
+                related_reads_service = RelatedReadsService(
+                    vector_search_service,
+                    min_similarity=cfg.runtime.related_reads_min_similarity,
+                )
+                url_processor._related_reads_service = related_reads_service
+                forward_processor._related_reads_service = related_reads_service
+                logger.info("related_reads_service_initialized")
+            except Exception as exc:
+                logger.warning(
+                    "related_reads_service_init_failed",
+                    extra={"error": str(exc)},
+                )
 
         from app.di.container import Container
 

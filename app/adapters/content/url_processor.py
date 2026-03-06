@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from app.core.progress_tracker import ProgressTracker
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
+    from app.services.related_reads_service import RelatedReadsService
     from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,31 @@ def _get_system_prompt(lang: str) -> str:
         )
 
 
+async def _run_related_reads(
+    service: RelatedReadsService,
+    sender: Any,
+    message: Any,
+    summary_payload: dict[str, Any],
+    request_id: int,
+    correlation_id: str | None,
+    lang: str,
+) -> None:
+    """Background task: find and send related reads for a summary."""
+    try:
+        items = await service.find_related(summary_payload, exclude_request_id=request_id)
+        if items:
+            from app.adapters.external.formatting.summary_presenter_parts.related_reads import (
+                send_related_reads,
+            )
+
+            await send_related_reads(sender, message, items, lang)
+    except Exception as exc:
+        logger.warning(
+            "related_reads_failed",
+            extra={"cid": correlation_id, "error": str(exc)},
+        )
+
+
 class URLProcessor:
     """Refactored URL processor using modular components."""
 
@@ -163,6 +189,7 @@ class URLProcessor:
         topic_search: TopicSearchService | None = None,
         db_write_queue: DbWriteQueue | None = None,
         summary_repo: SummaryRepositoryPort | None = None,
+        related_reads_service: RelatedReadsService | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -170,6 +197,7 @@ class URLProcessor:
         self._audit = audit_func
         self._db_write_queue = db_write_queue
         self.summary_repo = summary_repo or create_summary_repository(db)
+        self._related_reads_service = related_reads_service
 
         # Initialize modular components
         self.content_extractor = ContentExtractor(
@@ -935,6 +963,21 @@ class URLProcessor:
                         correlation_id,
                         "custom_article",
                     )
+
+        if self._related_reads_service is not None and not silent:
+            self._schedule_background_task(
+                _run_related_reads(
+                    self._related_reads_service,
+                    self.response_formatter.sender,
+                    message,
+                    summary,
+                    req_id,
+                    correlation_id,
+                    chosen_lang,
+                ),
+                correlation_id,
+                "related_reads",
+            )
 
     async def _maybe_send_russian_translation(
         self,

@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
+    from app.services.related_reads_service import RelatedReadsService
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class ForwardProcessor:
         summary_repo: SummaryRepositoryPort | None = None,
         request_repo: RequestRepositoryPort | None = None,
         user_repo: UserRepositoryPort | None = None,
+        related_reads_service: RelatedReadsService | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -59,6 +61,7 @@ class ForwardProcessor:
         self._audit = audit_func
         self._sem = sem
         self._db_write_queue = db_write_queue
+        self._related_reads_service = related_reads_service
         self._llm_summarizer: Any | None = None
 
         # Initialize components
@@ -141,6 +144,15 @@ class ForwardProcessor:
                     "additional_insights_forward",
                 )
 
+                if self._related_reads_service is not None and summary_payload:
+                    self._schedule_background_task(
+                        self._send_related_reads(
+                            message, summary_payload, req_id, correlation_id, chosen_lang
+                        ),
+                        correlation_id,
+                        "related_reads_forward",
+                    )
+
         except Exception as e:
             logger.exception("forward_flow_error", extra={"error": str(e), "cid": correlation_id})
             try:
@@ -193,6 +205,32 @@ class ForwardProcessor:
 
         task.add_done_callback(_log_task_error)
         return task
+
+    async def _send_related_reads(
+        self,
+        message: Any,
+        summary_payload: dict[str, Any],
+        request_id: int,
+        correlation_id: str | None,
+        lang: str,
+    ) -> None:
+        try:
+            if self._related_reads_service is None:
+                return
+            items = await self._related_reads_service.find_related(
+                summary_payload, exclude_request_id=request_id
+            )
+            if items:
+                from app.adapters.external.formatting.summary_presenter_parts.related_reads import (
+                    send_related_reads,
+                )
+
+                await send_related_reads(self.response_formatter.sender, message, items, lang)
+        except Exception as exc:
+            logger.warning(
+                "related_reads_forward_failed",
+                extra={"cid": correlation_id, "error": str(exc)},
+            )
 
     async def _run_forward_insights(
         self,
