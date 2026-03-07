@@ -141,3 +141,9 @@ body {
   max-height: 28rem;
   overflow: auto;
 }
+
+.digest-form-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}

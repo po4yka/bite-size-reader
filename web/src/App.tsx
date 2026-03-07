@@ -6,6 +6,7 @@ import RouteGuard from "./auth/RouteGuard";
 import AppShell from "./components/AppShell";
 import ArticlePage from "./features/article/ArticlePage";
 import CollectionsPage from "./features/collections/CollectionsPage";
+import DigestPage from "./features/digest/DigestPage";
 import LibraryPage from "./features/library/LibraryPage";
 import PreferencesPage from "./features/preferences/PreferencesPage";
 import SearchPage from "./features/search/SearchPage";
@@ -62,9 +63,8 @@ export default function App() {
         <Route path="submit" element={<SubmitPage />} />
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="collections/:id" element={<CollectionsPage />} />
+        <Route path="digest" element={<DigestPage />} />
         <Route path="preferences" element={<PreferencesPage />} />
-
-        {FEATURE_FLAGS.digest && <Route path="digest" element={<NotFoundPage />} />}
         {FEATURE_FLAGS.admin && <Route path="admin" element={<NotFoundPage />} />}
       </Route>
 

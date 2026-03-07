@@ -18,6 +18,7 @@ import {
   Catalog,
   Search as SearchIcon,
   Add,
+  Notification,
   User,
   Logout,
 } from "@carbon/icons-react";
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { path: "/search", label: "Search", icon: SearchIcon },
   { path: "/submit", label: "Submit", icon: Add },
   { path: "/collections", label: "Collections", icon: Catalog },
+  { path: "/digest", label: "Digest", icon: Notification },
   { path: "/preferences", label: "Preferences", icon: User },
 ] as const;
 
