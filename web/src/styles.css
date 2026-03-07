@@ -46,6 +46,12 @@ body {
   margin-top: 1rem;
 }
 
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .filter-row {
   display: flex;
   flex-wrap: wrap;

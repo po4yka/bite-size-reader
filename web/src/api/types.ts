@@ -42,7 +42,9 @@ export interface SummaryDetail {
 export interface Collection {
   id: number;
   name: string;
+  description?: string | null;
   parentId: number | null;
+  position?: number | null;
   itemCount: number;
   children?: Collection[];
 }

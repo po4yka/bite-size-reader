@@ -15,6 +15,7 @@ import {
   Tile,
 } from "@carbon/react";
 import { fetchSummary, fetchSummaryContent, markSummaryRead, toggleSummaryFavorite } from "../../api/summaries";
+import AddToCollectionModal from "../../components/AddToCollectionModal";
 
 function useSummaryId(): number {
   const params = useParams();
@@ -25,6 +26,7 @@ export default function ArticlePage() {
   const summaryId = useSummaryId();
   const queryClient = useQueryClient();
   const [showContent, setShowContent] = useState(false);
+  const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
 
   const summaryQuery = useQuery({
     queryKey: ["summary", summaryId],
@@ -85,6 +87,9 @@ export default function ArticlePage() {
             </Button>
             <Button kind="secondary" onClick={() => favoriteMutation.mutate()}>
               Toggle favorite
+            </Button>
+            <Button kind="secondary" onClick={() => setIsCollectionModalOpen(true)}>
+              Add to collection
             </Button>
             <Button kind="tertiary" onClick={() => window.open(detail.url, "_blank", "noopener,noreferrer")}>
               Open original
@@ -162,6 +167,12 @@ export default function ArticlePage() {
               </TabPanel>
             </TabPanels>
           </Tabs>
+
+          <AddToCollectionModal
+            open={isCollectionModalOpen}
+            summaryId={summaryId}
+            onClose={() => setIsCollectionModalOpen(false)}
+          />
         </>
       )}
     </section>

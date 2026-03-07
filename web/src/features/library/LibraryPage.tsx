@@ -21,6 +21,7 @@ import {
 } from "@carbon/react";
 import { fetchSummaries, toggleSummaryFavorite } from "../../api/summaries";
 import type { SummaryCompact } from "../../api/types";
+import AddToCollectionModal from "../../components/AddToCollectionModal";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -38,6 +39,7 @@ export default function LibraryPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [collectionModalSummaryId, setCollectionModalSummaryId] = useState<number | null>(null);
 
   const summariesQuery = useQuery({
     queryKey: ["summaries", filter, page, pageSize],
@@ -174,16 +176,28 @@ export default function LibraryPage() {
                         if (cell.info.header === "Actions") {
                           return (
                             <TableCell key={cell.id}>
-                              <Button
-                                kind={summary.isFavorited ? "primary" : "ghost"}
-                                size="sm"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  favoriteMutation.mutate(summary.id);
-                                }}
-                              >
-                                {summary.isFavorited ? "Favorited" : "Favorite"}
-                              </Button>
+                              <div className="table-actions">
+                                <Button
+                                  kind={summary.isFavorited ? "primary" : "ghost"}
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    favoriteMutation.mutate(summary.id);
+                                  }}
+                                >
+                                  {summary.isFavorited ? "Favorited" : "Favorite"}
+                                </Button>
+                                <Button
+                                  kind="tertiary"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setCollectionModalSummaryId(summary.id);
+                                  }}
+                                >
+                                  Add to collection
+                                </Button>
+                              </div>
                             </TableCell>
                           );
                         }
@@ -208,6 +222,12 @@ export default function LibraryPage() {
           setPage(event.page);
           setPageSize(event.pageSize);
         }}
+      />
+
+      <AddToCollectionModal
+        open={collectionModalSummaryId != null}
+        summaryId={collectionModalSummaryId}
+        onClose={() => setCollectionModalSummaryId(null)}
       />
     </section>
   );

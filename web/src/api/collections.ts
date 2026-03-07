@@ -5,8 +5,10 @@ import type { Collection, CollectionItem, PaginationInfo } from "./types";
 interface CollectionPayload {
   id: number;
   name: string;
+  description?: string | null;
   parentId?: number | null;
   parent_id?: number | null;
+  position?: number | null;
   itemCount?: number;
   item_count?: number;
   children?: CollectionPayload[];
@@ -16,7 +18,9 @@ function mapCollection(raw: CollectionPayload): Collection {
   return {
     id: raw.id,
     name: raw.name,
+    description: raw.description ?? null,
     parentId: raw.parentId ?? raw.parent_id ?? null,
+    position: raw.position ?? null,
     itemCount: raw.itemCount ?? raw.item_count ?? 0,
     children: raw.children?.map(mapCollection),
   };
@@ -55,10 +59,18 @@ export async function fetchCollectionTree(): Promise<Collection[]> {
   return data.collections.map(mapCollection);
 }
 
-export async function createCollection(name: string, parentId?: number): Promise<Collection> {
+export async function createCollection(
+  name: string,
+  parentId?: number,
+  description?: string | null,
+): Promise<Collection> {
   const data = await apiRequest<CollectionPayload>("/v1/collections", {
     method: "POST",
-    body: JSON.stringify({ name, parent_id: parentId ?? null }),
+    body: JSON.stringify({
+      name,
+      description: description ?? null,
+      parent_id: parentId ?? null,
+    }),
   });
 
   return mapCollection(data);
@@ -105,6 +117,28 @@ export async function fetchCollectionItems(collectionId: number): Promise<Collec
   });
 }
 
+export async function updateCollection(
+  collectionId: number,
+  payload: {
+    name?: string;
+    description?: string | null;
+    parent_id?: number | null;
+    position?: number | null;
+  },
+): Promise<Collection> {
+  const data = await apiRequest<CollectionPayload>(`/v1/collections/${collectionId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  return mapCollection(data);
+}
+
+export function deleteCollection(collectionId: number): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>(`/v1/collections/${collectionId}`, {
+    method: "DELETE",
+  });
+}
+
 export function addSummaryToCollection(collectionId: number, summaryId: number): Promise<{ success: boolean }> {
   return apiRequest<{ success: boolean }>(`/v1/collections/${collectionId}/items`, {
     method: "POST",
@@ -115,5 +149,34 @@ export function addSummaryToCollection(collectionId: number, summaryId: number):
 export function removeSummaryFromCollection(collectionId: number, summaryId: number): Promise<{ success: boolean }> {
   return apiRequest<{ success: boolean }>(`/v1/collections/${collectionId}/items/${summaryId}`, {
     method: "DELETE",
+  });
+}
+
+export function moveCollectionItems(
+  collectionId: number,
+  summaryIds: number[],
+  targetCollectionId: number,
+  position?: number,
+): Promise<{ movedSummaryIds: number[]; moved_summary_ids?: number[] }> {
+  return apiRequest<{ movedSummaryIds: number[]; moved_summary_ids?: number[] }>(
+    `/v1/collections/${collectionId}/items/move`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        summary_ids: summaryIds,
+        target_collection_id: targetCollectionId,
+        position: position ?? null,
+      }),
+    },
+  );
+}
+
+export function reorderCollectionItems(
+  collectionId: number,
+  items: Array<{ summary_id: number; position: number }>,
+): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>(`/v1/collections/${collectionId}/items/reorder`, {
+    method: "POST",
+    body: JSON.stringify({ items }),
   });
 }
