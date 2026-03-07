@@ -6,6 +6,7 @@ import { sanitizeRedirectPath } from "./auth/redirect";
 import RouteGuard from "./auth/RouteGuard";
 import AppShell from "./components/AppShell";
 import ArticlePage from "./features/article/ArticlePage";
+import ArticlesPage from "./features/articles/ArticlesPage";
 import CollectionsPage from "./features/collections/CollectionsPage";
 import DigestPage from "./features/digest/DigestPage";
 import LibraryPage from "./features/library/LibraryPage";
@@ -81,6 +82,7 @@ export default function App() {
         <Route index element={<HomeRedirect />} />
         <Route path="library" element={<LibraryPage />} />
         <Route path="library/:id" element={<ArticlePage />} />
+        <Route path="articles" element={<ArticlesPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="submit" element={<SubmitPage />} />
         <Route path="collections" element={<CollectionsPage />} />

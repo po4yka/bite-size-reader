@@ -29,6 +29,7 @@ import { useAuth } from "../auth/AuthProvider";
 
 const NAV_ITEMS = [
   { path: "/library", label: "Library", icon: Book },
+  { path: "/articles", label: "Articles", icon: Book },
   { path: "/search", label: "Search", icon: SearchIcon },
   { path: "/submit", label: "Submit", icon: Add },
   { path: "/collections", label: "Collections", icon: Catalog },
