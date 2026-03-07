@@ -104,4 +104,12 @@ export interface RequestStatus {
   progressPct: number;
   summaryId: number | null;
   errorMessage: string | null;
+  queuePosition?: number | null;
+  estimatedSecondsRemaining?: number | null;
+  canRetry?: boolean;
+  retryable?: boolean | null;
+  correlationId?: string | null;
+  updatedAt?: string | null;
+  errorType?: string | null;
+  errorReasonCode?: string | null;
 }

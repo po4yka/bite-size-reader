@@ -14,3 +14,20 @@ export function progressFromStatus(status: RequestStatus["status"], progressPct:
   if (status === "processing") return 70;
   return 0;
 }
+
+export function statusLabel(status: RequestStatus["status"]): string {
+  if (status === "pending") return "Waiting in queue";
+  if (status === "crawling") return "Extracting content";
+  if (status === "processing") return "Generating summary";
+  if (status === "completed") return "Completed";
+  return "Failed";
+}
+
+export function formatEta(estimatedSecondsRemaining?: number | null): string | null {
+  if (!estimatedSecondsRemaining || estimatedSecondsRemaining <= 0) return null;
+  if (estimatedSecondsRemaining < 60) {
+    return `~${estimatedSecondsRemaining}s remaining`;
+  }
+  const minutes = Math.ceil(estimatedSecondsRemaining / 60);
+  return `~${minutes}m remaining`;
+}
