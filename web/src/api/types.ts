@@ -65,10 +65,37 @@ export interface SearchResult {
   title: string;
   url: string;
   domain: string;
+  snippet?: string;
   tldr: string;
   topicTags: string[];
   score: number;
   createdAt: string;
+  publishedAt?: string;
+  isRead?: boolean;
+  matchSignals?: string[];
+  matchExplanation?: string;
+  scoreBreakdown?: Record<string, number>;
+}
+
+export interface SearchFacet {
+  value: string;
+  count: number;
+}
+
+export interface SearchFacets {
+  domains: SearchFacet[];
+  languages: SearchFacet[];
+  tags: SearchFacet[];
+  readStates: SearchFacet[];
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+  pagination: PaginationInfo;
+  query: string;
+  intent?: string | null;
+  mode?: string | null;
+  facets?: SearchFacets;
 }
 
 export interface RequestStatus {

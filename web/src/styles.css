@@ -153,3 +153,39 @@ body {
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
 }
+
+.search-power-tile {
+  display: grid;
+  gap: 1rem;
+}
+
+.search-power-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.search-power-actions {
+  margin-top: 0;
+}
+
+.search-filter-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.search-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.search-facet-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
