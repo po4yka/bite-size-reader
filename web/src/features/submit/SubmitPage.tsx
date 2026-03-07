@@ -173,7 +173,7 @@ export default function SubmitPage() {
           <TextInput
             id="submit-url"
             labelText="Article or YouTube URL"
-            placeholder="https://example.com/article"
+            placeholder="https://example.com/article…"
             value={url}
             invalid={urlTouched && !urlValidation.isValid}
             invalidText={urlValidation.error ?? ""}
@@ -208,7 +208,7 @@ export default function SubmitPage() {
             }
             disabled={!canSubmit}
           >
-            {submitMutation.isPending ? "Submitting..." : "Summarize"}
+            {submitMutation.isPending ? "Submitting…" : "Summarize"}
           </Button>
 
           {duplicateSummaryId != null && (
@@ -230,7 +230,7 @@ export default function SubmitPage() {
           )}
         </div>
 
-        {duplicateQuery.isFetching && !submitMutation.isPending && <InlineLoading description="Checking duplicates..." />}
+        {duplicateQuery.isFetching && !submitMutation.isPending && <InlineLoading description="Checking duplicates…" />}
 
         {submitMutation.error && (
           <InlineNotification
@@ -277,7 +277,7 @@ export default function SubmitPage() {
 
               {statusQuery.data.status === "failed" && (statusQuery.data.canRetry || statusQuery.data.retryable) && (
                 <Button onClick={() => retryMutation.mutate()} disabled={retryMutation.isPending}>
-                  {retryMutation.isPending ? "Retrying..." : "Retry processing"}
+                  {retryMutation.isPending ? "Retrying…" : "Retry processing"}
                 </Button>
               )}
 
@@ -307,7 +307,7 @@ export default function SubmitPage() {
           </>
         )}
 
-        {requestId && statusQuery.isLoading && <InlineLoading description="Connecting to status stream..." />}
+        {requestId && statusQuery.isLoading && <InlineLoading description="Connecting to status stream…" />}
 
         {requestId && statusQuery.error && (
           <InlineNotification

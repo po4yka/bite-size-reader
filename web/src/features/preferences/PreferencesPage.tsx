@@ -61,7 +61,7 @@ export default function PreferencesPage() {
     <section className="page-section">
       <h1>Preferences</h1>
 
-      {(preferencesQuery.isLoading || statsQuery.isLoading) && <InlineLoading description="Loading preferences..." />}
+      {(preferencesQuery.isLoading || statsQuery.isLoading) && <InlineLoading description="Loading preferences…" />}
 
       {(preferencesQuery.error || statsQuery.error) && (
         <InlineNotification

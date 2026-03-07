@@ -1,5 +1,13 @@
 interface TelegramWebApp {
   initData: string;
+  colorScheme?: "light" | "dark";
+  themeParams?: Record<string, string>;
+  viewportHeight?: number;
+  viewportStableHeight?: number;
+  ready?: () => void;
+  expand?: () => void;
+  onEvent?: (eventType: string, handler: () => void) => void;
+  offEvent?: (eventType: string, handler: () => void) => void;
 }
 
 interface TelegramWindow {

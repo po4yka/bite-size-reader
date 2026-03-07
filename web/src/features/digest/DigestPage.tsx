@@ -22,7 +22,6 @@ import {
   TableHeader,
   TableRow,
   TextInput,
-  Theme,
   TimePicker,
   Tile,
 } from "@carbon/react";
@@ -115,7 +114,7 @@ function ChannelsTab({ isOwner }: { isOwner: boolean }) {
           <TextInput
             id="digest-subscribe-input"
             labelText="Channel username"
-            placeholder="@channel_name or t.me/channel"
+            placeholder="@channel_name or t.me/channel…"
             value={channelInput}
             onChange={(event) => setChannelInput(event.currentTarget.value)}
           />
@@ -128,7 +127,7 @@ function ChannelsTab({ isOwner }: { isOwner: boolean }) {
           </Button>
         </div>
 
-        {channelsQuery.isLoading && <InlineLoading description="Loading channels..." />}
+        {channelsQuery.isLoading && <InlineLoading description="Loading channels…" />}
 
         {(channelsQuery.error || subscribeMutation.error || unsubscribeMutation.error) && (
           <InlineNotification
@@ -217,7 +216,7 @@ function ChannelsTab({ isOwner }: { isOwner: boolean }) {
               <TextInput
                 id="owner-channel-input"
                 labelText="Channel"
-                placeholder="@channel_name"
+                placeholder="@channel_name…"
                 value={ownerChannel}
                 onChange={(event) => setOwnerChannel(event.currentTarget.value)}
               />
@@ -302,7 +301,7 @@ function PreferencesTab() {
       <Tile>
         <h3>Digest preferences</h3>
 
-        {preferencesQuery.isLoading && <InlineLoading description="Loading preferences..." />}
+        {preferencesQuery.isLoading && <InlineLoading description="Loading preferences…" />}
 
         {(preferencesQuery.error || saveMutation.error) && (
           <InlineNotification
@@ -427,7 +426,7 @@ function HistoryTab() {
       <Tile>
         <h3>Digest history</h3>
 
-        {historyQuery.isLoading && <InlineLoading description="Loading digest history..." />}
+        {historyQuery.isLoading && <InlineLoading description="Loading digest history…" />}
 
         {historyQuery.error && (
           <InlineNotification
@@ -481,33 +480,31 @@ export default function DigestPage() {
   const { mode, user } = useAuth();
 
   return (
-    <Theme theme="white">
-      <section className="page-section">
-        <h1>Digest</h1>
+    <section className="page-section">
+      <h1>Digest</h1>
 
-        {mode !== "telegram-webapp" && <DigestUnavailableNotice />}
+      {mode !== "telegram-webapp" && <DigestUnavailableNotice />}
 
-        {mode === "telegram-webapp" && (
-          <Tabs>
-            <TabList aria-label="Digest tabs" contained>
-              <Tab>Channels</Tab>
-              <Tab>Preferences</Tab>
-              <Tab>History</Tab>
-            </TabList>
-            <TabPanels>
-              <TabPanel>
-                <ChannelsTab isOwner={Boolean(user?.isOwner)} />
-              </TabPanel>
-              <TabPanel>
-                <PreferencesTab />
-              </TabPanel>
-              <TabPanel>
-                <HistoryTab />
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
-        )}
-      </section>
-    </Theme>
+      {mode === "telegram-webapp" && (
+        <Tabs>
+          <TabList aria-label="Digest tabs" contained>
+            <Tab>Channels</Tab>
+            <Tab>Preferences</Tab>
+            <Tab>History</Tab>
+          </TabList>
+          <TabPanels>
+            <TabPanel>
+              <ChannelsTab isOwner={Boolean(user?.isOwner)} />
+            </TabPanel>
+            <TabPanel>
+              <PreferencesTab />
+            </TabPanel>
+            <TabPanel>
+              <HistoryTab />
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
+      )}
+    </section>
   );
 }

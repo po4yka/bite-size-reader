@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -92,6 +92,12 @@ export default function LibraryPage() {
     actions: summary,
   }));
 
+  function handleRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, rowId: string): void {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    navigate(`/library/${rowId}`);
+  }
+
   return (
     <section className="page-section">
       <h1>Library</h1>
@@ -113,7 +119,7 @@ export default function LibraryPage() {
         ))}
       </div>
 
-      {summariesQuery.isLoading && <InlineLoading description="Loading summaries..." />}
+      {summariesQuery.isLoading && <InlineLoading description="Loading summaries…" />}
 
       {summariesQuery.error && (
         <InlineNotification
@@ -156,6 +162,9 @@ export default function LibraryPage() {
                     <TableRow
                       {...getRowProps({ row })}
                       onClick={() => navigate(`/library/${row.id}`)}
+                      onKeyDown={(event) => handleRowKeyDown(event, row.id)}
+                      role="link"
+                      tabIndex={0}
                       className="clickable-row"
                     >
                       {row.cells.map((cell) => {

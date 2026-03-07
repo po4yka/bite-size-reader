@@ -93,7 +93,7 @@ export default function AddToCollectionModal({ open, summaryId, onClose }: AddTo
     <Modal
       open={open}
       modalHeading="Add to collection"
-      primaryButtonText={addMutation.isPending ? "Adding..." : "Add"}
+      primaryButtonText={addMutation.isPending ? "Adding…" : "Add"}
       secondaryButtonText="Cancel"
       primaryButtonDisabled={!canSubmit || addMutation.isPending}
       onRequestClose={() => {
@@ -105,7 +105,7 @@ export default function AddToCollectionModal({ open, summaryId, onClose }: AddTo
         addMutation.mutate();
       }}
     >
-      {collectionsQuery.isLoading && <InlineLoading description="Loading collections..." />}
+      {collectionsQuery.isLoading && <InlineLoading description="Loading collections…" />}
 
       {collectionsQuery.error && (
         <InlineNotification
@@ -147,7 +147,7 @@ export default function AddToCollectionModal({ open, summaryId, onClose }: AddTo
           labelText="Or create new collection"
           value={newCollectionName}
           onChange={(event) => setNewCollectionName(event.currentTarget.value)}
-          placeholder="Collection name"
+          placeholder="Collection name…"
         />
       </div>
     </Modal>

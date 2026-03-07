@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -301,6 +301,12 @@ export default function CollectionsPage() {
     reorderMutation.mutate(payload);
   }
 
+  function handleRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, summaryId: number): void {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    navigate(`/library/${summaryId}`);
+  }
+
   return (
     <section className="page-section collections-layout">
       <div className="collections-tree">
@@ -344,7 +350,7 @@ export default function CollectionsPage() {
           </Button>
         </div>
 
-        {treeQuery.isLoading && <InlineLoading description="Loading collections..." />}
+        {treeQuery.isLoading && <InlineLoading description="Loading collections…" />}
         {treeQuery.error && (
           <InlineNotification
             kind="error"
@@ -410,7 +416,7 @@ export default function CollectionsPage() {
       <div className="collections-items">
         <h2>{selectedCollection ? selectedCollection.name : "Select a collection"}</h2>
 
-        {itemsQuery.isLoading && selectedCollectionId && <InlineLoading description="Loading collection items..." />}
+        {itemsQuery.isLoading && selectedCollectionId && <InlineLoading description="Loading collection items…" />}
         {itemsQuery.error && (
           <InlineNotification
             kind="error"
@@ -444,6 +450,9 @@ export default function CollectionsPage() {
                         <TableRow
                           {...getRowProps({ row })}
                           onClick={() => navigate(`/library/${item.summaryId}`)}
+                          onKeyDown={(event) => handleRowKeyDown(event, item.summaryId)}
+                          role="link"
+                          tabIndex={0}
                           className="clickable-row"
                         >
                           {row.cells.map((cell) => {
@@ -517,7 +526,7 @@ export default function CollectionsPage() {
       <Modal
         open={moveSummaryId != null}
         modalHeading="Move item to collection"
-        primaryButtonText={moveItemMutation.isPending ? "Moving..." : "Move"}
+        primaryButtonText={moveItemMutation.isPending ? "Moving…" : "Move"}
         secondaryButtonText="Cancel"
         primaryButtonDisabled={!canMoveSubmit}
         onRequestClose={() => {
@@ -548,7 +557,7 @@ export default function CollectionsPage() {
             labelText="Or create target collection"
             value={moveNewCollectionName}
             onChange={(event) => setMoveNewCollectionName(event.currentTarget.value)}
-            placeholder="Collection name"
+            placeholder="Collection name…"
           />
         </div>
       </Modal>
@@ -556,7 +565,7 @@ export default function CollectionsPage() {
       <Modal
         open={deleteModalOpen}
         modalHeading="Delete collection"
-        primaryButtonText={deleteMutation.isPending ? "Deleting..." : "Delete"}
+        primaryButtonText={deleteMutation.isPending ? "Deleting…" : "Delete"}
         secondaryButtonText="Cancel"
         danger
         onRequestClose={() => {

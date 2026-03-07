@@ -150,7 +150,7 @@ export default function ArticlePage() {
 
   return (
     <section className="page-section article-reader-shell">
-      {summaryQuery.isLoading && <InlineLoading description="Loading article..." />}
+      {summaryQuery.isLoading && <InlineLoading description="Loading article…" />}
       {summaryQuery.error && (
         <InlineNotification
           kind="error"
@@ -268,7 +268,7 @@ export default function ArticlePage() {
                   {showContent && (
                     <>
                       <h3>Source Content</h3>
-                      {contentQuery.isFetching && <InlineLoading description="Loading source content..." />}
+                      {contentQuery.isFetching && <InlineLoading description="Loading source content…" />}
                       {contentQuery.error && (
                         <InlineNotification
                           kind="warning"

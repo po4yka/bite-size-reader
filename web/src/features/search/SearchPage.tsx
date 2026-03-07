@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Button,
@@ -30,7 +30,6 @@ function toggleValue(list: string[], value: string): string[] {
 }
 
 export default function SearchPage() {
-  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"auto" | "keyword" | "semantic" | "hybrid">("auto");
   const [language, setLanguage] = useState("");
@@ -155,7 +154,7 @@ export default function SearchPage() {
       <Search
         id="search-input"
         labelText="Search summaries"
-        placeholder="Search by keyword, topic, domain"
+        placeholder="Search by keyword, topic, domain…"
         value={query}
         size="lg"
         onChange={(event) => {
@@ -415,7 +414,7 @@ export default function SearchPage() {
         />
       )}
 
-      {searchQuery.isFetching && <InlineLoading description="Searching..." />}
+      {searchQuery.isFetching && <InlineLoading description="Searching…" />}
       {searchQuery.error && (
         <InlineNotification
           kind="error"
@@ -427,30 +426,32 @@ export default function SearchPage() {
 
       <div className="result-grid">
         {(searchQuery.data?.results ?? []).map((result) => (
-          <Tile key={result.id} className="result-tile" onClick={() => navigate(`/library/${result.id}`)}>
-            <h3>{result.title}</h3>
-            <div className="tag-row">
-              <Tag type="blue">Score {(result.score * 100).toFixed(0)}%</Tag>
-              <Tag type={result.isRead ? "green" : "cool-gray"}>{result.isRead ? "Read" : "Unread"}</Tag>
-              <Tag type="gray">{result.domain || "Unknown domain"}</Tag>
-            </div>
-            <p>{result.tldr || result.snippet || "No preview available."}</p>
-            <p className="muted">
-              Added {result.createdAt ? new Date(result.createdAt).toLocaleString() : "Unknown date"}
-            </p>
-            {result.matchExplanation && <p className="muted">{result.matchExplanation}</p>}
-            <div className="tag-row">
-              {result.topicTags.slice(0, 4).map((topic) => (
-                <Tag key={topic} type="cyan">
-                  {topic}
-                </Tag>
-              ))}
-              {(result.matchSignals ?? []).slice(0, 3).map((signal) => (
-                <Tag key={`${result.id}-${signal}`} type="warm-gray">
-                  {signal}
-                </Tag>
-              ))}
-            </div>
+          <Tile key={result.id} className="result-tile">
+            <Link to={`/library/${result.id}`} className="result-tile-link">
+              <h3>{result.title}</h3>
+              <div className="tag-row">
+                <Tag type="blue">Score {(result.score * 100).toFixed(0)}%</Tag>
+                <Tag type={result.isRead ? "green" : "cool-gray"}>{result.isRead ? "Read" : "Unread"}</Tag>
+                <Tag type="gray">{result.domain || "Unknown domain"}</Tag>
+              </div>
+              <p>{result.tldr || result.snippet || "No preview available."}</p>
+              <p className="muted">
+                Added {result.createdAt ? new Date(result.createdAt).toLocaleString() : "Unknown date"}
+              </p>
+              {result.matchExplanation && <p className="muted">{result.matchExplanation}</p>}
+              <div className="tag-row">
+                {result.topicTags.slice(0, 4).map((topic) => (
+                  <Tag key={topic} type="cyan">
+                    {topic}
+                  </Tag>
+                ))}
+                {(result.matchSignals ?? []).slice(0, 3).map((signal) => (
+                  <Tag key={`${result.id}-${signal}`} type="warm-gray">
+                    {signal}
+                  </Tag>
+                ))}
+              </div>
+            </Link>
           </Tile>
         ))}
       </div>

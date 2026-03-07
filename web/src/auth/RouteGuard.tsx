@@ -12,7 +12,7 @@ export default function RouteGuard({ children }: RouteGuardProps) {
   const { mode, status } = useAuth();
 
   if (status === "loading") {
-    return <InlineLoading description="Checking session..." />;
+    return <InlineLoading description="Checking session…" />;
   }
 
   if (!canAccessProtectedRoute(mode, status)) {

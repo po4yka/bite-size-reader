@@ -41,7 +41,7 @@ function LoginRoute() {
     if (status === "loading") {
       return (
         <section className="page-section">
-          <InlineLoading description="Checking Telegram session..." />
+          <InlineLoading description="Checking Telegram session…" />
         </section>
       );
     }

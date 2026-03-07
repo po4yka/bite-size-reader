@@ -93,7 +93,7 @@ export default function LoginPage() {
           />
         )}
 
-        {loading ? <InlineLoading description="Verifying Telegram credentials..." /> : <div ref={widgetRef} />}
+        {loading ? <InlineLoading description="Verifying Telegram credentials…" /> : <div ref={widgetRef} />}
 
         <InlineNotification
           kind="info"

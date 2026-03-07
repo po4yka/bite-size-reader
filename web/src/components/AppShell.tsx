@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Button,
@@ -37,12 +37,22 @@ const NAV_ITEMS = [
   { path: "/preferences", label: "Preferences", icon: User },
 ] as const;
 
+type CarbonTheme = "white" | "g100";
+
+function resolveCarbonTheme(mode: "telegram-webapp" | "jwt"): CarbonTheme {
+  if (mode !== "telegram-webapp") {
+    return "white";
+  }
+  return window.Telegram?.WebApp?.colorScheme === "dark" ? "g100" : "white";
+}
+
 export default function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const { dismissError, error, logout, mode, reloadUser, user } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [isVerifyingSession, setIsVerifyingSession] = useState(false);
+  const [theme, setTheme] = useState<CarbonTheme>(() => resolveCarbonTheme(mode));
 
   const activePath = useMemo(() => {
     const firstSegment = location.pathname.split("/")[1] ?? "library";
@@ -60,8 +70,30 @@ export default function AppShell() {
     }
   }
 
+  useEffect(() => {
+    setTheme(resolveCarbonTheme(mode));
+
+    if (mode !== "telegram-webapp") {
+      return;
+    }
+
+    const webApp = window.Telegram?.WebApp;
+    if (!webApp?.onEvent) {
+      return;
+    }
+
+    const handleThemeChanged = () => {
+      setTheme(resolveCarbonTheme(mode));
+    };
+
+    webApp.onEvent("themeChanged", handleThemeChanged);
+    return () => {
+      webApp.offEvent?.("themeChanged", handleThemeChanged);
+    };
+  }, [mode]);
+
   return (
-    <Theme theme="white">
+    <Theme theme={theme}>
       <div className="app-shell">
         <SkipToContent />
         <Header aria-label="Bite-Size Reader Web">
@@ -130,7 +162,7 @@ export default function AppShell() {
                   onClick={() => void handleSessionVerify()}
                   disabled={isVerifyingSession}
                 >
-                  {isVerifyingSession ? "Verifying..." : "Verify session"}
+                  {isVerifyingSession ? "Verifying…" : "Verify session"}
                 </Button>
                 <Button kind="ghost" size="sm" onClick={logout}>
                   Sign in again
