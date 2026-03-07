@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   DataTable,
-  InlineLoading,
+  DataTableSkeleton,
   InlineNotification,
   Pagination,
   Table,
@@ -98,6 +98,8 @@ export default function LibraryPage() {
     navigate(`/library/${rowId}`);
   }
 
+  const isInitialLoading = summariesQuery.isLoading && !summariesQuery.data;
+
   return (
     <section className="page-section">
       <h1>Library</h1>
@@ -119,8 +121,6 @@ export default function LibraryPage() {
         ))}
       </div>
 
-      {summariesQuery.isLoading && <InlineLoading description="Loading summaries…" />}
-
       {summariesQuery.error && (
         <InlineNotification
           kind="error"
@@ -130,108 +130,116 @@ export default function LibraryPage() {
         />
       )}
 
-      <DataTable rows={rows} headers={headers}>
-        {({ rows, headers, getHeaderProps, getRowProps, getTableProps, getToolbarProps }) => (
-          <TableContainer title="Article summaries">
-            <TableToolbar {...getToolbarProps()}>
-              <TableToolbarContent>
-                <TableToolbarSearch
-                  persistent
-                  onInput={(event) => {
-                    const value = (event.target as HTMLInputElement).value;
-                    setSearchTerm(value);
-                  }}
-                  value={searchTerm}
-                />
-              </TableToolbarContent>
-            </TableToolbar>
-            <Table {...getTableProps()}>
-              <TableHead>
-                <TableRow>
-                  {headers.map((header) => (
-                    <TableHeader {...getHeaderProps({ header })}>
-                      {header.header}
-                    </TableHeader>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.map((row) => {
-                  const summary = row.cells.find((cell) => cell.info.header === "Actions")?.value as SummaryCompact;
-                  return (
-                    <TableRow
-                      {...getRowProps({ row })}
-                      onClick={() => navigate(`/library/${row.id}`)}
-                      onKeyDown={(event) => handleRowKeyDown(event, row.id)}
-                      role="link"
-                      tabIndex={0}
-                      className="clickable-row"
-                    >
-                      {row.cells.map((cell) => {
-                        if (cell.info.header === "Topics") {
-                          return (
-                            <TableCell key={cell.id}>
-                              <div className="tag-row">
-                                {summary.topicTags.slice(0, 3).map((topic) => (
-                                  <Tag key={topic} type="teal">
-                                    {topic}
-                                  </Tag>
-                                ))}
-                              </div>
-                            </TableCell>
-                          );
-                        }
-
-                        if (cell.info.header === "Actions") {
-                          return (
-                            <TableCell key={cell.id}>
-                              <div className="table-actions">
-                                <Button
-                                  kind={summary.isFavorited ? "primary" : "ghost"}
-                                  size="sm"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    favoriteMutation.mutate(summary.id);
-                                  }}
-                                >
-                                  {summary.isFavorited ? "Favorited" : "Favorite"}
-                                </Button>
-                                <Button
-                                  kind="tertiary"
-                                  size="sm"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setCollectionModalSummaryId(summary.id);
-                                  }}
-                                >
-                                  Add to collection
-                                </Button>
-                              </div>
-                            </TableCell>
-                          );
-                        }
-
-                        return <TableCell key={cell.id}>{cell.value as string}</TableCell>;
-                      })}
+      {isInitialLoading ? (
+        <DataTableSkeleton columnCount={headers.length} rowCount={8} showToolbar />
+      ) : (
+        <>
+          <DataTable rows={rows} headers={headers}>
+            {({ rows, headers, getHeaderProps, getRowProps, getTableProps, getToolbarProps }) => (
+              <TableContainer title="Article summaries">
+                <TableToolbar {...getToolbarProps()}>
+                  <TableToolbarContent>
+                    <TableToolbarSearch
+                      persistent
+                      onInput={(event) => {
+                        const value = (event.target as HTMLInputElement).value;
+                        setSearchTerm(value);
+                      }}
+                      value={searchTerm}
+                    />
+                  </TableToolbarContent>
+                </TableToolbar>
+                <Table {...getTableProps()}>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((header) => (
+                        <TableHeader {...getHeaderProps({ header })}>
+                          {header.header}
+                        </TableHeader>
+                      ))}
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </DataTable>
+                  </TableHead>
+                  <TableBody>
+                    {rows.map((row) => {
+                      const summary = row.cells.find((cell) => cell.info.header === "Actions")?.value as SummaryCompact;
+                      return (
+                        <TableRow
+                          {...getRowProps({ row })}
+                          onClick={() => navigate(`/library/${row.id}`)}
+                          onKeyDown={(event) => handleRowKeyDown(event, row.id)}
+                          role="link"
+                          tabIndex={0}
+                          className="clickable-row"
+                        >
+                          {row.cells.map((cell) => {
+                            if (cell.info.header === "Topics") {
+                              return (
+                                <TableCell key={cell.id}>
+                                  <div className="tag-row">
+                                    {summary.topicTags.slice(0, 3).map((topic) => (
+                                      <Tag key={topic} type="teal">
+                                        {topic}
+                                      </Tag>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                              );
+                            }
 
-      <Pagination
-        page={page}
-        pageSize={pageSize}
-        pageSizes={[10, 20, 50]}
-        totalItems={summariesQuery.data?.pagination.total ?? 0}
-        onChange={(event) => {
-          setPage(event.page);
-          setPageSize(event.pageSize);
-        }}
-      />
+                            if (cell.info.header === "Actions") {
+                              return (
+                                <TableCell key={cell.id}>
+                                  <div className="table-actions">
+                                    <Button
+                                      kind={summary.isFavorited ? "primary" : "ghost"}
+                                      size="sm"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        favoriteMutation.mutate(summary.id);
+                                      }}
+                                    >
+                                      {summary.isFavorited ? "Favorited" : "Favorite"}
+                                    </Button>
+                                    <Button
+                                      kind="tertiary"
+                                      size="sm"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setCollectionModalSummaryId(summary.id);
+                                      }}
+                                    >
+                                      Add to collection
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              );
+                            }
+
+                            return <TableCell key={cell.id}>{cell.value as string}</TableCell>;
+                          })}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+
+          {summariesQuery.data && (
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              pageSizes={[10, 20, 50]}
+              totalItems={summariesQuery.data.pagination.total}
+              onChange={(event) => {
+                setPage(event.page);
+                setPageSize(event.pageSize);
+              }}
+            />
+          )}
+        </>
+      )}
 
       <AddToCollectionModal
         open={collectionModalSummaryId != null}

@@ -37,6 +37,8 @@ const NAV_ITEMS = [
   { path: "/preferences", label: "Preferences", icon: User },
 ] as const;
 
+const NAV_ROOT_PATHS: ReadonlySet<string> = new Set(NAV_ITEMS.map((item) => item.path));
+
 type CarbonTheme = "white" | "g100";
 
 function resolveCarbonTheme(mode: "telegram-webapp" | "jwt"): CarbonTheme {
@@ -60,6 +62,10 @@ export default function AppShell() {
   }, [location.pathname]);
 
   const sessionLabel = mode === "telegram-webapp" ? "Telegram session" : "Web session";
+  const shouldShowTelegramBackButton = useMemo(() => {
+    if (mode !== "telegram-webapp") return false;
+    return !NAV_ROOT_PATHS.has(location.pathname);
+  }, [location.pathname, mode]);
 
   async function handleSessionVerify(): Promise<void> {
     try {
@@ -91,6 +97,36 @@ export default function AppShell() {
       webApp.offEvent?.("themeChanged", handleThemeChanged);
     };
   }, [mode]);
+
+  useEffect(() => {
+    const webApp = window.Telegram?.WebApp;
+    const backButton = webApp?.BackButton;
+    if (!backButton) {
+      return;
+    }
+
+    if (!shouldShowTelegramBackButton) {
+      backButton.hide?.();
+      return;
+    }
+
+    const handleBackClick = () => {
+      const historyIndex = Number(window.history.state?.idx ?? 0);
+      if (historyIndex > 0) {
+        navigate(-1);
+        return;
+      }
+      navigate("/library", { replace: true });
+    };
+
+    backButton.show?.();
+    backButton.onClick?.(handleBackClick);
+
+    return () => {
+      backButton.offClick?.(handleBackClick);
+      backButton.hide?.();
+    };
+  }, [navigate, shouldShowTelegramBackButton]);
 
   return (
     <Theme theme={theme}>

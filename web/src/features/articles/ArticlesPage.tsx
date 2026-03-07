@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   DataTable,
-  InlineLoading,
+  DataTableSkeleton,
   InlineNotification,
   Pagination,
   Select,
@@ -84,6 +84,8 @@ export default function ArticlesPage() {
     navigate(`/library/${rowId}`);
   }
 
+  const isInitialLoading = summariesQuery.isLoading && !summariesQuery.data;
+
   return (
     <section className="page-section">
       <h1>All Articles</h1>
@@ -105,8 +107,6 @@ export default function ArticlesPage() {
         </Select>
       </div>
 
-      {summariesQuery.isLoading && <InlineLoading description="Loading articles…" />}
-
       {summariesQuery.error && (
         <InlineNotification
           kind="error"
@@ -116,76 +116,84 @@ export default function ArticlesPage() {
         />
       )}
 
-      <DataTable rows={rows} headers={headers}>
-        {({ rows, headers, getHeaderProps, getRowProps, getTableProps, getToolbarProps }) => (
-          <TableContainer title="All article summaries">
-            <TableToolbar {...getToolbarProps()}>
-              <TableToolbarContent>
-                <TableToolbarSearch
-                  persistent
-                  onInput={(event) => {
-                    const value = (event.target as HTMLInputElement).value;
-                    setSearchTerm(value);
-                  }}
-                  value={searchTerm}
-                />
-              </TableToolbarContent>
-            </TableToolbar>
-            <Table {...getTableProps()}>
-              <TableHead>
-                <TableRow>
-                  {headers.map((header) => (
-                    <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.map((row) => {
-                  const summary = row.cells.find((cell) => cell.info.header === "Status")?.value as SummaryCompact;
-                  return (
-                    <TableRow
-                      {...getRowProps({ row })}
-                      onClick={() => navigate(`/library/${row.id}`)}
-                      onKeyDown={(event) => handleRowKeyDown(event, row.id)}
-                      role="link"
-                      tabIndex={0}
-                      className="clickable-row"
-                    >
-                      {row.cells.map((cell) => {
-                        if (cell.info.header === "Status") {
-                          return (
-                            <TableCell key={cell.id}>
-                              <div className="tag-row">
-                                <Tag type={summary.isRead ? "green" : "gray"}>
-                                  {summary.isRead ? "Read" : "Unread"}
-                                </Tag>
-                                {summary.isFavorited && <Tag type="magenta">Favorited</Tag>}
-                              </div>
-                            </TableCell>
-                          );
-                        }
-
-                        return <TableCell key={cell.id}>{cell.value as string}</TableCell>;
-                      })}
+      {isInitialLoading ? (
+        <DataTableSkeleton columnCount={headers.length} rowCount={8} showToolbar />
+      ) : (
+        <>
+          <DataTable rows={rows} headers={headers}>
+            {({ rows, headers, getHeaderProps, getRowProps, getTableProps, getToolbarProps }) => (
+              <TableContainer title="All article summaries">
+                <TableToolbar {...getToolbarProps()}>
+                  <TableToolbarContent>
+                    <TableToolbarSearch
+                      persistent
+                      onInput={(event) => {
+                        const value = (event.target as HTMLInputElement).value;
+                        setSearchTerm(value);
+                      }}
+                      value={searchTerm}
+                    />
+                  </TableToolbarContent>
+                </TableToolbar>
+                <Table {...getTableProps()}>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((header) => (
+                        <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
+                      ))}
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </DataTable>
+                  </TableHead>
+                  <TableBody>
+                    {rows.map((row) => {
+                      const summary = row.cells.find((cell) => cell.info.header === "Status")?.value as SummaryCompact;
+                      return (
+                        <TableRow
+                          {...getRowProps({ row })}
+                          onClick={() => navigate(`/library/${row.id}`)}
+                          onKeyDown={(event) => handleRowKeyDown(event, row.id)}
+                          role="link"
+                          tabIndex={0}
+                          className="clickable-row"
+                        >
+                          {row.cells.map((cell) => {
+                            if (cell.info.header === "Status") {
+                              return (
+                                <TableCell key={cell.id}>
+                                  <div className="tag-row">
+                                    <Tag type={summary.isRead ? "green" : "gray"}>
+                                      {summary.isRead ? "Read" : "Unread"}
+                                    </Tag>
+                                    {summary.isFavorited && <Tag type="magenta">Favorited</Tag>}
+                                  </div>
+                                </TableCell>
+                              );
+                            }
 
-      <Pagination
-        page={page}
-        pageSize={pageSize}
-        pageSizes={[10, 20, 50]}
-        totalItems={summariesQuery.data?.pagination.total ?? 0}
-        onChange={(event) => {
-          setPage(event.page);
-          setPageSize(event.pageSize);
-        }}
-      />
+                            return <TableCell key={cell.id}>{cell.value as string}</TableCell>;
+                          })}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+
+          {summariesQuery.data && (
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              pageSizes={[10, 20, 50]}
+              totalItems={summariesQuery.data.pagination.total}
+              onChange={(event) => {
+                setPage(event.page);
+                setPageSize(event.pageSize);
+              }}
+            />
+          )}
+        </>
+      )}
     </section>
   );
 }

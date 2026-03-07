@@ -11,6 +11,7 @@ import {
   Search,
   Select,
   SelectItem,
+  SkeletonText,
   Tag,
   TextInput,
   Tile,
@@ -129,6 +130,8 @@ export default function SearchPage() {
     selectedTags.length > 0,
     selectedDomains.length > 0,
   ].filter(Boolean).length;
+  const showInitialResultsSkeleton =
+    searchQuery.isFetching && !searchQuery.data && query.trim().length > 1;
 
   function resetFilters(): void {
     setMode("auto");
@@ -414,7 +417,7 @@ export default function SearchPage() {
         />
       )}
 
-      {searchQuery.isFetching && <InlineLoading description="Searching…" />}
+      {searchQuery.isFetching && searchQuery.data && <InlineLoading description="Refreshing results…" />}
       {searchQuery.error && (
         <InlineNotification
           kind="error"
@@ -424,37 +427,49 @@ export default function SearchPage() {
         />
       )}
 
-      <div className="result-grid">
-        {(searchQuery.data?.results ?? []).map((result) => (
-          <Tile key={result.id} className="result-tile">
-            <Link to={`/library/${result.id}`} className="result-tile-link">
-              <h3>{result.title}</h3>
-              <div className="tag-row">
-                <Tag type="blue">Score {(result.score * 100).toFixed(0)}%</Tag>
-                <Tag type={result.isRead ? "green" : "cool-gray"}>{result.isRead ? "Read" : "Unread"}</Tag>
-                <Tag type="gray">{result.domain || "Unknown domain"}</Tag>
-              </div>
-              <p>{result.tldr || result.snippet || "No preview available."}</p>
-              <p className="muted">
-                Added {result.createdAt ? new Date(result.createdAt).toLocaleString() : "Unknown date"}
-              </p>
-              {result.matchExplanation && <p className="muted">{result.matchExplanation}</p>}
-              <div className="tag-row">
-                {result.topicTags.slice(0, 4).map((topic) => (
-                  <Tag key={topic} type="cyan">
-                    {topic}
-                  </Tag>
-                ))}
-                {(result.matchSignals ?? []).slice(0, 3).map((signal) => (
-                  <Tag key={`${result.id}-${signal}`} type="warm-gray">
-                    {signal}
-                  </Tag>
-                ))}
-              </div>
-            </Link>
-          </Tile>
-        ))}
-      </div>
+      {showInitialResultsSkeleton ? (
+        <div className="result-grid">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Tile key={`result-skeleton-${index}`} className="result-tile">
+              <SkeletonText heading width="65%" />
+              <SkeletonText paragraph lineCount={2} />
+              <SkeletonText paragraph lineCount={1} width="40%" />
+            </Tile>
+          ))}
+        </div>
+      ) : (
+        <div className="result-grid">
+          {(searchQuery.data?.results ?? []).map((result) => (
+            <Tile key={result.id} className="result-tile">
+              <Link to={`/library/${result.id}`} className="result-tile-link">
+                <h3>{result.title}</h3>
+                <div className="tag-row">
+                  <Tag type="blue">Score {(result.score * 100).toFixed(0)}%</Tag>
+                  <Tag type={result.isRead ? "green" : "cool-gray"}>{result.isRead ? "Read" : "Unread"}</Tag>
+                  <Tag type="gray">{result.domain || "Unknown domain"}</Tag>
+                </div>
+                <p>{result.tldr || result.snippet || "No preview available."}</p>
+                <p className="muted">
+                  Added {result.createdAt ? new Date(result.createdAt).toLocaleString() : "Unknown date"}
+                </p>
+                {result.matchExplanation && <p className="muted">{result.matchExplanation}</p>}
+                <div className="tag-row">
+                  {result.topicTags.slice(0, 4).map((topic) => (
+                    <Tag key={topic} type="cyan">
+                      {topic}
+                    </Tag>
+                  ))}
+                  {(result.matchSignals ?? []).slice(0, 3).map((signal) => (
+                    <Tag key={`${result.id}-${signal}`} type="warm-gray">
+                      {signal}
+                    </Tag>
+                  ))}
+                </div>
+              </Link>
+            </Tile>
+          ))}
+        </div>
+      )}
 
       {searchQuery.data && searchQuery.data.results.length === 0 && (
         <Tile>

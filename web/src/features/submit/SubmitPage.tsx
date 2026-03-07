@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -12,6 +12,8 @@ import {
   Tile,
 } from "@carbon/react";
 import { checkDuplicate, fetchRequestStatus, retryRequest, submitUrl } from "../../api/requests";
+import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
+import { useTelegramMainButton } from "../../hooks/useTelegramMainButton";
 import { formatEta, isTerminalStatus, progressFromStatus, statusLabel } from "./status";
 import { validateSubmitUrl } from "./url";
 
@@ -149,6 +151,51 @@ export default function SubmitPage() {
   ].filter((part): part is string => Boolean(part));
 
   const statusHelperText = statusHelperParts.join(" · ");
+  const completedSummaryId =
+    statusQuery.data?.status === "completed" ? (statusQuery.data.summaryId ?? null) : null;
+  const canRetryStatus = Boolean(
+    statusQuery.data?.status === "failed" && (statusQuery.data.canRetry || statusQuery.data.retryable),
+  );
+  const isFormDirty =
+    url.trim().length > 0 ||
+    langPreference !== "auto" ||
+    requestId != null ||
+    submitDuplicate != null ||
+    submitMutation.isPending ||
+    retryMutation.isPending;
+
+  useTelegramClosingConfirmation(isFormDirty);
+
+  const handleSubmit = useCallback(() => {
+    if (!canSubmit) return;
+    submitMutation.mutate({
+      inputUrl: urlValidation.normalizedUrl,
+      langPreference,
+    });
+  }, [canSubmit, langPreference, submitMutation, urlValidation.normalizedUrl]);
+
+  const handleOpenCompletedSummary = useCallback(() => {
+    if (!completedSummaryId) return;
+    navigate(`/library/${completedSummaryId}`);
+  }, [completedSummaryId, navigate]);
+
+  const handleRetry = useCallback(() => {
+    if (!canRetryStatus || retryMutation.isPending) return;
+    retryMutation.mutate();
+  }, [canRetryStatus, retryMutation]);
+
+  useTelegramMainButton({
+    visible: requestId == null || completedSummaryId != null || canRetryStatus,
+    text: completedSummaryId != null ? "Open Summary" : canRetryStatus ? "Retry Processing" : "Summarize",
+    disabled:
+      completedSummaryId != null
+        ? false
+        : canRetryStatus
+          ? retryMutation.isPending
+          : !canSubmit,
+    loading: submitMutation.isPending || retryMutation.isPending,
+    onClick: completedSummaryId != null ? handleOpenCompletedSummary : canRetryStatus ? handleRetry : handleSubmit,
+  });
 
   function startTrackingExistingRequest(): void {
     if (!duplicateRequestId) return;
@@ -200,12 +247,7 @@ export default function SubmitPage() {
 
         <div className="form-actions">
           <Button
-            onClick={() =>
-              submitMutation.mutate({
-                inputUrl: urlValidation.normalizedUrl,
-                langPreference,
-              })
-            }
+            onClick={handleSubmit}
             disabled={!canSubmit}
           >
             {submitMutation.isPending ? "Submitting…" : "Summarize"}
@@ -272,11 +314,11 @@ export default function SubmitPage() {
 
             <div className="form-actions">
               {statusQuery.data.status === "completed" && statusQuery.data.summaryId && (
-                <Button onClick={() => navigate(`/library/${statusQuery.data.summaryId}`)}>Open summary</Button>
+                <Button onClick={handleOpenCompletedSummary}>Open summary</Button>
               )}
 
               {statusQuery.data.status === "failed" && (statusQuery.data.canRetry || statusQuery.data.retryable) && (
-                <Button onClick={() => retryMutation.mutate()} disabled={retryMutation.isPending}>
+                <Button onClick={handleRetry} disabled={retryMutation.isPending}>
                   {retryMutation.isPending ? "Retrying…" : "Retry processing"}
                 </Button>
               )}

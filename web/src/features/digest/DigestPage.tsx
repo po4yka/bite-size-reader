@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   DataTable,
+  DataTableSkeleton,
   InlineLoading,
   InlineNotification,
   NumberInput,
@@ -36,6 +37,7 @@ import {
   unsubscribeDigestChannel,
   updateDigestPreferences,
 } from "../../api/digest";
+import { useTelegramMainButton } from "../../hooks/useTelegramMainButton";
 
 const HISTORY_PAGE_SIZE = 20;
 
@@ -50,7 +52,7 @@ function DigestUnavailableNotice() {
   );
 }
 
-function ChannelsTab({ isOwner }: { isOwner: boolean }) {
+function ChannelsTab({ isOwner, isActive }: { isOwner: boolean; isActive: boolean }) {
   const queryClient = useQueryClient();
   const [channelInput, setChannelInput] = useState("");
   const [ownerChannel, setOwnerChannel] = useState("");
@@ -82,6 +84,21 @@ function ChannelsTab({ isOwner }: { isOwner: boolean }) {
   const ownerTriggerMutation = useMutation({
     mutationFn: (username: string) => triggerSingleChannelDigest(username),
     onSuccess: () => setOwnerChannel(""),
+  });
+  const canTriggerDigestNow = (channelsQuery.data?.activeCount ?? 0) > 0;
+  const isChannelsInitialLoading = channelsQuery.isLoading && !channelsQuery.data;
+
+  const handleTriggerDigestNow = useCallback(() => {
+    if (!canTriggerDigestNow || triggerMutation.isPending) return;
+    triggerMutation.mutate();
+  }, [canTriggerDigestNow, triggerMutation]);
+
+  useTelegramMainButton({
+    visible: isActive,
+    text: "Generate Digest Now",
+    disabled: !canTriggerDigestNow || triggerMutation.isPending,
+    loading: triggerMutation.isPending,
+    onClick: handleTriggerDigestNow,
   });
 
   const headers = [
@@ -127,7 +144,7 @@ function ChannelsTab({ isOwner }: { isOwner: boolean }) {
           </Button>
         </div>
 
-        {channelsQuery.isLoading && <InlineLoading description="Loading channels…" />}
+        {isChannelsInitialLoading && <DataTableSkeleton columnCount={headers.length} rowCount={6} showToolbar={false} />}
 
         {(channelsQuery.error || subscribeMutation.error || unsubscribeMutation.error) && (
           <InlineNotification
@@ -150,52 +167,54 @@ function ChannelsTab({ isOwner }: { isOwner: boolean }) {
           </p>
         )}
 
-        <DataTable rows={rows} headers={headers}>
-          {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-            <TableContainer title="Digest channels">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {rows.map((row) => {
-                    const username = row.cells.find((cell) => cell.info.header === "Actions")?.value as string;
-                    return (
-                      <TableRow {...getRowProps({ row })}>
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === "Actions") {
-                            return (
-                              <TableCell key={cell.id}>
-                                <Button
-                                  kind="danger--ghost"
-                                  size="sm"
-                                  disabled={unsubscribeMutation.isPending}
-                                  onClick={() => unsubscribeMutation.mutate(username)}
-                                >
-                                  Remove
-                                </Button>
-                              </TableCell>
-                            );
-                          }
-                          return <TableCell key={cell.id}>{String(cell.value)}</TableCell>;
-                        })}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
+        {!isChannelsInitialLoading && (
+          <DataTable rows={rows} headers={headers}>
+            {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
+              <TableContainer title="Digest channels">
+                <Table {...getTableProps()}>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((header) => (
+                        <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rows.map((row) => {
+                      const username = row.cells.find((cell) => cell.info.header === "Actions")?.value as string;
+                      return (
+                        <TableRow {...getRowProps({ row })}>
+                          {row.cells.map((cell) => {
+                            if (cell.info.header === "Actions") {
+                              return (
+                                <TableCell key={cell.id}>
+                                  <Button
+                                    kind="danger--ghost"
+                                    size="sm"
+                                    disabled={unsubscribeMutation.isPending}
+                                    onClick={() => unsubscribeMutation.mutate(username)}
+                                  >
+                                    Remove
+                                  </Button>
+                                </TableCell>
+                              );
+                            }
+                            return <TableCell key={cell.id}>{String(cell.value)}</TableCell>;
+                          })}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+        )}
 
         <div className="form-actions">
           <Button
-            disabled={(channelsQuery.data?.activeCount ?? 0) === 0 || triggerMutation.isPending}
-            onClick={() => triggerMutation.mutate()}
+            disabled={!canTriggerDigestNow || triggerMutation.isPending}
+            onClick={handleTriggerDigestNow}
           >
             Generate Digest Now
           </Button>
@@ -420,13 +439,14 @@ function HistoryTab() {
     { key: "channelCount", header: "Channels" },
     { key: "digestType", header: "Type" },
   ];
+  const isHistoryInitialLoading = historyQuery.isLoading && !historyQuery.data;
 
   return (
     <div className="page-section">
       <Tile>
         <h3>Digest history</h3>
 
-        {historyQuery.isLoading && <InlineLoading description="Loading digest history…" />}
+        {isHistoryInitialLoading && <DataTableSkeleton columnCount={headers.length} rowCount={6} showToolbar={false} />}
 
         {historyQuery.error && (
           <InlineNotification
@@ -437,30 +457,32 @@ function HistoryTab() {
           />
         )}
 
-        <DataTable rows={rows} headers={headers}>
-          {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-            <TableContainer title="Digest deliveries">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {rows.map((row) => (
-                    <TableRow {...getRowProps({ row })}>
-                      {row.cells.map((cell) => (
-                        <TableCell key={cell.id}>{String(cell.value)}</TableCell>
+        {!isHistoryInitialLoading && (
+          <DataTable rows={rows} headers={headers}>
+            {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
+              <TableContainer title="Digest deliveries">
+                <Table {...getTableProps()}>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((header) => (
+                        <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
                       ))}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
+                  </TableHead>
+                  <TableBody>
+                    {rows.map((row) => (
+                      <TableRow {...getRowProps({ row })}>
+                        {row.cells.map((cell) => (
+                          <TableCell key={cell.id}>{String(cell.value)}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DataTable>
+        )}
 
         {historyQuery.data && (
           <Pagination
@@ -478,6 +500,7 @@ function HistoryTab() {
 
 export default function DigestPage() {
   const { mode, user } = useAuth();
+  const [selectedTabIndex, setSelectedTabIndex] = useState(0);
 
   return (
     <section className="page-section">
@@ -486,7 +509,7 @@ export default function DigestPage() {
       {mode !== "telegram-webapp" && <DigestUnavailableNotice />}
 
       {mode === "telegram-webapp" && (
-        <Tabs>
+        <Tabs selectedIndex={selectedTabIndex} onChange={({ selectedIndex }) => setSelectedTabIndex(selectedIndex)}>
           <TabList aria-label="Digest tabs" contained>
             <Tab>Channels</Tab>
             <Tab>Preferences</Tab>
@@ -494,7 +517,7 @@ export default function DigestPage() {
           </TabList>
           <TabPanels>
             <TabPanel>
-              <ChannelsTab isOwner={Boolean(user?.isOwner)} />
+              <ChannelsTab isOwner={Boolean(user?.isOwner)} isActive={selectedTabIndex === 0} />
             </TabPanel>
             <TabPanel>
               <PreferencesTab />

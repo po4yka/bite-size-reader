@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   DataTable,
+  DataTableSkeleton,
   InlineLoading,
   InlineNotification,
   Modal,
@@ -31,6 +32,7 @@ import {
   updateCollection,
 } from "../../api/collections";
 import type { Collection, CollectionItem } from "../../api/types";
+import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
 
 function RenderTree({
   collection,
@@ -285,6 +287,19 @@ export default function CollectionsPage() {
     moveSummaryId != null &&
     (Boolean(moveTargetCollectionId) || moveNewCollectionName.trim().length > 0) &&
     !moveItemMutation.isPending;
+  const isDirty =
+    newCollectionName.trim().length > 0 ||
+    (selectedCollection != null && renameCollectionName.trim() !== selectedCollection.name) ||
+    moveSummaryId != null ||
+    moveNewCollectionName.trim().length > 0 ||
+    createMutation.isPending ||
+    renameMutation.isPending ||
+    deleteMutation.isPending ||
+    moveItemMutation.isPending ||
+    removeMutation.isPending ||
+    reorderMutation.isPending;
+
+  useTelegramClosingConfirmation(isDirty);
 
   function handleCollectionSelect(id: number): void {
     setSelectedCollectionId(id);
@@ -416,7 +431,9 @@ export default function CollectionsPage() {
       <div className="collections-items">
         <h2>{selectedCollection ? selectedCollection.name : "Select a collection"}</h2>
 
-        {itemsQuery.isLoading && selectedCollectionId && <InlineLoading description="Loading collection items…" />}
+        {itemsQuery.isLoading && selectedCollectionId && (
+          <DataTableSkeleton columnCount={headers.length} rowCount={6} showToolbar={false} />
+        )}
         {itemsQuery.error && (
           <InlineNotification
             kind="error"

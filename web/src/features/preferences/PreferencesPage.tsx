@@ -1,16 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Button,
-  InlineLoading,
   InlineNotification,
   NumberInput,
   Select,
   SelectItem,
+  SkeletonText,
   Tile,
   TimePicker,
 } from "@carbon/react";
 import { fetchUserPreferences, fetchUserStats, updateUserPreferences } from "../../api/user";
+import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
+import { useTelegramMainButton } from "../../hooks/useTelegramMainButton";
 
 function parseDeliveryTime(settings: Record<string, unknown> | null): string {
   const raw = settings?.delivery_time;
@@ -57,11 +59,60 @@ export default function PreferencesPage() {
     },
   });
 
+  const initialLangPreference = useMemo(
+    () => (preferencesQuery.data?.langPreference ?? "auto") as "auto" | "en" | "ru",
+    [preferencesQuery.data?.langPreference],
+  );
+  const initialDeliveryTime = useMemo(
+    () => parseDeliveryTime(preferencesQuery.data?.appSettings ?? null),
+    [preferencesQuery.data?.appSettings],
+  );
+  const initialDailyTarget = useMemo(() => {
+    const value = preferencesQuery.data?.appSettings?.daily_target;
+    return typeof value === "number" ? value : 5;
+  }, [preferencesQuery.data?.appSettings]);
+
+  const isDirty = Boolean(
+    preferencesQuery.data &&
+      (langPreference !== initialLangPreference ||
+        deliveryTime !== initialDeliveryTime ||
+        dailyTarget !== initialDailyTarget),
+  );
+  const isInitialLoading =
+    (preferencesQuery.isLoading && !preferencesQuery.data) || (statsQuery.isLoading && !statsQuery.data);
+
+  useTelegramClosingConfirmation(isDirty || saveMutation.isPending);
+
+  const handleSave = useCallback(() => {
+    if (!isDirty || saveMutation.isPending) return;
+    saveMutation.mutate();
+  }, [isDirty, saveMutation]);
+
+  useTelegramMainButton({
+    visible: Boolean(preferencesQuery.data),
+    text: "Save Preferences",
+    disabled: !isDirty || saveMutation.isPending,
+    loading: saveMutation.isPending,
+    onClick: handleSave,
+  });
+
   return (
     <section className="page-section">
       <h1>Preferences</h1>
 
-      {(preferencesQuery.isLoading || statsQuery.isLoading) && <InlineLoading description="Loading preferences…" />}
+      {isInitialLoading && (
+        <>
+          <Tile>
+            <SkeletonText heading width="30%" />
+            <SkeletonText paragraph lineCount={3} />
+            <SkeletonText paragraph lineCount={5} />
+          </Tile>
+          <Tile>
+            <SkeletonText heading width="28%" />
+            <SkeletonText paragraph lineCount={5} />
+          </Tile>
+        </>
+      )}
 
       {(preferencesQuery.error || statsQuery.error) && (
         <InlineNotification
@@ -104,7 +155,7 @@ export default function PreferencesPage() {
             onChange={(_, { value }) => setDailyTarget(Number(value))}
           />
 
-          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
             Save preferences
           </Button>
 
