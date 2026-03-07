@@ -1,7 +1,7 @@
 # Mobile API Specification (Bite-Size Reader)
 
 - Version: 1.1
-- Last Updated: 2026-03-06
+- Last Updated: 2026-03-07
 - Canonical machine-readable contract: `docs/openapi/mobile_api.yaml` and `docs/openapi/mobile_api.json`
 
 ## Overview
@@ -9,9 +9,14 @@
 This document is a developer-facing summary of the mobile API implemented by the FastAPI app.
 
 - Base API prefix: `/v1`
-- Primary clients: mobile apps (Android/iOS/KMP), Telegram Mini App
+- Primary clients: mobile apps (Android/iOS/KMP), Telegram Mini App, Carbon web interface (`web/`)
 - Envelope contract: all JSON business responses use `success`, `data`, `meta`, and standardized `error`
 - OpenAPI source of truth: `docs/openapi/mobile_api.yaml`
+
+The same FastAPI host also serves the Carbon web SPA:
+
+- `/web` and `/web/*` -> SPA index entrypoint
+- `/static/web/*` -> built frontend assets
 
 ## Base URLs
 
@@ -29,7 +34,12 @@ Most `/v1/*` endpoints require bearer auth:
 
 - Header: `Authorization: Bearer <access_token>`
 
-Digest Mini App endpoints (`/v1/digest/*`) use Telegram WebApp authentication via initData (validated by the backend middleware/dependencies).
+The Carbon web client uses a hybrid auth strategy:
+
+- Telegram WebApp context: `X-Telegram-Init-Data`
+- Browser JWT context: `Authorization: Bearer <access_token>` with refresh via `/v1/auth/refresh`
+
+Digest endpoints (`/v1/digest/*`) require Telegram WebApp authentication via initData (validated by backend middleware/dependencies).
 
 ## Router and Service Boundaries
 
@@ -114,6 +124,8 @@ Current sync uses explicit sessions and chunked/full + delta + apply endpoints:
 ### Platform and Health
 
 - `GET /`
+- `GET /web`
+- `GET /web/{path:path}`
 - `GET /health`
 - `GET /health/live`
 - `GET /health/ready`

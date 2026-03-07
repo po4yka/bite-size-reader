@@ -1,7 +1,7 @@
 # Bite‑Size Reader — Technical Specification
 
 **Version:** 3.0
-**Last Updated:** 2026-03-06
+**Last Updated:** 2026-03-07
 
 ---
 
@@ -46,6 +46,11 @@
   - [Rate Limiting & Redis](#rate-limiting--redis)
   - [Data Model Notes (API-Specific Fields)](#data-model-notes-api-specific-fields)
   - [Background Processing (Requests → Summaries)](#background-processing-requests--summaries)
+- [Web Interface (web/)](#web-interface-web)
+  - [Serving Contract](#serving-contract)
+  - [Web Routes (V1)](#web-routes-v1)
+  - [Authentication Modes](#authentication-modes)
+  - [Frontend Tooling](#frontend-tooling)
 - [Future Work](#future-work)
 - [Appendix — API Specifics (Quick References)](#appendix--api-specifics-quick-references)
   - [Firecrawl (/scrape)](#firecrawl-scrape)
@@ -187,7 +192,7 @@ Incoming updates are normalized via `MessageHandler`, which delegates access che
 
 Telegram and CLI entrypoints both wire the DI container by default; business flows in presentation adapters execute through application use cases rather than repository fallbacks.
 
-For FastAPI, routers are transport-focused: digest orchestration is delegated via `DigestFacade`, and DB/Redis/file maintenance tasks are delegated via `SystemMaintenanceService`.
+For FastAPI, routers are transport-focused: digest orchestration is delegated via `DigestFacade`, and DB/Redis/file maintenance tasks are delegated via `SystemMaintenanceService`. The same FastAPI host also serves static frontend assets (`/static/digest/*`, `/static/web/*`) and Carbon SPA entry routes (`/web`, `/web/*`).
 
 ### Telegram message routing
 
@@ -913,10 +918,45 @@ sequenceDiagram
 - Retries: exponential backoff (`BACKGROUND_RETRY_ATTEMPTS` default 3, `BACKGROUND_RETRY_BASE_DELAY_MS` 500, `BACKGROUND_RETRY_MAX_DELAY_MS` 5000, jitter 0.2).
 - Errors: structured logs `{error_type,error_code,error_stage,correlation_id}`; request status set to `error`; lock fallback to local if Redis down and not required.
 
+## Web Interface (web/)
+
+Carbon-based web client implemented in `web/` (React + TypeScript + Vite + `@carbon/react`) and deployed as static files under `app/static/web`.
+
+### Serving contract
+
+- FastAPI static mount: `/static/*` from `app/static`
+- Carbon bundle namespace: `/static/web/*`
+- SPA entrypoint routes: `/web` and `/web/{path:path}` (both return `app/static/web/index.html`)
+- Telegram Mini App bundle remains separate under `/static/digest/*`
+
+### Web routes (V1)
+
+- `/web/library`
+- `/web/library/:id`
+- `/web/articles`
+- `/web/search`
+- `/web/submit`
+- `/web/collections`
+- `/web/collections/:id`
+- `/web/digest`
+- `/web/preferences`
+
+### Authentication modes
+
+- `telegram-webapp` mode: when `window.Telegram.WebApp.initData` is present, client sends `X-Telegram-Init-Data`.
+- `jwt` mode: otherwise client uses Telegram Login Widget (`/v1/auth/telegram-login`, `client_id=web-carbon-v1`), stores JWT tokens, sends `Authorization: Bearer ...`, and refreshes via `/v1/auth/refresh`.
+
+### Frontend tooling
+
+- Build: `cd web && npm run build` (outputs to `app/static/web`)
+- Static checks: `cd web && npm run check:static`
+- Unit tests: `cd web && npm run test`
+- E2E tests: `cd web && npm run test:e2e`
+
 ## Future work
 
 - Optional: store Firecrawl screenshots (object storage) and page text embeddings.
-- Web dashboard for search & exports.
+- Web admin parity and advanced digest tooling beyond V1 feature flags.
 - Background re‑summarization with upgraded models.
 
 ## Appendix — API specifics (quick references)

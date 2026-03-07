@@ -6,11 +6,11 @@ Welcome to the Bite-Size Reader documentation. This guide helps you find the rig
 
 ## Documentation freshness
 
-- Last documentation refresh: **2026-03-06**
-- This refresh aligns architecture and API docs with:
-  - Telegram orchestration decomposition (`CallbackActionRegistry`/`CallbackActionService`, `URLBatchPolicyService`, `URLAwaitingStateStore`, `TelegramLifecycleManager`)
-  - FastAPI router/service boundaries (`DigestFacade`, `SystemMaintenanceService`)
-  - Formatting seam policy (protocol interfaces at constructor/public boundaries)
+- Last documentation refresh: **2026-03-07**
+- This refresh aligns docs with:
+  - Carbon web interface architecture in `web/` (routing, auth modes, deploy/static namespaces)
+  - Web static check workflow (`npm run check:static`) and CI jobs (`web-build`, `web-test`, `web-static-check`)
+  - FastAPI SPA serving contract (`/web`, `/web/*`) alongside Telegram Mini App static assets
 
 ## Documentation by Audience
 
@@ -38,9 +38,10 @@ You want to contribute code, customize the bot, or understand the architecture.
 **Start here**:
 
 1. [Local Development Tutorial](tutorials/local-development.md) - Set up dev environment
-2. [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Architecture overview
-3. [SPEC.md](SPEC.md) - Technical specification
-4. [CLAUDE.md](../CLAUDE.md) - AI assistant guide (comprehensive codebase overview)
+2. [Frontend Web Guide](../FRONTEND.md) - Carbon web app architecture and workflows
+3. [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Architecture overview
+4. [SPEC.md](SPEC.md) - Technical specification
+5. [CLAUDE.md](../CLAUDE.md) - AI assistant guide (comprehensive codebase overview)
 
 **Next steps**:
 
@@ -100,6 +101,7 @@ You want to submit pull requests or improve the project.
 - [SPEC.md](SPEC.md) - Technical specification
 - [ADRs](adr/README.md) - Understand past decisions
 - [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Code organization
+- [Frontend Web Guide](../FRONTEND.md) - Carbon UI implementation details
 
 ### 🔌 I'm an Integrator
 
@@ -108,8 +110,9 @@ You want to integrate Bite-Size Reader with other tools or build a client.
 **Start here**:
 
 1. [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) - REST API specification
-2. [MCP Server Guide](mcp_server.md) - AI agent integration
-3. [First Mobile API Client Tutorial](tutorials/first-mobile-api-client.md)
+2. [Frontend Web Guide](../FRONTEND.md) - Web client routes, auth, and API usage
+3. [MCP Server Guide](mcp_server.md) - AI agent integration
+4. [First Mobile API Client Tutorial](tutorials/first-mobile-api-client.md)
 
 **Next steps**:
 
@@ -130,6 +133,7 @@ You want to integrate Bite-Size Reader with other tools or build a client.
 - **Install on my server** → [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Understand what this project does** → [README.md](../README.md) (project root)
 - **Decide if this is right for me** → [FAQ](FAQ.md)
+- **Open the web UI** → [Frontend Web Guide](../FRONTEND.md)
 
 ### 🛠 Configuring Features
 
@@ -165,7 +169,9 @@ You want to integrate Bite-Size Reader with other tools or build a client.
 **I want to...**
 
 - **Set up local dev environment** → [Local Development Tutorial](tutorials/local-development.md)
+- **Run Carbon web app locally** → [Frontend Web Guide](../FRONTEND.md#local-development)
 - **Run tests** → [Local Development Tutorial § Running Tests](tutorials/local-development.md)
+- **Run web static checks** → [Frontend Web Guide](../FRONTEND.md#quality-checks)
 - **Add a new feature** → [CLAUDE.md § Adding a New Feature](../CLAUDE.md#common-tasks)
 - **Understand the codebase** → [CLAUDE.md](../CLAUDE.md) (AI assistant guide, comprehensive)
 
@@ -174,6 +180,7 @@ You want to integrate Bite-Size Reader with other tools or build a client.
 **I want to...**
 
 - **Build a mobile app client** → [First Mobile API Client Tutorial](tutorials/first-mobile-api-client.md)
+- **Build or extend web client** → [Frontend Web Guide](../FRONTEND.md)
 - **Integrate with Claude Desktop** → [MCP Server Guide](mcp_server.md)
 - **Access the database directly** → [SPEC.md § Database Schema](SPEC.md#database-schema)
 - **See the full API spec** → [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md)
@@ -221,6 +228,7 @@ Technical facts, API specs, and complete references.
 | [SPEC.md](SPEC.md) | Complete technical specification | Developers, Integrators |
 | [Environment Variables](environment_variables.md) | Full configuration reference (250+ vars) | All |
 | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) | REST API specification | Integrators |
+| [Frontend Web Guide](../FRONTEND.md) | Carbon web app architecture, auth, and workflows | Developers, Integrators |
 | [OpenAPI Schema](openapi/) | Machine-readable API spec | Integrators |
 | [Summary Contract](SPEC.md#summary-json-contract) | JSON output format (35+ fields) | Developers, Integrators |
 | [Database Schema](SPEC.md#database-schema) | Database tables and relationships | Developers, Integrators |
@@ -260,6 +268,7 @@ Background, context, and "why" discussions.
 | File | Description | When to Read |
 | ------ | ------------- | -------------- |
 | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) | REST API spec | Building mobile client |
+| [FRONTEND.md](../FRONTEND.md) | Carbon web routes/auth/build details | Building or debugging web UI |
 | [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) | Architecture guide | Understanding code structure |
 | [multi_agent_architecture.md](multi_agent_architecture.md) | Multi-agent LLM | Understanding summarization pipeline |
 | [mcp_server.md](mcp_server.md) | MCP integration | Integrating with AI agents |
@@ -325,6 +334,7 @@ See [SPEC.md § Glossary](SPEC.md#glossary) for full glossary.
 | **Summary contract** | [SPEC.md § Summary JSON Contract](SPEC.md#summary-json-contract), [ADR-0002](adr/0002-strict-json-summary-contract.md) |
 | **Testing** | [Local Development Tutorial § Testing](tutorials/local-development.md), [CLAUDE.md § Testing](../CLAUDE.md#testing) |
 | **Troubleshooting** | [TROUBLESHOOTING.md](TROUBLESHOOTING.md), [FAQ](FAQ.md) |
+| **Web interface** | [FRONTEND.md](../FRONTEND.md), [README.md § Carbon Web Interface](../README.md#carbon-web-interface-v1) |
 | **Web search** | [How to enable web search](how-to/enable-web-search.md), [FAQ § Web Search](FAQ.md#web-search) |
 | **YouTube** | [How to configure YouTube](how-to/configure-youtube-download.md), [TROUBLESHOOTING.md § YouTube](TROUBLESHOOTING.md#youtube-issues) |
 
@@ -344,6 +354,6 @@ Found a typo? Documentation unclear? Want to add a tutorial?
 
 ---
 
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-03-07
 
 **Questions?** Check [FAQ](FAQ.md) or open an [issue](https://github.com/po4yka/bite-size-reader/issues).

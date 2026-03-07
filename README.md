@@ -23,6 +23,7 @@ Async Telegram bot that summarizes web articles and YouTube videos into structur
 - [YouTube Video Support](#youtube-video-support)
 - [Web Search Enrichment](#web-search-enrichment-optional)
 - [Mobile API](#mobile-api)
+- [Carbon Web Interface](#carbon-web-interface-v1)
 - [MCP Server](#mcp-server)
 - [Redis Caching](#redis-caching)
 - [Karakeep Integration](#karakeep-integration)
@@ -169,6 +170,7 @@ For the mobile API, routers are transport-focused and delegate infrastructure or
 | **Get real-time context** | Enable web search enrichment | [Enable Web Search](docs/how-to/enable-web-search.md) |
 | **Speed up responses** | Enable Redis caching | [Setup Redis](docs/how-to/setup-redis-caching.md) |
 | **Build mobile app** | Use Mobile API (JWT auth) | [MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md) |
+| **Use web interface** | Open Carbon web UI on `/web` | [Frontend Web Guide](FRONTEND.md) |
 | **Integrate with AI agents** | Use MCP server | [MCP Server Guide](docs/mcp_server.md) |
 | **Reduce API costs** | Use free models, caching | [FAQ § Cost Optimization](docs/FAQ.md#cost-optimization) |
 | **Self-host privately** | Docker deployment | [DEPLOYMENT.md](docs/DEPLOYMENT.md) |
@@ -346,6 +348,8 @@ app/
   types/         -- Type definitions
   utils/         -- Validation and helper utilities
 bot.py           -- Entrypoint wiring config, DB, and Telegram bot
+frontend/        -- Telegram Mini App frontend (legacy digest-focused app)
+web/             -- Carbon web interface (React + TypeScript + Vite)
 SPEC.md          -- Full technical specification
 ```
 
@@ -389,9 +393,21 @@ FastAPI-based REST API for mobile clients with Telegram-based JWT authentication
 Standalone React + IBM Carbon web UI is available in `web/` and served by FastAPI on:
 
 - `/web`
-- `/web/*` (SPA routes, e.g. `/web/library`, `/web/search`, `/web/collections`)
+- `/web/*` (SPA routes)
 
 Static assets are published under `/static/web/*`.
+
+Core routes:
+
+- `/web/library`
+- `/web/library/:id`
+- `/web/articles`
+- `/web/search`
+- `/web/submit`
+- `/web/collections`
+- `/web/collections/:id`
+- `/web/digest`
+- `/web/preferences`
 
 ### Local development
 
@@ -399,12 +415,16 @@ Static assets are published under `/static/web/*`.
 cd web
 npm install
 npm run dev
+npm run check:static
 ```
 
 Optional web env vars:
 
 - `VITE_API_BASE_URL` (default: same-origin API)
 - `VITE_TELEGRAM_BOT_USERNAME` (required for Telegram Login Widget in JWT mode)
+- `VITE_ROUTER_BASENAME` (default: `/web`)
+
+Frontend architecture and auth details: [FRONTEND.md](FRONTEND.md).
 
 ## MCP Server
 
@@ -436,6 +456,8 @@ All user-visible errors include `Error ID: <cid>` to correlate with logs and DB 
 - Format: `make format` (ruff format + isort)
 - Lint: `make lint` (ruff)
 - Type-check: `make type` (mypy)
+- Web static checks: `cd web && npm run check:static`
+- Web unit tests: `cd web && npm run test`
 - Pre-commit: `pre-commit install` then commits will auto-run hooks
 - Optional: `pip install loguru` to enable Loguru-based JSON logging with stdlib bridging
 
@@ -468,6 +490,7 @@ GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 - Lockfile freshness (rebuilds from `pyproject.toml` and checks diff)
 - Lint (ruff), format check (ruff format, isort), type check (mypy)
 - Unit tests with coverage (pytest, 80% threshold)
+- Frontend jobs: `frontend-build`, `web-build`, `web-test`, `web-static-check`
 - Docker image build on every push/PR; optional push to GHCR when `PUBLISH_DOCKER` repository variable is set to `true` (non-PR events)
 - OpenAPI spec validation, code complexity (radon)
 - Codecov coverage reporting
@@ -520,6 +543,7 @@ GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 | Document | Description | Audience |
 | -------- | ----------- | -------- |
 | [MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md) | REST API specification | **Integrators** |
+| [FRONTEND.md](FRONTEND.md) | Carbon web architecture and workflows | **Frontend Developers, Integrators** |
 | [mcp_server.md](docs/mcp_server.md) | MCP server (AI agents) | **Integrators** |
 | [claude_code_hooks.md](docs/claude_code_hooks.md) | Development safety hooks | **Developers** |
 

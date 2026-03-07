@@ -4,7 +4,7 @@ Set up a local development environment for Bite-Size Reader.
 
 **Time**: ~20 minutes
 **Difficulty**: Intermediate
-**Prerequisites**: Python 3.13+, git
+**Prerequisites**: Python 3.13+, git, Node.js 20+ (for web frontend work)
 
 ---
 
@@ -16,6 +16,7 @@ By the end of this tutorial, you'll have:
 - ✅ All dependencies installed (including dev tools)
 - ✅ Pre-commit hooks configured
 - ✅ Tests running successfully
+- ✅ Carbon web interface running locally
 - ✅ CLI summary runner working
 - ✅ Ready to make your first code change
 
@@ -240,6 +241,35 @@ tests/test_summary_contract.py ......................                    [100%]
 
 ---
 
+## Step 7.5: Run Carbon Web Interface (Optional, 3 minutes)
+
+Use this when you work on `web/` (React + TypeScript + IBM Carbon).
+
+```bash
+# In a new terminal from project root
+cd web
+npm ci
+
+# Start Vite dev server
+npm run dev
+
+# Static checks (lint + typecheck)
+npm run check:static
+
+# Unit tests
+npm run test
+```
+
+Useful URLs during local development:
+
+- Web app (Vite): `http://localhost:5173`
+- API host (when running `uvicorn app.api.main:app --reload`): `http://localhost:8000`
+- Same-host SPA route (when web is built to `app/static/web`): `http://localhost:8000/web/library`
+
+JWT login mode requires `VITE_TELEGRAM_BOT_USERNAME` in the `web` environment (for Telegram Login Widget).
+
+---
+
 ## Step 8: Use CLI Summary Runner (2 minutes)
 
 Test URL processing without running the full bot.
@@ -397,6 +427,9 @@ make type
 
 # Run all quality checks
 make format lint type
+
+# Web static checks
+cd web && npm run check:static
 ```
 
 ### Debugging Tips
@@ -461,6 +494,21 @@ curl http://localhost:8000/health
 
 # Or use the OpenAPI docs
 open http://localhost:8000/docs
+```
+
+### Testing Carbon Web Routes Through FastAPI
+
+```bash
+# Build web bundle into app/static/web
+cd web
+npm run build
+cd ..
+
+# Start API host
+uvicorn app.api.main:app --reload
+
+# Open web app served by FastAPI
+open http://localhost:8000/web/library
 ```
 
 ### Testing MCP Server
@@ -607,4 +655,4 @@ You now have a fully functional local development environment. Happy coding!
 
 ---
 
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-03-07

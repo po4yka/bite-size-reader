@@ -125,6 +125,8 @@ docker logs bite-size-reader
 # INFO: Listening for messages...
 ```
 
+> This quickstart starts the Telegram bot runtime only. The Carbon web interface (`/web/*`) is served by the FastAPI `mobile-api` service; see [DEPLOYMENT.md](../DEPLOYMENT.md) and [Frontend Web Guide](../../FRONTEND.md) for that setup.
+
 **Troubleshooting**: If you see errors, check:
 
 - All API keys are correct (no extra spaces)
@@ -209,6 +211,7 @@ Congratulations! You've successfully set up Bite-Size Reader. 🎉
 - 🔍 [Enable web search](../how-to/enable-web-search.md) - Add real-time context
 - ⚡ [Setup Redis caching](../how-to/setup-redis-caching.md) - Faster responses
 - 🧠 [Setup ChromaDB](../how-to/setup-chroma-vector-search.md) - Semantic search
+- 🖥️ [Frontend Web Guide](../../FRONTEND.md) - Carbon web app routes/auth/development
 
 **Learn more**:
 
@@ -338,4 +341,4 @@ You now have a working Bite-Size Reader setup. Try summarizing a few articles to
 
 ---
 
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-03-07

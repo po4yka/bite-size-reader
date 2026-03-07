@@ -12,6 +12,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 - Firecrawl API key (optional -- Scrapling and self-hosted Firecrawl are free alternatives)
 - Docker (for containerized deployment)
 - Rust toolchain (optional; needed for local Rust binary builds and migration parity suites)
+- Node.js 20+ (optional; needed for local `web/` frontend development)
 - (Optional) Redis for API rate limits/sync locks
 
 ## Telegram Setup
@@ -52,6 +53,7 @@ Copy `.env.example` to `.env` and fill:
 - Runtime: `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO| DEBUG`, `REQUEST_TIMEOUT_SEC=60`, `PREFERRED_LANG=auto | en | ru`, `DEBUG_PAYLOADS=0 |1` (keep 0 in prod)
 - YouTube: `YOUTUBE_DOWNLOAD_ENABLED=true`, `YOUTUBE_PREFERRED_QUALITY=1080p`, `YOUTUBE_STORAGE_PATH=/data/videos`, size/retention knobs as needed
 - API (mobile): `JWT_SECRET_KEY` (>=32 chars), `API_HOST`, `API_PORT` (default 8000), optional `ALLOWED_CLIENT_IDS`
+- Web frontend (JWT mode login widget, optional for `web/` local build/dev): `VITE_TELEGRAM_BOT_USERNAME`
 - Redis (rate limit/sync, optional): `REDIS_ENABLED`, `REDIS_URL` or host/port/db, `REDIS_PREFIX=bsr`, `REDIS_REQUIRED=false`, `API_RATE_LIMIT_*` caps, `SYNC_DEFAULT_CHUNK_SIZE`, `SYNC_EXPIRY_HOURS`
 
 ## Local Development
@@ -60,7 +62,27 @@ Copy `.env.example` to `.env` and fill:
 2) Export env or use `.env`.
 3) Tests: `make test` (or `make lint`, `make format`, `make type` as needed).
 4) Run Telegram bot: `python bot.py`
-5) Run mobile API (optional): `uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000`
+5) Run API host (serves `/v1/*`, `/static/*`, and `/web/*`): `uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000`
+6) Optional Carbon web frontend local loop:
+   - `cd web && npm ci`
+   - `npm run dev` (Vite dev server)
+   - `npm run check:static` (lint + typecheck)
+
+## Web Interface Serving Contract
+
+The FastAPI service serves both frontends from static bundles:
+
+- Telegram Mini App static files: `/static/digest/*`
+- Carbon web static files: `/static/web/*`
+- Carbon SPA entry routes: `/web` and `/web/{path:path}` (returns `app/static/web/index.html`)
+
+If `/web` returns `404 "Web interface is not built"`, rebuild static assets with:
+
+```bash
+cd web
+npm ci
+npm run build
+```
 
 How to use (no commands needed)
 
@@ -88,6 +110,7 @@ Notes
 - SQLite at `/data/app.db`; backups under `/data/backups`. Mount `/data` for durability.
 - Set `ALLOWED_USER_IDS`; keep `DEBUG_PAYLOADS=0` in prod.
 - If using mobile API, ensure `JWT_SECRET_KEY` is set and port 8000 exposed.
+- Docker build includes both `frontend/` and `web/` bundles and publishes them under `/static/digest/*` and `/static/web/*`.
 
 ## Docker Compose (recommended)
 
@@ -238,3 +261,4 @@ docker compose up -d --build
 - Telegram auth: verify `API_ID`, `API_HASH`, `BOT_TOKEN`; ensure bot not banned.
 - DB permissions: ensure host `data/` is writable by the Docker user.
 - Large summaries: The bot returns JSON in a message; if too large, consider implementing file replies.
+- `/web` returns 404: web bundle is missing; build `web/` (`npm run build`) or redeploy an image that includes the web build stage.
