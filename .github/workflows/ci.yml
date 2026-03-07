@@ -205,6 +205,30 @@ jobs:
       - name: Run web unit tests
         run: npm run test
 
+  web-static-check:
+    name: Web Static Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run web static checks
+        run: npm run check:static
+
   lint-and-format:
     name: Lint and Format Checks
     needs: prepare-environment
@@ -977,7 +1001,7 @@ jobs:
   pr-summary:
     name: PR Summary
     if: github.event_name == 'pull_request'
-    needs: [prepare-environment, frontend-build, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, secrets]
+    needs: [prepare-environment, frontend-build, web-static-check, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, secrets]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -996,6 +1020,7 @@ jobs:
             }
             summary += '### Checks Completed\n';
             summary += '- ✅ Frontend build\n';
+            summary += '- ✅ Web static checks (lint + typecheck)\n';
             summary += '- ✅ Code linting and formatting\n';
             summary += '- ✅ Type checking (mypy)\n';
             summary += '- ✅ Unit tests with coverage\n';
@@ -1032,7 +1057,7 @@ jobs:
   status-check:
     name: CI Status Check
     if: always()
-    needs: [prepare-environment, frontend-build, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, secrets, integration-tests]
+    needs: [prepare-environment, frontend-build, web-static-check, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, secrets, integration-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -1063,6 +1088,11 @@ jobs:
 
           if [[ "${{ needs.frontend-build.result }}" != "success" ]]; then
             echo "::error::frontend-build job failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.web-static-check.result }}" != "success" ]]; then
+            echo "::error::web-static-check job failed"
             exit 1
           fi
 
