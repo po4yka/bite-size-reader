@@ -1,7 +1,7 @@
 ---
 name: api-debugging
 description: Debug Firecrawl and OpenRouter API calls including request/response inspection, error handling, and retry logic. Use when investigating external API failures or analyzing API usage patterns.
-version: 1.0.0
+version: 1.1.0
 allowed-tools: Bash, Read, Grep
 ---
 
@@ -14,7 +14,7 @@ Helps debug and troubleshoot Firecrawl and OpenRouter API integrations.
 ### Endpoints
 
 - **Base URL**: `https://api.firecrawl.dev`
-- **Scrape endpoint**: `POST /v1/scrape`
+- **Scrape endpoint**: `POST /v2/scrape`
 
 ### Official Documentation
 
@@ -24,7 +24,7 @@ Helps debug and troubleshoot Firecrawl and OpenRouter API integrations.
 
 ### Integration Location
 
-- **Client**: `app/adapters/content/content_extractor.py`
+- **Client**: `app/adapters/content/scraper/firecrawl_provider.py`
 - **Parser**: `app/adapters/external/firecrawl_parser.py`
 - **DB Storage**: `crawl_results` table
 
@@ -71,7 +71,7 @@ EOF
 
 ### Retry Logic
 
-Check `app/adapters/content/content_extractor.py`:
+Check scraper provider/chain in `app/adapters/content/scraper/`:
 
 - 3 retries with exponential backoff on 5xx/timeout
 - Toggle `mobile` emulation on PDF failures
@@ -91,7 +91,7 @@ export LOG_LEVEL=DEBUG
 ### Test Firecrawl Directly
 
 ```bash
-curl -X POST https://api.firecrawl.dev/v1/scrape \
+curl -X POST https://api.firecrawl.dev/v2/scrape \
   -H "Authorization: Bearer $FIRECRAWL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

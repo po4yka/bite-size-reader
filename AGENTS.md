@@ -165,6 +165,7 @@ This is the canonical Codex overlay used by the README install command.
 9. Assessment scores are auto-applied from trusted internal run-batches imports, or via Claude cloud session imports (`desloppify review --external-start --external-runner claude` then printed `--external-submit`). Legacy attested external import via `--attested-external` remains supported.
 10. Manual override is safety-scoped: you cannot combine it with `--allow-partial`, and provisional manual scores expire on the next `scan` unless replaced by trusted internal or attested-external imports.
 11. If a batch fails, retry only that slice with `desloppify review --run-batches --packet <packet.json> --only-batches <idxs>`.
+12. For Carbon web frontend tasks, consult `FRONTEND.md` and run `cd web && npm run check:static` before completion.
 
 <!-- desloppify-overlay: codex -->
 <!-- desloppify-end -->

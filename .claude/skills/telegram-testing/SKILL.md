@@ -1,7 +1,7 @@
 ---
 name: telegram-testing
 description: Test Telegram bot functionality locally without running the full bot, including CLI summary runner, message simulation, and workflow validation. Use when testing bot features or debugging message handling.
-version: 1.0.0
+version: 1.1.0
 allowed-tools: Bash, Read, Write
 ---
 
@@ -363,8 +363,8 @@ EOF
 
 LLM prompts are in `app/prompts/`:
 
-- `en/summary.txt` — English summary prompt
-- `ru/summary.txt` — Russian summary prompt
+- `summary_system_en.txt` — English summary prompt
+- `summary_system_ru.txt` — Russian summary prompt
 
 Test prompt changes with CLI runner before deploying.
 

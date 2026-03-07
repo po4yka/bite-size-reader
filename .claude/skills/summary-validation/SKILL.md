@@ -1,7 +1,7 @@
 ---
 name: summary-validation
 description: Validate summary JSON contracts against strict schema requirements including character limits, field types, and deduplication. Use when testing summaries or debugging validation errors.
-version: 1.0.0
+version: 1.1.0
 allowed-tools: Bash, Read
 ---
 
@@ -212,7 +212,7 @@ The CLI automatically validates summaries using `validate_summary_json()`.
 
 - **Contract validation**: `app/core/summary_contract.py`
 - **Schema definition**: `app/core/summary_schema.py`
-- **LLM prompts**: `app/prompts/en/summary.txt`, `app/prompts/ru/summary.txt`
+- **LLM prompts**: `app/prompts/summary_system_en.txt`, `app/prompts/summary_system_ru.txt`
 - **JSON utilities**: `app/core/json_utils.py` (includes repair logic)
 
 ## Important Notes

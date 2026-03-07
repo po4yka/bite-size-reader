@@ -11,6 +11,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - Accepts forwarded channel posts and summarizes them directly
 - Returns structured JSON summaries with a strict contract
 - Stores all artifacts (Telegram messages, crawl results, video downloads, LLM calls, summaries) in SQLite
+- Exposes two frontend surfaces: Telegram Mini App (`frontend/`) and Carbon web app (`web/`) served by FastAPI on `/web/*`
 - Runs as a single Docker container with owner-only access control
 
 **Tech Stack:**
@@ -31,6 +32,9 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - scikit-learn, sentence-transformers, chromadb (search, embeddings, vector store)
 - loguru, orjson (structured logging, fast JSON serialization)
 - FastAPI / uvicorn (Mobile REST API)
+- React 18 + TypeScript + Vite (Carbon web frontend)
+- IBM Carbon (`@carbon/react`, `@carbon/styles`, `@carbon/icons-react`)
+- @tanstack/react-query (web data fetching, caching, polling)
 - PyJWT (JWT authentication)
 - redis (optional caching and distributed locking)
 - apscheduler (background task scheduling)
@@ -76,6 +80,8 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 - **Database** (`app/db/`) -- SQLite schema, Peewee ORM models (21 model classes), migrations
 - **CLI Tools** (`app/cli/`) -- Summary runner, search, migrations, MCP server, embedding backfill, Chroma backfill, search comparison, performance indexes
 - **Mobile API** (`app/api/`) -- FastAPI REST API with JWT auth, sync, background processing
+- **Web Frontend** (`web/`) -- Carbon web interface (library/article/search/submit/collections/digest/preferences), hybrid auth (Telegram WebApp + JWT), React Query data layer
+- **Legacy Mini App Frontend** (`frontend/`) -- Telegram mini app bundle served under `/static/digest/*`
 - **Multi-Agent System** (`app/agents/`) -- Content extraction, summarization with self-correction, validation, web search agents. See `docs/multi_agent_architecture.md`
 - **Search Services** (`app/services/`) -- Topic search, vector/hybrid search, embeddings, reranking, query expansion
 - **MCP Server** (`app/mcp/`) -- Model Context Protocol server for AI agent access. See `docs/mcp_server.md`
@@ -126,6 +132,8 @@ app/
 +-- services/           # Search and other domain services
 +-- types/              # Type definitions
 +-- utils/              # Helper utilities (progress, formatting, validation)
+frontend/               # Telegram Mini App frontend (legacy digest-focused app)
+web/                    # Carbon web interface (React + TypeScript + Vite)
 ```
 
 ## Database Models
@@ -161,6 +169,12 @@ make format                # Format code (ruff format + isort)
 make lint                  # Lint code (ruff)
 make type                  # Type-check code (mypy)
 
+# Web frontend (Carbon)
+cd web && npm ci
+cd web && npm run dev
+cd web && npm run check:static
+cd web && npm run test
+
 # Dependencies
 make lock-uv               # Lock dependencies with uv (recommended)
 make lock-piptools         # Lock dependencies with pip-tools
@@ -188,6 +202,7 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 - Lockfile freshness (rebuilds from `pyproject.toml`)
 - Lint (ruff), format check (ruff format, isort), type check (mypy)
 - Unit tests with coverage (pytest, 80% threshold)
+- Frontend jobs: `frontend-build`, `web-build`, `web-test`, `web-static-check`
 - Docker image build
 - OpenAPI spec validation, code complexity (radon)
 - Codecov coverage reporting
@@ -242,6 +257,12 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
    - Async/await throughout (Pyrogram, httpx, SQLite via peewee-async patterns)
    - Optional `uvloop` for async performance
 
+8. **Web Frontend Changes (`web/`):**
+   - Read `FRONTEND.md` before changing web architecture, routing, auth, or data layer behavior
+   - Keep same-host serving contract intact (`/web`, `/web/*`, `/static/web/*`)
+   - Preserve hybrid auth behavior (Telegram WebApp header mode and JWT mode with refresh)
+   - Run `cd web && npm run check:static && npm run test` before finalizing
+
 ### Security Considerations
 
 - **Secrets:** All secrets via env vars (never in DB or logs)
@@ -253,7 +274,7 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 ### Language Support
 
 - Language detection via `app/core/lang.py`
-- Prompts in `app/prompts/en/` and `app/prompts/ru/`
+- Prompts in `app/prompts/` (for example `summary_system_en.txt`, `summary_system_ru.txt`)
 - Configurable preference: `PREFERRED_LANG=auto| en |ru`
 - Detection result stored in `requests.lang_detected`
 
@@ -313,7 +334,7 @@ Claude Code hooks provide automatic safety checks. See `docs/claude_code_hooks.m
 ### Adding a New Summary Field
 
 1. Update `app/core/summary_contract.py` with new validation logic
-2. Update `app/prompts/en/summary.txt` and `app/prompts/ru/summary.txt` with new field instructions
+2. Update `app/prompts/summary_system_en.txt` and `app/prompts/summary_system_ru.txt` with new field instructions
 3. Update SPEC.md Summary JSON contract section
 4. Test with CLI runner: `python -m app.cli.summary --url <test-url>`
 
@@ -355,6 +376,9 @@ When making changes, these are the most critical files to understand:
 - **`app/config/scraper.py`** -- Scraper chain configuration (`ScraperConfig`)
 - **`app/adapters/content/scraper/`** -- `ContentScraperProtocol`, `ContentScraperChain`, `ContentScraperFactory`, providers
 - **`app/api/main.py`** -- Mobile API entry point
+- **`FRONTEND.md`** -- Carbon web frontend architecture, auth, and local workflow
+- **`web/src/App.tsx`** -- Carbon web route map and route guards
+- **`web/src/auth/AuthProvider.tsx`** -- Hybrid auth mode selection and session handling
 - **`app/mcp/server.py`** -- MCP server for AI agents
 - **`bot.py`** -- Entrypoint (wires everything together)
 - **`SPEC.md`** -- Full technical specification (canonical reference)
@@ -406,11 +430,12 @@ Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-03-06
+**Last Updated:** 2026-03-07
 
 For questions about the codebase, always refer to:
 
 1. This file (CLAUDE.md) for AI assistant guidance
 2. SPEC.md for technical specification
-3. README.md for user-facing documentation
-4. Code comments and docstrings for implementation details
+3. FRONTEND.md for Carbon web frontend contracts and workflows
+4. README.md for user-facing documentation
+5. Code comments and docstrings for implementation details
