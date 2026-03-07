@@ -1,7 +1,8 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { InlineLoading, InlineNotification } from "@carbon/react";
 import { useAuth } from "./auth/AuthProvider";
 import LoginPage from "./auth/LoginPage";
+import { sanitizeRedirectPath } from "./auth/redirect";
 import RouteGuard from "./auth/RouteGuard";
 import AppShell from "./components/AppShell";
 import ArticlePage from "./features/article/ArticlePage";
@@ -31,7 +32,9 @@ function NotFoundPage() {
 }
 
 function LoginRoute() {
+  const location = useLocation();
   const { mode, status } = useAuth();
+  const fromPath = sanitizeRedirectPath((location.state as { from?: string } | null)?.from);
 
   if (mode === "telegram-webapp") {
     if (status === "loading") {
@@ -42,7 +45,7 @@ function LoginRoute() {
       );
     }
     if (status === "authenticated") {
-      return <Navigate to="/library" replace />;
+      return <Navigate to={fromPath} replace />;
     }
     return (
       <section className="page-section">
@@ -57,7 +60,7 @@ function LoginRoute() {
   }
 
   if (status === "authenticated") {
-    return <Navigate to="/library" replace />;
+    return <Navigate to={fromPath} replace />;
   }
 
   return <LoginPage />;

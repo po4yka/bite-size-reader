@@ -18,8 +18,22 @@ body {
   display: none;
 }
 
+.app-shell-session {
+  color: var(--cds-text-secondary);
+  padding: 0 0.75rem 0 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  display: none;
+}
+
 @media (min-width: 42rem) {
   .app-shell-user {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .app-shell-session {
     display: inline-flex;
     align-items: center;
   }
@@ -33,6 +47,16 @@ body {
 .page-section {
   display: grid;
   gap: 1rem;
+}
+
+.app-session-alert {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.app-session-actions {
+  margin-top: 0;
 }
 
 .page-subtitle {
@@ -146,6 +170,79 @@ body {
   padding: 1rem;
   max-height: 28rem;
   overflow: auto;
+}
+
+.article-reader-shell {
+  align-content: start;
+}
+
+.article-reader-progress {
+  max-width: 28rem;
+}
+
+.article-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.reader-controls {
+  display: grid;
+  gap: 1rem;
+}
+
+.reader-control-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.article-summary-tile p {
+  margin: 0;
+}
+
+.article-summary-tile p + p {
+  margin-top: 0.8rem;
+}
+
+.article-text-sm {
+  font-size: 0.95rem;
+}
+
+.article-text-md {
+  font-size: 1rem;
+}
+
+.article-text-lg {
+  font-size: 1.12rem;
+}
+
+.article-density-compact {
+  line-height: 1.5;
+}
+
+.article-density-comfortable {
+  line-height: 1.75;
+}
+
+.article-content-preview {
+  margin-top: 0.75rem;
+}
+
+.article-stats-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.article-stat {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border: 1px solid var(--cds-border-subtle-01);
+  border-radius: 0.25rem;
+  background: var(--cds-layer-accent-01);
 }
 
 .digest-form-grid {

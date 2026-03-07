@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
+  Button,
   Content,
   Header,
   HeaderGlobalBar,
   HeaderGlobalAction,
   HeaderMenuButton,
   HeaderName,
+  InlineNotification,
   SideNav,
   SideNavItems,
   SideNavLink,
@@ -21,6 +23,7 @@ import {
   Notification,
   User,
   Logout,
+  Renew,
 } from "@carbon/icons-react";
 import { useAuth } from "../auth/AuthProvider";
 
@@ -36,13 +39,25 @@ const NAV_ITEMS = [
 export default function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, user } = useAuth();
+  const { dismissError, error, logout, mode, reloadUser, user } = useAuth();
   const [expanded, setExpanded] = useState(false);
+  const [isVerifyingSession, setIsVerifyingSession] = useState(false);
 
   const activePath = useMemo(() => {
     const firstSegment = location.pathname.split("/")[1] ?? "library";
     return `/${firstSegment}`;
   }, [location.pathname]);
+
+  const sessionLabel = mode === "telegram-webapp" ? "Telegram session" : "Web session";
+
+  async function handleSessionVerify(): Promise<void> {
+    try {
+      setIsVerifyingSession(true);
+      await reloadUser();
+    } finally {
+      setIsVerifyingSession(false);
+    }
+  }
 
   return (
     <Theme theme="white">
@@ -59,6 +74,13 @@ export default function AppShell() {
           </HeaderName>
           <HeaderGlobalBar>
             {user?.username && <span className="app-shell-user">@{user.username}</span>}
+            <span className="app-shell-session">{sessionLabel}</span>
+            <HeaderGlobalAction
+              aria-label={isVerifyingSession ? "Verifying session" : "Verify session"}
+              onClick={() => void handleSessionVerify()}
+            >
+              <Renew size={20} />
+            </HeaderGlobalAction>
             <HeaderGlobalAction aria-label="Sign out" onClick={logout}>
               <Logout size={20} />
             </HeaderGlobalAction>
@@ -92,6 +114,29 @@ export default function AppShell() {
         </SideNav>
 
         <Content id="main-content" className="app-content">
+          {error && (
+            <section className="app-session-alert">
+              <InlineNotification
+                kind="warning"
+                title="Session requires attention"
+                subtitle={error}
+                onCloseButtonClick={() => dismissError()}
+              />
+              <div className="form-actions app-session-actions">
+                <Button
+                  kind="tertiary"
+                  size="sm"
+                  onClick={() => void handleSessionVerify()}
+                  disabled={isVerifyingSession}
+                >
+                  {isVerifyingSession ? "Verifying..." : "Verify session"}
+                </Button>
+                <Button kind="ghost" size="sm" onClick={logout}>
+                  Sign in again
+                </Button>
+              </div>
+            </section>
+          )}
           <Outlet />
         </Content>
       </div>

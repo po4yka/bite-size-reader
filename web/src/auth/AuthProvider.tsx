@@ -22,6 +22,7 @@ interface AuthContextValue {
   login: (payload: TelegramAuthPayload) => Promise<void>;
   logout: () => void;
   reloadUser: () => Promise<void>;
+  dismissError: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -85,7 +86,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setStatus("authenticated");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load user profile.";
-      setError(message);
+      const normalizedMessage =
+        message === "Authentication required." || message === "Session expired. Please sign in again."
+          ? "Session expired. Please sign in again."
+          : message;
+      setError(normalizedMessage);
       if (mode === "jwt") {
         setStoredTokens(null);
       }
@@ -97,6 +102,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     void reloadUser();
   }, [reloadUser]);
+
+  useEffect(() => {
+    if (status !== "authenticated") {
+      return;
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void reloadUser();
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      void reloadUser();
+    }, 180_000);
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [reloadUser, status]);
 
   const login = useCallback(async (payload: TelegramAuthPayload) => {
     setStatus("loading");
@@ -128,6 +155,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     syncApiSession(null);
   }, [syncApiSession]);
 
+  const dismissError = useCallback(() => {
+    setError(null);
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       mode,
@@ -138,8 +169,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       login,
       logout,
       reloadUser,
+      dismissError,
     }),
-    [error, login, logout, mode, reloadUser, status, tokens, user],
+    [dismissError, error, login, logout, mode, reloadUser, status, tokens, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

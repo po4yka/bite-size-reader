@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -6,6 +6,9 @@ import {
   ButtonSet,
   InlineLoading,
   InlineNotification,
+  ProgressBar,
+  Select,
+  SelectItem,
   Tab,
   TabList,
   TabPanel,
@@ -17,16 +20,39 @@ import {
 import { fetchSummary, fetchSummaryContent, markSummaryRead, toggleSummaryFavorite } from "../../api/summaries";
 import AddToCollectionModal from "../../components/AddToCollectionModal";
 
+type ReaderTextScale = "sm" | "md" | "lg";
+type ReaderDensity = "compact" | "comfortable";
+
 function useSummaryId(): number {
   const params = useParams();
   return Number(params.id ?? 0);
 }
 
+function splitParagraphs(text: string): string[] {
+  return text
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function riskTagType(risk: string): "green" | "red" | "gray" | "warm-gray" {
+  if (risk === "low") return "green";
+  if (risk === "medium") return "warm-gray";
+  if (risk === "high") return "red";
+  return "gray";
+}
+
 export default function ArticlePage() {
   const summaryId = useSummaryId();
   const queryClient = useQueryClient();
+
   const [showContent, setShowContent] = useState(false);
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
+  const [readerTextScale, setReaderTextScale] = useState<ReaderTextScale>("md");
+  const [readerDensity, setReaderDensity] = useState<ReaderDensity>("comfortable");
+  const [copyState, setCopyState] = useState<"idle" | "success" | "error">("idle");
+  const [readProgress, setReadProgress] = useState(0);
+  const [markedReadLocally, setMarkedReadLocally] = useState(false);
 
   const summaryQuery = useQuery({
     queryKey: ["summary", summaryId],
@@ -43,6 +69,7 @@ export default function ArticlePage() {
   const readMutation = useMutation({
     mutationFn: () => markSummaryRead(summaryId),
     onSuccess: () => {
+      setMarkedReadLocally(true);
       void queryClient.invalidateQueries({ queryKey: ["summaries"] });
     },
   });
@@ -55,15 +82,74 @@ export default function ArticlePage() {
     },
   });
 
+  useEffect(() => {
+    setMarkedReadLocally(false);
+    setCopyState("idle");
+    setReadProgress(0);
+  }, [summaryId]);
+
+  useEffect(() => {
+    const updateProgress = () => {
+      const doc = document.documentElement;
+      const scrollHeight = doc.scrollHeight - window.innerHeight;
+      if (scrollHeight <= 0) {
+        setReadProgress(0);
+        return;
+      }
+      const nextProgress = Math.round((window.scrollY / scrollHeight) * 100);
+      setReadProgress(Math.max(0, Math.min(100, nextProgress)));
+    };
+
+    updateProgress();
+    window.addEventListener("scroll", updateProgress, { passive: true });
+    window.addEventListener("resize", updateProgress);
+    return () => {
+      window.removeEventListener("scroll", updateProgress);
+      window.removeEventListener("resize", updateProgress);
+    };
+  }, [showContent, summaryId]);
+
   const detail = summaryQuery.data;
 
   const entityTags = useMemo(() => {
     if (!detail) return [];
-    return detail.entities.slice(0, 10);
+    return detail.entities.slice(0, 12);
   }, [detail]);
 
+  async function handleCopySummary(): Promise<void> {
+    if (!detail) return;
+    try {
+      const payload = [detail.tldr, detail.summary250, detail.summary1000]
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join("\n\n");
+      await navigator.clipboard.writeText(payload);
+      setCopyState("success");
+    } catch {
+      setCopyState("error");
+    }
+  }
+
+  async function handleShare(): Promise<void> {
+    if (!detail?.url) return;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: detail.title,
+          text: detail.tldr || detail.summary250,
+          url: detail.url,
+        });
+        return;
+      }
+      await navigator.clipboard.writeText(detail.url);
+      setCopyState("success");
+    } catch {
+      setCopyState("error");
+    }
+  }
+
   return (
-    <section className="page-section">
+    <section className="page-section article-reader-shell">
       {summaryQuery.isLoading && <InlineLoading description="Loading article..." />}
       {summaryQuery.error && (
         <InlineNotification
@@ -77,13 +163,73 @@ export default function ArticlePage() {
       {detail && (
         <>
           <h1>{detail.title}</h1>
-          <p className="page-subtitle">
-            {detail.domain} · {detail.readingTimeMin} min read
-          </p>
+          <div className="article-meta-row">
+            <p className="page-subtitle">
+              {detail.domain} · {detail.readingTimeMin} min read
+            </p>
+            <Tag type="blue">Confidence {(detail.confidence * 100).toFixed(0)}%</Tag>
+            <Tag type={riskTagType(detail.hallucinationRisk)}>Risk {detail.hallucinationRisk}</Tag>
+            <Tag type="gray">{readProgress}% read</Tag>
+          </div>
+
+          <ProgressBar
+            className="article-reader-progress"
+            label="Reading progress"
+            value={readProgress}
+            helperText={`${readProgress}% scrolled`}
+          />
+
+          <Tile className="reader-controls">
+            <div className="reader-control-grid">
+              <Select
+                id="reader-text-scale"
+                labelText="Text size"
+                value={readerTextScale}
+                onChange={(event) => setReaderTextScale(event.currentTarget.value as ReaderTextScale)}
+              >
+                <SelectItem value="sm" text="Compact" />
+                <SelectItem value="md" text="Default" />
+                <SelectItem value="lg" text="Large" />
+              </Select>
+              <Select
+                id="reader-density"
+                labelText="Line density"
+                value={readerDensity}
+                onChange={(event) => setReaderDensity(event.currentTarget.value as ReaderDensity)}
+              >
+                <SelectItem value="compact" text="Compact" />
+                <SelectItem value="comfortable" text="Comfortable" />
+              </Select>
+            </div>
+            <div className="form-actions">
+              <Button kind="ghost" size="sm" onClick={() => void handleCopySummary()}>
+                Copy summary
+              </Button>
+              <Button kind="ghost" size="sm" onClick={() => void handleShare()}>
+                Share
+              </Button>
+            </div>
+            {copyState === "success" && (
+              <InlineNotification
+                kind="success"
+                title="Copied"
+                subtitle="Summary text or URL copied to clipboard."
+                hideCloseButton
+              />
+            )}
+            {copyState === "error" && (
+              <InlineNotification
+                kind="warning"
+                title="Copy failed"
+                subtitle="Clipboard access is blocked in this browser context."
+                hideCloseButton
+              />
+            )}
+          </Tile>
 
           <ButtonSet>
-            <Button kind="secondary" onClick={() => readMutation.mutate()}>
-              Mark as read
+            <Button kind="secondary" disabled={markedReadLocally || readMutation.isPending} onClick={() => readMutation.mutate()}>
+              {markedReadLocally ? "Marked as read" : "Mark as read"}
             </Button>
             <Button kind="secondary" onClick={() => favoriteMutation.mutate()}>
               Toggle favorite
@@ -107,44 +253,65 @@ export default function ArticlePage() {
             </TabList>
             <TabPanels>
               <TabPanel>
-                <Tile>
-                  <p>{detail.summary250}</p>
+                <Tile className={`article-summary-tile article-text-${readerTextScale} article-density-${readerDensity}`}>
+                  {splitParagraphs(detail.summary250).map((part) => (
+                    <p key={`summary250-${part.slice(0, 32)}`}>{part}</p>
+                  ))}
                   {detail.summary1000 && (
                     <>
                       <h3>Detailed Summary</h3>
-                      <p>{detail.summary1000}</p>
+                      {splitParagraphs(detail.summary1000).map((part) => (
+                        <p key={`summary1000-${part.slice(0, 32)}`}>{part}</p>
+                      ))}
                     </>
                   )}
-                  {showContent && contentQuery.data?.content && (
+                  {showContent && (
                     <>
                       <h3>Source Content</h3>
-                      <pre className="content-preview">{contentQuery.data.content}</pre>
+                      {contentQuery.isFetching && <InlineLoading description="Loading source content..." />}
+                      {contentQuery.error && (
+                        <InlineNotification
+                          kind="warning"
+                          title="Could not load source content"
+                          subtitle={
+                            contentQuery.error instanceof Error ? contentQuery.error.message : "Unknown error"
+                          }
+                          hideCloseButton
+                        />
+                      )}
+                      {contentQuery.data?.content && (
+                        <pre
+                          className={`content-preview article-content-preview article-text-${readerTextScale} article-density-${readerDensity}`}
+                        >
+                          {contentQuery.data.content}
+                        </pre>
+                      )}
                     </>
                   )}
                 </Tile>
               </TabPanel>
               <TabPanel>
                 <Tile>
-                  <p>
-                    Confidence: <strong>{(detail.confidence * 100).toFixed(0)}%</strong>
-                  </p>
-                  <p>
-                    Hallucination risk: <strong>{detail.hallucinationRisk}</strong>
-                  </p>
                   <h3>Key ideas</h3>
                   <ul>
                     {detail.keyIdeas.map((idea) => (
                       <li key={idea}>{idea}</li>
                     ))}
                   </ul>
+
                   <h3>Key stats</h3>
-                  <ul>
+                  <div className="article-stats-grid">
                     {detail.keyStats.map((stat) => (
-                      <li key={`${stat.label}-${stat.value}`}>
-                        {stat.label}: {stat.value}
-                      </li>
+                      <article key={`${stat.label}-${stat.value}`} className="article-stat">
+                        <p className="muted">{stat.label}</p>
+                        <p>
+                          <strong>{stat.value}</strong>
+                        </p>
+                        {stat.sourceExcerpt && <p className="muted">{stat.sourceExcerpt}</p>}
+                      </article>
                     ))}
-                  </ul>
+                    {detail.keyStats.length === 0 && <p className="muted">No structured stats extracted.</p>}
+                  </div>
                 </Tile>
               </TabPanel>
               <TabPanel>

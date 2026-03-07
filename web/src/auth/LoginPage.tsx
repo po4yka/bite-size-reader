@@ -24,7 +24,7 @@ function mapTelegramUserToPayload(user: {
 }
 
 export default function LoginPage() {
-  const { login, error } = useAuth();
+  const { login, logout, error, dismissError } = useAuth();
   const widgetRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -40,6 +40,7 @@ export default function LoginPage() {
       try {
         setLoading(true);
         setLocalError(null);
+        dismissError();
         await login(mapTelegramUserToPayload(user));
       } catch (err) {
         setLocalError(err instanceof Error ? err.message : "Telegram sign-in failed.");
@@ -95,9 +96,21 @@ export default function LoginPage() {
 
         {loading ? <InlineLoading description="Verifying Telegram credentials..." /> : <div ref={widgetRef} />}
 
-        <Button kind="ghost" href="https://core.telegram.org/widgets/login" target="_blank" rel="noreferrer">
+        <InlineNotification
+          kind="info"
+          title="Security note"
+          subtitle="Never share Telegram login confirmation codes. This app only uses Telegram widget auth."
+          hideCloseButton
+        />
+
+        <div className="form-actions">
+          <Button kind="ghost" onClick={logout}>
+            Clear local session
+          </Button>
+          <Button kind="ghost" href="https://core.telegram.org/widgets/login" target="_blank" rel="noreferrer">
           About Telegram Login
-        </Button>
+          </Button>
+        </div>
       </Tile>
     </div>
   );
