@@ -125,6 +125,15 @@ class InitSessionHandlerImpl:
             await self._reply_and_track(message, state, "No phone number received. Try again.")
             return
 
+        contact_user_id = getattr(contact, "user_id", None)
+        if contact_user_id is None or contact_user_id != uid:
+            await self._reply_and_track(
+                message,
+                state,
+                "Please share your own phone number using the provided button.",
+            )
+            return
+
         phone = contact.phone_number
         if not phone.startswith("+"):
             phone = f"+{phone}"
@@ -165,7 +174,11 @@ class InitSessionHandlerImpl:
                 "init_session_send_code_failed",
                 extra={"uid": uid, "error": str(exc)},
             )
-            await self._reply_and_track(message, state, f"Failed to send verification code: {exc}")
+            await self._reply_and_track(
+                message,
+                state,
+                "Failed to send verification code. Please retry with /init_session.",
+            )
             await self._cleanup(uid, message)
 
     # ------------------------------------------------------------------
@@ -242,7 +255,11 @@ class InitSessionHandlerImpl:
                 "init_session_sign_in_failed",
                 extra={"uid": uid, "error": str(exc)},
             )
-            await self._reply_and_track(message, state, f"Sign-in failed: {exc}")
+            await self._reply_and_track(
+                message,
+                state,
+                "Sign-in failed. The code may be invalid or expired. Please retry with /init_session.",
+            )
             await self._cleanup(uid, message)
 
     async def _handle_2fa(
@@ -273,7 +290,11 @@ class InitSessionHandlerImpl:
                 "init_session_2fa_failed",
                 extra={"uid": uid, "error": str(exc)},
             )
-            await self._reply_and_track(message, state, f"2FA authentication failed: {exc}")
+            await self._reply_and_track(
+                message,
+                state,
+                "2FA authentication failed. Please verify your password and retry with /init_session.",
+            )
             await self._cleanup(uid, message)
 
     # ------------------------------------------------------------------

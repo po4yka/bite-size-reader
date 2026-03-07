@@ -10,8 +10,9 @@ describe("canAccessProtectedRoute", () => {
     expect(canAccessProtectedRoute("jwt", "unauthenticated")).toBe(false);
   });
 
-  it("allows telegram webapp users unless loading", () => {
-    expect(canAccessProtectedRoute("telegram-webapp", "unauthenticated")).toBe(true);
+  it("blocks unauthenticated telegram webapp users", () => {
+    expect(canAccessProtectedRoute("telegram-webapp", "unauthenticated")).toBe(false);
     expect(canAccessProtectedRoute("telegram-webapp", "loading")).toBe(false);
+    expect(canAccessProtectedRoute("telegram-webapp", "authenticated")).toBe(true);
   });
 });

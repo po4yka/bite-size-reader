@@ -34,7 +34,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const mode = useMemo(() => detectAuthMode(window), []);
   const [tokens, setTokens] = useState<AuthTokens | null>(() => (mode === "jwt" ? getStoredTokens() : null));
   const [status, setStatus] = useState<AuthStatus>(() => {
-    if (mode === "telegram-webapp") return "authenticated";
+    if (mode === "telegram-webapp") return "loading";
     return tokens?.accessToken ? "authenticated" : "unauthenticated";
   });
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -69,7 +69,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [mode, syncApiSession]);
 
   const reloadUser = useCallback(async () => {
-    if (status !== "authenticated") {
+    const shouldFetchUser =
+      mode === "telegram-webapp"
+        ? status === "loading" || status === "authenticated"
+        : status === "authenticated";
+
+    if (!shouldFetchUser) {
       setUser(null);
       return;
     }
@@ -77,13 +82,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const current = await fetchCurrentUser();
       setUser(current);
       setError(null);
+      setStatus("authenticated");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load user profile.";
       setError(message);
       if (mode === "jwt") {
         setStoredTokens(null);
       }
-      setStatus(mode === "telegram-webapp" ? "authenticated" : "unauthenticated");
+      setStatus("unauthenticated");
       setUser(null);
     }
   }, [mode, status]);

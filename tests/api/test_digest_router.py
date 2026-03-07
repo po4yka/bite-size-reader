@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -9,61 +9,52 @@ from app.api.routers import digest as digest_router
 
 @pytest.mark.asyncio
 async def test_trigger_digest_enqueues_background_job():
-    service = MagicMock()
-    service.trigger_digest.return_value = TriggerDigestResponse(
-        status="queued",
-        correlation_id="cid-digest-1",
+    digest_facade = AsyncMock()
+    digest_facade.trigger_digest = AsyncMock(
+        return_value=TriggerDigestResponse(
+            status="queued",
+            correlation_id="cid-digest-1",
+        )
     )
-    service.enqueue_digest_trigger = AsyncMock()
 
     request = SimpleNamespace(state=SimpleNamespace(correlation_id="api-cid-1"))
 
-    with (
-        patch.object(digest_router, "_get_service", return_value=service),
-        patch("app.api.routers.digest.AuthService.require_owner", new=AsyncMock()),
-    ):
-        response = await digest_router.trigger_digest(
-            current_user={"user_id": 123456789},
-            request=request,
-        )
-
-    service.trigger_digest.assert_called_once_with(123456789)
-    service.enqueue_digest_trigger.assert_awaited_once_with(
-        user_id=123456789,
-        correlation_id="cid-digest-1",
+    response = await digest_router.trigger_digest(
+        current_user={"user_id": 123456789},
+        request=request,
+        digest_facade=digest_facade,
     )
+
+    digest_facade.trigger_digest.assert_awaited_once_with(123456789)
     assert response["data"]["status"] == "queued"
     assert response["data"]["correlation_id"] == "cid-digest-1"
 
 
 @pytest.mark.asyncio
 async def test_trigger_channel_digest_enqueues_background_job():
-    service = MagicMock()
-    service.trigger_channel_digest.return_value = {
-        "status": "queued",
-        "channel": "channel_name",
-        "correlation_id": "cid-channel-1",
-    }
-    service.enqueue_channel_digest_trigger = AsyncMock()
+    digest_facade = AsyncMock()
+    digest_facade.trigger_channel_digest = AsyncMock(
+        return_value={
+            "status": "queued",
+            "channel": "channel_name",
+            "correlation_id": "cid-channel-1",
+        }
+    )
 
     request = SimpleNamespace(state=SimpleNamespace(correlation_id="api-cid-2"))
 
-    with (
-        patch.object(digest_router, "_get_service", return_value=service),
-        patch("app.api.routers.digest.AuthService.require_owner", new=AsyncMock()),
-    ):
+    with patch(
+        "app.api.routers.digest.AuthService.require_owner", new=AsyncMock()
+    ) as require_owner:
         response = await digest_router.trigger_channel_digest(
             body=SubscribeRequest(channel_username="@channel_name"),
             current_user={"user_id": 123456789},
             request=request,
+            digest_facade=digest_facade,
         )
 
-    service.trigger_channel_digest.assert_called_once_with(123456789, "@channel_name")
-    service.enqueue_channel_digest_trigger.assert_awaited_once_with(
-        user_id=123456789,
-        channel_username="channel_name",
-        correlation_id="cid-channel-1",
-    )
+    require_owner.assert_awaited_once_with({"user_id": 123456789})
+    digest_facade.trigger_channel_digest.assert_awaited_once_with(123456789, "@channel_name")
     assert response["data"]["status"] == "queued"
     assert response["data"]["channel"] == "channel_name"
     assert response["data"]["correlation_id"] == "cid-channel-1"

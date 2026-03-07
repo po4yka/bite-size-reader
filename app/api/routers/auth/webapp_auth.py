@@ -99,9 +99,11 @@ def verify_telegram_webapp_init_data(init_data: str) -> dict:
     if not user_id:
         raise AuthenticationError("Missing user id in initData")
 
-    # Verify user is in whitelist
+    # Verify user is in whitelist (fail closed when not configured)
     allowed_ids = Config.get_allowed_user_ids()
-    if allowed_ids and user_id not in allowed_ids:
+    if not allowed_ids:
+        raise AuthorizationError("No authorized users configured")
+    if user_id not in allowed_ids:
         raise AuthorizationError("User not authorized")
 
     return {

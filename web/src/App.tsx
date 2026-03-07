@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { InlineNotification } from "@carbon/react";
+import { InlineLoading, InlineNotification } from "@carbon/react";
 import { useAuth } from "./auth/AuthProvider";
 import LoginPage from "./auth/LoginPage";
 import RouteGuard from "./auth/RouteGuard";
@@ -34,7 +34,26 @@ function LoginRoute() {
   const { mode, status } = useAuth();
 
   if (mode === "telegram-webapp") {
-    return <Navigate to="/library" replace />;
+    if (status === "loading") {
+      return (
+        <section className="page-section">
+          <InlineLoading description="Checking Telegram session..." />
+        </section>
+      );
+    }
+    if (status === "authenticated") {
+      return <Navigate to="/library" replace />;
+    }
+    return (
+      <section className="page-section">
+        <InlineNotification
+          kind="error"
+          title="Telegram authentication failed"
+          subtitle="Please reopen the Mini App from the bot and try again."
+          hideCloseButton
+        />
+      </section>
+    );
   }
 
   if (status === "authenticated") {

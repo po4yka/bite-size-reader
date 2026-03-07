@@ -123,6 +123,18 @@ class TestVerifyInitData:
         with pytest.raises(AuthorizationError, match="not authorized"):
             verify_telegram_webapp_init_data(init_data)
 
+    def test_empty_allowlist_fails_closed(self, monkeypatch):
+        from app.api.exceptions import AuthorizationError
+        from app.api.routers.auth.webapp_auth import verify_telegram_webapp_init_data
+
+        monkeypatch.setenv("ALLOWED_USER_IDS", "")
+
+        token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+        init_data = _build_init_data(token)
+
+        with pytest.raises(AuthorizationError, match="No authorized users configured"):
+            verify_telegram_webapp_init_data(init_data)
+
     def test_missing_user_field(self):
         from app.api.exceptions import AuthenticationError
         from app.api.routers.auth.webapp_auth import verify_telegram_webapp_init_data
