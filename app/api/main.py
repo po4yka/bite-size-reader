@@ -10,8 +10,9 @@ from datetime import datetime
 from pathlib import Path as _Path
 
 import peewee
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError as PydanticValidationError
 
@@ -146,6 +147,22 @@ app.include_router(health.router, tags=["Health"])
 _static_dir = _Path(__file__).resolve().parent.parent / "static"
 if _static_dir.is_dir():
     app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+_web_index = _static_dir / "web" / "index.html"
+
+
+def _serve_web_index() -> FileResponse:
+    if not _web_index.is_file():
+        raise HTTPException(status_code=404, detail="Web interface is not built")
+    return FileResponse(str(_web_index))
+
+
+@app.get("/web")
+@app.get("/web/{path:path}")
+async def web_interface(path: str = ""):
+    """Serve Carbon web SPA entrypoint."""
+    del path
+    return _serve_web_index()
 
 
 @app.get("/")

@@ -384,6 +384,28 @@ Only ~30-40% of articles trigger search (self-contained content is skipped). Add
 
 FastAPI-based REST API for mobile clients with Telegram-based JWT authentication, summary retrieval, and sync endpoints. See `docs/MOBILE_API_SPEC.md` for details.
 
+## Carbon Web Interface (V1)
+
+Standalone React + IBM Carbon web UI is available in `web/` and served by FastAPI on:
+
+- `/web`
+- `/web/*` (SPA routes, e.g. `/web/library`, `/web/search`, `/web/collections`)
+
+Static assets are published under `/static/web/*`.
+
+### Local development
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Optional web env vars:
+
+- `VITE_API_BASE_URL` (default: same-origin API)
+- `VITE_TELEGRAM_BOT_USERNAME` (required for Telegram Login Widget in JWT mode)
+
 ## MCP Server
 
 Model Context Protocol server that exposes articles and search to external AI agents (OpenClaw, Claude Desktop). Provides 17 tools and 13 resources for searching, retrieving, and exploring stored summaries. Runs as a dedicated Docker container with SSE transport or standalone via stdio. See `docs/mcp_server.md`.

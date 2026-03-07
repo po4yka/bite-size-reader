@@ -124,7 +124,12 @@ Desktop.ini
 # --- Frontend ---
 frontend/node_modules/
 frontend/tsconfig.tsbuildinfo
+web/node_modules/
+web/tsconfig.tsbuildinfo
+web/test-results/
+web/playwright-report/
 app/static/digest/
+app/static/web/
 
 # --- Claude Code ---
 # Local Claude Code settings (user-specific)

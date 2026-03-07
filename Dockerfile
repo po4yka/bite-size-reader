@@ -52,6 +52,18 @@ RUN npm run build
 # Output: /app/app/static/digest/
 
 # =============================================================================
+# Stage 2.1: Web - Build Carbon Web App
+# =============================================================================
+FROM node:25-alpine AS web-builder
+
+WORKDIR /app/web
+COPY web/package*.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+# Output: /app/app/static/web/
+
+# =============================================================================
 # Stage 2.5: Rust - Build migration runtime binaries
 # =============================================================================
 FROM rust:slim AS rust-builder
@@ -116,6 +128,8 @@ COPY --from=rust-builder /app/rust/target/release/bsr-telegram-runtime /app/rust
 
 # Copy built frontend assets from frontend-builder stage
 COPY --from=frontend-builder /app/app/static/digest /app/app/static/digest
+# Copy built Carbon web assets
+COPY --from=web-builder /app/app/static/web /app/app/static/web
 
 # Create non-root user for security
 RUN useradd -r -u 1000 -m -d /home/appuser -s /sbin/nologin appuser \
