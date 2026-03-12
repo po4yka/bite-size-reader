@@ -29,6 +29,7 @@ use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 use tower_http::services::ServeDir;
 use url::form_urlencoded;
 
+mod content_domains;
 mod core_domains;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -316,6 +317,7 @@ pub fn build_router(state: AppState) -> Router<AppState> {
         .route("/web", get(web_index_handler))
         .route("/web/{*path}", get(web_index_handler))
         .merge(core_domains::build_router())
+        .merge(content_domains::build_router())
         .nest_service(
             "/static",
             ServeDir::new(state.runtime.config.static_dir.clone()),
@@ -884,12 +886,21 @@ fn success_json_response(
     correlation_id: String,
     config: &ApiRuntimeConfig,
 ) -> Response {
+    success_json_response_with_pagination(data, correlation_id, config, None)
+}
+
+fn success_json_response_with_pagination(
+    data: Value,
+    correlation_id: String,
+    config: &ApiRuntimeConfig,
+    pagination: Option<Value>,
+) -> Response {
     (
         StatusCode::OK,
         Json(json!({
             "success": true,
             "data": data,
-            "meta": build_meta(&correlation_id, config, None, None),
+            "meta": build_meta(&correlation_id, config, pagination, None),
         })),
     )
         .into_response()
@@ -1067,6 +1078,9 @@ fn manual_route_map() -> BTreeMap<&'static str, BTreeSet<String>> {
     routes.insert("/web/{*path}", set_of(["GET"]));
     routes.insert("/static/{*path}", set_of(["GET"]));
     for (path, methods) in core_domains::implemented_route_map() {
+        routes.insert(path, methods);
+    }
+    for (path, methods) in content_domains::implemented_route_map() {
         routes.insert(path, methods);
     }
     routes
@@ -1500,6 +1514,54 @@ mod tests {
             .expect("probe sqlite");
     }
 
+    fn ensure_content_domain_test_db(path: &Path) {
+        let connection = Connection::open(path).expect("open sqlite db");
+        connection
+            .execute_batch(
+                r#"
+                CREATE TABLE IF NOT EXISTS requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NULL,
+                    updated_at TEXT NULL,
+                    type TEXT NULL,
+                    status TEXT NULL,
+                    correlation_id TEXT NULL,
+                    chat_id INTEGER NULL,
+                    user_id INTEGER NULL,
+                    input_url TEXT NULL,
+                    normalized_url TEXT NULL,
+                    dedupe_hash TEXT NULL,
+                    input_message_id INTEGER NULL,
+                    fwd_from_chat_id INTEGER NULL,
+                    fwd_from_msg_id INTEGER NULL,
+                    lang_detected TEXT NULL,
+                    content_text TEXT NULL,
+                    route_version INTEGER NULL,
+                    server_version INTEGER NULL,
+                    is_deleted INTEGER NOT NULL DEFAULT 0,
+                    deleted_at TEXT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS summaries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    request_id INTEGER NOT NULL UNIQUE,
+                    lang TEXT NULL,
+                    json_payload TEXT NULL,
+                    insights_json TEXT NULL,
+                    version INTEGER NOT NULL DEFAULT 1,
+                    server_version INTEGER NULL,
+                    is_read INTEGER NOT NULL DEFAULT 0,
+                    is_favorited INTEGER NOT NULL DEFAULT 0,
+                    is_deleted INTEGER NOT NULL DEFAULT 0,
+                    deleted_at TEXT NULL,
+                    updated_at TEXT NULL,
+                    created_at TEXT NULL
+                );
+                "#,
+            )
+            .expect("create content schema");
+    }
+
     fn test_config(label: &str) -> ApiRuntimeConfig {
         let db_path = test_db_path(label);
         ensure_test_db(&db_path);
@@ -1738,6 +1800,7 @@ mod tests {
     #[tokio::test]
     async fn protected_placeholder_accepts_valid_jwt() {
         let config = test_config("jwt");
+        ensure_content_domain_test_db(&config.db_path);
         let jwt = encode_test_jwt(
             config.jwt_secret_key.as_deref().expect("jwt secret"),
             42,
@@ -1758,12 +1821,13 @@ mod tests {
             )
             .await
             .expect("response");
-        assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]
     async fn protected_placeholder_accepts_valid_webapp_auth() {
         let config = test_config("webapp");
+        ensure_content_domain_test_db(&config.db_path);
         let init_data = encode_webapp_init_data(
             config.bot_token.as_deref().expect("bot token"),
             42,
@@ -1783,7 +1847,7 @@ mod tests {
             )
             .await
             .expect("response");
-        assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]

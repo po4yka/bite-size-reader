@@ -18,10 +18,12 @@ axum.workspace = true
 base64 = "0.22"
 bsr-interface-router = { path = "../bsr-interface-router" }
 bsr-persistence = { path = "../bsr-persistence" }
+bsr-processing-orchestrator = { path = "../bsr-processing-orchestrator" }
 chrono.workspace = true
 hmac = "0.12"
 http = "1"
 jsonwebtoken.workspace = true
+percent-encoding = "2"
 rand.workspace = true
 redis.workspace = true
 reqwest.workspace = true
@@ -39,3 +41,4 @@ url = "2"
 
 [dev-dependencies]
 http-body-util = "0.1"
+serial_test = "3"

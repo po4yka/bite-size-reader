@@ -6,9 +6,20 @@ use bsr_models::{MigrationHistoryEntry, MigrationStatusEntry, MigrationStatusRep
 use rusqlite::Connection;
 use thiserror::Error;
 
+mod api_content;
 mod api_core;
 mod processing;
 
+pub use api_content::{
+    complete_audio_generation, count_pending_requests_before, fail_audio_generation,
+    get_audio_generation_by_summary, get_crawl_result_by_request_api,
+    get_latest_llm_call_by_request, get_request_by_id_for_user, get_summary_by_id_for_user,
+    get_summary_by_request_id, get_summary_id_by_url_for_user, list_llm_calls_by_request,
+    list_user_summaries, mark_summary_as_read, mark_summary_as_unread, soft_delete_summary,
+    start_audio_generation, toggle_summary_favorite, upsert_user_device, ApiCrawlResultRecord,
+    ApiLlmCallRecord, ApiRequestRecord, ApiSummaryRecord, AudioGenerationRecord,
+    SummaryListFilters, UserDeviceRecord,
+};
 pub use api_core::{
     allowlisted_table_counts, clear_link_nonce, complete_telegram_link, create_client_secret,
     create_refresh_token, delete_user, get_client_secret, get_client_secret_by_id,

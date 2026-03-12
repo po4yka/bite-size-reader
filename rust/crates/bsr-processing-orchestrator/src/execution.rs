@@ -5,11 +5,11 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use bsr_persistence::{
-    create_minimal_request, create_request, get_request_by_forward,
-    get_summary_by_request, insert_crawl_result, insert_llm_call, open_connection,
-    update_request_correlation_id, update_request_error, update_request_lang_detected,
-    update_request_status, upsert_summary, CreateRequestInput, InsertCrawlResultInput,
-    InsertLlmCallInput, MinimalRequestInput, RequestErrorUpdate, UpsertSummaryInput,
+    create_minimal_request, create_request, get_request_by_forward, get_summary_by_request,
+    insert_crawl_result, insert_llm_call, open_connection, update_request_correlation_id,
+    update_request_error, update_request_lang_detected, update_request_status, upsert_summary,
+    CreateRequestInput, InsertCrawlResultInput, InsertLlmCallInput, MinimalRequestInput,
+    RequestErrorUpdate, UpsertSummaryInput,
 };
 use bsr_summary_contract::validate_and_shape_summary;
 use bsr_worker::{
@@ -38,6 +38,8 @@ const FIRECRAWL_BASE_URL: &str = "https://api.firecrawl.dev";
 const FIRECRAWL_SCRAPE_ENDPOINT: &str = "/v2/scrape";
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UrlExecuteInput {
+    #[serde(default)]
+    pub existing_request_id: Option<i64>,
     pub correlation_id: Option<String>,
     pub db_path: Option<String>,
     pub input_url: String,
@@ -63,10 +65,14 @@ pub struct UrlExecuteInput {
     pub vision_model: Option<String>,
     pub enable_two_pass_enrichment: bool,
     pub web_search_context: Option<String>,
+    #[serde(default)]
+    pub persist_is_read: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ForwardExecuteInput {
+    #[serde(default)]
+    pub existing_request_id: Option<i64>,
     pub correlation_id: Option<String>,
     pub db_path: Option<String>,
     pub text: String,
@@ -93,6 +99,8 @@ pub struct ForwardExecuteInput {
     pub enable_two_pass_enrichment: bool,
     pub normalize_forward_prompt: bool,
     pub prompt_version: String,
+    #[serde(default)]
+    pub persist_is_read: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -212,20 +220,31 @@ where
     let db_path = resolve_db_path(input.db_path.as_deref());
     let connection = open_connection(db_path)?;
 
-    let minimal_request = create_minimal_request(
-        &connection,
-        &MinimalRequestInput {
-            request_type: "url".to_string(),
-            status: "pending".to_string(),
-            correlation_id: input.correlation_id.clone(),
-            chat_id: input.chat_id,
-            user_id: input.user_id,
-            input_url: Some(input.input_url.clone()),
-            normalized_url: Some(normalized_url.clone()),
-            dedupe_hash: Some(dedupe_hash.clone()),
-        },
-    )?;
-    let request = minimal_request.0;
+    let request = if let Some(existing_request_id) = input.existing_request_id {
+        let request = bsr_persistence::get_request_by_id(&connection, existing_request_id)?
+            .ok_or_else(|| {
+                ExecutionError::InvalidInput("existing request not found".to_string())
+            })?;
+        if let Some(correlation_id) = input.correlation_id.as_deref() {
+            update_request_correlation_id(&connection, request.id, correlation_id)?;
+        }
+        request
+    } else {
+        let minimal_request = create_minimal_request(
+            &connection,
+            &MinimalRequestInput {
+                request_type: "url".to_string(),
+                status: "pending".to_string(),
+                correlation_id: input.correlation_id.clone(),
+                chat_id: input.chat_id,
+                user_id: input.user_id,
+                input_url: Some(input.input_url.clone()),
+                normalized_url: Some(normalized_url.clone()),
+                dedupe_hash: Some(dedupe_hash.clone()),
+            },
+        )?;
+        minimal_request.0
+    };
 
     emit(OrchestratorEvent::Phase {
         phase: "cache_lookup".to_string(),
@@ -284,7 +303,12 @@ where
     })?;
 
     let firecrawl_cfg = FirecrawlRuntimeConfig::from_env();
-    let firecrawl_result = scrape_url(&firecrawl_cfg, &normalized_url, input.correlation_id.as_deref()).await?;
+    let firecrawl_result = scrape_url(
+        &firecrawl_cfg,
+        &normalized_url,
+        input.correlation_id.as_deref(),
+    )
+    .await?;
     let crawl_record = insert_crawl_result(
         &connection,
         &InsertCrawlResultInput {
@@ -386,9 +410,8 @@ where
     let detected_language = detect_language(&extracted.content_text);
     update_request_lang_detected(&connection, request.id, &detected_language)?;
     let chosen_lang = crate::choose_language(&input.preferred_language, &detected_language);
-    let needs_ru_translation = !input.silent
-        && chosen_lang.as_str() != LANG_RU
-        && detected_language.as_str() != LANG_RU;
+    let needs_ru_translation =
+        !input.silent && chosen_lang.as_str() != LANG_RU && detected_language.as_str() != LANG_RU;
 
     let plan = build_url_processing_plan(&UrlProcessingPlanInput {
         dedupe_hash: dedupe_hash.clone(),
@@ -461,7 +484,10 @@ where
             request_id: Some(request.id),
             summary_id: Some(persisted.id),
             summary: Some(shaped_summary.clone()),
-            title: extracted.title.clone().or_else(|| summary_title(&shaped_summary)),
+            title: extracted
+                .title
+                .clone()
+                .or_else(|| summary_title(&shaped_summary)),
             detected_language: Some(detected_language),
             chosen_lang: Some(chosen_lang),
             needs_ru_translation,
@@ -537,7 +563,11 @@ where
                     input.json_temperature,
                     input.json_top_p,
                     &content_for_summary,
-                    &build_summary_user_content(&content_for_summary, &chosen_lang, &search_context),
+                    &build_summary_user_content(
+                        &content_for_summary,
+                        &chosen_lang,
+                        &search_context,
+                    ),
                 ),
             },
             &worker_config,
@@ -625,7 +655,7 @@ where
             lang: chosen_lang.clone(),
             json_payload: summary.clone(),
             insights_json: None,
-            is_read: !input.silent,
+            is_read: input.persist_is_read.unwrap_or(!input.silent),
         },
     )?;
     update_request_status(&connection, request.id, "ok")?;
@@ -719,7 +749,16 @@ where
         _ => None,
     };
 
-    let request = if let Some(request) = existing_request {
+    let request = if let Some(existing_request_id) = input.existing_request_id {
+        let request = bsr_persistence::get_request_by_id(&connection, existing_request_id)?
+            .ok_or_else(|| {
+                ExecutionError::InvalidInput("existing request not found".to_string())
+            })?;
+        if let Some(correlation_id) = input.correlation_id.as_deref() {
+            update_request_correlation_id(&connection, request.id, correlation_id)?;
+        }
+        request
+    } else if let Some(request) = existing_request {
         if let Some(correlation_id) = input.correlation_id.as_deref() {
             update_request_correlation_id(&connection, request.id, correlation_id)?;
         }
@@ -881,8 +920,7 @@ where
         return Ok(result);
     }
 
-    let terminal_model_name =
-        terminal_model(&worker_output).or(Some(input.primary_model.clone()));
+    let terminal_model_name = terminal_model(&worker_output).or(Some(input.primary_model.clone()));
     let mut summary = worker_output.summary.clone().unwrap_or_else(|| json!({}));
     if input.enable_two_pass_enrichment {
         emit(OrchestratorEvent::Phase {
@@ -930,7 +968,7 @@ where
             lang: plan.chosen_lang.clone(),
             json_payload: summary.clone(),
             insights_json: None,
-            is_read: true,
+            is_read: input.persist_is_read.unwrap_or(true),
         },
     )?;
     update_request_status(&connection, request.id, "ok")?;
@@ -980,7 +1018,11 @@ impl FirecrawlRuntimeConfig {
         let api_key = env::var("FIRECRAWL_SELF_HOSTED_API_KEY")
             .ok()
             .filter(|value| !value.trim().is_empty())
-            .or_else(|| env::var("FIRECRAWL_API_KEY").ok().filter(|value| !value.trim().is_empty()));
+            .or_else(|| {
+                env::var("FIRECRAWL_API_KEY")
+                    .ok()
+                    .filter(|value| !value.trim().is_empty())
+            });
         let timeout_sec = env::var("FIRECRAWL_TIMEOUT_SEC")
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
@@ -1535,7 +1577,11 @@ fn build_summary_requests(
     requests
 }
 
-fn build_summary_messages(system_prompt: &str, user_content: &str, images: &[String]) -> Vec<Value> {
+fn build_summary_messages(
+    system_prompt: &str,
+    user_content: &str,
+    images: &[String],
+) -> Vec<Value> {
     if images.is_empty() {
         return vec![
             json!({"role": "system", "content": system_prompt}),
@@ -1552,7 +1598,11 @@ fn build_summary_messages(system_prompt: &str, user_content: &str, images: &[Str
     ]
 }
 
-fn build_summary_user_content(content_for_summary: &str, chosen_lang: &str, search_context: &str) -> String {
+fn build_summary_user_content(
+    content_for_summary: &str,
+    chosen_lang: &str,
+    search_context: &str,
+) -> String {
     let response_language = if chosen_lang == LANG_RU {
         "Russian"
     } else {
@@ -1771,7 +1821,8 @@ fn detect_low_value_content(result: &FirecrawlResult) -> Option<Value> {
         Some("overlay_content_detected")
     } else if normalized.len() < 48 && word_count <= 2 {
         Some("content_too_short")
-    } else if normalized.len() < 120 && (unique_word_count <= 3 || (word_count >= 4 && top_ratio >= 0.8))
+    } else if normalized.len() < 120
+        && (unique_word_count <= 3 || (word_count >= 4 && top_ratio >= 0.8))
     {
         Some("content_low_variation")
     } else if word_count >= 6 && top_ratio >= 0.92 {
@@ -1807,11 +1858,15 @@ fn ensure_summary_metadata(
         return shaped;
     };
 
-    let metadata_value = object.entry("metadata".to_string()).or_insert_with(|| json!({}));
+    let metadata_value = object
+        .entry("metadata".to_string())
+        .or_insert_with(|| json!({}));
     if !metadata_value.is_object() {
         *metadata_value = json!({});
     }
-    let metadata = metadata_value.as_object_mut().expect("metadata should be object");
+    let metadata = metadata_value
+        .as_object_mut()
+        .expect("metadata should be object");
 
     if metadata.get("title").map(is_blank_json).unwrap_or(true) {
         if let Some(title) = extracted_title.filter(|value| !value.trim().is_empty()) {
@@ -1852,7 +1907,8 @@ fn ensure_summary_metadata(
                 for alias in aliases {
                     if let Some(value) = crawl_metadata.get(*alias).and_then(Value::as_str) {
                         if !value.trim().is_empty() {
-                            metadata.insert(target_key.to_string(), Value::String(value.to_string()));
+                            metadata
+                                .insert(target_key.to_string(), Value::String(value.to_string()));
                             break;
                         }
                     }
@@ -1913,7 +1969,9 @@ fn parse_bool_env(key: &str, default: bool) -> bool {
 fn normalize_url(input: &str) -> Result<String, ExecutionError> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
-        return Err(ExecutionError::InvalidInput("URL cannot be empty".to_string()));
+        return Err(ExecutionError::InvalidInput(
+            "URL cannot be empty".to_string(),
+        ));
     }
     let mut url = if trimmed.contains("://") {
         Url::parse(trimmed)
@@ -1991,9 +2049,10 @@ fn normalize_text(text: &str) -> String {
 fn clean_content_for_llm(text: &str) -> String {
     let blank_lines_re = Regex::new(r"\n{3,}").expect("blank line regex");
     let link_re = Regex::new(r"\[([^\]]+)\]\([^)]+\)").expect("markdown link regex");
-    let comments_re =
-        Regex::new(r"(?im)^(?:#{1,4}\s+)?(?:\d+\s+)?(?:comments?|responses?|replies?|discussion)\s*$")
-            .expect("comments regex");
+    let comments_re = Regex::new(
+        r"(?im)^(?:#{1,4}\s+)?(?:\d+\s+)?(?:comments?|responses?|replies?|discussion)\s*$",
+    )
+    .expect("comments regex");
     let mut output = text.to_string();
     output = blank_lines_re.replace_all(&output, "\n\n").to_string();
     output = link_re.replace_all(&output, "$1").to_string();
@@ -2050,7 +2109,10 @@ fn clean_markdown_article_text(markdown: &str) -> String {
             continue;
         }
         let lowered = raw.to_ascii_lowercase();
-        if drop_prefixes.iter().any(|prefix| lowered.starts_with(prefix)) {
+        if drop_prefixes
+            .iter()
+            .any(|prefix| lowered.starts_with(prefix))
+        {
             continue;
         }
         if drop_exact.contains(&raw) || url_re.is_match(raw) {
@@ -2073,7 +2135,9 @@ fn clean_markdown_article_text(markdown: &str) -> String {
         }
     }
 
-    let cleaned = spaces_re.replace_all(&collapsed.join("\n"), " ").to_string();
+    let cleaned = spaces_re
+        .replace_all(&collapsed.join("\n"), " ")
+        .to_string();
     newlines_re.replace_all(cleaned.trim(), "\n\n").to_string()
 }
 
@@ -2117,7 +2181,10 @@ fn find_prompt_root() -> Result<PathBuf, ExecutionError> {
         if candidate.is_dir() {
             return Ok(candidate);
         }
-        let nested = ancestor.join("bite-size-reader").join("app").join("prompts");
+        let nested = ancestor
+            .join("bite-size-reader")
+            .join("app")
+            .join("prompts");
         if nested.is_dir() {
             return Ok(nested);
         }
@@ -2134,7 +2201,8 @@ fn read_summary_cache(
     model_name: &str,
 ) -> Result<Option<Value>, ExecutionError> {
     let prefix = env::var("REDIS_PREFIX").unwrap_or_else(|_| "bsr".to_string());
-    let enabled = parse_bool_env("REDIS_ENABLED", true) && parse_bool_env("REDIS_CACHE_ENABLED", true);
+    let enabled =
+        parse_bool_env("REDIS_ENABLED", true) && parse_bool_env("REDIS_CACHE_ENABLED", true);
     if !enabled {
         return Ok(None);
     }
@@ -2160,7 +2228,8 @@ fn write_summary_cache(
     summary: &Value,
 ) -> Result<(), ExecutionError> {
     let prefix = env::var("REDIS_PREFIX").unwrap_or_else(|_| "bsr".to_string());
-    let enabled = parse_bool_env("REDIS_ENABLED", true) && parse_bool_env("REDIS_CACHE_ENABLED", true);
+    let enabled =
+        parse_bool_env("REDIS_ENABLED", true) && parse_bool_env("REDIS_CACHE_ENABLED", true);
     if !enabled {
         return Ok(());
     }
@@ -2183,12 +2252,15 @@ fn write_summary_cache(
 }
 
 fn redis_client_from_env() -> Result<Option<redis::Client>, ExecutionError> {
-    let url = env::var("REDIS_URL").ok().filter(|value| !value.trim().is_empty()).unwrap_or_else(|| {
-        let host = env::var("REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let port = env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
-        let db = env::var("REDIS_DB").unwrap_or_else(|_| "0".to_string());
-        format!("redis://{host}:{port}/{db}")
-    });
+    let url = env::var("REDIS_URL")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| {
+            let host = env::var("REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+            let port = env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
+            let db = env::var("REDIS_DB").unwrap_or_else(|_| "0".to_string());
+            format!("redis://{host}:{port}/{db}")
+        });
     Ok(Some(redis::Client::open(url)?))
 }
 
@@ -2232,10 +2304,22 @@ mod tests {
         );
 
         assert_eq!(requests[0].preset_name.as_deref(), Some("schema_strict"));
-        assert_eq!(requests[1].preset_name.as_deref(), Some("json_object_guardrail"));
-        assert_eq!(requests[2].preset_name.as_deref(), Some("json_object_flash"));
-        assert_eq!(requests[3].preset_name.as_deref(), Some("json_object_flash"));
-        assert_eq!(requests[4].preset_name.as_deref(), Some("json_object_fallback"));
+        assert_eq!(
+            requests[1].preset_name.as_deref(),
+            Some("json_object_guardrail")
+        );
+        assert_eq!(
+            requests[2].preset_name.as_deref(),
+            Some("json_object_flash")
+        );
+        assert_eq!(
+            requests[3].preset_name.as_deref(),
+            Some("json_object_flash")
+        );
+        assert_eq!(
+            requests[4].preset_name.as_deref(),
+            Some("json_object_fallback")
+        );
     }
 
     #[test]
@@ -2252,7 +2336,10 @@ mod tests {
             .and_then(|value| value.as_object())
             .expect("metadata object");
         assert_eq!(metadata.get("title"), Some(&json!("Article title")));
-        assert_eq!(metadata.get("canonical_url"), Some(&json!("https://example.com/path")));
+        assert_eq!(
+            metadata.get("canonical_url"),
+            Some(&json!("https://example.com/path"))
+        );
         assert_eq!(metadata.get("domain"), Some(&json!("example.com")));
         assert_eq!(metadata.get("author"), Some(&json!("Jane")));
     }
@@ -2280,7 +2367,10 @@ mod tests {
         };
 
         let low_value = detect_low_value_content(&result).expect("low-value payload");
-        assert_eq!(low_value.get("reason"), Some(&json!("overlay_content_detected")));
+        assert_eq!(
+            low_value.get("reason"),
+            Some(&json!("overlay_content_detected"))
+        );
     }
 
     #[test]
