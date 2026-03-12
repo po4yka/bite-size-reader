@@ -12,7 +12,6 @@ Async Telegram bot that summarizes web articles and YouTube videos into structur
 
 ## Table of Contents
 
-- [Migration Status](#migration-status)
 - [Architecture Overview](#architecture-overview)
 - [Quick Start](#quick-start)
 - [Common Use Cases](#common-use-cases)
@@ -30,32 +29,6 @@ Async Telegram bot that summarizes web articles and YouTube videos into structur
 - [Local CLI Summary Runner](#local-cli-summary-runner)
 - [Development](#dev-tooling)
 - [Documentation](#documentation)
-
----
-
-## Migration status
-
-Bite-Size Reader is now **Rust-first in production** with Python fallbacks decommissioned for migrated slices.
-
-- Canonical plan: [ROADMAP.md](ROADMAP.md)
-- Documentation hub migration entrypoint: [docs/README.md](docs/README.md)
-- Version/operator migration playbook: [docs/how-to/migrate-versions.md](docs/how-to/migrate-versions.md)
-- Baseline metrics guide: [docs/migration/baseline-metrics.md](docs/migration/baseline-metrics.md)
-
-The migration follows a parity-first approach: external contracts remain stable while internals move from Python modules to Rust components over time.
-
-Current milestone status:
-
-- ✅ **M0**: Contract freeze + parity suite + baseline metrics capture (`scripts/migration/*`, `docs/migration/baseline_metrics.json`)
-- ✅ **M1**: Rust workspace foundation with shared crates for config, logging, and summary-contract validation (`rust/`)
-- ✅ **M2**: Rust summary-contract service + fixture parity corpus + SQLite compatibility checks (`docs/migration/m2.md`)
-- ✅ **M3**: Pipeline slices with Rust-authoritative runtime execution and parity fixtures (`docs/migration/m3.md`)
-- ✅ **M4**: Interface-layer Rust routing for Mobile API + Telegram commands with parity fixtures (`docs/migration/m4.md`)
-- ✅ **M5**: Rust-first cutover defaults + Python fallback decommission for migrated slices (`docs/migration/m5.md`)
-- 🟡 **M6**: Telegram command-route migration slices (S1-S134) are implemented
-  with Rust-authoritative route decisions; Python handlers/orchestration remain
-  in scope for later slices (`docs/migration/runtime-inventory-matrix.md`,
-  `scripts/migration/run_m6_telegram_runtime_suite.sh`)
 
 ---
 

@@ -40,7 +40,6 @@ from .twitter import TwitterConfig
 
 logger = logging.getLogger(__name__)
 
-_M6_TELEGRAM_RUNTIME_BACKEND_ENV = "MIGRATION_TELEGRAM_RUNTIME_BACKEND"
 _DEPRECATED_SCRAPER_ENV_RENAMES = {
     "SCRAPLING_ENABLED": "SCRAPER_SCRAPLING_ENABLED",
     "SCRAPLING_TIMEOUT_SEC": "SCRAPER_SCRAPLING_TIMEOUT_SEC",
@@ -167,7 +166,6 @@ class Settings(BaseSettings):
         # Merge os.environ with constructor data (constructor takes precedence)
         env_data: dict[str, Any] = dict(os.environ)
         merged_source = {**env_data, **data}
-        cls._warn_legacy_m6_telegram_backend_toggle(merged_source)
         cls._fail_on_deprecated_scraper_envs(merged_source)
 
         for field_name, field_info in cls.model_fields.items():
@@ -193,19 +191,6 @@ class Settings(BaseSettings):
                     result[field_name] = nested_data
 
         return result
-
-    @staticmethod
-    def _warn_legacy_m6_telegram_backend_toggle(source: dict[str, Any]) -> None:
-        raw = source.get(_M6_TELEGRAM_RUNTIME_BACKEND_ENV)
-        if raw is None:
-            return
-        requested_backend = str(raw).strip().lower()
-        if not requested_backend:
-            return
-        logger.warning(
-            "m6_telegram_runtime_legacy_backend_toggle_ignored",
-            extra={"requested_backend": requested_backend},
-        )
 
     @staticmethod
     def _fail_on_deprecated_scraper_envs(source: dict[str, Any]) -> None:
