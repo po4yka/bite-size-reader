@@ -10,6 +10,7 @@ export interface ChannelSubscription {
   fetch_error_count: number;
   last_error: string | null;
   created_at: string;
+  category_id?: number | null;
 }
 
 export interface ChannelsData {
@@ -50,6 +51,30 @@ export interface HistoryData {
 export interface TriggerResult {
   status: string;
   correlation_id: string;
+}
+
+export interface ResolvedChannel {
+  username: string;
+  title: string;
+  description: string | null;
+  member_count: number | null;
+}
+
+export interface ChannelPost {
+  id: number;
+  date: string;
+  text: string;
+  topic_tag?: string | null;
+}
+
+export interface ChannelPostsData {
+  posts: ChannelPost[];
+  total: number;
+}
+
+export interface Category {
+  id: number;
+  name: string;
 }
 
 // API methods
@@ -105,5 +130,75 @@ export function triggerChannelDigest(channelUsername: string): Promise<{
   return apiRequest("/v1/digest/trigger-channel", {
     method: "POST",
     body: JSON.stringify({ channel_username: channelUsername }),
+  });
+}
+
+export function resolveChannel(username: string): Promise<ResolvedChannel> {
+  return apiRequest("/v1/digest/channels/resolve", {
+    method: "POST",
+    body: JSON.stringify({ channel_username: username }),
+  });
+}
+
+export function fetchChannelPosts(
+  username: string,
+  limit = 10,
+  offset = 0,
+): Promise<ChannelPostsData> {
+  return apiRequest(
+    `/v1/digest/channels/${encodeURIComponent(username)}/posts?limit=${limit}&offset=${offset}`,
+  );
+}
+
+export function listCategories(): Promise<Category[]> {
+  return apiRequest("/v1/digest/categories");
+}
+
+export function createCategory(name: string): Promise<Category> {
+  return apiRequest("/v1/digest/categories", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function updateCategory(id: number, name: string): Promise<Category> {
+  return apiRequest(`/v1/digest/categories/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteCategory(id: number): Promise<{ status: string }> {
+  return apiRequest(`/v1/digest/categories/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function assignCategory(
+  subscriptionId: number,
+  categoryId: number | null,
+): Promise<{ status: string }> {
+  return apiRequest(`/v1/digest/channels/${subscriptionId}/category`, {
+    method: "PATCH",
+    body: JSON.stringify({ category_id: categoryId }),
+  });
+}
+
+export function bulkUnsubscribe(
+  usernames: string[],
+): Promise<{ status: string; unsubscribed: string[] }> {
+  return apiRequest("/v1/digest/channels/bulk-unsubscribe", {
+    method: "POST",
+    body: JSON.stringify({ channel_usernames: usernames }),
+  });
+}
+
+export function bulkAssignCategory(
+  subscriptionIds: number[],
+  categoryId: number | null,
+): Promise<{ status: string }> {
+  return apiRequest("/v1/digest/channels/bulk-category", {
+    method: "PATCH",
+    body: JSON.stringify({ subscription_ids: subscriptionIds, category_id: categoryId }),
   });
 }

@@ -134,6 +134,36 @@ class UserbotClient:
         )
         return posts
 
+    async def resolve_channel(self, username: str) -> dict[str, Any]:
+        """Resolve a Telegram channel by username and return its metadata.
+
+        Returns:
+            Dict with keys: username, title, description, member_count.
+
+        Raises:
+            ValueError: If the channel cannot be found.
+        """
+        if not self._client:
+            msg = "UserbotClient not started"
+            raise RuntimeError(msg)
+
+        try:
+            chat = await self._client.get_chat(username)
+        except Exception as exc:
+            logger.warning(
+                "digest_resolve_channel_failed",
+                extra={"channel": username, "error": str(exc)},
+            )
+            msg = f"Could not resolve channel @{username}"
+            raise ValueError(msg) from exc
+
+        return {
+            "username": getattr(chat, "username", username) or username,
+            "title": getattr(chat, "title", None),
+            "description": getattr(chat, "description", None),
+            "member_count": getattr(chat, "members_count", None),
+        }
+
     @property
     def is_connected(self) -> bool:
         """Check if the userbot client is currently connected."""

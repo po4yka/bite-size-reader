@@ -15,15 +15,22 @@ import peewee
 
 from app.api.exceptions import FeatureDisabledError, ValidationError
 from app.api.models.digest import (
+    CategoryResponse,
+    ChannelPostResponse,
     ChannelSubscriptionResponse,
     DigestDeliveryResponse,
     DigestPreferenceResponse,
+    PostAnalysisResponse,
+    ResolveChannelResponse,
     TriggerDigestResponse,
 )
 from app.config.digest import ChannelDigestConfig  # noqa: TC001 - used at runtime
 from app.core.channel_utils import parse_channel_input
 from app.db.models import (
     Channel,
+    ChannelCategory,
+    ChannelPost,
+    ChannelPostAnalysis,
     ChannelSubscription,
     DigestDelivery,
     UserDigestPreference,
@@ -58,8 +65,12 @@ class DigestAPIService:
         if not self._cfg.enabled:
             raise FeatureDisabledError("digest", "Channel digest is not enabled.")
 
+    # ------------------------------------------------------------------ #
+    # Channels
+    # ------------------------------------------------------------------ #
+
     def list_subscriptions(self, user_id: int) -> dict[str, Any]:
-        """List channel subscriptions for a user."""
+        """List channel subscriptions for a user, including category info."""
         self._require_enabled()
 
         subs = (
@@ -75,6 +86,11 @@ class DigestAPIService:
         items = []
         for sub in subs:
             ch: Channel = sub.channel
+            cat_id = sub.category_id
+            cat_name = None
+            if cat_id is not None:
+                cat = ChannelCategory.get_or_none(ChannelCategory.id == cat_id)
+                cat_name = cat.name if cat else None
             items.append(
                 ChannelSubscriptionResponse(
                     id=sub.id,
@@ -83,6 +99,8 @@ class DigestAPIService:
                     is_active=sub.is_active,
                     fetch_error_count=ch.fetch_error_count,
                     last_error=ch.last_error,
+                    category_id=cat_id,
+                    category_name=cat_name,
                     created_at=sub.created_at,
                 )
             )
@@ -130,6 +148,141 @@ class DigestAPIService:
         return {"status": status, "username": username}
 
     _unsubscribe_atomic = staticmethod(unsubscribe_channel_atomic)
+
+    # ------------------------------------------------------------------ #
+    # Channel resolve (Phase 1)
+    # ------------------------------------------------------------------ #
+
+    async def resolve_channel(self, user_id: int, raw_username: str) -> ResolveChannelResponse:
+        """Resolve a channel via the userbot and return metadata preview."""
+        self._require_enabled()
+
+        username, error = parse_channel_input(raw_username)
+        if error:
+            raise ValidationError(error)
+
+        from pathlib import Path
+
+        from app.adapters.digest.userbot_client import UserbotClient
+        from app.config import load_config
+
+        app_cfg = load_config()
+        userbot = UserbotClient(app_cfg, Path("/data"))
+
+        await userbot.start()
+        try:
+            meta = await userbot.resolve_channel(username)
+        finally:
+            await userbot.stop()
+
+        # Upsert channel metadata in DB
+        channel, _ = Channel.get_or_create(
+            username=username,
+            defaults={"title": meta.get("title"), "is_active": True},
+        )
+        changed = False
+        for field in ("title", "description", "member_count"):
+            val = meta.get(field)
+            if val is not None and getattr(channel, field) != val:
+                setattr(channel, field, val)
+                changed = True
+        if changed:
+            channel.save()
+
+        # Check subscription status
+        is_subscribed = (
+            ChannelSubscription.select()
+            .where(
+                ChannelSubscription.user == user_id,
+                ChannelSubscription.channel == channel,
+                ChannelSubscription.is_active == True,  # noqa: E712
+            )
+            .exists()
+        )
+
+        return ResolveChannelResponse(
+            username=meta.get("username", username),
+            title=meta.get("title"),
+            description=meta.get("description"),
+            member_count=meta.get("member_count"),
+            is_subscribed=is_subscribed,
+        )
+
+    # ------------------------------------------------------------------ #
+    # Post preview (Phase 2)
+    # ------------------------------------------------------------------ #
+
+    def list_channel_posts(
+        self, user_id: int, raw_username: str, *, limit: int = 10, offset: int = 0
+    ) -> dict[str, Any]:
+        """List recent posts for a subscribed channel with optional analysis."""
+        self._require_enabled()
+
+        username, error = parse_channel_input(raw_username)
+        if error:
+            raise ValidationError(error)
+
+        channel = Channel.get_or_none(Channel.username == username)
+        if channel is None:
+            raise ValidationError(f"Channel @{username} not found.")
+
+        # Verify subscription
+        sub_exists = (
+            ChannelSubscription.select()
+            .where(
+                ChannelSubscription.user == user_id,
+                ChannelSubscription.channel == channel,
+                ChannelSubscription.is_active == True,  # noqa: E712
+            )
+            .exists()
+        )
+        if not sub_exists:
+            raise ValidationError(f"Not subscribed to @{username}.")
+
+        total = ChannelPost.select().where(ChannelPost.channel == channel).count()
+
+        posts = (
+            ChannelPost.select()
+            .where(ChannelPost.channel == channel)
+            .order_by(ChannelPost.date.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+
+        items = []
+        for post in posts:
+            analysis_row = ChannelPostAnalysis.get_or_none(ChannelPostAnalysis.post == post)
+            analysis = None
+            if analysis_row:
+                analysis = PostAnalysisResponse(
+                    real_topic=analysis_row.real_topic,
+                    tldr=analysis_row.tldr,
+                    relevance_score=analysis_row.relevance_score,
+                    content_type=analysis_row.content_type,
+                )
+
+            items.append(
+                ChannelPostResponse(
+                    message_id=post.message_id,
+                    text=post.text[:500],
+                    date=post.date,
+                    views=post.views,
+                    forwards=post.forwards,
+                    media_type=post.media_type,
+                    url=post.url,
+                    analysis=analysis,
+                )
+            )
+
+        return {
+            "posts": items,
+            "total": total,
+            "channel_username": username,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Preferences
+    # ------------------------------------------------------------------ #
 
     def get_preferences(self, user_id: int) -> DigestPreferenceResponse:
         """Get merged preferences (user overrides + global defaults)."""
@@ -214,6 +367,10 @@ class DigestAPIService:
 
         return self.get_preferences(user_id)
 
+    # ------------------------------------------------------------------ #
+    # History
+    # ------------------------------------------------------------------ #
+
     def list_deliveries(self, user_id: int, limit: int = 20, offset: int = 0) -> dict[str, Any]:
         """Paginated list of digest deliveries."""
         self._require_enabled()
@@ -245,6 +402,10 @@ class DigestAPIService:
             "limit": limit,
             "offset": offset,
         }
+
+    # ------------------------------------------------------------------ #
+    # Triggers
+    # ------------------------------------------------------------------ #
 
     def trigger_digest(self, user_id: int) -> TriggerDigestResponse:
         """Queue an on-demand digest generation.
@@ -464,3 +625,211 @@ class DigestAPIService:
             if llm_client is not None:
                 await llm_client.aclose()
             await userbot.stop()
+
+    # ------------------------------------------------------------------ #
+    # Categories (Phase 3)
+    # ------------------------------------------------------------------ #
+
+    def list_categories(self, user_id: int) -> list[CategoryResponse]:
+        """List all categories for a user with subscription counts."""
+        self._require_enabled()
+
+        cats = (
+            ChannelCategory.select()
+            .where(ChannelCategory.user == user_id)
+            .order_by(ChannelCategory.position, ChannelCategory.name)
+        )
+
+        items = []
+        for cat in cats:
+            count = (
+                ChannelSubscription.select()
+                .where(
+                    ChannelSubscription.category == cat,
+                    ChannelSubscription.is_active == True,  # noqa: E712
+                )
+                .count()
+            )
+            items.append(
+                CategoryResponse(
+                    id=cat.id,
+                    name=cat.name,
+                    position=cat.position,
+                    subscription_count=count,
+                )
+            )
+        return items
+
+    def create_category(self, user_id: int, name: str) -> CategoryResponse:
+        """Create a new channel category."""
+        self._require_enabled()
+
+        # Determine next position
+        max_pos = (
+            ChannelCategory.select(peewee.fn.MAX(ChannelCategory.position))
+            .where(ChannelCategory.user == user_id)
+            .scalar()
+        )
+        position = (max_pos or 0) + 1
+
+        try:
+            cat = ChannelCategory.create(user=user_id, name=name, position=position)
+        except peewee.IntegrityError as exc:
+            raise ValidationError(f"Category '{name}' already exists.") from exc
+
+        return CategoryResponse(
+            id=cat.id,
+            name=cat.name,
+            position=cat.position,
+            subscription_count=0,
+        )
+
+    def update_category(self, user_id: int, category_id: int, **fields: Any) -> CategoryResponse:
+        """Update a category's name or position."""
+        self._require_enabled()
+
+        cat = ChannelCategory.get_or_none(
+            ChannelCategory.id == category_id,
+            ChannelCategory.user == user_id,
+        )
+        if cat is None:
+            raise ValidationError("Category not found.")
+
+        changed = False
+        for key in ("name", "position"):
+            val = fields.get(key)
+            if val is not None and getattr(cat, key) != val:
+                setattr(cat, key, val)
+                changed = True
+
+        if changed:
+            try:
+                cat.save()
+            except peewee.IntegrityError as exc:
+                raise ValidationError(f"Category '{fields.get('name')}' already exists.") from exc
+
+        count = (
+            ChannelSubscription.select()
+            .where(
+                ChannelSubscription.category == cat,
+                ChannelSubscription.is_active == True,  # noqa: E712
+            )
+            .count()
+        )
+        return CategoryResponse(
+            id=cat.id,
+            name=cat.name,
+            position=cat.position,
+            subscription_count=count,
+        )
+
+    def delete_category(self, user_id: int, category_id: int) -> dict[str, str]:
+        """Delete a category. Subscriptions are unlinked (set to null)."""
+        self._require_enabled()
+
+        cat = ChannelCategory.get_or_none(
+            ChannelCategory.id == category_id,
+            ChannelCategory.user == user_id,
+        )
+        if cat is None:
+            raise ValidationError("Category not found.")
+
+        cat.delete_instance()
+        return {"status": "deleted"}
+
+    def assign_category(
+        self, user_id: int, subscription_id: int, category_id: int | None
+    ) -> dict[str, str]:
+        """Assign a subscription to a category (or remove with None)."""
+        self._require_enabled()
+
+        sub = ChannelSubscription.get_or_none(
+            ChannelSubscription.id == subscription_id,
+            ChannelSubscription.user == user_id,
+        )
+        if sub is None:
+            raise ValidationError("Subscription not found.")
+
+        if category_id is not None:
+            cat = ChannelCategory.get_or_none(
+                ChannelCategory.id == category_id,
+                ChannelCategory.user == user_id,
+            )
+            if cat is None:
+                raise ValidationError("Category not found.")
+
+        sub.category_id = category_id
+        sub.save()
+        return {"status": "updated"}
+
+    # ------------------------------------------------------------------ #
+    # Bulk operations (Phase 4)
+    # ------------------------------------------------------------------ #
+
+    def bulk_unsubscribe(self, user_id: int, usernames: list[str]) -> dict[str, Any]:
+        """Unsubscribe from multiple channels at once."""
+        self._require_enabled()
+
+        results: list[dict[str, str]] = []
+        success_count = 0
+        error_count = 0
+
+        for raw in usernames:
+            username, error = parse_channel_input(raw)
+            if error:
+                results.append({"username": raw, "status": "error", "detail": error})
+                error_count += 1
+                continue
+
+            status = self._unsubscribe_atomic(user_id, username)
+            if status in ("not_found", "not_subscribed"):
+                results.append({"username": username, "status": "error", "detail": status})
+                error_count += 1
+            else:
+                results.append({"username": username, "status": status})
+                success_count += 1
+
+        return {
+            "results": results,
+            "success_count": success_count,
+            "error_count": error_count,
+        }
+
+    def bulk_assign_category(
+        self, user_id: int, subscription_ids: list[int], category_id: int | None
+    ) -> dict[str, Any]:
+        """Assign multiple subscriptions to a category."""
+        self._require_enabled()
+
+        if category_id is not None:
+            cat = ChannelCategory.get_or_none(
+                ChannelCategory.id == category_id,
+                ChannelCategory.user == user_id,
+            )
+            if cat is None:
+                raise ValidationError("Category not found.")
+
+        results: list[dict[str, str]] = []
+        success_count = 0
+        error_count = 0
+
+        for sub_id in subscription_ids:
+            sub = ChannelSubscription.get_or_none(
+                ChannelSubscription.id == sub_id,
+                ChannelSubscription.user == user_id,
+            )
+            if sub is None:
+                results.append({"id": str(sub_id), "status": "error", "detail": "not_found"})
+                error_count += 1
+                continue
+
+            sub.category_id = category_id
+            sub.save()
+            results.append({"id": str(sub_id), "status": "updated"})
+            success_count += 1
+
+        return {
+            "results": results,
+            "success_count": success_count,
+            "error_count": error_count,
+        }

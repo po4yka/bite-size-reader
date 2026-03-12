@@ -654,11 +654,28 @@ class Channel(BaseModel):
     is_active = peewee.BooleanField(default=True)
     fetch_error_count = peewee.IntegerField(default=0)
     last_error = peewee.TextField(null=True)
+    description = peewee.TextField(null=True)
+    member_count = peewee.IntegerField(null=True)
     updated_at = peewee.DateTimeField(default=_utcnow)
     created_at = peewee.DateTimeField(default=_utcnow)
 
     class Meta:
         table_name = "channels"
+
+
+class ChannelCategory(BaseModel):
+    """User-defined category for organising channel subscriptions."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="channel_categories", on_delete="CASCADE")
+    name = peewee.TextField()
+    position = peewee.IntegerField(default=0)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "channel_categories"
+        indexes = ((("user", "name"), True),)
 
 
 class ChannelSubscription(BaseModel):
@@ -667,6 +684,9 @@ class ChannelSubscription(BaseModel):
     id = peewee.AutoField()
     user = peewee.ForeignKeyField(User, backref="channel_subscriptions", on_delete="CASCADE")
     channel = peewee.ForeignKeyField(Channel, backref="subscriptions", on_delete="CASCADE")
+    category = peewee.ForeignKeyField(
+        ChannelCategory, null=True, backref="subscriptions", on_delete="SET NULL"
+    )
     is_active = peewee.BooleanField(default=True)
     updated_at = peewee.DateTimeField(default=_utcnow)
     created_at = peewee.DateTimeField(default=_utcnow)
@@ -785,6 +805,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     BatchSession,
     BatchSessionItem,
     Channel,
+    ChannelCategory,
     ChannelSubscription,
     ChannelPost,
     ChannelPostAnalysis,
