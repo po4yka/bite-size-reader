@@ -45,5 +45,6 @@ bash scripts/migration/run_m2_parity_suite.sh
 bash scripts/migration/run_m3_parity_suite.sh
 bash scripts/migration/run_m4_parity_suite.sh
 bash scripts/migration/run_m5_cutover_suite.sh
+bash scripts/migration/run_processing_orchestrator_parity_suite.sh
 bash scripts/migration/run_m6_telegram_runtime_suite.sh
 ```

@@ -148,5 +148,15 @@ PROMPT.md
 
 # --- Local audit artifacts ---
 .desloppify/*
-docs/
+docs/*
+!docs/migration/
+docs/migration/*
+!docs/migration/fixtures/
+docs/migration/fixtures/*
+!docs/migration/fixtures/processing_orchestrator/
+!docs/migration/fixtures/processing_orchestrator/README.md
+!docs/migration/fixtures/processing_orchestrator/input/
+!docs/migration/fixtures/processing_orchestrator/input/*.json
+!docs/migration/fixtures/processing_orchestrator/expected/
+!docs/migration/fixtures/processing_orchestrator/expected/*.json
 scorecard.png

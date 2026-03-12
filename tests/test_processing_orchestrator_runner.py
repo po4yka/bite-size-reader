@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -12,6 +14,16 @@ from app.migration.processing_orchestrator import (
 )
 from tests.rust_bridge_helpers import ensure_rust_binary
 
+_FIXTURE_ROOT = (
+    Path(__file__).resolve().parents[1]
+    / "docs"
+    / "migration"
+    / "fixtures"
+    / "processing_orchestrator"
+)
+_FIXTURE_INPUT_DIR = _FIXTURE_ROOT / "input"
+_FIXTURE_EXPECTED_DIR = _FIXTURE_ROOT / "expected"
+
 
 def _runtime_cfg(**overrides: object) -> SimpleNamespace:
     defaults: dict[str, object] = {
@@ -20,6 +32,34 @@ def _runtime_cfg(**overrides: object) -> SimpleNamespace:
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
+
+
+def _processing_orchestrator_fixtures() -> list[
+    tuple[str, str, dict[str, object], dict[str, object]]
+]:
+    fixtures: list[tuple[str, str, dict[str, object], dict[str, object]]] = []
+    for input_path in sorted(_FIXTURE_INPUT_DIR.glob("*.json")):
+        fixture_name = input_path.stem
+        envelope = json.loads(input_path.read_text(encoding="utf-8"))
+        if not isinstance(envelope, dict):
+            msg = f"fixture envelope must be a JSON object: {input_path}"
+            raise ValueError(msg)
+
+        fixture_type = str(envelope.get("type") or "").strip()
+        payload = envelope.get("payload")
+        if not isinstance(payload, dict):
+            msg = f"fixture payload must be a JSON object: {input_path}"
+            raise ValueError(msg)
+
+        expected_path = _FIXTURE_EXPECTED_DIR / f"{fixture_name}.json"
+        expected = json.loads(expected_path.read_text(encoding="utf-8"))
+        if not isinstance(expected, dict):
+            msg = f"expected fixture must be a JSON object: {expected_path}"
+            raise ValueError(msg)
+
+        fixtures.append((fixture_name, fixture_type, payload, expected))
+
+    return fixtures
 
 
 def test_build_python_url_processing_plan_uses_chunked_strategy_without_long_context() -> None:
@@ -227,3 +267,48 @@ async def test_processing_orchestrator_runner_executes_real_rust_binary(monkeypa
     assert result["source_label"] == "Channel"
     assert result["source_title"] == "Migration Digest"
     assert result["prompt"].startswith("Channel: Migration Digest")
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("fixture_name", "fixture_type", "payload", "expected"),
+    _processing_orchestrator_fixtures(),
+    ids=[fixture_name for fixture_name, _, _, _ in _processing_orchestrator_fixtures()],
+)
+async def test_processing_orchestrator_runner_matches_fixture_baselines(
+    monkeypatch,
+    fixture_name: str,
+    fixture_type: str,
+    payload: dict[str, object],
+    expected: dict[str, object],
+) -> None:
+    del fixture_name
+    binary = ensure_rust_binary(
+        binary_name="bsr-processing-orchestrator",
+        package_name="bsr-processing-orchestrator",
+    )
+    monkeypatch.setenv("PROCESSING_ORCHESTRATOR_RUST_BIN", str(binary))
+    runner = ProcessingOrchestratorRunner(
+        _runtime_cfg(
+            migration_processing_orchestrator_backend="rust",
+            migration_processing_orchestrator_timeout_ms=2_000,
+        )
+    )
+
+    if fixture_type == "url_plan":
+        actual = await runner.resolve_url_processing_plan(
+            correlation_id="fixture-url",
+            request_id=101,
+            **payload,
+        )
+    elif fixture_type == "forward_plan":
+        actual = await runner.resolve_forward_processing_plan(
+            correlation_id="fixture-forward",
+            request_id=202,
+            **payload,
+        )
+    else:
+        raise AssertionError(f"unsupported fixture type: {fixture_type}")
+
+    assert actual == expected

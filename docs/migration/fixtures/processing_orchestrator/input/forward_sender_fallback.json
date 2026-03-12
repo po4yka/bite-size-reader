@@ -1,0 +1,12 @@
+{
+  "type": "forward_plan",
+  "payload": {
+    "text": "Please read this summary aloud for the release review so the team can validate parity quickly.",
+    "source_chat_title": null,
+    "source_user_first_name": null,
+    "source_user_last_name": null,
+    "forward_sender_name": "Private Source",
+    "preferred_language": "ru",
+    "primary_model": "openrouter/base-model"
+  }
+}
