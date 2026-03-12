@@ -1045,6 +1045,28 @@ mod tests {
         }
     }
 
+    fn multimodal_summary_request() -> WorkerRequestConfig {
+        WorkerRequestConfig {
+            preset_name: Some("schema_strict".to_string()),
+            messages: vec![
+                json!({"role": "system", "content": "system"}),
+                json!({
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "user"},
+                        {"type": "image_url", "image_url": {"url": "https://example.test/one.png"}},
+                        {"type": "image_url", "image_url": {"url": "https://example.test/two.png"}}
+                    ]
+                }),
+            ],
+            response_format: json!({"type": "json_object"}),
+            max_tokens: Some(4096),
+            temperature: Some(0.2),
+            top_p: Some(0.9),
+            model_override: Some("vision-model".to_string()),
+        }
+    }
+
     fn chunked_input() -> ChunkedUrlExecutionInput {
         let mut second_request = summary_request();
         second_request.preset_name = Some("chunk_2".to_string());
@@ -1170,6 +1192,53 @@ mod tests {
                 .as_ref()
                 .and_then(|summary| summary.get("summary_250")),
             Some(&json!("Short summary."))
+        );
+    }
+
+    #[tokio::test]
+    async fn executes_multimodal_summary_on_first_attempt() {
+        let summary_payload = json!({
+            "summary_250": "Image-aware short summary.",
+            "summary_1000": "Image-aware longer summary.",
+            "tldr": "Image-aware TLDR."
+        });
+        let addr = start_server(vec![(
+            StatusCode::OK,
+            json!({
+                "model": "vision-model",
+                "choices": [{"message": {"parsed": summary_payload}}],
+                "usage": {
+                    "prompt_tokens": 18,
+                    "completion_tokens": 42,
+                    "total_cost": 0.21
+                }
+            }),
+        )])
+        .await;
+
+        let output = execute_url_single_pass(
+            &WorkerExecutionInput {
+                request_id: Some(55),
+                requests: vec![multimodal_summary_request()],
+            },
+            &worker_config(format!("http://{addr}")),
+        )
+        .await
+        .expect("worker multimodal execution should succeed");
+
+        assert_eq!(output.status, "ok");
+        assert_eq!(output.terminal_attempt_index, Some(0));
+        assert_eq!(output.attempts.len(), 1);
+        assert_eq!(
+            output.attempts[0].model_override.as_deref(),
+            Some("vision-model")
+        );
+        assert_eq!(
+            output
+                .summary
+                .as_ref()
+                .and_then(|summary| summary.get("summary_250")),
+            Some(&json!("Image-aware short summary."))
         );
     }
 

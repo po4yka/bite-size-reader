@@ -309,6 +309,33 @@ def _get_worker_runner(summarizer: Any) -> WorkerRunner:
     return runner
 
 
+def _message_content_is_worker_compatible(content: Any) -> bool:
+    if isinstance(content, str):
+        return True
+    if not isinstance(content, list) or not content:
+        return False
+
+    for part in content:
+        if not isinstance(part, dict):
+            return False
+        part_type = str(part.get("type") or "").strip()
+        if part_type == "text":
+            if not isinstance(part.get("text"), str):
+                return False
+            continue
+        if part_type == "image_url":
+            image_payload = part.get("image_url")
+            if not isinstance(image_payload, dict):
+                return False
+            image_url = image_payload.get("url")
+            if not isinstance(image_url, str) or not image_url.strip():
+                return False
+            continue
+        return False
+
+    return True
+
+
 def _requests_are_worker_compatible(requests: list[LLMRequestConfig]) -> bool:
     for request in requests:
         if getattr(request, "stream", False):
@@ -316,7 +343,7 @@ def _requests_are_worker_compatible(requests: list[LLMRequestConfig]) -> bool:
         for message in request.messages:
             if not isinstance(message, dict):
                 return False
-            if isinstance(message.get("content"), list):
+            if not _message_content_is_worker_compatible(message.get("content")):
                 return False
     return True
 

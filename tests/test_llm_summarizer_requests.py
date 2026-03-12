@@ -46,6 +46,7 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
                 cache_timeout_sec=0.3,
                 llm_ttl_seconds=7_200,
             ),
+            attachment=SimpleNamespace(vision_model="vision-model"),
         )
 
         self.db = MagicMock()
@@ -247,3 +248,68 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
         assert summary is not None
         worker_exec.assert_awaited_once()
         workflow_exec.assert_not_called()
+
+    @patch("app.adapters.content.llm_summarizer.RedisCache")
+    async def test_routes_multimodal_summary_to_rust_worker_when_enabled(
+        self, redis_cache_mock: MagicMock
+    ) -> None:
+        cache_stub = MagicMock()
+        cache_stub.enabled = False
+        cache_stub.get_json = AsyncMock(return_value=None)
+        cache_stub.set_json = AsyncMock()
+        redis_cache_mock.return_value = cache_stub
+
+        self.cfg.runtime.migration_worker_backend = "rust"
+
+        summarizer = LLMSummarizer(
+            cfg=cast("AppConfig", self.cfg),
+            db=self.db,
+            openrouter=self.openrouter,
+            response_formatter=self.response_formatter,
+            audit_func=lambda *args, **kwargs: None,
+            sem=lambda: _DummySemaphore(),
+        )
+
+        with (
+            patch(
+                "app.adapters.content.llm_summarizer._execute_rust_worker_summary_for",
+                new=AsyncMock(
+                    return_value={"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"}
+                ),
+            ) as worker_exec,
+            patch.object(
+                summarizer._workflow,
+                "execute_summary_workflow",
+                new=AsyncMock(),
+            ) as workflow_exec,
+        ):
+            summary = await summarizer.summarize_content(
+                message=MagicMock(),
+                content_text="short content for image testing.",
+                chosen_lang="en",
+                system_prompt="system prompt",
+                req_id=101,
+                max_chars=10_000,
+                correlation_id="cid-worker-images",
+                images=["https://example.test/one.png", "https://example.test/two.png"],
+            )
+
+        assert summary is not None
+        worker_exec.assert_awaited_once()
+        workflow_exec.assert_not_called()
+        requests = worker_exec.await_args.kwargs["requests"]
+        assert requests[0].model_override == "vision-model"
+        user_content = requests[0].messages[1]["content"]
+        assert isinstance(user_content, list)
+        assert user_content[0] == {
+            "type": "text",
+            "text": requests[0].messages[1]["content"][0]["text"],
+        }
+        assert user_content[1] == {
+            "type": "image_url",
+            "image_url": {"url": "https://example.test/one.png"},
+        }
+        assert user_content[2] == {
+            "type": "image_url",
+            "image_url": {"url": "https://example.test/two.png"},
+        }
