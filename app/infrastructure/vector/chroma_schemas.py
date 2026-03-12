@@ -113,11 +113,12 @@ class ChromaQueryFilters(BaseModel):
         if isinstance(value, set | tuple):
             value = list(value)
         if not isinstance(value, list):
-            return [str(value).strip()] if str(value).strip() else []
+            cleaned = str(value).strip().lstrip("#")
+            return [cleaned] if cleaned else []
         seen: set[str] = set()
         result: list[str] = []
         for item in value:
-            cleaned = str(item).strip()
+            cleaned = str(item).strip().lstrip("#")
             if cleaned and cleaned not in seen:
                 seen.add(cleaned)
                 result.append(cleaned)

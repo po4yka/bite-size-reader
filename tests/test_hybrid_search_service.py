@@ -11,7 +11,17 @@ from app.services.topic_search import TopicArticle
 class FakeVectorResult:
     """Mock vector search result."""
 
-    def __init__(self, url: str, title: str, snippet: str, similarity_score: float):
+    def __init__(
+        self,
+        url: str,
+        title: str,
+        snippet: str,
+        similarity_score: float,
+        *,
+        window_id: str | None = None,
+        chunk_id: str | None = None,
+        request_id: int | None = None,
+    ):
         self.url = url
         self.title = title
         self.snippet = snippet
@@ -19,6 +29,11 @@ class FakeVectorResult:
         self.source = "example.com"
         self.published_at = "2024-01-01"
         self.similarity_score = similarity_score
+        self.window_id = window_id
+        self.chunk_id = chunk_id
+        self.request_id = request_id
+        self.window_index = 0
+        self.neighbor_chunk_ids: list[str] = []
 
 
 def _wrap_vector_results(results: list[FakeVectorResult]) -> SimpleNamespace:
@@ -239,6 +254,90 @@ class TestHybridSearchService(unittest.IsolatedAsyncioTestCase):
         # Should return FTS results only
         assert len(results) == 1
         assert results[0].url == "https://example.com/fts1"
+        assert results[0].title == "FTS Only"
+        assert results[0].snippet == "FTS snippet"
+        assert results[0].source == "example.com"
+        assert results[0].published_at == "2024-01-01"
+
+    async def test_hybrid_search_falls_back_to_fts_when_vector_service_missing(self):
+        """Test hybrid search still works when semantic search is disabled."""
+        fts_service = AsyncMock()
+        fts_service.find_articles.return_value = [
+            TopicArticle(
+                title="FTS Only",
+                url="https://example.com/fts-only",
+                snippet="FTS snippet",
+                source="example.com",
+                published_at="2024-01-01",
+            )
+        ]
+
+        hybrid_service = HybridSearchService(
+            fts_service=fts_service,
+            vector_service=None,
+            fts_weight=1.0,
+            vector_weight=0.0,
+            max_results=10,
+        )
+
+        results = await hybrid_service.search("test query")
+
+        fts_service.find_articles.assert_awaited_once()
+        assert len(results) == 1
+        assert results[0].title == "FTS Only"
+        assert results[0].url == "https://example.com/fts-only"
+
+    async def test_hybrid_search_merges_windowed_vector_hits_with_fts_by_url(self):
+        """Test vector window hits collapse into a single article-level result."""
+        overlap_url = "https://example.com/overlap"
+
+        fts_service = AsyncMock()
+        fts_service.find_articles.return_value = [
+            TopicArticle(
+                title="FTS Article",
+                url=overlap_url,
+                snippet="FTS snippet",
+                source="example.com",
+                published_at="2024-01-01",
+            ),
+        ]
+
+        vector_service = AsyncMock()
+        vector_service.search.return_value = _wrap_vector_results(
+            [
+                FakeVectorResult(
+                    url=overlap_url,
+                    title="Vector Article",
+                    snippet="Vector snippet",
+                    similarity_score=0.95,
+                    window_id="window-a",
+                    request_id=1,
+                ),
+                FakeVectorResult(
+                    url=overlap_url,
+                    title="Vector Article",
+                    snippet="Lower ranked window",
+                    similarity_score=0.80,
+                    window_id="window-b",
+                    request_id=1,
+                ),
+            ]
+        )
+
+        hybrid_service = HybridSearchService(
+            fts_service=fts_service,
+            vector_service=vector_service,
+            fts_weight=0.4,
+            vector_weight=0.6,
+            max_results=10,
+        )
+
+        results = await hybrid_service.search("test query")
+
+        assert len(results) == 1
+        assert results[0].url == overlap_url
+        assert results[0].title == "Vector Article"
+        assert results[0].snippet == "Vector snippet"
 
     async def test_hybrid_search_with_empty_query(self):
         """Test hybrid search with empty query returns empty results."""

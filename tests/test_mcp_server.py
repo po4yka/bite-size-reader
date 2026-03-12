@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -253,6 +254,58 @@ async def test_get_chroma_service_retries_after_backoff(monkeypatch: pytest.Monk
     clock["now"] = 61.0
     assert await mcp_server._get_chroma_service() is None
     assert attempts["count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_get_chroma_service_forwards_required_and_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.config as app_config
+    import app.infrastructure.vector.chroma_store as chroma_store_module
+    import app.services.chroma_vector_search_service as chroma_service_module
+    import app.services.embedding_factory as embedding_factory_module
+
+    captured: dict[str, Any] = {}
+
+    class _FakeStore:
+        def __init__(self, **kwargs: Any) -> None:
+            captured["store_kwargs"] = kwargs
+
+    class _FakeService:
+        def __init__(self, **kwargs: Any) -> None:
+            self._vector_store = kwargs["vector_store"]
+
+    monkeypatch.setattr(
+        app_config,
+        "load_config",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            vector_store=SimpleNamespace(
+                host="http://localhost:8000",
+                auth_token="token",
+                environment="test",
+                user_scope="scope",
+                collection_version="v5",
+                required=True,
+                connection_timeout=7.5,
+            ),
+            embedding=object(),
+        ),
+    )
+    monkeypatch.setattr(embedding_factory_module, "create_embedding_service", lambda _cfg: object())
+    monkeypatch.setattr(chroma_store_module, "ChromaVectorStore", _FakeStore)
+    monkeypatch.setattr(chroma_service_module, "ChromaVectorSearchService", _FakeService)
+
+    await mcp_server._get_chroma_service()
+
+    assert captured["store_kwargs"] == {
+        "host": "http://localhost:8000",
+        "auth_token": "token",
+        "environment": "test",
+        "user_scope": "scope",
+        "collection_version": "v5",
+        "required": True,
+        "connection_timeout": 7.5,
+    }
 
 
 def test_cli_uses_mcp_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:

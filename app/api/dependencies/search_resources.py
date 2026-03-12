@@ -31,6 +31,8 @@ def _default_vector_store_factory(config: ChromaConfig) -> ChromaVectorStore:
         environment=config.environment,
         user_scope=config.user_scope,
         collection_version=config.collection_version,
+        required=config.required,
+        connection_timeout=config.connection_timeout,
     )
 
 

@@ -36,6 +36,8 @@ def upgrade(db: Database | DatabaseSessionManager) -> None:
         environment=chroma_cfg.environment,
         user_scope=chroma_cfg.user_scope,
         collection_version=chroma_cfg.collection_version,
+        required=chroma_cfg.required,
+        connection_timeout=chroma_cfg.connection_timeout,
     )
 
     _log_chroma_heartbeat(vector_store)
@@ -64,11 +66,17 @@ def upgrade(db: Database | DatabaseSessionManager) -> None:
     for entry in embeddings:
         processed += 1
 
-        if not entry["text"]:
+        metadata = dict(entry.get("metadata") or {})
+        text = str(metadata.get("text") or "").strip()
+
+        if not text:
             skipped_empty += 1
             logger.warning(
                 "Skipping embedding with empty text",
-                extra={"summary_id": entry["summary_id"], "request_id": entry["request_id"]},
+                extra={
+                    "summary_id": entry.get("summary_id"),
+                    "request_id": entry.get("request_id"),
+                },
             )
             continue
 
@@ -78,37 +86,9 @@ def upgrade(db: Database | DatabaseSessionManager) -> None:
         except Exception:
             failed += 1
             logger.exception(
-                "Failed to deserialize embedding", extra={"summary_id": entry["summary_id"]}
+                "Failed to deserialize embedding", extra={"summary_id": entry.get("summary_id")}
             )
             continue
-
-        # We can use MetadataBuilder.build_metadata if we reconstruct the inputs,
-        # but _build_metadata was doing exactly that.
-        # Let's replace _build_metadata with MetadataBuilder.build_metadata
-        # but we need to adapt the input.
-
-        # Actually, the entry dict is already flat. MetadataBuilder.build_metadata expects payload/summary_row.
-        # Maybe it's better to keep the migration script simple as it is a one-off,
-        # OR update it to use the new standard.
-
-        # Given this is a migration script, it might be better to leave it alone if it works,
-        # BUT the task is to refactor.
-        # Let's see if we can make it cleaner.
-
-        metadata = {
-            "request_id": entry.get("request_id"),
-            "summary_id": entry.get("summary_id"),
-            "language": entry.get("language"),
-            "url": entry.get("url"),
-            "title": entry.get("title"),
-            "source": entry.get("source"),
-            "published_at": entry.get("published_at"),
-            "text": entry.get("text"),
-            "user_scope": chroma_cfg.user_scope,
-            "environment": chroma_cfg.environment,
-        }
-        # Remove None values
-        metadata = {k: v for k, v in metadata.items() if v is not None}
 
         batch_vectors.append(vector_list)
         batch_metadata.append(metadata)
@@ -192,17 +172,8 @@ def _fetch_summary_embeddings(
             yield {
                 "request_id": row.summary.request.id,
                 "summary_id": row.summary.id,
-                "language": summary_row["lang"],
                 "embedding_blob": row.embedding_blob,
-                "url": metadata.get("url"),
-                "title": metadata.get("title"),
-                "source": metadata.get("source"),
-                "published_at": metadata.get("published_at"),
-                "text": text,
-                "tags": metadata.get(
-                    "tags"
-                ),  # MetadataBuilder doesn't extract tags explicitly in build_metadata yet?
-                # Wait, build_note_text extracts tags into metadata.
+                "metadata": metadata if text else {},
             }
 
 

@@ -39,7 +39,7 @@ class HybridSearchService:
     def __init__(
         self,
         fts_service: LocalTopicSearchService,
-        vector_service: Any,
+        vector_service: Any | None,
         *,
         fts_weight: float = 0.4,
         vector_weight: float = 0.6,
@@ -112,17 +112,21 @@ class HybridSearchService:
         fts_task = asyncio.create_task(
             self._fts.find_articles(fts_query, correlation_id=correlation_id)
         )
-        vector_task = asyncio.create_task(
-            self._vector.search(
-                query.strip(),
-                language=getattr(filters, "language", None) if filters else None,
-                user_scope=getattr(self._vector, "user_scope", None),
-                correlation_id=correlation_id,
+        if self._vector is None:
+            logger.info("hybrid_search_vector_disabled", extra={"cid": correlation_id})
+            fts_results = await fts_task
+            vector_results = []
+        else:
+            vector_task = asyncio.create_task(
+                self._vector.search(
+                    query.strip(),
+                    language=getattr(filters, "language", None) if filters else None,
+                    user_scope=getattr(self._vector, "user_scope", None),
+                    correlation_id=correlation_id,
+                )
             )
-        )
-
-        fts_results, vector_search_results = await asyncio.gather(fts_task, vector_task)
-        vector_results: list[ChromaVectorSearchResult] = vector_search_results.results
+            fts_results, vector_search_results = await asyncio.gather(fts_task, vector_task)
+            vector_results = list(getattr(vector_search_results, "results", []))
 
         # Apply filters to FTS results (vector results already filtered)
         if filters and filters.has_filters():
@@ -193,38 +197,45 @@ class HybridSearchService:
         # Normalize FTS scores using rank-based scoring
         # (BM25 scores are unbounded, so we use position-based normalization)
         fts_scores: dict[str, float] = {}
+        fts_data: dict[str, TopicArticle] = {}
         for idx, result in enumerate(fts_results):
             score = 1.0 - (idx / max(len(fts_results), 1))
-            fts_scores[result.url] = score
+            result_id = result.url or f"fts:{idx}"
+            existing = fts_scores.get(result_id)
+            if existing is None or score > existing:
+                fts_scores[result_id] = score
+                fts_data[result_id] = result
 
         vector_scores: dict[str, float] = {}
         vector_data: dict[str, ChromaVectorSearchResult] = {}
         for vector_result in vector_results:
-            result_id = (
-                getattr(vector_result, "window_id", None)
-                or getattr(vector_result, "chunk_id", None)
-                or vector_result.url
-            )
+            result_id = self._vector_result_id(vector_result)
             if result_id:
-                vector_scores[result_id] = getattr(vector_result, "similarity_score", 0.0)
-                vector_data[result_id] = vector_result
+                score = float(getattr(vector_result, "similarity_score", 0.0))
+                existing = vector_scores.get(result_id)
+                if existing is None or score > existing:
+                    vector_scores[result_id] = score
+                    vector_data[result_id] = vector_result
 
         all_ids = set(vector_scores.keys()) | set(fts_scores.keys())
         combined = []
 
         for result_id in all_ids:
+            fts_match = fts_data.get(result_id)
             vector_match = vector_data.get(result_id)
 
-            url = (
-                getattr(vector_match, "url", None)
-                if vector_match
-                else next((r.url for r in fts_results if r.url and r.url == result_id), None)
+            url = getattr(vector_match, "url", None) or (fts_match.url if fts_match else None)
+            title = getattr(vector_match, "title", None) or (fts_match.title if fts_match else None)
+            snippet = getattr(vector_match, "snippet", None) or (
+                fts_match.snippet if fts_match else None
             )
-            title = getattr(vector_match, "title", None) if vector_match else None
-            snippet = getattr(vector_match, "snippet", None) if vector_match else None
-            text = getattr(vector_match, "text", None) if vector_match else None
-            source = getattr(vector_match, "source", None) if vector_match else None
-            published_at = getattr(vector_match, "published_at", None) if vector_match else None
+            text = getattr(vector_match, "text", None) or snippet
+            source = getattr(vector_match, "source", None) or (
+                fts_match.source if fts_match else None
+            )
+            published_at = getattr(vector_match, "published_at", None) or (
+                fts_match.published_at if fts_match else None
+            )
 
             fts_score = fts_scores.get(url or result_id, 0.0)
             vector_score = vector_scores.get(result_id, 0.0)
@@ -254,3 +265,15 @@ class HybridSearchService:
             )
 
         return combined
+
+    @staticmethod
+    def _vector_result_id(vector_result: ChromaVectorSearchResult) -> str | None:
+        url = getattr(vector_result, "url", None)
+        if url:
+            return url
+
+        request_id = getattr(vector_result, "request_id", None)
+        if request_id is not None:
+            return f"request:{request_id}"
+
+        return getattr(vector_result, "window_id", None) or getattr(vector_result, "chunk_id", None)

@@ -135,6 +135,8 @@ async def _get_chroma_service() -> Any:
                 environment=cfg.environment,
                 user_scope=cfg.user_scope,
                 collection_version=cfg.collection_version,
+                required=cfg.required,
+                connection_timeout=cfg.connection_timeout,
             )
             _chroma_service = ChromaVectorSearchService(
                 vector_store=store,
