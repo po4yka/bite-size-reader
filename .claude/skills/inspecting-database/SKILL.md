@@ -1,7 +1,7 @@
 ---
-name: database-inspection
-description: Query and inspect SQLite database for debugging requests, summaries, crawl results, and LLM calls. Use when investigating issues with correlation IDs or analyzing stored data.
-version: 1.0.0
+name: inspecting-database
+description: Query and inspect SQLite database for debugging requests, summaries, crawl results, and LLM calls. Trigger keywords -- correlation IDs, request status, API costs, crawl results, missing summaries, database query, SQLite, debug request.
+version: 2.0.0
 allowed-tools: Bash, Read
 ---
 
@@ -14,6 +14,12 @@ Helps query and inspect the Bite-Size Reader SQLite database for debugging and a
 - **Default path**: `/data/app.db`
 - **Check env**: `DB_PATH` environment variable
 - **Local dev**: Usually `./data/app.db` in project root
+
+## Dynamic Context
+
+```bash
+!sqlite3 data/app.db "SELECT COUNT(*) as total, SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) as errors FROM requests"
+```
 
 ## Common Query Patterns
 
