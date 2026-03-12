@@ -38,6 +38,9 @@ IGNORED_APP_ROUTES = frozenset(
         ("HEAD", "/docs"),
         ("HEAD", "/docs/oauth2-redirect"),
         ("HEAD", "/redoc"),
+        # SPA frontend routes -- not REST API endpoints
+        ("GET", "/web"),
+        ("GET", "/web/{path:path}"),
     }
 )
 

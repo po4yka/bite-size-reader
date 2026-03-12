@@ -5,10 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-pytest.importorskip("yt_dlp", reason="yt-dlp not installed")
-pytest.importorskip("youtube_transcript_api", reason="youtube-transcript-api not installed")
-
-from app.adapters.youtube.youtube_downloader import YouTubeDownloader
 from app.application.use_cases.get_unread_summaries import (
     GetUnreadSummariesQuery,
     GetUnreadSummariesUseCase,
@@ -24,14 +20,6 @@ from app.application.use_cases.mark_summary_as_unread import (
 from tests.conftest import make_test_app_config
 from tests.test_commands import BotSpy, FakeMessage
 
-pytest.importorskip("grpc", reason="grpcio not installed")
-
-from app.grpc.client import ProcessingClient
-from app.protos import processing_pb2
-
-# Cast to Any so mypy doesn't complain about dynamically-generated protobuf attrs
-_pb2: Any = processing_pb2
-
 
 async def _async_generator(items):
     for item in items:
@@ -41,6 +29,8 @@ async def _async_generator(items):
 @pytest.mark.asyncio
 async def test_characterization_summary_command_happy_path_preserved() -> None:
     """Lock current /summarize command behavior for a single URL."""
+    pytest.importorskip("yt_dlp", reason="yt-dlp not installed")
+    pytest.importorskip("youtube_transcript_api", reason="youtube-transcript-api not installed")
     cfg = make_test_app_config(db_path=":memory:", allowed_user_ids=(1, 42))
 
     from app.adapters import telegram_bot as tbmod
@@ -68,6 +58,11 @@ async def test_characterization_youtube_uses_vtt_fallback_when_api_transcript_em
     tmp_path,
 ) -> None:
     """Lock fallback behavior: empty API transcript should use downloaded VTT subtitles."""
+    pytest.importorskip("yt_dlp", reason="yt-dlp not installed")
+    pytest.importorskip("youtube_transcript_api", reason="youtube-transcript-api not installed")
+
+    from app.adapters.youtube.youtube_downloader import YouTubeDownloader
+
     cfg = MagicMock()
     cfg.youtube.storage_path = str(tmp_path / "videos")
     cfg.youtube.max_video_size_mb = 500
@@ -234,7 +229,15 @@ async def test_characterization_unread_read_unread_transition_with_topic_filter(
 @pytest.mark.asyncio
 async def test_characterization_grpc_submit_url_stream_order_and_terminal_state() -> None:
     """Lock stream contract: queued -> processing -> done with terminal summary id."""
+    pytest.importorskip("grpc", reason="grpcio not installed")
+
     from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.grpc.client import ProcessingClient
+    from app.protos import processing_pb2
+
+    # Cast to Any so mypy doesn't complain about dynamically-generated protobuf attrs
+    _pb2: Any = processing_pb2
 
     updates = [
         _pb2.ProcessingUpdate(

@@ -352,6 +352,12 @@ class YouTubeDownloader:
             )
             raise
         finally:
+            # On CancelledError, output_dir stays None because _run_download_pipeline
+            # never returned. Fall back to the expected date-based directory.
+            if output_dir is None and not download_succeeded:
+                candidate = self.storage_path / datetime.now().strftime("%Y%m%d")
+                if candidate.exists():
+                    output_dir = candidate
             if not download_succeeded and output_dir is not None:
                 self._cleanup_partial_download_files(
                     output_dir=output_dir,

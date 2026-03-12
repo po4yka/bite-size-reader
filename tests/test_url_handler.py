@@ -115,7 +115,7 @@ async def test_awaiting_users_expire_after_ttl() -> None:
     assert await handler.is_awaiting_url(100)
 
     # Simulate time passing beyond TTL (default 120s)
-    with patch("app.adapters.telegram.url_handler.time") as mock_time:
+    with patch("app.adapters.telegram.url_state_store.time") as mock_time:
         mock_time.time.return_value = time.time() + 130
         assert not await handler.is_awaiting_url(100), "Should have expired"
 
@@ -127,7 +127,7 @@ async def test_cleanup_expired_state() -> None:
 
     await handler.add_awaiting_user(100)
 
-    with patch("app.adapters.telegram.url_handler.time") as mock_time:
+    with patch("app.adapters.telegram.url_state_store.time") as mock_time:
         mock_time.time.return_value = time.time() + 130
         cleaned = await handler.cleanup_expired_state()
         assert cleaned == 1

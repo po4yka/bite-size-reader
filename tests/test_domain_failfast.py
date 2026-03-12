@@ -10,10 +10,11 @@ import asyncio
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.adapters.telegram.url_batch_policy_service import URLBatchPolicyService
 from app.adapters.telegram.url_handler import URLHandler
 from app.models.batch_processing import URLBatchStatus
 
@@ -142,15 +143,15 @@ async def test_concurrent_same_domain_cancel_on_timeout():
         await asyncio.sleep(999)
 
     handler.url_processor.handle_url_flow = AsyncMock(side_effect=_slow_handler)
+    handler._batch_policy = URLBatchPolicyService(
+        initial_timeout_sec=test_timeout,
+        max_timeout_sec=test_timeout * 2,
+        max_retries=0,
+    )
     msg = _make_message()
     wall_start = time.monotonic()
 
-    with (
-        patch("app.adapters.telegram.url_handler.URL_INITIAL_TIMEOUT_SEC", test_timeout),
-        patch("app.adapters.telegram.url_handler.URL_MAX_TIMEOUT_SEC", test_timeout * 2),
-        patch("app.adapters.telegram.url_handler.URL_MAX_RETRIES", 0),
-    ):
-        await handler._process_multiple_urls_parallel(msg, urls, uid=1, correlation_id="test-cid")
+    await handler._process_multiple_urls_parallel(msg, urls, uid=1, correlation_id="test-cid")
 
     wall_elapsed = time.monotonic() - wall_start
 
@@ -188,14 +189,14 @@ async def test_mixed_domains_only_cancel_affected():
         return SimpleNamespace(title=f"Title for {url}")
 
     handler.url_processor.handle_url_flow = AsyncMock(side_effect=_domain_aware_handler)
+    handler._batch_policy = URLBatchPolicyService(
+        initial_timeout_sec=test_timeout,
+        max_timeout_sec=test_timeout * 2,
+        max_retries=0,
+    )
     msg = _make_message()
 
-    with (
-        patch("app.adapters.telegram.url_handler.URL_INITIAL_TIMEOUT_SEC", test_timeout),
-        patch("app.adapters.telegram.url_handler.URL_MAX_TIMEOUT_SEC", test_timeout * 2),
-        patch("app.adapters.telegram.url_handler.URL_MAX_RETRIES", 0),
-    ):
-        await handler._process_multiple_urls_parallel(msg, urls, uid=1, correlation_id="test-cid")
+    await handler._process_multiple_urls_parallel(msg, urls, uid=1, correlation_id="test-cid")
 
     # Check the completion message for partial success
     calls = handler.response_formatter.safe_reply.call_args_list
@@ -227,15 +228,15 @@ async def test_event_already_set_skips_immediately():
         await asyncio.sleep(999)
 
     handler.url_processor.handle_url_flow = AsyncMock(side_effect=_hang_forever)
+    handler._batch_policy = URLBatchPolicyService(
+        initial_timeout_sec=test_timeout,
+        max_timeout_sec=test_timeout * 2,
+        max_retries=0,
+    )
     msg = _make_message()
     wall_start = time.monotonic()
 
-    with (
-        patch("app.adapters.telegram.url_handler.URL_INITIAL_TIMEOUT_SEC", test_timeout),
-        patch("app.adapters.telegram.url_handler.URL_MAX_TIMEOUT_SEC", test_timeout * 2),
-        patch("app.adapters.telegram.url_handler.URL_MAX_RETRIES", 0),
-    ):
-        await handler._process_multiple_urls_parallel(msg, urls, uid=1, correlation_id="test-cid")
+    await handler._process_multiple_urls_parallel(msg, urls, uid=1, correlation_id="test-cid")
 
     wall_elapsed = time.monotonic() - wall_start
 
