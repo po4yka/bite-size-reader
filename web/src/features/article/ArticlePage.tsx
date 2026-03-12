@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -17,7 +17,15 @@ import {
   Tag,
   Tile,
 } from "@carbon/react";
-import { fetchSummary, fetchSummaryContent, markSummaryRead, toggleSummaryFavorite } from "../../api/summaries";
+import { Play, PauseFilled, StopFilled } from "@carbon/icons-react";
+import {
+  fetchSummary,
+  fetchSummaryContent,
+  generateSummaryAudio,
+  getSummaryAudioUrl,
+  markSummaryRead,
+  toggleSummaryFavorite,
+} from "../../api/summaries";
 import AddToCollectionModal from "../../components/AddToCollectionModal";
 
 type ReaderTextScale = "sm" | "md" | "lg";
@@ -53,6 +61,9 @@ export default function ArticlePage() {
   const [copyState, setCopyState] = useState<"idle" | "success" | "error">("idle");
   const [readProgress, setReadProgress] = useState(0);
   const [markedReadLocally, setMarkedReadLocally] = useState(false);
+  const [audioState, setAudioState] = useState<"idle" | "loading" | "playing" | "paused" | "error">("idle");
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const summaryQuery = useQuery({
     queryKey: ["summary", summaryId],
@@ -86,6 +97,13 @@ export default function ArticlePage() {
     setMarkedReadLocally(false);
     setCopyState("idle");
     setReadProgress(0);
+    setAudioState("idle");
+    setAudioError(null);
+    // Cleanup audio on summary change
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
   }, [summaryId]);
 
   useEffect(() => {
@@ -128,6 +146,51 @@ export default function ArticlePage() {
     } catch {
       setCopyState("error");
     }
+  }
+
+  async function handleListenToggle(): Promise<void> {
+    if (audioState === "playing" && audioRef.current) {
+      audioRef.current.pause();
+      setAudioState("paused");
+      return;
+    }
+    if (audioState === "paused" && audioRef.current) {
+      void audioRef.current.play();
+      setAudioState("playing");
+      return;
+    }
+    // Generate + play
+    setAudioState("loading");
+    setAudioError(null);
+    try {
+      const result = await generateSummaryAudio(summaryId);
+      if (result.status === "error") {
+        setAudioState("error");
+        setAudioError(result.error ?? "Audio generation failed");
+        return;
+      }
+      const audio = new Audio(getSummaryAudioUrl(summaryId));
+      audio.onended = () => setAudioState("idle");
+      audio.onerror = () => {
+        setAudioState("error");
+        setAudioError("Failed to play audio");
+      };
+      audioRef.current = audio;
+      await audio.play();
+      setAudioState("playing");
+    } catch (err) {
+      setAudioState("error");
+      setAudioError(err instanceof Error ? err.message : "Audio generation failed");
+    }
+  }
+
+  function handleStopAudio(): void {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setAudioState("idle");
   }
 
   async function handleShare(): Promise<void> {
@@ -237,6 +300,19 @@ export default function ArticlePage() {
             <Button kind="secondary" onClick={() => setIsCollectionModalOpen(true)}>
               Add to collection
             </Button>
+            <Button
+              kind="secondary"
+              renderIcon={audioState === "playing" ? PauseFilled : audioState === "paused" ? Play : Play}
+              disabled={audioState === "loading"}
+              onClick={() => void handleListenToggle()}
+            >
+              {audioState === "loading" ? "Generating..." : audioState === "playing" ? "Pause" : audioState === "paused" ? "Resume" : "Listen"}
+            </Button>
+            {(audioState === "playing" || audioState === "paused") && (
+              <Button kind="ghost" renderIcon={StopFilled} onClick={handleStopAudio}>
+                Stop
+              </Button>
+            )}
             <Button kind="tertiary" onClick={() => window.open(detail.url, "_blank", "noopener,noreferrer")}>
               Open original
             </Button>
@@ -244,6 +320,15 @@ export default function ArticlePage() {
               {showContent ? "Hide full content" : "Show full content"}
             </Button>
           </ButtonSet>
+
+          {audioState === "error" && audioError && (
+            <InlineNotification
+              kind="error"
+              title="Audio error"
+              subtitle={audioError}
+              onCloseButtonClick={() => { setAudioState("idle"); setAudioError(null); }}
+            />
+          )}
 
           <Tabs>
             <TabList aria-label="Article tabs" contained>

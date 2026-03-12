@@ -261,6 +261,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 | **Draft Streaming** | `SUMMARY_STREAMING_ENABLED=true`<br>`SUMMARY_STREAMING_MODE=section`<br>`TELEGRAM_DRAFT_STREAMING_ENABLED=true` | Live section previews during OpenRouter summaries |
 | **Scraper Chain** | `SCRAPER_ENABLED=true`<br>`SCRAPER_PROFILE=balanced`<br>`SCRAPER_BROWSER_ENABLED=true`<br>`SCRAPER_PROVIDER_ORDER=[...]` | Control article extraction fallback behavior and tuning |
 | **ChromaDB** | `CHROMA_HOST=http://localhost:8000`<br>`CHROMA_AUTH_TOKEN` | Semantic search |
+| **Embeddings** | `EMBEDDING_PROVIDER=local`<br>`GEMINI_API_KEY`<br>`GEMINI_EMBEDDING_DIMENSIONS=768` | Switch embedding provider (local/Gemini) |
 | **MCP Server** | `MCP_ENABLED=false`<br>`MCP_TRANSPORT=stdio`<br>`MCP_PORT=8200` | AI agent integration (Claude Desktop) |
 | **Mobile API** | `JWT_SECRET_KEY`<br>`ALLOWED_CLIENT_IDS`<br>`API_RATE_LIMIT_*` | Build mobile clients |
 | **Karakeep** | `KARAKEEP_ENABLED=false`<br>`KARAKEEP_API_URL`<br>`KARAKEEP_API_KEY` | Bookmark sync |
@@ -344,7 +345,7 @@ app/
   observability/ -- Metrics, tracing, telemetry
   prompts/       -- LLM prompt templates (en/ru, including web search analysis)
   security/      -- Security utilities
-  services/      -- Topic search, embedding, hybrid search services
+  services/      -- Topic search, embedding (local/Gemini), hybrid search services
   types/         -- Type definitions
   utils/         -- Validation and helper utilities
 bot.py           -- Entrypoint wiring config, DB, and Telegram bot

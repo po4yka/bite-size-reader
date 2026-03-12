@@ -35,6 +35,7 @@ from .redis import RedisConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig
+from .tts import ElevenLabsConfig
 from .twitter import TwitterConfig
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,7 @@ class AppConfig:
     mcp: McpConfig = field(default_factory=McpConfig)
     scraper: ScraperConfig = field(default_factory=ScraperConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
+    tts: ElevenLabsConfig = field(default_factory=ElevenLabsConfig)
 
 
 class Settings(BaseSettings):
@@ -146,6 +148,7 @@ class Settings(BaseSettings):
     digest: ChannelDigestConfig = Field(default_factory=ChannelDigestConfig)
     scraper: ScraperConfig = Field(default_factory=ScraperConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
+    tts: ElevenLabsConfig = Field(default_factory=ElevenLabsConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -276,6 +279,7 @@ class Settings(BaseSettings):
             mcp=self.mcp,
             scraper=self.scraper,
             embedding=self.embedding,
+            tts=self.tts,
         )
 
 

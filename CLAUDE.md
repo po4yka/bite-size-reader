@@ -29,7 +29,8 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - pydantic / pydantic-settings (validation, configuration)
 - trafilatura, spacy (content extraction fallbacks, NLP)
 - json-repair (JSON recovery from LLM output)
-- scikit-learn, sentence-transformers, chromadb (search, embeddings, vector store)
+- scikit-learn, sentence-transformers, chromadb (search, local embeddings, vector store)
+- google-genai (optional: Gemini Embedding 2 API provider)
 - loguru, orjson (structured logging, fast JSON serialization)
 - FastAPI / uvicorn (Mobile REST API)
 - React 18 + TypeScript + Vite (Carbon web frontend)
@@ -83,7 +84,7 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 - **Web Frontend** (`web/`) -- Carbon web interface (library/article/search/submit/collections/digest/preferences), hybrid auth (Telegram WebApp + JWT), React Query data layer
 - **Legacy Mini App Frontend** (`frontend/`) -- Telegram mini app bundle served under `/static/digest/*`
 - **Multi-Agent System** (`app/agents/`) -- Content extraction, summarization with self-correction, validation, web search agents. See `docs/multi_agent_architecture.md`
-- **Search Services** (`app/services/`) -- Topic search, vector/hybrid search, embeddings, reranking, query expansion
+- **Search Services** (`app/services/`) -- Topic search, vector/hybrid search, embeddings (local/Gemini via protocol+factory), reranking, query expansion
 - **MCP Server** (`app/mcp/`) -- Model Context Protocol server for AI agent access. See `docs/mcp_server.md`
 - **Observability** (`app/observability/`) -- Metrics, tracing, and telemetry infrastructure
 - **Domain Layer** (`app/domain/`) -- DDD models and services
@@ -313,7 +314,7 @@ Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch
 - **Collections** -- User-created collections with items, collaborators, and invite links (`app/db/models.py`: Collection, CollectionItem, CollectionCollaborator, CollectionInvite)
 - **Device Sync** -- Multi-device sync with full/delta modes and conflict resolution (`app/api/routers/sync.py`, UserDevice model)
 - **Event Bus** -- Internal event publishing/subscribing (`app/infrastructure/messaging/`)
-- **Chroma Vector Store** -- Semantic search via ChromaDB embeddings (`app/infrastructure/`, `app/cli/backfill_chroma_store.py`)
+- **Chroma Vector Store** -- Semantic search via ChromaDB embeddings (`app/infrastructure/`, `app/cli/backfill_chroma_store.py`). Embedding provider switchable via `EmbeddingConfig` (local sentence-transformers or Gemini API); see `app/services/embedding_factory.py`
 - **PDF Export** -- Summary export to PDF via weasyprint
 - **Background Scheduling** -- APScheduler-based background task processing with Redis distributed locks
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Pyrogram userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow.
@@ -424,13 +425,20 @@ SCRAPER_DIRECT_HTML_ENABLED=true
 # Channel Digest (optional)
 DIGEST_ENABLED=false                # Enable channel digest subsystem
 API_BASE_URL=http://localhost:8000  # Mobile API base URL (for session init)
+
+# Embedding provider (optional -- defaults to local sentence-transformers)
+EMBEDDING_PROVIDER=local              # "local" (sentence-transformers) or "gemini"
+GEMINI_API_KEY=                        # Required when provider=gemini
+GEMINI_EMBEDDING_MODEL=gemini-embedding-2-preview  # Model ID
+GEMINI_EMBEDDING_DIMENSIONS=768       # Output dimensions (1-3072)
+EMBEDDING_MAX_TOKEN_LENGTH=512        # Max tokens for text preparation
 ```
 
 Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-03-07
+**Last Updated:** 2026-03-12
 
 For questions about the codebase, always refer to:
 

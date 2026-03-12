@@ -38,6 +38,7 @@ from app.adapters.telegram.command_handlers.digest_handler import DigestHandlerI
 from app.adapters.telegram.command_handlers.execution_context import CommandExecutionContext
 from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandlerImpl
 from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandlerImpl
+from app.adapters.telegram.command_handlers.listen_handler import ListenHandlerImpl
 from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandlerImpl
 from app.adapters.telegram.command_handlers.search_handler import SearchHandlerImpl
 from app.adapters.telegram.command_handlers.settings_handler import SettingsHandlerImpl
@@ -151,6 +152,12 @@ class CommandProcessor:
         )
 
         self._karakeep = KarakeepHandlerImpl(
+            cfg=cfg,
+            db=db,
+            response_formatter=response_formatter,
+        )
+
+        self._listen = ListenHandlerImpl(
             cfg=cfg,
             db=db,
             response_formatter=response_formatter,
@@ -562,6 +569,23 @@ class CommandProcessor:
         """
         ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
         await self._karakeep.handle_sync_karakeep(ctx)
+
+    # =========================================================================
+    # Listen (TTS) delegation
+    # =========================================================================
+
+    async def handle_listen_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /listen command -- generate audio from a summary."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._listen.handle_listen(ctx)
 
     # =========================================================================
     # Digest delegation

@@ -16,6 +16,7 @@ from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
 from .settings import AppConfig, Config, ConfigHelper, Settings, load_config
 from .telegram import TelegramConfig, TelegramLimitsConfig
+from .tts import ElevenLabsConfig
 from .twitter import TwitterConfig
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "ConfigHelper",
     "ContentLimitsConfig",
     "DatabaseConfig",
+    "ElevenLabsConfig",
     "EmbeddingConfig",
     "FirecrawlConfig",
     "KarakeepConfig",

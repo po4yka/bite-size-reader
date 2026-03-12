@@ -62,9 +62,7 @@ def _parse_session_expires_at(payload: dict[str, Any]) -> datetime | None:
         return None
 
 
-def _prune_fallback_sessions(
-    now: datetime, *, exclude_session_id: str | None = None
-) -> int:
+def _prune_fallback_sessions(now: datetime, *, exclude_session_id: str | None = None) -> int:
     """Remove expired in-memory sync sessions."""
     expired_session_ids = []
     for session_id, payload in _sync_sessions.items():

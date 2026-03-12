@@ -162,7 +162,9 @@ class TestAccessControllerBlockReset(unittest.IsolatedAsyncioTestCase):
             controller._deny_notified_until[stale_uid] = 5
 
             with patch("app.adapters.telegram.access_controller.time.time", fake_time):
-                allowed = await controller.check_access(1, FakeMessage("/help", uid=1), "cid", 0, 0.0)
+                allowed = await controller.check_access(
+                    1, FakeMessage("/help", uid=1), "cid", 0, 0.0
+                )
 
             assert allowed is True
             assert stale_uid not in controller._failed_attempts

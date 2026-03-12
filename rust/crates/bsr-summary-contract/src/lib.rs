@@ -1624,20 +1624,16 @@ fn normalize_entities_field(raw: Option<&Value>) -> Value {
                                 })
                         })
                         .or_else(|| {
-                            obj.get("label")
-                                .and_then(Value::as_str)
-                                .and_then(|value| {
-                                    bucket_key_used = Some("label");
-                                    resolve_entity_bucket(value)
-                                })
+                            obj.get("label").and_then(Value::as_str).and_then(|value| {
+                                bucket_key_used = Some("label");
+                                resolve_entity_bucket(value)
+                            })
                         })
                         .or_else(|| {
-                            obj.get("group")
-                                .and_then(Value::as_str)
-                                .and_then(|value| {
-                                    bucket_key_used = Some("group");
-                                    resolve_entity_bucket(value)
-                                })
+                            obj.get("group").and_then(Value::as_str).and_then(|value| {
+                                bucket_key_used = Some("group");
+                                resolve_entity_bucket(value)
+                            })
                         })
                         .unwrap_or("people");
                     buckets
@@ -1691,8 +1687,7 @@ fn coerce_entity_values_for_item(
     obj.iter()
         .filter(|(key, _)| {
             let key = key.as_str();
-            !is_entity_metadata_key(key)
-                && (bucket_key_used != Some(key))
+            !is_entity_metadata_key(key) && (bucket_key_used != Some(key))
         })
         .flat_map(|(_, value)| coerce_entity_values(value))
         .collect()
@@ -1885,7 +1880,12 @@ fn required_insert_columns_without_defaults(
         let not_null: i64 = row.get(3)?;
         let default_value: Option<String> = row.get(4)?;
         let part_of_pk: i64 = row.get(5)?;
-        Ok((name, not_null != 0, default_value.is_some(), part_of_pk != 0))
+        Ok((
+            name,
+            not_null != 0,
+            default_value.is_some(),
+            part_of_pk != 0,
+        ))
     })?;
 
     let mut required = Vec::new();
@@ -2158,11 +2158,14 @@ mod tests {
 
         let report = check_sqlite_compatibility_conn(&conn).expect("check report");
         assert!(!report.compatible);
-        assert!(report.missing_columns.get("requests").is_some_and(|columns| {
-            columns.iter().any(|column| {
-                column.contains("must_fill")
-                    && column.contains("required insert column unsupported by roundtrip")
-            })
-        }));
+        assert!(report
+            .missing_columns
+            .get("requests")
+            .is_some_and(|columns| {
+                columns.iter().any(|column| {
+                    column.contains("must_fill")
+                        && column.contains("required insert column unsupported by roundtrip")
+                })
+            }));
     }
 }

@@ -43,6 +43,7 @@ from app.api.routers import (
     summaries,
     sync,
     system,
+    tts,
     user,
 )
 from app.config import Config
@@ -141,6 +142,7 @@ app.include_router(system.router, prefix="/v1/system", tags=["System"])
 app.include_router(proxy.router, prefix="/v1/proxy", tags=["Proxy"])
 app.include_router(notifications.router, prefix="/v1/notifications", tags=["Notifications"])
 app.include_router(digest.router, prefix="/v1/digest", tags=["Digest"])
+app.include_router(tts.router, prefix="/v1/summaries", tags=["TTS"])
 app.include_router(health.router, tags=["Health"])
 
 # Serve static files (Mini App HTML for session init, etc.)

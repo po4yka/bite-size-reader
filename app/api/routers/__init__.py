@@ -14,6 +14,7 @@ from . import (
     summaries,
     sync,
     system,
+    tts,
     user,
 )
 
@@ -29,5 +30,6 @@ __all__ = [
     "summaries",
     "sync",
     "system",
+    "tts",
     "user",
 ]

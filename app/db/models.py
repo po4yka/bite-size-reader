@@ -388,6 +388,34 @@ class VideoDownload(BaseModel):
         )
 
 
+class AudioGeneration(BaseModel):
+    """Cached TTS audio files generated from summaries."""
+
+    summary = peewee.ForeignKeyField(
+        Summary, backref="audio_generations", unique=True, on_delete="CASCADE"
+    )
+    provider = peewee.TextField(default="elevenlabs")
+    voice_id = peewee.TextField()
+    model = peewee.TextField()
+    file_path = peewee.TextField(null=True)
+    file_size_bytes = peewee.BigIntegerField(null=True)
+    duration_sec = peewee.FloatField(null=True)
+    char_count = peewee.IntegerField(null=True)
+    source_field = peewee.TextField(default="summary_1000")
+    language = peewee.TextField(null=True)
+    status = peewee.TextField(default="pending")  # pending | generating | completed | error
+    error_text = peewee.TextField(null=True)
+    latency_ms = peewee.IntegerField(null=True)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "audio_generations"
+        indexes = (
+            (("status",), False),
+            (("created_at",), False),
+        )
+
+
 class AttachmentProcessing(BaseModel):
     """Tracks image and PDF attachment processing."""
 
@@ -793,6 +821,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     AuditLog,
     SummaryEmbedding,
     VideoDownload,
+    AudioGeneration,
     AttachmentProcessing,
     ClientSecret,
     Collection,

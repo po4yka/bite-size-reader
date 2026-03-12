@@ -365,6 +365,24 @@ uv run python scripts/twitter_article_live_smoke.py \
 | `CHROMA_REQUIRED` | `false` | Fail startup if ChromaDB unavailable |
 | `CHROMA_CONNECTION_TIMEOUT` | `10.0` | Connection timeout (seconds) |
 
+## Embedding Provider
+
+Controls which embedding backend generates vectors for semantic search.
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `EMBEDDING_PROVIDER` | `local` | `local` (sentence-transformers) or `gemini` (Google Gemini API) |
+| `GEMINI_API_KEY` | _(empty)_ | Google Gemini API key (required when `EMBEDDING_PROVIDER=gemini`) |
+| `GEMINI_EMBEDDING_MODEL` | `gemini-embedding-2-preview` | Gemini embedding model ID |
+| `GEMINI_EMBEDDING_DIMENSIONS` | `768` | Output embedding dimensions (1-3072) |
+| `EMBEDDING_MAX_TOKEN_LENGTH` | `512` | Max tokens per text chunk for embedding (64-8192; Gemini supports up to 8192) |
+
+**Notes:**
+
+- Switching providers changes embedding dimensions (local=384, Gemini=768 default). Re-embed all data after switching: `python -m app.cli.backfill_embeddings --force` then `python -m app.cli.backfill_chroma_store --force`.
+- `google-genai` package is an optional dependency (`pip install bite-size-reader[gemini]`). The app works without it when `EMBEDDING_PROVIDER=local`.
+- Gemini uses task-type-aware embeddings: `RETRIEVAL_DOCUMENT` for indexing, `RETRIEVAL_QUERY` for search queries.
+
 ## MCP Server
 
 | Variable | Default | Description |

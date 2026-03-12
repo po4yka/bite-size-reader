@@ -38,6 +38,7 @@ _POST_SUMMARIZE_TEXT_COMMANDS: tuple[tuple[str, str], ...] = (
     ("/read", "handle_read_command"),
     ("/search", "handle_search_command"),
     ("/sync_karakeep", "handle_sync_karakeep_command"),
+    ("/listen", "handle_listen_command"),
     ("/cdigest", "handle_cdigest_command"),
     ("/digest", "handle_digest_command"),
     ("/channels", "handle_channels_command"),

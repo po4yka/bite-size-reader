@@ -41,7 +41,6 @@ async def test_trending_payload_prunes_expired_in_memory_entries(monkeypatch):
 
     async def fake_get_from_redis(user_id: int, days: int, limit: int):
         del user_id, days, limit
-        return None
 
     async def fake_set_to_redis(
         user_id: int, days: int, limit: int, payload: dict[str, object]

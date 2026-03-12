@@ -1,6 +1,6 @@
 # How to Setup ChromaDB Vector Search
 
-Enable semantic search with ChromaDB and sentence embeddings.
+Enable semantic search with ChromaDB and configurable embedding providers (local sentence-transformers or Google Gemini API).
 
 **Audience:** Operators
 **Difficulty:** Intermediate
@@ -13,7 +13,7 @@ Enable semantic search with ChromaDB and sentence embeddings.
 ChromaDB enables **semantic search** over your summaries:
 
 - **Natural language queries**: "machine learning tutorials" finds relevant articles even if they use different terms
-- **Vector embeddings**: Converts text to 384-dimensional vectors using sentence-transformers
+- **Vector embeddings**: Converts text to vectors using sentence-transformers (384-dim, local) or Gemini Embedding 2 API (768-dim, remote)
 - **Similarity search**: Finds semantically similar summaries (not just keyword matches)
 - **Hybrid search**: Combines semantic search with full-text search and reranking
 
@@ -24,8 +24,8 @@ ChromaDB enables **semantic search** over your summaries:
 ## Prerequisites
 
 - Bite-Size Reader installed and running
-- Python 3.13+ with sentence-transformers support
-- 1-2 GB RAM for embedding model
+- **Local provider:** Python 3.13+ with sentence-transformers support, 1-2 GB RAM for embedding model
+- **Gemini provider:** Google Gemini API key ([get one free](https://aistudio.google.com/apikey)), `pip install google-genai`
 
 ---
 
@@ -212,7 +212,7 @@ grep CHROMA_HOST .env
 
 **Symptom:** Error "Failed to generate embeddings"
 
-**Causes & Solutions:**
+**Local provider causes & solutions:**
 
 1. **Model not downloaded:**
 
@@ -237,6 +237,25 @@ grep CHROMA_HOST .env
    # Or reduce batch size
    CHROMA_BATCH_SIZE=10  # Default: 50
    ```
+
+**Gemini provider causes & solutions:**
+
+1. **Missing API key:**
+
+   ```bash
+   # Verify GEMINI_API_KEY is set
+   grep GEMINI_API_KEY .env
+   ```
+
+2. **Missing dependency:**
+
+   ```bash
+   pip install google-genai>=1.0.0
+   ```
+
+3. **Rate limiting / quota exceeded:**
+
+   Gemini has per-minute and per-day rate limits. Reduce batch sizes for backfill operations or wait and retry.
 
 ---
 
@@ -278,7 +297,45 @@ python -m app.cli.backfill_chroma_store
 
 ## Advanced Configuration
 
-### Embedding Model Selection
+### Embedding Provider Selection
+
+Bite-Size Reader supports two embedding providers, controlled by `EMBEDDING_PROVIDER`:
+
+| Provider | Dimensions | Latency | Cost | Multilingual | Setup |
+| ---------- | ---------- | --------- | ------ | ------------ | ------- |
+| `local` (default) | 384 | ~50ms | Free (CPU/GPU) | Limited | Download model (~90 MB) |
+| `gemini` | 768 (configurable 1-3072) | ~200ms | Free tier / $0.20 per 1M tokens | Native | API key only |
+
+**Local provider** (default -- no changes needed):
+
+```bash
+EMBEDDING_PROVIDER=local
+```
+
+**Gemini Embedding 2 provider:**
+
+```bash
+EMBEDDING_PROVIDER=gemini
+GEMINI_API_KEY=your-api-key-here
+GEMINI_EMBEDDING_MODEL=gemini-embedding-2-preview   # default
+GEMINI_EMBEDDING_DIMENSIONS=768                      # 1-3072
+EMBEDDING_MAX_TOKEN_LENGTH=2048                      # Gemini supports up to 8192
+```
+
+Gemini uses task-type-aware embeddings automatically: `RETRIEVAL_DOCUMENT` when indexing summaries, `RETRIEVAL_QUERY` when searching. The `google-genai` package is lazily imported and only required when `EMBEDDING_PROVIDER=gemini`.
+
+**Switching providers** requires re-embedding all data (dimensions differ):
+
+```bash
+python -m app.cli.backfill_embeddings --force
+python -m app.cli.backfill_chroma_store --force
+```
+
+---
+
+### Local Embedding Model Selection
+
+These options only apply when `EMBEDDING_PROVIDER=local`.
 
 **Small & Fast (Recommended):**
 
@@ -313,6 +370,8 @@ CHROMA_EMBEDDING_MODEL=all-roberta-large-v1
 ---
 
 ### GPU Acceleration
+
+Applies to `EMBEDDING_PROVIDER=local` only.
 
 ```bash
 # Enable CUDA (requires NVIDIA GPU)
@@ -487,4 +546,4 @@ docker restart bite-size-reader
 
 ---
 
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-03-12

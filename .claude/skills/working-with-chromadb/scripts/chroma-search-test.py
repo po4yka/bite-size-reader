@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from typing import Any, cast
 
 
 def parse_args(argv: list[str]) -> tuple[str, int, str | None, str]:
@@ -67,7 +68,7 @@ async def run_search(query: str, limit: int, lang: str | None, db_path: str) -> 
 
     search_service = ChromaVectorSearchService(
         vector_store=vector_store,
-        embedding_service=embedding_service,  # type: ignore[arg-type]
+        embedding_service=cast("Any", embedding_service),
     )
 
     results = await search_service.search(query, language=lang, limit=limit)

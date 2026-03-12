@@ -157,6 +157,30 @@ export function markSummaryRead(summaryId: number): Promise<{ success: boolean }
   });
 }
 
+export interface AudioGenerationResponse {
+  summaryId: number;
+  status: string;
+  charCount: number | null;
+  fileSizeBytes: number | null;
+  latencyMs: number | null;
+  error: string | null;
+}
+
+export async function generateSummaryAudio(
+  summaryId: number,
+  sourceField: string = "summary_1000",
+): Promise<AudioGenerationResponse> {
+  const query = new URLSearchParams({ source_field: sourceField });
+  return apiRequest<AudioGenerationResponse>(`/v1/summaries/${summaryId}/audio?${query.toString()}`, {
+    method: "POST",
+  });
+}
+
+export function getSummaryAudioUrl(summaryId: number): string {
+  const base = import.meta.env.VITE_API_BASE_URL ?? "";
+  return `${base}/v1/summaries/${summaryId}/audio`;
+}
+
 export async function toggleSummaryFavorite(summaryId: number): Promise<{ isFavorited: boolean }> {
   const data = await apiRequest<{ isFavorited?: boolean; is_favorited?: boolean }>(
     `/v1/summaries/${summaryId}/favorite`,
