@@ -70,6 +70,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "bsr-models"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "bsr-persistence"
+version = "0.1.0"
+dependencies = [
+ "bsr-models",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "bsr-pipeline-shadow"
 version = "0.1.0"
 dependencies = [
