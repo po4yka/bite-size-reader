@@ -29,6 +29,8 @@ use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 use tower_http::services::ServeDir;
 use url::form_urlencoded;
 
+mod core_domains;
+
 type HmacSha256 = Hmac<Sha256>;
 
 const DEFAULT_DOCS_HTML: &str = r#"<!DOCTYPE html>
@@ -121,12 +123,29 @@ pub struct ApiRuntimeConfig {
     pub jwt_secret_key: Option<String>,
     pub bot_token: Option<String>,
     pub allowed_user_ids: HashSet<i64>,
+    pub allowed_client_ids: HashSet<String>,
     pub api_rate_limit_window_seconds: i64,
     pub api_rate_limit_cooldown_multiplier: f64,
     pub api_rate_limit_default: usize,
     pub api_rate_limit_summaries: usize,
     pub api_rate_limit_requests: usize,
     pub api_rate_limit_search: usize,
+    pub redis_enabled: bool,
+    pub redis_required: bool,
+    pub redis_url: Option<String>,
+    pub redis_host: String,
+    pub redis_port: u16,
+    pub redis_db: i64,
+    pub redis_password: Option<String>,
+    pub redis_prefix: String,
+    pub secret_login_enabled: bool,
+    pub secret_min_length: usize,
+    pub secret_max_length: usize,
+    pub secret_max_failed_attempts: usize,
+    pub secret_lockout_minutes: usize,
+    pub secret_pepper: Option<String>,
+    pub apple_jwks_url: String,
+    pub google_jwks_url: String,
 }
 
 impl ApiRuntimeConfig {
@@ -164,6 +183,7 @@ impl ApiRuntimeConfig {
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty()),
             allowed_user_ids: parse_allowed_user_ids(),
+            allowed_client_ids: parse_allowed_client_ids(),
             api_rate_limit_window_seconds: parse_i64_env("API_RATE_LIMIT_WINDOW_SECONDS", 60),
             api_rate_limit_cooldown_multiplier: parse_f64_env(
                 "API_RATE_LIMIT_COOLDOWN_MULTIPLIER",
@@ -173,6 +193,33 @@ impl ApiRuntimeConfig {
             api_rate_limit_summaries: parse_usize_env("API_RATE_LIMIT_SUMMARIES", 200),
             api_rate_limit_requests: parse_usize_env("API_RATE_LIMIT_REQUESTS", 10),
             api_rate_limit_search: parse_usize_env("API_RATE_LIMIT_SEARCH", 50),
+            redis_enabled: parse_bool_env("REDIS_ENABLED", true),
+            redis_required: parse_bool_env("REDIS_REQUIRED", false),
+            redis_url: std::env::var("REDIS_URL")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
+            redis_host: std::env::var("REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
+            redis_port: parse_u16_env("REDIS_PORT", 6379),
+            redis_db: parse_i64_env("REDIS_DB", 0),
+            redis_password: std::env::var("REDIS_PASSWORD")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
+            redis_prefix: std::env::var("REDIS_PREFIX").unwrap_or_else(|_| "bsr".to_string()),
+            secret_login_enabled: parse_bool_env("SECRET_LOGIN_ENABLED", false),
+            secret_min_length: parse_usize_env("SECRET_LOGIN_MIN_LENGTH", 32),
+            secret_max_length: parse_usize_env("SECRET_LOGIN_MAX_LENGTH", 128),
+            secret_max_failed_attempts: parse_usize_env("SECRET_LOGIN_MAX_FAILED_ATTEMPTS", 5),
+            secret_lockout_minutes: parse_usize_env("SECRET_LOGIN_LOCKOUT_MINUTES", 15),
+            secret_pepper: std::env::var("SECRET_LOGIN_PEPPER")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
+            apple_jwks_url: std::env::var("AUTH_APPLE_JWKS_URL")
+                .unwrap_or_else(|_| "https://appleid.apple.com/auth/keys".to_string()),
+            google_jwks_url: std::env::var("AUTH_GOOGLE_JWKS_URL")
+                .unwrap_or_else(|_| "https://www.googleapis.com/oauth2/v3/certs".to_string()),
         }
     }
 
@@ -208,6 +255,14 @@ struct CorrelationId(String);
 struct AuthenticatedUser {
     user_id: i64,
     username: Option<String>,
+    client_id: String,
+    auth_source: AuthSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+enum AuthSource {
+    Jwt,
+    WebApp,
 }
 
 #[derive(Debug, Clone)]
@@ -222,6 +277,9 @@ struct JwtHeader {
 struct JwtClaims {
     user_id: Value,
     username: Option<String>,
+    client_id: Option<String>,
+    #[serde(rename = "type")]
+    token_type: Option<String>,
     exp: Option<i64>,
 }
 
@@ -257,6 +315,7 @@ pub fn build_router(state: AppState) -> Router<AppState> {
         .route("/docs/oauth2-redirect", get(swagger_oauth_redirect_handler))
         .route("/web", get(web_index_handler))
         .route("/web/{*path}", get(web_index_handler))
+        .merge(core_domains::build_router())
         .nest_service(
             "/static",
             ServeDir::new(state.runtime.config.static_dir.clone()),
@@ -416,6 +475,9 @@ async fn auth_guard_middleware(
                     Vec::new(),
                 );
             }
+            request
+                .extensions_mut()
+                .insert(core_domains::AuthResolutionError(message));
         }
     }
 
@@ -480,9 +542,58 @@ async fn rate_limit_middleware(
     let window_start = (now / window) * window;
     let actor = resolve_rate_limit_actor(&request, &state.runtime.config)
         .unwrap_or_else(|| "unknown".to_string());
-    let key = format!("{actor}:{window_start}");
+    let ttl = std::cmp::max(
+        window + 5,
+        (window as f64 * state.runtime.config.api_rate_limit_cooldown_multiplier) as i64,
+    );
 
-    let (allowed, remaining) = {
+    let redis_outcome = if state.runtime.config.redis_enabled {
+        let url = redis_connection_url(&state.runtime.config);
+        match redis::Client::open(url) {
+            Ok(client) => match client.get_multiplexed_tokio_connection().await {
+                Ok(mut connection) => {
+                    let key = redis_rate_limit_key(&state.runtime.config, &actor, window_start);
+                    let result: redis::RedisResult<(i64, bool)> = redis::pipe()
+                        .cmd("INCR")
+                        .arg(&key)
+                        .cmd("EXPIRE")
+                        .arg(&key)
+                        .arg(ttl)
+                        .query_async(&mut connection)
+                        .await;
+                    match result {
+                        Ok((count, _)) => Some((
+                            count <= bucket_limit as i64,
+                            bucket_limit.saturating_sub(count as usize),
+                        )),
+                        Err(_) => None,
+                    }
+                }
+                Err(_) => None,
+            },
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
+
+    let (allowed, remaining) = if let Some(outcome) = redis_outcome {
+        outcome
+    } else if state.runtime.config.redis_required {
+        return error_json_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "RATE_LIMIT_BACKEND_UNAVAILABLE",
+            "Rate limit backend unavailable. Please try again later.",
+            "internal",
+            true,
+            correlation_id,
+            &state.runtime.config,
+            None,
+            None,
+            Vec::new(),
+        );
+    } else {
+        let key = format!("{actor}:{window_start}");
         let mut local_limits = state.runtime.local_rate_limits.lock().await;
         let bucket = local_limits.entry(key).or_default();
         bucket.retain(|timestamp| *timestamp >= window_start);
@@ -955,6 +1066,9 @@ fn manual_route_map() -> BTreeMap<&'static str, BTreeSet<String>> {
     routes.insert("/web", set_of(["GET"]));
     routes.insert("/web/{*path}", set_of(["GET"]));
     routes.insert("/static/{*path}", set_of(["GET"]));
+    for (path, methods) in core_domains::implemented_route_map() {
+        routes.insert(path, methods);
+    }
     routes
 }
 
@@ -996,13 +1110,44 @@ fn resolve_rate_limit_actor(request: &Request, config: &ApiRuntimeConfig) -> Opt
         return Some(user.user_id.to_string());
     }
 
-    request
+    if let Some(user_id) = request
         .headers()
         .get(AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.strip_prefix("Bearer "))
         .and_then(|token| decode_jwt_user(token.trim(), config).ok())
         .map(|user| user.user_id.to_string())
+    {
+        return Some(user_id);
+    }
+
+    request
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(',').next())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            request
+                .headers()
+                .get("x-real-ip")
+                .and_then(|value| value.to_str().ok())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        })
+        .or_else(|| {
+            request
+                .headers()
+                .get("host")
+                .and_then(|value| value.to_str().ok())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        })
+        .or_else(|| Some("unknown".to_string()))
 }
 
 fn decode_jwt_user(token: &str, config: &ApiRuntimeConfig) -> Result<AuthenticatedUser, String> {
@@ -1052,6 +1197,12 @@ fn decode_jwt_user(token: &str, config: &ApiRuntimeConfig) -> Result<Authenticat
             return Err("Signature has expired".to_string());
         }
     }
+    if claims.token_type.as_deref() != Some("access") {
+        return Err(format!(
+            "Wrong token type. Expected access token, got {} token.",
+            claims.token_type.as_deref().unwrap_or("unknown")
+        ));
+    }
 
     let user_id = match claims.user_id {
         Value::Number(number) => number
@@ -1066,6 +1217,8 @@ fn decode_jwt_user(token: &str, config: &ApiRuntimeConfig) -> Result<Authenticat
     Ok(AuthenticatedUser {
         user_id,
         username: claims.username,
+        client_id: claims.client_id.unwrap_or_default(),
+        auth_source: AuthSource::Jwt,
     })
 }
 
@@ -1144,6 +1297,8 @@ fn verify_telegram_webapp_init_data(
             .get("username")
             .and_then(Value::as_str)
             .map(str::to_string),
+        client_id: "webapp".to_string(),
+        auth_source: AuthSource::WebApp,
     })
 }
 
@@ -1238,6 +1393,42 @@ fn parse_allowed_user_ids() -> HashSet<i64> {
         .collect()
 }
 
+fn parse_allowed_client_ids() -> HashSet<String> {
+    std::env::var("ALLOWED_CLIENT_IDS")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .filter(|value| {
+            value.len() <= 100
+                && value
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+fn redis_connection_url(config: &ApiRuntimeConfig) -> String {
+    if let Some(url) = config.redis_url.as_ref() {
+        return url.clone();
+    }
+    let auth = config
+        .redis_password
+        .as_ref()
+        .filter(|value| !value.is_empty())
+        .map(|value| format!(":{}@", value))
+        .unwrap_or_default();
+    format!(
+        "redis://{}{}:{}/{}",
+        auth, config.redis_host, config.redis_port, config.redis_db
+    )
+}
+
+fn redis_rate_limit_key(config: &ApiRuntimeConfig, actor: &str, window_start: i64) -> String {
+    format!("{}:rate:{}:{}", config.redis_prefix, actor, window_start)
+}
+
 fn parse_bool_env(key: &str, default: bool) -> bool {
     match std::env::var(key) {
         Ok(value) => match value.trim().to_ascii_lowercase().as_str() {
@@ -1327,16 +1518,39 @@ mod tests {
             jwt_secret_key: Some("0123456789abcdef0123456789abcdef".to_string()),
             bot_token: Some("123456:ABCDEF".to_string()),
             allowed_user_ids: HashSet::from([42]),
+            allowed_client_ids: HashSet::from(["test-client".to_string(), "webapp".to_string()]),
             api_rate_limit_window_seconds: 60,
             api_rate_limit_cooldown_multiplier: 2.0,
             api_rate_limit_default: 100,
             api_rate_limit_summaries: 200,
             api_rate_limit_requests: 10,
             api_rate_limit_search: 50,
+            redis_enabled: false,
+            redis_required: false,
+            redis_url: None,
+            redis_host: "127.0.0.1".to_string(),
+            redis_port: 6379,
+            redis_db: 0,
+            redis_password: None,
+            redis_prefix: "bsr".to_string(),
+            secret_login_enabled: true,
+            secret_min_length: 12,
+            secret_max_length: 128,
+            secret_max_failed_attempts: 2,
+            secret_lockout_minutes: 1,
+            secret_pepper: Some("secret-pepper-value".to_string()),
+            apple_jwks_url: "http://127.0.0.1:9/apple".to_string(),
+            google_jwks_url: "http://127.0.0.1:9/google".to_string(),
         }
     }
 
-    fn encode_test_jwt(secret: &str, user_id: i64, username: &str, exp: i64) -> String {
+    fn encode_test_jwt(
+        secret: &str,
+        user_id: i64,
+        username: &str,
+        client_id: &str,
+        exp: i64,
+    ) -> String {
         let header = URL_SAFE_NO_PAD.encode(
             serde_json::to_vec(&json!({"alg": "HS256", "typ": "JWT"})).expect("jwt header"),
         );
@@ -1344,6 +1558,8 @@ mod tests {
             serde_json::to_vec(&json!({
                 "user_id": user_id,
                 "username": username,
+                "client_id": client_id,
+                "type": "access",
                 "exp": exp,
             }))
             .expect("jwt claims"),
@@ -1501,7 +1717,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn auth_placeholder_is_public_but_not_implemented() {
+    async fn auth_routes_are_public_but_still_validate_payloads() {
         let state = build_state(test_config("public-auth"))
             .await
             .expect("state");
@@ -1516,7 +1732,7 @@ mod tests {
             )
             .await
             .expect("response");
-        assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     #[tokio::test]
@@ -1526,6 +1742,7 @@ mod tests {
             config.jwt_secret_key.as_deref().expect("jwt secret"),
             42,
             "tester",
+            "test-client",
             unix_timestamp() + 300,
         );
         let state = build_state(config).await.expect("state");

@@ -14,7 +14,7 @@ This workspace contains migration crates delivered across milestones **M1–M8**
 - `bsr-pipeline-shadow`: M3 pipeline slice parity and runtime command surface
 - `bsr-interface-router`: M4 mobile route + Telegram command routing surface
 - `bsr-telegram-runtime`: M6-S1 Telegram command route-decision scaffold (`command-route`)
-- `bsr-mobile-api`: M8 API shell foundation for canonical OpenAPI/docs/static routes, middleware/auth/rate-limit scaffolding, and placeholder `/v1/*` route-method parity from `docs/openapi/mobile_api.yaml`
+- `bsr-mobile-api`: M8 API runtime shell plus Rust-native `auth` / `user` / `system` handlers, Redis-aware rate limiting, and canonical OpenAPI/docs/static route serving
 
 ## Scope
 
@@ -25,7 +25,8 @@ This workspace contains migration crates delivered across milestones **M1–M8**
 - `MIGRATION_PROCESSING_ORCHESTRATOR_BACKEND=rust` makes Rust authoritative for URL and forwarded-text processing hot paths; Python remains the Telegram/progress/message-shell bridge.
 - `MIGRATION_WORKER_BACKEND=rust` is now a secondary/test-only toggle when the processing orchestrator backend is Rust.
 - Specialized Twitter/YouTube extraction paths and web-search enrichment are still outside the Rust processing cutover.
-- `bsr-mobile-api` currently provides the runtime shell, docs/static/public endpoints, auth/rate-limit middleware scaffolding, and `/v1/*` route registration parity. Domain handlers, background processing, and API-domain persistence remain to be ported.
+- `bsr-mobile-api` now owns the runtime shell plus `/v1/auth/*`, `/v1/user/*`, and `/v1/system/*` on the Rust path, including JWT/WebApp auth precedence, owner checks, Redis-aware rate limiting, db-dump handling, and the auth/user/system SQLite subset in `bsr-persistence`.
+- API groups outside `auth` / `user` / `system`, plus background processing, remain to be ported before the full Mobile API runtime cutover.
 - Legacy `MIGRATION_TELEGRAM_RUNTIME_BACKEND` values are ignored with a warning.
 
 ## Recent Correctness Updates (2026-03-05)

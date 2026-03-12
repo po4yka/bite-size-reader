@@ -17,9 +17,14 @@ path = "src/main.rs"
 axum.workspace = true
 base64 = "0.22"
 bsr-interface-router = { path = "../bsr-interface-router" }
-chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+bsr-persistence = { path = "../bsr-persistence" }
+chrono.workspace = true
 hmac = "0.12"
 http = "1"
+jsonwebtoken.workspace = true
+rand.workspace = true
+redis.workspace = true
+reqwest.workspace = true
 rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true

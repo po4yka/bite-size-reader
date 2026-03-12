@@ -6,11 +6,23 @@ use bsr_models::{MigrationHistoryEntry, MigrationStatusEntry, MigrationStatusRep
 use rusqlite::Connection;
 use thiserror::Error;
 
+mod api_core;
 mod processing;
 
+pub use api_core::{
+    allowlisted_table_counts, clear_link_nonce, complete_telegram_link, create_client_secret,
+    create_refresh_token, delete_user, get_client_secret, get_client_secret_by_id,
+    get_or_create_user, get_refresh_token_by_hash, get_user_by_telegram_id,
+    increment_failed_attempts, list_active_sessions, list_client_secrets, list_user_summary_rows,
+    mark_client_secret_revoked, normalize_datetime_text, reset_failed_attempts,
+    revoke_active_secrets, revoke_refresh_token, rotate_client_secret, set_client_secret_status,
+    set_link_nonce, touch_client_secret_after_success, unlink_telegram,
+    update_refresh_token_last_used, update_user_preferences, ClientSecretRecord,
+    RefreshTokenRecord, UserRecord, UserSummaryStatRow,
+};
 pub use processing::{
-    create_minimal_request, create_request, get_crawl_result_by_request, get_request_by_dedupe_hash,
-    get_request_by_forward, get_request_by_id, get_summary_by_request,
+    create_minimal_request, create_request, get_crawl_result_by_request,
+    get_request_by_dedupe_hash, get_request_by_forward, get_request_by_id, get_summary_by_request,
     get_unread_summary_by_request, insert_crawl_result, insert_llm_call,
     update_request_correlation_id, update_request_error, update_request_lang_detected,
     update_request_status, update_summary_insights, upsert_summary, CrawlResultRecord,
@@ -41,7 +53,9 @@ CREATE TABLE IF NOT EXISTS "migration_history" (
 "#;
 
 pub fn open_connection(db_path: impl AsRef<Path>) -> Result<Connection, PersistenceError> {
-    Ok(Connection::open(db_path)?)
+    let connection = Connection::open(db_path)?;
+    connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+    Ok(connection)
 }
 
 pub fn ensure_migration_history_table(connection: &Connection) -> Result<(), PersistenceError> {

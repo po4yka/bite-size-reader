@@ -39,10 +39,11 @@ def _binary_is_fresh(binary_path: Path, package_name: str) -> bool:
 @cache
 def ensure_rust_binary(binary_name: str, package_name: str) -> Path:
     release_path, debug_path = _binary_candidates(binary_name)
-    if _binary_is_fresh(release_path, package_name):
-        return release_path
-    if _binary_is_fresh(debug_path, package_name):
-        return debug_path
+    fresh_candidates = [
+        path for path in (release_path, debug_path) if _binary_is_fresh(path, package_name)
+    ]
+    if fresh_candidates:
+        return max(fresh_candidates, key=lambda path: path.stat().st_mtime)
 
     cargo = shutil.which("cargo")
     if cargo is None:
@@ -64,10 +65,10 @@ def ensure_rust_binary(binary_name: str, package_name: str) -> Path:
         check=True,
     )
 
-    if release_path.is_file():
-        return release_path
     if debug_path.is_file():
         return debug_path
+    if release_path.is_file():
+        return release_path
 
     msg = f"expected Rust binary '{binary_name}' for package '{package_name}' after cargo build"
     raise FileNotFoundError(msg)
