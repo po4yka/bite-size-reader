@@ -5,9 +5,10 @@ import logging
 import sys
 from pathlib import Path
 
+from app.config import load_config
 from app.db.models import Summary, SummaryEmbedding
 from app.db.session import DatabaseSessionManager
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_factory import create_embedding_service
 from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
 
 logger = logging.getLogger(__name__)
@@ -47,9 +48,14 @@ def get_summaries_without_embeddings(
 async def backfill_embeddings(db_path: str, limit: int | None = None, force: bool = False) -> None:
     """Run backfill process."""
     # Initialize services
+    cfg = load_config(allow_stub_telegram=True)
     db = DatabaseSessionManager(path=db_path)
-    embedding_service = EmbeddingService()
-    generator = SummaryEmbeddingGenerator(db=db, embedding_service=embedding_service)
+    embedding_service = create_embedding_service(cfg.embedding)
+    generator = SummaryEmbeddingGenerator(
+        db=db,
+        embedding_service=embedding_service,
+        max_token_length=cfg.embedding.max_token_length,
+    )
 
     # Fetch summaries to process
     logger.info("Fetching summaries without embeddings...")

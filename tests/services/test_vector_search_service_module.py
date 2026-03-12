@@ -12,7 +12,9 @@ from app.services.vector_search_service import VectorSearchResult, VectorSearchS
 class _DummyEmbeddingService:
     """Simple embedding service stub for unit tests."""
 
-    async def generate_embedding(self, _text: str, *, language: str | None = None) -> list[float]:
+    async def generate_embedding(
+        self, _text: str, *, language: str | None = None, task_type: str | None = None
+    ) -> list[float]:
         if language:
             return [1.0, 0.0]
         return [1.0, 0.0]

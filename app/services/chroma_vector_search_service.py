@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from app.infrastructure.vector.chroma_store import ChromaVectorStore
-    from app.services.embedding_service import EmbeddingService
+    from app.services.embedding_protocol import EmbeddingServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class ChromaVectorSearchService:
         self,
         *,
         vector_store: ChromaVectorStore,
-        embedding_service: EmbeddingService,
+        embedding_service: EmbeddingServiceProtocol,
         default_top_k: int = 25,
     ) -> None:
         if default_top_k <= 0:
@@ -101,7 +101,7 @@ class ChromaVectorSearchService:
 
         try:
             query_embedding = await self._embedding_service.generate_embedding(
-                query.strip(), language=detected_language
+                query.strip(), language=detected_language, task_type="query"
             )
         except Exception:
             logger.exception(

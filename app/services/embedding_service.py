@@ -65,7 +65,9 @@ class EmbeddingService:
             )
         return self._models[model_name]
 
-    async def generate_embedding(self, text: str, language: str | None = None) -> Any:
+    async def generate_embedding(
+        self, text: str, *, language: str | None = None, task_type: str | None = None
+    ) -> Any:
         """Generate embedding vector for text.
 
         Args:

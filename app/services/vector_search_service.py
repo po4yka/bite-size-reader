@@ -18,7 +18,7 @@ from app.infrastructure.persistence.sqlite.repositories.topic_search_repository 
 
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
-    from app.services.embedding_service import EmbeddingService
+    from app.services.embedding_protocol import EmbeddingServiceProtocol
     from app.services.search_filters import SearchFilters
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class VectorSearchService:
     def __init__(
         self,
         db: DatabaseSessionManager | Any,
-        embedding_service: EmbeddingService,
+        embedding_service: EmbeddingServiceProtocol,
         *,
         max_results: int = 25,
         min_similarity: float = 0.3,
@@ -109,7 +109,7 @@ class VectorSearchService:
         # Generate query embedding with language-specific model
         try:
             query_embedding = await self._embedding_service.generate_embedding(
-                query.strip(), language=query_language
+                query.strip(), language=query_language, task_type="query"
             )
         except (RuntimeError, ValueError, OSError):
             logger.exception(

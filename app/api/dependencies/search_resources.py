@@ -9,16 +9,19 @@ from app.config import ChromaConfig, load_config
 from app.core.logging_utils import get_logger
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.chroma_vector_search_service import ChromaVectorSearchService
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_factory import create_embedding_service
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from app.services.embedding_protocol import EmbeddingServiceProtocol
+
 logger = get_logger(__name__)
 
 
-def _default_embedding_factory() -> EmbeddingService:
-    return EmbeddingService()
+def _default_embedding_factory() -> EmbeddingServiceProtocol:
+    cfg = load_config(allow_stub_telegram=True)
+    return create_embedding_service(cfg.embedding)
 
 
 def _default_vector_store_factory(config: ChromaConfig) -> ChromaVectorStore:
@@ -39,8 +42,8 @@ class _ChromaSearchResourceManager:
     _lock = asyncio.Lock()
     _service: ChromaVectorSearchService | None = None
     _vector_store: ChromaVectorStore | None = None
-    _embedding: EmbeddingService | None = None
-    _embedding_factory: Callable[[], EmbeddingService] = _default_embedding_factory
+    _embedding: EmbeddingServiceProtocol | None = None
+    _embedding_factory: Callable[[], EmbeddingServiceProtocol] = _default_embedding_factory
     _vector_store_factory: Callable[[ChromaConfig], ChromaVectorStore] = (
         _default_vector_store_factory
     )
@@ -108,7 +111,7 @@ class _ChromaSearchResourceManager:
     def set_factories_for_tests(
         cls,
         *,
-        embedding_factory: Callable[[], EmbeddingService] | None = None,
+        embedding_factory: Callable[[], EmbeddingServiceProtocol] | None = None,
         vector_store_factory: Callable[[ChromaConfig], ChromaVectorStore] | None = None,
         config_factory: Callable[[], ChromaConfig] | None = None,
     ) -> None:
@@ -133,7 +136,7 @@ async def shutdown_chroma_search_resources() -> None:
 
 def set_chroma_factories_for_tests(
     *,
-    embedding_factory: Callable[[], EmbeddingService] | None = None,
+    embedding_factory: Callable[[], EmbeddingServiceProtocol] | None = None,
     vector_store_factory: Callable[[ChromaConfig], ChromaVectorStore] | None = None,
     config_factory: Callable[[], ChromaConfig] | None = None,
 ) -> None:

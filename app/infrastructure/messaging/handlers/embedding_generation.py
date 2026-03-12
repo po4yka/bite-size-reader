@@ -116,7 +116,7 @@ class EmbeddingGenerationEventHandler:
         if chunk_windows:
             for text, metadata in chunk_windows:
                 embedding = await embedding_service.generate_embedding(
-                    text, language=metadata.get("language")
+                    text, language=metadata.get("language"), task_type="document"
                 )
                 vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
                 vectors.append(vector)
@@ -142,7 +142,7 @@ class EmbeddingGenerationEventHandler:
                 return
 
             embedding = await embedding_service.generate_embedding(
-                text, language=metadata.get("language")
+                text, language=metadata.get("language"), task_type="document"
             )
             vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
             vectors.append(vector)

@@ -331,6 +331,62 @@ class BatchAnalysisConfig(BaseModel):
         return parsed
 
 
+class EmbeddingConfig(BaseModel):
+    """Embedding provider configuration."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    provider: str = Field(default="local", validation_alias="EMBEDDING_PROVIDER")
+    gemini_api_key: str = Field(default="", validation_alias="GEMINI_API_KEY")
+    gemini_model: str = Field(
+        default="gemini-embedding-2-preview",
+        validation_alias="GEMINI_EMBEDDING_MODEL",
+    )
+    gemini_dimensions: int = Field(default=768, validation_alias="GEMINI_EMBEDDING_DIMENSIONS")
+    max_token_length: int = Field(default=512, validation_alias="EMBEDDING_MAX_TOKEN_LENGTH")
+
+    @field_validator("provider", mode="before")
+    @classmethod
+    def _validate_provider(cls, value: Any) -> str:
+        if value in (None, ""):
+            return "local"
+        value = str(value).strip().lower()
+        if value not in ("local", "gemini"):
+            msg = "EMBEDDING_PROVIDER must be 'local' or 'gemini'"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("gemini_dimensions", mode="before")
+    @classmethod
+    def _validate_dimensions(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 768
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "GEMINI_EMBEDDING_DIMENSIONS must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 3072:
+            msg = "GEMINI_EMBEDDING_DIMENSIONS must be between 1 and 3072"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("max_token_length", mode="before")
+    @classmethod
+    def _validate_max_token_length(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 512
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "EMBEDDING_MAX_TOKEN_LENGTH must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 64 or parsed > 8192:
+            msg = "EMBEDDING_MAX_TOKEN_LENGTH must be between 64 and 8192"
+            raise ValueError(msg)
+        return parsed
+
+
 class ChromaConfig(BaseModel):
     """Vector store configuration for Chroma."""
 

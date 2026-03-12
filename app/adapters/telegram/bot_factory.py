@@ -17,7 +17,7 @@ from app.adapters.telegram.telegram_client import TelegramClient
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.adaptive_timeout import AdaptiveTimeoutService
 from app.services.chroma_vector_search_service import ChromaVectorSearchService
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_factory import create_embedding_service
 from app.services.hybrid_search_service import HybridSearchService
 from app.services.query_expansion_service import QueryExpansionService
 from app.services.related_reads_service import RelatedReadsService
@@ -63,7 +63,7 @@ class BotComponents:
     message_handler: MessageHandler
     topic_searcher: TopicSearchService
     local_searcher: LocalTopicSearchService
-    embedding_service: EmbeddingService
+    embedding_service: Any
     chroma_vector_search_service: ChromaVectorSearchService
     query_expansion_service: QueryExpansionService
     hybrid_search_service: HybridSearchService
@@ -365,8 +365,12 @@ class BotFactory:
             max_results=topic_search_max_results,
             audit_func=audit_func,
         )
-        embedding_service = EmbeddingService()
-        embedding_generator = SummaryEmbeddingGenerator(db=db, embedding_service=embedding_service)
+        embedding_service = create_embedding_service(cfg.embedding)
+        embedding_generator = SummaryEmbeddingGenerator(
+            db=db,
+            embedding_service=embedding_service,
+            max_token_length=cfg.embedding.max_token_length,
+        )
         query_expansion_service = QueryExpansionService(max_expansions=5, use_synonyms=True)
 
         chroma_vector_search_service: ChromaVectorSearchService | None = None

@@ -53,7 +53,9 @@ def test_sync_vector_store_embeds_note_text_and_user_notes():
 
     asyncio.run(handler._sync_vector_store(request_id))
 
-    embedding_service.generate_embedding.assert_awaited_once_with(expected_text, language="en")
+    embedding_service.generate_embedding.assert_awaited_once_with(
+        expected_text, language="en", task_type="document"
+    )
 
     vector_store.upsert_notes.assert_called_once()
     vectors, metadatas = vector_store.upsert_notes.call_args.args

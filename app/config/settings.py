@@ -24,6 +24,7 @@ from .firecrawl import FirecrawlConfig  # noqa: TC001
 from .integrations import (
     BatchAnalysisConfig,
     ChromaConfig,
+    EmbeddingConfig,
     KarakeepConfig,
     McpConfig,
     WebSearchConfig,
@@ -99,6 +100,7 @@ class AppConfig:
     digest: ChannelDigestConfig = field(default_factory=ChannelDigestConfig)
     mcp: McpConfig = field(default_factory=McpConfig)
     scraper: ScraperConfig = field(default_factory=ScraperConfig)
+    embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
 
 
 class Settings(BaseSettings):
@@ -143,6 +145,7 @@ class Settings(BaseSettings):
     twitter: TwitterConfig = Field(default_factory=TwitterConfig)
     digest: ChannelDigestConfig = Field(default_factory=ChannelDigestConfig)
     scraper: ScraperConfig = Field(default_factory=ScraperConfig)
+    embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -272,6 +275,7 @@ class Settings(BaseSettings):
             digest=self.digest,
             mcp=self.mcp,
             scraper=self.scraper,
+            embedding=self.embedding,
         )
 
 

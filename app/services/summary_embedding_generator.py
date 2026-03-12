@@ -14,10 +14,11 @@ from app.infrastructure.persistence.sqlite.repositories.request_repository impor
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
-from app.services.embedding_service import EmbeddingService, prepare_text_for_embedding
+from app.services.embedding_service import prepare_text_for_embedding
 
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
+    from app.services.embedding_protocol import EmbeddingServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +29,21 @@ class SummaryEmbeddingGenerator:
     def __init__(
         self,
         db: DatabaseSessionManager | Any,
-        embedding_service: EmbeddingService | None = None,
+        embedding_service: EmbeddingServiceProtocol | None = None,
         model_version: str = "1.0",
+        max_token_length: int = 512,
     ) -> None:
         self._db = db
         self.embedding_repo = SqliteEmbeddingRepositoryAdapter(db)
         self.request_repo = SqliteRequestRepositoryAdapter(db)
         self.summary_repo = SqliteSummaryRepositoryAdapter(db)
-        self._embedding_service = embedding_service or EmbeddingService()
+        if embedding_service is None:
+            from app.services.embedding_factory import create_embedding_service
+
+            embedding_service = create_embedding_service()
+        self._embedding_service = embedding_service
         self._model_version = model_version
+        self._max_token_length = max_token_length
 
     @property
     def db(self) -> DatabaseSessionManager | Any:
@@ -45,7 +52,7 @@ class SummaryEmbeddingGenerator:
         return self._db
 
     @property
-    def embedding_service(self) -> EmbeddingService:
+    def embedding_service(self) -> EmbeddingServiceProtocol:
         """Expose the embedding service in use."""
 
         return self._embedding_service
@@ -101,6 +108,7 @@ class SummaryEmbeddingGenerator:
                 semantic_boosters=payload.get("semantic_boosters"),
                 query_expansion_keywords=payload.get("query_expansion_keywords"),
                 semantic_chunks=payload.get("semantic_chunks"),
+                max_length=self._max_token_length,
             )
 
             if not text or not text.strip():
@@ -111,7 +119,9 @@ class SummaryEmbeddingGenerator:
                 return False
 
             # Generate embedding with language-specific model
-            embedding = await self._embedding_service.generate_embedding(text, language=language)
+            embedding = await self._embedding_service.generate_embedding(
+                text, language=language, task_type="document"
+            )
 
             # Serialize and store
             embedding_blob = self._embedding_service.serialize_embedding(embedding)

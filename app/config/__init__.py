@@ -8,7 +8,7 @@ from .circuit_breaker import CircuitBreakerConfig
 from .content import ContentLimitsConfig
 from .database import DatabaseConfig
 from .firecrawl import FirecrawlConfig
-from .integrations import ChromaConfig, KarakeepConfig, McpConfig, WebSearchConfig
+from .integrations import ChromaConfig, EmbeddingConfig, KarakeepConfig, McpConfig, WebSearchConfig
 from .llm import AnthropicConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
 from .redis import RedisConfig
@@ -32,6 +32,7 @@ __all__ = [
     "ConfigHelper",
     "ContentLimitsConfig",
     "DatabaseConfig",
+    "EmbeddingConfig",
     "FirecrawlConfig",
     "KarakeepConfig",
     "McpConfig",

@@ -1,0 +1,72 @@
+"""Tests for embedding factory."""
+
+from __future__ import annotations
+
+import pytest
+
+from app.config.integrations import EmbeddingConfig
+from app.services.embedding_factory import create_embedding_service
+from app.services.embedding_protocol import EmbeddingServiceProtocol
+from app.services.embedding_service import EmbeddingService
+
+
+class TestCreateEmbeddingService:
+    def test_none_config_returns_local(self) -> None:
+        svc = create_embedding_service(None)
+        assert isinstance(svc, EmbeddingService)
+        assert isinstance(svc, EmbeddingServiceProtocol)
+
+    def test_local_provider_returns_local(self) -> None:
+        config = EmbeddingConfig(provider="local")
+        svc = create_embedding_service(config)
+        assert isinstance(svc, EmbeddingService)
+
+    def test_gemini_provider_returns_gemini(self) -> None:
+        config = EmbeddingConfig(
+            provider="gemini",
+            gemini_api_key="test-key",
+            gemini_model="gemini-embedding-2-preview",
+            gemini_dimensions=768,
+        )
+        svc = create_embedding_service(config)
+        from app.services.gemini_embedding_service import GeminiEmbeddingService
+
+        assert isinstance(svc, GeminiEmbeddingService)
+        assert isinstance(svc, EmbeddingServiceProtocol)
+
+    def test_gemini_without_key_raises(self) -> None:
+        config = EmbeddingConfig(provider="gemini", gemini_api_key="")
+        with pytest.raises(ValueError, match="GEMINI_API_KEY"):
+            create_embedding_service(config)
+
+    def test_unknown_provider_raises(self) -> None:
+        config = EmbeddingConfig.__new__(EmbeddingConfig)
+        object.__setattr__(config, "provider", "unknown")
+        with pytest.raises(ValueError, match="Unknown embedding provider"):
+            create_embedding_service(config)
+
+
+class TestEmbeddingConfig:
+    def test_defaults(self) -> None:
+        config = EmbeddingConfig()
+        assert config.provider == "local"
+        assert config.gemini_api_key == ""
+        assert config.gemini_model == "gemini-embedding-2-preview"
+        assert config.gemini_dimensions == 768
+        assert config.max_token_length == 512
+
+    def test_invalid_provider_raises(self) -> None:
+        with pytest.raises(ValueError, match="EMBEDDING_PROVIDER"):
+            EmbeddingConfig(provider="invalid")
+
+    def test_dimensions_bounds(self) -> None:
+        with pytest.raises(ValueError):
+            EmbeddingConfig(gemini_dimensions=0)
+        with pytest.raises(ValueError):
+            EmbeddingConfig(gemini_dimensions=5000)
+
+    def test_max_token_length_bounds(self) -> None:
+        with pytest.raises(ValueError):
+            EmbeddingConfig(max_token_length=10)
+        with pytest.raises(ValueError):
+            EmbeddingConfig(max_token_length=10000)

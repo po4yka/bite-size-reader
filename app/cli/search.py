@@ -92,12 +92,12 @@ async def search_vector(db_path: str, query: str, max_results: int = 10, filters
         List of search results
     """
     from app.db.session import DatabaseSessionManager
-    from app.services.embedding_service import EmbeddingService
+    from app.services.embedding_factory import create_embedding_service
     from app.services.topic_search import TopicArticle
     from app.services.vector_search_service import VectorSearchService
 
     db = DatabaseSessionManager(path=db_path)
-    embedding_service = EmbeddingService()
+    embedding_service = create_embedding_service()
     service = VectorSearchService(
         db=db,
         embedding_service=embedding_service,
@@ -142,7 +142,7 @@ async def search_hybrid(
         List of search results
     """
     from app.db.session import DatabaseSessionManager
-    from app.services.embedding_service import EmbeddingService
+    from app.services.embedding_factory import create_embedding_service
     from app.services.hybrid_search_service import HybridSearchService
     from app.services.query_expansion_service import QueryExpansionService
     from app.services.reranking_service import RerankingService
@@ -155,7 +155,7 @@ async def search_hybrid(
     fts_service = LocalTopicSearchService(db=db, max_results=max_results)
 
     # Initialize vector service
-    embedding_service = EmbeddingService()
+    embedding_service = create_embedding_service()
     vector_service = VectorSearchService(
         db=db,
         embedding_service=embedding_service,

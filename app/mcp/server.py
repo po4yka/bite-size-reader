@@ -124,10 +124,11 @@ async def _get_chroma_service() -> Any:
             from app.config import load_config
             from app.infrastructure.vector.chroma_store import ChromaVectorStore
             from app.services.chroma_vector_search_service import ChromaVectorSearchService
-            from app.services.embedding_service import EmbeddingService
+            from app.services.embedding_factory import create_embedding_service
 
-            cfg = load_config(allow_stub_telegram=True).vector_store
-            embedding = EmbeddingService()
+            app_cfg = load_config(allow_stub_telegram=True)
+            cfg = app_cfg.vector_store
+            embedding = create_embedding_service(app_cfg.embedding)
             store = ChromaVectorStore(
                 host=cfg.host,
                 auth_token=cfg.auth_token,
@@ -181,9 +182,9 @@ async def _get_local_vector_service() -> Any:
             return None
 
         try:
-            from app.services.embedding_service import EmbeddingService
+            from app.services.embedding_factory import create_embedding_service
 
-            _local_vector_service = EmbeddingService()
+            _local_vector_service = create_embedding_service()
             _local_vector_last_failed_at = None
             logger.info("Local vector fallback service initialised")
             return _local_vector_service
@@ -625,7 +626,7 @@ async def _search_local_vectors(
 
     try:
         query_vector_any = await embedding_service.generate_embedding(
-            query.strip(), language=language
+            query.strip(), language=language, task_type="query"
         )
     except Exception:
         logger.exception("local_vector_query_embedding_failed")

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 from app.config import load_config
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_factory import create_embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def upgrade(db: Database | DatabaseSessionManager) -> None:
 
     # Use full app config so environment overrides (e.g., CHROMA_HOST) are honored
     chroma_cfg = load_config(allow_stub_telegram=True).vector_store
-    embedding_service = EmbeddingService()
+    embedding_service = create_embedding_service()
     vector_store = ChromaVectorStore(
         host=chroma_cfg.host,
         auth_token=chroma_cfg.auth_token,

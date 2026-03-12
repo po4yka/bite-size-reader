@@ -8,13 +8,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from app.config import ChromaConfig
+from app.config import ChromaConfig, load_config
 from app.db.session import DatabaseSessionManager
 from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
     SqliteEmbeddingRepositoryAdapter,
 )
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_factory import create_embedding_service
 from app.services.metadata_builder import MetadataBuilder
 from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
 
@@ -52,10 +52,15 @@ async def backfill_chroma_store(
 ) -> None:
     logger.info("Initializing backfill", extra={"db_path": db_path, "limit": limit})
 
+    app_cfg = load_config(allow_stub_telegram=True)
     db = DatabaseSessionManager(path=db_path)
     embedding_repo = SqliteEmbeddingRepositoryAdapter(db)
-    embedding_service = EmbeddingService()
-    generator = SummaryEmbeddingGenerator(db=db, embedding_service=embedding_service)
+    embedding_service = create_embedding_service(app_cfg.embedding)
+    generator = SummaryEmbeddingGenerator(
+        db=db,
+        embedding_service=embedding_service,
+        max_token_length=app_cfg.embedding.max_token_length,
+    )
 
     summaries = _fetch_summaries(db, limit)
     logger.info("Found %d summaries to process", len(summaries))
@@ -122,7 +127,7 @@ async def backfill_chroma_store(
         if chunk_windows:
             for text, metadata in chunk_windows:
                 embedding = await embedding_service.generate_embedding(
-                    text, language=metadata.get("language")
+                    text, language=metadata.get("language"), task_type="document"
                 )
                 vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
                 pending_vectors.append(vector)
