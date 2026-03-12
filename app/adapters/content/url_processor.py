@@ -21,6 +21,7 @@ from app.core.url_utils import compute_dedupe_hash
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 from app.migration.pipeline_shadow import PipelineShadowRunner
+from app.migration.processing_orchestrator import ProcessingOrchestratorRunner
 from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
@@ -174,6 +175,119 @@ async def _run_related_reads(
         )
 
 
+def _get_processing_orchestrator(processor: Any) -> ProcessingOrchestratorRunner:
+    runner = getattr(processor, "processing_orchestrator", None)
+    if runner is None:
+        runner = ProcessingOrchestratorRunner(processor.cfg.runtime)
+        processor.processing_orchestrator = runner
+    return runner
+
+
+def _get_summary_response_type(summarizer: Any, *, mode: str | None = None) -> str:
+    workflow = getattr(summarizer, "_workflow", None)
+    builder = getattr(workflow, "build_structured_response_format", None)
+    default = "json_object" if mode == "json_object" else "unknown"
+    if not callable(builder):
+        return default
+    response_format = builder(mode=mode) if mode is not None else builder()
+    if asyncio.iscoroutine(response_format):
+        response_format.close()
+        return default
+    if isinstance(response_format, dict):
+        response_type = str(response_format.get("type") or default).strip()
+        return response_type or default
+    return default
+
+
+def _schedule_tracked_task(
+    task_registry: set[asyncio.Task[Any]],
+    coro: Coroutine[Any, Any, Any],
+    correlation_id: str | None,
+    label: str,
+    *,
+    schedule_error_event: str,
+    task_error_event: str,
+) -> asyncio.Task[Any] | None:
+    try:
+        task: asyncio.Task[Any] = asyncio.create_task(coro)
+        task_registry.add(task)
+        task.add_done_callback(task_registry.discard)
+    except RuntimeError as exc:
+        logger.error(
+            schedule_error_event,
+            extra={"cid": correlation_id, "label": label, "error": str(exc)},
+        )
+        return None
+
+    def _log_task_error(task: asyncio.Task[Any]) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc:
+            logger.error(
+                task_error_event,
+                extra={"cid": correlation_id, "label": label, "error": str(exc)},
+            )
+
+    task.add_done_callback(_log_task_error)
+    return task
+
+
+async def _await_persistence_task(task: asyncio.Task[Any] | None) -> None:
+    if task is None:
+        return
+    try:
+        await task
+    except Exception as exc:
+        raise_if_cancelled(exc)
+        logger.error("persistence_task_failed", extra={"error": str(exc)})
+
+
+def _create_chunk_llm_stub(cfg: Any) -> Any:
+    return type(
+        "LLMStub",
+        (),
+        {
+            "status": "ok",
+            "latency_ms": None,
+            "model": cfg.openrouter.model,
+            "cost_usd": None,
+            "tokens_prompt": None,
+            "tokens_completion": None,
+            "structured_output_used": True,
+            "structured_output_mode": cfg.openrouter.structured_output_mode,
+        },
+    )()
+
+
+def _schedule_chunk_persistence_if_needed(
+    processor: Any,
+    *,
+    context: URLFlowContext,
+    summary_json: dict[str, Any],
+    correlation_id: str | None,
+    interaction_id: int | None,
+    silent: bool,
+) -> asyncio.Task[Any] | None:
+    if not (context.should_chunk and context.chunks):
+        return None
+    return _schedule_tracked_task(
+        processor._background_tasks,
+        processor._persist_summary(
+            req_id=context.req_id,
+            chosen_lang=context.chosen_lang,
+            summary_json=summary_json,
+            correlation_id=correlation_id,
+            interaction_id=interaction_id,
+            silent=silent,
+        ),
+        correlation_id,
+        "persist_summary",
+        schedule_error_event="persistence_task_schedule_failed",
+        task_error_event="persistence_task_failed",
+    )
+
+
 class URLProcessor:
     """Refactored URL processor using modular components."""
 
@@ -230,65 +344,10 @@ class URLProcessor:
 
         self.message_persistence = MessagePersistence(db=db)
         self.pipeline_shadow = PipelineShadowRunner(cfg.runtime)
+        self.processing_orchestrator = ProcessingOrchestratorRunner(cfg.runtime)
         self.content_chunker.pipeline_shadow = self.pipeline_shadow
         # Registry for tracking background tasks to prevent GC and ensure shutdown
         self._background_tasks: set[asyncio.Task[Any]] = set()
-
-    def _schedule_persistence_task(
-        self, coro: Coroutine[Any, Any, Any], correlation_id: str | None, label: str
-    ) -> asyncio.Task[Any] | None:
-        """Run a persistence task without blocking the main flow."""
-        try:
-            task: asyncio.Task[Any] = asyncio.create_task(coro)
-            self._background_tasks.add(task)
-            task.add_done_callback(self._background_tasks.discard)
-        except RuntimeError as exc:
-            logger.error(
-                "persistence_task_schedule_failed",
-                extra={"cid": correlation_id, "label": label, "error": str(exc)},
-            )
-            return None
-
-        def _log_task_error(t: asyncio.Task) -> None:
-            if t.cancelled():
-                return
-            exc = t.exception()
-            if exc:
-                logger.error(
-                    "persistence_task_failed",
-                    extra={"cid": correlation_id, "label": label, "error": str(exc)},
-                )
-
-        task.add_done_callback(_log_task_error)
-        return task
-
-    def _schedule_background_task(
-        self, coro: Coroutine[Any, Any, Any], correlation_id: str | None, label: str
-    ) -> asyncio.Task[Any] | None:
-        """Run a background task without blocking the main flow."""
-        try:
-            task: asyncio.Task[Any] = asyncio.create_task(coro)
-            self._background_tasks.add(task)
-            task.add_done_callback(self._background_tasks.discard)
-        except RuntimeError as exc:
-            logger.error(
-                "background_task_schedule_failed",
-                extra={"cid": correlation_id, "label": label, "error": str(exc)},
-            )
-            return None
-
-        def _log_task_error(t: asyncio.Task) -> None:
-            if t.cancelled():
-                return
-            exc = t.exception()
-            if exc:
-                logger.error(
-                    "background_task_failed",
-                    extra={"cid": correlation_id, "label": label, "error": str(exc)},
-                )
-
-        task.add_done_callback(_log_task_error)
-        return task
 
     async def aclose(self, timeout: float = 5.0) -> None:
         """Wait for all background tasks to complete before closing."""
@@ -314,33 +373,6 @@ class URLProcessor:
                     "url_processor_shutdown_timeout", extra={"pending": len(self._background_tasks)}
                 )
         logger.info("url_processor_shutdown_complete")
-
-    async def _await_persistence_task(self, task: asyncio.Task | None) -> None:
-        """Await a scheduled persistence task when required (silent flows)."""
-        if task is None:
-            return
-        try:
-            await task
-        except Exception as exc:
-            raise_if_cancelled(exc)
-            logger.error("persistence_task_failed", extra={"error": str(exc)})
-
-    def _create_chunk_llm_stub(self) -> Any:
-        """Create a stub LLM result for chunked processing."""
-        return type(
-            "LLMStub",
-            (),
-            {
-                "status": "ok",
-                "latency_ms": None,
-                "model": self.cfg.openrouter.model,
-                "cost_usd": None,
-                "tokens_prompt": None,
-                "tokens_completion": None,
-                "structured_output_used": True,
-                "structured_output_mode": self.cfg.openrouter.structured_output_mode,
-            },
-        )()
 
     async def handle_url_flow(
         self,
@@ -423,7 +455,8 @@ class URLProcessor:
                     batch_mode=batch_mode,
                 )
 
-            persist_task = self._schedule_chunk_persistence_if_needed(
+            persist_task = _schedule_chunk_persistence_if_needed(
+                self,
                 context=context,
                 summary_json=summary_json,
                 correlation_id=correlation_id,
@@ -433,7 +466,7 @@ class URLProcessor:
 
             # Format and send the response (skip if silent or batch)
             if not silent and not batch_mode:
-                llm_result = self.llm_summarizer.last_llm_result or self._create_chunk_llm_stub()
+                llm_result = self.llm_summarizer.last_llm_result or _create_chunk_llm_stub(self.cfg)
                 # Pass request ID prefixed with 'req:' for action button callbacks
                 await self.response_formatter.send_structured_summary_response(
                     message,
@@ -460,7 +493,7 @@ class URLProcessor:
 
             # For silent or batch mode, we need to ensure persistence completes
             if (silent or batch_mode) and persist_task:
-                await self._await_persistence_task(persist_task)
+                await _await_persistence_task(persist_task)
 
             # Return result with extracted title and payload for batch card delivery
             return URLProcessingFlowResult.from_summary(summary_json, request_id=context.req_id)
@@ -534,9 +567,77 @@ class URLProcessor:
                 },
             )
 
-        chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
-        needs_ru_translation = not silent and LANG_RU not in (detected, chosen_lang)
-        system_prompt = await self._load_system_prompt(chosen_lang)
+        enable_chunking_value = getattr(self.cfg.runtime, "enable_chunking", False)
+        enable_chunking = (
+            enable_chunking_value if isinstance(enable_chunking_value, bool) else False
+        )
+        configured_chunk_max_chars_value = getattr(self.cfg.runtime, "chunk_max_chars", 200000)
+        configured_chunk_max_chars = (
+            configured_chunk_max_chars_value
+            if isinstance(configured_chunk_max_chars_value, int)
+            else 200000
+        )
+        base_temperature_value = getattr(self.cfg.openrouter, "temperature", 0.2)
+        base_temperature = (
+            base_temperature_value if isinstance(base_temperature_value, (int, float)) else 0.2
+        )
+        base_top_p_value = getattr(self.cfg.openrouter, "top_p", None)
+        base_top_p = base_top_p_value if isinstance(base_top_p_value, (int, float)) else 0.9
+        fallback_models_value = getattr(self.cfg.openrouter, "fallback_models", ())
+        fallback_models = (
+            [model for model in fallback_models_value if isinstance(model, str)]
+            if isinstance(fallback_models_value, (list, tuple))
+            else []
+        )
+        flash_fallback_models_value = getattr(self.cfg.openrouter, "flash_fallback_models", ())
+        flash_fallback_models = (
+            [model for model in flash_fallback_models_value if isinstance(model, str)]
+            if isinstance(flash_fallback_models_value, (list, tuple))
+            else []
+        )
+        json_temperature = self.cfg.openrouter.summary_temperature_json_fallback or max(
+            0.0, min(0.5, base_temperature - 0.05)
+        )
+        json_top_p = self.cfg.openrouter.summary_top_p_json_fallback or max(
+            0.0, min(0.95, base_top_p)
+        )
+        processing_plan = await _get_processing_orchestrator(self).resolve_url_processing_plan(
+            correlation_id=correlation_id,
+            request_id=req_id,
+            dedupe_hash=dedupe_hash,
+            content_text=content_text,
+            detected_language=detected,
+            preferred_language=self.cfg.runtime.preferred_lang,
+            silent=silent,
+            enable_chunking=enable_chunking,
+            configured_chunk_max_chars=configured_chunk_max_chars,
+            primary_model=self.cfg.openrouter.model,
+            long_context_model=self.cfg.openrouter.long_context_model,
+            schema_response_type=_get_summary_response_type(self.llm_summarizer),
+            json_object_response_type=_get_summary_response_type(
+                self.llm_summarizer, mode="json_object"
+            ),
+            max_tokens_schema=None,
+            max_tokens_json_object=None,
+            base_temperature=base_temperature,
+            base_top_p=base_top_p,
+            json_temperature=json_temperature,
+            json_top_p=json_top_p,
+            fallback_models=fallback_models,
+            flash_model=self.cfg.openrouter.flash_model,
+            flash_fallback_models=flash_fallback_models,
+        )
+        chosen_lang = str(
+            processing_plan.get("chosen_lang")
+            or choose_language(self.cfg.runtime.preferred_lang, detected)
+        )
+        needs_ru_translation = bool(
+            processing_plan.get(
+                "needs_ru_translation",
+                not silent and LANG_RU not in (detected, chosen_lang),
+            )
+        )
+        system_prompt = _get_system_prompt(chosen_lang)
 
         logger.debug(
             "language_choice",
@@ -554,11 +655,32 @@ class URLProcessor:
                 silent=silent,
             )
 
-        should_chunk, max_chars, chunks = await self._compute_chunk_strategy(
-            content_text=content_text,
-            chosen_lang=chosen_lang,
-            correlation_id=correlation_id,
-            request_id=req_id,
+        chunk_plan = processing_plan.get("chunk_plan")
+        raw_chunks = chunk_plan.get("chunks") if isinstance(chunk_plan, dict) else None
+        chunks = (
+            [item.strip() for item in raw_chunks if isinstance(item, str) and item.strip()]
+            if isinstance(raw_chunks, list)
+            else None
+        )
+        should_chunk = bool(processing_plan.get("summary_strategy") == "chunked" and chunks)
+        max_chars = int(
+            processing_plan.get("effective_max_chars") or self.cfg.runtime.chunk_max_chars
+        )
+
+        logger.debug(
+            "processing_orchestrator_url_plan_resolved",
+            extra={
+                "cid": correlation_id,
+                "request_id": req_id,
+                "strategy": processing_plan.get("summary_strategy"),
+                "summary_model": processing_plan.get("summary_model"),
+                "request_plan_count": (
+                    processing_plan.get("single_pass_request_plan", {}).get("request_count")
+                    if isinstance(processing_plan.get("single_pass_request_plan"), dict)
+                    else None
+                ),
+                "chunk_count": len(chunks) if chunks else 0,
+            },
         )
 
         if not batch_mode:
@@ -731,38 +853,6 @@ class URLProcessor:
             )
         return URLProcessingFlowResult(success=False)
 
-    def _schedule_chunk_persistence_if_needed(
-        self,
-        *,
-        context: URLFlowContext,
-        summary_json: dict[str, Any],
-        correlation_id: str | None,
-        interaction_id: int | None,
-        silent: bool,
-    ) -> asyncio.Task[Any] | None:
-        """Persist chunked summaries because single-pass flow persists internally."""
-        if not (context.should_chunk and context.chunks):
-            return None
-        return self._schedule_persistence_task(
-            self._persist_summary(
-                req_id=context.req_id,
-                chosen_lang=context.chosen_lang,
-                summary_json=summary_json,
-                correlation_id=correlation_id,
-                interaction_id=interaction_id,
-                silent=silent,
-            ),
-            correlation_id,
-            "persist_summary",
-        )
-
-    async def _load_system_prompt(self, lang: str) -> str:
-        """Load system prompt for the given language.
-
-        This is an async wrapper around the module-level _get_system_prompt function.
-        """
-        return _get_system_prompt(lang)
-
     async def _maybe_reply_with_cached_summary(
         self,
         message: Any,
@@ -819,7 +909,7 @@ class URLProcessor:
                     await self.response_formatter.send_structured_summary_response(
                         message,
                         payload,
-                        self._create_chunk_llm_stub(),
+                        _create_chunk_llm_stub(self.cfg),
                         summary_id=f"req:{request_id}" if request_id else None,
                     )
 
@@ -890,7 +980,8 @@ class URLProcessor:
         url_hash: str | None,
     ) -> None:
         if needs_ru_translation:
-            self._schedule_background_task(
+            _schedule_tracked_task(
+                self._background_tasks,
                 self._maybe_send_russian_translation(
                     message,
                     summary,
@@ -902,6 +993,8 @@ class URLProcessor:
                 ),
                 correlation_id,
                 "ru_translation",
+                schedule_error_event="background_task_schedule_failed",
+                task_error_event="background_task_failed",
             )
 
         reader_mode = False
@@ -921,7 +1014,8 @@ class URLProcessor:
                 except Exception as exc:
                     raise_if_cancelled(exc)
 
-        self._schedule_background_task(
+        _schedule_tracked_task(
+            self._background_tasks,
             self._handle_additional_insights(
                 message,
                 content_text,
@@ -934,6 +1028,8 @@ class URLProcessor:
             ),
             correlation_id,
             "additional_insights",
+            schedule_error_event="background_task_schedule_failed",
+            task_error_event="background_task_failed",
         )
 
         if not silent:
@@ -950,7 +1046,8 @@ class URLProcessor:
                         raise_if_cancelled(exc)
 
                 if not reader_mode:
-                    self._schedule_background_task(
+                    _schedule_tracked_task(
+                        self._background_tasks,
                         self._handle_custom_article(
                             message,
                             chosen_lang,
@@ -962,10 +1059,13 @@ class URLProcessor:
                         ),
                         correlation_id,
                         "custom_article",
+                        schedule_error_event="background_task_schedule_failed",
+                        task_error_event="background_task_failed",
                     )
 
         if self._related_reads_service is not None and not silent:
-            self._schedule_background_task(
+            _schedule_tracked_task(
+                self._background_tasks,
                 _run_related_reads(
                     self._related_reads_service,
                     self.response_formatter.sender,
@@ -977,6 +1077,8 @@ class URLProcessor:
                 ),
                 correlation_id,
                 "related_reads",
+                schedule_error_event="background_task_schedule_failed",
+                task_error_event="background_task_failed",
             )
 
     async def _maybe_send_russian_translation(

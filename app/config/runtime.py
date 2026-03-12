@@ -67,6 +67,12 @@ class RuntimeConfig(BaseModel):
     migration_telegram_runtime_timeout_ms: int = Field(
         default=150, validation_alias="MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS"
     )
+    migration_processing_orchestrator_backend: str = Field(
+        default="python", validation_alias="MIGRATION_PROCESSING_ORCHESTRATOR_BACKEND"
+    )
+    migration_processing_orchestrator_timeout_ms: int = Field(
+        default=250, validation_alias="MIGRATION_PROCESSING_ORCHESTRATOR_TIMEOUT_MS"
+    )
     jwt_secret_key: str = Field(
         default="", validation_alias=AliasChoices("JWT_SECRET_KEY", "JWT_SECRET")
     )
@@ -336,6 +342,33 @@ class RuntimeConfig(BaseModel):
             raise ValueError(msg) from exc
         if parsed < 25 or parsed > 10000:
             msg = "Migration telegram runtime timeout must be between 25 and 10000 milliseconds"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator("migration_processing_orchestrator_backend", mode="before")
+    @classmethod
+    def _validate_migration_processing_orchestrator_backend(cls, value: Any) -> str:
+        backend = str(value or "python").strip().lower()
+        allowed = {"python", "rust"}
+        if backend not in allowed:
+            msg = f"Migration processing orchestrator backend must be one of {sorted(allowed)}"
+            raise ValueError(msg)
+        return backend
+
+    @field_validator("migration_processing_orchestrator_timeout_ms", mode="before")
+    @classmethod
+    def _validate_migration_processing_orchestrator_timeout_ms(cls, value: Any) -> int:
+        default = cls.model_fields["migration_processing_orchestrator_timeout_ms"].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:
+            msg = "Migration processing orchestrator timeout must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 25 or parsed > 10000:
+            msg = (
+                "Migration processing orchestrator timeout must be between 25 and 10000 "
+                "milliseconds"
+            )
             raise ValueError(msg)
         return parsed
 

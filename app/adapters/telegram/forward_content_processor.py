@@ -9,6 +9,7 @@ from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import normalize_text
 from app.core.lang import choose_language, detect_language
 from app.infrastructure.persistence.message_persistence import MessagePersistence
+from app.migration.processing_orchestrator import ProcessingOrchestratorRunner
 from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
@@ -48,6 +49,14 @@ class ForwardContentProcessor:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self.message_persistence = MessagePersistence(db)
+        self.processing_orchestrator = ProcessingOrchestratorRunner(cfg.runtime)
+
+    def _get_processing_orchestrator(self) -> ProcessingOrchestratorRunner:
+        runner = getattr(self, "processing_orchestrator", None)
+        if runner is None:
+            runner = ProcessingOrchestratorRunner(self.cfg.runtime)
+            self.processing_orchestrator = runner
+        return runner
 
     async def process_forward_content(
         self, message: Any, correlation_id: str | None = None
@@ -83,9 +92,30 @@ class ForwardContentProcessor:
             )
             raise ValueError("Forwarded message has no text content")
 
-        # Optional normalization for forwards as well
+        normalize_forward_prompt = bool(getattr(self.cfg.runtime, "enable_textacy", False))
+
+        processing_plan = await self._get_processing_orchestrator().resolve_forward_processing_plan(
+            correlation_id=correlation_id,
+            text=text,
+            source_chat_title=title if fwd_chat is not None else None,
+            source_user_first_name=getattr(fwd_user, "first_name", None)
+            if fwd_chat is None
+            else None,
+            source_user_last_name=getattr(fwd_user, "last_name", None)
+            if fwd_chat is None
+            else None,
+            forward_sender_name=getattr(message, "forward_sender_name", None),
+            preferred_language=self.cfg.runtime.preferred_lang,
+            primary_model=self.cfg.openrouter.model,
+        )
+        source_label = str(processing_plan.get("source_label") or source_label)
+        title = str(processing_plan.get("source_title") or title)
+        prompt = str(processing_plan.get("prompt") or prompt)
+
+        # Optional normalization for forwards as well. Apply it after the
+        # orchestrator plan is resolved so the stored prompt matches runtime behavior.
         try:
-            if getattr(self.cfg.runtime, "enable_textacy", False):
+            if normalize_forward_prompt:
                 prompt = normalize_text(prompt)
         except Exception as exc:
             raise_if_cancelled(exc)
@@ -95,7 +125,7 @@ class ForwardContentProcessor:
         req_id = await self._create_forward_request(message, correlation_id, prompt)
 
         # Language detection and choice
-        detected = detect_language(text)
+        detected = str(processing_plan.get("detected_language") or detect_language(text))
         # Graceful degradation: if persisting the detected language fails, the
         # in-memory `detected` value is still used for prompt selection. The DB
         # record may show NULL for lang_detected, which is acceptable.
@@ -107,12 +137,23 @@ class ForwardContentProcessor:
             raise_if_cancelled(e)
             logger.exception("persist_lang_detected_error", extra={"error": str(e)})
 
-        chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
+        chosen_lang = str(
+            processing_plan.get("chosen_lang")
+            or choose_language(self.cfg.runtime.preferred_lang, detected)
+        )
         system_prompt = await self._load_system_prompt(chosen_lang)
 
         logger.debug(
-            "language_choice",
-            extra={"detected": detected, "chosen": chosen_lang, "cid": correlation_id},
+            "forward_processing_plan_resolved",
+            extra={
+                "detected": detected,
+                "chosen": chosen_lang,
+                "cid": correlation_id,
+                "source_label": source_label,
+                "summary_model": processing_plan.get("summary_model"),
+                "llm_prompt_truncated": processing_plan.get("llm_prompt_truncated"),
+                "llm_max_tokens": processing_plan.get("llm_max_tokens"),
+            },
         )
 
         # Notify: request accepted and language detected

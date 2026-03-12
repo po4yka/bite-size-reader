@@ -4,6 +4,7 @@ members = [
   "crates/bsr-logging",
   "crates/bsr-models",
   "crates/bsr-persistence",
+  "crates/bsr-processing-orchestrator",
   "crates/bsr-summary-contract",
   "crates/bsr-pipeline-shadow",
   "crates/bsr-interface-router",

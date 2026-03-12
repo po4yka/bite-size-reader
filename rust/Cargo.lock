@@ -103,6 +103,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bsr-processing-orchestrator"
+version = "0.1.0"
+dependencies = [
+ "bsr-pipeline-shadow",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "bsr-summary-contract"
 version = "0.1.0"
 dependencies = [

@@ -385,15 +385,16 @@ class TestPipelineShadowHooks(unittest.IsolatedAsyncioTestCase):
         proc.pipeline_shadow.resolve_extraction_adapter = AsyncMock(
             return_value={"language_hint": "en", "low_value": False}
         )
-        proc.pipeline_shadow.resolve_chunking_preprocess = AsyncMock(
+        proc.processing_orchestrator = MagicMock()
+        proc.processing_orchestrator.resolve_url_processing_plan = AsyncMock(
             return_value={
-                "content_length": 29,
-                "max_chars": 10000,
-                "chunk_size": 4000,
-                "should_chunk": False,
-                "long_context_bypass": False,
-                "estimated_chunk_count": 0,
-                "first_chunk_size": 0,
+                "flow_kind": "url",
+                "chosen_lang": "en",
+                "needs_ru_translation": False,
+                "summary_strategy": "single_pass",
+                "effective_max_chars": 10000,
+                "chunk_plan": None,
+                "single_pass_request_plan": {"request_count": 2},
             }
         )
 
@@ -415,7 +416,7 @@ class TestPipelineShadowHooks(unittest.IsolatedAsyncioTestCase):
 
         assert context.req_id == 1
         proc.pipeline_shadow.resolve_extraction_adapter.assert_called_once()
-        proc.pipeline_shadow.resolve_chunking_preprocess.assert_called_once()
+        proc.processing_orchestrator.resolve_url_processing_plan.assert_called_once()
 
     async def test_compute_chunk_strategy_uses_rust_chunk_sentence_plan(self) -> None:
         content_chunker = MagicMock()

@@ -8,6 +8,7 @@ This workspace contains migration crates delivered across milestones **M1–M6**
 - `bsr-logging`: structured logging bootstrap (`tracing` + JSON formatter)
 - `bsr-models`: shared Rust-side migration and telemetry model foundation
 - `bsr-persistence`: SQLite migration-history/status foundation for Rust runtime cutover
+- `bsr-processing-orchestrator`: URL/forward execution-plan foundation for processing runtime migration
 - `bsr-summary-contract`: summary contract validation/normalization + SQLite compatibility checks + CLI
 - `bsr-pipeline-shadow`: M3 pipeline slice parity and runtime command surface
 - `bsr-interface-router`: M4 mobile route + Telegram command routing surface
