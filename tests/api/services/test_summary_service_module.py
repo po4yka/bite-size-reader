@@ -6,6 +6,7 @@ import pytest
 
 from app.api.exceptions import ResourceNotFoundError
 from app.api.services.summary_service import SummaryService
+from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 
 
 @pytest.mark.asyncio
@@ -38,6 +39,21 @@ async def test_get_summary_by_id_raises_when_not_found() -> None:
     with patch.object(SummaryService, "_build_use_case", return_value=use_case):
         with pytest.raises(ResourceNotFoundError):
             await SummaryService.get_summary_by_id(user_id=1, summary_id=2)
+
+
+def test_build_use_case_returns_summary_read_model_use_case(db) -> None:
+    assert isinstance(SummaryService._build_use_case(), SummaryReadModelUseCase)
+
+
+@pytest.mark.asyncio
+async def test_get_summary_by_id_returns_summary_when_found() -> None:
+    use_case = MagicMock()
+    use_case.get_summary_by_id_for_user = AsyncMock(return_value={"id": 2, "title": "Summary"})
+
+    with patch.object(SummaryService, "_build_use_case", return_value=use_case):
+        summary = await SummaryService.get_summary_by_id(user_id=1, summary_id=2)
+
+    assert summary == {"id": 2, "title": "Summary"}
 
 
 @pytest.mark.asyncio

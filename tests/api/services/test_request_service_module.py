@@ -1,10 +1,34 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError
 from app.api.services.request_service import RequestService
+from app.core.time_utils import UTC
 from app.db.models import CrawlResult, LLMCall, Request, Summary
+
+
+def _create_request(
+    *,
+    user_id: int,
+    status: str,
+    correlation_id: str,
+    created_at: datetime | None = None,
+) -> Request:
+    url = f"https://{correlation_id}.example.com"
+    return Request.create(
+        user_id=user_id,
+        input_url=url,
+        normalized_url=url,
+        dedupe_hash=f"hash-{correlation_id}",
+        correlation_id=correlation_id,
+        status=status,
+        type="url",
+        created_at=created_at or datetime.now(UTC),
+    )
 
 
 @pytest.mark.asyncio
@@ -113,3 +137,165 @@ async def test_retry_failed_request_requires_error_status_and_copies_fields(
 
     with pytest.raises(ValueError, match="Only failed requests"):
         await RequestService.retry_failed_request(user.telegram_user_id, pending.id)
+
+
+@pytest.mark.asyncio
+async def test_get_request_status_covers_processing_queue_complete_cancelled_and_unknown(
+    db,
+    user_factory,
+) -> None:
+    user = user_factory(username="status-user", telegram_user_id=5004)
+    now = datetime.now(UTC)
+
+    crawling = _create_request(
+        user_id=user.telegram_user_id,
+        status="processing",
+        correlation_id="cid-crawling",
+        created_at=now,
+    )
+    processing = _create_request(
+        user_id=user.telegram_user_id,
+        status="processing",
+        correlation_id="cid-processing",
+        created_at=now + timedelta(seconds=1),
+    )
+    CrawlResult.create(
+        request=processing.id,
+        status="ok",
+        source_url="https://example.com/processing",
+    )
+    almost_done = _create_request(
+        user_id=user.telegram_user_id,
+        status="processing",
+        correlation_id="cid-almost-done",
+        created_at=now + timedelta(seconds=2),
+    )
+    CrawlResult.create(
+        request=almost_done.id,
+        status="ok",
+        source_url="https://example.com/almost-done",
+    )
+    LLMCall.create(request=almost_done.id, status="ok", response_text="Generated summary")
+    Summary.create(
+        request=almost_done.id,
+        lang="en",
+        json_payload={"tldr": "TLDR", "summary_250": "Summary", "key_ideas": ["idea"]},
+    )
+
+    _create_request(
+        user_id=user.telegram_user_id,
+        status="pending",
+        correlation_id="cid-older-pending",
+        created_at=now + timedelta(seconds=3),
+    )
+    queued = _create_request(
+        user_id=user.telegram_user_id,
+        status="pending",
+        correlation_id="cid-queued",
+        created_at=now + timedelta(seconds=4),
+    )
+    complete = _create_request(
+        user_id=user.telegram_user_id,
+        status="ok",
+        correlation_id="cid-complete",
+        created_at=now + timedelta(seconds=5),
+    )
+    cancelled = _create_request(
+        user_id=user.telegram_user_id,
+        status="cancelled",
+        correlation_id="cid-cancelled",
+        created_at=now + timedelta(seconds=6),
+    )
+    unknown = _create_request(
+        user_id=user.telegram_user_id,
+        status="mystery",
+        correlation_id="cid-unknown",
+        created_at=now + timedelta(seconds=7),
+    )
+
+    crawling_status = await RequestService.get_request_status(user.telegram_user_id, crawling.id)
+    processing_status = await RequestService.get_request_status(
+        user.telegram_user_id, processing.id
+    )
+    almost_done_status = await RequestService.get_request_status(
+        user.telegram_user_id, almost_done.id
+    )
+    queued_status = await RequestService.get_request_status(user.telegram_user_id, queued.id)
+    complete_status = await RequestService.get_request_status(user.telegram_user_id, complete.id)
+    cancelled_status = await RequestService.get_request_status(user.telegram_user_id, cancelled.id)
+    unknown_status = await RequestService.get_request_status(user.telegram_user_id, unknown.id)
+
+    assert crawling_status["stage"] == "crawling"
+    assert crawling_status["progress"] == {"current_step": 1, "total_steps": 3, "percentage": 33}
+    assert processing_status["stage"] == "processing"
+    assert processing_status["progress"] == {
+        "current_step": 2,
+        "total_steps": 3,
+        "percentage": 66,
+    }
+    assert almost_done_status["progress"] == {
+        "current_step": 3,
+        "total_steps": 3,
+        "percentage": 90,
+    }
+    assert queued_status["stage"] == "pending"
+    assert queued_status["queue_position"] == 2
+    assert complete_status["stage"] == "complete"
+    assert cancelled_status["stage"] == "failed"
+    assert cancelled_status["error_message"] == "Request was cancelled"
+    assert cancelled_status["error_reason_code"] == "REQUEST_CANCELLED"
+    assert cancelled_status["can_retry"] is True
+    assert unknown_status["stage"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_get_request_status_falls_back_for_failed_requests_and_enforces_access(
+    db,
+    user_factory,
+) -> None:
+    user = user_factory(username="status-error-user", telegram_user_id=5005)
+    failed = _create_request(
+        user_id=user.telegram_user_id,
+        status="error",
+        correlation_id="cid-error",
+    )
+
+    with patch.object(
+        RequestService,
+        "_derive_error_details",
+        AsyncMock(return_value=(None, None, None, None, False, None)),
+    ):
+        status = await RequestService.get_request_status(user.telegram_user_id, failed.id)
+
+    assert status["stage"] == "failed"
+    assert status["error_message"] == "Request failed"
+    assert status["retryable"] is False
+    assert status["can_retry"] is True
+
+    with pytest.raises(ResourceNotFoundError):
+        await RequestService.get_request_status(999999, failed.id)
+
+
+@pytest.mark.asyncio
+async def test_retry_failed_request_and_derive_error_details_handle_missing_records(
+    db,
+    user_factory,
+) -> None:
+    user = user_factory(username="status-missing-user", telegram_user_id=5006)
+    failed = _create_request(
+        user_id=user.telegram_user_id,
+        status="error",
+        correlation_id="cid-missing",
+    )
+
+    with pytest.raises(ResourceNotFoundError):
+        await RequestService.retry_failed_request(123456, failed.id)
+
+    assert await RequestService._derive_error_details(failed.id) == (
+        None,
+        None,
+        None,
+        None,
+        False,
+        None,
+    )
