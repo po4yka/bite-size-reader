@@ -1,6 +1,6 @@
-# Rust Workspace (M1-M6)
+# Rust Workspace (M1-M8)
 
-This workspace contains migration crates delivered across milestones **M1–M6**.
+This workspace contains migration crates delivered across milestones **M1–M8**.
 
 ## Crates
 
@@ -14,6 +14,7 @@ This workspace contains migration crates delivered across milestones **M1–M6**
 - `bsr-pipeline-shadow`: M3 pipeline slice parity and runtime command surface
 - `bsr-interface-router`: M4 mobile route + Telegram command routing surface
 - `bsr-telegram-runtime`: M6-S1 Telegram command route-decision scaffold (`command-route`)
+- `bsr-mobile-api`: M8 API shell foundation for canonical OpenAPI/docs/static routes, middleware/auth/rate-limit scaffolding, and placeholder `/v1/*` route-method parity from `docs/openapi/mobile_api.yaml`
 
 ## Scope
 
@@ -24,6 +25,7 @@ This workspace contains migration crates delivered across milestones **M1–M6**
 - `MIGRATION_PROCESSING_ORCHESTRATOR_BACKEND=rust` makes Rust authoritative for URL and forwarded-text processing hot paths; Python remains the Telegram/progress/message-shell bridge.
 - `MIGRATION_WORKER_BACKEND=rust` is now a secondary/test-only toggle when the processing orchestrator backend is Rust.
 - Specialized Twitter/YouTube extraction paths and web-search enrichment are still outside the Rust processing cutover.
+- `bsr-mobile-api` currently provides the runtime shell, docs/static/public endpoints, auth/rate-limit middleware scaffolding, and `/v1/*` route registration parity. Domain handlers, background processing, and API-domain persistence remain to be ported.
 - Legacy `MIGRATION_TELEGRAM_RUNTIME_BACKEND` values are ignored with a warning.
 
 ## Recent Correctness Updates (2026-03-05)
@@ -53,4 +55,5 @@ bash scripts/migration/run_m5_cutover_suite.sh
 bash scripts/migration/run_processing_orchestrator_parity_suite.sh
 bash scripts/migration/run_worker_chunked_parity_suite.sh
 bash scripts/migration/run_m6_telegram_runtime_suite.sh
+bash scripts/migration/run_m8_api_runtime_suite.sh
 ```

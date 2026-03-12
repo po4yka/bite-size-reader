@@ -56,6 +56,7 @@ pub fn resolve_mobile_route(input: &MobileRouteInput) -> MobileRouteDecision {
     if matches_route_prefix(&path, "/docs")
         || matches_route_prefix(&path, "/redoc")
         || matches_route_prefix(&path, "/openapi.json")
+        || matches_route_prefix(&path, "/web")
         || matches_route_prefix(&path, "/static")
     {
         return MobileRouteDecision {
@@ -248,6 +249,18 @@ mod tests {
         assert_eq!(decision.route_key, "articles");
         assert_eq!(decision.rate_limit_bucket, "default");
         assert!(decision.requires_auth);
+        assert!(decision.handled);
+    }
+
+    #[test]
+    fn mobile_route_web_shell_is_public() {
+        let decision = resolve_mobile_route(&MobileRouteInput {
+            method: "GET".to_string(),
+            path: "/web/settings".to_string(),
+        });
+        assert_eq!(decision.route_key, "docs");
+        assert_eq!(decision.rate_limit_bucket, "default");
+        assert!(!decision.requires_auth);
         assert!(decision.handled);
     }
 

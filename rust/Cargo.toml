@@ -10,6 +10,7 @@ members = [
   "crates/bsr-pipeline-shadow",
   "crates/bsr-interface-router",
   "crates/bsr-telegram-runtime",
+  "crates/bsr-mobile-api",
 ]
 resolver = "2"
 

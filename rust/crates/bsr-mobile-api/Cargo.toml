@@ -1,0 +1,36 @@
+[package]
+name = "bsr-mobile-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+name = "bsr_mobile_api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bsr-api"
+path = "src/main.rs"
+
+[dependencies]
+axum.workspace = true
+base64 = "0.22"
+bsr-interface-router = { path = "../bsr-interface-router" }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+hmac = "0.12"
+http = "1"
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml = "0.9"
+sha2 = "0.10"
+thiserror.workspace = true
+tokio.workspace = true
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+tracing.workspace = true
+url = "2"
+
+[dev-dependencies]
+http-body-util = "0.1"

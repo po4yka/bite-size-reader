@@ -39,6 +39,14 @@ def test_python_mobile_route_decision_for_articles_uses_default_bucket() -> None
     assert decision.handled is True
 
 
+def test_python_mobile_route_decision_for_web_shell_is_public() -> None:
+    decision = build_python_mobile_route_decision("GET", "/web/settings")
+    assert decision.route_key == "docs"
+    assert decision.rate_limit_bucket == "default"
+    assert decision.requires_auth is False
+    assert decision.handled is True
+
+
 def test_python_telegram_command_decision_strips_bot_mention() -> None:
     decision = build_python_telegram_command_decision("/unread@mybot 10")
     assert decision.command == "/unread"
@@ -148,10 +156,14 @@ async def test_interface_runner_executes_real_rust_binary(monkeypatch) -> None:
 
     runner = InterfaceRouterRunner(_runtime_cfg(migration_interface_timeout_ms=2_000))
     mobile = await runner.resolve_mobile_route(method="GET", path="/v1/summaries")
+    web = await runner.resolve_mobile_route(method="GET", path="/web/settings")
     command = await runner.resolve_telegram_command(text="/findonline rust migration")
 
     assert mobile.route_key == "summaries"
     assert mobile.rate_limit_bucket == "summaries"
     assert mobile.handled is True
+    assert web.route_key == "docs"
+    assert web.requires_auth is False
+    assert web.handled is True
     assert command.command == "/find"
     assert command.handled is True

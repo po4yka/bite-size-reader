@@ -70,9 +70,12 @@ def build_python_mobile_route_decision(method: str, path: str) -> MobileRouteDec
         return MobileRouteDecision("health", "default", False, True)
     if normalized_path == "/metrics":
         return MobileRouteDecision("metrics", "default", False, True)
-    if normalized_path in {"/docs", "/redoc", "/openapi.json"} or normalized_path.startswith(
-        "/static/"
-    ):
+    if normalized_path in {
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/web",
+    } or normalized_path.startswith(("/static/", "/web/")):
         return MobileRouteDecision("docs", "default", False, True)
 
     route_key = "unknown"

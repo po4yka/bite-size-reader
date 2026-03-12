@@ -73,6 +73,9 @@ class RuntimeConfig(BaseModel):
     migration_processing_orchestrator_timeout_ms: int = Field(
         default=300000, validation_alias="MIGRATION_PROCESSING_ORCHESTRATOR_TIMEOUT_MS"
     )
+    migration_api_runtime_backend: str = Field(
+        default="python", validation_alias="MIGRATION_API_RUNTIME_BACKEND"
+    )
     migration_worker_backend: str = Field(
         default="python", validation_alias="MIGRATION_WORKER_BACKEND"
     )
@@ -377,6 +380,16 @@ class RuntimeConfig(BaseModel):
             )
             raise ValueError(msg)
         return parsed
+
+    @field_validator("migration_api_runtime_backend", mode="before")
+    @classmethod
+    def _validate_migration_api_runtime_backend(cls, value: Any) -> str:
+        backend = str(value or "python").strip().lower()
+        allowed = {"python", "rust"}
+        if backend not in allowed:
+            msg = f"Migration API runtime backend must be one of {sorted(allowed)}"
+            raise ValueError(msg)
+        return backend
 
     @field_validator("migration_worker_backend", mode="before")
     @classmethod

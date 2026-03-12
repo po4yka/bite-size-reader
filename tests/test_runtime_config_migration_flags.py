@@ -51,6 +51,16 @@ def test_processing_orchestrator_timeout_accepts_long_running_execution_value() 
     assert cfg.migration_processing_orchestrator_timeout_ms == 450000
 
 
+def test_api_runtime_backend_defaults_to_python() -> None:
+    cfg = RuntimeConfig()
+    assert cfg.migration_api_runtime_backend == "python"
+
+
+def test_api_runtime_backend_accepts_rust() -> None:
+    cfg = RuntimeConfig(migration_api_runtime_backend="rust")
+    assert cfg.migration_api_runtime_backend == "rust"
+
+
 def test_worker_timeout_defaults_to_five_minutes() -> None:
     cfg = RuntimeConfig()
     assert cfg.migration_worker_timeout_ms == 300000
