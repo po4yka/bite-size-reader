@@ -66,8 +66,6 @@ class SettingsHandlerImpl:
     @combined_handler("command_settings", "settings_open")
     async def handle_settings(self, ctx: CommandExecutionContext) -> None:
         """Open Digest Mini App via inline keyboard button."""
-        from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-
         api_base = ""
         if self._cfg is not None:
             api_base = getattr(self._cfg.telegram, "api_base_url", "") or ""
@@ -78,6 +76,8 @@ class SettingsHandlerImpl:
                 "API base URL not configured. Set `API_BASE_URL` in your environment.",
             )
             return
+
+        from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
         url = f"{api_base.rstrip('/')}{_DIGEST_MINI_APP_PATH}"
         keyboard = InlineKeyboardMarkup(

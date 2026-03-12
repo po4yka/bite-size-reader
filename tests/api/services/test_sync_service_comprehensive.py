@@ -71,6 +71,18 @@ def sync_service(mock_config, mock_session_manager):
         return service
 
 
+@pytest.fixture(autouse=True)
+def clear_sync_service_fallback_state():
+    """Reset module-level fallback sync session state between tests."""
+    import app.api.services.sync_service as sync_service_module
+
+    sync_service_module._sync_sessions.clear()
+    sync_service_module._redis_warning_logged = False
+    yield
+    sync_service_module._sync_sessions.clear()
+    sync_service_module._redis_warning_logged = False
+
+
 class TestResolveLimit:
     """Test _resolve_limit method."""
 
@@ -253,6 +265,25 @@ class TestLoadSession:
                 await sync_service._load_session("test-session", 123, "test-client")
 
             assert "test-session" in str(exc_info.value.details.get("session_id", ""))
+
+    @pytest.mark.asyncio
+    async def test_load_session_fallback_expired_entry_is_removed(self, sync_service):
+        """Test expired fallback sessions are evicted after access."""
+        import app.api.services.sync_service as sync_service_module
+
+        expires_at = datetime.now(UTC) - timedelta(minutes=1)
+        sync_service_module._sync_sessions["expired-session"] = {
+            "session_id": "expired-session",
+            "user_id": 123,
+            "client_id": "test-client",
+            "expires_at": expires_at.isoformat().replace("+00:00", "Z"),
+        }
+
+        with patch("app.api.services.sync_service.get_redis", new=AsyncMock(return_value=None)):
+            with pytest.raises(SyncSessionExpiredError):
+                await sync_service._load_session("expired-session", 123, "test-client")
+
+        assert "expired-session" not in sync_service_module._sync_sessions
 
 
 class TestStartSession:

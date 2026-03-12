@@ -87,6 +87,8 @@ class TestAccessControl(unittest.IsolatedAsyncioTestCase):
             bot = make_bot(os.path.join(tmp, "app.db"), allowed_ids=[1])
             msg = FakeMessage("/help", uid=999)
             await bot._on_message(msg)
+            await bot._shutdown()
+            bot.db.database.close()
             assert any("denied" in r.lower() for r in msg._replies)
 
     async def test_allowed_user_passes(self):
@@ -94,6 +96,8 @@ class TestAccessControl(unittest.IsolatedAsyncioTestCase):
             bot = make_bot(os.path.join(tmp, "app.db"), allowed_ids=[7])
             msg = FakeMessage("/help", uid=7)
             await bot._on_message(msg)
+            await bot._shutdown()
+            bot.db.database.close()
             assert any("commands" in r.lower() for r in msg._replies)
 
 
@@ -137,6 +141,34 @@ class TestAccessControllerBlockReset(unittest.IsolatedAsyncioTestCase):
                 assert allowed is False
                 assert controller._failed_attempts[uid] == 1
                 assert uid not in controller._block_notified_until
+
+    async def test_stale_tracking_state_is_reclaimed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "app.db")
+            cfg = _make_config(db_path, allowed_ids=[1])
+            db = Database(db_path)
+            db.migrate()
+            formatter = DummyFormatter()
+            controller = AccessController(cfg, db, formatter, lambda *args, **kwargs: None)
+            controller.BLOCK_DURATION_SECONDS = 10
+            controller.DENY_NOTIFICATION_COOLDOWN_SECONDS = 10
+
+            stale_uid = 999
+            fake_time = FakeTime(20)
+
+            controller._failed_attempts[stale_uid] = 2
+            controller._last_attempt_time[stale_uid] = 1
+            controller._block_notified_until[stale_uid] = 5
+            controller._deny_notified_until[stale_uid] = 5
+
+            with patch("app.adapters.telegram.access_controller.time.time", fake_time):
+                allowed = await controller.check_access(1, FakeMessage("/help", uid=1), "cid", 0, 0.0)
+
+            assert allowed is True
+            assert stale_uid not in controller._failed_attempts
+            assert stale_uid not in controller._last_attempt_time
+            assert stale_uid not in controller._block_notified_until
+            assert stale_uid not in controller._deny_notified_until
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from types import SimpleNamespace
 from typing import Any, cast
@@ -11,7 +12,7 @@ import pytest
 
 from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandlerImpl
 from app.adapters.telegram.command_handlers.settings_handler import SettingsHandlerImpl
-from app.adapters.telegram.session_init_state import SessionInitState
+from app.adapters.telegram.session_init_state import SESSION_INIT_TTL_SECONDS, SessionInitState
 
 
 def _make_settings_ctx() -> tuple[Any, AsyncMock]:
@@ -145,6 +146,21 @@ class TestInitSessionHandlerImpl:
         assert all("internal-secret-send-code-error" not in text for text in sent_texts)
         assert handler._sessions[uid].step == "waiting_contact"
         cleanup.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_has_active_session_disconnects_expired_client(self) -> None:
+        handler = _make_init_handler()
+        uid = 505
+        client = SimpleNamespace(disconnect=AsyncMock())
+        state = SessionInitState(client=client, step="waiting_otp")
+        state.created_at = time.time() - SESSION_INIT_TTL_SECONDS - 1
+        handler._sessions[uid] = state
+
+        assert handler.has_active_session(uid) is False
+        await asyncio.sleep(0)
+
+        client.disconnect.assert_awaited_once()
+        assert uid not in handler._sessions
 
     @pytest.mark.asyncio
     async def test_handle_otp_failure_does_not_leak_exception_text(self) -> None:

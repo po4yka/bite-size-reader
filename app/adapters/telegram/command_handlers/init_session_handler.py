@@ -10,6 +10,7 @@ Replaces the interactive CLI tool with an in-bot flow:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -43,6 +44,7 @@ class InitSessionHandlerImpl:
         self._cfg = cfg
         self._formatter = response_formatter
         self._sessions: dict[int, SessionInitState] = {}
+        self._disconnect_tasks: set[asyncio.Task[Any]] = set()
 
     def has_active_session(self, uid: int) -> bool:
         """Check if a user has an active session init flow."""
@@ -50,7 +52,7 @@ class InitSessionHandlerImpl:
         if state is None:
             return False
         if state.is_expired:
-            self._sessions.pop(uid, None)
+            self._expire_session(uid, state)
             return False
         return True
 
@@ -350,13 +352,7 @@ class InitSessionHandlerImpl:
         if state is None:
             return
 
-        # Disconnect pyrogram client if still connected
-        if state.client is not None:
-            try:
-                await state.client.disconnect()
-            except Exception as exc:
-                raise_if_cancelled(exc)
-                logger.debug("init_session_disconnect_error", extra={"error": str(exc)})
+        await self._disconnect_state_client(uid, state)
 
         # Remove reply keyboard
         try:
@@ -387,19 +383,44 @@ class InitSessionHandlerImpl:
         """Remove any sessions that have exceeded the TTL."""
         expired = [uid for uid, s in self._sessions.items() if s.is_expired]
         for uid in expired:
-            state = self._sessions.pop(uid)
-            if state.client is not None:
-                # Fire-and-forget disconnect for expired sessions
-                try:
-                    import asyncio
+            state = self._sessions.get(uid)
+            if state is not None:
+                self._expire_session(uid, state)
 
-                    asyncio.get_event_loop().create_task(state.client.disconnect())
-                except Exception as exc:
-                    logger.debug(
-                        "init_session_disconnect_schedule_failed",
-                        extra={"uid": uid, "error": str(exc)},
-                    )
-            logger.info(
-                "init_session_expired",
-                extra={"uid": uid, "ttl": SESSION_INIT_TTL_SECONDS},
+    async def _disconnect_state_client(self, uid: int, state: SessionInitState) -> None:
+        """Disconnect a session-scoped Pyrogram client if one is attached."""
+        if state.client is None:
+            return
+
+        try:
+            await state.client.disconnect()
+        except Exception as exc:
+            raise_if_cancelled(exc)
+            logger.debug(
+                "init_session_disconnect_error",
+                extra={"uid": uid, "error": str(exc)},
             )
+        finally:
+            state.client = None
+
+    def _expire_session(self, uid: int, state: SessionInitState) -> None:
+        """Remove expired session state and disconnect its client in the background."""
+        self._sessions.pop(uid, None)
+
+        if state.client is not None:
+            try:
+                task = asyncio.get_running_loop().create_task(
+                    self._disconnect_state_client(uid, state)
+                )
+                self._disconnect_tasks.add(task)
+                task.add_done_callback(self._disconnect_tasks.discard)
+            except RuntimeError as exc:
+                logger.debug(
+                    "init_session_disconnect_schedule_failed",
+                    extra={"uid": uid, "error": str(exc)},
+                )
+
+        logger.info(
+            "init_session_expired",
+            extra={"uid": uid, "ttl": SESSION_INIT_TTL_SECONDS},
+        )

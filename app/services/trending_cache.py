@@ -40,6 +40,14 @@ _redis_cache: RedisCache | None = None
 _app_config: AppConfig | None = None
 
 
+def _prune_expired_in_memory_cache(now: datetime) -> int:
+    """Remove expired fallback cache entries and return the number deleted."""
+    expired_keys = [key for key, entry in _trending_cache.items() if entry.expires_at <= now]
+    for key in expired_keys:
+        _trending_cache.pop(key, None)
+    return len(expired_keys)
+
+
 def _normalize_tag(tag: Any) -> str | None:
     if tag is None:
         return None
@@ -229,6 +237,7 @@ async def get_trending_payload(user_id: int, *, limit: int, days: int) -> dict[s
     # Fall back to in-memory cache
     cache_key = (user_id, limit, days)
     async with _trending_cache_lock:
+        _prune_expired_in_memory_cache(now)
         cached = _trending_cache.get(cache_key)
         if cached and cached.expires_at > now:
             return cached.payload
@@ -251,6 +260,7 @@ async def get_trending_payload(user_id: int, *, limit: int, days: int) -> dict[s
 
     # Also cache in memory as immediate fallback
     async with _trending_cache_lock:
+        _prune_expired_in_memory_cache(now)
         _trending_cache[cache_key] = TrendingCacheEntry(
             expires_at=now + timedelta(seconds=TRENDING_CACHE_TTL_SECONDS),
             payload=payload,

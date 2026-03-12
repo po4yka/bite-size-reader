@@ -53,6 +53,37 @@ class AccessController:
         self.BLOCK_DURATION_SECONDS = 300  # 5 minutes
         self.DENY_NOTIFICATION_COOLDOWN_SECONDS = 300
 
+    def _clear_tracking(self, uid: int) -> None:
+        """Remove all in-memory tracking state for a user."""
+        self._failed_attempts.pop(uid, None)
+        self._last_attempt_time.pop(uid, None)
+        self._block_notified_until.pop(uid, None)
+        self._deny_notified_until.pop(uid, None)
+
+    def _cleanup_stale_tracking(self, current_time: float) -> int:
+        """Reclaim stale unauthorized-user tracking state."""
+        tracked_uids = (
+            set(self._failed_attempts)
+            | set(self._last_attempt_time)
+            | set(self._block_notified_until)
+            | set(self._deny_notified_until)
+        )
+        cleaned = 0
+
+        for uid in tracked_uids:
+            last_attempt_time = self._last_attempt_time.get(uid, 0.0)
+            retention_deadline = max(
+                last_attempt_time + self.BLOCK_DURATION_SECONDS if last_attempt_time else 0.0,
+                self._block_notified_until.get(uid, 0.0),
+                self._deny_notified_until.get(uid, 0.0),
+            )
+            if retention_deadline and current_time < retention_deadline:
+                continue
+            self._clear_tracking(uid)
+            cleaned += 1
+
+        return cleaned
+
     async def check_access(
         self, uid: int, message: Any, correlation_id: str, interaction_id: int, start_time: float
     ) -> bool:
@@ -60,13 +91,11 @@ class AccessController:
         allowed_ids = self.cfg.telegram.allowed_user_ids
 
         current_time = time.time()
+        self._cleanup_stale_tracking(current_time)
 
         if uid in allowed_ids:
             # Reset failed attempts on successful access
-            self._failed_attempts.pop(uid, None)
-            self._last_attempt_time.pop(uid, None)
-            self._block_notified_until.pop(uid, None)
-            self._deny_notified_until.pop(uid, None)
+            self._clear_tracking(uid)
             logger.info("access_granted", extra={"uid": uid})
             return True
 
@@ -96,9 +125,7 @@ class AccessController:
                 return False
 
             # Block window expired - reset counters so the user gets a fresh set of attempts
-            self._failed_attempts.pop(uid, None)
-            self._last_attempt_time.pop(uid, None)
-            self._block_notified_until.pop(uid, None)
+            self._clear_tracking(uid)
             failed_count = 0
 
         # Track failed attempts

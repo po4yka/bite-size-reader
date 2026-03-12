@@ -51,6 +51,34 @@ _sync_sessions: dict[str, dict[str, Any]] = {}
 _redis_warning_logged = False
 
 
+def _parse_session_expires_at(payload: dict[str, Any]) -> datetime | None:
+    """Parse a fallback session expiry timestamp."""
+    expires_raw = payload.get("expires_at")
+    if not isinstance(expires_raw, str) or not expires_raw:
+        return None
+    try:
+        return datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _prune_fallback_sessions(
+    now: datetime, *, exclude_session_id: str | None = None
+) -> int:
+    """Remove expired in-memory sync sessions."""
+    expired_session_ids = []
+    for session_id, payload in _sync_sessions.items():
+        if exclude_session_id is not None and session_id == exclude_session_id:
+            continue
+        expires_at = _parse_session_expires_at(payload)
+        if expires_at is not None and now >= expires_at:
+            expired_session_ids.append(session_id)
+
+    for session_id in expired_session_ids:
+        _sync_sessions.pop(session_id, None)
+    return len(expired_session_ids)
+
+
 class SyncService:
     """Sync protocol service implementing sessions, delta/full retrieval, and apply."""
 
@@ -84,6 +112,7 @@ class SyncService:
         if not _redis_warning_logged:
             logger.warning("sync_session_redis_unavailable_fallback")
             _redis_warning_logged = True
+        _prune_fallback_sessions(datetime.now(UTC))
         _sync_sessions[payload["session_id"]] = payload
 
     async def _load_session(
@@ -100,6 +129,7 @@ class SyncService:
 
             payload = json.loads(payload_raw)
         else:
+            _prune_fallback_sessions(datetime.now(UTC), exclude_session_id=session_id)
             payload = _sync_sessions.get(session_id)
             if not payload:
                 raise SyncSessionNotFoundError(session_id)
@@ -110,6 +140,8 @@ class SyncService:
         expires_raw = payload["expires_at"]
         expires_at = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
         if datetime.now(UTC) >= expires_at:
+            if redis_client is None:
+                _sync_sessions.pop(session_id, None)
             raise SyncSessionExpiredError(session_id)
 
         return payload
