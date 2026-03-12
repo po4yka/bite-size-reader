@@ -199,3 +199,51 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
             "json_object_guardrail",
             "json_object_fallback",
         ]
+
+    @patch("app.adapters.content.llm_summarizer.RedisCache")
+    async def test_routes_single_pass_summary_to_rust_worker_when_enabled(
+        self, redis_cache_mock: MagicMock
+    ) -> None:
+        cache_stub = MagicMock()
+        cache_stub.enabled = False
+        cache_stub.get_json = AsyncMock(return_value=None)
+        cache_stub.set_json = AsyncMock()
+        redis_cache_mock.return_value = cache_stub
+
+        self.cfg.runtime.migration_worker_backend = "rust"
+
+        summarizer = LLMSummarizer(
+            cfg=cast("AppConfig", self.cfg),
+            db=self.db,
+            openrouter=self.openrouter,
+            response_formatter=self.response_formatter,
+            audit_func=lambda *args, **kwargs: None,
+            sem=lambda: _DummySemaphore(),
+        )
+
+        with (
+            patch(
+                "app.adapters.content.llm_summarizer._execute_rust_worker_summary_for",
+                new=AsyncMock(
+                    return_value={"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"}
+                ),
+            ) as worker_exec,
+            patch.object(
+                summarizer._workflow,
+                "execute_summary_workflow",
+                new=AsyncMock(),
+            ) as workflow_exec,
+        ):
+            summary = await summarizer.summarize_content(
+                message=MagicMock(),
+                content_text="short content for testing.",
+                chosen_lang="en",
+                system_prompt="system prompt",
+                req_id=99,
+                max_chars=10_000,
+                correlation_id="cid-worker",
+            )
+
+        assert summary is not None
+        worker_exec.assert_awaited_once()
+        workflow_exec.assert_not_called()

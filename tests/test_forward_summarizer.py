@@ -26,10 +26,14 @@ class ForwardSummarizerTests(unittest.IsolatedAsyncioTestCase):
         cfg.openrouter.model = "primary"
         cfg.openrouter.fallback_models = ()
         cfg.openrouter.structured_output_mode = "json_object"
+        cfg.runtime.migration_worker_backend = "python"
+        cfg.runtime.llm_provider = "openrouter"
 
         db = MagicMock()
         openrouter = MagicMock()
         response_formatter = MagicMock()
+        response_formatter.send_forward_completion_notification = AsyncMock()
+        response_formatter.send_error_notification = AsyncMock()
 
         summarizer = ForwardSummarizer(
             cfg,
@@ -76,3 +80,77 @@ class ForwardSummarizerTests(unittest.IsolatedAsyncioTestCase):
         notifications = call_kwargs["notifications"]
         assert notifications.completion is not None
         assert notifications.llm_error is not None
+
+    async def test_summarize_forward_routes_to_rust_worker_when_enabled(self) -> None:
+        cfg = MagicMock()
+        cfg.openrouter.temperature = 0.2
+        cfg.openrouter.top_p = 1.0
+        cfg.openrouter.model = "primary"
+        cfg.openrouter.fallback_models = ()
+        cfg.openrouter.structured_output_mode = "json_object"
+        cfg.runtime.migration_worker_backend = "rust"
+        cfg.runtime.llm_provider = "openrouter"
+        cfg.runtime.summary_streaming_enabled = False
+
+        db = MagicMock()
+        openrouter = MagicMock()
+        response_formatter = MagicMock()
+        response_formatter.send_forward_completion_notification = AsyncMock()
+        response_formatter.send_error_notification = AsyncMock()
+
+        summarizer = ForwardSummarizer(
+            cfg,
+            db,
+            openrouter,
+            response_formatter,
+            lambda *a, **k: None,
+            lambda: self._Sem(),
+        )
+
+        terminal_llm = MagicMock(status="ok", model="primary", error_text=None)
+        persisted_attempts = [(terminal_llm, MagicMock())]
+
+        with (
+            patch.object(
+                summarizer.worker_runner,
+                "execute_forward_text",
+                new=AsyncMock(
+                    return_value={
+                        "status": "ok",
+                        "summary": {"summary_250": "ok", "summary_1000": "ok", "tldr": "fine"},
+                        "attempts": [{}],
+                        "terminal_attempt_index": 0,
+                    }
+                ),
+            ),
+            patch.object(
+                summarizer,
+                "_persist_worker_attempts",
+                new=AsyncMock(return_value=persisted_attempts),
+            ),
+            patch.object(
+                summarizer._workflow,
+                "_finalize_success",
+                new=AsyncMock(
+                    return_value={"summary_250": "ok", "summary_1000": "ok", "tldr": "fine"}
+                ),
+            ) as finalize_success,
+            patch.object(
+                summarizer._workflow,
+                "execute_summary_workflow",
+                new=AsyncMock(),
+            ) as workflow_exec,
+        ):
+            result = await summarizer.summarize_forward(
+                message=MagicMock(),
+                prompt="Forward message",
+                chosen_lang="en",
+                system_prompt="sys",
+                req_id=42,
+                correlation_id="cid-rust-worker",
+                interaction_id=99,
+            )
+
+        assert result == {"summary_250": "ok", "summary_1000": "ok", "tldr": "fine"}
+        finalize_success.assert_awaited_once()
+        workflow_exec.assert_not_called()

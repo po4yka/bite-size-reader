@@ -6,6 +6,7 @@ members = [
   "crates/bsr-persistence",
   "crates/bsr-processing-orchestrator",
   "crates/bsr-summary-contract",
+  "crates/bsr-worker",
   "crates/bsr-pipeline-shadow",
   "crates/bsr-interface-router",
   "crates/bsr-telegram-runtime",

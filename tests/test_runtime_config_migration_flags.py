@@ -29,3 +29,18 @@ def test_m6_telegram_runtime_timeout_accepts_valid_value() -> None:
 def test_m6_telegram_runtime_legacy_backend_toggle_is_ignored() -> None:
     cfg = RuntimeConfig(migration_interface_backend="rust")
     assert cfg.migration_interface_backend == "rust"
+
+
+def test_worker_backend_defaults_to_python() -> None:
+    cfg = RuntimeConfig()
+    assert cfg.migration_worker_backend == "python"
+
+
+def test_worker_backend_accepts_rust() -> None:
+    cfg = RuntimeConfig(migration_worker_backend="rust")
+    assert cfg.migration_worker_backend == "rust"
+
+
+def test_worker_timeout_defaults_to_five_minutes() -> None:
+    cfg = RuntimeConfig()
+    assert cfg.migration_worker_timeout_ms == 300000
