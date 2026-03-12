@@ -151,13 +151,6 @@ def _fetch_summary_embeddings(
                 },
             }
 
-            # We don't have user_scope here, but prepare_for_upsert needs it.
-            # However, the migration script passes user_scope later.
-            # We just need the text and the basic metadata.
-
-            # Actually, let's just use MetadataBuilder.prepare_for_upsert and ignore the user_scope in the result
-            # if we want, or pass a dummy one and override it.
-
             text, metadata = MetadataBuilder.prepare_for_upsert(
                 request_id=row.summary.request.id,
                 summary_id=row.summary.id,
