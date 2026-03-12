@@ -8,6 +8,7 @@ use thiserror::Error;
 
 mod api_content;
 mod api_core;
+mod api_sync_collections;
 mod processing;
 
 pub use api_content::{
@@ -30,6 +31,20 @@ pub use api_core::{
     set_link_nonce, touch_client_secret_after_success, unlink_telegram,
     update_refresh_token_last_used, update_user_preferences, ClientSecretRecord,
     RefreshTokenRecord, UserRecord, UserSummaryStatRow,
+};
+pub use api_sync_collections::{
+    accept_collection_invite, add_collection_collaborator, add_collection_item,
+    apply_summary_sync_change, create_collection, create_collection_invite,
+    get_collection_by_id, get_collection_owner_info, get_collection_role,
+    get_next_collection_item_position, get_next_collection_position,
+    get_summary_sync_entity_for_user, list_collection_collaborators,
+    list_collection_items, list_collection_tree, list_collections_for_user,
+    list_sync_entities_for_user, move_collection,
+    move_collection_items, remove_collection_collaborator, remove_collection_item,
+    reorder_collection_items, reorder_collections, shift_collection_positions,
+    soft_delete_collection, touch_collection, update_collection, CollectionAclRecord,
+    CollectionInviteRecord, CollectionItemRecord, CollectionRecord, MoveCollectionRecord,
+    MoveItemsResult, SyncEntityRecord,
 };
 pub use processing::{
     create_minimal_request, create_request, get_crawl_result_by_request,

@@ -31,6 +31,7 @@ use url::form_urlencoded;
 
 mod content_domains;
 mod core_domains;
+mod sync_collection_domains;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -131,6 +132,10 @@ pub struct ApiRuntimeConfig {
     pub api_rate_limit_summaries: usize,
     pub api_rate_limit_requests: usize,
     pub api_rate_limit_search: usize,
+    pub sync_expiry_hours: i64,
+    pub sync_default_limit: i64,
+    pub sync_min_limit: i64,
+    pub sync_max_limit: i64,
     pub redis_enabled: bool,
     pub redis_required: bool,
     pub redis_url: Option<String>,
@@ -194,6 +199,10 @@ impl ApiRuntimeConfig {
             api_rate_limit_summaries: parse_usize_env("API_RATE_LIMIT_SUMMARIES", 200),
             api_rate_limit_requests: parse_usize_env("API_RATE_LIMIT_REQUESTS", 10),
             api_rate_limit_search: parse_usize_env("API_RATE_LIMIT_SEARCH", 50),
+            sync_expiry_hours: parse_i64_env("SYNC_EXPIRY_HOURS", 1),
+            sync_default_limit: parse_i64_env("SYNC_DEFAULT_LIMIT", 200),
+            sync_min_limit: parse_i64_env("SYNC_MIN_LIMIT", 1),
+            sync_max_limit: parse_i64_env("SYNC_MAX_LIMIT", 500),
             redis_enabled: parse_bool_env("REDIS_ENABLED", true),
             redis_required: parse_bool_env("REDIS_REQUIRED", false),
             redis_url: std::env::var("REDIS_URL")
@@ -247,6 +256,7 @@ struct ApiRuntime {
     openapi_json: Value,
     route_manifest: Vec<RegisteredRoute>,
     local_rate_limits: Mutex<HashMap<String, Vec<i64>>>,
+    local_sync_sessions: Mutex<HashMap<String, Value>>,
 }
 
 #[derive(Debug, Clone)]
@@ -297,6 +307,7 @@ pub async fn build_state(config: ApiRuntimeConfig) -> Result<AppState, ApiRuntim
             openapi_json,
             route_manifest,
             local_rate_limits: Mutex::new(HashMap::new()),
+            local_sync_sessions: Mutex::new(HashMap::new()),
         }),
     })
 }
@@ -318,6 +329,7 @@ pub fn build_router(state: AppState) -> Router<AppState> {
         .route("/web/{*path}", get(web_index_handler))
         .merge(core_domains::build_router())
         .merge(content_domains::build_router())
+        .merge(sync_collection_domains::build_router())
         .nest_service(
             "/static",
             ServeDir::new(state.runtime.config.static_dir.clone()),
@@ -1083,6 +1095,9 @@ fn manual_route_map() -> BTreeMap<&'static str, BTreeSet<String>> {
     for (path, methods) in content_domains::implemented_route_map() {
         routes.insert(path, methods);
     }
+    for (path, methods) in sync_collection_domains::implemented_route_map() {
+        routes.insert(path, methods);
+    }
     routes
 }
 
@@ -1587,6 +1602,10 @@ mod tests {
             api_rate_limit_summaries: 200,
             api_rate_limit_requests: 10,
             api_rate_limit_search: 50,
+            sync_expiry_hours: 1,
+            sync_default_limit: 200,
+            sync_min_limit: 1,
+            sync_max_limit: 500,
             redis_enabled: false,
             redis_required: false,
             redis_url: None,

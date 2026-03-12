@@ -14,7 +14,7 @@ This workspace contains migration crates delivered across milestones **M1–M8**
 - `bsr-pipeline-shadow`: M3 pipeline slice parity and runtime command surface
 - `bsr-interface-router`: M4 mobile route + Telegram command routing surface
 - `bsr-telegram-runtime`: M6-S1 Telegram command route-decision scaffold (`command-route`)
-- `bsr-mobile-api`: M8 API runtime shell plus Rust-native `auth` / `user` / `system` and content/submission handlers (`summaries` / `articles` / `requests` / `proxy` / `notifications` / `tts`), Redis-aware rate limiting, Rust-owned API submit/retry execution, and canonical OpenAPI/docs/static route serving
+- `bsr-mobile-api`: M8 API runtime shell plus Rust-native `auth` / `user` / `system`, content/submission (`summaries` / `articles` / `requests` / `proxy` / `notifications` / `tts`), and `sync` / `collections` handlers, Redis-aware rate limiting, Rust-owned API submit/retry execution, and canonical OpenAPI/docs/static route serving
 
 ## Scope
 
@@ -25,9 +25,9 @@ This workspace contains migration crates delivered across milestones **M1–M8**
 - `MIGRATION_PROCESSING_ORCHESTRATOR_BACKEND=rust` makes Rust authoritative for URL and forwarded-text processing hot paths; Python remains the Telegram/progress/message-shell bridge.
 - `MIGRATION_WORKER_BACKEND=rust` is now a secondary/test-only toggle when the processing orchestrator backend is Rust.
 - Specialized Twitter/YouTube extraction paths and web-search enrichment are still outside the Rust processing cutover.
-- `bsr-mobile-api` now owns the runtime shell plus `/v1/auth/*`, `/v1/user/*`, `/v1/system/*`, `/v1/summaries/*`, `/v1/articles/*`, `/v1/requests/*`, `/v1/proxy/image`, `/v1/notifications/device`, and `/v1/summaries/{summary_id}/audio` on the Rust path.
-- The Rust API path now includes content/read-model SQLite access in `bsr-persistence`, Rust-owned API request submit/retry execution through `bsr-processing-orchestrator`, SSRF-guarded image proxying, notification-device registration, and ElevenLabs-backed TTS generation/download handling.
-- Remaining Mobile API groups such as `search`, `sync`, `collections`, `digest`, and broader background-job orchestration remain to be ported before the full Mobile API runtime cutover.
+- `bsr-mobile-api` now owns the runtime shell plus `/v1/auth/*`, `/v1/user/*`, `/v1/system/*`, `/v1/summaries/*`, `/v1/articles/*`, `/v1/requests/*`, `/v1/proxy/image`, `/v1/notifications/device`, `/v1/summaries/{summary_id}/audio`, `/v1/sync/*`, and `/v1/collections/*` on the Rust path.
+- The Rust API path now includes content/read-model SQLite access in `bsr-persistence`, Rust-owned API request submit/retry execution through `bsr-processing-orchestrator`, SSRF-guarded image proxying, notification-device registration, ElevenLabs-backed TTS generation/download handling, Redis-backed sync-session ownership with in-memory fallback, and collection ACL/share/invite/move/reorder flows.
+- Remaining Mobile API groups such as `search`, `digest`, and broader background-job orchestration remain to be ported before the full Mobile API runtime cutover.
 - Legacy `MIGRATION_TELEGRAM_RUNTIME_BACKEND` values are ignored with a warning.
 
 ## Recent Correctness Updates (2026-03-05)

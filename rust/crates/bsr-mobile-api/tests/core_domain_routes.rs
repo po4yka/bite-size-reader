@@ -208,6 +208,10 @@ fn test_config(
         api_rate_limit_summaries: 200,
         api_rate_limit_requests: 10,
         api_rate_limit_search: 50,
+        sync_expiry_hours: 1,
+        sync_default_limit: 200,
+        sync_min_limit: 1,
+        sync_max_limit: 500,
         redis_enabled,
         redis_required,
         redis_url: if redis_enabled {
