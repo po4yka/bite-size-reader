@@ -2,86 +2,11 @@
 
 Upgrade Bite-Size Reader to a new version safely.
 
-> **Migration context:** M5 cutover is complete and production is now Rust-first.
-> Use this guide for normal upgrades, runtime-track selection, and rollback readiness.
-> See [ROADMAP.md](../../ROADMAP.md) for milestone-level planning.
-
 **Audience:** Operators
 **Difficulty:** Intermediate
 **Estimated Time:** 10-15 minutes
 
 ---
-
-## Runtime Track Matrix (Python → Rust)
-
-Choose one runtime track per release:
-
-| Track | When to use | Runtime | Risk profile |
-| --- | --- | --- | --- |
-| `rust-canary` | Validation/canary environments | Rust-first with synthetic/parity checks | Medium |
-| `rust-primary` | Default after M5 cutover | Rust-first | Medium |
-
-Recommended progression for new environments: `rust-canary` → `rust-primary`.
-Emergency rollback should be release-based: revert to the previous known-good image/tag.
-Do not rely on legacy Python migration toggles (`SUMMARY_CONTRACT_BACKEND=python`,
-`MIGRATION_INTERFACE_BACKEND=python`, etc.); those modes are decommissioned.
-
-### M2 Contract Backend
-
-During M2 validation/canary runs, you can route summary contract shaping through Rust:
-
-```bash
-# Default after M5 cutover
-SUMMARY_CONTRACT_BACKEND=rust
-
-# Legacy values (`auto`, `python`) are ignored after fallback decommission.
-
-# Optional: explicit binary path override
-SUMMARY_CONTRACT_RUST_BIN=/absolute/path/to/bsr-summary-contract
-```
-
-Run the milestone suite before promotion:
-
-```bash
-make m2-parity-suite
-```
-
-### M3 Pipeline Runtime Backend
-
-```bash
-# Required (disabled mode is decommissioned)
-MIGRATION_SHADOW_MODE_ENABLED=true
-
-# Optional timeout override
-MIGRATION_SHADOW_MODE_TIMEOUT_MS=250
-```
-
-### M4 Interface Router Toggle
-
-M4 interface routing is Rust-only after fallback decommission:
-
-```bash
-# Required
-MIGRATION_INTERFACE_BACKEND=rust
-
-# Legacy values (`canary`, `python`) are decommissioned for runtime execution.
-```
-
-### M6 Telegram Route-Decision Runtime
-
-M6 Telegram command route decisions are now Rust-authoritative:
-
-```bash
-# Command-route backend is fixed to Rust.
-# Legacy MIGRATION_TELEGRAM_RUNTIME_BACKEND values are ignored with a warning.
-MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS=150
-```
-
-Run the M6 suite before rollout and after migration config changes:
-
-```bash
-make m6-telegram-runtime-suite
-```
 
 ## Before You Start
 
@@ -461,20 +386,3 @@ docker run -d \
 ---
 
 **Last Updated:** 2026-03-05
-
-
-## Migration-Specific Validation Checklist
-
-Run this checklist whenever changing runtime track:
-
-1. **Contract parity**
-   - Verify API schema compatibility (`docs/openapi/mobile_api.yaml`).
-   - Validate summary JSON contract behavior (`docs/reference/summary-contract.md`).
-2. **Operational parity**
-   - Compare latency/error metrics before and after switching track.
-   - Confirm logging, alerts, and health checks are still reporting correctly.
-3. **Rollback readiness**
-   - Keep previous image/tag available.
-   - Confirm rollback command path is tested in staging.
-
-If any parity check fails, revert to the previous known-good release image/tag and open a migration blocker issue.

@@ -7,13 +7,11 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.content.llm_response_workflow import LLMRequestConfig
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import chunk_sentences, split_sentences
 from app.core.lang import LANG_RU
 from app.core.summary_aggregate import aggregate_chunk_summaries
 from app.core.summary_contract import validate_and_shape_summary
-from app.migration.worker_runtime import WorkerRunner
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -21,7 +19,6 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
-    from app.migration.pipeline_shadow import PipelineShadowRunner
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +56,6 @@ class ContentChunker:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
-        self.pipeline_shadow: PipelineShadowRunner | None = None
-        self.worker_runner = WorkerRunner(cfg.runtime)
 
     def estimate_max_chars_for_model(self, model_name: str | None, base_default: int) -> int:
         """Return an adaptive chunk threshold based on concrete context limits.
@@ -148,15 +143,6 @@ class ContentChunker:
         correlation_id: str | None = None,
     ) -> dict[str, Any] | None:
         """Process chunks and aggregate summaries."""
-        if self._should_use_rust_worker():
-            return await self._process_chunks_with_rust_worker(
-                chunks=chunks,
-                system_prompt=system_prompt,
-                chosen_lang=chosen_lang,
-                req_id=req_id,
-                correlation_id=correlation_id,
-            )
-
         chunk_summaries: list[dict[str, Any]] = []
 
         async def _process_chunk(idx: int, chunk: str) -> dict[str, Any] | None:
@@ -265,91 +251,6 @@ class ContentChunker:
             return validate_and_shape_summary(aggregated)
         return None
 
-    def _should_use_rust_worker(self) -> bool:
-        if not self.worker_runner.enabled:
-            return False
-        return str(getattr(self.cfg.runtime, "llm_provider", "openrouter")).strip().lower() == (
-            "openrouter"
-        )
-
-    async def _process_chunks_with_rust_worker(
-        self,
-        *,
-        chunks: list[str],
-        system_prompt: str,
-        chosen_lang: str,
-        req_id: int,
-        correlation_id: str | None,
-    ) -> dict[str, Any] | None:
-        response_format = self._build_structured_response_format()
-        model_override = self._resolve_worker_model_override()
-        chunk_requests = [
-            LLMRequestConfig(
-                preset_name=f"chunk_{idx}",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Analyze this part {idx}/{len(chunks)} and output ONLY a valid JSON object matching the schema. "
-                            f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n"
-                            f"CONTENT START\n{chunk}\nCONTENT END"
-                        ),
-                    },
-                ],
-                response_format=response_format,
-                max_tokens=max(1024, min(4096, len(chunk) // 4 + 1024)),
-                temperature=self.cfg.openrouter.temperature,
-                top_p=self.cfg.openrouter.top_p,
-                model_override=model_override,
-            )
-            for idx, chunk in enumerate(chunks, start=1)
-        ]
-        synthesis_request = LLMRequestConfig(
-            preset_name="chunk_synthesis",
-            messages=[],
-            response_format=response_format,
-            max_tokens=self.cfg.openrouter.max_tokens or 4096,
-            temperature=self.cfg.openrouter.temperature,
-            top_p=self.cfg.openrouter.top_p,
-            model_override=model_override,
-        )
-
-        worker_output = await self.worker_runner.execute_chunked_url(
-            chunk_requests=chunk_requests,
-            synthesis_request=synthesis_request,
-            system_prompt=system_prompt,
-            chosen_lang=chosen_lang,
-            max_concurrent_calls=self._resolve_chunk_concurrency(),
-            correlation_id=correlation_id,
-            request_id=req_id,
-        )
-        if worker_output.get("status") != "ok":
-            logger.warning(
-                "chunk_worker_error",
-                extra={
-                    "cid": correlation_id,
-                    "status": worker_output.get("status"),
-                    "error": worker_output.get("error_text"),
-                    "chunk_success_count": worker_output.get("chunk_success_count"),
-                },
-            )
-            return None
-
-        summary = worker_output.get("summary")
-        if not isinstance(summary, dict):
-            msg = "Rust worker returned invalid chunked summary payload"
-            raise RuntimeError(msg)
-        return summary
-
-    def _resolve_chunk_concurrency(self) -> int:
-        concurrency = getattr(self.cfg.runtime, "max_concurrent_calls", 4)
-        return concurrency if isinstance(concurrency, int) and concurrency > 0 else 4
-
-    def _resolve_worker_model_override(self) -> str | None:
-        model = getattr(self.cfg.openrouter, "model", None)
-        return model if isinstance(model, str) and model.strip() else None
-
     async def _resolve_aggregated_summary(
         self,
         *,
@@ -357,14 +258,6 @@ class ContentChunker:
         req_id: int,
         correlation_id: str | None,
     ) -> dict[str, Any]:
-        pipeline_shadow = getattr(self, "pipeline_shadow", None)
-        options = getattr(pipeline_shadow, "options", None)
-        if pipeline_shadow is not None and bool(getattr(options, "enabled", False)):
-            return await pipeline_shadow.resolve_summary_aggregate(
-                correlation_id=correlation_id,
-                request_id=req_id,
-                summaries=chunk_summaries,
-            )
         return aggregate_chunk_summaries(chunk_summaries)
 
     async def _synthesize_chunks(
@@ -447,18 +340,6 @@ class ContentChunker:
         req_id: int,
         correlation_id: str | None,
     ) -> str:
-        pipeline_shadow = getattr(self, "pipeline_shadow", None)
-        options = getattr(pipeline_shadow, "options", None)
-        if pipeline_shadow is not None and bool(getattr(options, "enabled", False)):
-            snapshot = await pipeline_shadow.resolve_chunk_synthesis_prompt(
-                correlation_id=correlation_id,
-                request_id=req_id,
-                aggregated=aggregated,
-                chosen_lang=chosen_lang,
-            )
-            rust_content = str(snapshot.get("user_content") or "").strip()
-            if rust_content:
-                return rust_content
         return build_chunk_synthesis_user_content(aggregated, chosen_lang)
 
     def _build_structured_response_format(self) -> dict[str, Any]:

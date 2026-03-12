@@ -1,4 +1,4 @@
-.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate pre-migration-checks parity-suite m2-parity-suite m3-parity-suite m4-parity-suite m5-cutover-suite m6-telegram-runtime-suite capture-baseline rust-check rust-test
+.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate
 
 format:
 	ruff format .
@@ -24,36 +24,6 @@ test-all:
 
 test-fast:
 	pytest tests/ -m "not slow and not integration" -v -x
-
-pre-migration-checks:
-	bash scripts/run_pre_migration_checks.sh
-
-parity-suite:
-	bash scripts/migration/run_parity_suite.sh
-
-m2-parity-suite:
-	bash scripts/migration/run_m2_parity_suite.sh
-
-m3-parity-suite:
-	bash scripts/migration/run_m3_parity_suite.sh
-
-m4-parity-suite:
-	bash scripts/migration/run_m4_parity_suite.sh
-
-m5-cutover-suite:
-	bash scripts/migration/run_m5_cutover_suite.sh
-
-m6-telegram-runtime-suite:
-	bash scripts/migration/run_m6_telegram_runtime_suite.sh
-
-capture-baseline:
-	python scripts/migration/capture_python_baseline.py
-
-rust-check:
-	cargo check --workspace --manifest-path rust/Cargo.toml
-
-rust-test:
-	cargo test --workspace --manifest-path rust/Cargo.toml
 
 all: format lint type test
 

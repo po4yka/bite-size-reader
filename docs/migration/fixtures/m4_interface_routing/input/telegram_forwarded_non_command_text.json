@@ -1,7 +1,0 @@
-{
-  "type": "telegram_command",
-  "payload": {
-    "text": "Forwarded digest thread from channel",
-    "has_forward": true
-  }
-}

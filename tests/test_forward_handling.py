@@ -16,7 +16,7 @@ import os
 import tempfile
 import unittest
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -458,89 +458,6 @@ class TestForwardProcessorExceptionHandling(unittest.IsolatedAsyncioTestCase):
 
         # Should NOT raise
         await processor.handle_forward_flow(MagicMock(), correlation_id="cid", interaction_id=None)
-
-    async def test_rust_orchestrator_path_skips_python_forward_hot_path(self) -> None:
-        from app.adapters.telegram.forward_processor import ForwardProcessor
-
-        cfg = MagicMock()
-        cfg.runtime.migration_processing_orchestrator_backend = "rust"
-        cfg.runtime.preferred_lang = "auto"
-        cfg.runtime.enable_textacy = False
-        cfg.runtime.summary_prompt_version = "v1"
-        cfg.runtime.summary_two_pass_enabled = False
-        cfg.openrouter.temperature = 0.2
-        cfg.openrouter.top_p = 1.0
-        cfg.openrouter.model = "primary"
-        cfg.openrouter.fallback_models = ()
-        cfg.openrouter.flash_model = None
-        cfg.openrouter.flash_fallback_models = ()
-        cfg.openrouter.summary_temperature_json_fallback = None
-        cfg.openrouter.summary_top_p_json_fallback = None
-        cfg.openrouter.structured_output_mode = "json_object"
-
-        response_formatter = MagicMock()
-        response_formatter.send_forward_accepted_notification = AsyncMock()
-        response_formatter.send_forward_language_notification = AsyncMock()
-        response_formatter.send_forward_summary_response = AsyncMock()
-        response_formatter.send_cached_summary_notification = AsyncMock()
-        response_formatter.send_error_notification = AsyncMock()
-
-        processor = ForwardProcessor(
-            cfg=cfg,
-            db=MagicMock(),
-            openrouter=MagicMock(),
-            response_formatter=response_formatter,
-            audit_func=lambda *a, **kw: None,
-            sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
-        )
-        processor_any = cast("Any", processor)
-        execute_forward_flow = AsyncMock(
-            return_value={
-                "status": "ok",
-                "request_id": 88,
-                "summary_id": 9,
-                "summary": {"summary_250": "Rust cached", "tldr": "full"},
-                "chosen_lang": "en",
-                "detected_language": "en",
-                "title": "Channel Digest",
-                "content_text": "Forward body",
-            }
-        )
-        process_forward_content = AsyncMock(
-            side_effect=AssertionError("python forward content path")
-        )
-        summarize_forward = AsyncMock(side_effect=AssertionError("python summarizer path"))
-        processor_any.content_processor.processing_orchestrator.execute_forward_flow = (
-            execute_forward_flow
-        )
-        processor_any.content_processor.process_forward_content = process_forward_content
-        processor_any.summarizer.summarize_forward = summarize_forward
-        processor_any.content_processor._upsert_sender_metadata = AsyncMock()
-        processor_any.content_processor._persist_message_snapshot = AsyncMock()
-        processor_any._handle_additional_insights = AsyncMock()
-        processor_any._maybe_generate_custom_article = AsyncMock()
-        processor_any._send_related_reads = AsyncMock()
-
-        message = MagicMock()
-        message.text = "Forwarded text"
-        message.caption = None
-        message.chat.id = 123
-        message.from_user.id = 456
-        message.forward_from_chat = None
-        message.forward_from = None
-        message.forward_from_message_id = None
-        message.id = 321
-
-        await processor.handle_forward_flow(
-            message,
-            correlation_id="cid-rust-forward",
-            interaction_id=None,
-        )
-
-        execute_forward_flow.assert_awaited_once()
-        process_forward_content.assert_not_called()
-        summarize_forward.assert_not_called()
-        response_formatter.send_forward_summary_response.assert_awaited_once()
 
 
 class TestForwardProcessorCustomArticle(unittest.IsolatedAsyncioTestCase):

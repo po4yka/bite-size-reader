@@ -208,25 +208,6 @@ class MessageRouterContentMixin:
         uid: int,
         correlation_id: str,
     ) -> str:
-        runtime_runner = getattr(self, "telegram_runtime_runner", None)
-        if runtime_runner is None:
-            logger.error(
-                "m6_telegram_runtime_runner_missing",
-                extra={"cid": correlation_id, "uid": uid},
-            )
-            msg = (
-                "Telegram runtime runner is required; "
-                "legacy interface-router fallback is decommissioned."
-            )
-            raise RuntimeError(msg)
-
-        decision = await runtime_runner.resolve_command_route(
-            text=text,
-            correlation_id=correlation_id,
-            actor_key=str(uid),
-        )
-        if decision.handled and decision.command:
-            return decision.command
         return text
 
     async def _dispatch_uid_command(

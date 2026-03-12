@@ -1,5 +1,0 @@
-{
-  "content_for_summary": "Breaking: Reuters reported today that the migration pipeline reached stable parity. Press release notes include methodology, benchmarks, and rollout constraints.",
-  "chosen_lang": "ru",
-  "search_context": "WEB SEARCH CONTEXT:\n- Source: https://example.com/migration\n- Key detail: zero fallback activations in release window"
-}

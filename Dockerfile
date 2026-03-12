@@ -64,35 +64,13 @@ RUN npm run build
 # Output: /app/app/static/web/
 
 # =============================================================================
-# Stage 2.5: Rust - Build migration runtime binaries
-# =============================================================================
-FROM rust:slim AS rust-builder
-
-WORKDIR /app/rust
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       pkg-config \
-       libsqlite3-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY rust/Cargo.toml rust/Cargo.lock ./
-COPY rust/crates ./crates
-
-RUN cargo build --release --locked \
-    -p bsr-summary-contract \
-    -p bsr-pipeline-shadow \
-    -p bsr-interface-router \
-    -p bsr-telegram-runtime
-
-# =============================================================================
 # Stage 3: Runtime - Minimal production image
 # =============================================================================
 FROM python:3.13-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:/app/rust/target/release:$PATH" \
+    PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app:$PYTHONPATH"
 
 WORKDIR /app
@@ -118,13 +96,6 @@ RUN set -eux; \
 # Copy application code
 COPY app ./app
 COPY bot.py ./
-
-# Copy Rust migration binaries into auto-discovery path used by Python bridges
-RUN mkdir -p /app/rust/target/release
-COPY --from=rust-builder /app/rust/target/release/bsr-summary-contract /app/rust/target/release/bsr-summary-contract
-COPY --from=rust-builder /app/rust/target/release/bsr-pipeline-shadow /app/rust/target/release/bsr-pipeline-shadow
-COPY --from=rust-builder /app/rust/target/release/bsr-interface-router /app/rust/target/release/bsr-interface-router
-COPY --from=rust-builder /app/rust/target/release/bsr-telegram-runtime /app/rust/target/release/bsr-telegram-runtime
 
 # Copy built frontend assets from frontend-builder stage
 COPY --from=frontend-builder /app/app/static/digest /app/app/static/digest

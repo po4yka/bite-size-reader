@@ -14,7 +14,6 @@ from app.adapters.content.llm_response_workflow import (
     LLMWorkflowNotifications,
 )
 from app.core.lang import LANG_RU
-from app.migration.worker_runtime import WorkerRunner, materialize_worker_llm_result
 from app.utils.typing_indicator import typing_indicator
 
 if TYPE_CHECKING:
@@ -53,7 +52,6 @@ class ForwardSummarizer:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self.sem = sem
-        self.worker_runner = WorkerRunner(cfg.runtime)
         self._workflow = LLMResponseWorkflow(
             cfg=cfg,
             db=db,
@@ -63,44 +61,6 @@ class ForwardSummarizer:
             sem=sem,
             db_write_queue=db_write_queue,
         )
-
-    def _should_use_rust_worker(self, *, requests: list[LLMRequestConfig]) -> bool:
-        if not self.worker_runner.enabled:
-            return False
-        if (
-            str(getattr(self.cfg.runtime, "llm_provider", "openrouter")).strip().lower()
-            != "openrouter"
-        ):
-            return False
-        if self._summary_streaming_enabled():
-            return False
-        return all(not getattr(request, "stream", False) for request in requests)
-
-    async def _persist_worker_attempts(
-        self,
-        *,
-        worker_output: dict[str, Any],
-        requests: list[LLMRequestConfig],
-        req_id: int,
-        correlation_id: str | None,
-    ) -> list[tuple[Any, LLMRequestConfig]]:
-        raw_attempts = worker_output.get("attempts")
-        if not isinstance(raw_attempts, list):
-            msg = "Rust worker returned invalid attempts payload"
-            raise RuntimeError(msg)
-
-        attempts: list[tuple[Any, LLMRequestConfig]] = []
-        for index, item in enumerate(raw_attempts):
-            if not isinstance(item, dict) or index >= len(requests):
-                continue
-            llm_payload = item.get("llm_result")
-            if not isinstance(llm_payload, dict):
-                continue
-            llm_result = materialize_worker_llm_result(llm_payload)
-            request = requests[index]
-            await self._workflow.persist_llm_call(llm_result, req_id, correlation_id)
-            attempts.append((llm_result, request))
-        return attempts
 
     async def summarize_forward(
         self,
@@ -238,61 +198,6 @@ class ForwardSummarizer:
 
         try:
             async with typing_indicator(self.response_formatter, message, action="typing"):
-                if self._should_use_rust_worker(requests=requests):
-                    worker_output = await self.worker_runner.execute_forward_text(
-                        requests=requests,
-                        correlation_id=correlation_id,
-                        request_id=req_id,
-                    )
-                    attempts = await self._persist_worker_attempts(
-                        worker_output=worker_output,
-                        requests=requests,
-                        req_id=req_id,
-                        correlation_id=correlation_id,
-                    )
-                    terminal_index_raw = worker_output.get("terminal_attempt_index")
-                    terminal_index = (
-                        terminal_index_raw
-                        if isinstance(terminal_index_raw, int)
-                        and 0 <= terminal_index_raw < len(attempts)
-                        else len(attempts) - 1
-                    )
-                    terminal_attempt = (
-                        attempts[terminal_index] if attempts and terminal_index >= 0 else None
-                    )
-                    if terminal_attempt is not None and notifications.completion is not None:
-                        await notifications.completion(terminal_attempt[0], terminal_attempt[1])
-
-                    if worker_output.get("status") != "ok":
-                        await self._workflow._handle_all_attempts_failed(
-                            message,
-                            req_id,
-                            correlation_id,
-                            interaction_config,
-                            notifications,
-                            attempts,
-                        )
-                        return None
-
-                    summary = worker_output.get("summary")
-                    if not isinstance(summary, dict):
-                        msg = "Rust worker returned invalid summary payload"
-                        raise RuntimeError(msg)
-                    if terminal_attempt is None:
-                        msg = "Rust worker completed without a terminal attempt"
-                        raise RuntimeError(msg)
-                    return await self._workflow._finalize_success(
-                        summary,
-                        terminal_attempt[0],
-                        req_id,
-                        correlation_id,
-                        interaction_config,
-                        persistence,
-                        None,
-                        None,
-                        False,
-                    )
-
                 return await self._workflow.execute_summary_workflow(
                     message=message,
                     req_id=req_id,

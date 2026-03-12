@@ -17,11 +17,9 @@ from app.adapters.repository_ports import (
 )
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import LANG_RU, choose_language
-from app.core.url_utils import compute_dedupe_hash, is_twitter_url, is_youtube_url
+from app.core.url_utils import compute_dedupe_hash
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.persistence.message_persistence import MessagePersistence
-from app.migration.pipeline_shadow import PipelineShadowRunner
-from app.migration.processing_orchestrator import ProcessingOrchestratorRunner
 from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
@@ -175,202 +173,6 @@ async def _run_related_reads(
         )
 
 
-def _get_processing_orchestrator(processor: Any) -> ProcessingOrchestratorRunner:
-    runner = getattr(processor, "processing_orchestrator", None)
-    if runner is None:
-        runner = ProcessingOrchestratorRunner(processor.cfg.runtime)
-        processor.processing_orchestrator = runner
-    return runner
-
-
-def _should_use_rust_processing_orchestrator(processor: Any, url_text: str) -> bool:
-    runner = getattr(processor, "processing_orchestrator", None)
-    if runner is None or not getattr(runner, "enabled", False):
-        return False
-    try:
-        return not (is_twitter_url(url_text) or is_youtube_url(url_text))
-    except Exception:
-        return True
-
-
-async def _handle_url_flow_via_rust_orchestrator(
-    processor: Any,
-    *,
-    message: Any,
-    url_text: str,
-    correlation_id: str | None,
-    interaction_id: int | None,
-    silent: bool,
-    batch_mode: bool,
-    notify_silent: bool,
-    on_phase_change: Callable[[str, str | None, int | None, str | None], Awaitable[None]] | None,
-) -> URLProcessingFlowResult:
-    base_temperature_value = getattr(processor.cfg.openrouter, "temperature", 0.2)
-    base_temperature = (
-        base_temperature_value if isinstance(base_temperature_value, (int, float)) else 0.2
-    )
-    base_top_p_value = getattr(processor.cfg.openrouter, "top_p", None)
-    base_top_p = base_top_p_value if isinstance(base_top_p_value, (int, float)) else 0.9
-    fallback_models_value = getattr(processor.cfg.openrouter, "fallback_models", ())
-    fallback_models = (
-        [model for model in fallback_models_value if isinstance(model, str)]
-        if isinstance(fallback_models_value, (list, tuple))
-        else []
-    )
-    flash_fallback_models_value = getattr(processor.cfg.openrouter, "flash_fallback_models", ())
-    flash_fallback_models = (
-        [model for model in flash_fallback_models_value if isinstance(model, str)]
-        if isinstance(flash_fallback_models_value, (list, tuple))
-        else []
-    )
-
-    if not notify_silent:
-        await processor.response_formatter.send_url_accepted_notification(
-            message, url_text, correlation_id, silent=notify_silent
-        )
-
-    async def _handle_event(event: dict[str, Any]) -> None:
-        event_type = str(event.get("event_type") or "").strip().lower()
-        if event_type == "phase" and on_phase_change is not None:
-            phase = str(event.get("phase") or "").strip().lower()
-            title = event.get("title")
-            model = event.get("model")
-            content_length = event.get("content_length")
-            await on_phase_change(
-                phase,
-                str(title) if isinstance(title, str) else None,
-                int(content_length) if isinstance(content_length, int) else None,
-                str(model) if isinstance(model, str) else None,
-            )
-        elif (
-            event_type == "draft_delta"
-            and not notify_silent
-            and hasattr(processor.response_formatter, "send_message_draft")
-        ):
-            delta = str(event.get("delta") or "").strip()
-            if delta:
-                await processor.response_formatter.send_message_draft(message, delta)
-
-    result = await _get_processing_orchestrator(processor).execute_url_flow(
-        correlation_id=correlation_id,
-        input_url=url_text,
-        chat_id=getattr(getattr(message, "chat", None), "id", None),
-        user_id=getattr(getattr(message, "from_user", None), "id", None),
-        input_message_id=getattr(message, "id", getattr(message, "message_id", None)),
-        silent=silent,
-        preferred_language=processor.cfg.runtime.preferred_lang,
-        route_version=1,
-        prompt_version=processor.cfg.runtime.summary_prompt_version,
-        enable_chunking=bool(getattr(processor.cfg.runtime, "enable_chunking", False)),
-        configured_chunk_max_chars=int(getattr(processor.cfg.runtime, "chunk_max_chars", 200000)),
-        primary_model=processor.cfg.openrouter.model,
-        long_context_model=processor.cfg.openrouter.long_context_model,
-        fallback_models=fallback_models,
-        flash_model=processor.cfg.openrouter.flash_model,
-        flash_fallback_models=flash_fallback_models,
-        structured_output_mode=processor.cfg.openrouter.structured_output_mode,
-        temperature=base_temperature,
-        top_p=base_top_p,
-        json_temperature=processor.cfg.openrouter.summary_temperature_json_fallback
-        or max(0.0, min(0.5, base_temperature - 0.05)),
-        json_top_p=processor.cfg.openrouter.summary_top_p_json_fallback
-        or max(0.0, min(0.95, base_top_p)),
-        vision_model=getattr(getattr(processor.cfg, "attachment", None), "vision_model", None),
-        enable_two_pass_enrichment=bool(
-            getattr(processor.cfg.runtime, "summary_two_pass_enabled", False)
-        ),
-        web_search_context=None,
-        on_event=_handle_event,
-    )
-
-    status = str(result.get("status") or "error").strip().lower()
-    request_id = result.get("request_id") if isinstance(result.get("request_id"), int) else None
-    summary_json = result.get("summary") if isinstance(result.get("summary"), dict) else None
-    content_text = (
-        result.get("content_text") if isinstance(result.get("content_text"), str) else None
-    )
-    chosen_lang = (
-        str(result.get("chosen_lang") or processor.cfg.runtime.preferred_lang).strip().lower()
-        or "en"
-    )
-    needs_ru_translation = bool(result.get("needs_ru_translation"))
-    dedupe_hash = result.get("dedupe_hash") if isinstance(result.get("dedupe_hash"), str) else None
-
-    if status == "error" or summary_json is None:
-        if not silent and not batch_mode:
-            await processor.response_formatter.send_error_notification(
-                message,
-                "processing_failed",
-                correlation_id or "unknown",
-                details=str(result.get("error_text") or ""),
-            )
-        return URLProcessingFlowResult(success=False, request_id=request_id)
-
-    if not silent and not batch_mode:
-        if status == "cached":
-            await processor.response_formatter.send_cached_summary_notification(
-                message, silent=notify_silent
-            )
-        llm_stub = _create_chunk_llm_stub(processor.cfg)
-        model = result.get("model")
-        if isinstance(model, str) and model:
-            llm_stub.model = model
-        await processor.response_formatter.send_structured_summary_response(
-            message,
-            summary_json,
-            llm_stub,
-            chunks=result.get("chunk_count")
-            if isinstance(result.get("chunk_count"), int)
-            else None,
-            summary_id=f"req:{request_id}" if request_id else None,
-            correlation_id=correlation_id,
-        )
-
-    if interaction_id:
-        await async_safe_update_user_interaction(
-            processor.db,
-            interaction_id=interaction_id,
-            response_sent=True,
-            response_type="summary",
-            request_id=request_id,
-        )
-
-    if content_text and request_id and not batch_mode:
-        await processor._schedule_post_summary_tasks(
-            message,
-            content_text,
-            chosen_lang,
-            request_id,
-            correlation_id,
-            summary_json,
-            needs_ru_translation=needs_ru_translation,
-            silent=silent,
-            url_hash=dedupe_hash,
-        )
-
-    return URLProcessingFlowResult.from_summary(
-        summary_json,
-        cached=status == "cached",
-        request_id=request_id,
-    )
-
-
-def _get_summary_response_type(summarizer: Any, *, mode: str | None = None) -> str:
-    workflow = getattr(summarizer, "_workflow", None)
-    builder = getattr(workflow, "build_structured_response_format", None)
-    default = "json_object" if mode == "json_object" else "unknown"
-    if not callable(builder):
-        return default
-    response_format = builder(mode=mode) if mode is not None else builder()
-    if asyncio.iscoroutine(response_format):
-        response_format.close()
-        return default
-    if isinstance(response_format, dict):
-        response_type = str(response_format.get("type") or default).strip()
-        return response_type or default
-    return default
-
-
 def _schedule_tracked_task(
     task_registry: set[asyncio.Task[Any]],
     coro: Coroutine[Any, Any, Any],
@@ -515,9 +317,6 @@ class URLProcessor:
         )
 
         self.message_persistence = MessagePersistence(db=db)
-        self.pipeline_shadow = PipelineShadowRunner(cfg.runtime)
-        self.processing_orchestrator = ProcessingOrchestratorRunner(cfg.runtime)
-        self.content_chunker.pipeline_shadow = self.pipeline_shadow
         # Registry for tracking background tasks to prevent GC and ensure shutdown
         self._background_tasks: set[asyncio.Task[Any]] = set()
 
@@ -576,19 +375,6 @@ class URLProcessor:
         # In batch mode, suppress individual per-URL notifications from sub-components.
         # The batch progress message handles status display via on_phase_change callback.
         notify_silent = silent or batch_mode
-
-        if _should_use_rust_processing_orchestrator(self, url_text):
-            return await _handle_url_flow_via_rust_orchestrator(
-                self,
-                message=message,
-                url_text=url_text,
-                correlation_id=correlation_id,
-                interaction_id=interaction_id,
-                silent=silent,
-                batch_mode=batch_mode,
-                notify_silent=notify_silent,
-                on_phase_change=on_phase_change,
-            )
 
         cached_result = await self._maybe_reply_with_cached_summary(
             message,
@@ -731,97 +517,9 @@ class URLProcessor:
             notify_silent,
             progress_tracker,
         )
-        pipeline_shadow = getattr(self, "pipeline_shadow", None)
-        if pipeline_shadow is not None and pipeline_shadow.options.enabled:
-            extraction_snapshot = await pipeline_shadow.resolve_extraction_adapter(
-                correlation_id=correlation_id,
-                request_id=req_id,
-                url_hash=dedupe_hash,
-                content_text=content_text,
-                content_source=_content_source,
-                title=title,
-                images_count=len(images or []),
-            )
-            logger.debug(
-                "m3_pipeline_extraction_adapter_resolved",
-                extra={
-                    "cid": correlation_id,
-                    "request_id": req_id,
-                    "language_hint": extraction_snapshot.get("language_hint"),
-                    "low_value": extraction_snapshot.get("low_value"),
-                },
-            )
 
-        enable_chunking_value = getattr(self.cfg.runtime, "enable_chunking", False)
-        enable_chunking = (
-            enable_chunking_value if isinstance(enable_chunking_value, bool) else False
-        )
-        configured_chunk_max_chars_value = getattr(self.cfg.runtime, "chunk_max_chars", 200000)
-        configured_chunk_max_chars = (
-            configured_chunk_max_chars_value
-            if isinstance(configured_chunk_max_chars_value, int)
-            else 200000
-        )
-        base_temperature_value = getattr(self.cfg.openrouter, "temperature", 0.2)
-        base_temperature = (
-            base_temperature_value if isinstance(base_temperature_value, (int, float)) else 0.2
-        )
-        base_top_p_value = getattr(self.cfg.openrouter, "top_p", None)
-        base_top_p = base_top_p_value if isinstance(base_top_p_value, (int, float)) else 0.9
-        fallback_models_value = getattr(self.cfg.openrouter, "fallback_models", ())
-        fallback_models = (
-            [model for model in fallback_models_value if isinstance(model, str)]
-            if isinstance(fallback_models_value, (list, tuple))
-            else []
-        )
-        flash_fallback_models_value = getattr(self.cfg.openrouter, "flash_fallback_models", ())
-        flash_fallback_models = (
-            [model for model in flash_fallback_models_value if isinstance(model, str)]
-            if isinstance(flash_fallback_models_value, (list, tuple))
-            else []
-        )
-        json_temperature = self.cfg.openrouter.summary_temperature_json_fallback or max(
-            0.0, min(0.5, base_temperature - 0.05)
-        )
-        json_top_p = self.cfg.openrouter.summary_top_p_json_fallback or max(
-            0.0, min(0.95, base_top_p)
-        )
-        processing_plan = await _get_processing_orchestrator(self).resolve_url_processing_plan(
-            correlation_id=correlation_id,
-            request_id=req_id,
-            dedupe_hash=dedupe_hash,
-            content_text=content_text,
-            detected_language=detected,
-            preferred_language=self.cfg.runtime.preferred_lang,
-            silent=silent,
-            enable_chunking=enable_chunking,
-            configured_chunk_max_chars=configured_chunk_max_chars,
-            primary_model=self.cfg.openrouter.model,
-            long_context_model=self.cfg.openrouter.long_context_model,
-            schema_response_type=_get_summary_response_type(self.llm_summarizer),
-            json_object_response_type=_get_summary_response_type(
-                self.llm_summarizer, mode="json_object"
-            ),
-            max_tokens_schema=None,
-            max_tokens_json_object=None,
-            base_temperature=base_temperature,
-            base_top_p=base_top_p,
-            json_temperature=json_temperature,
-            json_top_p=json_top_p,
-            fallback_models=fallback_models,
-            flash_model=self.cfg.openrouter.flash_model,
-            flash_fallback_models=flash_fallback_models,
-        )
-        chosen_lang = str(
-            processing_plan.get("chosen_lang")
-            or choose_language(self.cfg.runtime.preferred_lang, detected)
-        )
-        needs_ru_translation = bool(
-            processing_plan.get(
-                "needs_ru_translation",
-                not silent and LANG_RU not in (detected, chosen_lang),
-            )
-        )
+        chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
+        needs_ru_translation = not silent and LANG_RU not in (detected, chosen_lang)
         system_prompt = _get_system_prompt(chosen_lang)
 
         logger.debug(
@@ -840,32 +538,11 @@ class URLProcessor:
                 silent=silent,
             )
 
-        chunk_plan = processing_plan.get("chunk_plan")
-        raw_chunks = chunk_plan.get("chunks") if isinstance(chunk_plan, dict) else None
-        chunks = (
-            [item.strip() for item in raw_chunks if isinstance(item, str) and item.strip()]
-            if isinstance(raw_chunks, list)
-            else None
-        )
-        should_chunk = bool(processing_plan.get("summary_strategy") == "chunked" and chunks)
-        max_chars = int(
-            processing_plan.get("effective_max_chars") or self.cfg.runtime.chunk_max_chars
-        )
-
-        logger.debug(
-            "processing_orchestrator_url_plan_resolved",
-            extra={
-                "cid": correlation_id,
-                "request_id": req_id,
-                "strategy": processing_plan.get("summary_strategy"),
-                "summary_model": processing_plan.get("summary_model"),
-                "request_plan_count": (
-                    processing_plan.get("single_pass_request_plan", {}).get("request_count")
-                    if isinstance(processing_plan.get("single_pass_request_plan"), dict)
-                    else None
-                ),
-                "chunk_count": len(chunks) if chunks else 0,
-            },
+        should_chunk, max_chars, chunks = await self._compute_chunk_strategy(
+            content_text=content_text,
+            chosen_lang=chosen_lang,
+            correlation_id=correlation_id,
+            request_id=req_id,
         )
 
         if not batch_mode:
@@ -901,7 +578,7 @@ class URLProcessor:
         correlation_id: str | None,
         request_id: int | None,
     ) -> tuple[bool, int, list[str] | None]:
-        """Choose chunking strategy, with optional Rust-authoritative M3 preprocessing."""
+        """Choose chunking strategy based on content length and language."""
         should_chunk, max_chars, chunks = self.content_chunker.should_chunk_content(
             content_text, chosen_lang
         )
@@ -917,48 +594,6 @@ class URLProcessor:
             )
             should_chunk = False
             chunks = None
-
-        pipeline_shadow = getattr(self, "pipeline_shadow", None)
-        if pipeline_shadow is not None and pipeline_shadow.options.enabled:
-            enable_chunking_value = getattr(self.cfg.runtime, "enable_chunking", False)
-            enable_chunking = (
-                enable_chunking_value if isinstance(enable_chunking_value, bool) else False
-            )
-            lc_model = long_context_model if isinstance(long_context_model, str) else None
-            rust_snapshot = await pipeline_shadow.resolve_chunking_preprocess(
-                correlation_id=correlation_id,
-                request_id=request_id,
-                content_text=content_text,
-                enable_chunking=enable_chunking,
-                max_chars=max_chars,
-                long_context_model=lc_model,
-            )
-            rust_should_chunk = bool(rust_snapshot.get("should_chunk", False))
-            max_chars = int(rust_snapshot.get("max_chars", max_chars))
-            should_chunk = rust_should_chunk
-            if not should_chunk:
-                should_chunk = False
-                chunks = None
-            else:
-                chunk_plan = await pipeline_shadow.resolve_chunk_sentence_plan(
-                    correlation_id=correlation_id,
-                    request_id=request_id,
-                    content_text=content_text,
-                    lang=chosen_lang,
-                    max_chars=max_chars,
-                )
-                rust_chunks_raw = chunk_plan.get("chunks")
-                if isinstance(rust_chunks_raw, list):
-                    rust_chunks = [
-                        item.strip()
-                        for item in rust_chunks_raw
-                        if isinstance(item, str) and item.strip()
-                    ]
-                    chunks = rust_chunks or None
-                    should_chunk = chunks is not None
-                else:
-                    chunks = None
-                    should_chunk = False
 
         logger.info(
             "content_handling",

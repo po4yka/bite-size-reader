@@ -5,7 +5,6 @@ import time
 import uuid
 from collections import defaultdict
 from collections.abc import Callable
-from types import SimpleNamespace
 from typing import Any
 
 from fastapi import Request
@@ -16,15 +15,12 @@ from app.api.models.responses import ErrorType, error_response, make_error
 from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
 from app.infrastructure.redis import get_redis, redis_key
-from app.migration.interface_router import InterfaceRouterRunner
 
 logger = get_logger(__name__)
 
 # Cached config for middleware usage
 _cfg: AppConfig | None = None
 _redis_warning_logged = False
-_interface_router_runner: InterfaceRouterRunner | None = None
-_interface_router_runtime_ref: Any = None
 
 # In-memory rate limiting fallback when Redis is unavailable
 _local_rate_limits: dict[str, list[float]] = defaultdict(list)
@@ -130,22 +126,6 @@ def _resolve_limit_from_bucket(cfg: AppConfig, bucket: str | None) -> int:
     if bucket == "search":
         return limits.search_limit
     return limits.default_limit
-
-
-def _get_interface_router_runner(cfg: AppConfig) -> InterfaceRouterRunner:
-    global _interface_router_runner, _interface_router_runtime_ref
-
-    runtime_cfg = getattr(cfg, "runtime", None)
-    if runtime_cfg is None:
-        runtime_cfg = SimpleNamespace(
-            migration_interface_backend="rust",
-            migration_interface_timeout_ms=150,
-        )
-
-    if _interface_router_runner is None or runtime_cfg is not _interface_router_runtime_ref:
-        _interface_router_runner = InterfaceRouterRunner(runtime_cfg)
-        _interface_router_runtime_ref = runtime_cfg
-    return _interface_router_runner
 
 
 def _get_user_id_from_auth_header(request: Request) -> str | None:
@@ -368,30 +348,21 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
     correlation_id = getattr(request.state, "correlation_id", None)
 
     user_id = _resolve_rate_limit_actor(request)
-    try:
-        route_decision = await _get_interface_router_runner(cfg).resolve_mobile_route(
-            method=request.method,
-            path=request.url.path,
-            correlation_id=correlation_id,
-            actor_key=str(user_id),
-        )
-    except Exception as exc:
-        logger.error(
-            "m4_interface_router_resolution_failed",
-            extra={"error": str(exc), "path": request.url.path, "correlation_id": correlation_id},
-        )
-        return _build_rate_limit_response(
-            correlation_id=correlation_id,
-            code="INTERFACE_ROUTER_UNAVAILABLE",
-            message="Interface router unavailable. Please try again later.",
-            error_type=ErrorType.INTERNAL,
-            status_code=503,
-        )
 
-    request.state.interface_route_key = route_decision.route_key
-    request.state.interface_route_requires_auth = route_decision.requires_auth
+    # Simple path-based rate limit bucket resolution
+    path = request.url.path
+    bucket: str | None = None
+    if "/summaries" in path:
+        bucket = "summaries"
+    elif "/search" in path:
+        bucket = "search"
+    elif "/requests" in path:
+        bucket = "requests"
 
-    bucket_limit = _resolve_limit_from_bucket(cfg=cfg, bucket=route_decision.rate_limit_bucket)
+    request.state.interface_route_key = path
+    request.state.interface_route_requires_auth = True
+
+    bucket_limit = _resolve_limit_from_bucket(cfg=cfg, bucket=bucket)
     window = cfg.api_limits.window_seconds
     now = int(time.time())
     window_start = (now // window) * window

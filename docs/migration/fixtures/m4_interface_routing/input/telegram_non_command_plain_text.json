@@ -1,6 +1,0 @@
-{
-  "type": "telegram_command",
-  "payload": {
-    "text": "hello from migration parity"
-  }
-}

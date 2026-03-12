@@ -42,8 +42,6 @@ from app.core.summary_contract import validate_and_shape_summary
 from app.core.token_utils import count_tokens
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.cache.redis_cache import RedisCache
-from app.migration.pipeline_shadow import PipelineShadowRunner
-from app.migration.worker_runtime import WorkerRunner, materialize_worker_llm_result
 from app.utils.progress_message_updater import ProgressMessageUpdater
 from app.utils.typing_indicator import typing_indicator
 
@@ -301,249 +299,6 @@ async def _execute_summary_with_progress_for(
         raise
 
 
-def _get_worker_runner(summarizer: Any) -> WorkerRunner:
-    runner = getattr(summarizer, "worker_runner", None)
-    if runner is None:
-        runner = WorkerRunner(summarizer.cfg.runtime)
-        summarizer.worker_runner = runner
-    return runner
-
-
-def _message_content_is_worker_compatible(content: Any) -> bool:
-    if isinstance(content, str):
-        return True
-    if not isinstance(content, list) or not content:
-        return False
-
-    for part in content:
-        if not isinstance(part, dict):
-            return False
-        part_type = str(part.get("type") or "").strip()
-        if part_type == "text":
-            if not isinstance(part.get("text"), str):
-                return False
-            continue
-        if part_type == "image_url":
-            image_payload = part.get("image_url")
-            if not isinstance(image_payload, dict):
-                return False
-            image_url = image_payload.get("url")
-            if not isinstance(image_url, str) or not image_url.strip():
-                return False
-            continue
-        return False
-
-    return True
-
-
-def _requests_are_worker_compatible(requests: list[LLMRequestConfig]) -> bool:
-    for request in requests:
-        if getattr(request, "stream", False):
-            return False
-        for message in request.messages:
-            if not isinstance(message, dict):
-                return False
-            if not _message_content_is_worker_compatible(message.get("content")):
-                return False
-    return True
-
-
-async def _persist_worker_attempts_for(
-    summarizer: LLMSummarizer,
-    *,
-    worker_output: dict[str, Any],
-    requests: list[LLMRequestConfig],
-    req_id: int,
-    correlation_id: str | None,
-    defer_persistence: bool,
-    persistence: LLMSummaryPersistenceSettings,
-) -> list[tuple[Any, LLMRequestConfig]]:
-    raw_attempts = worker_output.get("attempts")
-    if not isinstance(raw_attempts, list):
-        msg = "Rust worker returned invalid attempts payload"
-        raise RuntimeError(msg)
-
-    attempts: list[tuple[Any, LLMRequestConfig]] = []
-    for index, item in enumerate(raw_attempts):
-        if not isinstance(item, dict) or index >= len(requests):
-            continue
-        llm_payload = item.get("llm_result")
-        if not isinstance(llm_payload, dict):
-            continue
-        llm_result = materialize_worker_llm_result(llm_payload)
-        request = requests[index]
-        if defer_persistence or persistence.defer_write:
-            summarizer._workflow._schedule_background_task(
-                summarizer._workflow.persist_llm_call(llm_result, req_id, correlation_id),
-                "persist_llm_call",
-                correlation_id,
-            )
-        else:
-            await summarizer._workflow.persist_llm_call(llm_result, req_id, correlation_id)
-        attempts.append((llm_result, request))
-    return attempts
-
-
-async def _execute_rust_worker_summary_for(
-    summarizer: LLMSummarizer,
-    *,
-    message: Any,
-    req_id: int,
-    correlation_id: str | None,
-    interaction_config: LLMInteractionConfig,
-    persistence: LLMSummaryPersistenceSettings,
-    notifications: LLMWorkflowNotifications,
-    requests: list[LLMRequestConfig],
-    ensure_summary: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]],
-    on_success: Callable[[dict[str, Any], Any], Awaitable[None]],
-    defer_persistence: bool,
-    progress_tracker: ProgressTracker | None,
-    content_for_summary: str,
-    model_for_cache: str,
-    chosen_lang: str,
-    url_hash: str | None,
-) -> dict[str, Any] | None:
-    use_progress = progress_tracker is not None
-    updater: ProgressMessageUpdater | None = None
-    typing_ctx: Any = None
-    start_time = time.time()
-
-    try:
-        if use_progress and progress_tracker is not None:
-            updater = ProgressMessageUpdater(progress_tracker, message)
-
-            def analyzing_formatter(elapsed: float) -> str:
-                return SingleURLProgressFormatter.format_llm_progress(
-                    content_length=len(content_for_summary),
-                    model=model_for_cache,
-                    elapsed_sec=elapsed,
-                    phase="analyzing",
-                )
-
-            await updater.start(analyzing_formatter)
-        else:
-            typing_ctx = typing_indicator(summarizer.response_formatter, message, action="typing")
-            await typing_ctx.__aenter__()
-
-        worker_output = await _get_worker_runner(summarizer).execute_url_single_pass(
-            requests=requests,
-            correlation_id=correlation_id,
-            request_id=req_id,
-        )
-        attempts = await _persist_worker_attempts_for(
-            summarizer,
-            worker_output=worker_output,
-            requests=requests,
-            req_id=req_id,
-            correlation_id=correlation_id,
-            defer_persistence=defer_persistence,
-            persistence=persistence,
-        )
-
-        terminal_index_raw = worker_output.get("terminal_attempt_index")
-        terminal_index = (
-            terminal_index_raw
-            if isinstance(terminal_index_raw, int) and 0 <= terminal_index_raw < len(attempts)
-            else len(attempts) - 1
-        )
-        terminal_attempt = attempts[terminal_index] if attempts and terminal_index >= 0 else None
-        if terminal_attempt is not None:
-            terminal_llm, terminal_request = terminal_attempt
-            summarizer._last_llm_result = terminal_llm
-            if notifications.completion is not None:
-                await notifications.completion(terminal_llm, terminal_request)
-
-        if worker_output.get("status") != "ok":
-            await summarizer._workflow._handle_all_attempts_failed(
-                message,
-                req_id,
-                correlation_id,
-                interaction_config,
-                notifications,
-                attempts,
-            )
-            elapsed_total = time.time() - start_time
-            if use_progress and updater is not None:
-                error_msg = SingleURLProgressFormatter.format_llm_complete(
-                    model=model_for_cache,
-                    elapsed_sec=elapsed_total,
-                    success=False,
-                    error_msg="Processing failed",
-                    correlation_id=correlation_id,
-                )
-                await updater.finalize(error_msg)
-            elif typing_ctx:
-                await typing_ctx.__aexit__(None, None, None)
-            return None
-
-        summary = worker_output.get("summary")
-        if not isinstance(summary, dict):
-            msg = "Rust worker returned invalid summary payload"
-            raise RuntimeError(msg)
-
-        if summarizer.cfg.runtime.summary_two_pass_enabled:
-            if use_progress and updater is not None:
-
-                def enriching_formatter(elapsed: float) -> str:
-                    return SingleURLProgressFormatter.format_llm_progress(
-                        content_length=len(content_for_summary),
-                        model=model_for_cache,
-                        elapsed_sec=elapsed,
-                        phase="enriching",
-                    )
-
-                await updater.update_formatter(enriching_formatter)
-            summary = await summarizer._enrich_summary_two_pass(
-                summary, content_for_summary, chosen_lang, correlation_id
-            )
-
-        if terminal_attempt is None:
-            msg = "Rust worker completed without a terminal attempt"
-            raise RuntimeError(msg)
-
-        shaped = await summarizer._workflow._finalize_success(
-            summary,
-            terminal_attempt[0],
-            req_id,
-            correlation_id,
-            interaction_config,
-            persistence,
-            ensure_summary,
-            on_success,
-            defer_persistence,
-        )
-        if url_hash:
-            chosen_model = getattr(terminal_attempt[0], "model", model_for_cache)
-            await summarizer._cache_helper.write_summary_cache(
-                url_hash, chosen_model, chosen_lang, shaped
-            )
-
-        elapsed_total = time.time() - start_time
-        if use_progress and updater is not None:
-            success_msg = SingleURLProgressFormatter.format_llm_complete(
-                model=model_for_cache,
-                elapsed_sec=elapsed_total,
-                success=True,
-            )
-            await updater.finalize(success_msg)
-        elif typing_ctx:
-            await typing_ctx.__aexit__(None, None, None)
-        return shaped
-    except Exception:
-        if use_progress and updater is not None:
-            error_msg = SingleURLProgressFormatter.format_llm_complete(
-                model=model_for_cache,
-                elapsed_sec=time.time() - start_time,
-                success=False,
-                error_msg="Processing failed",
-                correlation_id=correlation_id,
-            )
-            await updater.finalize(error_msg)
-        elif typing_ctx:
-            await typing_ctx.__aexit__(None, None, None)
-        raise
-
-
 def _summary_streaming_enabled_for(summarizer: Any, *, silent: bool) -> bool:
     if silent:
         return False
@@ -590,123 +345,12 @@ def _configure_summary_streaming_for(
     return stream_coordinator
 
 
-def _should_use_rust_worker_for(
-    summarizer: Any,
-    *,
-    requests: list[LLMRequestConfig],
-    silent: bool,
-) -> bool:
-    if not _get_worker_runner(summarizer).enabled:
-        return False
-    if str(getattr(summarizer.cfg.runtime, "llm_provider", "openrouter")).strip().lower() != (
-        "openrouter"
-    ):
-        return False
-    if _summary_streaming_enabled_for(summarizer, silent=silent):
-        return False
-    return _requests_are_worker_compatible(requests)
-
-
-def _requests_from_m3_rust_plan(
-    summarizer: LLMSummarizer,
-    *,
-    plan_payload: dict[str, Any],
-    messages: list[dict[str, Any]],
-    silent: bool,
-) -> list[LLMRequestConfig]:
-    response_format_schema = summarizer._workflow.build_structured_response_format()
-    response_format_json_object = summarizer._workflow.build_structured_response_format(
-        mode="json_object"
-    )
-    requests_payload = plan_payload.get("requests")
-    if not isinstance(requests_payload, list) or not requests_payload:
-        msg = "Rust M3 llm-wrapper-plan returned invalid request list"
-        raise RuntimeError(msg)
-
-    requests: list[LLMRequestConfig] = []
-    for item in requests_payload:
-        if not isinstance(item, dict):
-            msg = "Rust M3 llm-wrapper-plan returned invalid request entry"
-            raise RuntimeError(msg)
-        response_type = str(item.get("response_type") or "")
-        if response_type == "json_schema":
-            response_format = response_format_schema
-        elif response_type == "json_object":
-            response_format = response_format_json_object
-        else:
-            msg = f"Rust M3 llm-wrapper-plan returned unsupported response type: {response_type}"
-            raise RuntimeError(msg)
-
-        model_name = str(item.get("model") or "").strip()
-        if not model_name:
-            msg = "Rust M3 llm-wrapper-plan returned empty model name"
-            raise RuntimeError(msg)
-
-        max_tokens_raw = item.get("max_tokens")
-        max_tokens = int(max_tokens_raw) if isinstance(max_tokens_raw, int) else None
-        temperature_raw = item.get("temperature")
-        temperature = float(temperature_raw) if isinstance(temperature_raw, (int, float)) else None
-        top_p_raw = item.get("top_p")
-        top_p = float(top_p_raw) if isinstance(top_p_raw, (int, float)) else None
-        preset_name = str(item.get("preset") or "unknown")
-
-        requests.append(
-            LLMRequestConfig(
-                preset_name=preset_name,
-                messages=messages,
-                response_format=response_format,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                model_override=model_name,
-                silent=silent,
-            )
-        )
-    return requests
-
-
-async def _resolve_m3_rust_llm_wrapper_plan_for(
-    summarizer: LLMSummarizer,
-    *,
-    correlation_id: str | None,
-    request_id: int,
-    base_model: str,
-    requests: list[LLMRequestConfig],
-) -> list[LLMRequestConfig]:
-    runner = getattr(summarizer, "pipeline_shadow", None)
-    if runner is None or not runner.options.enabled:
-        return requests
-
-    fallback_models = tuple(getattr(summarizer.cfg.openrouter, "fallback_models", ()) or ())
-    flash_model = getattr(summarizer.cfg.openrouter, "flash_model", None)
-    flash_fallback_models = tuple(
-        getattr(summarizer.cfg.openrouter, "flash_fallback_models", ()) or ()
-    )
-
-    plan_payload = await runner.resolve_llm_wrapper_plan(
-        correlation_id=correlation_id,
-        request_id=request_id,
-        base_model=base_model,
-        requests=requests,
-        fallback_models=fallback_models,
-        flash_model=flash_model if isinstance(flash_model, str) else None,
-        flash_fallback_models=flash_fallback_models,
-    )
-    return _requests_from_m3_rust_plan(
-        summarizer,
-        plan_payload=plan_payload,
-        messages=requests[0].messages if requests else [],
-        silent=requests[0].silent if requests else False,
-    )
-
-
 async def _prepare_summary_content_for(
     summarizer: LLMSummarizer,
     *,
     content_text: str,
     max_chars: int,
     correlation_id: str | None,
-    request_id: int | None,
     images: list[str] | None,
 ) -> tuple[str, str | None]:
     """Choose model override/truncation strategy and return cleaned content."""
@@ -728,55 +372,9 @@ async def _prepare_summary_content_for(
                 },
             )
 
-    runner = getattr(summarizer, "pipeline_shadow", None)
-    if runner is not None and runner.options.enabled:
-        cleaned_payload = await runner.resolve_content_cleaner(
-            correlation_id=correlation_id,
-            request_id=request_id,
-            content_text=content_for_summary,
-        )
-        rust_cleaned = cleaned_payload.get("content_text")
-        content_for_summary = (
-            str(rust_cleaned) if isinstance(rust_cleaned, str) else content_for_summary
-        )
-    else:
-        content_for_summary = clean_content_for_llm(content_for_summary)
+    content_for_summary = clean_content_for_llm(content_for_summary)
 
     return content_for_summary, model_override
-
-
-async def _resolve_m3_rust_summary_user_content_for(
-    summarizer: LLMSummarizer,
-    *,
-    content_for_summary: str,
-    chosen_lang: str,
-    search_context: str,
-    correlation_id: str | None,
-    request_id: int,
-) -> str:
-    runner = getattr(summarizer, "pipeline_shadow", None)
-    if runner is None or not runner.options.enabled:
-        return summarizer._build_summary_user_content(
-            content_for_summary=content_for_summary,
-            chosen_lang=chosen_lang,
-            search_context=search_context,
-        )
-
-    payload = await runner.resolve_summary_user_content(
-        correlation_id=correlation_id,
-        request_id=request_id,
-        content_for_summary=content_for_summary,
-        chosen_lang=chosen_lang,
-        search_context=search_context,
-    )
-    rust_content = payload.get("user_content")
-    if isinstance(rust_content, str) and rust_content.strip():
-        return rust_content
-    return summarizer._build_summary_user_content(
-        content_for_summary=content_for_summary,
-        chosen_lang=chosen_lang,
-        search_context=search_context,
-    )
 
 
 class LLMSummarizer:
@@ -853,8 +451,6 @@ class LLMSummarizer:
             select_max_tokens=self._insights_helper.select_max_tokens,
             coerce_string_list=coerce_string_list,
         )
-        self.pipeline_shadow = PipelineShadowRunner(cfg.runtime)
-        self.worker_runner = WorkerRunner(cfg.runtime)
         self._last_llm_result: Any | None = None
 
     @property
@@ -893,19 +489,15 @@ class LLMSummarizer:
             content_text=content_text,
             max_chars=max_chars,
             correlation_id=correlation_id,
-            request_id=req_id,
             images=images,
         )
         search_context = await self._maybe_enrich_with_search(
             content_for_summary, chosen_lang, correlation_id
         )
-        user_content = await _resolve_m3_rust_summary_user_content_for(
-            self,
+        user_content = self._build_summary_user_content(
             content_for_summary=content_for_summary,
             chosen_lang=chosen_lang,
             search_context=search_context,
-            correlation_id=correlation_id,
-            request_id=req_id,
         )
         self._log_llm_content_validation(
             content_for_summary, system_prompt, user_content, correlation_id
@@ -923,13 +515,6 @@ class LLMSummarizer:
             content_for_summary=content_for_summary,
             user_content=user_content,
             silent=silent,
-        )
-        requests = await _resolve_m3_rust_llm_wrapper_plan_for(
-            self,
-            correlation_id=correlation_id,
-            request_id=req_id,
-            base_model=base_model,
-            requests=requests,
         )
         stream_coordinator = _configure_summary_streaming_for(
             self,
@@ -1036,52 +621,31 @@ class LLMSummarizer:
             url=url,
             silent=silent,
         )
-        use_rust_worker = _should_use_rust_worker_for(self, requests=requests, silent=silent)
         try:
-            if use_rust_worker:
-                summary = await _execute_rust_worker_summary_for(
-                    self,
-                    message=message,
-                    req_id=req_id,
-                    correlation_id=correlation_id,
-                    interaction_config=interaction_config,
-                    persistence=persistence,
-                    notifications=notifications,
-                    requests=requests,
-                    ensure_summary=ensure_summary,
-                    on_success=_on_success,
-                    defer_persistence=defer_persistence,
-                    progress_tracker=progress_tracker,
-                    content_for_summary=content_for_summary,
-                    model_for_cache=model_for_cache,
-                    chosen_lang=chosen_lang,
-                    url_hash=url_hash,
-                )
-            else:
-                summary = await _execute_summary_with_progress_for(
-                    self,
-                    message=message,
-                    req_id=req_id,
-                    correlation_id=correlation_id,
-                    interaction_config=interaction_config,
-                    persistence=persistence,
-                    repair_context=repair_context,
-                    requests=requests,
-                    notifications=notifications,
-                    ensure_summary=ensure_summary,
-                    on_attempt=_on_attempt,
-                    on_success=_on_success,
-                    defer_persistence=defer_persistence,
-                    progress_tracker=progress_tracker,
-                    content_for_summary=content_for_summary,
-                    model_for_cache=model_for_cache,
-                    chosen_lang=chosen_lang,
-                )
+            summary = await _execute_summary_with_progress_for(
+                self,
+                message=message,
+                req_id=req_id,
+                correlation_id=correlation_id,
+                interaction_config=interaction_config,
+                persistence=persistence,
+                repair_context=repair_context,
+                requests=requests,
+                notifications=notifications,
+                ensure_summary=ensure_summary,
+                on_attempt=_on_attempt,
+                on_success=_on_success,
+                defer_persistence=defer_persistence,
+                progress_tracker=progress_tracker,
+                content_for_summary=content_for_summary,
+                model_for_cache=model_for_cache,
+                chosen_lang=chosen_lang,
+            )
         finally:
             if stream_coordinator is not None:
                 await stream_coordinator.finalize()
 
-        if summary and url_hash and not use_rust_worker:
+        if summary and url_hash:
             chosen_model = getattr(self._last_llm_result, "model", model_for_cache)
             await self._cache_helper.write_summary_cache(
                 url_hash, chosen_model, chosen_lang, summary

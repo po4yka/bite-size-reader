@@ -20,7 +20,6 @@ from app.adapters.telegram.message_router_rate_limiter import MessageRouterRateL
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.config import AppConfig
 from app.db.session import DatabaseSessionManager
-from app.migration.telegram_runtime import TelegramRuntimeRunner
 from app.security.file_validation import SecureFileValidator
 from app.security.rate_limiter import RateLimitConfig, RedisUserRateLimiter, UserRateLimiter
 
@@ -75,7 +74,6 @@ class MessageRouter(
         self.callback_handler: Any | None = None
 
         self._url_processor = url_handler.url_processor
-        self.telegram_runtime_runner = TelegramRuntimeRunner(cfg.runtime)
 
         self._rate_limiter_config = RateLimitConfig(
             max_requests=cfg.api_limits.requests_limit,

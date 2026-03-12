@@ -1,7 +1,0 @@
-{
-  "type": "mobile_route",
-  "payload": {
-    "method": "GET",
-    "path": "/v1/summaries"
-  }
-}

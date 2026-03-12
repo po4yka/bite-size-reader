@@ -135,9 +135,6 @@ app/static/web/
 # Local Claude Code settings (user-specific)
 .claude/settings.local.json
 
-# --- Rust ---
-rust/target/
-
 # --- Ralph (migration agent) ---
 .ralph/
 ralph.yml
@@ -149,20 +146,4 @@ PROMPT.md
 # --- Local audit artifacts ---
 .desloppify/*
 docs/*
-!docs/migration/
-docs/migration/*
-!docs/migration/fixtures/
-docs/migration/fixtures/*
-!docs/migration/fixtures/processing_orchestrator/
-!docs/migration/fixtures/processing_orchestrator/README.md
-!docs/migration/fixtures/processing_orchestrator/input/
-!docs/migration/fixtures/processing_orchestrator/input/*.json
-!docs/migration/fixtures/processing_orchestrator/expected/
-!docs/migration/fixtures/processing_orchestrator/expected/*.json
-!docs/migration/fixtures/worker_chunked/
-!docs/migration/fixtures/worker_chunked/README.md
-!docs/migration/fixtures/worker_chunked/input/
-!docs/migration/fixtures/worker_chunked/input/*.json
-!docs/migration/fixtures/worker_chunked/expected/
-!docs/migration/fixtures/worker_chunked/expected/*.json
 scorecard.png

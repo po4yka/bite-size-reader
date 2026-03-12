@@ -1,8 +1,0 @@
-{
-  "aggregated": {
-    "tldr": "Draft TLDR from chunk aggregation.",
-    "summary_250": "Draft summary section assembled from multiple chunk outputs.",
-    "key_ideas": ["Rust-authoritative M3", "Prompt assembly parity", "Стабильный формат"]
-  },
-  "chosen_lang": "ru"
-}

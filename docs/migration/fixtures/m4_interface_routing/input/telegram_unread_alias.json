@@ -1,6 +1,0 @@
-{
-  "type": "telegram_command",
-  "payload": {
-    "text": "/unread@bite_size_reader_bot 5"
-  }
-}
