@@ -1,0 +1,31 @@
+{
+  "type": "chunked_url_finalization",
+  "payload": {
+    "chunk_attempts": [
+      {
+        "preset_name": "chunk_1",
+        "summary": {
+          "summary_250": "The essay argues that energy retrofits succeed only when landlords and tenants share incentives.",
+          "summary_1000": "The essay argues that energy retrofits succeed only when landlords and tenants share incentives, because split ownership weakens adoption.",
+          "tldr": "Energy retrofits need aligned landlord and tenant incentives."
+        }
+      },
+      {
+        "preset_name": "chunk_2",
+        "summary": {
+          "summary_250": "It also says financing tools matter less than simple implementation support and trusted local contractors.",
+          "summary_1000": "It also says financing tools matter less than simple implementation support and trusted local contractors who reduce friction during the retrofit process.",
+          "tldr": "Trusted contractors and implementation support reduce retrofit friction."
+        }
+      }
+    ],
+    "synthesis_attempt": {
+      "preset_name": "chunk_synthesis",
+      "summary": {
+        "summary_250": "The essay says retrofit adoption improves when incentives are aligned and implementation support is simple enough for building owners to trust.",
+        "summary_1000": "The essay says retrofit adoption improves when landlord and tenant incentives are aligned, avoiding the usual split-benefit problem. It also argues that trusted local contractors and low-friction implementation support matter more than financing complexity for getting projects across the line.",
+        "tldr": "Aligned incentives plus low-friction implementation support make retrofits more likely."
+      }
+    }
+  }
+}

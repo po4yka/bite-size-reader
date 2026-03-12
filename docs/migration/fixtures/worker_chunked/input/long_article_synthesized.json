@@ -1,0 +1,31 @@
+{
+  "type": "chunked_url_finalization",
+  "payload": {
+    "chunk_attempts": [
+      {
+        "preset_name": "chunk_1",
+        "summary": {
+          "summary_250": "The article opens with a long explanation of why distributed caching failures amplified user-visible latency across several regions.",
+          "summary_1000": "The article opens with a long explanation of why distributed caching failures amplified user-visible latency across several regions. It also notes that retry storms made the incident worse before circuit breakers were tightened.",
+          "tldr": "Caching failures amplified latency and retry storms worsened the outage."
+        }
+      },
+      {
+        "preset_name": "chunk_2",
+        "summary": {
+          "summary_250": "The second section focuses on remediation steps, including query-budget limits, safer rollouts, and better regional isolation.",
+          "summary_1000": "The second section focuses on remediation steps, including query-budget limits, safer rollouts, and better regional isolation. It frames those changes as the core reason the follow-up deployment remained stable.",
+          "tldr": "Remediation centered on query budgets, safer rollouts, and regional isolation."
+        }
+      }
+    ],
+    "synthesis_attempt": {
+      "preset_name": "chunk_synthesis",
+      "summary": {
+        "summary_250": "A long postmortem explains how cache instability caused multi-region latency spikes and how tighter budgets plus safer rollouts stabilized the system.",
+        "summary_1000": "A long postmortem explains how cache instability caused multi-region latency spikes, with retry storms deepening the outage before operators tightened circuit breakers. It then shifts to the recovery plan: stricter query budgets, safer release gates, and stronger regional isolation that kept the next rollout stable.",
+        "tldr": "Cache instability caused latency spikes; tighter budgets and safer rollouts stabilized the follow-up release."
+      }
+    }
+  }
+}

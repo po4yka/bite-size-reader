@@ -159,4 +159,10 @@ docs/migration/fixtures/*
 !docs/migration/fixtures/processing_orchestrator/input/*.json
 !docs/migration/fixtures/processing_orchestrator/expected/
 !docs/migration/fixtures/processing_orchestrator/expected/*.json
+!docs/migration/fixtures/worker_chunked/
+!docs/migration/fixtures/worker_chunked/README.md
+!docs/migration/fixtures/worker_chunked/input/
+!docs/migration/fixtures/worker_chunked/input/*.json
+!docs/migration/fixtures/worker_chunked/expected/
+!docs/migration/fixtures/worker_chunked/expected/*.json
 scorecard.png

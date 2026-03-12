@@ -2,7 +2,8 @@ use std::env;
 use std::io::{self, Read};
 
 use bsr_worker::{
-    execute_forward_text, execute_url_single_pass, OpenRouterRuntimeConfig, WorkerExecutionInput,
+    execute_chunked_url, execute_forward_text, execute_url_single_pass, ChunkedUrlExecutionInput,
+    OpenRouterRuntimeConfig, WorkerExecutionInput,
 };
 
 #[tokio::main]
@@ -32,10 +33,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string_pretty(&output)?);
             Ok(())
         }
+        "chunked-url" => {
+            let input: ChunkedUrlExecutionInput = serde_json::from_value(read_json_stdin()?)?;
+            let config = OpenRouterRuntimeConfig::from_env()?;
+            let output = execute_chunked_url(&input, &config).await?;
+            println!("{}", serde_json::to_string_pretty(&output)?);
+            Ok(())
+        }
         _ => {
             println!("Usage:");
             println!("  bsr-worker url-single-pass < input.json");
             println!("  bsr-worker forward-text < input.json");
+            println!("  bsr-worker chunked-url < input.json");
             Ok(())
         }
     }

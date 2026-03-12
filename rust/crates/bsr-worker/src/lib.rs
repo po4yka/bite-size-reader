@@ -1,12 +1,18 @@
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use bsr_pipeline_shadow::{
+    build_chunk_synthesis_prompt_snapshot, build_summary_aggregate_snapshot,
+    ChunkSynthesisPromptInput, SummaryAggregateInput,
+};
 use bsr_summary_contract::validate_and_shape_summary;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
+use tokio::sync::Semaphore;
 
 const OPENROUTER_DEFAULT_BASE_URL: &str = "https://openrouter.ai/api/v1";
 const OPENROUTER_DEFAULT_MODEL: &str = "deepseek/deepseek-v3.2";
@@ -29,6 +35,26 @@ pub struct WorkerRequestConfig {
 pub struct WorkerExecutionInput {
     pub request_id: Option<i64>,
     pub requests: Vec<WorkerRequestConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkerChunkedSynthesisConfig {
+    pub preset_name: Option<String>,
+    pub system_prompt: String,
+    pub chosen_lang: String,
+    pub response_format: Value,
+    pub max_tokens: Option<i64>,
+    pub temperature: Option<f64>,
+    pub top_p: Option<f64>,
+    pub model_override: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ChunkedUrlExecutionInput {
+    pub request_id: Option<i64>,
+    pub chunk_requests: Vec<WorkerRequestConfig>,
+    pub synthesis: WorkerChunkedSynthesisConfig,
+    pub max_concurrent_calls: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -68,10 +94,30 @@ pub struct WorkerExecutionOutput {
     pub error_text: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ChunkedUrlExecutionOutput {
+    pub status: String,
+    pub summary: Option<Value>,
+    pub attempts: Vec<WorkerAttemptOutput>,
+    pub terminal_attempt_index: Option<usize>,
+    pub error_text: Option<String>,
+    pub chunk_success_count: usize,
+    pub used_synthesis: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkerAttemptOutcome {
+    pub preset_name: Option<String>,
+    pub model_override: Option<String>,
+    pub llm_result: WorkerLlmCallResult,
+    pub summary: Option<Value>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkerSurface {
     UrlSinglePass,
     ForwardText,
+    ChunkedUrl,
 }
 
 impl WorkerSurface {
@@ -79,6 +125,7 @@ impl WorkerSurface {
         match self {
             Self::UrlSinglePass => "url_single_pass",
             Self::ForwardText => "forward_text",
+            Self::ChunkedUrl => "chunked_url",
         }
     }
 }
@@ -161,6 +208,106 @@ pub async fn execute_forward_text(
     execute_surface(WorkerSurface::ForwardText, input, config).await
 }
 
+pub async fn execute_chunked_url(
+    input: &ChunkedUrlExecutionInput,
+    config: &OpenRouterRuntimeConfig,
+) -> Result<ChunkedUrlExecutionOutput, WorkerError> {
+    if input.chunk_requests.is_empty() {
+        return Err(WorkerError::EmptyRequests);
+    }
+
+    let client = build_execution_client(config)?;
+    let semaphore = Arc::new(Semaphore::new(input.max_concurrent_calls.max(1)));
+    let mut handles = Vec::with_capacity(input.chunk_requests.len());
+
+    for request in input.chunk_requests.iter().cloned() {
+        let client = client.clone();
+        let config = config.clone();
+        let semaphore = Arc::clone(&semaphore);
+        let request_id = input.request_id;
+        handles.push(tokio::spawn(async move {
+            let _permit = semaphore
+                .acquire_owned()
+                .await
+                .expect("chunk worker semaphore should stay open");
+            execute_attempt_with_summary_policy(
+                &client,
+                &config,
+                WorkerSurface::ChunkedUrl,
+                request_id,
+                request,
+                false,
+            )
+            .await
+        }));
+    }
+
+    let mut chunk_attempts = Vec::with_capacity(handles.len());
+    for handle in handles {
+        let attempt = handle
+            .await
+            .map_err(|err| WorkerError::HttpRequest(err.to_string()))?;
+        chunk_attempts.push(attempt);
+    }
+
+    let successful_chunk_summaries: Vec<Value> = chunk_attempts
+        .iter()
+        .filter_map(|attempt| attempt.summary.clone())
+        .collect();
+
+    let synthesis_attempt = if successful_chunk_summaries.is_empty() {
+        None
+    } else {
+        let aggregated = build_summary_aggregate_snapshot(&SummaryAggregateInput {
+            summaries: successful_chunk_summaries,
+        });
+        let prompt_snapshot = build_chunk_synthesis_prompt_snapshot(&ChunkSynthesisPromptInput {
+            aggregated,
+            chosen_lang: input.synthesis.chosen_lang.clone(),
+        });
+        let synthesis_request = WorkerRequestConfig {
+            preset_name: input
+                .synthesis
+                .preset_name
+                .clone()
+                .or_else(|| Some("chunk_synthesis".to_string())),
+            messages: vec![
+                json!({"role": "system", "content": input.synthesis.system_prompt}),
+                json!({"role": "user", "content": prompt_snapshot.user_content}),
+            ],
+            response_format: input.synthesis.response_format.clone(),
+            max_tokens: input.synthesis.max_tokens,
+            temperature: input.synthesis.temperature,
+            top_p: input.synthesis.top_p,
+            model_override: input.synthesis.model_override.clone(),
+        };
+
+        Some(
+            execute_attempt_with_summary_policy(
+                &client,
+                config,
+                WorkerSurface::ChunkedUrl,
+                input.request_id,
+                synthesis_request,
+                false,
+            )
+            .await,
+        )
+    };
+
+    Ok(finalize_chunked_url_execution(
+        chunk_attempts,
+        synthesis_attempt,
+    ))
+}
+
+fn build_execution_client(config: &OpenRouterRuntimeConfig) -> Result<Client, WorkerError> {
+    Client::builder()
+        .timeout(config.timeout)
+        .build()
+        .map_err(|err| WorkerError::HttpClientBuild(err.to_string()))
+}
+
 async fn execute_surface(
     surface: WorkerSurface,
     input: &WorkerExecutionInput,
@@ -170,83 +317,42 @@ async fn execute_surface(
         return Err(WorkerError::EmptyRequests);
     }
 
-    let client = Client::builder()
-        .timeout(config.timeout)
-        .build()
-        .map_err(|err| WorkerError::HttpClientBuild(err.to_string()))?;
+    let client = build_execution_client(config)?;
 
     let mut attempts = Vec::with_capacity(input.requests.len());
     let mut last_error_text = None;
 
     for (index, request) in input.requests.iter().enumerate() {
-        let attempt = execute_attempt(&client, config, input.request_id, request).await;
-        let terminal_result = attempt.llm_result.clone();
-        let summary = if terminal_result.status == "ok" {
-            extract_shaped_summary(
-                terminal_result.response_json.as_ref(),
-                terminal_result.response_text.as_deref(),
-            )
-        } else {
-            None
-        };
+        let attempt = execute_attempt_with_summary_policy(
+            &client,
+            config,
+            surface.clone(),
+            input.request_id,
+            request.clone(),
+            true,
+        )
+        .await;
+        if let Some(summary_value) = attempt.summary.clone() {
+            attempts.push(WorkerAttemptOutput {
+                preset_name: attempt.preset_name.clone(),
+                model_override: attempt.model_override.clone(),
+                llm_result: attempt.llm_result,
+            });
 
-        let llm_result = if let Some(validation_error) = summary_validation_error(&summary) {
-            last_error_text = Some(validation_error.clone());
-            WorkerLlmCallResult {
-                status: "error".to_string(),
-                error_text: Some(validation_error.clone()),
-                error_context: Some(json!({
-                    "status_code": Value::Null,
-                    "message": validation_error,
-                    "surface": surface.as_str(),
-                })),
-                ..terminal_result
-            }
-        } else {
-            if let Some(summary_value) = summary.clone() {
-                attempts.push(WorkerAttemptOutput {
-                    preset_name: request.preset_name.clone(),
-                    model_override: request.model_override.clone(),
-                    llm_result: terminal_result,
-                });
+            return Ok(WorkerExecutionOutput {
+                status: "ok".to_string(),
+                summary: Some(summary_value),
+                attempts,
+                terminal_attempt_index: Some(index),
+                error_text: None,
+            });
+        }
 
-                return Ok(WorkerExecutionOutput {
-                    status: "ok".to_string(),
-                    summary: Some(summary_value),
-                    attempts,
-                    terminal_attempt_index: Some(index),
-                    error_text: None,
-                });
-            }
-
-            if terminal_result.status != "ok" {
-                last_error_text = terminal_result.error_text.clone();
-            } else {
-                last_error_text = Some("summary_parse_failed".to_string());
-            }
-
-            WorkerLlmCallResult {
-                status: "error".to_string(),
-                error_text: Some(
-                    last_error_text
-                        .clone()
-                        .unwrap_or_else(|| "summary_parse_failed".to_string()),
-                ),
-                error_context: Some(json!({
-                    "status_code": Value::Null,
-                    "message": last_error_text
-                        .clone()
-                        .unwrap_or_else(|| "summary_parse_failed".to_string()),
-                    "surface": surface.as_str(),
-                })),
-                ..terminal_result
-            }
-        };
-
+        last_error_text = attempt.llm_result.error_text.clone();
         attempts.push(WorkerAttemptOutput {
-            preset_name: request.preset_name.clone(),
-            model_override: request.model_override.clone(),
-            llm_result,
+            preset_name: attempt.preset_name,
+            model_override: attempt.model_override,
+            llm_result: attempt.llm_result,
         });
     }
 
@@ -257,6 +363,55 @@ async fn execute_surface(
         error_text: last_error_text,
         attempts,
     })
+}
+
+async fn execute_attempt_with_summary_policy(
+    client: &Client,
+    config: &OpenRouterRuntimeConfig,
+    surface: WorkerSurface,
+    request_id: Option<i64>,
+    request: WorkerRequestConfig,
+    require_non_empty_summary: bool,
+) -> WorkerAttemptOutcome {
+    let attempt = execute_attempt(client, config, request_id, &request).await;
+    let mut llm_result = attempt.llm_result;
+    let mut summary = None;
+
+    if llm_result.status == "ok" {
+        summary = extract_shaped_summary(
+            llm_result.response_json.as_ref(),
+            llm_result.response_text.as_deref(),
+        );
+
+        if summary.is_none() {
+            mark_summary_error(
+                &mut llm_result,
+                "summary_parse_failed",
+                request_id,
+                &surface,
+            );
+        } else if require_non_empty_summary
+            && summary
+                .as_ref()
+                .map(|value| !summary_has_content(value))
+                .unwrap_or(false)
+        {
+            summary = None;
+            mark_summary_error(
+                &mut llm_result,
+                "summary_fields_empty",
+                request_id,
+                &surface,
+            );
+        }
+    }
+
+    WorkerAttemptOutcome {
+        preset_name: attempt.preset_name,
+        model_override: attempt.model_override,
+        llm_result,
+        summary,
+    }
 }
 
 async fn execute_attempt(
@@ -349,6 +504,95 @@ async fn execute_attempt(
         preset_name: request.preset_name.clone(),
         model_override: request.model_override.clone(),
         llm_result,
+    }
+}
+
+pub fn finalize_chunked_url_execution(
+    chunk_attempts: Vec<WorkerAttemptOutcome>,
+    synthesis_attempt: Option<WorkerAttemptOutcome>,
+) -> ChunkedUrlExecutionOutput {
+    let chunk_success_summaries: Vec<Value> = chunk_attempts
+        .iter()
+        .filter_map(|attempt| attempt.summary.clone())
+        .collect();
+    let chunk_success_count = chunk_success_summaries.len();
+
+    let mut attempts: Vec<WorkerAttemptOutput> = chunk_attempts
+        .iter()
+        .cloned()
+        .map(attempt_output_from_outcome)
+        .collect();
+    if let Some(attempt) = synthesis_attempt.clone() {
+        attempts.push(attempt_output_from_outcome(attempt));
+    }
+
+    if chunk_success_count == 0 {
+        let error_text = synthesis_attempt
+            .as_ref()
+            .and_then(|attempt| attempt.llm_result.error_text.clone())
+            .or_else(|| {
+                chunk_attempts
+                    .iter()
+                    .rev()
+                    .find_map(|attempt| attempt.llm_result.error_text.clone())
+            })
+            .or_else(|| Some("all_chunk_attempts_failed".to_string()));
+
+        return ChunkedUrlExecutionOutput {
+            status: "error".to_string(),
+            summary: None,
+            terminal_attempt_index: attempts.len().checked_sub(1),
+            error_text,
+            attempts,
+            chunk_success_count,
+            used_synthesis: false,
+        };
+    }
+
+    let aggregated = build_summary_aggregate_snapshot(&SummaryAggregateInput {
+        summaries: chunk_success_summaries,
+    });
+    let aggregate_summary = validate_and_shape_summary(&aggregated).ok();
+    let synthesis_summary = synthesis_attempt
+        .as_ref()
+        .and_then(|attempt| attempt.summary.clone());
+    let used_synthesis = synthesis_summary.is_some();
+    let summary = synthesis_summary.or(aggregate_summary);
+
+    if let Some(summary) = summary {
+        let terminal_attempt_index = if used_synthesis {
+            attempts.len().checked_sub(1)
+        } else {
+            chunk_attempts
+                .iter()
+                .enumerate()
+                .rev()
+                .find_map(|(index, attempt)| attempt.summary.as_ref().map(|_| index))
+        };
+
+        return ChunkedUrlExecutionOutput {
+            status: "ok".to_string(),
+            summary: Some(summary),
+            terminal_attempt_index,
+            error_text: None,
+            attempts,
+            chunk_success_count,
+            used_synthesis,
+        };
+    }
+
+    let error_text = synthesis_attempt
+        .as_ref()
+        .and_then(|attempt| attempt.llm_result.error_text.clone())
+        .or_else(|| Some("aggregate_summary_invalid".to_string()));
+    ChunkedUrlExecutionOutput {
+        status: "error".to_string(),
+        summary: None,
+        terminal_attempt_index: attempts.len().checked_sub(1),
+        error_text,
+        attempts,
+        chunk_success_count,
+        used_synthesis: false,
     }
 }
 
@@ -601,16 +845,29 @@ fn extract_shaped_summary(
     None
 }
 
-fn summary_validation_error(summary: &Option<Value>) -> Option<String> {
-    let Some(summary) = summary else {
-        return None;
-    };
-
-    if summary_has_content(summary) {
-        None
-    } else {
-        Some("summary_fields_empty".to_string())
+fn attempt_output_from_outcome(outcome: WorkerAttemptOutcome) -> WorkerAttemptOutput {
+    WorkerAttemptOutput {
+        preset_name: outcome.preset_name,
+        model_override: outcome.model_override,
+        llm_result: outcome.llm_result,
     }
+}
+
+fn mark_summary_error(
+    llm_result: &mut WorkerLlmCallResult,
+    reason: &str,
+    request_id: Option<i64>,
+    surface: &WorkerSurface,
+) {
+    llm_result.status = "error".to_string();
+    llm_result.error_text = Some(reason.to_string());
+    llm_result.error_context = Some(json!({
+        "status_code": Value::Null,
+        "message": reason,
+        "api_error": reason,
+        "request_id": request_id,
+        "surface": surface.as_str(),
+    }));
 }
 
 fn summary_has_content(summary: &Value) -> bool {
@@ -788,6 +1045,34 @@ mod tests {
         }
     }
 
+    fn chunked_input() -> ChunkedUrlExecutionInput {
+        let mut second_request = summary_request();
+        second_request.preset_name = Some("chunk_2".to_string());
+        second_request.messages[1] = json!({"role": "user", "content": "chunk-2"});
+
+        ChunkedUrlExecutionInput {
+            request_id: Some(501),
+            chunk_requests: vec![
+                WorkerRequestConfig {
+                    preset_name: Some("chunk_1".to_string()),
+                    ..summary_request()
+                },
+                second_request,
+            ],
+            synthesis: WorkerChunkedSynthesisConfig {
+                preset_name: Some("chunk_synthesis".to_string()),
+                system_prompt: "system".to_string(),
+                chosen_lang: "en".to_string(),
+                response_format: json!({"type": "json_object"}),
+                max_tokens: Some(4096),
+                temperature: Some(0.2),
+                top_p: Some(0.9),
+                model_override: Some("primary-model".to_string()),
+            },
+            max_concurrent_calls: 1,
+        }
+    }
+
     #[tokio::test]
     async fn executes_summary_on_first_attempt() {
         let summary_payload = json!({
@@ -886,5 +1171,186 @@ mod tests {
                 .and_then(|summary| summary.get("summary_250")),
             Some(&json!("Short summary."))
         );
+    }
+
+    #[tokio::test]
+    async fn executes_chunked_url_and_prefers_synthesis_summary() {
+        let chunk_one = json!({
+            "summary_250": "Chunk one summary.",
+            "summary_1000": "Chunk one longer summary.",
+            "tldr": "Chunk one TLDR."
+        });
+        let chunk_two = json!({
+            "summary_250": "Chunk two summary.",
+            "summary_1000": "Chunk two longer summary.",
+            "tldr": "Chunk two TLDR."
+        });
+        let synthesized = json!({
+            "summary_250": "Synthesized summary.",
+            "summary_1000": "Synthesized longer summary.",
+            "tldr": "Synthesized TLDR."
+        });
+        let addr = start_server(vec![
+            (
+                StatusCode::OK,
+                json!({
+                    "model": "primary-model",
+                    "choices": [{"message": {"parsed": chunk_one}}],
+                    "usage": {"prompt_tokens": 5, "completion_tokens": 6}
+                }),
+            ),
+            (
+                StatusCode::OK,
+                json!({
+                    "model": "primary-model",
+                    "choices": [{"message": {"parsed": chunk_two}}],
+                    "usage": {"prompt_tokens": 7, "completion_tokens": 8}
+                }),
+            ),
+            (
+                StatusCode::OK,
+                json!({
+                    "model": "primary-model",
+                    "choices": [{"message": {"parsed": synthesized}}],
+                    "usage": {"prompt_tokens": 9, "completion_tokens": 10}
+                }),
+            ),
+        ])
+        .await;
+
+        let output =
+            execute_chunked_url(&chunked_input(), &worker_config(format!("http://{addr}")))
+                .await
+                .expect("chunked worker execution should succeed");
+
+        assert_eq!(output.status, "ok");
+        assert_eq!(output.chunk_success_count, 2);
+        assert!(output.used_synthesis);
+        assert_eq!(output.attempts.len(), 3);
+        assert_eq!(output.terminal_attempt_index, Some(2));
+        assert_eq!(
+            output
+                .summary
+                .as_ref()
+                .and_then(|summary| summary.get("summary_250")),
+            Some(&json!("Synthesized summary."))
+        );
+    }
+
+    #[tokio::test]
+    async fn executes_chunked_url_with_aggregate_fallback_after_synthesis_failure() {
+        let chunk_one = json!({
+            "summary_250": "Chunk one summary.",
+            "summary_1000": "Chunk one longer summary.",
+            "tldr": "Chunk one TLDR."
+        });
+        let chunk_two = json!({
+            "summary_250": "Chunk two summary.",
+            "summary_1000": "Chunk two longer summary.",
+            "tldr": "Chunk two TLDR."
+        });
+        let addr = start_server(vec![
+            (
+                StatusCode::OK,
+                json!({
+                    "model": "primary-model",
+                    "choices": [{"message": {"parsed": chunk_one.clone()}}],
+                    "usage": {"prompt_tokens": 5, "completion_tokens": 6}
+                }),
+            ),
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json!({
+                    "error": {"message": "upstream unavailable"}
+                }),
+            ),
+            (
+                StatusCode::OK,
+                json!({
+                    "model": "primary-model",
+                    "choices": [{"message": {"parsed": chunk_two.clone()}}],
+                    "usage": {"prompt_tokens": 7, "completion_tokens": 8}
+                }),
+            ),
+            (
+                StatusCode::BAD_GATEWAY,
+                json!({
+                    "error": {"message": "synthesis unavailable"}
+                }),
+            ),
+        ])
+        .await;
+
+        let mut input = chunked_input();
+        input.chunk_requests.push(WorkerRequestConfig {
+            preset_name: Some("chunk_3".to_string()),
+            messages: vec![
+                json!({"role": "system", "content": "system"}),
+                json!({"role": "user", "content": "chunk-3"}),
+            ],
+            response_format: json!({"type": "json_object"}),
+            max_tokens: Some(4096),
+            temperature: Some(0.2),
+            top_p: Some(0.9),
+            model_override: Some("primary-model".to_string()),
+        });
+
+        let output = execute_chunked_url(&input, &worker_config(format!("http://{addr}")))
+            .await
+            .expect("chunked worker execution should succeed");
+        let expected_aggregate =
+            validate_and_shape_summary(&build_summary_aggregate_snapshot(&SummaryAggregateInput {
+                summaries: vec![
+                    validate_and_shape_summary(&chunk_one).expect("chunk one should validate"),
+                    validate_and_shape_summary(&chunk_two).expect("chunk two should validate"),
+                ],
+            }))
+            .expect("aggregate summary should validate");
+
+        assert_eq!(output.status, "ok");
+        assert_eq!(output.chunk_success_count, 2);
+        assert!(!output.used_synthesis);
+        assert_eq!(output.attempts.len(), 4);
+        assert_eq!(output.terminal_attempt_index, Some(2));
+        assert_eq!(output.summary, Some(expected_aggregate));
+        assert_eq!(
+            output.attempts[1].llm_result.error_text.as_deref(),
+            Some("upstream unavailable")
+        );
+        assert_eq!(
+            output.attempts[3].llm_result.error_text.as_deref(),
+            Some("synthesis unavailable")
+        );
+    }
+
+    #[tokio::test]
+    async fn executes_chunked_url_errors_when_all_chunks_fail() {
+        let addr = start_server(vec![
+            (
+                StatusCode::BAD_GATEWAY,
+                json!({
+                    "error": {"message": "chunk one unavailable"}
+                }),
+            ),
+            (
+                StatusCode::BAD_GATEWAY,
+                json!({
+                    "error": {"message": "chunk two unavailable"}
+                }),
+            ),
+        ])
+        .await;
+
+        let output =
+            execute_chunked_url(&chunked_input(), &worker_config(format!("http://{addr}")))
+                .await
+                .expect("chunked worker execution should return structured failure");
+
+        assert_eq!(output.status, "error");
+        assert_eq!(output.chunk_success_count, 0);
+        assert!(!output.used_synthesis);
+        assert_eq!(output.attempts.len(), 2);
+        assert_eq!(output.summary, None);
+        assert_eq!(output.error_text.as_deref(), Some("chunk two unavailable"));
     }
 }

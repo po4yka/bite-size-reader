@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+bsr-pipeline-shadow = { path = "../bsr-pipeline-shadow" }
 bsr-summary-contract = { path = "../bsr-summary-contract" }
 reqwest.workspace = true
 serde.workspace = true

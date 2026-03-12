@@ -200,6 +200,7 @@ name = "bsr-worker"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bsr-pipeline-shadow",
  "bsr-summary-contract",
  "reqwest",
  "serde",

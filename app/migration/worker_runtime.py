@@ -63,6 +63,27 @@ def _build_worker_payload(
     }
 
 
+def _build_chunked_worker_payload(
+    *,
+    request_id: int | None,
+    chunk_requests: list[Any],
+    synthesis_request: Any,
+    system_prompt: str,
+    chosen_lang: str,
+    max_concurrent_calls: int,
+) -> dict[str, Any]:
+    synthesis_payload = _serialize_request(synthesis_request)
+    synthesis_payload["system_prompt"] = system_prompt
+    synthesis_payload["chosen_lang"] = chosen_lang
+
+    return {
+        "request_id": request_id,
+        "chunk_requests": [_serialize_request(request) for request in chunk_requests],
+        "synthesis": synthesis_payload,
+        "max_concurrent_calls": max(1, int(max_concurrent_calls)),
+    }
+
+
 def materialize_worker_llm_result(payload: dict[str, Any]) -> Any:
     return SimpleNamespace(**payload)
 
@@ -153,6 +174,49 @@ class WorkerRunner:
             correlation_id=correlation_id,
             request_id=request_id,
         )
+
+    async def execute_chunked_url(
+        self,
+        *,
+        chunk_requests: list[Any],
+        synthesis_request: Any,
+        system_prompt: str,
+        chosen_lang: str,
+        max_concurrent_calls: int,
+        correlation_id: str | None = None,
+        request_id: int | None = None,
+    ) -> dict[str, Any]:
+        if not self.enabled:
+            msg = "Rust worker backend is not enabled"
+            raise RuntimeError(msg)
+
+        payload = _build_chunked_worker_payload(
+            request_id=request_id,
+            chunk_requests=chunk_requests,
+            synthesis_request=synthesis_request,
+            system_prompt=system_prompt,
+            chosen_lang=chosen_lang,
+            max_concurrent_calls=max_concurrent_calls,
+        )
+        try:
+            return await asyncio.to_thread(
+                run_rust_worker_command,
+                "chunked-url",
+                payload,
+                timeout_ms=self.options.timeout_ms,
+            )
+        except Exception as exc:
+            record_cutover_event(
+                event_type="rust_failure",
+                surface="worker_chunked_url",
+                reason="rust_backend_failed",
+                correlation_id=correlation_id,
+                metadata={"backend": "rust", "request_id": request_id},
+            )
+            msg = (
+                "Rust worker chunked-url failed; Python fallback is disabled for rust backend mode."
+            )
+            raise RuntimeError(msg) from exc
 
     async def _execute(
         self,
