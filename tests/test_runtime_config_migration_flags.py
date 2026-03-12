@@ -41,6 +41,16 @@ def test_worker_backend_accepts_rust() -> None:
     assert cfg.migration_worker_backend == "rust"
 
 
+def test_processing_orchestrator_timeout_defaults_to_five_minutes() -> None:
+    cfg = RuntimeConfig()
+    assert cfg.migration_processing_orchestrator_timeout_ms == 300000
+
+
+def test_processing_orchestrator_timeout_accepts_long_running_execution_value() -> None:
+    cfg = RuntimeConfig(migration_processing_orchestrator_timeout_ms=450000)
+    assert cfg.migration_processing_orchestrator_timeout_ms == 450000
+
+
 def test_worker_timeout_defaults_to_five_minutes() -> None:
     cfg = RuntimeConfig()
     assert cfg.migration_worker_timeout_ms == 300000

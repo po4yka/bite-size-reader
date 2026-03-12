@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import subprocess
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from typing import Any
 from app.migration.cutover_monitor import record_cutover_event
 
 _WORKER_BIN_ENV = "WORKER_RUST_BIN"
+logger = logging.getLogger(__name__)
 
 
 def _repo_root() -> Path:
@@ -136,10 +138,18 @@ class WorkerRuntimeOptions:
 
 class WorkerRunner:
     def __init__(self, runtime_cfg: Any) -> None:
+        backend = str(getattr(runtime_cfg, "migration_worker_backend", "python")).strip().lower()
+        orchestrator_backend = (
+            str(getattr(runtime_cfg, "migration_processing_orchestrator_backend", "python"))
+            .strip()
+            .lower()
+        )
         self.options = WorkerRuntimeOptions(
-            backend=str(getattr(runtime_cfg, "migration_worker_backend", "python")).strip().lower(),
+            backend=backend,
             timeout_ms=int(getattr(runtime_cfg, "migration_worker_timeout_ms", 300000)),
         )
+        if backend == "rust" and orchestrator_backend == "rust":
+            logger.warning("migration_worker_backend_is_test_only_when_orchestrator_is_rust")
 
     @property
     def enabled(self) -> bool:

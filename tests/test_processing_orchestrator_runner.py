@@ -28,7 +28,7 @@ _FIXTURE_EXPECTED_DIR = _FIXTURE_ROOT / "expected"
 def _runtime_cfg(**overrides: object) -> SimpleNamespace:
     defaults: dict[str, object] = {
         "migration_processing_orchestrator_backend": "python",
-        "migration_processing_orchestrator_timeout_ms": 250,
+        "migration_processing_orchestrator_timeout_ms": 300000,
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -267,6 +267,84 @@ async def test_processing_orchestrator_runner_executes_real_rust_binary(monkeypa
     assert result["source_label"] == "Channel"
     assert result["source_title"] == "Migration Digest"
     assert result["prompt"].startswith("Channel: Migration Digest")
+
+
+@pytest.mark.asyncio
+async def test_processing_orchestrator_runner_execute_url_flow_streams_events() -> None:
+    runner = ProcessingOrchestratorRunner(
+        _runtime_cfg(
+            migration_processing_orchestrator_backend="rust",
+            migration_processing_orchestrator_timeout_ms=2_000,
+        )
+    )
+    seen_events: list[dict[str, object]] = []
+    expected = {
+        "status": "ok",
+        "request_id": 42,
+        "summary_id": 7,
+        "summary": {"summary_250": "short"},
+        "chosen_lang": "en",
+        "cached": False,
+    }
+
+    async def _capture_event(event: dict[str, object]) -> None:
+        seen_events.append(event)
+
+    with patch(
+        "app.migration.processing_orchestrator._stream_rust_processing_orchestrator_events",
+        return_value=expected,
+    ) as stream_call:
+        result = await runner.execute_url_flow(
+            correlation_id="cid-stream",
+            request_id=42,
+            input_url="https://example.com",
+            preferred_language="auto",
+            on_event=_capture_event,
+        )
+
+    assert result == expected
+    assert stream_call.call_args.kwargs["command"] == "url-execute"
+    assert stream_call.call_args.kwargs["payload"]["input_url"] == "https://example.com"
+    assert callable(stream_call.call_args.kwargs["on_event"])
+
+
+@pytest.mark.asyncio
+async def test_processing_orchestrator_runner_execute_forward_flow_raises_when_stream_fails() -> (
+    None
+):
+    runner = ProcessingOrchestratorRunner(
+        _runtime_cfg(migration_processing_orchestrator_backend="rust")
+    )
+
+    with (
+        patch(
+            "app.migration.processing_orchestrator._stream_rust_processing_orchestrator_events",
+            side_effect=RuntimeError("boom"),
+        ),
+        patch("app.migration.processing_orchestrator.record_cutover_event") as event_call,
+    ):
+        with pytest.raises(RuntimeError, match="Python fallback is disabled"):
+            await runner.execute_forward_flow(
+                correlation_id="cid-forward-stream",
+                request_id=12,
+                text="forwarded content",
+            )
+
+    event_call.assert_called_once()
+    assert event_call.call_args.kwargs["surface"] == "processing_orchestrator_forward_execute"
+
+
+def test_processing_orchestrator_runner_warns_when_worker_toggle_is_left_on(caplog) -> None:
+    with caplog.at_level("WARNING"):
+        runner = ProcessingOrchestratorRunner(
+            _runtime_cfg(
+                migration_processing_orchestrator_backend="rust",
+                migration_worker_backend="rust",
+            )
+        )
+
+    assert runner.enabled is True
+    assert "migration_worker_backend_ignored_for_rust_processing_orchestrator" in caplog.text
 
 
 @pytest.mark.integration

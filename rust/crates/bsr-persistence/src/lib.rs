@@ -6,14 +6,30 @@ use bsr_models::{MigrationHistoryEntry, MigrationStatusEntry, MigrationStatusRep
 use rusqlite::Connection;
 use thiserror::Error;
 
+mod processing;
+
+pub use processing::{
+    create_minimal_request, create_request, get_crawl_result_by_request, get_request_by_dedupe_hash,
+    get_request_by_forward, get_request_by_id, get_summary_by_request,
+    get_unread_summary_by_request, insert_crawl_result, insert_llm_call,
+    update_request_correlation_id, update_request_error, update_request_lang_detected,
+    update_request_status, update_summary_insights, upsert_summary, CrawlResultRecord,
+    CreateRequestInput, InsertCrawlResultInput, InsertLlmCallInput, MinimalRequestInput,
+    RequestErrorUpdate, RequestRecord, SummaryRecord, UpsertSummaryInput,
+};
+
 #[derive(Debug, Error)]
 pub enum PersistenceError {
     #[error("sqlite error: {0}")]
     Sqlite(#[from] rusqlite::Error),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("json error: {0}")]
+    Json(#[from] serde_json::Error),
     #[error("could not locate app/cli/migrations from {start}")]
     MigrationsDirNotFound { start: String },
+    #[error("expected row was not found: {0}")]
+    MissingRow(String),
 }
 
 const MIGRATION_HISTORY_DDL: &str = r#"

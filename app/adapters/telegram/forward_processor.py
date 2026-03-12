@@ -87,6 +87,14 @@ class ForwardProcessor:
     ) -> None:
         """Handle complete forwarded message processing flow."""
         try:
+            if getattr(self.content_processor.processing_orchestrator, "enabled", False):
+                await self._handle_forward_flow_via_rust_orchestrator(
+                    message,
+                    correlation_id=correlation_id,
+                    interaction_id=interaction_id,
+                )
+                return
+
             # Process forward content
             (
                 req_id,
@@ -165,6 +173,188 @@ class ForwardProcessor:
                 logger.debug(
                     "forward_flow_error_notification_failed", extra={"cid": correlation_id}
                 )
+
+    async def _handle_forward_flow_via_rust_orchestrator(
+        self,
+        message: Any,
+        *,
+        correlation_id: str | None,
+        interaction_id: int | None,
+    ) -> None:
+        text = (getattr(message, "text", None) or getattr(message, "caption", "") or "").strip()
+        if not text:
+            await self.response_formatter.safe_reply(
+                message,
+                "This forwarded message has no text content to summarize. "
+                "Please forward a message that contains text.",
+            )
+            raise ValueError("Forwarded message has no text content")
+
+        await self.content_processor._upsert_sender_metadata(message)
+
+        fwd_chat = getattr(message, "forward_from_chat", None)
+        fwd_user = getattr(message, "forward_from", None)
+        snapshot_persisted = False
+
+        async def _handle_event(event: dict[str, Any]) -> None:
+            nonlocal snapshot_persisted
+            request_id = event.get("request_id")
+            if isinstance(request_id, int) and not snapshot_persisted:
+                try:
+                    await self.content_processor._persist_message_snapshot(request_id, message)
+                except Exception as exc:
+                    logger.exception(
+                        "forward_snapshot_persist_failed",
+                        extra={"cid": correlation_id, "error": str(exc), "request_id": request_id},
+                    )
+                snapshot_persisted = True
+
+            if str(event.get("event_type") or "").strip().lower() == "draft_delta" and hasattr(
+                self.response_formatter, "send_message_draft"
+            ):
+                delta = str(event.get("delta") or "").strip()
+                if delta:
+                    await self.response_formatter.send_message_draft(message, delta)
+
+        base_temperature_value = getattr(self.cfg.openrouter, "temperature", 0.2)
+        base_temperature = (
+            base_temperature_value if isinstance(base_temperature_value, (int, float)) else 0.2
+        )
+        base_top_p_value = getattr(self.cfg.openrouter, "top_p", None)
+        base_top_p = base_top_p_value if isinstance(base_top_p_value, (int, float)) else 0.9
+        fallback_models_value = getattr(self.cfg.openrouter, "fallback_models", ())
+        fallback_models = (
+            [model for model in fallback_models_value if isinstance(model, str)]
+            if isinstance(fallback_models_value, (list, tuple))
+            else []
+        )
+        flash_fallback_models_value = getattr(self.cfg.openrouter, "flash_fallback_models", ())
+        flash_fallback_models = (
+            [model for model in flash_fallback_models_value if isinstance(model, str)]
+            if isinstance(flash_fallback_models_value, (list, tuple))
+            else []
+        )
+
+        result = await self.content_processor.processing_orchestrator.execute_forward_flow(
+            correlation_id=correlation_id,
+            text=text,
+            chat_id=getattr(getattr(message, "chat", None), "id", None),
+            user_id=getattr(getattr(message, "from_user", None), "id", None),
+            input_message_id=getattr(message, "id", getattr(message, "message_id", None)),
+            fwd_from_chat_id=getattr(fwd_chat, "id", None),
+            fwd_from_msg_id=getattr(message, "forward_from_message_id", None),
+            source_chat_title=getattr(fwd_chat, "title", None) if fwd_chat is not None else None,
+            source_user_first_name=getattr(fwd_user, "first_name", None)
+            if fwd_chat is None
+            else None,
+            source_user_last_name=getattr(fwd_user, "last_name", None)
+            if fwd_chat is None
+            else None,
+            forward_sender_name=getattr(message, "forward_sender_name", None),
+            preferred_language=self.cfg.runtime.preferred_lang,
+            route_version=1,
+            primary_model=self.cfg.openrouter.model,
+            fallback_models=fallback_models,
+            flash_model=self.cfg.openrouter.flash_model,
+            flash_fallback_models=flash_fallback_models,
+            structured_output_mode=self.cfg.openrouter.structured_output_mode,
+            temperature=base_temperature,
+            top_p=base_top_p,
+            json_temperature=self.cfg.openrouter.summary_temperature_json_fallback
+            or max(0.0, min(0.5, base_temperature - 0.05)),
+            json_top_p=self.cfg.openrouter.summary_top_p_json_fallback
+            or max(0.0, min(0.95, base_top_p)),
+            enable_two_pass_enrichment=bool(
+                getattr(self.cfg.runtime, "summary_two_pass_enabled", False)
+            ),
+            normalize_forward_prompt=bool(getattr(self.cfg.runtime, "enable_textacy", False)),
+            prompt_version=self.cfg.runtime.summary_prompt_version,
+            on_event=_handle_event,
+        )
+
+        status = str(result.get("status") or "error").strip().lower()
+        req_id = result.get("request_id") if isinstance(result.get("request_id"), int) else None
+        chosen_lang = (
+            str(result.get("chosen_lang") or self.cfg.runtime.preferred_lang).strip().lower()
+            or "en"
+        )
+        detected_lang = (
+            str(result.get("detected_language") or chosen_lang).strip().lower() or chosen_lang
+        )
+        summary_json = result.get("summary") if isinstance(result.get("summary"), dict) else None
+        title = result.get("title") if isinstance(result.get("title"), str) else None
+        content_text = (
+            result.get("content_text") if isinstance(result.get("content_text"), str) else None
+        )
+
+        await self.response_formatter.send_forward_accepted_notification(message, title)
+        await self.response_formatter.send_forward_language_notification(message, detected_lang)
+
+        if status == "error" or summary_json is None:
+            await self.response_formatter.send_error_notification(
+                message,
+                "processing_failed",
+                correlation_id or "unknown",
+                details=str(result.get("error_text") or ""),
+            )
+            return
+
+        if status == "cached":
+            await self.response_formatter.send_cached_summary_notification(message)
+
+        await self.response_formatter.send_forward_summary_response(
+            message,
+            summary_json,
+            summary_id=f"req:{req_id}" if req_id else None,
+        )
+
+        if interaction_id:
+            await async_safe_update_user_interaction(
+                self.user_repo,
+                interaction_id=interaction_id,
+                response_sent=True,
+                response_type="summary",
+                request_id=req_id,
+                logger_=logger,
+            )
+
+        if not req_id:
+            return
+
+        if content_text:
+            self._schedule_background_task(
+                self._handle_additional_insights(
+                    message,
+                    content_text,
+                    chosen_lang,
+                    req_id,
+                    correlation_id,
+                    summary=summary_json,
+                ),
+                correlation_id,
+                "additional_insights_forward",
+            )
+
+        self._schedule_background_task(
+            self._maybe_generate_custom_article(
+                message,
+                summary_json,
+                chosen_lang,
+                req_id,
+                correlation_id,
+            ),
+            correlation_id,
+            "custom_article_forward",
+        )
+
+        if self._related_reads_service is not None:
+            self._schedule_background_task(
+                self._send_related_reads(
+                    message, summary_json, req_id, correlation_id, chosen_lang
+                ),
+                correlation_id,
+                "related_reads_forward",
+            )
 
     def _schedule_background_task(
         self, coro: Coroutine[Any, Any, Any], correlation_id: str | None, label: str

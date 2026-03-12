@@ -7,8 +7,8 @@ This workspace contains migration crates delivered across milestones **M1–M6**
 - `bsr-config`: runtime configuration loading from environment variables
 - `bsr-logging`: structured logging bootstrap (`tracing` + JSON formatter)
 - `bsr-models`: shared Rust-side migration and telemetry model foundation
-- `bsr-persistence`: SQLite migration-history/status foundation for Rust runtime cutover
-- `bsr-processing-orchestrator`: URL/forward execution-plan foundation for processing runtime migration
+- `bsr-persistence`: SQLite migration-history/status plus processing-critical request/summary/llm/crawl CRUD
+- `bsr-processing-orchestrator`: Rust-authoritative URL/forward execution bridge with NDJSON event streaming, extraction, cache, worker orchestration, and processing-path persistence
 - `bsr-summary-contract`: summary contract validation/normalization + SQLite compatibility checks + CLI
 - `bsr-worker`: Rust OpenRouter execution path for single-pass URL (text and multimodal), chunked URL, and forwarded-text summaries
 - `bsr-pipeline-shadow`: M3 pipeline slice parity and runtime command surface
@@ -21,7 +21,9 @@ This workspace contains migration crates delivered across milestones **M1–M6**
 - `SUMMARY_CONTRACT_BACKEND` and `MIGRATION_INTERFACE_BACKEND` require Rust.
 - `MIGRATION_SHADOW_MODE_ENABLED` must remain enabled (M3 disabled mode is decommissioned).
 - M6 Telegram command-route execution is Rust-authoritative.
-- `MIGRATION_WORKER_BACKEND=rust` enables the first execution-owned worker slice for single-pass URL (including image-assisted requests), chunked URL, and forward-text summaries.
+- `MIGRATION_PROCESSING_ORCHESTRATOR_BACKEND=rust` makes Rust authoritative for URL and forwarded-text processing hot paths; Python remains the Telegram/progress/message-shell bridge.
+- `MIGRATION_WORKER_BACKEND=rust` is now a secondary/test-only toggle when the processing orchestrator backend is Rust.
+- Specialized Twitter/YouTube extraction paths and web-search enrichment are still outside the Rust processing cutover.
 - Legacy `MIGRATION_TELEGRAM_RUNTIME_BACKEND` values are ignored with a warning.
 
 ## Recent Correctness Updates (2026-03-05)
@@ -41,6 +43,7 @@ This workspace contains migration crates delivered across milestones **M1–M6**
 ```bash
 cargo check --workspace --manifest-path rust/Cargo.toml
 cargo test --workspace --manifest-path rust/Cargo.toml
+cargo test -p bsr-persistence -p bsr-processing-orchestrator --manifest-path rust/Cargo.toml
 
 # Run milestone parity suites
 bash scripts/migration/run_m2_parity_suite.sh

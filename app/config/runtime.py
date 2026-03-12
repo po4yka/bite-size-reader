@@ -71,7 +71,7 @@ class RuntimeConfig(BaseModel):
         default="python", validation_alias="MIGRATION_PROCESSING_ORCHESTRATOR_BACKEND"
     )
     migration_processing_orchestrator_timeout_ms: int = Field(
-        default=250, validation_alias="MIGRATION_PROCESSING_ORCHESTRATOR_TIMEOUT_MS"
+        default=300000, validation_alias="MIGRATION_PROCESSING_ORCHESTRATOR_TIMEOUT_MS"
     )
     migration_worker_backend: str = Field(
         default="python", validation_alias="MIGRATION_WORKER_BACKEND"
@@ -370,9 +370,9 @@ class RuntimeConfig(BaseModel):
         except ValueError as exc:
             msg = "Migration processing orchestrator timeout must be a valid integer"
             raise ValueError(msg) from exc
-        if parsed < 25 or parsed > 10000:
+        if parsed < 1000 or parsed > 600000:
             msg = (
-                "Migration processing orchestrator timeout must be between 25 and 10000 "
+                "Migration processing orchestrator timeout must be between 1000 and 600000 "
                 "milliseconds"
             )
             raise ValueError(msg)

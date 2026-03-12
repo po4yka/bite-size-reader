@@ -2,19 +2,21 @@ use std::env;
 use std::io::{self, Read};
 
 use bsr_processing_orchestrator::{
-    build_forward_processing_plan, build_url_processing_plan, ForwardProcessingPlanInput,
-    UrlProcessingPlanInput,
+    build_forward_processing_plan, build_url_processing_plan, execute_forward_flow,
+    execute_url_flow, write_ndjson_event, ForwardExecuteInput, ForwardProcessingPlanInput,
+    OrchestratorEvent, UrlExecuteInput, UrlProcessingPlanInput,
 };
 use serde_json::Value;
 
-fn main() {
-    if let Err(err) = run() {
+#[tokio::main]
+async fn main() {
+    if let Err(err) = run().await {
         eprintln!("{err}");
         std::process::exit(1);
     }
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args().skip(1);
     let command = args.next().unwrap_or_else(|| "help".to_string());
 
@@ -33,10 +35,28 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string_pretty(&output)?);
             Ok(())
         }
+        "url-execute" => {
+            let input: UrlExecuteInput = serde_json::from_value(read_json_stdin()?)?;
+            let stdout = io::stdout();
+            let mut lock = stdout.lock();
+            let mut emit = |event: OrchestratorEvent| write_ndjson_event(&mut lock, &event);
+            let _ = execute_url_flow(&input, &mut emit).await?;
+            Ok(())
+        }
+        "forward-execute" => {
+            let input: ForwardExecuteInput = serde_json::from_value(read_json_stdin()?)?;
+            let stdout = io::stdout();
+            let mut lock = stdout.lock();
+            let mut emit = |event: OrchestratorEvent| write_ndjson_event(&mut lock, &event);
+            let _ = execute_forward_flow(&input, &mut emit).await?;
+            Ok(())
+        }
         _ => {
             println!("Usage:");
             println!("  bsr-processing-orchestrator url-plan < input.json");
             println!("  bsr-processing-orchestrator forward-plan < input.json");
+            println!("  bsr-processing-orchestrator url-execute < input.json");
+            println!("  bsr-processing-orchestrator forward-execute < input.json");
             Ok(())
         }
     }

@@ -12,6 +12,7 @@ def _runtime_cfg(**overrides: object) -> SimpleNamespace:
     defaults: dict[str, object] = {
         "migration_worker_backend": "python",
         "migration_worker_timeout_ms": 300000,
+        "migration_processing_orchestrator_backend": "python",
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -126,3 +127,16 @@ async def test_worker_runner_executes_chunked_url_when_enabled() -> None:
     assert payload["synthesis"]["system_prompt"] == "sys"
     assert payload["synthesis"]["chosen_lang"] == "en"
     assert payload["max_concurrent_calls"] == 3
+
+
+def test_worker_runner_warns_when_worker_toggle_is_secondary_to_orchestrator(caplog) -> None:
+    with caplog.at_level("WARNING"):
+        runner = WorkerRunner(
+            _runtime_cfg(
+                migration_worker_backend="rust",
+                migration_processing_orchestrator_backend="rust",
+            )
+        )
+
+    assert runner.enabled is True
+    assert "migration_worker_backend_is_test_only_when_orchestrator_is_rust" in caplog.text

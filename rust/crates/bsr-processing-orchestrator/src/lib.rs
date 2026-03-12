@@ -5,6 +5,13 @@ use bsr_pipeline_shadow::{
 };
 use serde::{Deserialize, Serialize};
 
+mod execution;
+
+pub use execution::{
+    execute_forward_flow, execute_url_flow, write_ndjson_event, ForwardExecuteInput,
+    OrchestratorEvent, ProcessingTerminalResult, UrlExecuteInput,
+};
+
 const LANG_EN: &str = "en";
 const LANG_RU: &str = "ru";
 const LANG_AUTO: &str = "auto";

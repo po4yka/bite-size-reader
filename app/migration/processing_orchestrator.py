@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
+import logging
 import os
 import subprocess
 from dataclasses import dataclass
@@ -19,6 +21,8 @@ from app.migration.pipeline_shadow import (
 _PROCESSING_ORCHESTRATOR_BIN_ENV = "PROCESSING_ORCHESTRATOR_RUST_BIN"
 _MAX_SINGLE_PASS_CHARS = 50_000
 _MAX_FORWARD_CONTENT_CHARS = 45_000
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_model(value: Any) -> str:
@@ -259,21 +263,33 @@ def run_rust_processing_orchestrator_command(
 @dataclass(frozen=True)
 class ProcessingOrchestratorRuntimeOptions:
     backend: str = "python"
-    timeout_ms: int = 250
+    timeout_ms: int = 300000
 
 
 class ProcessingOrchestratorRunner:
     """Processing orchestrator runner for URL and forward execution planning."""
 
     def __init__(self, runtime_cfg: Any) -> None:
-        self.options = ProcessingOrchestratorRuntimeOptions(
-            backend=str(getattr(runtime_cfg, "migration_processing_orchestrator_backend", "python"))
+        backend = (
+            str(getattr(runtime_cfg, "migration_processing_orchestrator_backend", "python"))
             .strip()
-            .lower(),
+            .lower()
+        )
+        worker_backend = (
+            str(getattr(runtime_cfg, "migration_worker_backend", "python")).strip().lower()
+        )
+        self.options = ProcessingOrchestratorRuntimeOptions(
+            backend=backend,
             timeout_ms=int(
-                getattr(runtime_cfg, "migration_processing_orchestrator_timeout_ms", 250)
+                getattr(runtime_cfg, "migration_processing_orchestrator_timeout_ms", 300000)
             ),
         )
+        if backend == "rust" and worker_backend == "rust":
+            logger.warning("migration_worker_backend_ignored_for_rust_processing_orchestrator")
+
+    @property
+    def enabled(self) -> bool:
+        return self.options.backend == "rust"
 
     async def resolve_url_processing_plan(
         self,
@@ -336,3 +352,153 @@ class ProcessingOrchestratorRunner:
                 "Python fallback is disabled for rust backend mode."
             )
             raise RuntimeError(msg) from exc
+
+    async def execute_url_flow(
+        self,
+        *,
+        correlation_id: str | None = None,
+        request_id: int | None = None,
+        on_event: Any | None = None,
+        **payload: Any,
+    ) -> dict[str, Any]:
+        return await self._execute_stream(
+            command="url-execute",
+            surface="processing_orchestrator_url_execute",
+            correlation_id=correlation_id,
+            request_id=request_id,
+            on_event=on_event,
+            payload=payload,
+        )
+
+    async def execute_forward_flow(
+        self,
+        *,
+        correlation_id: str | None = None,
+        request_id: int | None = None,
+        on_event: Any | None = None,
+        **payload: Any,
+    ) -> dict[str, Any]:
+        return await self._execute_stream(
+            command="forward-execute",
+            surface="processing_orchestrator_forward_execute",
+            correlation_id=correlation_id,
+            request_id=request_id,
+            on_event=on_event,
+            payload=payload,
+        )
+
+    async def _execute_stream(
+        self,
+        *,
+        command: str,
+        surface: str,
+        correlation_id: str | None,
+        request_id: int | None,
+        on_event: Any | None,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if self.options.backend != "rust":
+            msg = "Rust processing orchestrator backend is not enabled"
+            raise RuntimeError(msg)
+
+        binary = resolve_rust_processing_orchestrator_binary()
+        if binary is None:
+            msg = "Rust processing orchestrator binary not found"
+            raise FileNotFoundError(msg)
+
+        timeout_ms = max(self.options.timeout_ms, 300000)
+        try:
+            return await _stream_rust_processing_orchestrator_events(
+                command=command,
+                payload=payload,
+                timeout_ms=timeout_ms,
+                binary_path=binary,
+                on_event=on_event,
+            )
+        except Exception as exc:
+            record_cutover_event(
+                event_type="rust_failure",
+                surface=surface,
+                reason="rust_backend_failed",
+                correlation_id=correlation_id,
+                metadata={"backend": "rust", "request_id": request_id},
+            )
+            msg = (
+                f"Rust processing orchestrator {command} failed; "
+                "Python fallback is disabled for rust backend mode."
+            )
+            raise RuntimeError(msg) from exc
+
+
+async def _stream_rust_processing_orchestrator_events(
+    *,
+    command: str,
+    payload: dict[str, Any],
+    timeout_ms: int,
+    binary_path: Path,
+    on_event: Any | None = None,
+) -> dict[str, Any]:
+    process = await asyncio.create_subprocess_exec(
+        str(binary_path),
+        command,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    assert process.stdin is not None
+    process.stdin.write(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+    await process.stdin.drain()
+    process.stdin.close()
+
+    assert process.stdout is not None
+    assert process.stderr is not None
+
+    timeout_sec = max(1.0, timeout_ms / 1000.0)
+    deadline = asyncio.get_running_loop().time() + timeout_sec
+    result_payload: dict[str, Any] | None = None
+
+    while True:
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            process.kill()
+            await process.wait()
+            msg = f"processing orchestrator rust command timed out ({command})"
+            raise TimeoutError(msg)
+        try:
+            line = await asyncio.wait_for(process.stdout.readline(), timeout=remaining)
+        except TimeoutError:
+            process.kill()
+            await process.wait()
+            msg = f"processing orchestrator rust command timed out ({command})"
+            raise TimeoutError(msg) from None
+        if not line:
+            break
+
+        parsed = json.loads(line.decode("utf-8"))
+        if not isinstance(parsed, dict):
+            msg = f"processing orchestrator rust event must be a JSON object ({command})"
+            raise RuntimeError(msg)
+
+        if on_event is not None:
+            maybe_awaitable = on_event(parsed)
+            if inspect.isawaitable(maybe_awaitable):
+                await maybe_awaitable
+
+        if parsed.get("event_type") == "result":
+            payload_obj = parsed.get("payload")
+            if isinstance(payload_obj, dict):
+                result_payload = payload_obj
+
+    stderr = (await process.stderr.read()).decode("utf-8", errors="replace").strip()
+    returncode = await process.wait()
+    if returncode != 0:
+        msg = (
+            "processing orchestrator rust command failed "
+            f"({command}, exit={returncode}): {stderr or 'no stderr'}"
+        )
+        raise RuntimeError(msg)
+    if result_payload is None:
+        msg = f"processing orchestrator rust stream produced no result payload ({command})"
+        raise RuntimeError(msg)
+    return result_payload
