@@ -8,6 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -49,14 +51,12 @@ def test_phase2():
                 INSERT INTO llm_calls (request_id, provider, model, status)
                 VALUES (NULL, 'openrouter', 'qwen/qwen3-max', 'should-fail')
             """)
-            print("✗ NOT NULL constraint NOT enforced")
-            return False
+            pytest.fail("NOT NULL constraint NOT enforced on LLMCall.request")
         except Exception as e:
             if "NOT NULL" in str(e):
                 print("✓ NOT NULL constraint enforced")
             else:
-                print(f"✗ Unexpected error: {e}")
-                return False
+                pytest.fail(f"Unexpected error testing NOT NULL constraint: {e}")
 
         # Step 3: Create test user
         print("\n[3] Creating test user...")
@@ -72,14 +72,12 @@ def test_phase2():
                 INSERT INTO requests (type, status, correlation_id, user_id, created_at, route_version)
                 VALUES ('url', 'ok', 'test-no-url', 123456789, datetime('now'), 1)
             """)
-            print("✗ CHECK constraint NOT enforced for URL requests")
-            return False
+            pytest.fail("CHECK constraint NOT enforced for URL requests")
         except Exception as e:
             if "validation" in str(e).lower():
                 print("✓ CHECK constraint enforced for URL requests")
             else:
-                print(f"✗ Unexpected error: {e}")
-                return False
+                pytest.fail(f"Unexpected error testing URL CHECK constraint: {e}")
 
         # Step 5: Test CHECK constraint for forward requests
         print("\n[5] Testing CHECK constraint for forward requests...")
@@ -88,14 +86,12 @@ def test_phase2():
                 INSERT INTO requests (type, status, correlation_id, user_id, fwd_from_msg_id, created_at, route_version)
                 VALUES ('forward', 'ok', 'test-no-chat', 123456789, 999, datetime('now'), 1)
             """)
-            print("✗ CHECK constraint NOT enforced for forward requests")
-            return False
+            pytest.fail("CHECK constraint NOT enforced for forward requests")
         except Exception as e:
             if "validation" in str(e).lower():
                 print("✓ CHECK constraint enforced for forward requests")
             else:
-                print(f"✗ Unexpected error: {e}")
-                return False
+                pytest.fail(f"Unexpected error testing forward CHECK constraint: {e}")
 
         # Step 6: Verify valid requests still work
         print("\n[6] Testing valid requests...")
@@ -147,8 +143,7 @@ def test_phase2():
         # Verify LLM call was also deleted
         try:
             LLMCall.get_by_id(llm_id)
-            print("✗ CASCADE DELETE failed (LLM call still exists)")
-            return False
+            pytest.fail("CASCADE DELETE failed (LLM call still exists)")
         except LLMCall.DoesNotExist:
             print("✓ CASCADE DELETE works (LLM call deleted with request)")
 
@@ -161,7 +156,6 @@ def test_phase2():
         print("  ✓ Forward requests must have fwd_from_chat_id and fwd_from_msg_id")
         print("  ✓ Valid requests work correctly")
         print("  ✓ CASCADE DELETE prevents orphaned LLM calls")
-        return True
 
     finally:
         Path(db_path).unlink(missing_ok=True)
@@ -169,8 +163,8 @@ def test_phase2():
 
 if __name__ == "__main__":
     try:
-        success = test_phase2()
-        sys.exit(0 if success else 1)
+        test_phase2()
+        sys.exit(0)
     except Exception:
         logger.exception("Test failed with exception")
         sys.exit(1)

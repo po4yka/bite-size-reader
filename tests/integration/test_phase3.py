@@ -24,7 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def test_phase3() -> bool:
+def test_phase3() -> None:
     """Test Phase 3 performance improvements."""
     print("=" * 70)
     print("Testing Phase 3: Performance Improvements")
@@ -81,27 +81,20 @@ def test_phase3() -> bool:
         result2 = get_request_by_id(requests[0].id)
         stats2 = cache.get_stats()
 
-        if result1 and result2 and result1.id == result2.id:
-            print("✓ Query cache working (same result)")
-        else:
-            print("✗ Query cache failed (different results)")
-            return False
+        assert result1 is not None, "Query cache returned None on first call"
+        assert result2 is not None, "Query cache returned None on second call (cache hit)"
+        assert result1.id == result2.id, "Query cache returned different results"
+        print("✓ Query cache working (same result)")
 
         # Cache should have hits now
-        if stats2["hits"] > stats1["hits"]:
-            print("✓ Cache hit detected")
-        else:
-            print("✗ Cache hit not detected")
-            return False
+        assert stats2["hits"] > stats1["hits"], "Cache hit not detected on second call"
+        print("✓ Cache hit detected")
 
         # Test cache invalidation
         cache.invalidate("test_query")
         stats3 = cache.get_stats()
-        if stats3["invalidations"] > 0:
-            print("✓ Cache invalidation working")
-        else:
-            print("✗ Cache invalidation failed")
-            return False
+        assert stats3["invalidations"] > 0, "Cache invalidation did not register"
+        print("✓ Cache invalidation working")
 
         # Step 4: Test Batch Operations
         print("\n[4] Testing batch operations...")
@@ -120,11 +113,8 @@ def test_phase3() -> bool:
         ]
 
         llm_call_ids = batch.insert_llm_calls_batch(llm_call_data)
-        if len(llm_call_ids) == 3:
-            print(f"✓ Batch insert created {len(llm_call_ids)} LLM calls")
-        else:
-            print(f"✗ Batch insert failed: expected 3, got {len(llm_call_ids)}")
-            return False
+        assert len(llm_call_ids) == 3, f"Batch insert failed: expected 3, got {len(llm_call_ids)}"
+        print(f"✓ Batch insert created {len(llm_call_ids)} LLM calls")
 
         # Test batch status update
         status_updates = [
@@ -132,20 +122,16 @@ def test_phase3() -> bool:
             (requests[1].id, "processing"),
         ]
         updated_count = batch.update_request_statuses_batch(status_updates)
-        if updated_count == 2:
-            print(f"✓ Batch status update modified {updated_count} rows")
-        else:
-            print(f"✗ Batch status update failed: expected 2, got {updated_count}")
-            return False
+        assert updated_count == 2, f"Batch status update failed: expected 2, got {updated_count}"
+        print(f"✓ Batch status update modified {updated_count} rows")
 
         # Test batch fetch
         request_ids = [r.id for r in requests[:3]]
         fetched_requests = batch.get_requests_by_ids_batch(request_ids)
-        if len(fetched_requests) == 3:
-            print(f"✓ Batch fetch retrieved {len(fetched_requests)} requests")
-        else:
-            print(f"✗ Batch fetch failed: expected 3, got {len(fetched_requests)}")
-            return False
+        assert len(fetched_requests) == 3, (
+            f"Batch fetch failed: expected 3, got {len(fetched_requests)}"
+        )
+        print(f"✓ Batch fetch retrieved {len(fetched_requests)} requests")
 
         # Step 5: Test Database Health Check
         print("\n[5] Testing database health check...")
@@ -181,10 +167,7 @@ def test_phase3() -> bool:
                 print(f"  ✗ {check_name}: {check_result.get('error', message)}")
                 all_checks_passed = False
 
-        if not all_checks_passed:
-            print("✗ Some health checks failed")
-            return False
-
+        assert all_checks_passed, "Some database health checks failed"
         print("✓ All health checks passed")
 
         # Get database stats
@@ -222,13 +205,11 @@ def test_phase3() -> bool:
         # Count LLM calls after delete
         llm_count_after = LLMCall.select().count()
 
-        if deleted == 1 and llm_count_after == llm_count_before - 1:
-            print("✓ Batch delete with CASCADE works")
-        else:
-            print("✗ Batch delete CASCADE failed")
-            print(f"  Deleted requests: {deleted}")
-            print(f"  LLM calls before: {llm_count_before}, after: {llm_count_after}")
-            return False
+        assert deleted == 1, f"Batch delete failed: expected 1 deleted, got {deleted}"
+        assert llm_count_after == llm_count_before - 1, (
+            f"CASCADE failed: LLM calls before={llm_count_before}, after={llm_count_after}"
+        )
+        print("✓ Batch delete with CASCADE works")
 
         print("\n" + "=" * 70)
         print("✓ ALL PHASE 3 TESTS PASSED!")
@@ -240,7 +221,6 @@ def test_phase3() -> bool:
         print("  ✓ Batch fetch operations (IN clause queries)")
         print("  ✓ Database health checks (7 checks)")
         print("  ✓ Comprehensive database statistics")
-        return True
 
     finally:
         Path(db_path).unlink(missing_ok=True)
@@ -248,8 +228,8 @@ def test_phase3() -> bool:
 
 if __name__ == "__main__":
     try:
-        success = test_phase3()
-        sys.exit(0 if success else 1)
+        test_phase3()
+        sys.exit(0)
     except Exception:
         logger.exception("Test failed with exception")
         sys.exit(1)
