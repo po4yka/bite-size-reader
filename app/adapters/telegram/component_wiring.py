@@ -40,6 +40,7 @@ class TelegramComponentWiring:
         llm_client: Any,
     ) -> None:
         """Assign components to bot and wire cross-component dependencies."""
+        _ = llm_client
         bot.telegram_client = components.telegram_client
         bot.response_formatter = components.response_formatter
         bot.url_processor = components.url_processor
@@ -59,8 +60,5 @@ class TelegramComponentWiring:
         bot.message_handler.url_processor = bot.url_processor
 
         bot._batch_session_repo = create_batch_session_repository(self._db)
-        bot.message_handler.url_handler._llm_client = llm_client
-        bot.message_handler.url_handler._batch_session_repo = bot._batch_session_repo
-        bot.message_handler.url_handler._batch_config = self._cfg.batch_analysis
 
         bot._awaiting_url_users = bot.message_handler.url_handler._awaiting_url_users

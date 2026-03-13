@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.repository_ports import (
     AuditLogRepositoryPort,
     create_audit_log_repository,
+    create_batch_session_repository,
 )
 from app.adapters.telegram.access_controller import AccessController
 from app.adapters.telegram.callback_handler import CallbackHandler
@@ -16,6 +17,7 @@ from app.adapters.telegram.message_router import MessageRouter
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.url_handler import URLHandler
 from app.core.async_utils import raise_if_cancelled
+from app.security.file_validation import SecureFileValidator
 
 if TYPE_CHECKING:
     from app.adapters.attachment.attachment_processor import AttachmentProcessor
@@ -49,6 +51,10 @@ class MessageHandler:
         verbosity_resolver: Any | None = None,
         adaptive_timeout_service: AdaptiveTimeoutService | None = None,
         audit_repo: AuditLogRepositoryPort | None = None,
+        llm_client: Any | None = None,
+        batch_session_repo: Any | None = None,
+        batch_config: Any | None = None,
+        file_validator: SecureFileValidator | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -69,6 +75,10 @@ class MessageHandler:
             url_processor=url_processor,
             adaptive_timeout_service=adaptive_timeout_service,
             verbosity_resolver=verbosity_resolver,
+            llm_client=llm_client,
+            batch_session_repo=batch_session_repo or create_batch_session_repository(db),
+            batch_config=batch_config,
+            file_validator=file_validator or SecureFileValidator(max_file_size=10 * 1024 * 1024),
         )
         # Expose url_processor for legacy integrations/tests
         self.url_processor = url_processor

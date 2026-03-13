@@ -20,7 +20,6 @@ from app.adapters.telegram.message_router_rate_limiter import MessageRouterRateL
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.config import AppConfig
 from app.db.session import DatabaseSessionManager
-from app.security.file_validation import SecureFileValidator
 from app.security.rate_limiter import RateLimitConfig, RedisUserRateLimiter, UserRateLimiter
 
 if TYPE_CHECKING:
@@ -73,8 +72,6 @@ class MessageRouter(
         self._task_manager = task_manager
         self.callback_handler: Any | None = None
 
-        self._url_processor = url_handler.url_processor
-
         self._rate_limiter_config = RateLimitConfig(
             max_requests=cfg.api_limits.requests_limit,
             window_seconds=cfg.api_limits.window_seconds,
@@ -84,9 +81,6 @@ class MessageRouter(
         self._rate_limiter = UserRateLimiter(self._rate_limiter_config)
         self._redis_limiter: RedisUserRateLimiter | None = None
         self._redis_limiter_available: bool | None = None
-        self._file_validator = SecureFileValidator(
-            max_file_size=10 * 1024 * 1024  # 10 MB max file size
-        )
         self._rate_limit_notified_until: dict[int, float] = {}
         self._rate_limit_notice_window = max(self._rate_limiter_config.window_seconds, 30)
         self._recent_message_ids: dict[tuple[int, int, int], tuple[float, str]] = {}

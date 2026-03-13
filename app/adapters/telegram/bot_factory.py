@@ -10,11 +10,12 @@ from app.adapters.content.url_processor import URLProcessor
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.llm import LLMClientFactory, LLMClientProtocol
-from app.adapters.repository_ports import create_user_repository
+from app.adapters.repository_ports import create_batch_session_repository, create_user_repository
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
+from app.security.file_validation import SecureFileValidator
 from app.services.adaptive_timeout import AdaptiveTimeoutService
 from app.services.chroma_vector_search_service import ChromaVectorSearchService
 from app.services.embedding_factory import create_embedding_service
@@ -251,6 +252,7 @@ class BotFactory:
             telegram_client=telegram_client,
         )
         adaptive_timeout_service = BotFactory._create_adaptive_timeout_service(cfg=cfg, db=db)
+        batch_session_repo = create_batch_session_repository(db)
 
         # Create message handler (will be wired with URL processor entrypoint by TelegramBot)
         message_handler = MessageHandler(
@@ -266,6 +268,10 @@ class BotFactory:
             attachment_processor=attachment_processor,
             verbosity_resolver=verbosity_resolver,
             adaptive_timeout_service=adaptive_timeout_service,
+            llm_client=clients.llm_client,
+            batch_session_repo=batch_session_repo,
+            batch_config=cfg.batch_analysis,
+            file_validator=SecureFileValidator(max_file_size=10 * 1024 * 1024),
         )
 
         return BotComponents(

@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.adapters.telegram.message_router_helpers import process_url_batch
 from app.core.url_utils import extract_domain
 
 logger = logging.getLogger(__name__)
@@ -89,7 +88,25 @@ class URLBatchPolicyService:
 
         valid_urls: list[str] = []
         for url in urls:
-            is_valid, error_msg = response_formatter._validate_url(url)
+            is_valid, error_msg = True, None
+            validator = getattr(response_formatter, "validator", None)
+            validate_url = getattr(validator, "validate_url", None)
+            fallback_validate_url = getattr(response_formatter, "_validate_url", None)
+            result: Any = None
+            if callable(validate_url):
+                try:
+                    result = validate_url(url)
+                except Exception:
+                    result = None
+            if not (
+                isinstance(result, tuple) and len(result) == 2 and isinstance(result[0], bool)
+            ) and callable(fallback_validate_url):
+                try:
+                    result = fallback_validate_url(url)
+                except Exception:
+                    result = None
+            if isinstance(result, tuple) and len(result) == 2 and isinstance(result[0], bool):
+                is_valid, error_msg = result
             if is_valid:
                 valid_urls.append(url)
             else:
@@ -107,48 +124,3 @@ class URLBatchPolicyService:
             )
 
         return valid_urls
-
-    async def process_multiple_urls_parallel(
-        self,
-        *,
-        message: Any,
-        urls: list[str],
-        uid: int,
-        correlation_id: str,
-        url_processor: Any,
-        response_formatter: Any,
-        request_repo: Any,
-        user_repo: Any,
-        adaptive_timeout_service: Any | None,
-        llm_client: Any | None,
-        batch_session_repo: Any | None,
-        batch_config: Any | None,
-        initial_message_id: int | None = None,
-    ) -> None:
-        """Run batch URL processing with controlled concurrency and retries."""
-        max_concurrent = max(2, min(self.max_concurrent, len(urls)))
-
-        async def _compute_timeout(url: str, attempt: int) -> float:
-            return await self.compute_timeout(
-                url=url,
-                attempt=attempt,
-                adaptive_timeout_service=adaptive_timeout_service,
-            )
-
-        await process_url_batch(
-            message=message,
-            urls=urls,
-            uid=uid,
-            correlation_id=correlation_id,
-            url_processor=url_processor,
-            response_formatter=response_formatter,
-            request_repo=request_repo,
-            user_repo=user_repo,
-            max_concurrent=max_concurrent,
-            max_retries=self.max_retries,
-            compute_timeout_func=_compute_timeout,
-            initial_message_id=initial_message_id,
-            llm_client=llm_client,
-            batch_session_repo=batch_session_repo,
-            batch_config=batch_config,
-        )

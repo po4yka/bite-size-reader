@@ -9,10 +9,6 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.llm_response_workflow import ConcurrencyTimeoutError
-from app.adapters.telegram.message_router_helpers import (
-    is_duplicate_message,
-    should_notify_rate_limit,
-)
 from app.core.logging_utils import generate_correlation_id
 from app.core.ui_strings import t
 from app.core.url_utils import extract_all_urls, looks_like_url
@@ -29,6 +25,8 @@ class MessageRouterEntrypointMixin:
     """Top-level message handling flow for MessageRouter."""
 
     _MAX_TEXT_LENGTH = 50 * 1024
+    _recent_message_ids: dict[tuple[int, int, int], tuple[float, str]]
+    _recent_message_ttl: int
 
     async def route_message(self, message: Any) -> None:
         """Main message routing entry point."""
@@ -226,7 +224,7 @@ class MessageRouterEntrypointMixin:
 
         message_key = (uid, chat_id or 0, message_id) if message_id is not None else None
         text_signature = text.strip() if isinstance(text, str) else ""
-        if message_key and is_duplicate_message(self, message_key, text_signature):
+        if message_key and self._is_duplicate_message(message_key, text_signature):
             logger.info(
                 "duplicate_message_skipped",
                 extra={"uid": uid, "chat_id": chat_id, "message_id": message_id},
@@ -331,7 +329,7 @@ class MessageRouterEntrypointMixin:
             "rate_limit_rejected",
             extra={"uid": uid, "interaction_type": interaction_type, "cid": correlation_id},
         )
-        if error_msg and should_notify_rate_limit(self, uid):
+        if error_msg and self._should_notify_rate_limit(uid):
             await self.response_formatter.safe_reply(message, error_msg)
         if interaction_id:
             await async_safe_update_user_interaction(
@@ -370,6 +368,29 @@ class MessageRouterEntrypointMixin:
                 start_time=start_time,
                 logger_=logger,
             )
+
+    def _is_duplicate_message(
+        self,
+        message_key: tuple[int, int, int],
+        text_signature: str,
+    ) -> bool:
+        now = time.time()
+        last_seen = self._recent_message_ids.get(message_key)
+        if (
+            last_seen is not None
+            and now - last_seen[0] < self._recent_message_ttl
+            and last_seen[1] == text_signature
+        ):
+            return True
+        self._recent_message_ids[message_key] = (now, text_signature)
+        if len(self._recent_message_ids) > 2000:
+            cutoff = now - self._recent_message_ttl
+            self._recent_message_ids = {
+                key: (ts, signature)
+                for key, (ts, signature) in self._recent_message_ids.items()
+                if ts >= cutoff
+            }
+        return False
 
     async def _route_message_content_with_tracking(
         self,

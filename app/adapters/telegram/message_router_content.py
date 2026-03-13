@@ -9,10 +9,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-from app.adapters.telegram.message_router_helpers import (
-    handle_document_file,
-    is_txt_file_with_urls,
-)
 from app.core.ui_strings import t
 from app.core.url_utils import looks_like_url
 from app.db.user_interactions import async_safe_update_user_interaction
@@ -141,8 +137,13 @@ class MessageRouterContentMixin:
             )
             return
 
-        if is_txt_file_with_urls(message):
-            await handle_document_file(self, message, correlation_id, interaction_id, start_time)
+        if self.url_handler.can_handle_document(message):
+            await self.url_handler.handle_document_file(
+                message,
+                correlation_id,
+                interaction_id,
+                start_time,
+            )
             return
 
         if self.attachment_processor and self._should_handle_attachment(message):

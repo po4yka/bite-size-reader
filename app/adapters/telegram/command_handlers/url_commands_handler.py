@@ -88,7 +88,7 @@ class URLCommandsHandlerImpl:
         if len(urls) > 1:
             # Multiple URLs - process directly in parallel (no confirmation prompt)
             if self._url_handler is not None:
-                valid_urls = await self._url_handler._apply_url_security_checks(
+                valid_urls = await self._url_handler.apply_url_security_checks(
                     ctx.message, urls, ctx.uid, ctx.correlation_id
                 )
                 if valid_urls:
@@ -107,11 +107,13 @@ class URLCommandsHandlerImpl:
                         progress_id = await self._formatter.safe_reply_with_id(
                             ctx.message, f"Processing {len(valid_urls)} links in parallel..."
                         )
-                    await self._url_handler._process_multiple_urls_parallel(
+                    await self._url_handler.process_url_batch(
                         ctx.message,
                         valid_urls,
                         ctx.uid,
                         ctx.correlation_id,
+                        interaction_id=ctx.interaction_id,
+                        start_time=ctx.start_time,
                         initial_message_id=progress_id,
                     )
             else:
@@ -123,16 +125,6 @@ class URLCommandsHandlerImpl:
                     )
 
             logger.debug("multi_url_processed", extra={"uid": ctx.uid, "count": len(urls)})
-
-            if ctx.interaction_id:
-                await async_safe_update_user_interaction(
-                    ctx.user_repo,
-                    interaction_id=ctx.interaction_id,
-                    response_sent=True,
-                    response_type="multi_url_direct",
-                    start_time=ctx.start_time,
-                    logger_=logger,
-                )
             return None, False
 
         if len(urls) == 1:
@@ -205,23 +197,15 @@ class URLCommandsHandlerImpl:
                 ctx.message, f"🚀 Preparing to process {len(urls)} links..."
             )
 
-        if ctx.interaction_id:
-            await async_safe_update_user_interaction(
-                ctx.user_repo,
-                interaction_id=ctx.interaction_id,
-                response_sent=True,
-                response_type="processing",
-                start_time=ctx.start_time,
-                logger_=logger,
-            )
-
         # Use unified batch processor if url_handler is available, otherwise sequential
         if self._url_handler is not None:
-            await self._url_handler._process_multiple_urls_parallel(
+            await self._url_handler.process_url_batch(
                 ctx.message,
                 urls,
                 ctx.uid,
                 ctx.correlation_id,
+                interaction_id=ctx.interaction_id,
+                start_time=ctx.start_time,
                 initial_message_id=progress_message_id,
             )
         else:

@@ -78,3 +78,18 @@ class MessageRouterRateLimiterMixin:
             del self._recent_message_ids[key]
 
         return cleaned
+
+    def _should_notify_rate_limit(self, uid: int) -> bool:
+        now = time.time()
+        deadline = self._rate_limit_notified_until.get(uid, 0.0)
+        if now >= deadline:
+            self._rate_limit_notified_until[uid] = now + self._rate_limit_notice_window
+            return True
+        logger.debug(
+            "rate_limit_notice_suppressed",
+            extra={
+                "uid": uid,
+                "remaining_suppression": max(0.0, deadline - now),
+            },
+        )
+        return False

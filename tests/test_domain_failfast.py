@@ -151,7 +151,7 @@ async def test_concurrent_same_domain_cancel_on_timeout():
     msg = _make_message()
     wall_start = time.monotonic()
 
-    await handler._process_multiple_urls_parallel(msg, urls, uid=1, correlation_id="test-cid")
+    await handler.process_url_batch(msg, urls, uid=1, correlation_id="test-cid")
 
     wall_elapsed = time.monotonic() - wall_start
 
@@ -196,7 +196,7 @@ async def test_mixed_domains_only_cancel_affected():
     )
     msg = _make_message()
 
-    await handler._process_multiple_urls_parallel(msg, urls, uid=1, correlation_id="test-cid")
+    await handler.process_url_batch(msg, urls, uid=1, correlation_id="test-cid")
 
     # Check the completion message for partial success
     calls = handler.response_formatter.safe_reply.call_args_list
@@ -236,7 +236,7 @@ async def test_event_already_set_skips_immediately():
     msg = _make_message()
     wall_start = time.monotonic()
 
-    await handler._process_multiple_urls_parallel(msg, urls, uid=1, correlation_id="test-cid")
+    await handler.process_url_batch(msg, urls, uid=1, correlation_id="test-cid")
 
     wall_elapsed = time.monotonic() - wall_start
 

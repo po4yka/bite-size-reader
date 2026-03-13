@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -11,11 +12,20 @@ from app.adapters.repository_ports import (
     create_request_repository,
     create_user_repository,
 )
+from app.adapters.telegram.batch_relationship_analysis_service import (
+    BatchRelationshipAnalysisService,
+)
 from app.adapters.telegram.url_batch_policy_service import URLBatchPolicyService
+from app.adapters.telegram.url_batch_processor import (
+    BatchProcessingResult,
+    BatchProcessRequest,
+    URLBatchProcessor,
+)
 from app.adapters.telegram.url_state_store import URLAwaitingStateStore
-from app.core.url_utils import extract_all_urls
+from app.core.async_utils import raise_if_cancelled
+from app.core.url_utils import extract_all_urls, normalize_url
 from app.core.verbosity import VerbosityLevel
-from app.db.user_interactions import async_safe_update_user_interaction
+from app.security.file_validation import FileValidationError, SecureFileValidator
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -44,6 +54,9 @@ class URLHandler:
         request_repo: RequestRepositoryPort | None = None,
         batch_policy: URLBatchPolicyService | None = None,
         awaiting_state: URLAwaitingStateStore | None = None,
+        file_validator: SecureFileValidator | None = None,
+        batch_processor: URLBatchProcessor | None = None,
+        relationship_analysis_service: BatchRelationshipAnalysisService | None = None,
     ) -> None:
         self.db = db
         self.user_repo = user_repo or create_user_repository(db)
@@ -52,13 +65,26 @@ class URLHandler:
         self.url_processor = url_processor
         self._adaptive_timeout = adaptive_timeout_service
         self.verbosity_resolver = verbosity_resolver
-
-        self._llm_client = llm_client
-        self._batch_session_repo = batch_session_repo
-        self._batch_config = batch_config
-
+        self._file_validator = file_validator or SecureFileValidator()
         self._batch_policy = batch_policy or URLBatchPolicyService()
         self._awaiting_state = awaiting_state or URLAwaitingStateStore(ttl_sec=120)
+        self._relationship_analysis_service = (
+            relationship_analysis_service
+            or BatchRelationshipAnalysisService(
+                summary_repo=getattr(url_processor, "summary_repo", None),
+                batch_session_repo=batch_session_repo,
+                llm_client=llm_client,
+                batch_config=batch_config,
+                response_formatter=response_formatter,
+            )
+        )
+        self._batch_processor = batch_processor or URLBatchProcessor(
+            url_processor=self.url_processor,
+            response_formatter=self.response_formatter,
+            request_repo=self.request_repo,
+            user_repo=self.user_repo,
+            relationship_analysis_service=self._relationship_analysis_service,
+        )
 
         # Backward-compatible attribute for tests/introspection.
         self._awaiting_url_users = self._awaiting_state.raw_state
@@ -71,10 +97,14 @@ class URLHandler:
             adaptive_timeout_service=self._adaptive_timeout,
         )
 
-    async def _apply_url_security_checks(
-        self, message: Any, urls: list[str], uid: int, correlation_id: str
+    async def apply_url_security_checks(
+        self,
+        message: Any,
+        urls: list[str],
+        uid: int,
+        correlation_id: str,
     ) -> list[str]:
-        """Compatibility wrapper around URL security policy."""
+        """Validate a URL list using the shared batch policy."""
         return await self._batch_policy.apply_security_checks(
             message=message,
             urls=urls,
@@ -83,29 +113,32 @@ class URLHandler:
             response_formatter=self.response_formatter,
         )
 
-    async def _process_multiple_urls_parallel(
+    async def process_url_batch(
         self,
         message: Any,
         urls: list[str],
         uid: int,
         correlation_id: str,
+        *,
+        interaction_id: int | None = None,
+        start_time: float | None = None,
         initial_message_id: int | None = None,
-    ) -> None:
-        """Compatibility wrapper around URL batch execution policy."""
-        await self._batch_policy.process_multiple_urls_parallel(
-            message=message,
-            urls=urls,
-            uid=uid,
-            correlation_id=correlation_id,
-            url_processor=self.url_processor,
-            response_formatter=self.response_formatter,
-            request_repo=self.request_repo,
-            user_repo=self.user_repo,
-            adaptive_timeout_service=self._adaptive_timeout,
-            llm_client=self._llm_client,
-            batch_session_repo=self._batch_session_repo,
-            batch_config=self._batch_config,
-            initial_message_id=initial_message_id,
+    ) -> BatchProcessingResult | None:
+        """Process a URL batch through the dedicated batch processor."""
+        max_concurrent = max(2, min(self._batch_policy.max_concurrent, len(urls)))
+        return await self._batch_processor.process(
+            BatchProcessRequest(
+                message=message,
+                urls=urls,
+                uid=uid,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                start_time=start_time,
+                initial_message_id=initial_message_id,
+                max_concurrent=max_concurrent,
+                max_retries=self._batch_policy.max_retries,
+                compute_timeout=self._compute_url_timeout,
+            )
         )
 
     async def add_awaiting_user(self, uid: int) -> None:
@@ -130,11 +163,10 @@ class URLHandler:
         start_time: float,
     ) -> None:
         """Handle URL sent after /summarize command."""
-        _ = start_time
         urls = extract_all_urls(text)
         await self._awaiting_state.consume(uid)
 
-        urls = await self._apply_url_security_checks(message, urls, uid, correlation_id)
+        urls = await self.apply_url_security_checks(message, urls, uid, correlation_id)
         if not urls:
             return
 
@@ -144,11 +176,13 @@ class URLHandler:
                 urls_count=len(urls),
                 text_template="🚀 Preparing to process {count} links...",
             )
-            await self._process_multiple_urls_parallel(
+            await self.process_url_batch(
                 message,
                 urls,
                 uid,
                 correlation_id,
+                interaction_id=interaction_id,
+                start_time=start_time,
                 initial_message_id=progress_message_id,
             )
             return
@@ -171,7 +205,7 @@ class URLHandler:
     ) -> None:
         """Handle direct URL message with security validation."""
         urls = extract_all_urls(text)
-        urls = await self._apply_url_security_checks(message, urls, uid, correlation_id)
+        urls = await self.apply_url_security_checks(message, urls, uid, correlation_id)
         if not urls:
             return
 
@@ -181,22 +215,15 @@ class URLHandler:
                 urls_count=len(urls),
                 text_template="Processing {count} links in parallel...",
             )
-            await self._process_multiple_urls_parallel(
+            await self.process_url_batch(
                 message,
                 urls,
                 uid,
                 correlation_id,
+                interaction_id=interaction_id,
+                start_time=start_time,
                 initial_message_id=progress_message_id,
             )
-            if interaction_id:
-                await async_safe_update_user_interaction(
-                    self.user_repo,
-                    interaction_id=interaction_id,
-                    response_sent=True,
-                    response_type="processing",
-                    start_time=start_time,
-                    logger_=logger,
-                )
             return
 
         await self._process_single_url(
@@ -213,6 +240,115 @@ class URLHandler:
     async def cleanup_expired_state(self) -> int:
         """Remove expired awaiting entries. Returns count removed."""
         return await self._awaiting_state.cleanup_expired()
+
+    def can_handle_document(self, message: Any) -> bool:
+        """Return True when the message contains a supported .txt batch file."""
+        document = getattr(message, "document", None)
+        if not document or not hasattr(document, "file_name"):
+            return False
+        file_name = getattr(document, "file_name", "")
+        return isinstance(file_name, str) and file_name.lower().endswith(".txt")
+
+    async def handle_document_file(
+        self,
+        message: Any,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle .txt file processing (files containing URLs)."""
+        file_path: str | None = None
+        try:
+            file_path = await self._download_document_file(message)
+            if not file_path:
+                await self.response_formatter.send_error_notification(
+                    message,
+                    "unexpected_error",
+                    correlation_id,
+                    details="Failed to download the uploaded file from Telegram servers.",
+                )
+                return
+
+            try:
+                urls = self._parse_txt_file(file_path)
+            except FileValidationError as exc:
+                logger.error(
+                    "file_validation_failed",
+                    extra={"error": str(exc), "cid": correlation_id},
+                )
+                await self.response_formatter.safe_reply(
+                    message,
+                    f"❌ File validation failed: {exc!s}",
+                )
+                return
+
+            if not urls:
+                await self.response_formatter.send_error_notification(
+                    message,
+                    "no_urls_found",
+                    correlation_id,
+                    details="No valid links starting with http:// or https:// were detected in the file.",
+                )
+                return
+
+            uid = self._resolve_user_id(message)
+            valid_urls = await self.apply_url_security_checks(message, urls, uid, correlation_id)
+            if not valid_urls:
+                return
+
+            await self.response_formatter.safe_reply(
+                message,
+                f"📄 File accepted. Processing {len(valid_urls)} links.",
+            )
+            try:
+                initial_gap = max(
+                    0.12,
+                    (self.response_formatter.MIN_MESSAGE_INTERVAL_MS + 10) / 1000.0,
+                )
+                await asyncio.sleep(initial_gap)
+            except Exception as exc:
+                raise_if_cancelled(exc)
+
+            progress_message_id: int | None = None
+            if not self._is_draft_streaming_enabled():
+                progress_message_id = await self.response_formatter.safe_reply_with_id(
+                    message,
+                    f"🔄 Preparing to process {len(valid_urls)} links...",
+                )
+            logger.debug(
+                "document_file_processing_started",
+                extra={"url_count": len(valid_urls)},
+            )
+
+            await self.process_url_batch(
+                message,
+                valid_urls,
+                uid,
+                correlation_id,
+                interaction_id=interaction_id,
+                start_time=start_time,
+                initial_message_id=progress_message_id,
+            )
+
+            try:
+                min_gap_sec = max(
+                    0.6,
+                    (self.response_formatter.MIN_MESSAGE_INTERVAL_MS + 50) / 1000.0,
+                )
+                await asyncio.sleep(min_gap_sec)
+            except Exception as exc:
+                raise_if_cancelled(exc)
+        except Exception:
+            logger.exception("document_file_processing_error", extra={"cid": correlation_id})
+            await self.response_formatter.send_error_notification(
+                message,
+                "unexpected_error",
+                correlation_id,
+                details="An error occurred while parsing or downloading the uploaded file.",
+            )
+        finally:
+            if file_path:
+                await self._cleanup_downloaded_file(file_path, correlation_id)
 
     async def _process_single_url(
         self,
@@ -257,7 +393,8 @@ class URLHandler:
         )
 
     def _is_draft_streaming_enabled(self) -> bool:
-        checker = getattr(self.response_formatter.sender, "is_draft_streaming_enabled", None)
+        sender = getattr(self.response_formatter, "sender", self.response_formatter)
+        checker = getattr(sender, "is_draft_streaming_enabled", None)
         if not callable(checker):
             return False
 
@@ -267,3 +404,116 @@ class URLHandler:
             return False
 
         return enabled if isinstance(enabled, bool) else False
+
+    def _resolve_user_id(self, message: Any) -> int:
+        from_user = getattr(message, "from_user", None)
+        user_id = getattr(from_user, "id", 0)
+        return int(user_id) if isinstance(user_id, int) else 0
+
+    async def _download_document_file(self, message: Any) -> str | None:
+        try:
+            document = getattr(message, "document", None)
+            if not document:
+                return None
+            file_info = await message.download()
+            return str(file_info) if file_info else None
+        except Exception as exc:
+            logger.error("file_download_failed", extra={"error": str(exc)})
+            return None
+
+    def _parse_txt_file(self, file_path: str) -> list[str]:
+        lines = self._file_validator.safe_read_text_file(file_path)
+
+        urls: list[str] = []
+        skipped_count = 0
+        for line_num, line in enumerate(lines, 1):
+            line = line.strip()
+
+            if not line or line.startswith("#"):
+                continue
+
+            if line.startswith(("http://", "https://")):
+                if " " in line or "\t" in line:
+                    logger.warning(
+                        "suspicious_url_skipped",
+                        extra={
+                            "url_preview": line[:50],
+                            "reason": "contains whitespace",
+                            "line_num": line_num,
+                        },
+                    )
+                    skipped_count += 1
+                    continue
+
+                try:
+                    normalized = normalize_url(line)
+                    urls.append(normalized)
+                except ValueError as exc:
+                    logger.warning(
+                        "invalid_url_in_file",
+                        extra={
+                            "url_preview": line[:50],
+                            "error": str(exc),
+                            "line_num": line_num,
+                            "file_path": file_path,
+                        },
+                    )
+                    skipped_count += 1
+            elif line.startswith(("http", "www")):
+                logger.warning(
+                    "malformed_url_skipped",
+                    extra={
+                        "url_preview": line[:50],
+                        "reason": "invalid protocol",
+                        "line_num": line_num,
+                    },
+                )
+                skipped_count += 1
+
+        logger.info(
+            "file_parsed_successfully",
+            extra={
+                "file_path": file_path,
+                "urls_found": len(urls),
+                "urls_skipped": skipped_count,
+                "lines_read": len(lines),
+            },
+        )
+        return urls
+
+    async def _cleanup_downloaded_file(self, file_path: str, correlation_id: str) -> None:
+        cleanup_attempts = 0
+        max_cleanup_attempts = 3
+        while cleanup_attempts < max_cleanup_attempts:
+            try:
+                self._file_validator.cleanup_file(file_path)
+                return
+            except PermissionError as exc:
+                cleanup_attempts += 1
+                if cleanup_attempts >= max_cleanup_attempts:
+                    logger.error(
+                        "file_cleanup_permission_denied",
+                        extra={
+                            "error": str(exc),
+                            "file_path": file_path,
+                            "cid": correlation_id,
+                            "attempts": cleanup_attempts,
+                        },
+                    )
+                else:
+                    await asyncio.sleep(0.1 * cleanup_attempts)
+            except FileNotFoundError:
+                return
+            except Exception as exc:
+                cleanup_attempts += 1
+                logger.error(
+                    "file_cleanup_unexpected_error",
+                    extra={
+                        "error": str(exc),
+                        "file_path": file_path,
+                        "cid": correlation_id,
+                        "error_type": type(exc).__name__,
+                        "attempts": cleanup_attempts,
+                    },
+                )
+                return
