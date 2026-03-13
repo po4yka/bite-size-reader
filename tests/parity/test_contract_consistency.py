@@ -8,7 +8,7 @@ from app.api.models.requests import SubmitURLRequest
 from app.api.models.responses import SuccessResponse
 from app.core.summary_contract import validate_and_shape_summary
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.contracts
 
 
 async def _noop_handler(context: CommandContext) -> None:
