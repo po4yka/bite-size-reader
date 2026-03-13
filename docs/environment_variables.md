@@ -3,7 +3,7 @@
 Complete reference for all Bite-Size Reader configuration. Source of truth: `app/config/` (entrypoint `app/config/settings.py`).
 
 **Total Variables**: 250+
-**Last Updated**: 2026-02-28
+**Last Updated**: 2026-03-13
 
 ---
 
@@ -108,52 +108,6 @@ API_RATE_LIMIT_DEFAULT=100
 | `FIRECRAWL_API_KEY` | Firecrawl API key (optional -- only required for cloud Firecrawl or web search enrichment; defaults to empty) |
 | `OPENROUTER_API_KEY` | OpenRouter API key |
 
-## [OPTIONAL] Migration / Rust Contract Backend
-
-| Variable | Default | Description |
-| ---------- | --------- | ------------- |
-| `SUMMARY_CONTRACT_BACKEND` | `rust` | Summary contract backend (Rust required). Legacy values are ignored. |
-| `SUMMARY_CONTRACT_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-summary-contract` binary override |
-
-## [OPTIONAL] Migration / M3 Pipeline Runtime Bridge
-
-| Variable | Default | Description |
-| ---------- | --------- | ------------- |
-| `MIGRATION_SHADOW_MODE_ENABLED` | `true` | M3 pipeline backend (Rust required; disabled mode is decommissioned). |
-| `MIGRATION_SHADOW_MODE_TIMEOUT_MS` | `250` | Timeout per Rust pipeline bridge call (milliseconds) |
-| `MIGRATION_SHADOW_MODE_SAMPLE_RATE` | `0.0` | Deprecated legacy shadow option (ignored in authoritative mode) |
-| `MIGRATION_SHADOW_MODE_MAX_DIFFS` | `8` | Deprecated legacy shadow option (ignored in authoritative mode) |
-| `MIGRATION_SHADOW_MODE_EMIT_MATCH_LOGS` | `false` | Deprecated legacy shadow option (ignored in authoritative mode) |
-| `PIPELINE_SHADOW_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-pipeline-shadow` binary override |
-
-## [OPTIONAL] Migration / M4 Interface Router
-
-| Variable | Default | Description |
-| ---------- | --------- | ------------- |
-| `MIGRATION_INTERFACE_BACKEND` | `rust` | Interface routing backend (Rust required). Legacy `canary`/`python` modes are decommissioned. |
-| `MIGRATION_INTERFACE_SAMPLE_RATE` | `0.0` | Deprecated (ignored after fallback decommission). |
-| `MIGRATION_INTERFACE_TIMEOUT_MS` | `150` | Timeout per Rust interface router call (milliseconds) |
-| `MIGRATION_INTERFACE_EMIT_MATCH_LOGS` | `false` | Deprecated (ignored after fallback decommission). |
-| `MIGRATION_INTERFACE_MAX_DIFFS` | `8` | Deprecated (ignored after fallback decommission). |
-| `INTERFACE_ROUTER_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-interface-router` binary override |
-
-## [OPTIONAL] Migration / M6-S1 Telegram Runtime Route Decisions
-
-Telegram command-route execution is fixed to Rust. Legacy
-`MIGRATION_TELEGRAM_RUNTIME_BACKEND` inputs are ignored with a startup warning.
-
-| Variable | Default | Description |
-| ---------- | --------- | ------------- |
-| `MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS` | `150` | Timeout per Rust telegram runtime command-route call (milliseconds) |
-| `TELEGRAM_RUNTIME_RUST_BIN` | _(auto-discover)_ | Absolute path to `bsr-telegram-runtime` binary override |
-
-## [OPTIONAL] Migration / M5 Cutover Monitoring
-
-| Variable | Default | Description |
-| ---------- | --------- | ------------- |
-| `MIGRATION_CUTOVER_EVENTS_FILE` | `data/migration_cutover_events.jsonl` | JSONL file for standardized migration events (including Rust path failures) |
-| `MIGRATION_RELEASE_WINDOW_DAYS` | `14` | Release-window length used by `check_m5_cutover_window.py` |
-
 ## [OPTIONAL] LLM Provider Selection
 
 | Variable | Default | Description |
@@ -236,13 +190,16 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 | `SCRAPER_ENABLED` | `true` | Global master switch for article scraper chain |
 | `SCRAPER_PROFILE` | `balanced` | Scraper tuning profile: `fast`, `balanced`, `robust` |
 | `SCRAPER_BROWSER_ENABLED` | `true` | Master switch for browser-based providers (`playwright`, `crawlee`) |
-| `SCRAPER_FORCE_PROVIDER` | _(none)_ | Force single provider token (`scrapling`, `firecrawl`, `playwright`, `crawlee`, `direct_html`) |
+| `SCRAPER_FORCE_PROVIDER` | _(none)_ | Force single provider token (`scrapling`, `defuddle`, `firecrawl`, `playwright`, `crawlee`, `direct_html`) |
 | `SCRAPER_JS_HEAVY_HOSTS` | _(none)_ | CSV host list for JS-heavy heuristic overlays |
 | `SCRAPER_MIN_CONTENT_LENGTH` | `400` | Minimum extracted text length to accept content |
-| `SCRAPER_PROVIDER_ORDER` | `["scrapling", "firecrawl", "playwright", "crawlee", "direct_html"]` | Ordered list of scraping providers to try |
+| `SCRAPER_PROVIDER_ORDER` | `["scrapling", "defuddle", "firecrawl", "playwright", "crawlee", "direct_html"]` | Ordered list of scraping providers to try |
 | `SCRAPER_SCRAPLING_ENABLED` | `true` | Enable Scrapling in-process provider |
 | `SCRAPER_SCRAPLING_TIMEOUT_SEC` | `30` | Scrapling fetch timeout (seconds) |
 | `SCRAPER_SCRAPLING_STEALTH_FALLBACK` | `true` | Try stealth fetch if basic fetch returns thin content |
+| `SCRAPER_DEFUDDLE_ENABLED` | `true` | Enable Defuddle HTTP API provider (second in chain) |
+| `SCRAPER_DEFUDDLE_TIMEOUT_SEC` | `20` | Defuddle request timeout (seconds) |
+| `SCRAPER_DEFUDDLE_API_BASE_URL` | `https://defuddle.md` | Defuddle API base URL |
 | `FIRECRAWL_SELF_HOSTED_ENABLED` | `false` | Enable self-hosted Firecrawl provider |
 | `FIRECRAWL_SELF_HOSTED_URL` | `http://firecrawl:3002` | Self-hosted Firecrawl base URL |
 | `FIRECRAWL_SELF_HOSTED_API_KEY` | `fc-bsr-local` | Self-hosted Firecrawl API key |
@@ -267,6 +224,7 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 **Notes**:
 
 - Scrapling is a free, in-process scraper that requires no API key. It is tried first by default.
+- Defuddle is a free HTTP API for content extraction. It is tried second in the default chain, after Scrapling.
 - Self-hosted Firecrawl runs as a Docker Compose service (`bsr-firecrawl` on port 3002) and also requires no cloud API key.
 - Playwright fallback is useful for JS-heavy pages that fail in HTTP-only extractors.
 - Crawlee fallback is a single-page advanced fallback (BeautifulSoup stage, then Playwright stage); it is not broad multi-page site crawling in this pipeline.
@@ -382,6 +340,22 @@ Controls which embedding backend generates vectors for semantic search.
 - Switching providers changes embedding dimensions (local=384, Gemini=768 default). Re-embed all data after switching: `python -m app.cli.backfill_embeddings --force` then `python -m app.cli.backfill_chroma_store --force`.
 - `google-genai` package is an optional dependency (`pip install bite-size-reader[gemini]`). The app works without it when `EMBEDDING_PROVIDER=local`.
 - Gemini uses task-type-aware embeddings: `RETRIEVAL_DOCUMENT` for indexing, `RETRIEVAL_QUERY` for search queries.
+
+## [OPTIONAL] ElevenLabs Text-to-Speech (TTS)
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `ELEVENLABS_ENABLED` | `false` | Enable ElevenLabs TTS integration |
+| `ELEVENLABS_API_KEY` | _(empty)_ | ElevenLabs API key (required when enabled) |
+| `ELEVENLABS_VOICE_ID` | `21m00Tcm4TlvDq8ikWAM` | Voice ID (default: Rachel) |
+| `ELEVENLABS_MODEL` | `eleven_multilingual_v2` | TTS model ID |
+| `ELEVENLABS_OUTPUT_FORMAT` | `mp3_44100_128` | Audio output format |
+| `ELEVENLABS_STABILITY` | `0.5` | Voice stability (0.0-1.0) |
+| `ELEVENLABS_SIMILARITY_BOOST` | `0.75` | Voice similarity boost (0.0-1.0) |
+| `ELEVENLABS_SPEED` | `1.0` | Speech speed (0.5-2.0) |
+| `ELEVENLABS_TIMEOUT_SEC` | `60` | API request timeout (seconds) |
+| `ELEVENLABS_MAX_CHARS` | `5000` | Character limit per API request (chunking threshold) |
+| `ELEVENLABS_AUDIO_PATH` | `/data/audio` | Directory for cached audio files |
 
 ## MCP Server
 
@@ -527,19 +501,6 @@ Controls which embedding backend generates vectors for semantic search.
 | `SUMMARY_STREAMING_ENABLED` | `true` | Enable section-based summary streaming |
 | `SUMMARY_STREAMING_MODE` | `section` | Streaming mode (`section` or `disabled`) |
 | `SUMMARY_STREAMING_PROVIDER_SCOPE` | `openrouter` | Provider scope for token streaming (`openrouter`, `all`, `disabled`) |
-| `MIGRATION_SHADOW_MODE_ENABLED` | `true` | M3 pipeline backend (Rust required; disabled mode is decommissioned) |
-| `MIGRATION_SHADOW_MODE_SAMPLE_RATE` | `0.0` | Deprecated legacy shadow option (ignored in authoritative mode) |
-| `MIGRATION_SHADOW_MODE_TIMEOUT_MS` | `250` | Per-call Rust pipeline timeout (ms) |
-| `MIGRATION_SHADOW_MODE_MAX_DIFFS` | `8` | Deprecated legacy shadow option (ignored in authoritative mode) |
-| `MIGRATION_SHADOW_MODE_EMIT_MATCH_LOGS` | `false` | Deprecated legacy shadow option (ignored in authoritative mode) |
-| `MIGRATION_INTERFACE_BACKEND` | `rust` | M4 interface backend (Rust required; legacy fallback modes are decommissioned) |
-| `MIGRATION_INTERFACE_SAMPLE_RATE` | `0.0` | Deprecated (ignored after fallback decommission) |
-| `MIGRATION_INTERFACE_TIMEOUT_MS` | `150` | Per-call Rust interface timeout (ms) |
-| `MIGRATION_INTERFACE_EMIT_MATCH_LOGS` | `false` | Deprecated (ignored after fallback decommission) |
-| `MIGRATION_INTERFACE_MAX_DIFFS` | `8` | Deprecated (ignored after fallback decommission) |
-| `MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS` | `150` | Per-call Rust telegram runtime timeout (ms) |
-| `MIGRATION_CUTOVER_EVENTS_FILE` | `data/migration_cutover_events.jsonl` | JSONL sink for M5 migration events |
-| `MIGRATION_RELEASE_WINDOW_DAYS` | `14` | Release-window duration used by M5 fallback checker |
 | `TELEGRAM_REPLY_TIMEOUT_SEC` | `30.0` | Timeout for Telegram reply operations |
 
 ---
@@ -704,6 +665,6 @@ curl "$CHROMA_HOST/api/v2/heartbeat"
 
 ---
 
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-03-13
 
 **Found an error or have a question?** [Open an issue](https://github.com/po4yka/bite-size-reader/issues) or check [FAQ](FAQ.md).

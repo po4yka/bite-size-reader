@@ -2,8 +2,6 @@
 
 This guide explains how to prepare environments, configure secrets, and run the service locally and in production (Docker).
 
-> **Migration note:** production is Rust-first after M5 cutover, and Python fallbacks are decommissioned for migrated slices. Track migration state in [ROADMAP.md](../ROADMAP.md) and use [how-to/migrate-versions.md](how-to/migrate-versions.md) for runtime-track changes and rollback procedures.
-
 ## Prerequisites
 
 - Python 3.13+
@@ -11,7 +9,6 @@ This guide explains how to prepare environments, configure secrets, and run the 
 - OpenRouter API key
 - Firecrawl API key (optional -- Scrapling and self-hosted Firecrawl are free alternatives)
 - Docker (for containerized deployment)
-- Rust toolchain (optional; needed for local Rust binary builds and migration parity suites)
 - Node.js 20+ (optional; needed for local `web/` frontend development)
 - (Optional) Redis for API rate limits/sync locks
 

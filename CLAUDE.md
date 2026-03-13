@@ -41,6 +41,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - apscheduler (background task scheduling)
 - weasyprint (PDF export)
 - mcp (Model Context Protocol server)
+- ElevenLabs API (optional: text-to-speech audio generation)
 
 ## Architecture Overview
 
@@ -75,10 +76,12 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 - **LLM Abstraction** (`app/adapters/llm/`) -- Provider-agnostic LLM interface (OpenRouter, OpenAI, Anthropic)
 - **External Services** (`app/adapters/openrouter/`, `app/adapters/external/`) -- OpenRouter client, Firecrawl parser, response formatting
 - **Karakeep Integration** (`app/adapters/karakeep/`) -- Bookmark sync from self-hosted Karakeep
-- **Digest Subsystem** (`app/adapters/telegram/command_handlers/digest*.py`, `app/adapters/telegram/digest/`) -- Channel digest with userbot, scheduler, and bot-mediated session init via Mini App
+- **ElevenLabs TTS** (`app/adapters/elevenlabs/`) -- Text-to-speech audio generation via ElevenLabs API
+- **Attachment Processing** (`app/adapters/attachment/`) -- Attachment handling and processing
+- **Digest** (`app/adapters/digest/`, `app/adapters/telegram/command_handlers/digest*.py`) -- Channel digest orchestration with userbot, scheduler, and bot-mediated session init via Mini App
 - **Application Layer** (`app/application/`) -- DTOs (`dto/`) and use cases (`use_cases/`) for orchestrating domain logic
 - **Core Utilities** (`app/core/`) -- URL normalization, JSON parsing/repair, summary contract validation, language detection, structured logging
-- **Database** (`app/db/`) -- SQLite schema, Peewee ORM models (21 model classes), migrations
+- **Database** (`app/db/`) -- SQLite schema, Peewee ORM models (31 model classes), migrations
 - **CLI Tools** (`app/cli/`) -- Summary runner, search, migrations, MCP server, embedding backfill, Chroma backfill, search comparison, performance indexes
 - **Mobile API** (`app/api/`) -- FastAPI REST API with JWT auth, sync, background processing
 - **Web Frontend** (`web/`) -- Carbon web interface (library/article/search/submit/collections/digest/preferences), hybrid auth (Telegram WebApp + JWT), React Query data layer
@@ -95,18 +98,22 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 ```
 app/
 +-- adapters/           # External service integrations
+|   +-- attachment/     # Attachment handling and processing
 |   +-- content/        # URL processing pipeline
 |   |   +-- scraper/    # Multi-provider scraper chain (protocol, chain, factory, providers)
+|   +-- digest/         # Channel digest orchestration
+|   +-- elevenlabs/     # ElevenLabs TTS integration
 |   +-- external/       # Firecrawl parser, response formatter
 |   +-- karakeep/       # Karakeep bookmark sync
 |   +-- llm/            # Provider-agnostic LLM abstraction
 |   +-- openrouter/     # OpenRouter client and helpers
 |   +-- telegram/       # Telegram bot logic, command_handlers/
+|   +-- twitter/        # Twitter/X content extraction
 |   +-- youtube/        # YouTube video download and transcript extraction
 +-- agents/             # Multi-agent system (extraction, summarization, validation, web search)
 +-- api/                # Mobile API (FastAPI, JWT auth, sync)
 |   +-- models/         # Pydantic request/response models
-|   +-- routers/        # Route handlers (auth, summaries, sync, collections, health, system)
+|   +-- routers/        # Route handlers (auth, summaries, sync, collections, health, system, tts, search, requests, digest, user)
 |   +-- services/       # API business logic
 +-- application/        # Application layer (DDD)
 |   +-- dto/            # Data transfer objects
@@ -139,9 +146,9 @@ web/                    # Carbon web interface (React + TypeScript + Vite)
 
 ## Database Models
 
-24 Peewee model classes in `app/db/models.py`:
+31 Peewee model classes in `app/db/models.py`:
 
-`BaseModel`, `User`, `ClientSecret`, `Chat`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `TopicSearchIndex` (FTS5), `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `Collection`, `UserDevice`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`, `RefreshToken`, `KarakeepSync`, `Channel`, `ChannelSubscription`, `DigestDelivery`
+`BaseModel`, `User`, `ClientSecret`, `Chat`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `TopicSearchIndex` (FTS5), `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `AudioGeneration`, `AttachmentProcessing`, `Collection`, `UserDevice`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`, `RefreshToken`, `KarakeepSync`, `BatchSession`, `BatchSessionItem`, `Channel`, `ChannelCategory`, `ChannelSubscription`, `ChannelPost`, `ChannelPostAnalysis`, `DigestDelivery`, `UserDigestPreference`
 
 ## Summary JSON Contract
 
@@ -435,13 +442,17 @@ GEMINI_API_KEY=                        # Required when provider=gemini
 GEMINI_EMBEDDING_MODEL=gemini-embedding-2-preview  # Model ID
 GEMINI_EMBEDDING_DIMENSIONS=768       # Output dimensions (1-3072)
 EMBEDDING_MAX_TOKEN_LENGTH=512        # Max tokens for text preparation
+
+# ElevenLabs TTS (optional)
+ELEVENLABS_ENABLED=false              # Enable text-to-speech
+ELEVENLABS_API_KEY=                   # ElevenLabs API key
 ```
 
 Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-03-12
+**Last Updated:** 2026-03-13
 
 For questions about the codebase, always refer to:
 

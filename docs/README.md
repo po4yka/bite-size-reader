@@ -6,7 +6,7 @@ Welcome to the Bite-Size Reader documentation. This guide helps you find the rig
 
 ## Documentation freshness
 
-- Last documentation refresh: **2026-03-07**
+- Last documentation refresh: **2026-03-13**
 - This refresh aligns docs with:
   - Carbon web interface architecture in `web/` (routing, auth modes, deploy/static namespaces)
   - Web static check workflow (`npm run check:static`) and CI jobs (`web-build`, `web-test`, `web-static-check`)
@@ -66,26 +66,6 @@ You want to deploy, monitor, and maintain Bite-Size Reader in production.
 - [How to backup and restore](how-to/backup-and-restore.md)
 - [How to optimize performance](how-to/optimize-performance.md)
 
-
-### 🦀 Python → Rust Migration
-
-You want to track or contribute to the migration from Python to Rust.
-
-**Start here**:
-
-1. [Project Roadmap](../ROADMAP.md) - Official migration phases and milestones
-2. [How to migrate versions](how-to/migrate-versions.md) - Operator runbook for runtime-track selection and rollback
-3. [SPEC.md](SPEC.md) - Source-of-truth contracts that must stay stable through migration
-4. [M0-M1 Implementation Notes](migration/m0-m1.md) - Implemented parity/baseline and Rust foundation artifacts
-5. [M2 Implementation Notes](migration/m2.md) - Rust contract layer, fixture parity, and SQLite compatibility artifacts
-6. [M3 Implementation Notes](migration/m3.md) - Pipeline runtime bridge with Rust-authoritative execution and parity path
-7. [M4 Implementation Notes](migration/m4.md) - Mobile API + Telegram interface routing migration and decommission notes
-8. [M5 Implementation Notes](migration/m5.md) - Rust-first cutover defaults and fallback decommission for migrated slices
-9. [M6 Implementation Status](../ROADMAP.md#post-m5-first-implementation-slice-m6-s1-scaffold-implemented) -
-   Telegram runtime command-route slices (S1-S134) and hardening chronology
-10. [Runtime Inventory Matrix](migration/runtime-inventory-matrix.md) - Current Python/Rust ownership map for remaining runtime surfaces
-11. [Baseline Metrics Guide](migration/baseline-metrics.md) - How to capture and compare Python baseline runs
-
 ### 🤝 I'm a Contributor
 
 You want to submit pull requests or improve the project.
@@ -128,7 +108,6 @@ You want to integrate Bite-Size Reader with other tools or build a client.
 
 **I want to...**
 
-- **Track Python → Rust migration status** → [ROADMAP.md](../ROADMAP.md)
 - **Get my first summary in 5 minutes** → [Quickstart Tutorial](tutorials/quickstart.md)
 - **Install on my server** → [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Understand what this project does** → [README.md](../README.md) (project root)
@@ -354,6 +333,6 @@ Found a typo? Documentation unclear? Want to add a tutorial?
 
 ---
 
-**Last Updated**: 2026-03-07
+**Last Updated**: 2026-03-13
 
 **Questions?** Check [FAQ](FAQ.md) or open an [issue](https://github.com/po4yka/bite-size-reader/issues).
