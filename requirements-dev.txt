@@ -268,7 +268,7 @@ pillow==12.1.1
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-platformdirs==4.9.2
+platformdirs==4.9.4
     # via virtualenv
 playwright==1.58.0
     # via
@@ -312,7 +312,7 @@ pydantic==2.12.5
     #   spacy
     #   thinc
     #   weasel
-pydantic-core==2.41.5
+pydantic-core==2.42.0
     # via
     #   -c .requirements-all.tmp.txt
     #   pydantic
@@ -410,7 +410,7 @@ ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-ruff==0.15.4
+ruff==0.15.6
     # via bite-size-reader (pyproject.toml)
 scrapling==0.4.2
     # via
