@@ -6,6 +6,7 @@ import unittest
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from app.adapters.content.summarization_models import InteractiveSummaryResult
 from app.adapters.content.url_processor import URLProcessor
 
 # Shared patch targets for module-level helpers
@@ -26,7 +27,7 @@ def _make_processor(
     *,
     content_extractor: Any = None,
     content_chunker: Any = None,
-    llm_summarizer: Any = None,
+    interactive_summary_service: Any = None,
     response_formatter: Any = None,
     summary_repo: Any = None,
     message_persistence: Any = None,
@@ -68,19 +69,27 @@ def _make_processor(
         content_chunker.should_chunk_content = MagicMock(return_value=(False, 10000, None))
     proc.content_chunker = content_chunker
 
-    # LLM summarizer
-    if llm_summarizer is None:
-        llm_summarizer = AsyncMock()
-        llm_summarizer.summarize_content = AsyncMock(
-            return_value={"summary_250": "Test summary", "tldr": "Test tldr"}
+    # Interactive summary service
+    if interactive_summary_service is None:
+        interactive_summary_service = AsyncMock()
+        interactive_summary_service.summarize = AsyncMock(
+            return_value=InteractiveSummaryResult(
+                summary={"summary_250": "Test summary", "tldr": "Test tldr"},
+                llm_result=MagicMock(
+                    status="ok",
+                    latency_ms=100,
+                    model="test-model",
+                    cost_usd=0.01,
+                ),
+                served_from_cache=False,
+                model_used="test-model",
+            )
         )
-        llm_summarizer.last_llm_result = MagicMock(
-            status="ok",
-            latency_ms=100,
-            model="test-model",
-            cost_usd=0.01,
-        )
-    proc.llm_summarizer = llm_summarizer
+    proc.interactive_summary_service = interactive_summary_service
+    proc.article_generator = AsyncMock()
+    proc.insights_generator = AsyncMock()
+    proc.semantic_helper = AsyncMock()
+    proc.summarization_runtime = MagicMock()
 
     # Response formatter
     if response_formatter is None:
@@ -177,9 +186,15 @@ class TestBatchModeSuppressesNotifications(unittest.IsolatedAsyncioTestCase):
     async def test_batch_mode_skips_error_notification_on_summarization_failure(self) -> None:
         formatter = AsyncMock()
         summarizer = AsyncMock()
-        summarizer.summarize_content = AsyncMock(return_value=None)
-        summarizer.last_llm_result = None
-        proc = _make_processor(response_formatter=formatter, llm_summarizer=summarizer)
+        summarizer.summarize = AsyncMock(
+            return_value=InteractiveSummaryResult(
+                summary=None,
+                llm_result=None,
+                served_from_cache=False,
+                model_used=None,
+            )
+        )
+        proc = _make_processor(response_formatter=formatter, interactive_summary_service=summarizer)
 
         with patch(_PATCH_LANG, return_value="en"), patch(_PATCH_PROMPT, return_value="prompt"):
             result = await proc.handle_url_flow(
@@ -290,9 +305,15 @@ class TestNonBatchModeBackwardCompat(unittest.IsolatedAsyncioTestCase):
     async def test_default_mode_sends_error_notification_on_failure(self) -> None:
         formatter = AsyncMock()
         summarizer = AsyncMock()
-        summarizer.summarize_content = AsyncMock(return_value=None)
-        summarizer.last_llm_result = None
-        proc = _make_processor(response_formatter=formatter, llm_summarizer=summarizer)
+        summarizer.summarize = AsyncMock(
+            return_value=InteractiveSummaryResult(
+                summary=None,
+                llm_result=None,
+                served_from_cache=False,
+                model_used=None,
+            )
+        )
+        proc = _make_processor(response_formatter=formatter, interactive_summary_service=summarizer)
 
         with patch(_PATCH_LANG, return_value="en"), patch(_PATCH_PROMPT, return_value="prompt"):
             result = await proc.handle_url_flow(

@@ -272,12 +272,14 @@ class TelegramBot:
             if chunker is not None:
                 chunker.openrouter = llm_client
 
-            summarizer = getattr(self.url_processor, "llm_summarizer", None)
-            if summarizer is not None:
-                summarizer.openrouter = llm_client
-                workflow = getattr(summarizer, "_workflow", None)
-                if workflow is not None:
-                    workflow.openrouter = llm_client
+            runtime = getattr(self.url_processor, "summarization_runtime", None)
+            if runtime is not None:
+                runtime.openrouter = llm_client
+                runtime.workflow.openrouter = llm_client
+                runtime.search_enricher._openrouter = llm_client
+                runtime.insights_generator._openrouter = llm_client
+                runtime.metadata_helper._openrouter = llm_client
+                runtime.article_generator._openrouter = llm_client
 
         if hasattr(self, "forward_processor"):
             forward_summarizer = getattr(self.forward_processor, "summarizer", None)

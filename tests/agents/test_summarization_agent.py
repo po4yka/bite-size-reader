@@ -13,11 +13,11 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.correlation_id = "summarization-test-123"
-        self.mock_llm_summarizer = MagicMock()
+        self.mock_pure_summary_service = MagicMock()
         self.mock_validator = MagicMock()
 
         self.agent = SummarizationAgent(
-            llm_summarizer=self.mock_llm_summarizer,
+            pure_summary_service=self.mock_pure_summary_service,
             validator_agent=self.mock_validator,
             correlation_id=self.correlation_id,
         )
@@ -45,7 +45,7 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
     async def test_successful_summarization_first_attempt(self):
         """Test successful summarization on the first attempt."""
         # Mock LLM to return valid summary
-        self.mock_llm_summarizer.summarize_content_pure = AsyncMock(return_value=self.valid_summary)
+        self.mock_pure_summary_service.summarize = AsyncMock(return_value=self.valid_summary)
 
         # Mock validator to pass
         validation_result = AgentResult.success_result({"summary_json": self.valid_summary})
@@ -67,7 +67,7 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result.output.corrections_applied), 0)
 
         # Verify LLM was called once
-        self.mock_llm_summarizer.summarize_content_pure.assert_called_once()
+        self.mock_pure_summary_service.summarize.assert_called_once()
 
         # Verify validator was called once
         self.mock_validator.execute.assert_called_once()
@@ -81,7 +81,7 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
         # Second attempt: valid summary
         valid_summary = self.valid_summary.copy()
 
-        self.mock_llm_summarizer.summarize_content_pure = AsyncMock(
+        self.mock_pure_summary_service.summarize = AsyncMock(
             side_effect=[invalid_summary, valid_summary]
         )
 
@@ -107,17 +107,17 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
         self.assertIn("summary_250 exceeds limit", result.output.corrections_applied[0])
 
         # Verify LLM was called twice
-        self.assertEqual(self.mock_llm_summarizer.summarize_content_pure.call_count, 2)
+        self.assertEqual(self.mock_pure_summary_service.summarize.call_count, 2)
 
         # Verify second call included feedback
-        second_call_args = self.mock_llm_summarizer.summarize_content_pure.call_args_list[1]
-        self.assertIsNotNone(second_call_args[1].get("feedback_instructions"))
+        second_call_args = self.mock_pure_summary_service.summarize.call_args_list[1]
+        self.assertIsNotNone(second_call_args.args[0].feedback_instructions)
 
     async def test_max_retry_limit_respected(self):
         """Test that max retry limit is respected when validation keeps failing."""
         # Always return invalid summary
         invalid_summary = {"summary_250": "X" * 300}
-        self.mock_llm_summarizer.summarize_content_pure = AsyncMock(return_value=invalid_summary)
+        self.mock_pure_summary_service.summarize = AsyncMock(return_value=invalid_summary)
 
         # Validation always fails
         validation_error = AgentResult.error_result("summary_250 exceeds limit: 300 chars")
@@ -138,12 +138,12 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result.metadata["corrections_attempted"]), 4)
 
         # Verify LLM was called max_retries times
-        self.assertEqual(self.mock_llm_summarizer.summarize_content_pure.call_count, 3)
+        self.assertEqual(self.mock_pure_summary_service.summarize.call_count, 3)
 
     async def test_error_feedback_included_in_retry_prompts(self):
         """Test that error feedback is included in retry prompts."""
         # First: validation error, Second: success
-        self.mock_llm_summarizer.summarize_content_pure = AsyncMock(
+        self.mock_pure_summary_service.summarize = AsyncMock(
             side_effect=[{"summary_250": "X" * 300}, self.valid_summary]
         )
 
@@ -166,8 +166,8 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.success)
 
         # Verify second call to LLM included feedback_instructions
-        second_call = self.mock_llm_summarizer.summarize_content_pure.call_args_list[1]
-        feedback = second_call[1].get("feedback_instructions")
+        second_call = self.mock_pure_summary_service.summarize.call_args_list[1]
+        feedback = second_call.args[0].feedback_instructions
         self.assertIsNotNone(feedback)
         self.assertIn("CORRECTIONS NEEDED", feedback)
         self.assertIn("summary_250 exceeds limit", feedback)
@@ -175,7 +175,7 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_llm_returns_none_handled(self):
         """Test that None return from LLM is handled gracefully."""
-        self.mock_llm_summarizer.summarize_content_pure = AsyncMock(return_value=None)
+        self.mock_pure_summary_service.summarize = AsyncMock(return_value=None)
 
         input_data = SummarizationInput(
             content=self.content,
@@ -191,7 +191,7 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_llm_raises_value_error_handled(self):
         """Test that ValueError from LLM is handled."""
-        self.mock_llm_summarizer.summarize_content_pure = AsyncMock(
+        self.mock_pure_summary_service.summarize = AsyncMock(
             side_effect=ValueError("Summarization failed")
         )
 
@@ -209,7 +209,7 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_llm_raises_unexpected_exception_handled(self):
         """Test that unexpected exceptions from LLM are handled."""
-        self.mock_llm_summarizer.summarize_content_pure = AsyncMock(
+        self.mock_pure_summary_service.summarize = AsyncMock(
             side_effect=RuntimeError("Unexpected error")
         )
 
@@ -228,7 +228,7 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
     async def test_duplicate_response_detection(self):
         """Test detection of duplicate LLM responses (feedback ignored)."""
         # Return same summary multiple times (LLM ignoring feedback)
-        self.mock_llm_summarizer.summarize_content_pure = AsyncMock(
+        self.mock_pure_summary_service.summarize = AsyncMock(
             return_value={"summary_250": "X" * 300}
         )
 
@@ -249,11 +249,11 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.metadata.get("feedback_ignored", False))
 
         # Should abort before max_retries due to duplicate detection
-        self.assertLessEqual(self.mock_llm_summarizer.summarize_content_pure.call_count, 5)
+        self.assertLessEqual(self.mock_pure_summary_service.summarize.call_count, 5)
 
     async def test_system_prompt_loaded_for_language(self):
         """Test that correct system prompt is loaded for language."""
-        self.mock_llm_summarizer.summarize_content_pure = AsyncMock(return_value=self.valid_summary)
+        self.mock_pure_summary_service.summarize = AsyncMock(return_value=self.valid_summary)
         validation_success = AgentResult.success_result({"summary_json": self.valid_summary})
         self.mock_validator.execute = AsyncMock(return_value=validation_success)
 
@@ -334,7 +334,7 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
             {"summary_250": "Short", "topic_tags": ["invalid"]},  # No # prefix
             self.valid_summary,  # Valid
         ]
-        self.mock_llm_summarizer.summarize_content_pure = AsyncMock(side_effect=summaries)
+        self.mock_pure_summary_service.summarize = AsyncMock(side_effect=summaries)
 
         validation_results = [
             AgentResult.error_result("summary_250 exceeds limit"),

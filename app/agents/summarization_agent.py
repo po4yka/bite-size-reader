@@ -13,7 +13,7 @@ from app.agents.base_agent import AgentResult, BaseAgent
 from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
-    from app.adapters.content.llm_summarizer import LLMSummarizer
+    from app.adapters.content.pure_summary_service import PureSummaryService
 
 logger = logging.getLogger(__name__)
 
@@ -52,19 +52,19 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
 
     def __init__(
         self,
-        llm_summarizer: LLMSummarizer,
+        pure_summary_service: PureSummaryService,
         validator_agent: Any,  # Will be ValidationAgent
         correlation_id: str | None = None,
     ):
         """Initialize the summarization agent.
 
         Args:
-            llm_summarizer: The LLM summarizer component
+            pure_summary_service: The summary generation service
             validator_agent: Validation agent for checking outputs
             correlation_id: Optional correlation ID for tracing
         """
         super().__init__(name="SummarizationAgent", correlation_id=correlation_id)
-        self.llm_summarizer = llm_summarizer
+        self.pure_summary_service = pure_summary_service
         self.validator_agent = validator_agent
 
     async def execute(self, input_data: SummarizationInput) -> AgentResult[SummarizationOutput]:
@@ -206,12 +206,16 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
             feedback_instructions = self._build_correction_prompt(previous_errors)
             self.log_info(f"Retry attempt {attempt} with {len(previous_errors)} previous error(s)")
 
-        return await self.llm_summarizer.summarize_content_pure(
-            content_text=content,
-            chosen_lang=language,
-            system_prompt=system_prompt,
-            correlation_id=self.correlation_id,
-            feedback_instructions=feedback_instructions,
+        from app.adapters.content.summarization_models import PureSummaryRequest
+
+        return await self.pure_summary_service.summarize(
+            PureSummaryRequest(
+                content_text=content,
+                chosen_lang=language,
+                system_prompt=system_prompt,
+                correlation_id=self.correlation_id,
+                feedback_instructions=feedback_instructions,
+            )
         )
 
     def _get_system_prompt(self, lang: str) -> str:

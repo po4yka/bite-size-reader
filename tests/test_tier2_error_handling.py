@@ -379,7 +379,7 @@ class TestURLProcessorRuTranslationCancelledError:
             sem=MagicMock(return_value=sem_ctx),
         )
 
-        processor.llm_summarizer.translate_summary_to_ru = AsyncMock(  # type: ignore[method-assign]
+        processor.article_generator.translate_summary_to_ru = AsyncMock(  # type: ignore[method-assign]
             side_effect=RuntimeError("translate failed")
         )
 

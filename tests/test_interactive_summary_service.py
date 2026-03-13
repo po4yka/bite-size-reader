@@ -3,7 +3,11 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.adapters.content.llm_summarizer import LLMSummarizer
+from app.adapters.content.interactive_summary_service import InteractiveSummaryService
+from app.adapters.content.pure_summary_service import PureSummaryService
+from app.adapters.content.summarization_models import InteractiveSummaryRequest
+from app.adapters.content.summarization_runtime import SummarizationRuntime
+from app.adapters.content.summary_request_factory import SummaryRequestFactory
 
 if TYPE_CHECKING:
     from app.config import AppConfig
@@ -17,12 +21,14 @@ class _DummySemaphore:
         return None
 
 
-class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
+class InteractiveSummaryServiceRequestTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.cfg = SimpleNamespace(
             openrouter=SimpleNamespace(
                 model="primary-model",
                 fallback_models=("fallback-model",),
+                flash_model=None,
+                flash_fallback_models=(),
                 temperature=0.2,
                 top_p=0.9,
                 max_tokens=None,
@@ -36,7 +42,10 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
                 require_parameters=True,
                 auto_fallback_structured=True,
             ),
-            runtime=SimpleNamespace(summary_prompt_version="v1", summary_two_pass_enabled=False),
+            runtime=SimpleNamespace(
+                summary_prompt_version="v1",
+                summary_two_pass_enabled=False,
+            ),
             web_search=SimpleNamespace(enabled=False),
             redis=SimpleNamespace(
                 enabled=False,
@@ -57,7 +66,7 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
         self.response_formatter.send_cached_summary_notification = AsyncMock()
         self.openrouter = MagicMock()
 
-    @patch("app.adapters.content.llm_summarizer.RedisCache")
+    @patch("app.adapters.content.summarization_runtime.RedisCache")
     async def test_builds_parameter_presets_and_fallbacks(
         self, redis_cache_mock: MagicMock
     ) -> None:
@@ -67,13 +76,23 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
         cache_stub.set_json = AsyncMock()
         redis_cache_mock.return_value = cache_stub
 
-        summarizer = LLMSummarizer(
+        runtime = SummarizationRuntime(
             cfg=cast("AppConfig", self.cfg),
             db=self.db,
             openrouter=self.openrouter,
             response_formatter=self.response_formatter,
             audit_func=lambda *args, **kwargs: None,
             sem=lambda: _DummySemaphore(),
+        )
+        pure_service = PureSummaryService(runtime=runtime)
+        request_factory = SummaryRequestFactory(
+            runtime=runtime,
+            select_max_tokens=pure_service.select_max_tokens,
+        )
+        service = InteractiveSummaryService(
+            runtime=runtime,
+            request_factory=request_factory,
+            pure_summary_service=pure_service,
         )
 
         captured_requests: list[Any] = []
@@ -82,22 +101,31 @@ class LLMSummarizerRequestTests(unittest.IsolatedAsyncioTestCase):
             captured_requests.extend(kwargs.get("requests") or [])
             return {"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"}
 
-        with patch.object(
-            summarizer._workflow,
-            "execute_summary_workflow",
-            AsyncMock(side_effect=_capture_requests),
+        with (
+            patch.object(
+                runtime.workflow,
+                "execute_summary_workflow",
+                AsyncMock(side_effect=_capture_requests),
+            ),
+            patch.object(
+                runtime.metadata_helper,
+                "ensure_summary_metadata",
+                AsyncMock(side_effect=lambda summary, *args, **kwargs: summary),
+            ),
         ):
-            summary = await summarizer.summarize_content(
-                message=MagicMock(),
-                content_text="short content for testing.",
-                chosen_lang="en",
-                system_prompt="system prompt",
-                req_id=1,
-                max_chars=10_000,
-                correlation_id="cid",
+            result = await service.summarize(
+                InteractiveSummaryRequest(
+                    message=MagicMock(),
+                    content_text="short content for testing.",
+                    chosen_lang="en",
+                    system_prompt="system prompt",
+                    req_id=1,
+                    max_chars=10_000,
+                    correlation_id="cid",
+                )
             )
 
-        assert summary is not None
+        assert result.summary is not None
         assert captured_requests, "requests should be built and passed to the workflow"
         preset_names = [req.preset_name for req in captured_requests]
         assert preset_names == [

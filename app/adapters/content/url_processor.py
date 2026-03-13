@@ -10,7 +10,14 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.content_chunker import ContentChunker
 from app.adapters.content.content_extractor import ContentExtractor
-from app.adapters.content.llm_summarizer import LLMSummarizer
+from app.adapters.content.interactive_summary_service import InteractiveSummaryService
+from app.adapters.content.pure_summary_service import PureSummaryService
+from app.adapters.content.summarization_models import (
+    InteractiveSummaryRequest,
+    InteractiveSummaryResult,
+)
+from app.adapters.content.summarization_runtime import SummarizationRuntime
+from app.adapters.content.summary_request_factory import SummaryRequestFactory
 from app.adapters.repository_ports import (
     SummaryRepositoryPort,
     create_summary_repository,
@@ -305,7 +312,7 @@ class URLProcessor:
             sem=sem,
         )
 
-        self.llm_summarizer = LLMSummarizer(
+        self.summarization_runtime = SummarizationRuntime(
             cfg=cfg,
             db=db,
             openrouter=openrouter,
@@ -315,6 +322,19 @@ class URLProcessor:
             topic_search=topic_search,
             db_write_queue=db_write_queue,
         )
+        self.pure_summary_service = PureSummaryService(runtime=self.summarization_runtime)
+        self.summary_request_factory = SummaryRequestFactory(
+            runtime=self.summarization_runtime,
+            select_max_tokens=self.pure_summary_service.select_max_tokens,
+        )
+        self.interactive_summary_service = InteractiveSummaryService(
+            runtime=self.summarization_runtime,
+            request_factory=self.summary_request_factory,
+            pure_summary_service=self.pure_summary_service,
+        )
+        self.article_generator = self.summarization_runtime.article_generator
+        self.insights_generator = self.summarization_runtime.insights_generator
+        self.semantic_helper = self.summarization_runtime.semantic_helper
 
         self.message_persistence = MessagePersistence(db=db)
         # Registry for tracking background tasks to prevent GC and ensure shutdown
@@ -322,9 +342,9 @@ class URLProcessor:
 
     async def aclose(self, timeout: float = 5.0) -> None:
         """Wait for all background tasks to complete before closing."""
-        # 1. Drain workflow tasks via summarizer
-        if hasattr(self, "llm_summarizer") and hasattr(self.llm_summarizer, "workflow"):
-            await self.llm_summarizer.workflow.aclose(timeout=timeout)
+        # 1. Drain runtime workflow tasks
+        if hasattr(self, "summarization_runtime"):
+            await self.summarization_runtime.aclose(timeout=timeout)
 
         # 2. Drain local background tasks
         if not self._background_tasks:
@@ -406,7 +426,7 @@ class URLProcessor:
                     self.cfg.openrouter.model,
                 )
 
-            summary_json = await self._summarize_url_content(
+            summary_result = await self._summarize_url_content(
                 message=message,
                 url_text=url_text,
                 context=context,
@@ -417,6 +437,7 @@ class URLProcessor:
                 progress_tracker=progress_tracker,
             )
 
+            summary_json = summary_result.summary if summary_result else None
             if summary_json is None:
                 return await self._handle_summarization_failure(
                     message=message,
@@ -437,7 +458,11 @@ class URLProcessor:
 
             # Format and send the response (skip if silent or batch)
             if not silent and not batch_mode:
-                llm_result = self.llm_summarizer.last_llm_result or _create_chunk_llm_stub(self.cfg)
+                llm_result = (
+                    summary_result.llm_result
+                    if summary_result and summary_result.llm_result
+                    else None
+                ) or _create_chunk_llm_stub(self.cfg)
                 # Pass request ID prefixed with 'req:' for action button callbacks
                 bot_reply_msg_id = await self.response_formatter.send_structured_summary_response(
                     message,
@@ -635,7 +660,7 @@ class URLProcessor:
         on_phase_change: Callable[[str, str | None, int | None, str | None], Awaitable[None]]
         | None,
         progress_tracker: ProgressTracker | None,
-    ) -> dict[str, Any] | None:
+    ) -> InteractiveSummaryResult | None:
         """Run either chunked or single-pass summarization."""
         if context.should_chunk and context.chunks:
             summary_json = await self.content_chunker.process_chunks(
@@ -646,29 +671,36 @@ class URLProcessor:
                 correlation_id,
             )
             if summary_json:
-                return await self.llm_summarizer.enrich_summary_rag_fields(
+                summary_json = await self.semantic_helper.enrich_with_rag_fields(
                     summary_json,
                     content_text=context.content_text,
                     chosen_lang=context.chosen_lang,
                     req_id=context.req_id,
                 )
-            return summary_json
+            return InteractiveSummaryResult(
+                summary=summary_json,
+                llm_result=_create_chunk_llm_stub(self.cfg) if summary_json else None,
+                served_from_cache=False,
+                model_used=getattr(self.cfg.openrouter, "model", None),
+            )
 
-        return await self.llm_summarizer.summarize_content(
-            message,
-            context.content_text,
-            context.chosen_lang,
-            context.system_prompt,
-            context.req_id,
-            context.max_chars,
-            correlation_id,
-            interaction_id,
-            url_hash=context.dedupe_hash,
-            url=url_text,
-            silent=notify_silent,
-            on_phase_change=on_phase_change,
-            images=context.images,
-            progress_tracker=progress_tracker,
+        return await self.interactive_summary_service.summarize(
+            InteractiveSummaryRequest(
+                message=message,
+                content_text=context.content_text,
+                chosen_lang=context.chosen_lang,
+                system_prompt=context.system_prompt,
+                req_id=context.req_id,
+                max_chars=context.max_chars,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                url_hash=context.dedupe_hash,
+                url=url_text,
+                silent=notify_silent,
+                on_phase_change=on_phase_change,
+                images=context.images,
+                progress_tracker=progress_tracker,
+            )
         )
 
     async def _handle_summarization_failure(
@@ -933,7 +965,7 @@ class URLProcessor:
             return
 
         try:
-            translated = await self.llm_summarizer.translate_summary_to_ru(
+            translated = await self.article_generator.translate_summary_to_ru(
                 summary,
                 req_id=req_id,
                 correlation_id=correlation_id,
@@ -985,7 +1017,7 @@ class URLProcessor:
         )
 
         try:
-            insights = await self.llm_summarizer.generate_additional_insights(
+            insights = await self.insights_generator.generate_additional_insights(
                 message,
                 content_text=content_text,
                 chosen_lang=chosen_lang,
@@ -1060,7 +1092,7 @@ class URLProcessor:
     ) -> None:
         """Generate a standalone custom article based on extracted topics/tags."""
         try:
-            article = await self.llm_summarizer.generate_custom_article(
+            article = await self.article_generator.generate_custom_article(
                 message,
                 chosen_lang=chosen_lang,
                 req_id=req_id,
@@ -1088,7 +1120,7 @@ class URLProcessor:
         source_lang: str | None = None,
     ) -> str | None:
         """Translate a shaped summary to fluent Russian."""
-        return await self.llm_summarizer.translate_summary_to_ru(
+        return await self.article_generator.translate_summary_to_ru(
             summary,
             req_id=req_id,
             correlation_id=correlation_id,

@@ -485,7 +485,6 @@ class TestForwardProcessorCustomArticle(unittest.IsolatedAsyncioTestCase):
     async def test_none_summary_returns_early(self) -> None:
         """When summary is None, should return immediately without LLM call."""
         processor = self._make_processor()
-        # Patch LLMSummarizer so we know it's NOT called
         with patch("app.adapters.telegram.forward_processor.ForwardProcessor") as _:
             await processor._maybe_generate_custom_article(MagicMock(), None, "en", 1, "cid")
         # No assertions needed — just verifying no exception

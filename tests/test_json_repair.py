@@ -53,6 +53,9 @@ def _setup_bot_repository_mocks(
     request_repo_mock = MagicMock()
     request_repo_mock.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
     request_repo_mock.async_get_request_by_forward = AsyncMock(return_value=None)
+    request_repo_mock.async_get_request_by_id = AsyncMock(
+        return_value={"normalized_url": "http://example.com"}
+    )
     request_repo_mock.async_create_request = AsyncMock(return_value=1)
     request_repo_mock.async_update_request_status = AsyncMock()
     request_repo_mock.async_update_request_lang_detected = AsyncMock()
@@ -70,6 +73,7 @@ def _setup_bot_repository_mocks(
     summary_repo_mock = MagicMock()
     summary_repo_mock.async_get_summary_by_request = AsyncMock(return_value=None)
     summary_repo_mock.async_upsert_summary = AsyncMock(return_value=1)
+    summary_repo_mock.async_finalize_request_summary = AsyncMock(return_value=1)
     summary_repo_mock.async_update_summary_insights = AsyncMock()
 
     llm_repo_mock = MagicMock()
@@ -90,21 +94,28 @@ def _setup_bot_repository_mocks(
             mp.user_repo = user_repo_mock
         if hasattr(up, "summary_repo"):
             up.summary_repo = summary_repo_mock
-        if hasattr(up, "llm_summarizer"):
-            llm_sum = up.llm_summarizer
-            llm_sum.summary_repo = summary_repo_mock
-            llm_sum.request_repo = request_repo_mock
-            llm_sum.crawl_result_repo = crawl_repo_mock
-            if hasattr(llm_sum, "_workflow"):
-                wf = llm_sum._workflow
+        if hasattr(up, "summarization_runtime"):
+            runtime = up.summarization_runtime
+            runtime.summary_repo = summary_repo_mock
+            runtime.request_repo = request_repo_mock
+            runtime.crawl_result_repo = crawl_repo_mock
+            if hasattr(runtime, "metadata_helper"):
+                runtime.metadata_helper._request_repo = request_repo_mock
+                runtime.metadata_helper._crawl_result_repo = crawl_repo_mock
+                runtime.metadata_helper.ensure_summary_metadata = AsyncMock(
+                    side_effect=lambda summary, *args, **kwargs: summary
+                )
+            if hasattr(runtime, "insights_generator"):
+                runtime.insights_generator._summary_repo = summary_repo_mock
+            if hasattr(runtime, "workflow"):
+                wf = runtime.workflow
                 wf.summary_repo = summary_repo_mock
                 wf.request_repo = request_repo_mock
                 wf.llm_repo = llm_repo_mock
                 wf.user_repo = user_repo_mock
-            if hasattr(llm_sum, "_cache_helper"):
-                # Disable cache to avoid cache hits
-                llm_sum._cache_helper._cache = MagicMock()
-                llm_sum._cache_helper._cache.enabled = False
+            if hasattr(runtime, "cache_helper"):
+                runtime.cache_helper._cache = MagicMock()
+                runtime.cache_helper._cache.enabled = False
 
 
 def _setup_openrouter_mock(bot: TelegramBot, mock_instance: MagicMock) -> None:
@@ -112,16 +123,14 @@ def _setup_openrouter_mock(bot: TelegramBot, mock_instance: MagicMock) -> None:
     bot._openrouter = mock_instance
 
     if hasattr(bot, "url_processor"):
-        if hasattr(bot.url_processor, "llm_summarizer"):
-            bot.url_processor.llm_summarizer.openrouter = mock_instance
-            if hasattr(bot.url_processor.llm_summarizer, "_workflow"):
-                bot.url_processor.llm_summarizer._workflow.openrouter = mock_instance
-            if hasattr(bot.url_processor.llm_summarizer, "_insights_helper"):
-                bot.url_processor.llm_summarizer._insights_helper._openrouter = mock_instance
-            if hasattr(bot.url_processor.llm_summarizer, "_article_helper"):
-                bot.url_processor.llm_summarizer._article_helper._openrouter = mock_instance
-            if hasattr(bot.url_processor.llm_summarizer, "_metadata_helper"):
-                bot.url_processor.llm_summarizer._metadata_helper._openrouter = mock_instance
+        if hasattr(bot.url_processor, "summarization_runtime"):
+            runtime = bot.url_processor.summarization_runtime
+            runtime.openrouter = mock_instance
+            runtime.workflow.openrouter = mock_instance
+            runtime.insights_generator._openrouter = mock_instance
+            runtime.article_generator._openrouter = mock_instance
+            runtime.metadata_helper._openrouter = mock_instance
+            runtime.search_enricher._openrouter = mock_instance
         if hasattr(bot.url_processor, "content_chunker"):
             bot.url_processor.content_chunker.openrouter = mock_instance
 

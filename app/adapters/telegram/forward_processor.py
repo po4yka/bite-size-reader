@@ -8,6 +8,7 @@ import logging
 from collections.abc import Callable, Coroutine, Mapping
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.content.summarization_runtime import SummarizationRuntime
 from app.adapters.repository_ports import (
     RequestRepositoryPort,
     SummaryRepositoryPort,
@@ -62,7 +63,7 @@ class ForwardProcessor:
         self._sem = sem
         self._db_write_queue = db_write_queue
         self._related_reads_service = related_reads_service
-        self._llm_summarizer: Any | None = None
+        self._summarization_runtime: SummarizationRuntime | None = None
 
         # Initialize components
         self.content_processor = ForwardContentProcessor(
@@ -319,12 +320,10 @@ class ForwardProcessor:
             )
             return None
 
-    def _get_llm_summarizer(self) -> Any:
-        """Lazily create a shared LLMSummarizer for background tasks."""
-        if self._llm_summarizer is None:
-            from app.adapters.content.llm_summarizer import LLMSummarizer
-
-            self._llm_summarizer = LLMSummarizer(
+    def _get_summarization_runtime(self) -> SummarizationRuntime:
+        """Lazily create shared summarization dependencies for background tasks."""
+        if self._summarization_runtime is None:
+            self._summarization_runtime = SummarizationRuntime(
                 cfg=self.cfg,
                 db=self.db,
                 openrouter=self.summarizer.openrouter,
@@ -333,7 +332,7 @@ class ForwardProcessor:
                 sem=self._sem,
                 db_write_queue=self._db_write_queue,
             )
-        return self._llm_summarizer
+        return self._summarization_runtime
 
     async def _maybe_generate_custom_article(
         self,
@@ -367,7 +366,7 @@ class ForwardProcessor:
 
         from app.core.async_utils import raise_if_cancelled
 
-        llm_summarizer = self._get_llm_summarizer()
+        article_generator = self._get_summarization_runtime().article_generator
 
         try:
             await self.response_formatter.safe_reply(
@@ -381,7 +380,7 @@ class ForwardProcessor:
                 extra={"cid": correlation_id, "error": str(exc)},
             )
 
-        article = await llm_summarizer.generate_custom_article(
+        article = await article_generator.generate_custom_article(
             message,
             chosen_lang=chosen_lang,
             req_id=req_id,
@@ -433,9 +432,9 @@ class ForwardProcessor:
                         extra={"cid": correlation_id, "error": str(exc)},
                     )
 
-            llm_summarizer = self._get_llm_summarizer()
+            insights_generator = self._get_summarization_runtime().insights_generator
 
-            insights = await llm_summarizer.generate_additional_insights(
+            insights = await insights_generator.generate_additional_insights(
                 message,
                 content_text=content_text,
                 chosen_lang=chosen_lang,

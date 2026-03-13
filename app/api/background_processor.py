@@ -9,6 +9,10 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.content.summarization_models import (
+    EnsureSummaryPayloadRequest,
+    PureSummaryRequest,
+)
 from app.adapters.content.url_processor import URLProcessor, _get_system_prompt
 from app.config import AppConfig, load_config
 from app.core.async_utils import raise_if_cancelled
@@ -327,7 +331,7 @@ class BackgroundProcessor:
             cfg=self.cfg,
             db=override_db,
             firecrawl=self.url_processor.content_extractor.firecrawl,
-            openrouter=self.url_processor.llm_summarizer.openrouter,
+            openrouter=self.url_processor.summarization_runtime.openrouter,
             response_formatter=self.url_processor.response_formatter,
             audit_func=self._audit,
             sem=lambda: self._sem,
@@ -469,11 +473,13 @@ class BackgroundProcessor:
         summary_json = await self._run_stage(
             "summarization",
             correlation_id,
-            lambda: url_processor.llm_summarizer.summarize_content_pure(
-                content_text=content_text,
-                chosen_lang=lang,
-                system_prompt=system_prompt,
-                correlation_id=correlation_id,
+            lambda: url_processor.pure_summary_service.summarize(
+                PureSummaryRequest(
+                    content_text=content_text,
+                    chosen_lang=lang,
+                    system_prompt=system_prompt,
+                    correlation_id=correlation_id,
+                )
             ),
         )
 
@@ -488,12 +494,14 @@ class BackgroundProcessor:
         summary_json = await self._run_stage(
             "validation",
             correlation_id,
-            lambda: url_processor.llm_summarizer.ensure_summary_payload(
-                summary_json,
-                req_id=request_id,
-                content_text=content_text,
-                chosen_lang=lang,
-                correlation_id=correlation_id,
+            lambda: url_processor.pure_summary_service.ensure_summary_payload(
+                EnsureSummaryPayloadRequest(
+                    summary=summary_json,
+                    req_id=request_id,
+                    content_text=content_text,
+                    chosen_lang=lang,
+                    correlation_id=correlation_id,
+                )
             ),
         )
 
@@ -550,11 +558,13 @@ class BackgroundProcessor:
         summary_json = await self._run_stage(
             "summarization",
             correlation_id,
-            lambda: url_processor.llm_summarizer.summarize_content_pure(
-                content_text=request.get("content_text") or "",
-                chosen_lang=lang,
-                system_prompt=system_prompt,
-                correlation_id=correlation_id,
+            lambda: url_processor.pure_summary_service.summarize(
+                PureSummaryRequest(
+                    content_text=request.get("content_text") or "",
+                    chosen_lang=lang,
+                    system_prompt=system_prompt,
+                    correlation_id=correlation_id,
+                )
             ),
         )
 

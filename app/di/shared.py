@@ -1,0 +1,167 @@
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import logging
+from typing import TYPE_CHECKING, Any
+
+from app.adapters.content.scraper.factory import ContentScraperFactory
+from app.adapters.external.firecrawl_parser import FirecrawlClient
+from app.adapters.external.response_formatter import ResponseFormatter
+from app.adapters.llm import LLMClientFactory
+from app.adapters.repository_ports import create_audit_log_repository
+from app.di.types import CoreDependencies
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from app.config import AppConfig
+    from app.db.session import DatabaseSessionManager
+
+logger = logging.getLogger(__name__)
+
+
+class LazySemaphoreFactory:
+    """Lazy semaphore factory mirroring runtime bot behavior."""
+
+    def __init__(self, permits: int) -> None:
+        self._permits = max(1, permits)
+        self._semaphore: asyncio.Semaphore | None = None
+
+    def __call__(self) -> asyncio.Semaphore:
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self._permits)
+        return self._semaphore
+
+
+def build_async_audit_sink(
+    db: DatabaseSessionManager,
+    *,
+    task_registry: set[asyncio.Task[Any]] | None = None,
+) -> Callable[[str, str, dict[str, Any]], None]:
+    """Create an async fire-and-forget audit callback backed by the DB."""
+    repo = create_audit_log_repository(db)
+
+    def audit(level: str, event: str, details: dict[str, Any]) -> None:
+        payload = details if isinstance(details, dict) else {"details": str(details)}
+
+        async def _write() -> None:
+            try:
+                await repo.async_insert_audit_log(
+                    log_level=level,
+                    event_type=event,
+                    details=payload,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "audit_persist_failed",
+                    extra={"event": event, "error": str(exc)},
+                )
+
+        try:
+            task = asyncio.create_task(_write())
+        except RuntimeError as exc:
+            logger.debug("audit_task_schedule_skipped", extra={"error": str(exc)})
+            return
+
+        if task_registry is not None:
+            task_registry.add(task)
+            task.add_done_callback(task_registry.discard)
+
+    return audit
+
+
+def resolve_ui_lang(cfg: AppConfig) -> str:
+    ui_lang = cfg.runtime.preferred_lang
+    return "en" if ui_lang == "auto" else ui_lang
+
+
+def build_core_dependencies(
+    cfg: AppConfig,
+    db: DatabaseSessionManager,
+    *,
+    audit_sink: Callable[[str, str, dict[str, Any]], None] | None = None,
+    semaphore_factory: Callable[[], asyncio.Semaphore] | None = None,
+    response_formatter_kwargs: dict[str, Any] | None = None,
+) -> CoreDependencies:
+    """Build the shared LLM, scraper, formatter, and concurrency resources."""
+    audit = audit_sink or _default_audit
+    sem_factory = semaphore_factory or LazySemaphoreFactory(cfg.runtime.max_concurrent_calls)
+    firecrawl_client = _build_firecrawl_client(cfg, audit)
+    llm_client = LLMClientFactory.create_from_config(cfg, audit=audit)
+    scraper_chain = ContentScraperFactory.create_from_config(cfg, audit=audit)
+
+    response_kwargs = dict(response_formatter_kwargs or {})
+    response_formatter = ResponseFormatter(
+        telegram_limits=cfg.telegram_limits,
+        telegram_config=cfg.telegram,
+        lang=resolve_ui_lang(cfg),
+        **response_kwargs,
+    )
+
+    return CoreDependencies(
+        cfg=cfg,
+        db=db,
+        audit_sink=audit,
+        semaphore_factory=sem_factory,
+        llm_client=llm_client,
+        scraper_chain=scraper_chain,
+        response_formatter=response_formatter,
+        firecrawl_client=firecrawl_client,
+    )
+
+
+async def close_runtime_resources(*resources: Any) -> None:
+    """Close all runtime resources that expose async cleanup hooks."""
+    for resource in resources:
+        if resource is None:
+            continue
+        close = getattr(resource, "aclose", None)
+        if close is None:
+            continue
+        with contextlib.suppress(Exception):
+            await close()
+
+
+def _build_firecrawl_client(
+    cfg: AppConfig,
+    audit: Callable[[str, str, dict[str, Any]], None],
+) -> FirecrawlClient | None:
+    if not cfg.firecrawl.api_key:
+        return None
+
+    return FirecrawlClient(
+        api_key=cfg.firecrawl.api_key,
+        timeout_sec=cfg.firecrawl.timeout_sec,
+        audit=audit,
+        debug_payloads=cfg.runtime.debug_payloads,
+        log_truncate_length=cfg.runtime.log_truncate_length,
+        max_connections=cfg.firecrawl.max_connections,
+        max_keepalive_connections=cfg.firecrawl.max_keepalive_connections,
+        keepalive_expiry=cfg.firecrawl.keepalive_expiry,
+        credit_warning_threshold=cfg.firecrawl.credit_warning_threshold,
+        credit_critical_threshold=cfg.firecrawl.credit_critical_threshold,
+        max_response_size_mb=cfg.firecrawl.max_response_size_mb,
+        max_age_seconds=cfg.firecrawl.max_age_seconds,
+        remove_base64_images=cfg.firecrawl.remove_base64_images,
+        block_ads=cfg.firecrawl.block_ads,
+        skip_tls_verification=cfg.firecrawl.skip_tls_verification,
+        include_markdown_format=cfg.firecrawl.include_markdown_format,
+        include_html_format=cfg.firecrawl.include_html_format,
+        include_links_format=cfg.firecrawl.include_links_format,
+        include_summary_format=cfg.firecrawl.include_summary_format,
+        include_images_format=cfg.firecrawl.include_images_format,
+        enable_screenshot_format=cfg.firecrawl.enable_screenshot_format,
+        screenshot_full_page=cfg.firecrawl.screenshot_full_page,
+        screenshot_quality=cfg.firecrawl.screenshot_quality,
+        screenshot_viewport_width=cfg.firecrawl.screenshot_viewport_width,
+        screenshot_viewport_height=cfg.firecrawl.screenshot_viewport_height,
+        json_prompt=cfg.firecrawl.json_prompt,
+        json_schema=cfg.firecrawl.json_schema,
+        wait_for_ms=cfg.firecrawl.wait_for_ms,
+    )
+
+
+def _default_audit(level: str, event: str, details: dict[str, Any]) -> None:
+    log_level = logging.INFO if level == "info" else logging.ERROR
+    logger.log(log_level, event, extra=details)

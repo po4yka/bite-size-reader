@@ -261,8 +261,8 @@ class SummaryFollowupManager:
             return llm_client
 
         url_processor = getattr(handler, "url_processor", None)
-        llm_summarizer = getattr(url_processor, "llm_summarizer", None)
-        llm_client = getattr(llm_summarizer, "openrouter", None)
+        summarization_runtime = getattr(url_processor, "summarization_runtime", None)
+        llm_client = getattr(summarization_runtime, "openrouter", None)
         if llm_client is not None and callable(getattr(llm_client, "chat", None)):
             return llm_client
         return None

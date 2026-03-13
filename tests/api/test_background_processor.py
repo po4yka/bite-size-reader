@@ -103,7 +103,7 @@ class StubExtractor:
         )
 
 
-class StubSummarizer:
+class StubPureSummaryService:
     def __init__(self, summary: Any | None = None, *, fail: bool = False) -> None:
         self._summary = summary or {"ok": True}
         self.fail = fail
@@ -111,40 +111,22 @@ class StubSummarizer:
         self.openrouter = object()
         self.last_chosen_lang: str | None = None
 
-    async def summarize_content_pure(
-        self,
-        *,
-        content_text: str,
-        chosen_lang: str,
-        system_prompt: str,
-        correlation_id: str | None = None,
-    ) -> Any:
+    async def summarize(self, request: Any) -> Any:
         self.calls += 1
-        self.last_chosen_lang = chosen_lang
+        self.last_chosen_lang = request.chosen_lang
         if self.fail:
             raise RuntimeError("fail_summarize")
         return self._summary
 
-    async def ensure_summary_payload(
-        self,
-        summary: dict[str, Any],
-        *,
-        req_id: int,
-        content_text: str,
-        chosen_lang: str,
-        correlation_id: str | None = None,
-    ) -> dict[str, Any]:
-        _ = req_id
-        _ = content_text
-        _ = chosen_lang
-        _ = correlation_id
-        return dict(summary)
+    async def ensure_summary_payload(self, request: Any) -> dict[str, Any]:
+        return dict(request.summary)
 
 
 class StubURLProcessor:
-    def __init__(self, extractor: StubExtractor, summarizer: StubSummarizer) -> None:
+    def __init__(self, extractor: StubExtractor, summarizer: StubPureSummaryService) -> None:
         self.content_extractor = extractor
-        self.llm_summarizer = summarizer
+        self.pure_summary_service = summarizer
+        self.summarization_runtime = MagicMock(openrouter=summarizer.openrouter)
         self.response_formatter = object()
 
 
@@ -183,7 +165,7 @@ async def test_lock_skip_when_redis_key_held(monkeypatch):
     processor = BackgroundProcessor(
         cfg=cfg,
         db=db,
-        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        url_processor=StubURLProcessor(StubExtractor(), StubPureSummaryService()),
         redis=redis_client,
         semaphore=asyncio.Semaphore(2),
         audit_func=lambda *_args, **_kwargs: None,
@@ -208,7 +190,7 @@ async def test_local_lock_fallback_and_success(monkeypatch):
     processor = BackgroundProcessor(
         cfg=cfg,
         db=db,
-        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        url_processor=StubURLProcessor(StubExtractor(), StubPureSummaryService()),
         redis=None,
         semaphore=asyncio.Semaphore(2),
         audit_func=lambda *_args, **_kwargs: None,
@@ -253,7 +235,7 @@ async def test_retries_and_error_status(monkeypatch):
     cfg.background.retry_max_delay_ms = 2
 
     db = StubDB()
-    failing_summarizer = StubSummarizer(fail=True)
+    failing_summarizer = StubPureSummaryService(fail=True)
     processor = BackgroundProcessor(
         cfg=cfg,
         db=db,
@@ -301,7 +283,7 @@ async def test_local_locks_cleaned_after_release():
     processor = BackgroundProcessor(
         cfg=cfg,
         db=StubDB(),
-        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        url_processor=StubURLProcessor(StubExtractor(), StubPureSummaryService()),
         redis=None,
         semaphore=asyncio.Semaphore(1),
         audit_func=lambda *_args, **_kwargs: None,
@@ -331,7 +313,7 @@ async def test_run_with_backoff_propagates_cancellation():
     proc = BackgroundProcessor(
         cfg=cfg,
         db=StubDB(),
-        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        url_processor=StubURLProcessor(StubExtractor(), StubPureSummaryService()),
         redis=None,
         semaphore=asyncio.Semaphore(3),
         audit_func=lambda *_args, **_kwargs: None,
@@ -355,7 +337,7 @@ async def test_url_processing_auto_language_uses_detected_content():
     cfg = DummyCfg()
     db = StubDB()
     extractor = StubExtractor(content="Привет мир. Это тестовый русский текст.")
-    summarizer = StubSummarizer(summary={"summary_250": "ok"})
+    summarizer = StubPureSummaryService(summary={"summary_250": "ok"})
     processor = BackgroundProcessor(
         cfg=cfg,
         db=db,
@@ -392,7 +374,7 @@ async def test_url_processing_prefers_extractor_detected_lang_metadata():
         content="[Source: YouTube video transcript]\n\nTitle: Example\n\nShort content.",
         metadata={"detected_lang": "ru"},
     )
-    summarizer = StubSummarizer(summary={"summary_250": "ok"})
+    summarizer = StubPureSummaryService(summary={"summary_250": "ok"})
     processor = BackgroundProcessor(
         cfg=cfg,
         db=db,
@@ -426,7 +408,7 @@ def test_resolve_request_language_prefers_explicit_request_lang():
     processor = BackgroundProcessor(
         cfg=cfg,
         db=StubDB(),
-        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        url_processor=StubURLProcessor(StubExtractor(), StubPureSummaryService()),
         redis=None,
         semaphore=asyncio.Semaphore(1),
         audit_func=lambda *_args, **_kwargs: None,
@@ -445,7 +427,7 @@ def test_resolve_request_language_falls_back_to_detected_content_when_metadata_i
     processor = BackgroundProcessor(
         cfg=cfg,
         db=StubDB(),
-        url_processor=StubURLProcessor(StubExtractor(), StubSummarizer()),
+        url_processor=StubURLProcessor(StubExtractor(), StubPureSummaryService()),
         redis=None,
         semaphore=asyncio.Semaphore(1),
         audit_func=lambda *_args, **_kwargs: None,

@@ -49,7 +49,7 @@ class TestURLProcessorTranslation(unittest.IsolatedAsyncioTestCase):
         formatter = StubFormatter()
         summarizer = StubSummarizer("перевод")
         processor.response_formatter = cast("Any", formatter)
-        processor.llm_summarizer = cast("Any", summarizer)
+        processor.article_generator = cast("Any", summarizer)
 
         await processor._maybe_send_russian_translation(
             DummyMessage(),
@@ -67,7 +67,7 @@ class TestURLProcessorTranslation(unittest.IsolatedAsyncioTestCase):
 
         processor = URLProcessor.__new__(URLProcessor)
         processor.response_formatter = cast("Any", formatter)
-        processor.llm_summarizer = cast("Any", summarizer)
+        processor.article_generator = cast("Any", summarizer)
 
         await processor._maybe_send_russian_translation(
             DummyMessage(),
@@ -86,7 +86,7 @@ class TestURLProcessorTranslation(unittest.IsolatedAsyncioTestCase):
 
         processor = URLProcessor.__new__(URLProcessor)
         processor.response_formatter = cast("Any", formatter)
-        processor.llm_summarizer = cast("Any", summarizer)
+        processor.article_generator = cast("Any", summarizer)
 
         await processor._maybe_send_russian_translation(
             DummyMessage(),

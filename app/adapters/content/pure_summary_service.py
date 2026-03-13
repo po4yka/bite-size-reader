@@ -1,0 +1,302 @@
+"""Pure summarization service for non-interactive workflows."""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from app.core.content_cleaner import clean_content_for_llm
+from app.core.json_utils import dumps as json_dumps, extract_json
+from app.core.lang import LANG_RU
+from app.core.summary_contract import validate_and_shape_summary
+from app.core.token_utils import count_tokens
+
+from .summary_request_factory import detect_content_type_hint, log_llm_content_validation
+
+if TYPE_CHECKING:
+    from .summarization_models import EnsureSummaryPayloadRequest, PureSummaryRequest
+    from .summarization_runtime import SummarizationRuntime
+
+logger = logging.getLogger(__name__)
+
+
+class PureSummaryService:
+    """LLM summarization without Telegram message dependencies."""
+
+    def __init__(self, *, runtime: SummarizationRuntime) -> None:
+        self._runtime = runtime
+
+    async def summarize(self, request: PureSummaryRequest) -> dict[str, Any]:
+        """Generate a summary payload without Telegram-side notifications."""
+        if not request.content_text or not request.content_text.strip():
+            raise ValueError("Content text is empty or contains only whitespace")
+
+        content_for_summary = request.content_text
+        model_override = None
+        max_chars_threshold = 50000
+        if len(request.content_text) > max_chars_threshold:
+            if self._runtime.cfg.openrouter.long_context_model:
+                model_override = self._runtime.cfg.openrouter.long_context_model
+            else:
+                content_for_summary = self._truncate_content(
+                    request.content_text,
+                    max_chars_threshold,
+                )
+                logger.info(
+                    "summarize_pure_truncated",
+                    extra={
+                        "cid": request.correlation_id,
+                        "original_len": len(request.content_text),
+                        "truncated_len": len(content_for_summary),
+                        "max_chars": max_chars_threshold,
+                    },
+                )
+
+        content_for_summary = clean_content_for_llm(content_for_summary)
+        content_hint = detect_content_type_hint(content_for_summary)
+        user_content = (
+            "Analyze the following content and output ONLY a valid JSON object that matches the system contract exactly. "
+            f"Respond in {'Russian' if request.chosen_lang == LANG_RU else 'English'}. "
+            "Do NOT include any text outside the JSON.\n\n"
+        )
+        if request.feedback_instructions:
+            user_content += f"{request.feedback_instructions}\n\n"
+        user_content += f"{content_hint}CONTENT START\n{content_for_summary}\nCONTENT END"
+
+        log_llm_content_validation(
+            cfg=self._runtime.cfg,
+            content_text=content_for_summary,
+            system_prompt=request.system_prompt,
+            user_content=user_content,
+            correlation_id=request.correlation_id,
+        )
+
+        messages = [
+            {"role": "system", "content": request.system_prompt},
+            {"role": "user", "content": user_content},
+        ]
+        response_format = self._runtime.workflow.build_structured_response_format()
+        max_tokens = self.select_max_tokens(content_for_summary)
+
+        logger.info(
+            "summarize_pure_start",
+            extra={
+                "cid": request.correlation_id,
+                "content_len": len(content_for_summary),
+                "lang": request.chosen_lang,
+                "has_feedback": bool(request.feedback_instructions),
+                "model": model_override or self._runtime.cfg.openrouter.model,
+            },
+        )
+
+        try:
+            async with self._runtime.sem():
+                llm_result = await self._runtime.openrouter.chat(
+                    messages,
+                    response_format=response_format,
+                    max_tokens=max_tokens,
+                    temperature=self._runtime.cfg.openrouter.temperature,
+                    top_p=self._runtime.cfg.openrouter.top_p,
+                    request_id=None,
+                    model_override=model_override,
+                )
+        except Exception as exc:
+            logger.error(
+                "summarize_pure_llm_call_failed",
+                extra={"cid": request.correlation_id, "error": str(exc)},
+            )
+            raise ValueError(f"LLM call failed: {exc}") from exc
+
+        if llm_result.status != "ok":
+            error_msg = llm_result.error_text or "Unknown LLM error"
+            logger.error(
+                "summarize_pure_llm_error",
+                extra={
+                    "cid": request.correlation_id,
+                    "status": llm_result.status,
+                    "error": error_msg,
+                },
+            )
+            raise ValueError(f"LLM returned error status: {error_msg}") from None
+
+        summary = self.parse_summary_from_llm_result(llm_result)
+        if not summary:
+            logger.error(
+                "summarize_pure_parse_failed",
+                extra={"cid": request.correlation_id},
+            )
+            raise ValueError("Failed to parse valid summary from LLM response") from None
+
+        logger.info(
+            "summarize_pure_success",
+            extra={"cid": request.correlation_id, "summary_keys": list(summary.keys())},
+        )
+        return summary
+
+    async def ensure_summary_payload(self, request: EnsureSummaryPayloadRequest) -> dict[str, Any]:
+        """Validate and enrich a parsed summary payload."""
+        if not isinstance(request.summary, dict):
+            raise ValueError("Summary payload must be a dictionary")
+
+        shaped = validate_and_shape_summary(request.summary)
+        shaped = await self._runtime.metadata_helper.ensure_summary_metadata(
+            shaped,
+            request.req_id,
+            request.content_text,
+            request.correlation_id,
+            request.chosen_lang,
+        )
+        self._runtime.insights_generator.update_last_summary(shaped)
+        return shaped
+
+    async def enrich_two_pass(
+        self,
+        summary: dict[str, Any],
+        *,
+        content_text: str,
+        chosen_lang: str,
+        correlation_id: str | None,
+    ) -> dict[str, Any]:
+        """Run the optional second-pass enrichment flow."""
+        try:
+            prompt_dir = Path(__file__).resolve().parent.parent.parent / "prompts"
+            lang_suffix = "ru" if chosen_lang == LANG_RU else "en"
+            prompt_path = prompt_dir / f"enrichment_system_{lang_suffix}.txt"
+            enrichment_prompt = prompt_path.read_text(encoding="utf-8")
+
+            core_fields = {
+                "summary_250",
+                "summary_1000",
+                "tldr",
+                "key_ideas",
+                "topic_tags",
+                "entities",
+                "source_type",
+            }
+            core_summary_text = json_dumps(
+                {key: value for key, value in summary.items() if key in core_fields},
+                indent=2,
+            )
+            user_content = (
+                f"Respond in {'Russian' if chosen_lang == LANG_RU else 'English'}.\n\n"
+                f"CORE SUMMARY (already generated, do not modify):\n{core_summary_text}\n\n"
+                f"ORIGINAL CONTENT START\n{content_text[:30000]}\nORIGINAL CONTENT END"
+            )
+            messages = [
+                {"role": "system", "content": enrichment_prompt},
+                {"role": "user", "content": user_content},
+            ]
+
+            async with self._runtime.sem():
+                llm_result = await self._runtime.openrouter.chat(
+                    messages,
+                    response_format=self._runtime.workflow.build_structured_response_format(
+                        mode="json_object"
+                    ),
+                    max_tokens=4096,
+                    temperature=self._runtime.cfg.openrouter.temperature,
+                    top_p=self._runtime.cfg.openrouter.top_p,
+                    request_id=None,
+                )
+
+            if llm_result.status != "ok":
+                logger.warning(
+                    "two_pass_enrichment_failed",
+                    extra={"cid": correlation_id, "error": llm_result.error_text},
+                )
+                return summary
+
+            enrichment = self.parse_summary_from_llm_result(llm_result)
+            if not enrichment:
+                logger.warning(
+                    "two_pass_enrichment_parse_failed",
+                    extra={"cid": correlation_id},
+                )
+                return summary
+
+            enrichment_keys = {
+                "answered_questions",
+                "seo_keywords",
+                "extractive_quotes",
+                "highlights",
+                "categories",
+                "key_points_to_remember",
+                "questions_answered",
+                "topic_taxonomy",
+            }
+            for key in enrichment_keys:
+                value = enrichment.get(key)
+                if value:
+                    summary[key] = value
+
+            logger.info(
+                "two_pass_enrichment_merged",
+                extra={
+                    "cid": correlation_id,
+                    "enriched_fields": [key for key in enrichment_keys if key in enrichment],
+                },
+            )
+            return summary
+        except Exception as exc:
+            logger.warning(
+                "two_pass_enrichment_error",
+                extra={"cid": correlation_id, "error": str(exc)},
+            )
+            return summary
+
+    def parse_summary_from_llm_result(self, llm_result: Any) -> dict[str, Any] | None:
+        """Parse a summary payload from an LLM result object."""
+        if isinstance(llm_result.response_json, dict):
+            choices = llm_result.response_json.get("choices") or []
+            if choices:
+                message = (choices[0] or {}).get("message") or {}
+                parsed = message.get("parsed")
+                if isinstance(parsed, dict):
+                    return parsed
+                content = message.get("content")
+                if isinstance(content, str):
+                    extracted = extract_json(content)
+                    if isinstance(extracted, dict):
+                        return extracted
+
+        if llm_result.response_text:
+            extracted = extract_json(llm_result.response_text)
+            if isinstance(extracted, dict):
+                return extracted
+        return None
+
+    def select_max_tokens(self, content_text: str) -> int | None:
+        """Choose a cost-aware output token budget."""
+        configured = self._runtime.cfg.openrouter.max_tokens
+        approx_input_tokens = count_tokens(content_text)
+        dynamic_budget = max(4096, min(12288, approx_input_tokens // 2 + 2048))
+
+        if configured is None:
+            logger.debug(
+                "max_tokens_dynamic",
+                extra={
+                    "content_len": len(content_text),
+                    "approx_input_tokens": approx_input_tokens,
+                    "selected": dynamic_budget,
+                },
+            )
+            return dynamic_budget
+
+        selected = max(4096, min(configured, dynamic_budget))
+        logger.debug(
+            "max_tokens_adjusted",
+            extra={
+                "content_len": len(content_text),
+                "approx_input_tokens": approx_input_tokens,
+                "configured": configured,
+                "selected": selected,
+            },
+        )
+        return selected
+
+    @staticmethod
+    def _truncate_content(content_text: str, max_chars: int) -> str:
+        from app.adapters.content.llm_summarizer_text import truncate_content_text
+
+        return truncate_content_text(content_text, max_chars)

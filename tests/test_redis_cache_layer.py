@@ -5,7 +5,11 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.adapters.content.content_extractor import ContentExtractor, FirecrawlResult
-from app.adapters.content.llm_summarizer import LLMSummarizer
+from app.adapters.content.interactive_summary_service import InteractiveSummaryService
+from app.adapters.content.pure_summary_service import PureSummaryService
+from app.adapters.content.summarization_models import InteractiveSummaryRequest
+from app.adapters.content.summarization_runtime import SummarizationRuntime
+from app.adapters.content.summary_request_factory import SummaryRequestFactory
 from app.infrastructure.cache.redis_cache import RedisCache
 
 
@@ -149,7 +153,7 @@ async def test_content_extractor_uses_cached_crawl(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_llm_summarizer_uses_cached_summary(monkeypatch):
+async def test_interactive_summary_service_uses_cached_summary(monkeypatch):
     cfg = _dummy_cfg()
 
     openrouter = SimpleNamespace()
@@ -164,13 +168,23 @@ async def test_llm_summarizer_uses_cached_summary(monkeypatch):
         send_cached_summary_notification=AsyncMock(),
     )
 
-    summarizer = LLMSummarizer(
+    runtime = SummarizationRuntime(
         cfg=cfg,
         db=db,
         openrouter=openrouter,
         response_formatter=response_formatter,
         audit_func=lambda *args, **kwargs: None,
         sem=lambda: asyncio.Semaphore(1),
+    )
+    pure_service = PureSummaryService(runtime=runtime)
+    request_factory = SummaryRequestFactory(
+        runtime=runtime,
+        select_max_tokens=pure_service.select_max_tokens,
+    )
+    service = InteractiveSummaryService(
+        runtime=runtime,
+        request_factory=request_factory,
+        pure_summary_service=pure_service,
     )
 
     cached_summary = {
@@ -180,27 +194,30 @@ async def test_llm_summarizer_uses_cached_summary(monkeypatch):
         "topic_tags": [],
     }
 
-    summarizer._cache_helper.get_cached_summary = AsyncMock(return_value=cached_summary)
-    summarizer._cache_helper.write_summary_cache = AsyncMock()
+    runtime.cache_helper.get_cached_summary = AsyncMock(return_value=cached_summary)
+    runtime.cache_helper.write_summary_cache = AsyncMock()
 
     async def _finalize_success(*args, **kwargs):
         return cached_summary
 
-    summarizer._workflow._finalize_success = _finalize_success
+    runtime.workflow._finalize_success = _finalize_success
 
-    summary = await summarizer.summarize_content(
-        message=None,
-        content_text="hello world",
-        chosen_lang="en",
-        system_prompt="prompt",
-        req_id=1,
-        max_chars=100,
-        url_hash="hash",
-        correlation_id=None,
-        interaction_id=None,
-        silent=True,
+    result = await service.summarize(
+        InteractiveSummaryRequest(
+            message=None,
+            content_text="hello world",
+            chosen_lang="en",
+            system_prompt="prompt",
+            req_id=1,
+            max_chars=100,
+            url_hash="hash",
+            correlation_id=None,
+            interaction_id=None,
+            silent=True,
+        )
     )
 
-    assert summary == cached_summary
+    assert result.summary == cached_summary
+    assert result.served_from_cache is True
     response_formatter.send_llm_start_notification.assert_not_called()
     response_formatter.send_cached_summary_notification.assert_not_awaited()
