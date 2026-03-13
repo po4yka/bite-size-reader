@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from app.db.database import Database
     from app.db.session import DatabaseSessionManager
 
 from app.config import load_config
@@ -19,7 +18,7 @@ from app.services.embedding_factory import create_embedding_service
 logger = logging.getLogger(__name__)
 
 
-def upgrade(db: Database | DatabaseSessionManager) -> None:
+def upgrade(db: DatabaseSessionManager) -> None:
     """Stream existing summary embeddings into the configured Chroma collection.
 
     The migration reads stored embeddings, converts them into Chroma upsert payloads,
@@ -113,7 +112,7 @@ def upgrade(db: Database | DatabaseSessionManager) -> None:
         _log_query_probe(vector_store, sample_vector, sample_metadata)
 
 
-def downgrade(db: Database | DatabaseSessionManager) -> None:
+def downgrade(db: DatabaseSessionManager) -> None:
     """No-op rollback placeholder.
 
     Chroma writes cannot be rolled back automatically. Operators can manually
@@ -124,7 +123,7 @@ def downgrade(db: Database | DatabaseSessionManager) -> None:
 
 
 def _fetch_summary_embeddings(
-    db: Database | DatabaseSessionManager, *, environment: str, user_scope: str
+    db: DatabaseSessionManager, *, environment: str, user_scope: str
 ) -> Iterable[dict[str, Any]]:
     from app.db.models import Request, Summary, SummaryEmbedding
     from app.services.metadata_builder import MetadataBuilder

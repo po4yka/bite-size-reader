@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.access_controller import AccessController
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from tests.conftest import make_test_app_config
 
 
@@ -56,7 +56,7 @@ def _make_config(tmp_path: str, allowed_ids):
 
 
 def make_bot(tmp_path: str, allowed_ids):
-    db = Database(tmp_path)
+    db = DatabaseSessionManager(tmp_path)
     db.migrate()
     cfg = _make_config(tmp_path, allowed_ids)
     from app.adapters import telegram_bot as tbmod
@@ -67,7 +67,7 @@ def make_bot(tmp_path: str, allowed_ids):
     # Mock the LLM client factory to avoid API key validation
     with patch("app.adapters.openrouter.openrouter_client.OpenRouterClient") as mock_openrouter:
         mock_openrouter.return_value = AsyncMock()
-        return TelegramBot(cfg=cfg, db=db)  # type: ignore[arg-type]
+        return TelegramBot(cfg=cfg, db=db)
 
 
 class TestAccessControl(unittest.IsolatedAsyncioTestCase):
@@ -117,7 +117,7 @@ class TestAccessControllerBlockReset(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "app.db")
             cfg = _make_config(db_path, allowed_ids=[1])
-            db = Database(db_path)
+            db = DatabaseSessionManager(db_path)
             db.migrate()
             formatter = DummyFormatter()
             controller = AccessController(cfg, db, formatter, lambda *args, **kwargs: None)
@@ -146,7 +146,7 @@ class TestAccessControllerBlockReset(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "app.db")
             cfg = _make_config(db_path, allowed_ids=[1])
-            db = Database(db_path)
+            db = DatabaseSessionManager(db_path)
             db.migrate()
             formatter = DummyFormatter()
             controller = AccessController(cfg, db, formatter, lambda *args, **kwargs: None)

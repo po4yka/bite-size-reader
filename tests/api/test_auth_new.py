@@ -11,8 +11,8 @@ from app.api.routers.auth import (
     oauth as auth_oauth,
     secret_auth,
 )
-from app.db.database import Database
 from app.db.models import User
+from app.db.session import DatabaseSessionManager
 
 
 def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -22,8 +22,8 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     secret_auth._cfg = None
 
 
-def _init_db(tmp_path) -> Database:
-    db = Database(str(tmp_path / "test-auth-new.db"))
+def _init_db(tmp_path) -> DatabaseSessionManager:
+    db = DatabaseSessionManager(str(tmp_path / "test-auth-new.db"))
     db.migrate()
     return db
 

@@ -134,8 +134,8 @@ async def test_summary_persistence_deferred_from_llm_flow() -> None:
         sem=lambda: _DummySemaphore(),
     )
     # Override repositories with slow mocks
-    workflow.summary_repo = _SlowSummaryRepo()  # type: ignore[assignment]
-    workflow.request_repo = _SlowRequestRepo()  # type: ignore[assignment]
+    workflow.summary_repo = _SlowSummaryRepo()
+    workflow.request_repo = _SlowRequestRepo()
 
     summary = {"summary_250": "short", "summary_1000": "long form", "tldr": "tldr"}
     llm_stub = SimpleNamespace(status="ok", latency_ms=5, model="m")

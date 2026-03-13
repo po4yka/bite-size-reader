@@ -19,13 +19,12 @@ from playhouse.migrate import SqliteMigrator, migrate
 from app.core.logging_utils import log_exception
 
 if TYPE_CHECKING:
-    from app.db.database import Database
     from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
 
-def upgrade(db: Database | DatabaseSessionManager) -> None:
+def upgrade(db: DatabaseSessionManager) -> None:
     """Add preferences_json field to users table."""
     migrator = SqliteMigrator(db._database)
 
@@ -50,7 +49,7 @@ def upgrade(db: Database | DatabaseSessionManager) -> None:
             raise
 
 
-def downgrade(db: Database | DatabaseSessionManager) -> None:
+def downgrade(db: DatabaseSessionManager) -> None:
     """Remove preferences_json field from users table."""
     migrator = SqliteMigrator(db._database)
 

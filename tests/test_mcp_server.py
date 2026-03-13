@@ -12,8 +12,9 @@ import pytest
 pytest.importorskip("mcp", reason="mcp not installed (install with: pip install .[mcp])")
 
 import app.mcp.server as mcp_server
-from app.db.database import Database
 from app.db.models import Summary, TopicSearchIndex, database_proxy
+from app.db.session import DatabaseSessionManager
+from tests.db_helpers import create_request, insert_summary
 
 
 @pytest.fixture
@@ -21,7 +22,7 @@ def mcp_test_db(tmp_path):
     """Create isolated DB and bind it to Peewee proxy for MCP tests."""
     old_proxy_obj = database_proxy.obj
     db_path = tmp_path / "mcp.db"
-    database = Database(str(db_path))
+    database = DatabaseSessionManager(str(db_path))
     database.migrate()
     database_proxy.initialize(database._database)
     yield database
@@ -47,14 +48,14 @@ def reset_mcp_state():
 
 def _insert_summary(
     *,
-    db: Database,
+    db: DatabaseSessionManager,
     user_id: int,
     url: str,
     title: str,
     tags: list[str],
     created_at: datetime,
 ) -> tuple[int, int]:
-    request_id = db.create_request(
+    request_id = create_request(
         type_="url",
         status="completed",
         correlation_id=f"cid-{user_id}-{url}",
@@ -63,7 +64,7 @@ def _insert_summary(
         input_url=url,
         normalized_url=url,
     )
-    summary_id = db.insert_summary(
+    summary_id = insert_summary(
         request_id=request_id,
         lang="en",
         json_payload={
@@ -90,7 +91,7 @@ def test_isotime_formats_utc_cleanly() -> None:
     assert mcp_server._isotime(naive) == "2026-01-01T12:00:00Z"
 
 
-def test_list_articles_tag_filter_paginates_correctly(mcp_test_db: Database) -> None:
+def test_list_articles_tag_filter_paginates_correctly(mcp_test_db: DatabaseSessionManager) -> None:
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     sid_old, _ = _insert_summary(
         db=mcp_test_db,
@@ -132,7 +133,7 @@ def test_list_articles_tag_filter_paginates_correctly(mcp_test_db: Database) -> 
 
 
 def test_search_articles_preserves_fts_order_and_scope(
-    mcp_test_db: Database, monkeypatch: pytest.MonkeyPatch
+    mcp_test_db: DatabaseSessionManager, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     sid_user1_new, req_user1_new = _insert_summary(
@@ -378,7 +379,7 @@ class _FakeChromaService:
 
 @pytest.mark.asyncio
 async def test_semantic_search_groups_chunks_and_min_similarity(
-    mcp_test_db: Database, monkeypatch: pytest.MonkeyPatch
+    mcp_test_db: DatabaseSessionManager, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     sid1, req1 = _insert_summary(
@@ -481,7 +482,7 @@ async def test_semantic_search_keyword_fallback_when_semantic_unavailable(
 
 @pytest.mark.asyncio
 async def test_find_similar_articles_excludes_source_summary(
-    mcp_test_db: Database, monkeypatch: pytest.MonkeyPatch
+    mcp_test_db: DatabaseSessionManager, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     sid1, req1 = _insert_summary(
@@ -535,7 +536,7 @@ async def test_find_similar_articles_excludes_source_summary(
 
 @pytest.mark.asyncio
 async def test_chroma_sync_gap_reports_missing_and_extra(
-    mcp_test_db: Database, monkeypatch: pytest.MonkeyPatch
+    mcp_test_db: DatabaseSessionManager, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     sid1, _ = _insert_summary(

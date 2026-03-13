@@ -40,12 +40,12 @@ python -m app.cli.migrations.migration_runner rollback 001_add_performance_index
 from __future__ import annotations
 
 import logging
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
 
-def upgrade(db: Database) -> None:
+def upgrade(db: DatabaseSessionManager) -> None:
     """Apply migration changes."""
     with db._database.connection_context():
         # Your migration code here
@@ -57,7 +57,7 @@ def upgrade(db: Database) -> None:
     logger.info("Migration completed")
 
 
-def downgrade(db: Database) -> None:
+def downgrade(db: DatabaseSessionManager) -> None:
     """Revert migration changes."""
     with db._database.connection_context():
         # Your rollback code here
@@ -103,7 +103,7 @@ python -m app.cli.migrations.migration_runner run
 ### Adding an Index
 
 ```python
-def upgrade(db: Database) -> None:
+def upgrade(db: DatabaseSessionManager) -> None:
     """Add index for faster queries."""
     with db._database.connection_context():
         # Check if index exists
@@ -118,7 +118,7 @@ def upgrade(db: Database) -> None:
             ON my_table(column_name)
         """)
 
-def downgrade(db: Database) -> None:
+def downgrade(db: DatabaseSessionManager) -> None:
     """Remove index."""
     with db._database.connection_context():
         db._database.execute_sql("DROP INDEX IF EXISTS idx_my_index")
@@ -127,7 +127,7 @@ def downgrade(db: Database) -> None:
 ### Adding a Column
 
 ```python
-def upgrade(db: Database) -> None:
+def upgrade(db: DatabaseSessionManager) -> None:
     """Add new column to table."""
     with db._database.connection_context():
         # Check if column exists
@@ -142,7 +142,7 @@ def upgrade(db: Database) -> None:
             ADD COLUMN new_column TEXT DEFAULT NULL
         """)
 
-def downgrade(db: Database) -> None:
+def downgrade(db: DatabaseSessionManager) -> None:
     """Remove column (SQLite limitation)."""
     # SQLite doesn't support DROP COLUMN before 3.35.0
     # You need to recreate the table without the column
@@ -155,7 +155,7 @@ def downgrade(db: Database) -> None:
 ### Data Migration
 
 ```python
-def upgrade(db: Database) -> None:
+def upgrade(db: DatabaseSessionManager) -> None:
     """Migrate data to new format."""
     with db._database.connection_context():
         # Fetch old format data
@@ -190,7 +190,7 @@ SQLite has limited ALTER TABLE support:
 **Workaround**: Recreate table with new schema:
 
 ```python
-def upgrade(db: Database) -> None:
+def upgrade(db: DatabaseSessionManager) -> None:
     """Recreate table with new schema."""
     with db._database.connection_context():
         # Create new table with desired schema

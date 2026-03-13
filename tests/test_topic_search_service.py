@@ -9,9 +9,10 @@ from app.adapters.external.firecrawl_parser import (
     FirecrawlSearchItem,
     FirecrawlSearchResult,
 )
-from app.db.database import Database
 from app.db.models import database_proxy
+from app.db.session import DatabaseSessionManager
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService
+from tests.db_helpers import create_request, insert_summary
 
 
 @pytest.fixture
@@ -19,7 +20,7 @@ def test_database(tmp_path):
     """Create an isolated test database with proper database_proxy handling."""
     old_proxy_obj = database_proxy.obj
     db_path = tmp_path / "app.db"
-    database = Database(str(db_path))
+    database = DatabaseSessionManager(str(db_path))
     database.migrate()
     # Explicitly ensure database_proxy points to this database
     database_proxy.initialize(database._database)
@@ -103,7 +104,7 @@ async def test_find_articles_raises_on_error_status() -> None:
 async def test_local_search_returns_recent_matches(test_database) -> None:
     database = test_database
 
-    request_id = database.create_request(
+    request_id = create_request(
         type_="url",
         status="completed",
         correlation_id="cid-1",
@@ -113,7 +114,7 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
         normalized_url="https://example.com/android",
         content_text="Android systems excel at modular design principles.",
     )
-    database.insert_summary(
+    insert_summary(
         request_id=request_id,
         lang="en",
         json_payload={
@@ -128,7 +129,7 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
         },
     )
 
-    other_request = database.create_request(
+    other_request = create_request(
         type_="url",
         status="completed",
         correlation_id="cid-2",
@@ -138,7 +139,7 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
         normalized_url="https://example.com/cooking",
         content_text="All about pasta.",
     )
-    database.insert_summary(
+    insert_summary(
         request_id=other_request,
         lang="en",
         json_payload={
@@ -186,7 +187,7 @@ async def test_local_search_rejects_blank_queries(test_database) -> None:
 async def test_local_search_index_finds_older_match(test_database) -> None:
     database = test_database
 
-    matching_request = database.create_request(
+    matching_request = create_request(
         type_="url",
         status="completed",
         correlation_id="cid-3",
@@ -196,7 +197,7 @@ async def test_local_search_index_finds_older_match(test_database) -> None:
         normalized_url="https://example.com/android-old",
         content_text="Legacy overview of Android modular design patterns.",
     )
-    database.insert_summary(
+    insert_summary(
         request_id=matching_request,
         lang="en",
         json_payload={
@@ -211,7 +212,7 @@ async def test_local_search_index_finds_older_match(test_database) -> None:
     )
 
     # Insert a newer, non-matching summary so fallback scans would skip the older entry.
-    newer_request = database.create_request(
+    newer_request = create_request(
         type_="url",
         status="completed",
         correlation_id="cid-4",
@@ -221,7 +222,7 @@ async def test_local_search_index_finds_older_match(test_database) -> None:
         normalized_url="https://example.com/cooking-souffle",
         content_text="All about baking souffles.",
     )
-    database.insert_summary(
+    insert_summary(
         request_id=newer_request,
         lang="en",
         json_payload={
@@ -245,7 +246,7 @@ async def test_local_search_index_finds_older_match(test_database) -> None:
 def test_database_populates_topic_search_index(test_database) -> None:
     database = test_database
 
-    request_id = database.create_request(
+    request_id = create_request(
         type_="url",
         status="completed",
         correlation_id="cid-5",
@@ -255,7 +256,7 @@ def test_database_populates_topic_search_index(test_database) -> None:
         normalized_url="https://example.com/ai",
         content_text="Artificial intelligence fundamentals.",
     )
-    database.insert_summary(
+    insert_summary(
         request_id=request_id,
         lang="en",
         json_payload={
@@ -267,6 +268,7 @@ def test_database_populates_topic_search_index(test_database) -> None:
             },
         },
     )
+    database._topic_search.refresh_index(request_id)
 
     with database._database.connection_context():
         cursor = database._database.execute_sql(

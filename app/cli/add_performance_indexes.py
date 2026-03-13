@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 from app.core.logging_utils import log_exception
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def create_indexes(db: Database) -> None:
+def create_indexes(db: DatabaseSessionManager) -> None:
     """Create performance indexes on requests and summaries tables."""
     indexes = [
         # Requests table indexes
@@ -98,7 +98,7 @@ def create_indexes(db: Database) -> None:
     logger.info(f"\nSuccessfully created {created_count} indexes")
 
 
-def check_indexes(db: Database) -> None:
+def check_indexes(db: DatabaseSessionManager) -> None:
     """Verify that indexes were created successfully."""
     logger.info("\nVerifying indexes...")
 
@@ -147,7 +147,7 @@ def main() -> int:
 
     # Initialize database
     try:
-        db = Database(path=db_path)
+        db = DatabaseSessionManager(path=db_path)
 
         # Ensure base schema exists
         logger.info("Ensuring base schema exists...")

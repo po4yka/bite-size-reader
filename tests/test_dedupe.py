@@ -7,9 +7,17 @@ from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.core.url_utils import normalize_url, url_hash_sha256
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from app.models.llm.llm_models import LLMCallResult
 from tests.conftest import make_test_app_config
+from tests.db_helpers import (
+    create_request,
+    get_request_by_dedupe_hash,
+    get_request_by_forward,
+    get_summary_by_request,
+    insert_crawl_result,
+    insert_summary,
+)
 
 
 class FakeMessage:
@@ -95,7 +103,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
     async def test_dedupe_and_summary_version_increment(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "app.db")
-            db = Database(db_path)
+            db = DatabaseSessionManager(db_path)
             db.migrate()
 
             url = "https://Example.com/Path?a=1&utm_source=x"
@@ -103,7 +111,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             dedupe = url_hash_sha256(norm)
 
             # Create initial request and crawl result
-            req_id = db.create_request(
+            req_id = create_request(
                 type_="url",
                 status="pending",
                 correlation_id="initcid",
@@ -114,7 +122,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 dedupe_hash=dedupe,
                 route_version=1,
             )
-            db.insert_crawl_result(
+            insert_crawl_result(
                 request_id=req_id,
                 source_url=url,
                 endpoint="/v2/scrape",
@@ -162,35 +170,35 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
             msg = FakeMessage()
             # First run: should reuse crawl and insert summary with a version marker
             await bot._handle_url_flow(msg, url, correlation_id="cid1")
-            s1 = db.get_summary_by_request(req_id)
+            s1 = get_summary_by_request(req_id)
             assert s1 is not None
             version1 = int(s1["version"])
             assert version1 > 0
             # correlation id updated
-            row = db.get_request_by_dedupe_hash(dedupe)
+            row = get_request_by_dedupe_hash(dedupe)
             assert row["correlation_id"] == "cid1"
             first_pass_calls = fake_or.calls
             assert first_pass_calls >= 1  # summarization pipeline made at least one LLM call
 
             # Second run: dedupe again; summary should be served from cache without a new call
             await bot._handle_url_flow(msg, url, correlation_id="cid2")
-            s2 = db.get_summary_by_request(req_id)
+            s2 = get_summary_by_request(req_id)
             assert s2 is not None
             assert int(s2["version"]) == version1
-            row2 = db.get_request_by_dedupe_hash(dedupe)
+            row2 = get_request_by_dedupe_hash(dedupe)
             assert row2["correlation_id"] == "cid2"
             assert fake_or.calls == first_pass_calls  # cache reuse means no additional LLM calls
 
     async def test_forward_cached_summary_reuse(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "app.db")
-            db = Database(db_path)
+            db = DatabaseSessionManager(db_path)
             db.migrate()
 
             fwd_chat_id = 777
             fwd_msg_id = 888
 
-            req_id = db.create_request(
+            req_id = create_request(
                 type_="forward",
                 status="ok",
                 correlation_id="orig",
@@ -201,7 +209,7 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
                 fwd_from_msg_id=fwd_msg_id,
                 route_version=1,
             )
-            db.insert_summary(
+            insert_summary(
                 request_id=req_id,
                 lang="en",
                 json_payload={"summary_250": "cached", "tldr": "cached"},
@@ -239,11 +247,11 @@ class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
 
             await bot._handle_forward_flow(msg, correlation_id="newcid")
 
-            cached_summary = db.get_summary_by_request(req_id)
+            cached_summary = get_summary_by_request(req_id)
             assert cached_summary is not None
             assert int(cached_summary["version"]) > 0
 
-            existing_request = db.get_request_by_forward(fwd_chat_id, fwd_msg_id)
+            existing_request = get_request_by_forward(fwd_chat_id, fwd_msg_id)
             assert existing_request is not None
             assert existing_request["correlation_id"] == "newcid"
 

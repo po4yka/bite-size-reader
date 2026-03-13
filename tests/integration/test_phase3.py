@@ -13,9 +13,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.cli.migrations.migration_runner import MigrationRunner
 from app.db.batch_operations import BatchOperations
-from app.db.database import Database
 from app.db.health_check import DatabaseHealthCheck
 from app.db.query_cache import QueryCache
+from app.db.session import DatabaseSessionManager
 
 logging.basicConfig(
     level=logging.WARNING,  # Reduce noise
@@ -38,7 +38,7 @@ def test_phase3() -> None:
 
         # Step 1: Apply all migrations (Phase 1 + Phase 2)
         print("\n[1] Applying all migrations...")
-        db = Database(path=db_path)
+        db = DatabaseSessionManager(path=db_path)
         db.migrate()
 
         runner = MigrationRunner(db)

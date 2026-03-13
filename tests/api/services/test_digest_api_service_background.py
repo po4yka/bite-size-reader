@@ -15,7 +15,7 @@ from app.db.models import Channel
 
 @pytest.fixture
 def digest_service() -> DigestAPIService:
-    return DigestAPIService(ChannelDigestConfig(DIGEST_ENABLED=True))
+    return DigestAPIService(ChannelDigestConfig(enabled=True))
 
 
 def test_trigger_channel_digest_normalizes_username(digest_service: DigestAPIService) -> None:
@@ -39,11 +39,11 @@ async def test_enqueue_methods_schedule_background_work(digest_service: DigestAP
     )
     await asyncio.sleep(0)
 
-    digest_service._execute_digest_trigger.assert_awaited_once_with(  # type: ignore[attr-defined]
+    digest_service._execute_digest_trigger.assert_awaited_once_with(
         user_id=1,
         correlation_id="cid-1",
     )
-    digest_service._execute_channel_digest_trigger.assert_awaited_once_with(  # type: ignore[attr-defined]
+    digest_service._execute_channel_digest_trigger.assert_awaited_once_with(
         user_id=1,
         correlation_id="cid-2",
         channel_username="channel",
@@ -63,7 +63,7 @@ async def test_execute_trigger_helpers_swallow_failures(digest_service: DigestAP
         channel_username="chan",
     )
 
-    digest_service._run_digest_task.side_effect = RuntimeError("boom")  # type: ignore[attr-defined]
+    digest_service._run_digest_task.side_effect = RuntimeError("boom")
     await digest_service._execute_digest_trigger(user_id=1, correlation_id="cid-3")
     await digest_service._execute_channel_digest_trigger(
         user_id=1,

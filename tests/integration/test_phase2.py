@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test script to verify Phase 2 schema improvements.
 
-Since Database.migrate() now runs all pending migrations (including Phase 2),
+Since DatabaseSessionManager.migrate() now runs all pending migrations (including Phase 2),
 this test verifies the constraints are enforced after a standard migration.
 """
 
@@ -19,7 +19,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.cli.migrations.migration_runner import MigrationRunner
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def test_phase2_migration():
     """Test Phase 2 schema constraint improvements.
 
-    Database.migrate() applies all pending migrations automatically,
+    DatabaseSessionManager.migrate() applies all pending migrations automatically,
     so we verify that Phase 2 constraints are active after migration.
     """
     print("=" * 70)
@@ -47,7 +47,7 @@ def test_phase2_migration():
 
         # Step 1: Create base schema and run all migrations
         print("\n[1] Creating base schema and running all migrations...")
-        db = Database(path=db_path)
+        db = DatabaseSessionManager(path=db_path)
         db.migrate()
 
         runner = MigrationRunner(db)

@@ -7,9 +7,10 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from app.services.topic_search import TopicArticle
 from tests.conftest import make_test_app_config
+from tests.db_helpers import get_user_interactions
 
 
 class FakeMessage:
@@ -49,7 +50,7 @@ class BotSpy(TelegramBot):
 
 def make_bot(tmp_path: str) -> BotSpy:
     """Create test bot instance with mocked dependencies."""
-    db = Database(tmp_path)
+    db = DatabaseSessionManager(tmp_path)
     db.migrate()
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1, 42))
     from app.adapters import telegram_bot as tbmod
@@ -374,7 +375,7 @@ class TestSearchCommand(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Verify interaction was tracked in database
-            interactions = bot.db.get_user_interactions(uid=42, limit=10)
+            interactions = get_user_interactions(uid=42, limit=10)
             assert len(interactions) > 0
             last_interaction = interactions[0]
             assert last_interaction["command"] == "/search"

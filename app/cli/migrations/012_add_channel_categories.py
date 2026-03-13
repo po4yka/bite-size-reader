@@ -10,13 +10,12 @@ import peewee
 from app.core.logging_utils import log_exception
 
 if TYPE_CHECKING:
-    from app.db.database import Database
     from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
 
-def upgrade(db: Database | DatabaseSessionManager) -> None:
+def upgrade(db: DatabaseSessionManager) -> None:
     """Create channel_categories table and add category_id to channel_subscriptions."""
     # Create channel_categories table
     create_sql = """
@@ -55,7 +54,7 @@ def upgrade(db: Database | DatabaseSessionManager) -> None:
     logger.info("migration_012_complete")
 
 
-def downgrade(db: Database | DatabaseSessionManager) -> None:
+def downgrade(db: DatabaseSessionManager) -> None:
     """Drop channel_categories table (category_id column stays as SQLite limitation)."""
     try:
         db._database.execute_sql("DROP TABLE IF EXISTS channel_categories")

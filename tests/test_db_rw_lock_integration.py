@@ -1,4 +1,4 @@
-"""Integration tests for Database with AsyncRWLock."""
+"""Integration tests for DatabaseSessionManager with AsyncRWLock."""
 
 from __future__ import annotations
 
@@ -9,15 +9,28 @@ from pathlib import Path
 
 import pytest
 
+from app.db.models import Request, model_to_dict
+from tests.db_helpers import (
+    create_request,
+    get_summary_by_request,
+    update_request_status,
+    upsert_summary,
+)
+
+
+def _get_request_by_id(request_id: int) -> dict | None:
+    request = Request.get_or_none(Request.id == request_id)
+    return model_to_dict(request)
+
 
 @pytest.mark.integration
 class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
-    """Test that Database class works correctly with AsyncRWLock."""
+    """Test that DatabaseSessionManager works correctly with AsyncRWLock."""
 
     async def asyncSetUp(self) -> None:
         """Set up test database."""
-        from app.db.database import Database
         from app.db.models import database_proxy
+        from app.db.session import DatabaseSessionManager
 
         # Save original database proxy state
         self._old_db = database_proxy.obj
@@ -26,7 +39,7 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as temp_db:
             self.db_path = temp_db.name
 
-        self.db = Database(path=self.db_path)
+        self.db = DatabaseSessionManager(path=self.db_path)
         self.db.migrate()
 
     async def asyncTearDown(self) -> None:
@@ -41,7 +54,7 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
     async def test_concurrent_reads(self) -> None:
         """Test that multiple read operations can run concurrently."""
         # Create a test request
-        request_id = self.db.create_request(
+        request_id = create_request(
             type_="url",
             status="pending",
             correlation_id="test-123",
@@ -52,7 +65,7 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
         )
 
         # Create summary
-        self.db.upsert_summary(
+        upsert_summary(
             request_id=request_id,
             lang="en",
             json_payload={"summary_250": "Test summary", "tldr": "Test"},
@@ -61,7 +74,15 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
         # Perform multiple concurrent reads
         read_count = 10
         results = await asyncio.gather(
-            *[self.db.async_get_request_by_id(request_id) for _ in range(read_count)]
+            *[
+                self.db._safe_db_operation(
+                    _get_request_by_id,
+                    request_id,
+                    operation_name="get_request_by_id",
+                    read_only=True,
+                )
+                for _ in range(read_count)
+            ]
         )
 
         # All reads should succeed
@@ -73,7 +94,7 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
     async def test_read_write_isolation(self) -> None:
         """Test that reads and writes don't interfere with each other."""
         # Create a test request
-        request_id = self.db.create_request(
+        request_id = create_request(
             type_="url",
             status="pending",
             correlation_id="test-456",
@@ -87,13 +108,23 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
         async def reader() -> None:
             """Read operation."""
             await asyncio.sleep(0.01)
-            result = await self.db.async_get_request_by_id(request_id)
+            result = await self.db._safe_db_operation(
+                _get_request_by_id,
+                request_id,
+                operation_name="get_request_by_id",
+                read_only=True,
+            )
             results.append(f"read:{result['status']}")
 
         async def writer(status: str) -> None:
             """Write operation."""
             await asyncio.sleep(0.005)
-            await self.db.async_update_request_status(request_id, status)
+            await self.db._safe_db_operation(
+                update_request_status,
+                request_id,
+                status,
+                operation_name="update_request_status",
+            )
             results.append(f"write:{status}")
 
         # Execute reads and writes concurrently
@@ -113,7 +144,7 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
         # Create test requests
         request_ids = []
         for i in range(5):
-            request_id = self.db.create_request(
+            request_id = create_request(
                 type_="url",
                 status="pending",
                 correlation_id=f"test-write-{i}",
@@ -125,18 +156,31 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
 
         # Update all requests concurrently
         await asyncio.gather(
-            *[self.db.async_update_request_status(req_id, "completed") for req_id in request_ids]
+            *[
+                self.db._safe_db_operation(
+                    update_request_status,
+                    req_id,
+                    "completed",
+                    operation_name="update_request_status",
+                )
+                for req_id in request_ids
+            ]
         )
 
         # Verify all requests were updated
         for req_id in request_ids:
-            result = await self.db.async_get_request_by_id(req_id)
+            result = await self.db._safe_db_operation(
+                _get_request_by_id,
+                req_id,
+                operation_name="get_request_by_id",
+                read_only=True,
+            )
             self.assertEqual(result["status"], "completed")
 
     async def test_read_only_flag_usage(self) -> None:
         """Test that read_only flag is properly used."""
         # Create a test request
-        request_id = self.db.create_request(
+        request_id = create_request(
             type_="url",
             status="pending",
             correlation_id="test-readonly",
@@ -146,21 +190,36 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
         )
 
         # Perform read operation (should use read lock)
-        result = await self.db.async_get_request_by_id(request_id)
+        result = await self.db._safe_db_operation(
+            _get_request_by_id,
+            request_id,
+            operation_name="get_request_by_id",
+            read_only=True,
+        )
         self.assertIsNotNone(result)
         self.assertEqual(result["id"], request_id)
 
         # Perform write operation (should use write lock)
-        await self.db.async_update_request_status(request_id, "completed")
+        await self.db._safe_db_operation(
+            update_request_status,
+            request_id,
+            "completed",
+            operation_name="update_request_status",
+        )
 
         # Verify write succeeded
-        result = await self.db.async_get_request_by_id(request_id)
+        result = await self.db._safe_db_operation(
+            _get_request_by_id,
+            request_id,
+            operation_name="get_request_by_id",
+            read_only=True,
+        )
         self.assertEqual(result["status"], "completed")
 
     async def test_summary_operations(self) -> None:
         """Test summary read/write operations."""
         # Create request
-        request_id = self.db.create_request(
+        request_id = create_request(
             type_="url",
             status="pending",
             correlation_id="test-summary",
@@ -170,7 +229,9 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
         )
 
         # Write summary
-        version = await self.db.async_upsert_summary(
+        version = await self.db._safe_db_operation(
+            upsert_summary,
+            operation_name="upsert_summary",
             request_id=request_id,
             lang="en",
             json_payload={"summary_250": "Test", "tldr": "Test summary"},
@@ -179,7 +240,15 @@ class TestDatabaseRWLockIntegration(unittest.IsolatedAsyncioTestCase):
 
         # Read summary concurrently
         results = await asyncio.gather(
-            *[self.db.async_get_summary_by_request(request_id) for _ in range(5)]
+            *[
+                self.db._safe_db_operation(
+                    get_summary_by_request,
+                    request_id,
+                    operation_name="get_summary_by_request",
+                    read_only=True,
+                )
+                for _ in range(5)
+            ]
         )
 
         # All reads should succeed

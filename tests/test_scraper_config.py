@@ -9,12 +9,12 @@ from app.config.settings import _raise_on_deprecated_scraper_env_vars
 
 
 def test_provider_order_accepts_csv() -> None:
-    cfg = ScraperConfig(provider_order="scrapling,firecrawl,playwright,direct_html")
+    cfg = ScraperConfig(provider_order="scrapling,firecrawl,playwright,direct_html")  # type: ignore[arg-type]
     assert cfg.provider_order == ["scrapling", "firecrawl", "playwright", "direct_html"]
 
 
 def test_provider_order_accepts_json_array_string() -> None:
-    cfg = ScraperConfig(provider_order='["scrapling", "crawlee", "direct_html"]')
+    cfg = ScraperConfig(provider_order='["scrapling", "crawlee", "direct_html"]')  # type: ignore[arg-type]
     assert cfg.provider_order == ["scrapling", "crawlee", "direct_html"]
 
 
@@ -25,7 +25,7 @@ def test_provider_order_rejects_unknown_provider() -> None:
 
 def test_provider_order_rejects_duplicates() -> None:
     with pytest.raises(ValueError, match="Duplicate scraper provider"):
-        ScraperConfig(provider_order="scrapling,scrapling,direct_html")
+        ScraperConfig(provider_order="scrapling,scrapling,direct_html")  # type: ignore[arg-type]
 
 
 def test_force_provider_validation() -> None:

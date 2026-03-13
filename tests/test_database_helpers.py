@@ -7,8 +7,21 @@ import unittest
 
 import pytest
 
-from app.db.database import Database
-from app.db.models import database_proxy
+from app.db.models import Request, Summary, database_proxy
+from app.db.session import DatabaseSessionManager
+from tests.db_helpers import (
+    create_request,
+    get_crawl_result_by_request,
+    get_request_by_dedupe_hash,
+    get_summary_by_request,
+    insert_audit_log,
+    insert_crawl_result,
+    insert_llm_call,
+    insert_summary,
+    insert_telegram_message,
+    update_request_status,
+    upsert_summary,
+)
 
 
 class TestDatabaseHelpers(unittest.TestCase):
@@ -18,7 +31,7 @@ class TestDatabaseHelpers(unittest.TestCase):
 
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = os.path.join(self.tmp.name, "app.db")
-        self.db = Database(self.db_path)
+        self.db = DatabaseSessionManager(self.db_path)
         self.db.migrate()
 
     def tearDown(self):
@@ -43,20 +56,20 @@ class TestDatabaseHelpers(unittest.TestCase):
             assert row is not None
 
     def test_create_backup_copy_rejects_memory_db(self):
-        mem_db = Database(":memory:")
+        mem_db = DatabaseSessionManager(":memory:")
         mem_db.migrate()
 
         with pytest.raises(ValueError):
             mem_db.create_backup_copy(os.path.join(self.tmp.name, "memory.db"))
 
     def test_create_backup_copy_requires_source_file(self):
-        db = Database(os.path.join(self.tmp.name, "missing.db"))
+        db = DatabaseSessionManager(os.path.join(self.tmp.name, "missing.db"))
 
         with pytest.raises(FileNotFoundError):
             db.create_backup_copy(os.path.join(self.tmp.name, "missing-backup.db"))
 
     def test_create_request_and_fetch_by_hash(self):
-        rid = self.db.create_request(
+        rid = create_request(
             type_="url",
             status="pending",
             correlation_id="abc123",
@@ -68,23 +81,23 @@ class TestDatabaseHelpers(unittest.TestCase):
             route_version=1,
         )
         assert isinstance(rid, int)
-        row = self.db.get_request_by_dedupe_hash("abc")
+        row = get_request_by_dedupe_hash("abc")
         assert row is not None
         assert row["id"] == rid
         assert row["status"] == "pending"
         assert row["correlation_id"] == "abc123"
 
         # Update status and lang
-        self.db.update_request_status(rid, "ok")
-        self.db.update_request_lang_detected(rid, "en")
-        self.db.update_request_correlation_id(rid, "zzz999")
-        row2 = self.db.get_request_by_dedupe_hash("abc")
+        update_request_status(rid, "ok")
+        Request.update({Request.lang_detected: "en"}).where(Request.id == rid).execute()
+        Request.update({Request.correlation_id: "zzz999"}).where(Request.id == rid).execute()
+        row2 = get_request_by_dedupe_hash("abc")
         assert row2["status"] == "ok"
         assert row2["lang_detected"] == "en"
         assert row2["correlation_id"] == "zzz999"
 
     def test_create_request_handles_duplicate_hash_race(self):
-        first_id = self.db.create_request(
+        first_id = create_request(
             type_="url",
             status="pending",
             correlation_id="cid-1",
@@ -96,7 +109,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             route_version=1,
         )
 
-        second_id = self.db.create_request(
+        second_id = create_request(
             type_="url",
             status="pending",
             correlation_id="cid-2",
@@ -110,7 +123,7 @@ class TestDatabaseHelpers(unittest.TestCase):
 
         assert first_id == second_id
 
-        row = self.db.get_request_by_dedupe_hash("shared-hash")
+        row = get_request_by_dedupe_hash("shared-hash")
         assert row["id"] == first_id
         # Latest correlation id should be persisted
         assert row["correlation_id"] == "cid-2"
@@ -122,7 +135,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         assert count["c"] == 1
 
     def test_crawl_result_helpers(self):
-        rid = self.db.create_request(
+        rid = create_request(
             type_="url",
             status="pending",
             correlation_id=None,
@@ -131,7 +144,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             normalized_url="https://example.com/crawl-test",
             route_version=1,
         )
-        cid = self.db.insert_crawl_result(
+        cid = insert_crawl_result(
             request_id=rid,
             source_url="https://example.com",
             endpoint="/v2/scrape",
@@ -154,7 +167,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             error_text=None,
         )
         assert isinstance(cid, int)
-        row = self.db.get_crawl_result_by_request(rid)
+        row = get_crawl_result_by_request(rid)
         assert row is not None
         assert row["http_status"] == 200
         assert row["content_markdown"] == "# md"
@@ -163,7 +176,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         assert row["raw_response_json"] is None
 
     def test_summary_upsert(self):
-        rid = self.db.create_request(
+        rid = create_request(
             type_="url",
             status="pending",
             correlation_id=None,
@@ -172,26 +185,30 @@ class TestDatabaseHelpers(unittest.TestCase):
             normalized_url="https://example.com/upsert-test",
             route_version=1,
         )
-        v1 = self.db.upsert_summary(request_id=rid, lang="en", json_payload={"a": 1})
+        v1 = upsert_summary(request_id=rid, lang="en", json_payload={"a": 1})
         assert v1 >= 1
-        row = self.db.get_summary_by_request(rid)
+        row = get_summary_by_request(rid)
         assert row is not None
         assert row["version"] == v1
         assert row["lang"] == "en"
         assert row["insights_json"] is None
 
-        v2 = self.db.upsert_summary(request_id=rid, lang="en", json_payload={"a": 2})
+        v2 = upsert_summary(request_id=rid, lang="en", json_payload={"a": 2})
         assert v2 > v1
-        row2 = self.db.get_summary_by_request(rid)
+        row2 = get_summary_by_request(rid)
         assert row2["version"] == v2
 
         insights_payload = {"topic_overview": "Context", "new_facts": []}
-        self.db.update_summary_insights(rid, insights_payload)
-        row3 = self.db.get_summary_by_request(rid)
+        from app.db.json_utils import prepare_json_payload
+
+        Summary.update({Summary.insights_json: prepare_json_payload(insights_payload)}).where(
+            Summary.request == rid
+        ).execute()
+        row3 = get_summary_by_request(rid)
         assert row3["insights_json"] == insights_payload
 
     def test_insert_llm_and_telegram_and_audit(self):
-        rid = self.db.create_request(
+        rid = create_request(
             type_="forward",
             status="pending",
             correlation_id=None,
@@ -200,7 +217,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             route_version=1,
         )
         # Telegram message
-        mid = self.db.insert_telegram_message(
+        mid = insert_telegram_message(
             request_id=rid,
             message_id=10,
             chat_id=1,
@@ -223,7 +240,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         assert row["chat_id"] == 1
 
         # LLM call
-        lid = self.db.insert_llm_call(
+        lid = insert_llm_call(
             request_id=rid,
             provider="openrouter",
             model="m",
@@ -256,7 +273,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         assert json.loads(lrow["openrouter_response_json"] or "{}") == {"choices": []}
 
         # Audit
-        aid = self.db.insert_audit_log(level="INFO", event="test", details_json={"x": 1})
+        aid = insert_audit_log(level="INFO", event="test", details_json={"x": 1})
         assert isinstance(aid, int)
         arow = self.db.fetchone("SELECT * FROM audit_logs WHERE id = ?", (aid,))
         assert arow is not None
@@ -298,7 +315,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             "key_points_to_remember": [],
         }
 
-        rid_good = self.db.create_request(
+        rid_good = create_request(
             type_="url",
             status="ok",
             correlation_id="good",
@@ -308,12 +325,12 @@ class TestDatabaseHelpers(unittest.TestCase):
             normalized_url="https://example.com/good",
             route_version=1,
         )
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid_good,
             lang="en",
             json_payload=base_summary,
         )
-        self.db.insert_crawl_result(
+        insert_crawl_result(
             request_id=rid_good,
             source_url="https://example.com/good",
             endpoint="/v2/scrape",
@@ -342,7 +359,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         bad_summary["summary_250"] = ""
         bad_summary.pop("metadata", None)
 
-        rid_bad = self.db.create_request(
+        rid_bad = create_request(
             type_="url",
             status="ok",
             correlation_id="bad",
@@ -352,13 +369,13 @@ class TestDatabaseHelpers(unittest.TestCase):
             normalized_url="https://example.com/bad",
             route_version=1,
         )
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid_bad,
             lang="en",
             json_payload=bad_summary,
         )
 
-        rid_empty_links = self.db.create_request(
+        rid_empty_links = create_request(
             type_="url",
             status="ok",
             correlation_id="empty",
@@ -368,12 +385,12 @@ class TestDatabaseHelpers(unittest.TestCase):
             normalized_url="https://example.com/empty",
             route_version=1,
         )
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid_empty_links,
             lang="en",
             json_payload=base_summary,
         )
-        self.db.insert_crawl_result(
+        insert_crawl_result(
             request_id=rid_empty_links,
             source_url="https://example.com/empty",
             endpoint="/v2/scrape",
@@ -396,7 +413,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             error_text=None,
         )
 
-        rid_missing = self.db.create_request(
+        rid_missing = create_request(
             type_="url",
             status="pending",
             correlation_id="missing",
@@ -456,7 +473,7 @@ class TestDatabaseHelpers(unittest.TestCase):
         assert rid_empty_links not in reprocess_map
 
     def test_insert_telegram_message_handles_duplicate_request(self):
-        rid = self.db.create_request(
+        rid = create_request(
             type_="url",
             status="pending",
             correlation_id="cid-telegram",
@@ -468,7 +485,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             route_version=1,
         )
 
-        mid1 = self.db.insert_telegram_message(
+        mid1 = insert_telegram_message(
             request_id=rid,
             message_id=10,
             chat_id=1,
@@ -485,7 +502,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             telegram_raw_json={"k": "v"},
         )
 
-        mid2 = self.db.insert_telegram_message(
+        mid2 = insert_telegram_message(
             request_id=rid,
             message_id=10,
             chat_id=1,

@@ -22,7 +22,7 @@ from app.db.models import (
 
 @pytest.fixture
 def digest_service() -> DigestAPIService:
-    return DigestAPIService(ChannelDigestConfig(DIGEST_ENABLED=True))
+    return DigestAPIService(ChannelDigestConfig(enabled=True))
 
 
 def _create_subscription(

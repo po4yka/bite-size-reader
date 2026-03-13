@@ -5,8 +5,8 @@ import pytest
 from app.api.exceptions import ValidationError
 from app.api.models.auth import TelegramLinkCompleteRequest
 from app.api.routers.auth import endpoints as auth_endpoints, secret_auth
-from app.db.database import Database
 from app.db.models import User
+from app.db.session import DatabaseSessionManager
 
 
 def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -20,8 +20,8 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     secret_auth._cfg = None
 
 
-def _init_db(tmp_path) -> Database:
-    db = Database(str(tmp_path / "linking.db"))
+def _init_db(tmp_path) -> DatabaseSessionManager:
+    db = DatabaseSessionManager(str(tmp_path / "linking.db"))
     db.migrate()
     return db
 

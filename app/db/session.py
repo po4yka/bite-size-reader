@@ -30,6 +30,7 @@ from app.db.models import (
 )
 from app.db.rw_lock import AsyncRWLock
 from app.db.schema_migrator import SchemaMigrator
+from app.db.topic_search_index import TopicSearchIndexManager
 
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
 
@@ -105,6 +106,7 @@ class DatabaseSessionManager:
         # Initialize read-write lock for thread-safe database access
         self._rw_lock = AsyncRWLock()
         self._diagnostics = DatabaseDiagnostics(self._database, self._logger)
+        self._topic_search = TopicSearchIndexManager(self._database, self._logger)
 
     @property
     def database(self) -> peewee.SqliteDatabase:
@@ -136,6 +138,8 @@ class DatabaseSessionManager:
 
             # Idempotent JSON coercion (runs every startup to fix malformed data)
             SchemaMigrator(self._database, self._logger).ensure_schema_compatibility()
+
+            self._topic_search.ensure_index()
 
         self._run_database_maintenance()
         self._logger.info("db_migrated", extra={"path": self._mask_path(self.path)})

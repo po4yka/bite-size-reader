@@ -6,7 +6,7 @@ import pytest
 
 from app.adapters.telegram.message_router import MessageRouter
 from app.config import AppConfig
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from tests.conftest import make_test_app_config
 
 
@@ -14,8 +14,8 @@ def _make_config() -> AppConfig:
     return make_test_app_config(db_path=":memory:")
 
 
-def _make_db(tmp_path) -> Database:
-    db = Database(str(tmp_path / "forward-routing.db"))
+def _make_db(tmp_path) -> DatabaseSessionManager:
+    db = DatabaseSessionManager(str(tmp_path / "forward-routing.db"))
     db.migrate()
     return db
 
@@ -47,7 +47,7 @@ async def test_forward_message_with_url_prefers_forward_flow(
 
     router = MessageRouter(
         cfg=cfg,
-        db=db,  # type: ignore[arg-type]
+        db=db,
         access_controller=access_controller,
         command_processor=command_processor,
         url_handler=url_handler,

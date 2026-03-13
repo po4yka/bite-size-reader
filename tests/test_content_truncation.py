@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from tests.conftest import make_test_app_config
 
 
@@ -34,14 +34,14 @@ class FakeMessage:
 
 def make_bot(tmp_path: str, allowed_ids):
     """Create a test bot instance."""
-    db = Database(tmp_path)
+    db = DatabaseSessionManager(tmp_path)
     db.migrate()
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=tuple(allowed_ids))
     from app.adapters import telegram_bot as tbmod
 
     tbmod.Client = object
     tbmod.filters = None
-    return TelegramBot(cfg=cfg, db=db)  # type: ignore[arg-type]
+    return TelegramBot(cfg=cfg, db=db)
 
 
 class TestContentTruncation(unittest.IsolatedAsyncioTestCase):

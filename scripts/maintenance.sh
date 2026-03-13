@@ -256,12 +256,12 @@ import os
 
 try:
     from app.config import load_config
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
     cfg = load_config()
     db_path = os.getenv("DB_PATH", cfg.runtime.db_path)
 
-    database = Database(db_path)
+    database = DatabaseSessionManager(db_path)
     database.migrate()
 
     print(f"[maint] Database migrated successfully at: {db_path}")

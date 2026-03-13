@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from app.infrastructure.persistence.message_persistence import MessagePersistence
+from tests.db_helpers import create_request
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -55,7 +56,7 @@ class _DummyMessage:
 
 
 @pytest.fixture
-def db(tmp_path) -> Generator[Database]:
+def db(tmp_path) -> Generator[DatabaseSessionManager]:
     from app.db.models import database_proxy
 
     # Save the original database proxy state
@@ -63,7 +64,7 @@ def db(tmp_path) -> Generator[Database]:
 
     # Create test database with file-based storage
     path = tmp_path / "app.db"
-    database = Database(str(path))
+    database = DatabaseSessionManager(str(path))
     database.migrate()
 
     # Ensure database_proxy is initialized AFTER migrate
@@ -77,12 +78,12 @@ def db(tmp_path) -> Generator[Database]:
 
 
 @pytest.fixture
-def persistence(db: Database) -> MessagePersistence:
+def persistence(db: DatabaseSessionManager) -> MessagePersistence:
     return MessagePersistence(db=db)
 
 
-def _create_request(db: Database) -> int:
-    return db.create_request(
+def _create_request(db: DatabaseSessionManager) -> int:
+    return create_request(
         type_="url",
         status="pending",
         correlation_id=None,
@@ -98,7 +99,7 @@ def _create_request(db: Database) -> int:
 
 
 def test_persist_message_snapshot_populates_user_and_chat(
-    db: Database, persistence: MessagePersistence
+    db: DatabaseSessionManager, persistence: MessagePersistence
 ) -> None:
     req_id = _create_request(db)
     message = _DummyMessage(
@@ -120,7 +121,7 @@ def test_persist_message_snapshot_populates_user_and_chat(
 
 
 def test_persist_message_snapshot_refreshes_user_and_chat(
-    db: Database, persistence: MessagePersistence
+    db: DatabaseSessionManager, persistence: MessagePersistence
 ) -> None:
     first_req = _create_request(db)
     first_message = _DummyMessage(

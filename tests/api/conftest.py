@@ -30,8 +30,8 @@ class NotRequired(metaclass=_NotRequiredMeta):
 # Note: These shims are also set up in tests/conftest.py (root)
 # No need to set them up again here as conftest.py is loaded first
 
-from app.db.database import Database
 from app.db.models import Request, Summary, User, database_proxy
+from app.db.session import DatabaseSessionManager
 
 # Mock chromadb to avoid Pydantic V2 compatibility issues in tests
 sys.modules["chromadb"] = MagicMock()
@@ -54,7 +54,7 @@ def db(tmp_path, monkeypatch):
     monkeypatch.setenv("REDIS_ENABLED", "0")  # Disable Redis for tests
 
     db_path = tmp_path / "test.db"
-    database = Database(str(db_path))
+    database = DatabaseSessionManager(str(db_path))
     database.migrate()
 
     # Explicitly ensure database_proxy points to this test database

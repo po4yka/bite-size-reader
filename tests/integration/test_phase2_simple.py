@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.cli.migrations.migration_runner import MigrationRunner
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 
 logging.basicConfig(
     level=logging.WARNING,  # Reduce noise
@@ -37,7 +37,7 @@ def test_phase2():
 
         # Step 1: Apply all migrations
         print("\n[1] Applying all migrations...")
-        db = Database(path=db_path)
+        db = DatabaseSessionManager(path=db_path)
         db.migrate()
 
         runner = MigrationRunner(db)

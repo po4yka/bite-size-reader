@@ -8,9 +8,9 @@ This module provides a migration framework for managing database schema changes:
 
 Usage:
     from app.cli.migrations.migration_runner import MigrationRunner
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
 
-    db = Database("/data/app.db")
+    db = DatabaseSessionManager("/data/app.db")
     runner = MigrationRunner(db)
 
     # Run all pending migrations

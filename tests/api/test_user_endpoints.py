@@ -43,8 +43,8 @@ import typing
 enum.StrEnum = StrEnum  # type: ignore[misc,assignment]
 typing.NotRequired = NotRequired  # type: ignore[assignment]
 
-from app.db.database import Database
 from app.db.models import Request, Summary, User, database_proxy
+from app.db.session import DatabaseSessionManager
 
 
 def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -60,7 +60,7 @@ def user_db(tmp_path):
     # Save the original database proxy state
     old_proxy_obj = database_proxy.obj
 
-    db = Database(str(tmp_path / "test-user.db"))
+    db = DatabaseSessionManager(str(tmp_path / "test-user.db"))
     db.migrate()
     # Initialize the global database proxy so models use this database
     database_proxy.initialize(db._database)

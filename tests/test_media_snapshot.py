@@ -5,9 +5,10 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.db.database import Database
 from app.db.models import database_proxy
+from app.db.session import DatabaseSessionManager
 from tests.conftest import make_test_app_config
+from tests.db_helpers import create_request
 
 
 class _Ent:
@@ -43,7 +44,7 @@ class _MsgBase:
 
 
 def _bot_with_tmpdb(tmp_path):
-    db = Database(tmp_path)
+    db = DatabaseSessionManager(tmp_path)
     db.migrate()
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1,))
     from app.adapters import telegram_bot as tbmod
@@ -73,7 +74,7 @@ class TestMediaSnapshot(unittest.IsolatedAsyncioTestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = os.path.join(self.tmp.name, "app.db")
         self.bot, self.db = _bot_with_tmpdb(self.db_path)
-        self.req_id = self.db.create_request(
+        self.req_id = create_request(
             type_="forward",
             status="pending",
             correlation_id=None,

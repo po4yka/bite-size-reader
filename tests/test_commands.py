@@ -5,9 +5,15 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from app.services.topic_search import TopicArticle
 from tests.conftest import make_test_app_config
+from tests.db_helpers import (
+    create_request,
+    insert_audit_log,
+    insert_crawl_result,
+    insert_summary,
+)
 
 
 class FakeMessage:
@@ -45,7 +51,7 @@ class BotSpy(TelegramBot):
                 await self._safe_reply(message, f"OK {url_text}")
 
             # Use setattr to avoid mypy method assignment error
-            self.url_processor.handle_url_flow = mock_handle_url_flow  # type: ignore[method-assign]
+            self.url_processor.handle_url_flow = mock_handle_url_flow
 
     async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)
@@ -53,7 +59,7 @@ class BotSpy(TelegramBot):
 
 
 def make_bot(tmp_path: str) -> BotSpy:
-    db = Database(tmp_path)
+    db = DatabaseSessionManager(tmp_path)
     db.migrate()
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1, 42))
     from app.adapters import telegram_bot as tbmod
@@ -158,7 +164,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             db_path = os.path.join(tmp, "app.db")
             bot = make_bot(db_path)
-            request_id = bot.db.create_request(
+            request_id = create_request(
                 type_="url",
                 status="completed",
                 correlation_id="cid",
@@ -167,8 +173,8 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 input_url="https://example.com",
                 normalized_url="https://example.com",
             )
-            bot.db.insert_summary(request_id=request_id, lang="en", json_payload="{}")
-            bot.db.insert_audit_log(level="INFO", event="test", details_json="{}")
+            insert_summary(request_id=request_id, lang="en", json_payload="{}")
+            insert_audit_log(level="INFO", event="test", details_json="{}")
 
             msg = FakeMessage("/dbinfo")
             await bot._on_message(msg)
@@ -213,7 +219,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 "key_points_to_remember": [],
             }
 
-            rid_good = bot.db.create_request(
+            rid_good = create_request(
                 type_="url",
                 status="ok",
                 correlation_id="good",
@@ -223,12 +229,12 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 normalized_url="https://example.com/good",
                 route_version=1,
             )
-            bot.db.insert_summary(
+            insert_summary(
                 request_id=rid_good,
                 lang="en",
                 json_payload=base_summary,
             )
-            bot.db.insert_crawl_result(
+            insert_crawl_result(
                 request_id=rid_good,
                 source_url="https://example.com/good",
                 endpoint="/v2/scrape",
@@ -255,7 +261,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             bad_summary.pop("summary_1000", None)
             bad_summary.pop("tldr", None)
 
-            rid_bad = bot.db.create_request(
+            rid_bad = create_request(
                 type_="url",
                 status="ok",
                 correlation_id="bad",
@@ -265,13 +271,13 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 normalized_url="https://example.com/bad",
                 route_version=1,
             )
-            bot.db.insert_summary(
+            insert_summary(
                 request_id=rid_bad,
                 lang="en",
                 json_payload=bad_summary,
             )
 
-            rid_empty = bot.db.create_request(
+            rid_empty = create_request(
                 type_="url",
                 status="ok",
                 correlation_id="empty",
@@ -281,12 +287,12 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 normalized_url="https://example.com/empty",
                 route_version=1,
             )
-            bot.db.insert_summary(
+            insert_summary(
                 request_id=rid_empty,
                 lang="en",
                 json_payload=base_summary,
             )
-            bot.db.insert_crawl_result(
+            insert_crawl_result(
                 request_id=rid_empty,
                 source_url="https://example.com/empty",
                 endpoint="/v2/scrape",
@@ -309,7 +315,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
                 error_text=None,
             )
 
-            bot.db.create_request(
+            create_request(
                 type_="url",
                 status="pending",
                 correlation_id="missing",

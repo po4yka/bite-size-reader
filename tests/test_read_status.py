@@ -6,9 +6,18 @@ from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.db.database import Database
 from app.db.models import database_proxy
+from app.db.session import DatabaseSessionManager
 from tests.conftest import make_test_app_config
+from tests.db_helpers import (
+    create_request,
+    get_read_status,
+    get_summary_by_request,
+    get_unread_summaries,
+    get_unread_summary_by_request_id,
+    insert_summary,
+    mark_summary_as_read,
+)
 
 
 class FakeMessage:
@@ -42,7 +51,7 @@ class ReadStatusBot(TelegramBot):
         # Patch url_processor.handle_url_flow so the message router's
         # url_handler routes through our test interceptor.
         if hasattr(self, "url_processor"):
-            self.url_processor.handle_url_flow = self._fake_url_flow  # type: ignore[method-assign]
+            self.url_processor.handle_url_flow = self._fake_url_flow
 
         # Mock Firecrawl to avoid API key issues
         if hasattr(self, "_firecrawl"):
@@ -85,7 +94,7 @@ class ReadStatusBot(TelegramBot):
 
 
 def make_bot(tmp_path: str) -> ReadStatusBot:
-    db = Database(tmp_path)
+    db = DatabaseSessionManager(tmp_path)
     db.migrate()
     # Ensure the database_proxy is properly initialized
     database_proxy.initialize(db._database)
@@ -94,7 +103,7 @@ def make_bot(tmp_path: str) -> ReadStatusBot:
 
     tbmod.Client = object
     tbmod.filters = None
-    return ReadStatusBot(cfg=cfg, db=db)  # type: ignore[arg-type]
+    return ReadStatusBot(cfg=cfg, db=db)
 
 
 class TestParseUnreadArguments(unittest.TestCase):
@@ -150,7 +159,7 @@ class TestReadStatusDatabase(unittest.TestCase):
         self._old_proxy_obj = database_proxy.obj
         self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.db_path = os.path.join(self.tmp.name, "app.db")
-        self.db = Database(self.db_path)
+        self.db = DatabaseSessionManager(self.db_path)
         self.db.migrate()
 
     def tearDown(self):
@@ -160,7 +169,7 @@ class TestReadStatusDatabase(unittest.TestCase):
 
     def test_summary_read_status_defaults(self):
         """Test that summaries default to is_read = false."""
-        rid = self.db.create_request(
+        rid = create_request(
             type_="url",
             status="pending",
             correlation_id=None,
@@ -171,19 +180,19 @@ class TestReadStatusDatabase(unittest.TestCase):
         )
 
         # Insert summary without specifying is_read
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid,
             lang="en",
             json_payload={"title": "Test Article"},
         )
 
-        row = self.db.get_summary_by_request(rid)
+        row = get_summary_by_request(rid)
         assert row is not None
         assert row["is_read"] == 0  # Should default to false
 
     def test_summary_read_status_explicit(self):
         """Test setting explicit read status."""
-        rid1 = self.db.create_request(
+        rid1 = create_request(
             type_="url",
             status="pending",
             correlation_id=None,
@@ -192,7 +201,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             normalized_url="https://example.com/explicit-1",
             route_version=1,
         )
-        rid2 = self.db.create_request(
+        rid2 = create_request(
             type_="url",
             status="pending",
             correlation_id=None,
@@ -203,7 +212,7 @@ class TestReadStatusDatabase(unittest.TestCase):
         )
 
         # Insert summary as unread
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid1,
             lang="en",
             json_payload={"title": "Unread Article"},
@@ -211,15 +220,15 @@ class TestReadStatusDatabase(unittest.TestCase):
         )
 
         # Insert summary as read
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid2,
             lang="en",
             json_payload={"title": "Read Article"},
             is_read=True,
         )
 
-        row1 = self.db.get_summary_by_request(rid1)
-        row2 = self.db.get_summary_by_request(rid2)
+        row1 = get_summary_by_request(rid1)
+        row2 = get_summary_by_request(rid2)
 
         assert row1["is_read"] == 0  # Unread
         assert row2["is_read"] == 1  # Read
@@ -227,7 +236,7 @@ class TestReadStatusDatabase(unittest.TestCase):
     def test_get_unread_summaries(self):
         """Test querying unread summaries."""
         # Create requests
-        rid1 = self.db.create_request(
+        rid1 = create_request(
             type_="url",
             status="pending",
             input_url="https://example1.com",
@@ -237,7 +246,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             user_id=None,
             route_version=1,
         )
-        rid2 = self.db.create_request(
+        rid2 = create_request(
             type_="url",
             status="pending",
             input_url="https://example2.com",
@@ -247,7 +256,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             user_id=None,
             route_version=1,
         )
-        rid3 = self.db.create_request(
+        rid3 = create_request(
             type_="url",
             status="pending",
             input_url="https://example3.com",
@@ -259,19 +268,19 @@ class TestReadStatusDatabase(unittest.TestCase):
         )
 
         # Insert summaries with mixed read status
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid1,
             lang="en",
             json_payload={"title": "Article 1"},
             is_read=False,
         )
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid2,
             lang="en",
             json_payload={"title": "Article 2"},
             is_read=True,
         )
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid3,
             lang="en",
             json_payload={"title": "Article 3"},
@@ -279,7 +288,7 @@ class TestReadStatusDatabase(unittest.TestCase):
         )
 
         # Get unread summaries
-        unread = self.db.get_unread_summaries(limit=10)
+        unread = get_unread_summaries(limit=10)
         assert len(unread) == 2
         assert unread[0]["input_url"] == "https://example1.com"
         assert unread[1]["input_url"] == "https://example3.com"
@@ -288,7 +297,7 @@ class TestReadStatusDatabase(unittest.TestCase):
         """Test limiting unread summaries."""
         # Create multiple requests
         for i in range(5):
-            rid = self.db.create_request(
+            rid = create_request(
                 type_="url",
                 status="pending",
                 input_url=f"https://example{i}.com",
@@ -298,7 +307,7 @@ class TestReadStatusDatabase(unittest.TestCase):
                 user_id=None,
                 route_version=1,
             )
-            self.db.insert_summary(
+            insert_summary(
                 request_id=rid,
                 lang="en",
                 json_payload={"title": f"Article {i}"},
@@ -306,7 +315,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             )
 
         # Get limited unread summaries
-        unread = self.db.get_unread_summaries(limit=3)
+        unread = get_unread_summaries(limit=3)
         assert [row["input_url"] for row in unread] == [
             "https://example0.com",
             "https://example1.com",
@@ -315,7 +324,7 @@ class TestReadStatusDatabase(unittest.TestCase):
 
     def test_get_unread_summaries_filters_by_user_and_chat(self):
         """Unread summaries respect user and chat scoping."""
-        rid_target = self.db.create_request(
+        rid_target = create_request(
             type_="url",
             status="pending",
             input_url="https://visible.com",
@@ -325,7 +334,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             user_id=555,
             route_version=1,
         )
-        rid_other_user = self.db.create_request(
+        rid_other_user = create_request(
             type_="url",
             status="pending",
             input_url="https://other-user.com",
@@ -335,7 +344,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             user_id=777,
             route_version=1,
         )
-        rid_other_chat = self.db.create_request(
+        rid_other_chat = create_request(
             type_="url",
             status="pending",
             input_url="https://other-chat.com",
@@ -347,14 +356,14 @@ class TestReadStatusDatabase(unittest.TestCase):
         )
 
         for rid in (rid_target, rid_other_user, rid_other_chat):
-            self.db.insert_summary(
+            insert_summary(
                 request_id=rid,
                 lang="en",
                 json_payload={"title": "Scoped Article"},
                 is_read=False,
             )
 
-        unread_scoped = self.db.get_unread_summaries(
+        unread_scoped = get_unread_summaries(
             user_id=555,
             chat_id=111,
             limit=10,
@@ -383,7 +392,7 @@ class TestReadStatusDatabase(unittest.TestCase):
         )
 
         for index, payload in enumerate(payloads):
-            rid = self.db.create_request(
+            rid = create_request(
                 type_="url",
                 status="pending",
                 input_url=f"https://example{index}.com",
@@ -393,26 +402,26 @@ class TestReadStatusDatabase(unittest.TestCase):
                 user_id=None,
                 route_version=1,
             )
-            self.db.insert_summary(
+            insert_summary(
                 request_id=rid,
                 lang="en",
                 json_payload=payload,
                 is_read=False,
             )
 
-        unread_ai = self.db.get_unread_summaries(limit=5, topic="AI")
+        unread_ai = get_unread_summaries(limit=5, topic="AI")
         assert len(unread_ai) == 2
         assert all(
             "example0" in row["input_url"] or "example2" in row["input_url"] for row in unread_ai
         )
 
-        unread_garden = self.db.get_unread_summaries(limit=5, topic="garden")
+        unread_garden = get_unread_summaries(limit=5, topic="garden")
         assert len(unread_garden) == 1
         assert "example1" in unread_garden[0]["input_url"]
 
     def test_get_unread_summaries_topic_filter_no_matches(self):
         """Topic filter returns empty when nothing matches."""
-        rid = self.db.create_request(
+        rid = create_request(
             type_="url",
             status="pending",
             input_url="https://example.com",
@@ -422,7 +431,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             user_id=None,
             route_version=1,
         )
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid,
             lang="en",
             json_payload={
@@ -433,14 +442,14 @@ class TestReadStatusDatabase(unittest.TestCase):
             is_read=False,
         )
 
-        unread_none = self.db.get_unread_summaries(limit=5, topic="space")
+        unread_none = get_unread_summaries(limit=5, topic="space")
         assert unread_none == []
 
     def test_get_unread_summaries_topic_filter_large_backlog(self):
         """Topic filtering consults the search index beyond the initial window."""
         matching_ids: list[int] = []
         for i in range(130):
-            rid = self.db.create_request(
+            rid = create_request(
                 type_="url",
                 status="pending",
                 input_url=f"https://example{i}.com",
@@ -466,20 +475,20 @@ class TestReadStatusDatabase(unittest.TestCase):
                 }
                 matching_ids.append(rid)
 
-            self.db.insert_summary(
+            insert_summary(
                 request_id=rid,
                 lang="en",
                 json_payload=payload,
                 is_read=False,
             )
 
-        unread = self.db.get_unread_summaries(limit=3, topic="gardening")
+        unread = get_unread_summaries(limit=3, topic="gardening")
         assert len(unread) == 3
         assert [row["request_id"] for row in unread] == matching_ids[:3]
 
     def test_mark_summary_as_read(self):
         """Test marking summary as read."""
-        rid = self.db.create_request(
+        rid = create_request(
             type_="url",
             status="pending",
             correlation_id=None,
@@ -489,7 +498,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             route_version=1,
         )
 
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid,
             lang="en",
             json_payload={"title": "Test Article"},
@@ -497,19 +506,19 @@ class TestReadStatusDatabase(unittest.TestCase):
         )
 
         # Verify it's unread
-        row = self.db.get_summary_by_request(rid)
+        row = get_summary_by_request(rid)
         assert row["is_read"] == 0
 
         # Mark as read
-        self.db.mark_summary_as_read(rid)
+        mark_summary_as_read(rid)
 
         # Verify it's read
-        row = self.db.get_summary_by_request(rid)
+        row = get_summary_by_request(rid)
         assert row["is_read"] == 1
 
     def test_get_read_status(self):
         """Test checking read status."""
-        rid1 = self.db.create_request(
+        rid1 = create_request(
             type_="url",
             status="pending",
             correlation_id=None,
@@ -518,7 +527,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             normalized_url="https://example.com/read-status-1",
             route_version=1,
         )
-        rid2 = self.db.create_request(
+        rid2 = create_request(
             type_="url",
             status="pending",
             correlation_id=None,
@@ -528,26 +537,26 @@ class TestReadStatusDatabase(unittest.TestCase):
             route_version=1,
         )
 
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid1,
             lang="en",
             json_payload={"title": "Unread Article"},
             is_read=False,
         )
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid2,
             lang="en",
             json_payload={"title": "Read Article"},
             is_read=True,
         )
 
-        assert not self.db.get_read_status(rid1)  # Unread
-        assert self.db.get_read_status(rid2)  # Read
-        assert not self.db.get_read_status(999)  # Non-existent
+        assert not get_read_status(rid1)  # Unread
+        assert get_read_status(rid2)  # Read
+        assert not get_read_status(999)  # Non-existent
 
     def test_get_unread_summary_by_request_id(self):
         """Test getting specific unread summary by request_id."""
-        rid = self.db.create_request(
+        rid = create_request(
             type_="url",
             status="pending",
             input_url="https://example.com",
@@ -558,7 +567,7 @@ class TestReadStatusDatabase(unittest.TestCase):
             route_version=1,
         )
 
-        self.db.insert_summary(
+        insert_summary(
             request_id=rid,
             lang="en",
             json_payload={"title": "Test Article"},
@@ -566,15 +575,15 @@ class TestReadStatusDatabase(unittest.TestCase):
         )
 
         # Should find unread summary
-        summary = self.db.get_unread_summary_by_request_id(rid)
+        summary = get_unread_summary_by_request_id(rid)
         assert summary is not None
         assert summary["input_url"] == "https://example.com"
 
         # Mark as read
-        self.db.mark_summary_as_read(rid)
+        mark_summary_as_read(rid)
 
         # Should not find it anymore (it's now read)
-        summary = self.db.get_unread_summary_by_request_id(rid)
+        summary = get_unread_summary_by_request_id(rid)
         assert summary is None
 
 
@@ -620,7 +629,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             ]
 
             for i, (url, payload) in enumerate(details, start=1):
-                rid = bot.db.create_request(
+                rid = create_request(
                     type_="url",
                     status="ok",
                     input_url=url,
@@ -630,7 +639,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                     user_id=None,
                     route_version=1,
                 )
-                bot.db.insert_summary(
+                insert_summary(
                     request_id=rid,
                     lang="en",
                     json_payload=payload,
@@ -662,7 +671,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             ]
 
             for url, title, tags in details:
-                rid = bot.db.create_request(
+                rid = create_request(
                     type_="url",
                     status="ok",
                     input_url=url,
@@ -672,7 +681,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                     user_id=None,
                     route_version=1,
                 )
-                bot.db.insert_summary(
+                insert_summary(
                     request_id=rid,
                     lang="en",
                     json_payload={
@@ -698,7 +707,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
-            rid = bot.db.create_request(
+            rid = create_request(
                 type_="url",
                 status="ok",
                 input_url="https://example.com",
@@ -708,7 +717,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                 user_id=None,
                 route_version=1,
             )
-            bot.db.insert_summary(
+            insert_summary(
                 request_id=rid,
                 lang="en",
                 json_payload={
@@ -732,7 +741,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
             gardening_titles: list[str] = []
             for i in range(130):
-                rid = bot.db.create_request(
+                rid = create_request(
                     type_="url",
                     status="ok",
                     input_url=f"https://example{i}.com",
@@ -760,7 +769,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                         },
                     }
                     gardening_titles.append(payload["title"])
-                bot.db.insert_summary(
+                insert_summary(
                     request_id=rid,
                     lang="en",
                     json_payload=payload,
@@ -806,7 +815,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             # Create an unread article
-            rid = bot.db.create_request(
+            rid = create_request(
                 type_="url",
                 status="ok",
                 input_url="https://example.com",
@@ -816,7 +825,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                 user_id=None,
                 route_version=1,
             )
-            bot.db.insert_summary(
+            insert_summary(
                 request_id=rid,
                 lang="en",
                 json_payload={
@@ -837,7 +846,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             assert "Test Article" in reply_text
 
             # Verify it's now marked as read
-            assert bot.db.get_read_status(rid)
+            assert get_read_status(rid)
 
     async def test_read_command_already_read_article(self):
         """Test /read command with already read article."""
@@ -845,7 +854,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             # Create a read article
-            rid = bot.db.create_request(
+            rid = create_request(
                 type_="url",
                 status="ok",
                 input_url="https://example.com",
@@ -855,7 +864,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
                 user_id=None,
                 route_version=1,
             )
-            bot.db.insert_summary(
+            insert_summary(
                 request_id=rid,
                 lang="en",
                 json_payload={"title": "Test Article", "metadata": {"title": "Test Article"}},
@@ -891,7 +900,7 @@ class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             # Create an unread article
-            rid = bot.db.create_request(
+            rid = create_request(
                 type_="url",
                 status="ok",
                 input_url="https://example.com",
@@ -901,7 +910,7 @@ class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
                 user_id=None,
                 route_version=1,
             )
-            bot.db.insert_summary(
+            insert_summary(
                 request_id=rid,
                 lang="en",
                 json_payload={
@@ -917,7 +926,7 @@ class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
             await bot._on_message(msg)
 
             # Verify article is now read
-            assert bot.db.get_read_status(rid)
+            assert get_read_status(rid)
 
 
 if __name__ == "__main__":

@@ -20,13 +20,12 @@ import peewee
 from app.core.logging_utils import log_exception
 
 if TYPE_CHECKING:
-    from app.db.database import Database
     from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
 
-def upgrade(db: Database | DatabaseSessionManager) -> None:
+def upgrade(db: DatabaseSessionManager) -> None:
     """Add performance indexes."""
     indexes = [
         # Request table indexes
@@ -175,7 +174,7 @@ def upgrade(db: Database | DatabaseSessionManager) -> None:
     )
 
 
-def downgrade(db: Database | DatabaseSessionManager) -> None:
+def downgrade(db: DatabaseSessionManager) -> None:
     """Remove indexes added by this migration."""
     indexes = [
         "idx_requests_correlation_id",

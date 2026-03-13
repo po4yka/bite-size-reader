@@ -10,13 +10,12 @@ import peewee
 from app.core.logging_utils import log_exception
 
 if TYPE_CHECKING:
-    from app.db.database import Database
     from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
 
 
-def upgrade(db: Database | DatabaseSessionManager) -> None:
+def upgrade(db: DatabaseSessionManager) -> None:
     """Add description and member_count to channels."""
     columns = [
         ("channels", "description", "TEXT"),
@@ -45,6 +44,6 @@ def upgrade(db: Database | DatabaseSessionManager) -> None:
     logger.info("migration_011_complete")
 
 
-def downgrade(db: Database | DatabaseSessionManager) -> None:
+def downgrade(db: DatabaseSessionManager) -> None:
     """SQLite does not support DROP COLUMN before 3.35.0; recreate if needed."""
     logger.warning("migration_011_downgrade_noop")

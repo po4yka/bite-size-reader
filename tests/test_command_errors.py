@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from tests.conftest import make_test_app_config
 
 
@@ -29,7 +29,7 @@ class FakeMessage:
 
 
 def make_bot(tmp_path: str) -> TelegramBot:
-    db = Database(tmp_path)
+    db = DatabaseSessionManager(tmp_path)
     db.migrate()
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1,))
     from app.adapters import telegram_bot as tbmod
@@ -40,7 +40,7 @@ def make_bot(tmp_path: str) -> TelegramBot:
     # Mock the OpenRouter client to avoid API key validation
     with patch("app.adapters.openrouter.openrouter_client.OpenRouterClient") as mock_openrouter:
         mock_openrouter.return_value = AsyncMock()
-        return TelegramBot(cfg=cfg, db=db)  # type: ignore[arg-type]
+        return TelegramBot(cfg=cfg, db=db)
 
 
 class TestCommandErrors(unittest.IsolatedAsyncioTestCase):

@@ -268,7 +268,7 @@ class TestJsonParsing(unittest.TestCase):
             # Also update the notification formatter's internal references
             bot.response_formatter._notification_formatter._safe_reply_func = bot._safe_reply
             # fmt: off
-            bot.response_formatter._notification_formatter._response_sender.safe_reply = bot._safe_reply  # type: ignore[method-assign]
+            bot.response_formatter._notification_formatter._response_sender.safe_reply = bot._safe_reply
             # fmt: on
 
             message = MagicMock()

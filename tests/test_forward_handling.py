@@ -21,8 +21,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.db.database import Database
 from app.db.models import database_proxy
+from app.db.session import DatabaseSessionManager
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 from tests.conftest import make_test_app_config
 
@@ -70,7 +70,7 @@ def _make_processor(db_path: str):
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
 
-    db = Database(db_path)
+    db = DatabaseSessionManager(db_path)
     db.migrate()
 
     cfg = make_test_app_config(db_path=db_path, allowed_user_ids=(1,))
@@ -81,7 +81,7 @@ def _make_processor(db_path: str):
 
     processor = ForwardContentProcessor(
         cfg=cfg,
-        db=db,  # type: ignore[arg-type]
+        db=db,
         response_formatter=formatter,
         audit_func=lambda *a, **kw: None,
     )
@@ -702,7 +702,7 @@ async def test_forward_caption_only_routes_to_forward_flow(
     from app.adapters.telegram.message_router import MessageRouter
 
     cfg = make_test_app_config(db_path=":memory:")
-    db = Database(str(tmp_path / "router.db"))
+    db = DatabaseSessionManager(str(tmp_path / "router.db"))
     db.migrate()
 
     url_handler: Any = SimpleNamespace(
@@ -717,7 +717,7 @@ async def test_forward_caption_only_routes_to_forward_flow(
 
     router = MessageRouter(
         cfg=cfg,
-        db=db,  # type: ignore[arg-type]
+        db=db,
         access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),  # type: ignore[arg-type]
         command_processor=MagicMock(),
         url_handler=url_handler,
@@ -759,7 +759,7 @@ async def test_channel_forward_missing_msg_id_falls_to_user_path(
     from app.adapters.telegram.message_router import MessageRouter
 
     cfg = make_test_app_config(db_path=":memory:")
-    db = Database(str(tmp_path / "router2.db"))
+    db = DatabaseSessionManager(str(tmp_path / "router2.db"))
     db.migrate()
 
     url_handler: Any = SimpleNamespace(
@@ -774,7 +774,7 @@ async def test_channel_forward_missing_msg_id_falls_to_user_path(
 
     router = MessageRouter(
         cfg=cfg,
-        db=db,  # type: ignore[arg-type]
+        db=db,
         access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),  # type: ignore[arg-type]
         command_processor=MagicMock(),
         url_handler=url_handler,
@@ -832,7 +832,7 @@ class TestMessagePersistenceForwardDefaults(unittest.IsolatedAsyncioTestCase):
         """forward_from_message_id=None should persist as NULL, not 0."""
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "persist.db")
-            db = Database(db_path)
+            db = DatabaseSessionManager(db_path)
             db.migrate()
 
             persistence = MessagePersistence(db)
@@ -866,7 +866,7 @@ class TestMessagePersistenceForwardDefaults(unittest.IsolatedAsyncioTestCase):
         """forward_from_message_id=456 should persist as 456."""
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "persist2.db")
-            db = Database(db_path)
+            db = DatabaseSessionManager(db_path)
             db.migrate()
 
             persistence = MessagePersistence(db)

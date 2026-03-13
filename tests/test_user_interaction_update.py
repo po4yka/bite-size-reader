@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
+from tests.db_helpers import update_user_interaction
 
 
 @pytest.fixture
-def db(tmp_path) -> Database:
+def db(tmp_path) -> DatabaseSessionManager:
     path = tmp_path / "app.db"
-    database = Database(str(path))
+    database = DatabaseSessionManager(str(path))
     database.migrate()
     with database.connect() as conn:
         conn.execute("DROP TABLE IF EXISTS user_interactions")
@@ -29,7 +30,7 @@ def db(tmp_path) -> Database:
     return database
 
 
-def _insert_interaction(db: Database) -> int:
+def _insert_interaction(db: DatabaseSessionManager) -> int:
     with db.connect() as conn:
         cur = conn.execute(
             """
@@ -49,10 +50,10 @@ def _insert_interaction(db: Database) -> int:
         return int(cur.lastrowid)
 
 
-def test_update_user_interaction_updates_allowed_fields(db: Database) -> None:
+def test_update_user_interaction_updates_allowed_fields(db: DatabaseSessionManager) -> None:
     interaction_id = _insert_interaction(db)
 
-    db.update_user_interaction(
+    update_user_interaction(
         interaction_id=interaction_id,
         updates={
             "response_sent": True,
@@ -74,29 +75,29 @@ def test_update_user_interaction_updates_allowed_fields(db: Database) -> None:
     assert row["request_id"] == 42
 
 
-def test_update_user_interaction_rejects_unknown_field(db: Database) -> None:
+def test_update_user_interaction_rejects_unknown_field(db: DatabaseSessionManager) -> None:
     interaction_id = _insert_interaction(db)
 
     with pytest.raises(ValueError):
-        db.update_user_interaction(interaction_id=interaction_id, updates={"invalid": "noop"})
+        update_user_interaction(interaction_id=interaction_id, updates={"invalid": "noop"})
 
 
-def test_update_user_interaction_ignores_empty_updates(db: Database) -> None:
+def test_update_user_interaction_ignores_empty_updates(db: DatabaseSessionManager) -> None:
     interaction_id = _insert_interaction(db)
     before = db.fetchone("SELECT * FROM user_interactions WHERE id = ?", (interaction_id,))
     assert before is not None
 
-    db.update_user_interaction(interaction_id=interaction_id, updates={})
+    update_user_interaction(interaction_id=interaction_id, updates={})
 
     after = db.fetchone("SELECT * FROM user_interactions WHERE id = ?", (interaction_id,))
     assert after is not None
     assert dict(after) == dict(before)
 
 
-def test_update_user_interaction_accepts_legacy_kwargs(db: Database) -> None:
+def test_update_user_interaction_accepts_legacy_kwargs(db: DatabaseSessionManager) -> None:
     interaction_id = _insert_interaction(db)
 
-    db.update_user_interaction(
+    update_user_interaction(
         interaction_id=interaction_id,
         response_sent=True,
         response_type="completed",
@@ -116,11 +117,11 @@ def test_update_user_interaction_accepts_legacy_kwargs(db: Database) -> None:
     assert row["request_id"] == 99
 
 
-def test_update_user_interaction_rejects_mixed_inputs(db: Database) -> None:
+def test_update_user_interaction_rejects_mixed_inputs(db: DatabaseSessionManager) -> None:
     interaction_id = _insert_interaction(db)
 
     with pytest.raises(ValueError):
-        db.update_user_interaction(
+        update_user_interaction(
             interaction_id=interaction_id,
             updates={"response_sent": True},
             response_type="summary",

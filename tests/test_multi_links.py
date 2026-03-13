@@ -5,7 +5,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.db.database import Database
+from app.db.session import DatabaseSessionManager
 from tests.conftest import make_test_app_config
 
 
@@ -46,7 +46,7 @@ class SpyBot(TelegramBot):
                 await self._safe_reply(message, f"OK {url_text}")
 
             # Use setattr to avoid mypy method assignment error
-            self.url_processor.handle_url_flow = mock_handle_url_flow  # type: ignore[method-assign]
+            self.url_processor.handle_url_flow = mock_handle_url_flow
 
     async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)
@@ -54,14 +54,14 @@ class SpyBot(TelegramBot):
 
 
 def make_bot(tmp_path: str) -> SpyBot:
-    db = Database(tmp_path)
+    db = DatabaseSessionManager(tmp_path)
     db.migrate()
     cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1, 55, 66, 77, 88))
     from app.adapters import telegram_bot as tbmod
 
     tbmod.Client = object
     tbmod.filters = None
-    return SpyBot(cfg=cfg, db=Database(tmp_path))  # type: ignore[arg-type]
+    return SpyBot(cfg=cfg, db=DatabaseSessionManager(tmp_path))
 
 
 class TestMultiLinks(unittest.IsolatedAsyncioTestCase):

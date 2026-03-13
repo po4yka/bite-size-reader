@@ -27,14 +27,14 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
         Dict with keys 'fts', 'vector', 'hybrid' containing search results
     """
     from app.config import ChromaConfig
-    from app.db.database import Database
+    from app.db.session import DatabaseSessionManager
     from app.infrastructure.vector.chroma_store import ChromaVectorStore
     from app.services.chroma_vector_search_service import ChromaVectorSearchService
     from app.services.embedding_factory import create_embedding_service
     from app.services.hybrid_search_service import HybridSearchService
     from app.services.topic_search import LocalTopicSearchService, TopicArticle
 
-    db = Database(path=db_path)
+    db = DatabaseSessionManager(path=db_path)
 
     # Initialize services
     embedding_service = create_embedding_service()
