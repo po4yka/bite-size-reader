@@ -148,7 +148,7 @@ class TestReadStatusDatabase(unittest.TestCase):
     def setUp(self):
         # Save the original database_proxy object to restore later
         self._old_proxy_obj = database_proxy.obj
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.db_path = os.path.join(self.tmp.name, "app.db")
         self.db = Database(self.db_path)
         self.db.migrate()
@@ -581,7 +581,7 @@ class TestReadStatusDatabase(unittest.TestCase):
 class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
     async def test_unread_command_no_unread(self):
         """Test /unread command when no unread articles exist."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             msg = FakeMessage("/unread", uid=1)
 
@@ -593,7 +593,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
     async def test_unread_command_with_unread(self):
         """Test /unread command when unread articles exist."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             # Create some unread articles
@@ -652,7 +652,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
     async def test_unread_command_with_topic_and_limit(self):
         """/unread accepts topic filters and limits results."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             details = [
@@ -695,7 +695,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
     async def test_unread_command_topic_no_results(self):
         """/unread reports when a topic has no unread articles."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             rid = bot.db.create_request(
@@ -727,7 +727,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
     async def test_unread_command_topic_large_backlog(self):
         """/unread topic queries surface matches beyond the default scan window."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             gardening_titles: list[str] = []
@@ -778,7 +778,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
     async def test_read_command_invalid_id(self):
         """Test /read command with invalid request ID."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             msg = FakeMessage("/read invalid", uid=1)
 
@@ -790,7 +790,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
     async def test_read_command_nonexistent_id(self):
         """Test /read command with non-existent request ID."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             msg = FakeMessage("/read 999", uid=1)
 
@@ -802,7 +802,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
     async def test_read_command_read_article(self):
         """Test /read command with existing unread article."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             # Create an unread article
@@ -841,7 +841,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 
     async def test_read_command_already_read_article(self):
         """Test /read command with already read article."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             # Create a read article
@@ -873,7 +873,7 @@ class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
 class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
     async def test_direct_url_processing_creates_read_articles(self):
         """Test that direct URL processing creates read articles."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             # Test direct URL processing
@@ -887,7 +887,7 @@ class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
 
     async def test_read_command_marks_article_read(self):
         """Test that /read command properly marks articles as read."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
 
             # Create an unread article

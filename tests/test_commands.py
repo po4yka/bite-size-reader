@@ -69,14 +69,14 @@ def make_bot(tmp_path: str) -> BotSpy:
 
 class TestCommands(unittest.IsolatedAsyncioTestCase):
     async def test_help(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             msg = FakeMessage("/help")
             await bot._on_message(msg)
             assert any("Commands" in r for r in msg._replies)
 
     async def test_summarize_same_message(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             url = "https://example.com/a"
             msg = FakeMessage(f"/summarize {url}")
@@ -84,7 +84,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             assert url in bot.seen_urls
 
     async def test_summarize_next_message(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             uid = 42
             await bot._on_message(FakeMessage("/summarize", uid=uid))
@@ -95,7 +95,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             assert uid not in bot._awaiting_url_users
 
     async def test_cancel_awaiting_request(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
             uid = 42
@@ -113,7 +113,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
 
     async def test_cancel_after_multi_links_direct_processing(self):
         """After multi-link direct processing, /cancel reports nothing to cancel."""
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
             uid = 42
@@ -128,7 +128,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             assert any("No pending link requests" in reply for reply in cancel_msg._replies)
 
     async def test_cancel_without_pending_requests(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
             uid = 42
@@ -139,7 +139,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             assert any("No pending link requests" in reply for reply in cancel_msg._replies)
 
     async def test_cancel_includes_active_requests(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
             uid = 42
@@ -155,7 +155,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             assert any("ongoing requests" in reply for reply in cancel_msg._replies)
 
     async def test_dbinfo_command(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             db_path = os.path.join(tmp, "app.db")
             bot = make_bot(db_path)
             request_id = bot.db.create_request(
@@ -178,7 +178,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             assert not any(db_path in reply for reply in msg._replies)
 
     async def test_dbverify_command(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
 
@@ -337,7 +337,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             assert expected_urls.issubset(set(bot.seen_urls))
 
     async def test_findweb_command_success(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
 
@@ -379,7 +379,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             assert any("summarize" in reply.lower() for reply in msg._replies)
 
     async def test_find_alias_uses_online_search(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
 
@@ -402,7 +402,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             assert any("No recent online articles" in reply for reply in msg._replies)
 
     async def test_finddb_command_success(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
 
@@ -434,7 +434,7 @@ class TestCommands(unittest.IsolatedAsyncioTestCase):
             assert any("summarize" in reply.lower() for reply in msg._replies)
 
     async def test_find_commands_require_topic(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             bot = make_bot(os.path.join(tmp, "app.db"))
             bot.response_formatter.MIN_MESSAGE_INTERVAL_MS = 0
 
