@@ -1,0 +1,139 @@
+"""Tests for DefuddleProvider."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, patch
+
+import httpx
+import pytest
+
+from app.adapters.content.scraper.defuddle_provider import (
+    DefuddleProvider,
+    _parse_frontmatter,
+    _parse_yaml_safe,
+)
+
+
+class TestParseFrontmatter:
+    def test_valid_frontmatter_extracted(self):
+        raw = "---\ntitle: Hello\nauthor: Jane\n---\n# Article\nBody."
+        meta, md = _parse_frontmatter(raw)
+        assert meta == {"title": "Hello", "author": "Jane"}
+        assert "# Article" in md
+
+    def test_no_frontmatter_returns_raw(self):
+        raw = "# Just Markdown"
+        meta, md = _parse_frontmatter(raw)
+        assert meta == {}
+        assert md == raw
+
+    def test_unclosed_frontmatter_returns_raw(self):
+        raw = "---\ntitle: Broken\nno closing"
+        meta, md = _parse_frontmatter(raw)
+        assert meta == {}
+        assert md == raw
+
+    def test_empty_frontmatter_block(self):
+        raw = "---\n---\n# Body"
+        meta, md = _parse_frontmatter(raw)
+        assert meta == {}
+        assert "# Body" in md
+
+
+class TestParseYamlSafe:
+    def test_valid_yaml(self):
+        assert _parse_yaml_safe("title: Hello") == {"title": "Hello"}
+
+    def test_empty_returns_empty_dict(self):
+        assert _parse_yaml_safe("") == {}
+
+    def test_malformed_returns_empty_dict(self):
+        assert _parse_yaml_safe("title: [unclosed") == {}
+
+    def test_list_yaml_returns_empty_dict(self):
+        assert _parse_yaml_safe("- a\n- b") == {}
+
+
+class TestDefuddleProvider:
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_successful_scrape(self):
+        body = "---\ntitle: Article\nauthor: Jane\n---\n" + "A" * 500
+        provider = DefuddleProvider(timeout_sec=5, min_content_length=100)
+        with patch.object(provider, "_fetch_raw", new_callable=AsyncMock, return_value=body):
+            result = await provider.scrape_markdown("https://example.com")
+        assert result.status == "ok"
+        assert result.metadata_json == {"title": "Article", "author": "Jane"}
+        assert result.endpoint == "defuddle"
+        assert result.source_url == "https://example.com"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_thin_content_returns_error(self):
+        body = "---\ntitle: Short\n---\nTiny."
+        provider = DefuddleProvider(timeout_sec=5, min_content_length=400)
+        with patch.object(provider, "_fetch_raw", new_callable=AsyncMock, return_value=body):
+            result = await provider.scrape_markdown("https://example.com")
+        assert result.status == "error"
+        assert "too short" in result.error_text.lower()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_empty_response_returns_error(self):
+        provider = DefuddleProvider(timeout_sec=5)
+        with patch.object(provider, "_fetch_raw", new_callable=AsyncMock, return_value=""):
+            result = await provider.scrape_markdown("https://example.com")
+        assert result.status == "error"
+        assert "empty" in result.error_text.lower()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_timeout_returns_error(self):
+        provider = DefuddleProvider(timeout_sec=1)
+        with patch.object(
+            provider, "_fetch_raw", new_callable=AsyncMock, side_effect=TimeoutError()
+        ):
+            result = await provider.scrape_markdown("https://example.com")
+        assert result.status == "error"
+        assert "timeout" in result.error_text.lower()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_http_status_error_returns_error(self):
+        provider = DefuddleProvider(timeout_sec=5)
+        req = httpx.Request("GET", "https://defuddle.md/https://example.com")
+        resp = httpx.Response(404, request=req)
+        exc = httpx.HTTPStatusError("404", request=req, response=resp)
+        with patch.object(provider, "_fetch_raw", new_callable=AsyncMock, side_effect=exc):
+            result = await provider.scrape_markdown("https://example.com")
+        assert result.status == "error"
+        assert "404" in result.error_text
+        assert result.http_status == 404
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_generic_exception_returns_error(self):
+        provider = DefuddleProvider(timeout_sec=5)
+        with patch.object(
+            provider,
+            "_fetch_raw",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("connection refused"),
+        ):
+            result = await provider.scrape_markdown("https://example.com")
+        assert result.status == "error"
+        assert "connection refused" in result.error_text.lower()
+
+    def test_provider_name(self):
+        assert DefuddleProvider().provider_name == "defuddle"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aclose_is_noop(self):
+        await DefuddleProvider().aclose()
+
+    def test_api_base_url_trailing_slash_stripped(self):
+        p = DefuddleProvider(api_base_url="https://self-hosted.internal/")
+        assert not p._api_base_url.endswith("/")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_no_frontmatter_still_ok_when_long_enough(self):
+        body = "# Plain\n" + "B" * 500
+        provider = DefuddleProvider(timeout_sec=5, min_content_length=100)
+        with patch.object(provider, "_fetch_raw", new_callable=AsyncMock, return_value=body):
+            result = await provider.scrape_markdown("https://example.com")
+        assert result.status == "ok"
+        assert result.metadata_json is None

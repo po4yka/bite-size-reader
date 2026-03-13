@@ -50,6 +50,7 @@ class ContentScraperFactory:
 
         builder_map = {
             "scrapling": lambda: _build_scrapling(scraper_cfg),
+            "defuddle": lambda: _build_defuddle(scraper_cfg),
             "firecrawl": lambda: _build_firecrawl(cfg, audit),
             "playwright": lambda: _build_playwright(scraper_cfg),
             "crawlee": lambda: _build_crawlee(scraper_cfg),
@@ -113,6 +114,30 @@ def _build_scrapling(scraper_cfg: object) -> ContentScraperProtocol | None:
     except Exception as exc:
         logger.warning(
             "scrapling_provider_init_failed",
+            extra={"error": str(exc), "error_type": type(exc).__name__},
+        )
+        return None
+
+
+def _build_defuddle(scraper_cfg: object) -> ContentScraperProtocol | None:
+    if not getattr(scraper_cfg, "defuddle_enabled", True):
+        return None
+    try:
+        from app.adapters.content.scraper.defuddle_provider import DefuddleProvider
+
+        timeout_multiplier = profile_timeout_multiplier(getattr(scraper_cfg, "profile", "balanced"))
+        timeout_sec = max(
+            1,
+            round(getattr(scraper_cfg, "defuddle_timeout_sec", 20) * timeout_multiplier),
+        )
+        return DefuddleProvider(
+            timeout_sec=timeout_sec,
+            min_content_length=getattr(scraper_cfg, "min_content_length", 400),
+            api_base_url=getattr(scraper_cfg, "defuddle_api_base_url", "https://defuddle.md"),
+        )
+    except Exception as exc:
+        logger.warning(
+            "defuddle_provider_init_failed",
             extra={"error": str(exc), "error_type": type(exc).__name__},
         )
         return None

@@ -43,6 +43,15 @@ def build_scraper_diagnostics(cfg: AppConfig) -> dict[str, Any]:
             "stealth_fallback": scraper_cfg.scrapling_stealth_fallback,
             "js_heavy_timeout_multiplier": 0.8,
         },
+        "defuddle": {
+            "enabled": bool(scraper_cfg.enabled and scraper_cfg.defuddle_enabled),
+            "dependency_ready": _module_ready("httpx") and _module_ready("yaml"),
+            "api_base_url": scraper_cfg.defuddle_api_base_url,
+            "base_timeout_sec": scraper_cfg.defuddle_timeout_sec,
+            "effective_timeout_sec": round(
+                scraper_cfg.defuddle_timeout_sec * profile_multiplier, 2
+            ),
+        },
         "firecrawl": {
             "enabled": bool(scraper_cfg.enabled and scraper_cfg.firecrawl_self_hosted_enabled),
             "dependency_ready": _module_ready("httpx"),

@@ -329,28 +329,33 @@ class TestContentScraperChain:
 class TestContentScraperFactory:
     """Tests for the factory that builds a scraper chain from config."""
 
-    def test_default_config_creates_chain_with_scrapling_playwright_crawlee_and_direct_html(self):
-        """Default config enables scrapling + playwright + crawlee + direct_html."""
+    def test_default_config_creates_chain_with_scrapling_defuddle_playwright_crawlee_and_direct_html(
+        self,
+    ):
+        """Default config enables scrapling + defuddle + playwright + crawlee + direct_html."""
         cfg = make_test_app_config(scraper=ScraperConfig())
 
         with (
             patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
+            patch("app.adapters.content.scraper.factory._build_defuddle") as mock_defuddle,
             patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
             patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
             patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
         ):
             mock_scrapling.return_value = _MockProvider(name="scrapling")
+            mock_defuddle.return_value = _MockProvider(name="defuddle")
             mock_playwright.return_value = _MockProvider(name="playwright")
             mock_crawlee.return_value = _MockProvider(name="crawlee")
             mock_direct.return_value = _MockProvider(name="direct_html")
 
             chain = ContentScraperFactory.create_from_config(cfg)
 
-        assert len(chain._providers) == 4
+        assert len(chain._providers) == 5
         assert chain._providers[0].provider_name == "scrapling"
-        assert chain._providers[1].provider_name == "playwright"
-        assert chain._providers[2].provider_name == "crawlee"
-        assert chain._providers[3].provider_name == "direct_html"
+        assert chain._providers[1].provider_name == "defuddle"
+        assert chain._providers[2].provider_name == "playwright"
+        assert chain._providers[3].provider_name == "crawlee"
+        assert chain._providers[4].provider_name == "direct_html"
 
     def test_scrapling_disabled_skipped(self):
         """When scrapling_enabled=False, the scrapling provider is skipped."""
@@ -533,6 +538,67 @@ class TestContentScraperFactory:
             chain = ContentScraperFactory.create_from_config(cfg, audit=audit)
 
         assert chain._audit is audit
+
+    def test_defuddle_included_in_default_chain(self):
+        """defuddle appears in chain when enabled (default)."""
+        cfg = make_test_app_config()
+        with (
+            patch(
+                "app.adapters.content.scraper.factory._build_scrapling",
+                return_value=_MockProvider("scrapling"),
+            ),
+            patch(
+                "app.adapters.content.scraper.factory._build_defuddle",
+                return_value=_MockProvider("defuddle"),
+            ),
+            patch("app.adapters.content.scraper.factory._build_firecrawl", return_value=None),
+            patch(
+                "app.adapters.content.scraper.factory._build_playwright",
+                return_value=_MockProvider("playwright"),
+            ),
+            patch(
+                "app.adapters.content.scraper.factory._build_crawlee",
+                return_value=_MockProvider("crawlee"),
+            ),
+            patch(
+                "app.adapters.content.scraper.factory._build_direct_html",
+                return_value=_MockProvider("direct_html"),
+            ),
+        ):
+            chain = ContentScraperFactory.create_from_config(cfg)
+        names = [p.provider_name for p in chain._providers]
+        assert "defuddle" in names
+        assert names.index("defuddle") > names.index("scrapling")
+
+    def test_defuddle_disabled_absent_from_chain(self):
+        """When _build_defuddle returns None, defuddle is absent."""
+        cfg = make_test_app_config()
+        with (
+            patch(
+                "app.adapters.content.scraper.factory._build_scrapling",
+                return_value=_MockProvider("scrapling"),
+            ),
+            patch(
+                "app.adapters.content.scraper.factory._build_defuddle",
+                return_value=None,
+            ),
+            patch("app.adapters.content.scraper.factory._build_firecrawl", return_value=None),
+            patch(
+                "app.adapters.content.scraper.factory._build_playwright",
+                return_value=_MockProvider("playwright"),
+            ),
+            patch(
+                "app.adapters.content.scraper.factory._build_crawlee",
+                return_value=_MockProvider("crawlee"),
+            ),
+            patch(
+                "app.adapters.content.scraper.factory._build_direct_html",
+                return_value=_MockProvider("direct_html"),
+            ),
+        ):
+            chain = ContentScraperFactory.create_from_config(cfg)
+        names = [p.provider_name for p in chain._providers]
+        assert "defuddle" not in names
 
 
 # ===================================================================

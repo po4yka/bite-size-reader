@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 
 SCRAPER_PROVIDER_TOKENS = {
     "scrapling",
+    "defuddle",
     "firecrawl",
     "playwright",
     "crawlee",
@@ -76,7 +77,7 @@ class ScraperConfig(BaseModel):
     )
 
     provider_order: list[str] = Field(
-        default=["scrapling", "firecrawl", "playwright", "crawlee", "direct_html"],
+        default=["scrapling", "defuddle", "firecrawl", "playwright", "crawlee", "direct_html"],
         validation_alias="SCRAPER_PROVIDER_ORDER",
         description="Ordered list of scraping providers to try",
     )
@@ -92,6 +93,19 @@ class ScraperConfig(BaseModel):
     scrapling_stealth_fallback: bool = Field(
         default=True,
         validation_alias="SCRAPER_SCRAPLING_STEALTH_FALLBACK",
+    )
+
+    defuddle_enabled: bool = Field(
+        default=True,
+        validation_alias="SCRAPER_DEFUDDLE_ENABLED",
+    )
+    defuddle_timeout_sec: int = Field(
+        default=20,
+        validation_alias="SCRAPER_DEFUDDLE_TIMEOUT_SEC",
+    )
+    defuddle_api_base_url: str = Field(
+        default="https://defuddle.md",
+        validation_alias="SCRAPER_DEFUDDLE_API_BASE_URL",
     )
 
     firecrawl_self_hosted_enabled: bool = Field(
@@ -204,7 +218,7 @@ class ScraperConfig(BaseModel):
     @classmethod
     def _parse_provider_order(cls, value: Any) -> list[str]:
         if value in (None, ""):
-            return ["scrapling", "firecrawl", "playwright", "crawlee", "direct_html"]
+            return ["scrapling", "defuddle", "firecrawl", "playwright", "crawlee", "direct_html"]
 
         raw_items: list[Any]
         if isinstance(value, str):
@@ -264,6 +278,7 @@ class ScraperConfig(BaseModel):
     @field_validator(
         "min_content_length",
         "scrapling_timeout_sec",
+        "defuddle_timeout_sec",
         "firecrawl_timeout_sec",
         "firecrawl_wait_for_ms",
         "firecrawl_max_retries",
@@ -290,6 +305,7 @@ class ScraperConfig(BaseModel):
         bounds: dict[str, tuple[int, int]] = {
             "min_content_length": (50, 20_000),
             "scrapling_timeout_sec": (1, 300),
+            "defuddle_timeout_sec": (1, 300),
             "firecrawl_timeout_sec": (1, 300),
             "firecrawl_wait_for_ms": (0, 30_000),
             "firecrawl_max_retries": (0, 10),

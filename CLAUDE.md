@@ -69,7 +69,7 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 ### Key Components
 
 - **Telegram Layer** (`app/adapters/telegram/`) -- Bot orchestration, message routing, access control, persistence, command processing, URL/forward handling
-- **Content Pipeline** (`app/adapters/content/`) -- Multi-provider scraper chain (Scrapling -> self-hosted Firecrawl -> Playwright -> Crawlee -> direct HTTP/trafilatura), content chunking, LLM summarization, web search context. Scraper protocol, chain, factory, and providers in `app/adapters/content/scraper/`
+- **Content Pipeline** (`app/adapters/content/`) -- Multi-provider scraper chain (Scrapling -> Defuddle -> self-hosted Firecrawl -> Playwright -> Crawlee -> direct HTTP/trafilatura), content chunking, LLM summarization, web search context. Scraper protocol, chain, factory, and providers in `app/adapters/content/scraper/`
 - **YouTube Adapter** (`app/adapters/youtube/`) -- yt-dlp video download, transcript extraction, storage management
 - **Twitter/X Adapter** (`app/adapters/twitter/`) -- Two-tier extraction: Firecrawl (public) + Playwright (authenticated). GraphQL interception for tweets/threads, DOM scraping for X Articles
 - **LLM Abstraction** (`app/adapters/llm/`) -- Provider-agnostic LLM interface (OpenRouter, OpenAI, Anthropic)
@@ -220,7 +220,7 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
    - Respect URL normalization (`app/core/url_utils.py`) -- all URLs must be normalized before deduplication
    - Preserve `dedupe_hash` (sha256) for idempotence
    - Always persist scraper responses in `crawl_results` table (`FirecrawlResult` is the universal output model)
-   - Content extraction uses `ContentScraperChain` (ordered fallback: Scrapling -> self-hosted Firecrawl -> Playwright -> Crawlee -> direct HTTP). See `app/adapters/content/scraper/` for protocol, chain, factory, and providers
+   - Content extraction uses `ContentScraperChain` (ordered fallback: Scrapling -> Defuddle -> self-hosted Firecrawl -> Playwright -> Crawlee -> direct HTTP). See `app/adapters/content/scraper/` for protocol, chain, factory, and providers
    - Check `app/adapters/content/url_processor.py` for orchestration logic
 
 2. **Summary Contract Changes:**
@@ -417,6 +417,9 @@ SCRAPER_ENABLED=true
 SCRAPER_PROFILE=balanced
 SCRAPER_BROWSER_ENABLED=true
 SCRAPER_SCRAPLING_ENABLED=true      # Enable Scrapling provider (primary)
+SCRAPER_DEFUDDLE_ENABLED=true       # Enable Defuddle API provider (second in chain)
+SCRAPER_DEFUDDLE_TIMEOUT_SEC=20     # Defuddle request timeout in seconds
+SCRAPER_DEFUDDLE_API_BASE_URL=https://defuddle.md  # Defuddle API base URL
 SCRAPER_FIRECRAWL_TIMEOUT_SEC=90
 SCRAPER_PLAYWRIGHT_ENABLED=true
 SCRAPER_CRAWLEE_ENABLED=true
