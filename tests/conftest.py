@@ -60,6 +60,7 @@ from app.config import (
     TwitterConfig,
     WebSearchConfig,
     YouTubeConfig,
+    clear_config_cache,
 )
 from app.config.integrations import BatchAnalysisConfig
 
@@ -72,6 +73,14 @@ os.environ.setdefault("API_ID", "12345")
 os.environ.setdefault("API_HASH", "test_api_hash")
 os.environ.setdefault("FIRECRAWL_API_KEY", "test_firecrawl_key")
 os.environ.setdefault("OPENROUTER_API_KEY", "test_openrouter_key")
+
+
+@pytest.fixture(autouse=True)
+def manage_config_cache():
+    """Clear cached config between tests that mutate environment variables."""
+    clear_config_cache()
+    yield
+    clear_config_cache()
 
 
 @pytest.fixture(autouse=True)

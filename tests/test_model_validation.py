@@ -156,6 +156,32 @@ class TestModelValidation(unittest.TestCase):
             with pytest.raises(RuntimeError):
                 Settings(_env_file=None)  # type: ignore[call-arg]
 
+    def test_load_config_caches_per_process_until_cleared(self) -> None:
+        from app.config import clear_config_cache, load_config
+
+        test_env = {
+            "API_ID": "123456",
+            "API_HASH": "a" * 32,
+            "BOT_TOKEN": "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij",
+            "FIRECRAWL_API_KEY": "fc_" + "n" * 20,
+            "OPENROUTER_API_KEY": "or_" + "o" * 20,
+            "ALLOWED_USER_IDS": "77",
+            "LOG_LEVEL": "INFO",
+        }
+
+        with patch.dict(os.environ, test_env, clear=True):
+            clear_config_cache()
+            cfg1 = load_config()
+
+            os.environ["LOG_LEVEL"] = "DEBUG"
+            cfg2 = load_config()
+            assert cfg1 is cfg2
+            assert cfg2.runtime.log_level == "INFO"
+
+            clear_config_cache()
+            cfg3 = load_config()
+            assert cfg3.runtime.log_level == "DEBUG"
+
 
 if __name__ == "__main__":
     unittest.main()

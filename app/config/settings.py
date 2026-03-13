@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -39,6 +40,8 @@ from .tts import ElevenLabsConfig
 from .twitter import TwitterConfig
 
 logger = logging.getLogger(__name__)
+_CONFIG_CACHE_LOCK = threading.Lock()
+_CONFIG_CACHE: dict[bool, AppConfig] = {}
 
 _DEPRECATED_SCRAPER_ENV_RENAMES = {
     "SCRAPLING_ENABLED": "SCRAPER_SCRAPLING_ENABLED",
@@ -268,23 +271,18 @@ class Settings(BaseSettings):
         )
 
 
-def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
-    """Load application configuration from environment variables.
+def clear_config_cache() -> None:
+    """Clear cached AppConfig instances.
 
-    Uses pydantic-settings to automatically load from:
-    1. Environment variables
-    2. .env file (if present)
-
-    Args:
-        allow_stub_telegram: If True, use stub Telegram credentials when not provided.
-                           Useful for testing and CLI tools that don't need real credentials.
-
-    Returns:
-        Immutable AppConfig instance with all configuration sections.
-
-    Raises:
-        RuntimeError: If configuration validation fails.
+    Tests mutate environment variables between runs, so they need a way to
+    invalidate the process-level config cache.
     """
+    with _CONFIG_CACHE_LOCK:
+        _CONFIG_CACHE.clear()
+
+
+def _build_config(*, allow_stub_telegram: bool) -> AppConfig:
+    """Build a fresh immutable AppConfig from environment variables."""
     overrides: dict[str, Any] = {"allow_stub_telegram": allow_stub_telegram}
     using_stub_telegram = False
     _raise_on_deprecated_scraper_env_vars()
@@ -304,8 +302,6 @@ def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
             overrides["telegram"] = telegram_overrides
 
     try:
-        # pydantic-settings automatically loads from environment variables and .env file
-        # We pass overrides for stub telegram credentials when needed
         settings = Settings(**overrides)
     except (ValidationError, RuntimeError) as exc:  # pragma: no cover - defensive
         msg = f"Configuration validation failed: {exc}"
@@ -317,6 +313,33 @@ def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
         )
 
     return settings.as_app_config()
+
+
+def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:
+    """Load application configuration from environment variables.
+
+    Uses pydantic-settings to automatically load from:
+    1. Environment variables
+    2. .env file (if present)
+
+    Args:
+        allow_stub_telegram: If True, use stub Telegram credentials when not provided.
+                           Useful for testing and CLI tools that don't need real credentials.
+
+    Returns:
+        Immutable AppConfig instance with all configuration sections.
+
+    Raises:
+        RuntimeError: If configuration validation fails.
+    """
+    with _CONFIG_CACHE_LOCK:
+        cached = _CONFIG_CACHE.get(allow_stub_telegram)
+        if cached is not None:
+            return cached
+
+        config = _build_config(allow_stub_telegram=allow_stub_telegram)
+        _CONFIG_CACHE[allow_stub_telegram] = config
+        return config
 
 
 class ConfigHelper:

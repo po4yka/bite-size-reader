@@ -14,7 +14,7 @@ from .media import AttachmentConfig, YouTubeConfig
 from .redis import RedisConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
-from .settings import AppConfig, Config, ConfigHelper, Settings, load_config
+from .settings import AppConfig, Config, ConfigHelper, Settings, clear_config_cache, load_config
 from .telegram import TelegramConfig, TelegramLimitsConfig
 from .tts import ElevenLabsConfig
 from .twitter import TwitterConfig
@@ -50,6 +50,7 @@ __all__ = [
     "TwitterConfig",
     "WebSearchConfig",
     "YouTubeConfig",
+    "clear_config_cache",
     "load_config",
     "validate_model_name",
 ]
