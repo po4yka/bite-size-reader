@@ -494,8 +494,8 @@ Controls which embedding backend generates vectors for semantic search.
 | `PREFERRED_LANG` | `auto` | Language preference: `auto`, `en`, `ru` |
 | `DEBUG_PAYLOADS` | `0` | Log API payloads (0/1, Authorization redacted) |
 | `MAX_CONCURRENT_CALLS` | `4` | Max concurrent Firecrawl/OpenRouter calls |
-| `TEXTACY_ENABLED` | `false` | Enable textacy-based text analysis |
-| `CHUNKING_ENABLED` | `false` | Enable content chunking for long articles |
+| `TEXTACY_ENABLED` | `false` | Enable the optional text-normalization pass (historical env var name) |
+| `CHUNKING_ENABLED` | `true` | Enable content chunking for long articles |
 | `CHUNK_MAX_CHARS` | `200000` | Max chars per content chunk |
 | `SUMMARY_PROMPT_VERSION` | `v1` | Summary prompt template version |
 | `SUMMARY_STREAMING_ENABLED` | `true` | Enable section-based summary streaming |

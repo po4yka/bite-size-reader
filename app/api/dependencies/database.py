@@ -40,6 +40,7 @@ def get_session_manager() -> DatabaseSessionManager:
         json_max_array_length=db_cfg.json_max_array_length,
         json_max_dict_keys=db_cfg.json_max_dict_keys,
     )
+    _session_manager.migrate()
 
     logger.info("session_manager_initialized", extra={"db_path": db_path})
     return _session_manager

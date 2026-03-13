@@ -349,7 +349,7 @@ docker restart bite-size-reader
 
 ```bash
 # Reduce concurrency
-echo "MAX_CONCURRENT_CALLS=2" >> .env  # Default: 3
+echo "MAX_CONCURRENT_CALLS=2" >> .env  # Default: 4
 
 # Add rate limit delay
 echo "RATE_LIMIT_WINDOW_SECONDS=60" >> .env
@@ -371,8 +371,8 @@ echo "RATE_LIMIT_WINDOW_SECONDS=60" >> .env
 echo "OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2.5" >> .env  # 256k context
 
 # Or enable chunking (splits long articles)
-echo "ENABLE_CONTENT_CHUNKING=true" >> .env
-echo "MAX_CHUNK_SIZE_TOKENS=50000" >> .env
+echo "CHUNKING_ENABLED=true" >> .env
+echo "CHUNK_MAX_CHARS=150000" >> .env
 
 # Restart bot
 docker restart bite-size-reader
@@ -885,10 +885,10 @@ echo "OPENROUTER_MODEL=qwen/qwen3-max" >> .env  # Faster than DeepSeek
 echo "MAX_CONTENT_LENGTH_TOKENS=30000" >> .env  # Default: 50000
 
 # Enable content chunking
-echo "ENABLE_CONTENT_CHUNKING=true" >> .env
+echo "CHUNKING_ENABLED=true" >> .env
 
 # Increase concurrency
-echo "MAX_CONCURRENT_CALLS=5" >> .env  # Default: 3
+echo "MAX_CONCURRENT_CALLS=5" >> .env  # Default: 4
 
 # Restart bot
 docker restart bite-size-reader

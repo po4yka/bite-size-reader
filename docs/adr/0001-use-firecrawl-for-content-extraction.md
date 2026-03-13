@@ -172,7 +172,7 @@ Firecrawl scored highest across all high-priority criteria.
 - **Code**: `app/adapters/content/content_extractor.py` (`ContentExtractor` class)
 - **API Endpoint**: `POST https://api.firecrawl.dev/v1/scrape`
 - **Configuration**: `FIRECRAWL_API_KEY` environment variable (required)
-- **Rate Limiting**: Semaphore-based concurrency control (`MAX_CONCURRENT_CALLS=3`)
+- **Rate Limiting**: Semaphore-based concurrency control (`MAX_CONCURRENT_CALLS=4`)
 - **Error Handling**: Retry logic with exponential backoff (3 attempts)
 - **Persistence**: All responses stored in `crawl_results` table with `correlation_id`
 

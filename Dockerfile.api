@@ -32,7 +32,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra api
 
 # Stage 1.5: Frontend - Build React Mini App assets
-FROM node:25-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
@@ -41,7 +41,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 1.55: Web - Build Carbon Web App assets
-FROM node:25-alpine AS web-builder
+FROM node:20-alpine AS web-builder
 
 WORKDIR /app/web
 COPY web/package*.json ./
@@ -92,8 +92,8 @@ ENV DB_PATH=/data/app.db \
     LOG_LEVEL=INFO \
     API_HOST=0.0.0.0 \
     API_PORT=8000 \
-    API_WORKERS=4
+    API_WORKERS=1
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "python -m app.cli.migrate_db ${DB_PATH:-/data/app.db} && uvicorn app.api.main:app --host ${API_HOST:-0.0.0.0} --port ${API_PORT:-8000} --workers ${API_WORKERS:-4}"]
+CMD ["sh", "-c", "python -m app.cli.migrate_db ${DB_PATH:-/data/app.db} && uvicorn app.api.main:app --host ${API_HOST:-0.0.0.0} --port ${API_PORT:-8000} --workers ${API_WORKERS:-1}"]

@@ -235,7 +235,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 | **Scraper Chain** | `SCRAPER_ENABLED=true`<br>`SCRAPER_PROFILE=balanced`<br>`SCRAPER_BROWSER_ENABLED=true`<br>`SCRAPER_PROVIDER_ORDER=[...]` | Control article extraction fallback behavior and tuning |
 | **ChromaDB** | `CHROMA_HOST=http://localhost:8000`<br>`CHROMA_AUTH_TOKEN` | Semantic search |
 | **Embeddings** | `EMBEDDING_PROVIDER=local`<br>`GEMINI_API_KEY`<br>`GEMINI_EMBEDDING_DIMENSIONS=768` | Switch embedding provider (local/Gemini) |
-| **MCP Server** | `MCP_ENABLED=false`<br>`MCP_TRANSPORT=stdio`<br>`MCP_PORT=8200` | AI agent integration (Claude Desktop) |
+| **MCP Server** | `MCP_ENABLED=false`<br>`MCP_TRANSPORT=stdio`<br>`MCP_PORT=8200` | AI agent integration (Claude Desktop / optional Docker `mcp` profile) |
 | **Mobile API** | `JWT_SECRET_KEY`<br>`ALLOWED_CLIENT_IDS`<br>`API_RATE_LIMIT_*` | Build mobile clients |
 | **Karakeep** | `KARAKEEP_ENABLED=false`<br>`KARAKEEP_API_URL`<br>`KARAKEEP_API_KEY` | Bookmark sync |
 | **Channel Digest** | `DIGEST_ENABLED=true`<br>`API_BASE_URL=http://localhost:8000` | Scheduled channel digests |
@@ -262,7 +262,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 
 - ⚡ **Use faster models**: `qwen/qwen3-max` (faster than DeepSeek), `google/gemini-2.0-flash-001:free` (free)
 - 🔄 **Enable Redis caching**: Cache repeated URLs, reduce API calls
-- 📦 **Increase concurrency**: `MAX_CONCURRENT_CALLS=5` (default: 3)
+- 📦 **Increase concurrency**: `MAX_CONCURRENT_CALLS=5` (default: 4)
 - 🎯 **Disable optional features**: Set `WEB_SEARCH_ENABLED=false`, `SUMMARY_TWO_PASS_ENABLED=false`
 
 **Reduce costs**:

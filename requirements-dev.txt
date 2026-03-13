@@ -37,7 +37,7 @@ browserforge==1.2.4
     # via
     #   -c .requirements-all.tmp.txt
     #   crawlee
-cachetools==7.0.3
+cachetools==7.0.5
     # via
     #   -c .requirements-all.tmp.txt
     #   crawlee
@@ -84,7 +84,7 @@ courlan==1.3.2
     # via
     #   -c .requirements-all.tmp.txt
     #   trafilatura
-crawlee==1.4.0
+crawlee==1.5.0
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
@@ -116,7 +116,7 @@ fakeredis==2.34.1
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-filelock==3.25.0
+filelock==3.25.2
     # via
     #   -c .requirements-all.tmp.txt
     #   tldextract
@@ -169,7 +169,7 @@ idna==3.11
     #   requests
     #   tldextract
     #   yarl
-impit==0.11.0
+impit==0.12.0
     # via
     #   -c .requirements-all.tmp.txt
     #   crawlee
@@ -181,7 +181,7 @@ jinja2==3.1.6
     # via
     #   -c .requirements-all.tmp.txt
     #   spacy
-json-repair==0.58.4
+json-repair==0.58.5
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
@@ -240,7 +240,7 @@ mypy-extensions==1.1.0
     # via mypy
 nodeenv==1.10.0
     # via pre-commit
-numpy==2.4.2
+numpy==2.4.3
     # via
     #   -c .requirements-all.tmp.txt
     #   blis
@@ -339,11 +339,11 @@ pymorphy3-dicts-ru==2.4.417150.4580142
     # via
     #   -c .requirements-all.tmp.txt
     #   pymorphy3
-pymupdf==1.27.1
+pymupdf==1.27.2
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-pyrotgfork==2.2.20
+pyrotgfork==2.2.21
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
@@ -382,7 +382,7 @@ pyyaml==6.0.3
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
     #   pre-commit
-redis==7.2.1
+redis==7.3.0
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
@@ -412,11 +412,11 @@ ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru
     #   bite-size-reader (pyproject.toml)
 ruff==0.15.4
     # via bite-size-reader (pyproject.toml)
-scrapling==0.4.1
+scrapling==0.4.2
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-setuptools==82.0.0
+setuptools==82.0.1
     # via
     #   -c .requirements-all.tmp.txt
     #   pymorphy3
@@ -467,7 +467,7 @@ thinc==8.3.10
     # via
     #   -c .requirements-all.tmp.txt
     #   spacy
-tld==0.13.1
+tld==0.13.2
     # via
     #   -c .requirements-all.tmp.txt
     #   courlan

@@ -118,6 +118,8 @@ services:
           memory: 1024M
           cpus: "0.30"
   mcp:
+    profiles:
+      - mcp
     build:
       context: .
       dockerfile: Dockerfile
@@ -126,10 +128,11 @@ services:
     env_file:
       - .env
     environment:
+      - MCP_ENABLED=true
       - MCP_TRANSPORT=sse
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8200
-      - MCP_USER_ID=${MCP_USER_ID:-94225168}
+      - MCP_USER_ID=${MCP_USER_ID:-}
       - MCP_ALLOW_REMOTE_SSE=true
       - DB_PATH=/data/app.db
       - CHROMA_HOST=http://chroma:8000

@@ -8,7 +8,7 @@ lint:
 	ruff check .
 
 type:
-	mypy app tests
+	uv run --frozen mypy app tests
 
 test:
 	pytest tests/ -v

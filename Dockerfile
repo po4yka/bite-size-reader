@@ -42,7 +42,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # Stage 2: Frontend - Build React Mini App
 # =============================================================================
-FROM node:25-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
@@ -54,7 +54,7 @@ RUN npm run build
 # =============================================================================
 # Stage 2.1: Web - Build Carbon Web App
 # =============================================================================
-FROM node:25-alpine AS web-builder
+FROM node:20-alpine AS web-builder
 
 WORKDIR /app/web
 COPY web/package*.json ./

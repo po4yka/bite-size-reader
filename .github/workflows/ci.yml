@@ -555,10 +555,6 @@ jobs:
             grep -v "^torch==" | \
             sort -u > requirements-audit.txt
 
-          # Add base spaCy and textacy packages for auditing
-          echo "spacy>=3.7,<4" >> requirements-audit.txt
-          echo "textacy>=0.13,<0.14" >> requirements-audit.txt
-
       - name: Run pip-audit
         run: pip-audit -r requirements-audit.txt --strict
 

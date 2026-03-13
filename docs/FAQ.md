@@ -431,7 +431,7 @@ Yes. Several optimizations:
 2. **Increase concurrency**:
 
    ```bash
-   MAX_CONCURRENT_CALLS=5  # Default: 3
+   MAX_CONCURRENT_CALLS=5  # Default: 4
    ```
 
 3. **Disable optional features**:
