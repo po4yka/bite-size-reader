@@ -4,14 +4,11 @@ Authentication service - business logic for auth operations.
 
 from datetime import datetime
 
+from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import AuthorizationError, ResourceNotFoundError
 from app.api.models.auth import TelegramLinkStatus
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 
 logger = get_logger(__name__)
 
@@ -55,7 +52,7 @@ class AuthService:
         Raises:
             AuthorizationError: If user is not an owner
         """
-        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        user_repo = get_user_repository()
         user_record = await user_repo.async_get_user_by_telegram_id(user["user_id"])
         if not user_record or not user_record.get("is_owner"):
             raise AuthorizationError("Owner permissions required")
@@ -72,7 +69,7 @@ class AuthService:
         Returns:
             User data dict
         """
-        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        user_repo = get_user_repository()
         user_data, _ = await user_repo.async_get_or_create_user(
             user_id,
             username=username,
@@ -93,7 +90,7 @@ class AuthService:
         Raises:
             ResourceNotFoundError: If user not found
         """
-        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        user_repo = get_user_repository()
         user = await user_repo.async_get_user_by_telegram_id(user_id)
         if not user:
             raise ResourceNotFoundError("User", user_id)
@@ -108,7 +105,7 @@ class AuthService:
             nonce: Link nonce value
             expires_at: Nonce expiration time
         """
-        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        user_repo = get_user_repository()
         await user_repo.async_set_link_nonce(
             telegram_user_id=user_id,
             nonce=nonce,
@@ -122,7 +119,7 @@ class AuthService:
         Args:
             user_id: Telegram user ID
         """
-        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        user_repo = get_user_repository()
         await user_repo.async_clear_link_nonce(telegram_user_id=user_id)
 
     @staticmethod
@@ -180,7 +177,7 @@ class AuthService:
             last_name: Last name
         """
         now = _utcnow_naive()
-        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        user_repo = get_user_repository()
         await user_repo.async_complete_telegram_link(
             telegram_user_id=user_id,
             linked_telegram_user_id=telegram_user_id,
@@ -198,7 +195,7 @@ class AuthService:
         Args:
             user_id: User ID to unlink
         """
-        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        user_repo = get_user_repository()
         await user_repo.async_unlink_telegram(telegram_user_id=user_id)
 
     @staticmethod
@@ -208,5 +205,5 @@ class AuthService:
         Args:
             user_id: User ID to delete
         """
-        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        user_repo = get_user_repository()
         await user_repo.async_delete_user(telegram_user_id=user_id)

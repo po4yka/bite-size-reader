@@ -2,10 +2,10 @@
 
 from typing import Any
 
+from app.api.dependencies.database import resolve_repository_session
 from app.api.exceptions import ResourceNotFoundError
 from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 from app.core.logging_utils import get_logger
-from app.db.models import database_proxy
 from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
     SqliteCrawlResultRepositoryAdapter,
 )
@@ -27,11 +27,12 @@ class SummaryService:
 
     @staticmethod
     def _build_use_case() -> SummaryReadModelUseCase:
+        session = resolve_repository_session()
         return SummaryReadModelUseCase(
-            summary_repository=SqliteSummaryRepositoryAdapter(database_proxy),
-            request_repository=SqliteRequestRepositoryAdapter(database_proxy),
-            crawl_result_repository=SqliteCrawlResultRepositoryAdapter(database_proxy),
-            llm_repository=SqliteLLMRepositoryAdapter(database_proxy),
+            summary_repository=SqliteSummaryRepositoryAdapter(session),
+            request_repository=SqliteRequestRepositoryAdapter(session),
+            crawl_result_repository=SqliteCrawlResultRepositoryAdapter(session),
+            llm_repository=SqliteLLMRepositoryAdapter(session),
         )
 
     @staticmethod

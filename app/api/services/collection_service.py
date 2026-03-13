@@ -5,12 +5,15 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
+from app.api.dependencies.database import get_collection_repository
 from app.api.exceptions import AuthorizationError, ResourceNotFoundError
-from app.infrastructure.persistence.sqlite.repositories.collection_repository import (
-    SqliteCollectionRepositoryAdapter,
-)
+
+if TYPE_CHECKING:
+    from app.infrastructure.persistence.sqlite.repositories.collection_repository import (
+        SqliteCollectionRepositoryAdapter,
+    )
 
 Role = Literal["owner", "editor", "viewer"]
 ROLE_RANK = {"owner": 3, "editor": 2, "viewer": 1}
@@ -18,6 +21,11 @@ ROLE_RANK = {"owner": 3, "editor": 2, "viewer": 1}
 
 class CollectionService:
     """Business logic for collections and folders."""
+
+    @staticmethod
+    def _repo() -> SqliteCollectionRepositoryAdapter:
+        """Get a collection repository bound to the shared session manager."""
+        return get_collection_repository()
 
     # ---- access helpers ----
     @staticmethod
@@ -76,9 +84,7 @@ class CollectionService:
             ResourceNotFoundError: If collection not found.
             AuthorizationError: If user lacks required permissions.
         """
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
         collection = await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, minimum_role)
         return collection
@@ -89,9 +95,7 @@ class CollectionService:
         cls, user_id: int, parent_id: int | None, limit: int, offset: int
     ) -> list[dict[str, Any]]:
         """List collections for a user with optional parent filter."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
         return await repo.async_list_collections(user_id, parent_id, limit, offset)
 
     @classmethod
@@ -100,9 +104,7 @@ class CollectionService:
 
         Returns flat list of collections. Tree building done in memory.
         """
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
         collections = await repo.async_get_collection_tree(user_id)
 
         # Build tree in memory
@@ -133,9 +135,7 @@ class CollectionService:
         position: int | None,
     ) -> dict[str, Any]:
         """Create a new collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
 
         # Validate parent if provided
         if parent_id is not None:
@@ -174,9 +174,7 @@ class CollectionService:
         position: int | None = None,
     ) -> dict[str, Any]:
         """Update a collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
 
         collection = await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "editor")
@@ -220,9 +218,7 @@ class CollectionService:
     @classmethod
     async def delete_collection(cls, collection_id: int, user_id: int) -> None:
         """Soft delete a collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "owner")
         await repo.async_soft_delete_collection(collection_id)
@@ -231,9 +227,7 @@ class CollectionService:
     @classmethod
     async def add_item(cls, collection_id: int, summary_id: int, user_id: int) -> None:
         """Add a summary to a collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "editor")
 
@@ -246,9 +240,7 @@ class CollectionService:
     @classmethod
     async def remove_item(cls, collection_id: int, summary_id: int, user_id: int) -> None:
         """Remove a summary from a collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "editor")
         await repo.async_remove_item(collection_id, summary_id)
@@ -258,9 +250,7 @@ class CollectionService:
         cls, collection_id: int, user_id: int, limit: int, offset: int
     ) -> list[dict[str, Any]]:
         """List items in a collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "viewer")
         return await repo.async_list_items(collection_id, limit, offset)
@@ -270,9 +260,7 @@ class CollectionService:
         cls, collection_id: int, user_id: int, items: Iterable[dict[str, int]]
     ) -> None:
         """Reorder items in a collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "editor")
         await repo.async_reorder_items(collection_id, list(items))
@@ -287,9 +275,7 @@ class CollectionService:
         position: int | None,
     ) -> list[int]:
         """Move items from one collection to another."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
 
         # Check both collections exist and user has editor access
         await cls._get_collection_or_raise(repo, source_collection_id)
@@ -307,9 +293,7 @@ class CollectionService:
         cls, parent_id: int | None, user_id: int, items: Iterable[dict[str, int]]
     ) -> None:
         """Reorder collections within a parent."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
 
         if parent_id is not None:
             await cls._get_collection_or_raise(repo, parent_id)
@@ -322,9 +306,7 @@ class CollectionService:
         cls, collection_id: int, user_id: int, parent_id: int | None, position: int | None
     ) -> dict[str, Any]:
         """Move a collection to a new parent."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
 
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "owner")
@@ -345,9 +327,7 @@ class CollectionService:
     @classmethod
     async def list_acl(cls, collection_id: int, user_id: int) -> list[dict[str, Any]]:
         """List access control entries for a collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
 
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "viewer")
@@ -370,9 +350,7 @@ class CollectionService:
         cls, collection_id: int, user_id: int, target_user_id: int, role: Role
     ) -> None:
         """Add a collaborator to a collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
 
         collection = await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "owner")
@@ -388,9 +366,7 @@ class CollectionService:
         cls, collection_id: int, user_id: int, target_user_id: int
     ) -> None:
         """Remove a collaborator from a collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
 
         collection = await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "owner")
@@ -406,9 +382,7 @@ class CollectionService:
         cls, collection_id: int, user_id: int, role: Role, expires_at: datetime | None
     ) -> dict[str, Any]:
         """Create an invite for a collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
+        repo = cls._repo()
 
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "owner")
@@ -418,10 +392,7 @@ class CollectionService:
     @classmethod
     async def accept_invite(cls, token: str, user_id: int) -> None:
         """Accept an invite to join a collection."""
-        from app.db.models import database_proxy
-
-        repo = SqliteCollectionRepositoryAdapter(database_proxy)
-
+        repo = cls._repo()
         result = await repo.async_accept_invite(token, user_id)
         if result is None:
             raise ResourceNotFoundError("Invite", token)

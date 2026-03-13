@@ -9,6 +9,7 @@ import secrets
 from datetime import datetime
 from typing import Any
 
+from app.api.dependencies.database import get_auth_repository, get_user_repository
 from app.api.exceptions import (
     AuthenticationError,
     AuthorizationError,
@@ -49,13 +50,6 @@ from app.api.routers.auth.tokens import (
 )
 from app.api.services.auth_service import AuthService
 from app.core.logging_utils import get_logger
-from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
-    SqliteAuthRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -95,12 +89,12 @@ async def secret_login(login_data: SecretLoginRequest):
     ensure_user_allowed(login_data.user_id)
     now = utcnow_naive()
 
-    user_repo = SqliteUserRepositoryAdapter(database_proxy)
+    user_repo = get_user_repository()
     user = await user_repo.async_get_user_by_telegram_id(login_data.user_id)
     if not user:
         raise ResourceNotFoundError("User", login_data.user_id)
 
-    auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
+    auth_repo = get_auth_repository()
     secret_record = await auth_repo.async_get_client_secret(
         login_data.user_id, login_data.client_id
     )
@@ -202,7 +196,7 @@ async def rotate_secret_key(
     ensure_secret_login_enabled()
     admin_user = await AuthService.require_owner(user)
 
-    auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
+    auth_repo = get_auth_repository()
     record = await auth_repo.async_get_client_secret_by_id(key_id)
     if not record:
         raise ResourceNotFoundError("Secret key", key_id)
@@ -259,7 +253,7 @@ async def revoke_secret_key(
     ensure_secret_login_enabled()
     admin_user = await AuthService.require_owner(user)
 
-    auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
+    auth_repo = get_auth_repository()
     record = await auth_repo.async_get_client_secret_by_id(key_id)
     if not record:
         raise ResourceNotFoundError("Secret key", key_id)
@@ -304,7 +298,7 @@ async def list_secret_keys(
     if user_id is not None:
         ensure_user_allowed(user_id)
 
-    auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
+    auth_repo = get_auth_repository()
     records = await auth_repo.async_list_client_secrets(
         user_id=user_id,
         client_id=client_id,

@@ -24,6 +24,7 @@ except Exception:  # pragma: no cover - fallback for environments without compat
         return None
 
 
+from app.api.dependencies.database import get_auth_repository as get_db_auth_repository
 from app.api.exceptions import AuthenticationError, AuthorizationError
 from app.api.routers.auth.tokens import decode_token, validate_client_id
 from app.config import Config
@@ -79,13 +80,8 @@ def get_auth_repository() -> SqliteAuthRepositoryAdapter:
     Returns:
         SqliteAuthRepositoryAdapter with token cache if Redis is available.
     """
-    from app.db.models import database_proxy
-    from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
-        SqliteAuthRepositoryAdapter,
-    )
-
     token_cache = _get_auth_token_cache()
-    return SqliteAuthRepositoryAdapter(database_proxy, token_cache=token_cache)
+    return get_db_auth_repository(token_cache=token_cache)
 
 
 async def get_current_user(

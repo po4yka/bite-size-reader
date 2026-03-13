@@ -8,6 +8,7 @@ import hashlib
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import ResourceNotFoundError
 from app.api.models.auth import RefreshTokenRequest, SessionInfo
 from app.api.models.responses import (
@@ -26,10 +27,6 @@ from app.api.routers.auth.tokens import (
 )
 from app.core.logging_utils import get_logger, log_exception
 from app.core.time_utils import UTC
-from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 
 if TYPE_CHECKING:
     from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
@@ -72,7 +69,7 @@ async def refresh_access_token(
     if refresh_token_record.get("is_revoked"):
         raise TokenRevokedError()
 
-    user_repo = SqliteUserRepositoryAdapter(database_proxy)
+    user_repo = get_user_repository()
     user = await user_repo.async_get_user_by_telegram_id(user_id)
     if not user:
         raise ResourceNotFoundError("User", user_id)

@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -36,6 +37,7 @@ enum.StrEnum = StrEnum  # type: ignore[misc,assignment]
 typing.NotRequired = NotRequired  # type: ignore[assignment]
 dt_module.UTC = timezone.utc
 
+from app.api.dependencies.database import clear_session_manager
 from app.config import (
     AdaptiveTimeoutConfig,
     AnthropicConfig,
@@ -81,6 +83,15 @@ def manage_config_cache():
     clear_config_cache()
     yield
     clear_config_cache()
+
+
+@pytest.fixture(autouse=True)
+def manage_api_session_manager(tmp_path, monkeypatch):
+    """Keep API DB singletons isolated and point fallback DB paths at writable storage."""
+    monkeypatch.setenv("DB_PATH", str(Path(tmp_path) / "api-session.db"))
+    clear_session_manager()
+    yield
+    clear_session_manager()
 
 
 @pytest.fixture(autouse=True)

@@ -7,6 +7,7 @@ from __future__ import annotations
 import secrets
 from datetime import datetime, timedelta
 
+from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import (
     AuthenticationError,
     AuthorizationError,
@@ -33,10 +34,6 @@ from app.api.routers.auth.tokens import (
 from app.api.services.auth_service import AuthService
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -62,7 +59,7 @@ async def telegram_login(login_data: TelegramLoginRequest):
             photo_url=login_data.photo_url,
         )
 
-        user_repo = SqliteUserRepositoryAdapter(database_proxy)
+        user_repo = get_user_repository()
         user, created = await user_repo.async_get_or_create_user(
             login_data.telegram_user_id,
             username=login_data.username,

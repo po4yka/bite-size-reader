@@ -6,16 +6,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import ProcessingError
 from app.api.models.responses import UserInfo, success_response
 from app.api.routers.auth._fastapi import APIRouter, Depends
 from app.api.routers.auth.dependencies import get_current_user
 from app.api.services.auth_service import AuthService
 from app.core.logging_utils import get_logger
-from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -34,7 +31,7 @@ def _format_dt_z(dt_value: Any) -> str:
 @router.get("/me")
 async def get_current_user_info(user=Depends(get_current_user)):
     """Get current authenticated user information."""
-    user_repo = SqliteUserRepositoryAdapter(database_proxy)
+    user_repo = get_user_repository()
     user_record, _ = await user_repo.async_get_or_create_user(
         user["user_id"],
         username=user.get("username"),

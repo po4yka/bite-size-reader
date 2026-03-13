@@ -4,6 +4,7 @@ OAuth login endpoints (Apple / Google).
 
 from __future__ import annotations
 
+from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import AuthenticationError, AuthorizationError
 from app.api.models.auth import AppleLoginRequest, GoogleLoginRequest  # noqa: TC001
 from app.api.models.responses import AuthTokensResponse, TokenPair, success_response
@@ -21,10 +22,6 @@ from app.api.routers.auth.tokens import (
 )
 from app.config import Config
 from app.core.logging_utils import get_logger
-from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -60,7 +57,7 @@ async def apple_login(login_data: AppleLoginRequest):
         display_name = " ".join(p for p in name_parts if p)
     email = claims.get("email")
 
-    user_repo = SqliteUserRepositoryAdapter(database_proxy)
+    user_repo = get_user_repository()
     user, created = await user_repo.async_get_or_create_user(
         apple_user_id,
         username=display_name or email or f"apple_{apple_user_id}",
@@ -103,7 +100,7 @@ async def google_login(login_data: GoogleLoginRequest):
     email = claims.get("email")
     name = claims.get("name")
 
-    user_repo = SqliteUserRepositoryAdapter(database_proxy)
+    user_repo = get_user_repository()
     user, created = await user_repo.async_get_or_create_user(
         google_user_id,
         username=name or email or f"google_{google_user_id}",

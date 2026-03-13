@@ -10,6 +10,7 @@ from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, Query
 
+from app.api.dependencies.database import get_summary_read_model_use_case
 from app.api.exceptions import ResourceNotFoundError
 from app.api.models.requests import UpdateSummaryRequest
 from app.api.models.responses import (
@@ -34,19 +35,6 @@ from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
-    SqliteCrawlResultRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
-    SqliteLLMRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
 from app.services.topic_search_utils import ensure_mapping
 
 logger = get_logger(__name__)
@@ -73,12 +61,7 @@ def _isotime(dt: Any) -> str:
 
 def _get_summary_use_case() -> SummaryReadModelUseCase:
     """Build the summary read-model use case for API handlers."""
-    return SummaryReadModelUseCase(
-        summary_repository=SqliteSummaryRepositoryAdapter(database_proxy),
-        request_repository=SqliteRequestRepositoryAdapter(database_proxy),
-        crawl_result_repository=SqliteCrawlResultRepositoryAdapter(database_proxy),
-        llm_repository=SqliteLLMRepositoryAdapter(database_proxy),
-    )
+    return get_summary_read_model_use_case()
 
 
 def _resolve_use_case(use_case: Any) -> SummaryReadModelUseCase:

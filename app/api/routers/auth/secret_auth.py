@@ -7,6 +7,7 @@ import hmac
 import secrets
 from datetime import datetime
 
+from app.api.dependencies.database import get_auth_repository
 from app.api.exceptions import (
     AuthenticationError,
     AuthorizationError,
@@ -17,10 +18,6 @@ from app.api.models.auth import ClientSecretInfo
 from app.config import AppConfig, Config, load_config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
-    SqliteAuthRepositoryAdapter,
-)
 
 logger = get_logger(__name__)
 
@@ -164,7 +161,7 @@ def serialize_secret(record: dict) -> ClientSecretInfo:
 
 async def revoke_active_secrets(user_id: int, client_id: str) -> None:
     """Revoke all active secrets for a user/client pair."""
-    auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
+    auth_repo = get_auth_repository()
     await auth_repo.async_revoke_active_secrets(user_id, client_id)
 
 
@@ -178,7 +175,7 @@ async def check_expired(record: dict) -> None:
                 tzinfo=None
             )
         if expires_at < now:
-            auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
+            auth_repo = get_auth_repository()
             await auth_repo.async_update_client_secret(record["id"], status="expired")
             raise AuthenticationError("Secret has expired")
 
@@ -186,7 +183,7 @@ async def check_expired(record: dict) -> None:
 async def handle_failed_attempt(record: dict) -> None:
     """Increment failed attempts and potentially lock the secret."""
     cfg = _get_auth_config()
-    auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
+    auth_repo = get_auth_repository()
     await auth_repo.async_increment_failed_attempts(
         record["id"],
         max_attempts=cfg.secret_max_failed_attempts,
@@ -196,7 +193,7 @@ async def handle_failed_attempt(record: dict) -> None:
 
 async def reset_failed_attempts(record: dict) -> None:
     """Reset failed attempts and unlock secret."""
-    auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
+    auth_repo = get_auth_repository()
     await auth_repo.async_reset_failed_attempts(record["id"])
 
 
@@ -222,7 +219,7 @@ async def build_secret_record(
     salt = secrets.token_hex(16)
     secret_hash = hash_secret(secret_value, salt)
 
-    auth_repo = SqliteAuthRepositoryAdapter(database_proxy)
+    auth_repo = get_auth_repository()
     record_id = await auth_repo.async_create_client_secret(
         user_id=user_id,
         client_id=client_id,

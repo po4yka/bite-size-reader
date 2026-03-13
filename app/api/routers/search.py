@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 
+from app.api.dependencies.database import resolve_repository_session
 from app.api.dependencies.search_resources import get_chroma_search_service
 from app.api.exceptions import ProcessingError
 from app.api.models.responses import (
@@ -21,7 +22,6 @@ from app.api.routers.auth import get_current_user
 from app.application.use_cases.search_read_model import SearchReadModelUseCase
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import database_proxy
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
@@ -45,10 +45,11 @@ _ENTITY_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b")
 
 def _get_search_read_model_use_case() -> SearchReadModelUseCase:
     """Build search read-model use case for API handlers."""
+    session = resolve_repository_session()
     return SearchReadModelUseCase(
-        topic_search_repository=SqliteTopicSearchRepositoryAdapter(database_proxy),
-        request_repository=SqliteRequestRepositoryAdapter(database_proxy),
-        summary_repository=SqliteSummaryRepositoryAdapter(database_proxy),
+        topic_search_repository=SqliteTopicSearchRepositoryAdapter(session),
+        request_repository=SqliteRequestRepositoryAdapter(session),
+        summary_repository=SqliteSummaryRepositoryAdapter(session),
     )
 
 

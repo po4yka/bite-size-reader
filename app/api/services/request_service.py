@@ -3,19 +3,18 @@
 from datetime import datetime
 from typing import Any
 
+from app.api.dependencies.database import (
+    get_crawl_result_repository,
+    get_summary_repository,
+    resolve_repository_session,
+)
 from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.models import LLMCall, Request as RequestModel
-from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
-    SqliteCrawlResultRepositoryAdapter,
-)
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
 )
 
 logger = get_logger(__name__)
@@ -23,6 +22,11 @@ logger = get_logger(__name__)
 
 class RequestService:
     """Service for request-related business logic."""
+
+    @staticmethod
+    def _request_repo() -> SqliteRequestRepositoryAdapter:
+        """Create a request repository bound to the shared API DB session."""
+        return SqliteRequestRepositoryAdapter(resolve_repository_session())
 
     @staticmethod
     async def check_duplicate_url(user_id: int, url: str) -> dict | None:
@@ -36,10 +40,8 @@ class RequestService:
         Returns:
             Dictionary with duplicate info if found, None otherwise
         """
-        from app.db.models import database_proxy
-
-        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
-        summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
+        request_repo = RequestService._request_repo()
+        summary_repo = get_summary_repository()
 
         normalized = normalize_url(url)
         dedupe_hash = compute_dedupe_hash(normalized)
@@ -77,9 +79,7 @@ class RequestService:
         Raises:
             DuplicateResourceError: If URL already exists for this user
         """
-        from app.db.models import database_proxy
-
-        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
+        request_repo = RequestService._request_repo()
 
         normalized = normalize_url(input_url)
         dedupe_hash = compute_dedupe_hash(normalized)
@@ -143,9 +143,7 @@ class RequestService:
         Returns:
             Created Request object (dict or model)
         """
-        from app.db.models import database_proxy
-
-        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
+        request_repo = RequestService._request_repo()
 
         correlation_id = f"api-{user_id}-{int(datetime.now(UTC).timestamp())}"
 
@@ -190,11 +188,9 @@ class RequestService:
         Raises:
             ResourceNotFoundError: If request not found or access denied
         """
-        from app.db.models import database_proxy
-
-        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
-        crawl_repo = SqliteCrawlResultRepositoryAdapter(database_proxy)
-        summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
+        request_repo = RequestService._request_repo()
+        crawl_repo = get_crawl_result_repository()
+        summary_repo = get_summary_repository()
 
         request = await request_repo.async_get_request_by_id(request_id)
 
@@ -234,11 +230,9 @@ class RequestService:
         Raises:
             ResourceNotFoundError: If request not found or access denied
         """
-        from app.db.models import database_proxy
-
-        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
-        crawl_repo = SqliteCrawlResultRepositoryAdapter(database_proxy)
-        summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
+        request_repo = RequestService._request_repo()
+        crawl_repo = get_crawl_result_repository()
+        summary_repo = get_summary_repository()
 
         request = await request_repo.async_get_request_by_id(request_id)
 
@@ -348,9 +342,7 @@ class RequestService:
             ResourceNotFoundError: If request not found or access denied
             ValueError: If request is not in error status
         """
-        from app.db.models import database_proxy
-
-        request_repo = SqliteRequestRepositoryAdapter(database_proxy)
+        request_repo = RequestService._request_repo()
 
         original_request = await request_repo.async_get_request_by_id(request_id)
 
@@ -400,9 +392,7 @@ class RequestService:
         Infer error stage/type/message from persisted artifacts.
         Prefers LLM errors (later stage) over crawl errors.
         """
-        from app.db.models import database_proxy
-
-        crawl_repo = SqliteCrawlResultRepositoryAdapter(database_proxy)
+        crawl_repo = get_crawl_result_repository()
 
         request_row = RequestModel.get_or_none(RequestModel.id == request_id)
         request_ctx = (

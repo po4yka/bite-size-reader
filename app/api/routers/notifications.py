@@ -3,11 +3,8 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.dependencies.database import get_device_repository
 from app.api.routers.auth import get_current_user
-from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.device_repository import (
-    SqliteDeviceRepositoryAdapter,
-)
 
 router = APIRouter()
 
@@ -33,7 +30,7 @@ async def register_device(
     Register or update a device token for push notifications.
     """
     user_id = user_data["user_id"]
-    device_repo = SqliteDeviceRepositoryAdapter(database_proxy)
+    device_repo = get_device_repository()
 
     try:
         await device_repo.async_upsert_device(

@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
+from app.api.dependencies.database import get_summary_repository, get_user_repository
 from app.api.models.requests import UpdatePreferencesRequest
 from app.api.models.responses import (
     PreferencesData,
@@ -17,13 +18,6 @@ from app.api.models.responses import (
 from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import database_proxy
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 from app.services.topic_search_utils import ensure_mapping
 
 logger = get_logger(__name__)
@@ -54,7 +48,7 @@ def _safe_isoformat(dt_value: Any) -> str | None:
 @router.get("/preferences")
 async def get_user_preferences(user=Depends(get_current_user)):
     """Get user preferences."""
-    user_repo = SqliteUserRepositoryAdapter(database_proxy)
+    user_repo = get_user_repository()
     user_record = await user_repo.async_get_user_by_telegram_id(user["user_id"])
 
     # Default preferences
@@ -101,7 +95,7 @@ async def update_user_preferences(
     user=Depends(get_current_user),
 ):
     """Update user preferences."""
-    user_repo = SqliteUserRepositoryAdapter(database_proxy)
+    user_repo = get_user_repository()
 
     # Get or create user record
     user_record, _created = await user_repo.async_get_or_create_user(
@@ -150,8 +144,8 @@ async def get_user_stats(user=Depends(get_current_user)):
     from collections import Counter
     from urllib.parse import urlparse
 
-    user_repo = SqliteUserRepositoryAdapter(database_proxy)
-    summary_repo = SqliteSummaryRepositoryAdapter(database_proxy)
+    user_repo = get_user_repository()
+    summary_repo = get_summary_repository()
 
     # Get user summaries with pagination (using a large limit for stats)
     summaries_list, total_summaries, unread_count = await summary_repo.async_get_user_summaries(
