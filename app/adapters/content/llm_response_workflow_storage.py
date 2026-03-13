@@ -17,74 +17,57 @@ class LLMWorkflowStorageMixin:
     cfg: Any
     llm_repo: Any
 
+    def _build_llm_call_payload(self, llm: Any, req_id: int) -> dict[str, Any]:
+        """Serialize an LLM call once so queue batching can reuse the payload."""
+        return {
+            "request_id": req_id,
+            "provider": "openrouter",
+            "model": llm.model or self.cfg.openrouter.model,
+            "endpoint": llm.endpoint,
+            "request_headers_json": llm.request_headers or {},
+            "request_messages_json": list(llm.request_messages or []),
+            "response_text": llm.response_text,
+            "response_json": llm.response_json or {},
+            "tokens_prompt": llm.tokens_prompt,
+            "tokens_completion": llm.tokens_completion,
+            "cost_usd": llm.cost_usd,
+            "latency_ms": llm.latency_ms,
+            "status": llm.status,
+            "error_text": llm.error_text,
+            "structured_output_used": getattr(llm, "structured_output_used", None),
+            "structured_output_mode": getattr(llm, "structured_output_mode", None),
+            "error_context_json": (
+                getattr(llm, "error_context", {})
+                if getattr(llm, "error_context", None) is not None
+                else None
+            ),
+        }
+
+    async def _persist_llm_calls_batch(self, calls: list[dict[str, Any]]) -> None:
+        """Persist multiple LLM calls together when the queue can coalesce them."""
+        try:
+            await self.llm_repo.async_insert_llm_calls_batch(calls)
+        except Exception as exc:
+            logger.exception(
+                "persist_llm_batch_error",
+                extra={"error": str(exc), "count": len(calls)},
+            )
+
     async def _persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
+        payload = self._build_llm_call_payload(llm, req_id)
+
         if self._db_write_queue is not None:
-            _llm = llm
-            _req_id, _cid = req_id, correlation_id
-            _model_fallback = self.cfg.openrouter.model
-
-            async def _deferred_persist() -> None:
-                try:
-                    await self.llm_repo.async_insert_llm_call(
-                        request_id=_req_id,
-                        provider="openrouter",
-                        model=_llm.model or _model_fallback,
-                        endpoint=_llm.endpoint,
-                        request_headers_json=_llm.request_headers or {},
-                        request_messages_json=list(_llm.request_messages or []),
-                        response_text=_llm.response_text,
-                        response_json=_llm.response_json or {},
-                        tokens_prompt=_llm.tokens_prompt,
-                        tokens_completion=_llm.tokens_completion,
-                        cost_usd=_llm.cost_usd,
-                        latency_ms=_llm.latency_ms,
-                        status=_llm.status,
-                        error_text=_llm.error_text,
-                        structured_output_used=getattr(_llm, "structured_output_used", None),
-                        structured_output_mode=getattr(_llm, "structured_output_mode", None),
-                        error_context_json=(
-                            getattr(_llm, "error_context", {})
-                            if getattr(_llm, "error_context", None) is not None
-                            else None
-                        ),
-                    )
-                except Exception as exc:
-                    logger.exception(
-                        "persist_llm_error",
-                        extra={"error": str(exc), "cid": _cid},
-                    )
-
-            await self._db_write_queue.enqueue(
-                _deferred_persist,
+            await self._db_write_queue.enqueue_batch(
+                payload,
+                batch_key=f"persist_llm_call:{id(self.llm_repo)}",
+                execute_batch=self._persist_llm_calls_batch,
                 operation_name="persist_llm_call",
-                correlation_id=_cid or "",
+                correlation_id=correlation_id or "",
             )
             return
 
         try:
-            await self.llm_repo.async_insert_llm_call(
-                request_id=req_id,
-                provider="openrouter",
-                model=llm.model or self.cfg.openrouter.model,
-                endpoint=llm.endpoint,
-                request_headers_json=llm.request_headers or {},
-                request_messages_json=list(llm.request_messages or []),
-                response_text=llm.response_text,
-                response_json=llm.response_json or {},
-                tokens_prompt=llm.tokens_prompt,
-                tokens_completion=llm.tokens_completion,
-                cost_usd=llm.cost_usd,
-                latency_ms=llm.latency_ms,
-                status=llm.status,
-                error_text=llm.error_text,
-                structured_output_used=getattr(llm, "structured_output_used", None),
-                structured_output_mode=getattr(llm, "structured_output_mode", None),
-                error_context_json=(
-                    getattr(llm, "error_context", {})
-                    if getattr(llm, "error_context", None) is not None
-                    else None
-                ),
-            )
+            await self.llm_repo.async_insert_llm_call(**payload)
         except Exception as exc:
             logger.exception(
                 "persist_llm_error",

@@ -263,14 +263,13 @@ class LLMWorkflowAttemptsMixin:
         correlation_id: str | None,
     ) -> None:
         try:
-            new_version = await self.summary_repo.async_upsert_summary(
+            new_version = await self.summary_repo.async_finalize_request_summary(
                 request_id=req_id,
                 lang=persistence.lang,
                 json_payload=summary,
                 insights_json=insights_json,
                 is_read=persistence.is_read,
             )
-            await self.request_repo.async_update_request_status(req_id, "ok")
             self._audit("INFO", "summary_upserted", {"request_id": req_id, "version": new_version})
         except Exception as exc:
             logger.exception(

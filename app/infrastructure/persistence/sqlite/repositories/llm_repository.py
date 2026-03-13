@@ -12,6 +12,46 @@ from app.db.utils import prepare_json_payload
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
 
+def _build_llm_call_payload(call_data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize LLM call payloads for single and batched inserts."""
+    provider = call_data.get("provider")
+    response_text = call_data.get("response_text")
+
+    headers_payload = prepare_json_payload(call_data.get("request_headers_json"), default={})
+    messages_payload = prepare_json_payload(call_data.get("request_messages_json"), default=[])
+    response_payload = prepare_json_payload(call_data.get("response_json"), default={})
+    error_context_payload = prepare_json_payload(call_data.get("error_context_json"))
+
+    payload = {
+        "request": call_data.get("request_id"),
+        "provider": provider,
+        "model": call_data.get("model"),
+        "endpoint": call_data.get("endpoint"),
+        "request_headers_json": headers_payload,
+        "request_messages_json": messages_payload,
+        "tokens_prompt": call_data.get("tokens_prompt"),
+        "tokens_completion": call_data.get("tokens_completion"),
+        "cost_usd": call_data.get("cost_usd"),
+        "latency_ms": call_data.get("latency_ms"),
+        "status": call_data.get("status"),
+        "error_text": call_data.get("error_text"),
+        "structured_output_used": call_data.get("structured_output_used"),
+        "structured_output_mode": call_data.get("structured_output_mode"),
+        "error_context_json": error_context_payload,
+    }
+
+    if provider == "openrouter":
+        payload["openrouter_response_text"] = response_text
+        payload["openrouter_response_json"] = response_payload
+        payload["response_text"] = None
+        payload["response_json"] = None
+    else:
+        payload["response_text"] = response_text
+        payload["response_json"] = response_payload
+
+    return payload
+
+
 class SqliteLLMRepositoryAdapter(SqliteBaseRepository):
     """Adapter for LLM call logging operations."""
 
@@ -19,46 +59,30 @@ class SqliteLLMRepositoryAdapter(SqliteBaseRepository):
         """Insert an LLM call log record."""
 
         def _insert() -> int:
-            provider = kwargs.get("provider")
-            response_text = kwargs.get("response_text")
-
-            # Prepare payloads using shared utilities
-            headers_payload = prepare_json_payload(kwargs.get("request_headers_json"), default={})
-            messages_payload = prepare_json_payload(kwargs.get("request_messages_json"), default=[])
-            response_payload = prepare_json_payload(kwargs.get("response_json"), default={})
-            error_context_payload = prepare_json_payload(kwargs.get("error_context_json"))
-
-            payload = {
-                "request": kwargs.get("request_id"),
-                "provider": provider,
-                "model": kwargs.get("model"),
-                "endpoint": kwargs.get("endpoint"),
-                "request_headers_json": headers_payload,
-                "request_messages_json": messages_payload,
-                "tokens_prompt": kwargs.get("tokens_prompt"),
-                "tokens_completion": kwargs.get("tokens_completion"),
-                "cost_usd": kwargs.get("cost_usd"),
-                "latency_ms": kwargs.get("latency_ms"),
-                "status": kwargs.get("status"),
-                "error_text": kwargs.get("error_text"),
-                "structured_output_used": kwargs.get("structured_output_used"),
-                "structured_output_mode": kwargs.get("structured_output_mode"),
-                "error_context_json": error_context_payload,
-            }
-
-            if provider == "openrouter":
-                payload["openrouter_response_text"] = response_text
-                payload["openrouter_response_json"] = response_payload
-                payload["response_text"] = None
-                payload["response_json"] = None
-            else:
-                payload["response_text"] = response_text
-                payload["response_json"] = response_payload
-
-            call = LLMCall.create(**payload)
+            call = LLMCall.create(**_build_llm_call_payload(kwargs))
             return call.id
 
         return await self._execute(_insert, operation_name="insert_llm_call")
+
+    async def async_insert_llm_calls_batch(
+        self,
+        calls: list[dict[str, Any]],
+    ) -> list[int]:
+        """Insert multiple LLM calls in a single transaction."""
+        if not calls:
+            return []
+
+        def _insert() -> list[int]:
+            call_ids: list[int] = []
+            for call_data in calls:
+                call = LLMCall.create(**_build_llm_call_payload(call_data))
+                call_ids.append(call.id)
+            return call_ids
+
+        return await self._execute_transaction(
+            _insert,
+            operation_name="insert_llm_calls_batch",
+        )
 
     async def async_get_latest_llm_model_by_request_id(self, request_id: int) -> str | None:
         """Get the latest LLM model used for a request."""

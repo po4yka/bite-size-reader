@@ -84,6 +84,39 @@ class TestDbWriteQueue(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(results, [0, 1, 2, 3])
 
+    async def test_batches_consecutive_batchable_items(self) -> None:
+        """Consecutive batchable items are flushed together."""
+        q = await self._make_queue()
+        batches: list[list[int]] = []
+
+        async def _persist_batch(payloads: list[int]) -> None:
+            batches.append(payloads)
+
+        await q.enqueue_batch(1, batch_key="llm", execute_batch=_persist_batch)
+        await q.enqueue_batch(2, batch_key="llm", execute_batch=_persist_batch)
+        await q.enqueue_batch(3, batch_key="llm", execute_batch=_persist_batch)
+
+        await q.stop(timeout=5.0)
+        self.assertEqual(batches, [[1, 2, 3]])
+
+    async def test_batching_preserves_fifo_boundaries(self) -> None:
+        """Generic items split batches so overall queue order stays predictable."""
+        q = await self._make_queue()
+        events: list[object] = []
+
+        async def _persist_batch(payloads: list[int]) -> None:
+            events.append(tuple(payloads))
+
+        async def _single_write() -> None:
+            events.append("single")
+
+        await q.enqueue_batch(1, batch_key="llm", execute_batch=_persist_batch)
+        await q.enqueue(_single_write, operation_name="single")
+        await q.enqueue_batch(2, batch_key="llm", execute_batch=_persist_batch)
+
+        await q.stop(timeout=5.0)
+        self.assertEqual(events, [(1,), "single", (2,)])
+
     async def test_backpressure_on_full_queue(self) -> None:
         """enqueue() blocks when the queue is full, then succeeds once space opens."""
         q = await self._make_queue(maxsize=2)

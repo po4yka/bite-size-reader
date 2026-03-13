@@ -47,6 +47,15 @@ class SummaryRepositoryPort(Protocol):
         insights_json: dict[str, Any] | None = None,
         is_read: bool = False,
     ) -> int: ...
+    async def async_finalize_request_summary(
+        self,
+        request_id: int,
+        lang: str,
+        json_payload: dict[str, Any],
+        insights_json: dict[str, Any] | None = None,
+        is_read: bool = False,
+        request_status: str = "ok",
+    ) -> int: ...
 
 
 class UserRepositoryPort(Protocol):
@@ -61,6 +70,7 @@ class UserRepositoryPort(Protocol):
 
 class LLMRepositoryPort(Protocol):
     async def async_insert_llm_call(self, *args: Any, **kwargs: Any) -> int: ...
+    async def async_insert_llm_calls_batch(self, calls: list[dict[str, Any]]) -> list[int]: ...
     async def async_get_latest_llm_model_by_request_id(self, request_id: int) -> str | None: ...
 
 

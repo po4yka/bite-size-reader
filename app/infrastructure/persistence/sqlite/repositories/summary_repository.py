@@ -24,6 +24,44 @@ from app.infrastructure.persistence.sqlite.repositories._joined_row_utils import
 from app.services.topic_search_utils import ensure_mapping, tokenize
 
 
+def _upsert_summary_record(
+    *,
+    request_id: int,
+    lang: str,
+    json_payload: dict[str, Any],
+    insights_json: dict[str, Any] | None = None,
+    is_read: bool = False,
+) -> int:
+    """Create or update a summary row and return its version."""
+    payload = prepare_json_payload(json_payload, default={})
+    insights = prepare_json_payload(insights_json)
+
+    try:
+        summary = Summary.create(
+            request=request_id,
+            lang=lang,
+            json_payload=payload,
+            insights_json=insights,
+            is_read=is_read,
+            version=1,
+        )
+        return summary.version
+    except peewee.IntegrityError:
+        Summary.update(
+            {
+                Summary.lang: lang,
+                Summary.json_payload: payload,
+                Summary.insights_json: insights,
+                Summary.version: Summary.version + 1,
+                Summary.is_read: is_read,
+                Summary.updated_at: datetime.now(UTC),
+            }
+        ).where(Summary.request == request_id).execute()
+
+        summary = Summary.get_or_none(Summary.request == request_id)
+        return summary.version if summary else 1
+
+
 class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
     """Adapter that implements SummaryRepository using Peewee models directly.
 
@@ -41,37 +79,44 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
         """Create or update a summary."""
 
         def _upsert() -> int:
-            payload = prepare_json_payload(json_payload, default={})
-            insights = prepare_json_payload(insights_json)
-
-            try:
-                # Try to create new summary
-                summary = Summary.create(
-                    request=request_id,
-                    lang=lang,
-                    json_payload=payload,
-                    insights_json=insights,
-                    is_read=is_read,
-                    version=1,
-                )
-                return summary.version
-            except peewee.IntegrityError:
-                # Update existing summary
-                Summary.update(
-                    {
-                        Summary.lang: lang,
-                        Summary.json_payload: payload,
-                        Summary.insights_json: insights,
-                        Summary.version: Summary.version + 1,
-                        Summary.is_read: is_read,
-                        Summary.updated_at: datetime.now(UTC),
-                    }
-                ).where(Summary.request == request_id).execute()
-
-                summary = Summary.get_or_none(Summary.request == request_id)
-                return summary.version if summary else 1
+            return _upsert_summary_record(
+                request_id=request_id,
+                lang=lang,
+                json_payload=json_payload,
+                insights_json=insights_json,
+                is_read=is_read,
+            )
 
         return await self._execute(_upsert, operation_name="upsert_summary")
+
+    async def async_finalize_request_summary(
+        self,
+        request_id: int,
+        lang: str,
+        json_payload: dict[str, Any],
+        insights_json: dict[str, Any] | None = None,
+        is_read: bool = False,
+        request_status: str = "ok",
+    ) -> int:
+        """Persist a summary and update request status in one transaction."""
+
+        def _finalize() -> int:
+            version = _upsert_summary_record(
+                request_id=request_id,
+                lang=lang,
+                json_payload=json_payload,
+                insights_json=insights_json,
+                is_read=is_read,
+            )
+            Request.update({Request.status: request_status}).where(
+                Request.id == request_id
+            ).execute()
+            return version
+
+        return await self._execute_transaction(
+            _finalize,
+            operation_name="finalize_request_summary",
+        )
 
     async def async_get_user_summaries(
         self,
