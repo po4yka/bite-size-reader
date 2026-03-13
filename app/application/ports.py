@@ -51,6 +51,9 @@ class SummaryRepositoryPort(Protocol):
     async def async_get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
         """Return summary by ID."""
 
+    async def async_get_summary_context_by_id(self, summary_id: int) -> dict[str, Any] | None:
+        """Return summary joined with its request and crawl result."""
+
     async def async_get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Return summary by request ID."""
 
@@ -87,6 +90,9 @@ class RequestRepositoryPort(Protocol):
     async def async_get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
         """Return request by ID."""
 
+    async def async_get_request_context(self, request_id: int) -> dict[str, Any] | None:
+        """Return request joined with its crawl result and summary."""
+
     async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
         """Return request by dedupe hash."""
 
@@ -108,6 +114,9 @@ class LLMRepositoryPort(Protocol):
 
     async def async_get_llm_calls_by_request(self, request_id: int) -> list[dict[str, Any]]:
         """Return LLM calls by request ID."""
+
+    async def async_count_llm_calls_by_request(self, request_id: int) -> int:
+        """Return the number of LLM calls by request ID."""
 
 
 class TopicSearchRepositoryPort(Protocol):

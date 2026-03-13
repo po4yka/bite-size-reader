@@ -13,10 +13,14 @@ from typing import Any
 import peewee
 
 from app.core.time_utils import UTC
-from app.db.models import Request, Summary, model_to_dict
+from app.db.models import CrawlResult, Request, Summary, model_to_dict
 from app.db.utils import prepare_json_payload
 from app.domain.models.summary import Summary as DomainSummary
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+from app.infrastructure.persistence.sqlite.repositories._joined_row_utils import (
+    aliased_model_fields,
+    extract_aliased_model,
+)
 from app.services.topic_search_utils import ensure_mapping, tokenize
 
 
@@ -205,6 +209,46 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
             return data
 
         return await self._execute(_get, operation_name="get_summary_by_id", read_only=True)
+
+    async def async_get_summary_context_by_id(self, summary_id: int) -> dict[str, Any] | None:
+        """Get a summary with its request and crawl result in a single read."""
+
+        def _get() -> dict[str, Any] | None:
+            row = (
+                Summary.select(
+                    *aliased_model_fields(Summary, "summary"),
+                    *aliased_model_fields(Request, "request"),
+                    *aliased_model_fields(CrawlResult, "crawl_result"),
+                )
+                .join(Request)
+                .switch(Request)
+                .join(
+                    CrawlResult,
+                    peewee.JOIN.LEFT_OUTER,
+                    on=(CrawlResult.request == Request.id),
+                )
+                .where(Summary.id == summary_id)
+                .dicts()
+                .first()
+            )
+            if row is None:
+                return None
+
+            summary_data = extract_aliased_model(row, Summary, "summary")
+            request_data = extract_aliased_model(row, Request, "request")
+            if summary_data is None or request_data is None:
+                return None
+
+            summary_data["request_id"] = summary_data.get("request")
+            summary_data["user_id"] = request_data.get("user_id")
+
+            return {
+                "summary": summary_data,
+                "request": request_data,
+                "crawl_result": extract_aliased_model(row, CrawlResult, "crawl_result"),
+            }
+
+        return await self._execute(_get, operation_name="get_summary_context_by_id", read_only=True)
 
     async def async_get_summaries_by_request_ids(
         self, request_ids: list[int]

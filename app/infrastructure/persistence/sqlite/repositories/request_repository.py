@@ -7,15 +7,22 @@ from __future__ import annotations
 
 import datetime as _dt
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import peewee
 
 from app.core.time_utils import UTC
-from app.db.models import Request, TelegramMessage, model_to_dict
+from app.db.models import CrawlResult, Request, Summary, TelegramMessage, model_to_dict
 from app.db.utils import prepare_json_payload
 from app.domain.models.request import Request as DomainRequest, RequestStatus, RequestType
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+from app.infrastructure.persistence.sqlite.repositories._joined_row_utils import (
+    aliased_model_fields,
+    extract_aliased_model,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def _utcnow() -> _dt.datetime:
@@ -158,6 +165,46 @@ class SqliteRequestRepositoryAdapter(SqliteBaseRepository):
             return model_to_dict(request)
 
         return await self._execute(_get, operation_name="get_request_by_id", read_only=True)
+
+    async def async_get_request_context(self, request_id: int) -> dict[str, Any] | None:
+        """Get a request with its one-to-one related records in a single read."""
+
+        def _get() -> dict[str, Any] | None:
+            row: Mapping[str, Any] | None = (
+                Request.select(
+                    *aliased_model_fields(Request, "request"),
+                    *aliased_model_fields(CrawlResult, "crawl_result"),
+                    *aliased_model_fields(Summary, "summary"),
+                )
+                .join(
+                    CrawlResult,
+                    peewee.JOIN.LEFT_OUTER,
+                    on=(CrawlResult.request == Request.id),
+                )
+                .switch(Request)
+                .join(
+                    Summary,
+                    peewee.JOIN.LEFT_OUTER,
+                    on=(Summary.request == Request.id),
+                )
+                .where(Request.id == request_id)
+                .dicts()
+                .first()
+            )
+            if row is None:
+                return None
+
+            request_data = extract_aliased_model(row, Request, "request")
+            if request_data is None:
+                return None
+
+            return {
+                "request": request_data,
+                "crawl_result": extract_aliased_model(row, CrawlResult, "crawl_result"),
+                "summary": extract_aliased_model(row, Summary, "summary"),
+            }
+
+        return await self._execute(_get, operation_name="get_request_context", read_only=True)
 
     async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
         """Get a request by its deduplication hash."""

@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+from typing import Any, cast
+from unittest.mock import AsyncMock
+
+import pytest
+
+from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
+
+
+class _OptimizedSummaryRepository:
+    def __init__(self, context: dict[str, object] | None) -> None:
+        self.get_summary_context_mock = AsyncMock(return_value=context)
+        self.async_get_summary_by_id = AsyncMock()
+
+    async def async_get_summary_context_by_id(self, summary_id: int) -> dict[str, object] | None:
+        return await self.get_summary_context_mock(summary_id)
+
+
+@pytest.mark.asyncio
+async def test_get_summary_context_for_user_prefers_joined_repository_path() -> None:
+    summary_repo = _OptimizedSummaryRepository(
+        {
+            "summary": {"id": 7, "request_id": 70, "user_id": 3, "is_deleted": False},
+            "request": {"id": 70, "user_id": 3, "status": "ok"},
+            "crawl_result": {"request": 70, "status": "ok"},
+        }
+    )
+    request_repo = AsyncMock()
+    crawl_repo = AsyncMock()
+    llm_repo = AsyncMock()
+    llm_repo.async_get_llm_calls_by_request.return_value = [{"id": 1, "request": 70}]
+
+    use_case = SummaryReadModelUseCase(
+        summary_repository=cast("Any", summary_repo),
+        request_repository=request_repo,
+        crawl_result_repository=crawl_repo,
+        llm_repository=llm_repo,
+    )
+
+    context = await use_case.get_summary_context_for_user(user_id=3, summary_id=7)
+
+    assert context == {
+        "summary": {"id": 7, "request_id": 70, "user_id": 3, "is_deleted": False},
+        "request": {"id": 70, "user_id": 3, "status": "ok"},
+        "request_id": 70,
+        "crawl_result": {"request": 70, "status": "ok"},
+        "llm_calls": [{"id": 1, "request": 70}],
+    }
+    summary_repo.get_summary_context_mock.assert_awaited_once_with(7)
+    summary_repo.async_get_summary_by_id.assert_not_called()
+    request_repo.async_get_request_by_id.assert_not_called()
+    crawl_repo.async_get_crawl_result_by_request.assert_not_called()
+    llm_repo.async_get_llm_calls_by_request.assert_awaited_once_with(70)

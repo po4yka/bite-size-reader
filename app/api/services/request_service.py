@@ -1,10 +1,14 @@
 """Request service - business logic for request operations."""
 
+import inspect
 from datetime import datetime
 from typing import Any
 
+from peewee import OperationalError
+
 from app.api.dependencies.database import (
     get_crawl_result_repository,
+    get_llm_repository,
     get_summary_repository,
     resolve_repository_session,
 )
@@ -27,6 +31,30 @@ class RequestService:
     def _request_repo() -> SqliteRequestRepositoryAdapter:
         """Create a request repository bound to the shared API DB session."""
         return SqliteRequestRepositoryAdapter(resolve_repository_session())
+
+    @staticmethod
+    async def _request_context(
+        request_repo: SqliteRequestRepositoryAdapter,
+        request_id: int,
+    ) -> dict[str, Any] | None:
+        """Load request context through the optimized repository path when available."""
+        if inspect.iscoroutinefunction(
+            getattr(type(request_repo), "async_get_request_context", None)
+        ):
+            try:
+                return await request_repo.async_get_request_context(request_id)
+            except OperationalError:
+                return None
+        return None
+
+    @staticmethod
+    async def _safe_get_summary_by_request(request_id: int) -> dict[str, Any] | None:
+        """Fetch a summary when the table is available, otherwise degrade gracefully."""
+        summary_repo = get_summary_repository()
+        try:
+            return await summary_repo.async_get_summary_by_request(request_id)
+        except OperationalError:
+            return None
 
     @staticmethod
     async def check_duplicate_url(user_id: int, url: str) -> dict | None:
@@ -189,26 +217,33 @@ class RequestService:
             ResourceNotFoundError: If request not found or access denied
         """
         request_repo = RequestService._request_repo()
-        crawl_repo = get_crawl_result_repository()
-        summary_repo = get_summary_repository()
-
-        request = await request_repo.async_get_request_by_id(request_id)
+        llm_repo = get_llm_repository()
+        context = await RequestService._request_context(request_repo, request_id)
+        request = (
+            context["request"]
+            if context
+            else await request_repo.async_get_request_by_id(request_id)
+        )
 
         if not request or request.get("user_id") != user_id:
             raise ResourceNotFoundError("Request", request_id)
 
-        # Load related data
-        crawl_result = await crawl_repo.async_get_crawl_result_by_request(request_id)
-        # For llm_calls we don't have a direct repo method for list, we'll keep Peewee for now or add it
-        llm_calls = list(LLMCall.select().where(LLMCall.request == request_id))
-        summary = await summary_repo.async_get_summary_by_request(request_id)
+        if context:
+            crawl_result = context.get("crawl_result")
+            summary = context.get("summary")
+        else:
+            crawl_repo = get_crawl_result_repository()
+            crawl_result = await crawl_repo.async_get_crawl_result_by_request(request_id)
+            summary = await RequestService._safe_get_summary_by_request(request_id)
+
+        llm_calls = await llm_repo.async_get_llm_calls_by_request(request_id)
 
         from types import SimpleNamespace
 
         return {
             "request": SimpleNamespace(**request),
             "crawl_result": SimpleNamespace(**crawl_result) if crawl_result else None,
-            "llm_calls": llm_calls,
+            "llm_calls": [SimpleNamespace(**call) for call in llm_calls],
             "summary": SimpleNamespace(**summary) if summary else None,
         }
 
@@ -231,10 +266,13 @@ class RequestService:
             ResourceNotFoundError: If request not found or access denied
         """
         request_repo = RequestService._request_repo()
-        crawl_repo = get_crawl_result_repository()
-        summary_repo = get_summary_repository()
-
-        request = await request_repo.async_get_request_by_id(request_id)
+        llm_repo = get_llm_repository()
+        context = await RequestService._request_context(request_repo, request_id)
+        request = (
+            context["request"]
+            if context
+            else await request_repo.async_get_request_by_id(request_id)
+        )
 
         if not request or request.get("user_id") != user_id:
             raise ResourceNotFoundError("Request", request_id)
@@ -254,10 +292,14 @@ class RequestService:
         can_retry = False  # Explicit boolean, never None
 
         if status == "processing":
-            crawl_result = await crawl_repo.async_get_crawl_result_by_request(request_id)
-            # Count llm calls via Peewee for now
-            llm_calls_count = LLMCall.select().where(LLMCall.request == request_id).count()
-            summary = await summary_repo.async_get_summary_by_request(request_id)
+            if context:
+                crawl_result = context.get("crawl_result")
+                summary = context.get("summary")
+            else:
+                crawl_repo = get_crawl_result_repository()
+                crawl_result = await crawl_repo.async_get_crawl_result_by_request(request_id)
+                summary = await RequestService._safe_get_summary_by_request(request_id)
+            llm_calls_count = await llm_repo.async_count_llm_calls_by_request(request_id)
 
             if not crawl_result:
                 stage = "crawling"

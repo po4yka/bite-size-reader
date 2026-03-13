@@ -85,6 +85,18 @@ class SqliteLLMRepositoryAdapter(SqliteBaseRepository):
 
         return await self._execute(_get, operation_name="get_llm_calls_by_request", read_only=True)
 
+    async def async_count_llm_calls_by_request(self, request_id: int) -> int:
+        """Count LLM calls for a request."""
+
+        def _count() -> int:
+            return LLMCall.select().where(LLMCall.request == request_id).count()
+
+        return await self._execute(
+            _count,
+            operation_name="count_llm_calls_by_request",
+            read_only=True,
+        )
+
     async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
         """Get all LLM calls for a user (for sync operations).
 

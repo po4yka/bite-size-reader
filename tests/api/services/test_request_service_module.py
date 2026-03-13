@@ -11,6 +11,15 @@ from app.core.time_utils import UTC
 from app.db.models import CrawlResult, LLMCall, Request, Summary
 
 
+class _OptimizedRequestRepository:
+    def __init__(self, context: dict[str, object] | None) -> None:
+        self.get_request_context_mock = AsyncMock(return_value=context)
+        self.async_get_request_by_id = AsyncMock()
+
+    async def async_get_request_context(self, request_id: int) -> dict[str, object] | None:
+        return await self.get_request_context_mock(request_id)
+
+
 def _create_request(
     *,
     user_id: int,
@@ -274,6 +283,58 @@ async def test_get_request_status_falls_back_for_failed_requests_and_enforces_ac
 
     with pytest.raises(ResourceNotFoundError):
         await RequestService.get_request_status(999999, failed.id)
+
+
+@pytest.mark.asyncio
+async def test_get_request_by_id_prefers_joined_repository_path() -> None:
+    request_repo = _OptimizedRequestRepository(
+        {
+            "request": {"id": 99, "user_id": 5002, "status": "ok"},
+            "crawl_result": {"request": 99, "source_url": "https://example.com/joined"},
+            "summary": {"id": 199, "request": 99, "lang": "en"},
+        }
+    )
+    llm_repo = AsyncMock()
+    llm_repo.async_get_llm_calls_by_request.return_value = [{"id": 3, "request": 99}]
+
+    with (
+        patch.object(RequestService, "_request_repo", return_value=request_repo),
+        patch("app.api.services.request_service.get_llm_repository", return_value=llm_repo),
+    ):
+        details = await RequestService.get_request_by_id(user_id=5002, request_id=99)
+
+    assert details["request"].id == 99
+    assert details["crawl_result"].source_url == "https://example.com/joined"
+    assert details["summary"].id == 199
+    assert details["llm_calls"][0].id == 3
+    request_repo.get_request_context_mock.assert_awaited_once_with(99)
+    request_repo.async_get_request_by_id.assert_not_called()
+    llm_repo.async_get_llm_calls_by_request.assert_awaited_once_with(99)
+
+
+@pytest.mark.asyncio
+async def test_get_request_status_prefers_joined_repository_path() -> None:
+    request_repo = _OptimizedRequestRepository(
+        {
+            "request": {"id": 77, "user_id": 5004, "status": "processing"},
+            "crawl_result": {"request": 77, "status": "ok"},
+            "summary": None,
+        }
+    )
+    llm_repo = AsyncMock()
+    llm_repo.async_count_llm_calls_by_request.return_value = 0
+
+    with (
+        patch.object(RequestService, "_request_repo", return_value=request_repo),
+        patch("app.api.services.request_service.get_llm_repository", return_value=llm_repo),
+    ):
+        status = await RequestService.get_request_status(user_id=5004, request_id=77)
+
+    assert status["stage"] == "processing"
+    assert status["progress"] == {"current_step": 2, "total_steps": 3, "percentage": 66}
+    request_repo.get_request_context_mock.assert_awaited_once_with(77)
+    request_repo.async_get_request_by_id.assert_not_called()
+    llm_repo.async_count_llm_calls_by_request.assert_awaited_once_with(77)
 
 
 @pytest.mark.asyncio

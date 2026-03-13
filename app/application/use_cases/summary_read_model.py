@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -86,6 +87,32 @@ class SummaryReadModelUseCase:
     async def get_summary_context_for_user(
         self, user_id: int, summary_id: int
     ) -> dict[str, Any] | None:
+        if inspect.iscoroutinefunction(
+            getattr(type(self._summary_repo), "async_get_summary_context_by_id", None)
+        ):
+            context = await self._summary_repo.async_get_summary_context_by_id(summary_id)
+            if not context:
+                return None
+
+            summary = context.get("summary") or {}
+            if summary.get("user_id") != user_id or summary.get("is_deleted"):
+                return None
+
+            request_data = context.get("request") or {}
+            request_id = request_data.get("id") or summary.get("request_id")
+            if request_id is None:
+                return None
+
+            request_id_int = int(request_id)
+            llm_calls = await self._llm_repo.async_get_llm_calls_by_request(request_id_int)
+            return {
+                "summary": summary,
+                "request": request_data,
+                "request_id": request_id_int,
+                "crawl_result": context.get("crawl_result"),
+                "llm_calls": llm_calls,
+            }
+
         summary = await self.get_summary_by_id_for_user(user_id=user_id, summary_id=summary_id)
         if not summary:
             return None
