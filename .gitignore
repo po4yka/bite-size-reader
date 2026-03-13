@@ -135,15 +135,7 @@ app/static/web/
 # Local Claude Code settings (user-specific)
 .claude/settings.local.json
 
-# --- Ralph (migration agent) ---
-.ralph/
-ralph.yml
-PROMPT.md
-
 # --- Desloppify ---
 .desloppify/
-
-# --- Local audit artifacts ---
 .desloppify/*
-docs/*
 scorecard.png
