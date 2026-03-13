@@ -13,50 +13,92 @@ import time
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 
+from app.api.dependencies.database import get_session_manager
 from app.api.models.responses import success_response
+from app.config import load_config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC, format_iso_z
 
 logger = get_logger(__name__)
 
 router = APIRouter()
+_DATABASE_DETAILS_TTL_SECONDS = 30.0
+_database_details_cache: dict[str, Any] | None = None
+_database_details_cached_at = 0.0
+_database_details_lock = asyncio.Lock()
 
 
-async def _check_database() -> dict[str, Any]:
+def clear_health_check_cache() -> None:
+    """Reset cached component details used by health endpoints."""
+    global _database_details_cache, _database_details_cached_at
+    _database_details_cache = None
+    _database_details_cached_at = 0.0
+
+
+def _compute_database_details() -> dict[str, Any]:
+    """Compute heavier database diagnostics using the shared session manager."""
+    db = get_session_manager()
+    db_conn = db.database
+
+    cursor = db_conn.execute_sql(
+        "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()"
+    )
+    size_bytes = cursor.fetchone()[0] if cursor else 0
+    integrity_ok, integrity_result = db.check_integrity()
+
+    result: dict[str, Any] = {
+        "size_bytes": size_bytes,
+        "size_mb": round(size_bytes / (1024 * 1024), 2) if size_bytes else 0,
+        "integrity_ok": integrity_ok,
+    }
+    if not integrity_ok:
+        result["integrity_detail"] = integrity_result
+    return result
+
+
+async def _get_cached_database_details() -> dict[str, Any]:
+    """Return cached database diagnostics, recomputing only when stale."""
+    global _database_details_cache, _database_details_cached_at
+
+    now = time.monotonic()
+    if (
+        _database_details_cache is not None
+        and now - _database_details_cached_at < _DATABASE_DETAILS_TTL_SECONDS
+    ):
+        return dict(_database_details_cache)
+
+    async with _database_details_lock:
+        now = time.monotonic()
+        if (
+            _database_details_cache is not None
+            and now - _database_details_cached_at < _DATABASE_DETAILS_TTL_SECONDS
+        ):
+            return dict(_database_details_cache)
+
+        details = await asyncio.to_thread(_compute_database_details)
+        _database_details_cache = details
+        _database_details_cached_at = now
+        return dict(details)
+
+
+async def _check_database(*, include_details: bool = True) -> dict[str, Any]:
     """Check database connectivity and health."""
     start = time.perf_counter()
     try:
-        from app.config import load_config
-        from app.db.session import DatabaseSessionManager
-
-        # Try to execute a simple query
-        config = load_config()
-        db = DatabaseSessionManager(path=config.runtime.db_path)
+        db = get_session_manager()
         db_conn = db.database
         cursor = db_conn.execute_sql("SELECT 1")
         cursor.fetchone()
         latency_ms = (time.perf_counter() - start) * 1000
 
-        # Get database size
-        cursor = db_conn.execute_sql(
-            "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()"
-        )
-        size_bytes = cursor.fetchone()[0] if cursor else 0
-
-        # Run quick integrity check
-        integrity_ok, integrity_result = db.check_integrity()
-
         result: dict[str, Any] = {
             "status": "healthy",
             "latency_ms": round(latency_ms, 2),
-            "size_bytes": size_bytes,
-            "size_mb": round(size_bytes / (1024 * 1024), 2) if size_bytes else 0,
-            "integrity_ok": integrity_ok,
         }
-        if not integrity_ok:
-            result["integrity_detail"] = integrity_result
+        if include_details:
+            result.update(await _get_cached_database_details())
         return result
     except Exception as exc:
         latency_ms = (time.perf_counter() - start) * 1000
@@ -75,7 +117,6 @@ async def _check_redis() -> dict[str, Any]:
     """Check Redis connectivity using shared client."""
     start = time.perf_counter()
     try:
-        from app.config import load_config
         from app.infrastructure.redis import get_connection_state, get_redis
 
         config = load_config()
@@ -129,7 +170,6 @@ async def _check_scraper() -> dict[str, Any]:
     start = time.perf_counter()
     try:
         from app.adapters.content.scraper.diagnostics import build_scraper_diagnostics
-        from app.config import load_config
 
         config = load_config()
         diagnostics = build_scraper_diagnostics(config)
@@ -161,7 +201,7 @@ def _get_circuit_breaker_states() -> dict[str, Any]:
 
 
 @router.get("/health/detailed")
-async def detailed_health_check(request: Request):
+async def detailed_health_check():
     """Comprehensive health check with component status.
 
     Returns detailed status of all system components:
@@ -176,7 +216,7 @@ async def detailed_health_check(request: Request):
     try:
         async with asyncio.timeout(10.0):
             db_status, redis_status, scraper_status = await asyncio.gather(
-                _check_database(),
+                _check_database(include_details=True),
                 _check_redis(),
                 _check_scraper(),
                 return_exceptions=True,
@@ -239,7 +279,7 @@ async def readiness_check():
     Returns 200 if the service is ready to handle requests.
     Checks database connectivity only.
     """
-    db_status = await _check_database()
+    db_status = await _check_database(include_details=False)
 
     if db_status.get("status") == "healthy":
         return success_response(
