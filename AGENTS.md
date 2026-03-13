@@ -1,3 +1,91 @@
+# AGENTS.md -- AI Agent Guide for Bite-Size Reader
+
+This document provides project context for AI coding agents (Codex, Copilot, etc.). For the full guide see `CLAUDE.md`.
+
+## Project Overview
+
+Async Telegram bot that summarizes web articles, YouTube videos, and forwarded channel posts. Returns structured JSON summaries with a strict contract. Single Docker container, owner-only access.
+
+**Stack:** Python 3.13+, Pyrogram, Scrapling/Firecrawl/Playwright (scraper chain), OpenRouter (LLM), SQLite (Peewee ORM), FastAPI, React 18 + TypeScript + Vite (Carbon web frontend).
+
+## Architecture
+
+```
+Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> Summary JSON -> SQLite
+```
+
+### Key Layers
+
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| Telegram | `app/adapters/telegram/` | Bot orchestration, routing, commands |
+| Content | `app/adapters/content/` | Scraper chain (Scrapling -> Defuddle -> Firecrawl -> Playwright -> Crawlee -> direct HTTP) |
+| YouTube | `app/adapters/youtube/` | yt-dlp download, transcript extraction |
+| Twitter/X | `app/adapters/twitter/` | Firecrawl + Playwright extraction |
+| LLM | `app/adapters/llm/`, `app/adapters/openrouter/` | Provider-agnostic LLM interface |
+| Application | `app/application/` | DTOs and use cases |
+| Core | `app/core/` | URL normalization, JSON parsing, summary contract, logging |
+| Database | `app/db/` | Peewee ORM models (31 classes), `DatabaseSessionManager` (`session.py`) is sole DB entry point |
+| API | `app/api/` | FastAPI REST API with JWT auth |
+| Web | `web/` | Carbon web interface (React + TypeScript + Vite) |
+| Search | `app/services/` | Topic search, vector/hybrid search, embeddings |
+| MCP | `app/mcp/` | Model Context Protocol server |
+
+## Critical Files
+
+- `app/adapters/telegram/message_router.py` -- Central routing logic
+- `app/adapters/content/url_processor.py` -- URL processing orchestration
+- `app/core/summary_contract.py` -- Summary validation (strict contract)
+- `app/core/url_utils.py` -- URL normalization and deduplication
+- `app/db/models.py` -- Database schema (ORM models)
+- `app/db/session.py` -- `DatabaseSessionManager` (sole DB entry point)
+- `app/config/settings.py` -- Configuration loading
+- `app/config/scraper.py` -- Scraper chain configuration
+- `bot.py` -- Entrypoint
+- `SPEC.md` -- Full technical specification (canonical reference)
+- `FRONTEND.md` -- Carbon web frontend contracts
+
+## Development Commands
+
+```bash
+source .venv/bin/activate
+make format          # ruff format + isort
+make lint            # ruff
+make type            # mypy
+cd web && npm run check:static && npm run test  # Web frontend
+python -m app.cli.summary --url <URL>           # CLI test runner
+```
+
+## Code Conventions
+
+- **Formatting:** ruff format + isort (profile=black)
+- **Linting:** Ruff (see `pyproject.toml`)
+- **Type checking:** mypy (`python_version = "3.13"`)
+- **Pre-commit hooks:** ruff -> isort -> mypy
+- **Testing:** pytest + pytest-asyncio. Test DB helpers in `tests/db_helpers.py`
+- **Commits:** Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`)
+
+## Key Rules
+
+1. All URLs must be normalized before deduplication (`app/core/url_utils.py`)
+2. All user-visible errors must include `Error ID: <correlation_id>`
+3. Persist everything: scraper responses, LLM calls, Telegram messages
+4. Always redact `Authorization` headers before logging
+5. Update both `en/` and `ru/` prompts when changing LLM behavior
+6. Validate summary JSON with `app/core/summary_contract.py`
+7. Database changes require migration via `app/cli/migrate_db.py` + SPEC.md update
+8. Web frontend changes: read `FRONTEND.md` first, run `npm run check:static` before finalizing
+
+## Database
+
+31 Peewee model classes in `app/db/models.py`. `DatabaseSessionManager` (`app/db/session.py`) handles connection management, migrations, FTS5 indexing, and async operations via `AsyncRWLock`. No other DB entry point exists.
+
+## Summary JSON Contract
+
+Defined in `app/core/summary_contract.py` (validation) and `app/core/summary_schema.py` (Pydantic model). Core fields: `summary_250`, `summary_1000`, `tldr`, `key_ideas`, `topic_tags`, `entities`, `estimated_reading_time_min`. Full contract has 35+ fields. See `SPEC.md`.
+
+---
+
 <!-- desloppify-begin -->
 <!-- desloppify-skill-version: 2 -->
 <!-- markdownlint-disable MD003 MD029 -->

@@ -81,7 +81,7 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 - **Digest** (`app/adapters/digest/`, `app/adapters/telegram/command_handlers/digest*.py`) -- Channel digest orchestration with userbot, scheduler, and bot-mediated session init via Mini App
 - **Application Layer** (`app/application/`) -- DTOs (`dto/`) and use cases (`use_cases/`) for orchestrating domain logic
 - **Core Utilities** (`app/core/`) -- URL normalization, JSON parsing/repair, summary contract validation, language detection, structured logging
-- **Database** (`app/db/`) -- SQLite schema, Peewee ORM models (31 model classes), migrations
+- **Database** (`app/db/`) -- SQLite schema, Peewee ORM models (31 model classes), migrations. `DatabaseSessionManager` (`app/db/session.py`) is the sole DB entry point (connection management, migrations, FTS5 indexing, async RW lock)
 - **CLI Tools** (`app/cli/`) -- Summary runner, search, migrations, MCP server, embedding backfill, Chroma backfill, search comparison, performance indexes
 - **Mobile API** (`app/api/`) -- FastAPI REST API with JWT auth, sync, background processing
 - **Web Frontend** (`web/`) -- Carbon web interface (library/article/search/submit/collections/digest/preferences), hybrid auth (Telegram WebApp + JWT), React Query data layer
@@ -202,6 +202,7 @@ python -m app.cli.summary --accept-multiple --json-path out.json --log-level DEB
 - **Integration Tests:** Mock Firecrawl/OpenRouter responses
 - **E2E Tests:** Gated by `E2E=1` environment variable
 - Test files in `tests/` directory (follow `test_*.py` naming)
+- **Test DB Helpers:** `tests/db_helpers.py` provides standalone CRUD functions (`create_request`, `insert_summary`, `upsert_summary`, etc.) for test setup -- use these instead of calling ORM models directly for common operations
 
 ### CI/CD
 
@@ -380,6 +381,7 @@ When making changes, these are the most critical files to understand:
 - **`app/core/summary_schema.py`** -- Summary Pydantic model (full schema)
 - **`app/core/url_utils.py`** -- URL normalization and deduplication
 - **`app/db/models.py`** -- Database schema (ORM models)
+- **`app/db/session.py`** -- `DatabaseSessionManager` (sole DB entry point)
 - **`app/config/settings.py`** -- Configuration loading
 - **`app/config/scraper.py`** -- Scraper chain configuration (`ScraperConfig`)
 - **`app/adapters/content/scraper/`** -- `ContentScraperProtocol`, `ContentScraperChain`, `ContentScraperFactory`, providers
