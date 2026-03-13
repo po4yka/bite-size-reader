@@ -114,8 +114,22 @@ class ListenHandlerImpl(HandlerDependenciesMixin):
 
     @staticmethod
     def _find_summary_for_message(message_id: int, user_id: int) -> Summary | None:
-        """Find a summary associated with a Telegram message ID for a given user."""
+        """Find a summary associated with a Telegram message ID for a given user.
+
+        Queries by bot_reply_message_id first (the ID of the bot's outbound summary
+        message), then falls back to input_message_id for rows created before this
+        field was introduced.
+        """
         try:
+            result = (
+                Summary.select()
+                .join(Request)
+                .where((Request.bot_reply_message_id == message_id) & (Request.user_id == user_id))
+                .first()
+            )
+            if result:
+                return result
+            # Fallback for rows created before bot_reply_message_id was added
             return (
                 Summary.select()
                 .join(Request)

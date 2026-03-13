@@ -125,6 +125,7 @@ class Request(BaseModel):
     normalized_url = peewee.TextField(null=True)
     dedupe_hash = peewee.TextField(null=True, unique=True)
     input_message_id = peewee.IntegerField(null=True)
+    bot_reply_message_id = peewee.IntegerField(null=True)
     fwd_from_chat_id = peewee.BigIntegerField(null=True)
     fwd_from_msg_id = peewee.IntegerField(null=True)
     lang_detected = peewee.TextField(null=True)

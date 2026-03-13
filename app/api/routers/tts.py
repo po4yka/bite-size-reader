@@ -17,10 +17,23 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
+# Module-level singleton — avoids creating a new httpx.AsyncClient per request.
+_tts_service = None
+
 
 def _get_tts_config():
     """Lazy-load TTS config."""
     return load_config(allow_stub_telegram=True).tts
+
+
+def _get_tts_service():
+    """Return a shared TTSService instance (lazy init)."""
+    global _tts_service
+    if _tts_service is None:
+        from app.services.tts_service import TTSService
+
+        _tts_service = TTSService(_get_tts_config())
+    return _tts_service
 
 
 def _get_user_summary(summary_id: int, user_id: int) -> Summary:
@@ -53,13 +66,7 @@ async def generate_audio(
 
     _get_user_summary(summary_id, user["user_id"])
 
-    from app.services.tts_service import TTSService
-
-    service = TTSService(tts_config)
-    try:
-        result = await service.generate_audio(summary_id, source_field=source_field)
-    finally:
-        await service.close()
+    result = await _get_tts_service().generate_audio(summary_id, source_field=source_field)
 
     return success_response(
         {

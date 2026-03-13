@@ -493,9 +493,12 @@ class ResponseFormatter:
         chunks: int | None = None,
         summary_id: int | str | None = None,
         correlation_id: str | None = None,
-    ) -> None:
-        """Send summary where each top-level JSON field is a separate message."""
-        await self._summary_presenter.send_structured_summary_response(
+    ) -> int | None:
+        """Send summary where each top-level JSON field is a separate message.
+
+        Returns the Telegram message ID of the last sent message, or None.
+        """
+        return await self._summary_presenter.send_structured_summary_response(
             message,
             summary_shaped,
             llm,

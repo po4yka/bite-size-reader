@@ -439,7 +439,7 @@ class URLProcessor:
             if not silent and not batch_mode:
                 llm_result = self.llm_summarizer.last_llm_result or _create_chunk_llm_stub(self.cfg)
                 # Pass request ID prefixed with 'req:' for action button callbacks
-                await self.response_formatter.send_structured_summary_response(
+                bot_reply_msg_id = await self.response_formatter.send_structured_summary_response(
                     message,
                     summary_json,
                     llm_result,
@@ -447,6 +447,23 @@ class URLProcessor:
                     summary_id=f"req:{context.req_id}" if context.req_id else None,
                     correlation_id=correlation_id,
                 )
+                if bot_reply_msg_id and context.req_id:
+                    from app.db.models import Request as RequestModel
+
+                    req_id = context.req_id
+
+                    def _update_bot_reply_id() -> None:
+                        RequestModel.update(bot_reply_message_id=bot_reply_msg_id).where(
+                            RequestModel.id == req_id
+                        ).execute()
+
+                    try:
+                        await asyncio.to_thread(_update_bot_reply_id)
+                    except Exception as _exc:
+                        logger.warning(
+                            "bot_reply_msg_id_persist_failed",
+                            extra={"cid": correlation_id, "error": str(_exc)},
+                        )
 
             # Skip post-summary background tasks in batch mode to reduce noise
             if not batch_mode:

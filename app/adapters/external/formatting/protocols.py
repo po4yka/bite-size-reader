@@ -75,6 +75,8 @@ class ResponseSender(Protocol):
         text: str,
         *,
         parse_mode: str | None = None,
+        reply_markup: Any = None,
+        disable_web_page_preview: bool | None = None,
         message_thread_id: int | None = None,
     ) -> int | None:
         """Safely reply to a message and return the message ID."""
@@ -338,8 +340,11 @@ class SummaryPresenter(Protocol):
         chunks: int | None = None,
         summary_id: int | str | None = None,
         correlation_id: str | None = None,
-    ) -> None:
-        """Send summary where each top-level JSON field is a separate message."""
+    ) -> int | None:
+        """Send summary where each top-level JSON field is a separate message.
+
+        Returns the Telegram message ID of the last sent message, or None.
+        """
         ...
 
     async def send_forward_summary_response(

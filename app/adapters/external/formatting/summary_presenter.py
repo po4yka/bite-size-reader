@@ -124,12 +124,15 @@ class SummaryPresenterImpl:
 
     async def _send_action_buttons(
         self, message: Any, summary_id: int | str, correlation_id: str | None = None
-    ) -> None:
-        """Send action buttons as a separate message after the summary."""
+    ) -> int | None:
+        """Send action buttons as a separate message after the summary.
+
+        Returns the Telegram message ID of the sent message, or None if not sent.
+        """
         try:
             keyboard = self._create_inline_keyboard(summary_id, correlation_id)
             if keyboard:
-                await self._response_sender.safe_reply(
+                msg_id = await self._response_sender.safe_reply_with_id(
                     message,
                     t("quick_actions", self._lang),
                     reply_markup=keyboard,
@@ -138,12 +141,14 @@ class SummaryPresenterImpl:
                     "action_buttons_sent",
                     extra={"summary_id": summary_id},
                 )
+                return msg_id
         except Exception as e:
             raise_if_cancelled(e)
             logger.warning(
                 "send_action_buttons_failed",
                 extra={"summary_id": summary_id, "error": str(e)},
             )
+        return None
 
     async def _is_reader_mode(self, message: Any) -> bool:
         if self._verbosity_resolver is None:
@@ -393,7 +398,7 @@ class SummaryPresenterImpl:
         chunks: int | None = None,
         summary_id: int | str | None = None,
         correlation_id: str | None = None,
-    ) -> None:
+    ) -> int | None:
         """Send summary where each top-level JSON field is a separate message,
         then attach the full JSON as a .json document with a descriptive filename.
 
@@ -404,6 +409,9 @@ class SummaryPresenterImpl:
             chunks: Number of chunks used (optional)
             summary_id: Database summary ID for action buttons (optional)
             correlation_id: Request correlation ID for tracing (optional)
+
+        Returns:
+            The Telegram message ID of the last sent message (action buttons), or None.
         """
         try:
             reader = await self._is_reader_mode(message)
@@ -417,7 +425,7 @@ class SummaryPresenterImpl:
             )
 
             if reader and job_card_finalized:
-                return
+                return None
 
             if not reader and not job_card_finalized:
                 try:
@@ -437,12 +445,14 @@ class SummaryPresenterImpl:
             await self._send_new_field_messages(message, summary_shaped)
             await self._response_sender.reply_json(message, summary_shaped)
 
+            bot_reply_id: int | None = None
             if summary_id and not job_card_finalized:
-                await self._send_action_buttons(message, summary_id, correlation_id)
+                bot_reply_id = await self._send_action_buttons(message, summary_id, correlation_id)
 
             await self._crosspost_to_topic(
                 message, summary_shaped, llm, chunks, summary_id, correlation_id, card_text
             )
+            return bot_reply_id
         except Exception as exc:
             raise_if_cancelled(exc)
             # Fallback to simpler format
@@ -458,6 +468,7 @@ class SummaryPresenterImpl:
             # Still try to add action buttons in fallback
             if summary_id:
                 await self._send_action_buttons(message, summary_id, correlation_id)
+            return None
 
     async def _crosspost_to_topic(
         self,

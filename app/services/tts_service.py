@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass
@@ -46,14 +47,16 @@ class TTSService:
             source_field = "summary_1000"
 
         # Check cache
-        existing: AudioGeneration | None = (
-            AudioGeneration.select()
-            .where(
-                (AudioGeneration.summary == summary_id)
-                & (AudioGeneration.source_field == source_field)
-                & (AudioGeneration.status == "completed")
+        existing: AudioGeneration | None = await asyncio.to_thread(
+            lambda: (
+                AudioGeneration.select()
+                .where(
+                    (AudioGeneration.summary == summary_id)
+                    & (AudioGeneration.source_field == source_field)
+                    & (AudioGeneration.status == "completed")
+                )
+                .first()
             )
-            .first()
         )
         if existing and existing.file_path and Path(existing.file_path).is_file():
             return AudioGenerationResult(
@@ -66,7 +69,9 @@ class TTSService:
             )
 
         # Load summary
-        summary: Summary | None = Summary.get_or_none(Summary.id == summary_id)
+        summary: Summary | None = await asyncio.to_thread(
+            lambda: Summary.get_or_none(Summary.id == summary_id)
+        )
         if summary is None:
             return AudioGenerationResult(
                 summary_id=summary_id, status="error", error="Summary not found"
@@ -88,23 +93,27 @@ class TTSService:
             )
 
         # Create or update DB record
-        row, _ = AudioGeneration.get_or_create(
-            summary=summary_id,
-            defaults={
-                "voice_id": self._config.voice_id,
-                "model": self._config.model,
-                "source_field": source_field,
-                "language": summary.lang,
-                "status": "generating",
-                "char_count": len(text),
-            },
-        )
-        if row.status != "generating":
-            row.status = "generating"
-            row.source_field = source_field
-            row.char_count = len(text)
-            row.error_text = None
-            row.save()
+        def _upsert() -> AudioGeneration:
+            _row, _ = AudioGeneration.get_or_create(
+                summary=summary_id,
+                defaults={
+                    "voice_id": self._config.voice_id,
+                    "model": self._config.model,
+                    "source_field": source_field,
+                    "language": summary.lang,
+                    "status": "generating",
+                    "char_count": len(text),
+                },
+            )
+            if _row.status != "generating":
+                _row.status = "generating"
+                _row.source_field = source_field
+                _row.char_count = len(text)
+                _row.error_text = None
+                _row.save()
+            return _row
+
+        row: AudioGeneration = await asyncio.to_thread(_upsert)
 
         # Synthesize
         start = time.monotonic()
@@ -119,7 +128,7 @@ class TTSService:
             row.status = "error"
             row.error_text = error_msg
             row.latency_ms = latency
-            row.save()
+            await asyncio.to_thread(row.save)
             logger.error(
                 "tts_generation_failed",
                 extra={"summary_id": summary_id, "error": error_msg, "latency_ms": latency},
@@ -142,7 +151,7 @@ class TTSService:
         row.file_path = str(file_path)
         row.file_size_bytes = file_size
         row.latency_ms = latency_ms
-        row.save()
+        await asyncio.to_thread(row.save)
 
         logger.info(
             "tts_generation_completed",
