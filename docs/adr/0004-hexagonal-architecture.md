@@ -213,6 +213,8 @@ See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](../HEXAGONAL_ARCHITECTURE_QUICKSTART.
 
 **2026-02-23**: Legacy `app/db/database.py` facade decomposed into focused operation modules (`database_user_ops`, `database_request_ops`, `database_summary_ops`, `database_embedding_media_ops`) to reduce module size while preserving backward compatibility.
 
+**2026-03-13**: Removed the `Database` facade and all 4 mixin modules entirely. `DatabaseSessionManager` (`app/db/session.py`) is now the sole database entry point. Test helpers moved to standalone functions in `tests/db_helpers.py`.
+
 **Future**: Consider `injector` or `dependency-injector` library for automated DI as codebase grows.
 
 ---
@@ -224,3 +226,4 @@ See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](../HEXAGONAL_ARCHITECTURE_QUICKSTART.
 | 2025-01-10 | po4yka | Initial decision (Accepted) |
 | 2025-02-01 | po4yka | Added mobile API and MCP server note |
 | 2026-02-23 | codex | Documented legacy DB facade decomposition into focused operation modules |
+| 2026-03-13 | po4yka | Documented removal of Database facade; DatabaseSessionManager is sole DB entry point |

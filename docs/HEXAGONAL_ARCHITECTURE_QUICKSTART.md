@@ -18,15 +18,10 @@ This doc keeps our layering consistent across Telegram, CLI, and the mobile API.
 - Infrastructure: `app/infrastructure/*`, `app/db/*`, external clients in `app/adapters/*`
 - DI: `app/di/container.py`
 
-## Legacy DB Facade Layout
+## DB Layer
 
-- `app/db/database.py` is a backward-compatible facade around `DatabaseSessionManager`.
-- Facade operations are split into focused mixins:
-  - `app/db/database_user_ops.py`
-  - `app/db/database_request_ops.py`
-  - `app/db/database_summary_ops.py`
-  - `app/db/database_embedding_media_ops.py`
-- New business workflows should go through application use cases and repository ports in `app/infrastructure/persistence/sqlite/repositories/*`, not directly through the facade.
+- `DatabaseSessionManager` (`app/db/session.py`) is the sole database entry point. It handles connection management, migrations, FTS5 indexing, and async operations via `AsyncRWLock`.
+- New business workflows should go through application use cases and repository ports in `app/infrastructure/persistence/sqlite/repositories/*`, not through the session manager directly.
 
 ## Current seam examples (2026-03)
 
