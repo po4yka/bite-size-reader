@@ -5,8 +5,8 @@ import logging
 
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import load_config
-from app.di.database import build_runtime_database
 from app.db.write_queue import DbWriteQueue
+from app.di.database import build_runtime_database
 
 # Use uvloop for better async performance if available
 try:

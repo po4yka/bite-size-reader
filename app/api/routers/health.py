@@ -76,7 +76,9 @@ async def _get_cached_database_details(request: Request | None = None) -> dict[s
         ):
             return dict(_database_details_cache)
 
-        details = await asyncio.to_thread(_compute_database_details, resolve_api_runtime(request).db)
+        details = await asyncio.to_thread(
+            _compute_database_details, resolve_api_runtime(request).db
+        )
         _database_details_cache = details
         _database_details_cached_at = now
         return dict(details)
