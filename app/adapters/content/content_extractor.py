@@ -10,8 +10,12 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.content_extractor_crawl import ContentExtractorCrawlMixin
-from app.adapters.content.content_extractor_platforms import ContentExtractorPlatformsMixin
 from app.adapters.content.content_extractor_requests import ContentExtractorRequestsMixin
+from app.adapters.content.platform_extraction import (
+    PlatformExtractionRequest,
+    PlatformExtractionRouter,
+    PlatformRequestLifecycle,
+)
 from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.content.scraper.protocol import ContentScraperProtocol
 from app.adapters.external.firecrawl.models import FirecrawlResult
@@ -30,7 +34,6 @@ from app.observability.failure_observability import (
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.adapters.youtube.youtube_downloader import YouTubeDownloader
     from app.core.progress_tracker import ProgressTracker
 
 logger = logging.getLogger(__name__)
@@ -42,7 +45,6 @@ URL_ROUTE_VERSION = 1
 class ContentExtractor(
     ContentExtractorRequestsMixin,
     ContentExtractorCrawlMixin,
-    ContentExtractorPlatformsMixin,
 ):
     """Handles Firecrawl operations and content extraction/processing."""
 
@@ -63,12 +65,62 @@ class ContentExtractor(
         self._sem = sem
         self._cache = RedisCache(cfg)
         self.message_persistence = MessagePersistence(db)
-        self._youtube_downloader: YouTubeDownloader | None = None
-        self._twitter_extractor: Any | None = None
+        self._platform_request_lifecycle = PlatformRequestLifecycle(
+            response_formatter=response_formatter,
+            message_persistence=self.message_persistence,
+            audit_func=audit_func,
+            route_version=URL_ROUTE_VERSION,
+        )
+        self._platform_router: PlatformExtractionRouter | None = None
 
     async def clear_cache(self) -> int:
         """Clear the extraction cache."""
         return await self._cache.clear()
+
+    def _get_platform_router(self) -> PlatformExtractionRouter:
+        if self._platform_router is not None:
+            return self._platform_router
+
+        from app.core.url_utils import is_twitter_url, is_youtube_url
+
+        router = PlatformExtractionRouter()
+        router.register(
+            predicate=is_youtube_url,
+            factory=self._build_youtube_platform_extractor,
+        )
+        router.register(
+            predicate=lambda normalized_url: (
+                bool(self.cfg.twitter.enabled) and is_twitter_url(normalized_url)
+            ),
+            factory=self._build_twitter_platform_extractor,
+        )
+        self._platform_router = router
+        return router
+
+    def _build_youtube_platform_extractor(self) -> Any:
+        from app.adapters.youtube.platform_extractor import YouTubePlatformExtractor
+
+        return YouTubePlatformExtractor(
+            cfg=self.cfg,
+            db=self.db,
+            response_formatter=self.response_formatter,
+            audit_func=self._audit,
+            lifecycle=self._platform_request_lifecycle,
+        )
+
+    def _build_twitter_platform_extractor(self) -> Any:
+        from app.adapters.twitter.platform_extractor import TwitterPlatformExtractor
+
+        return TwitterPlatformExtractor(
+            cfg=self.cfg,
+            db=self.db,
+            firecrawl=self.firecrawl,
+            response_formatter=self.response_formatter,
+            message_persistence=self.message_persistence,
+            firecrawl_sem=self._sem,
+            schedule_crawl_persistence=self._schedule_crawl_persistence,
+            lifecycle=self._platform_request_lifecycle,
+        )
 
     async def extract_content_pure(
         self,
@@ -80,20 +132,23 @@ class ContentExtractor(
         from app.core.url_utils import is_twitter_url, is_youtube_url
 
         normalized_url = normalize_url(url)
-
-        if is_youtube_url(normalized_url):
-            logger.info(
-                "youtube_url_detected_pure",
-                extra={"url": url, "normalized": normalized_url, "cid": correlation_id},
+        platform_result = await self._get_platform_router().extract(
+            PlatformExtractionRequest(
+                message=None,
+                url_text=url,
+                normalized_url=normalized_url,
+                correlation_id=correlation_id,
+                silent=True,
+                request_id_override=request_id,
+                mode="pure",
             )
-            return await self._extract_youtube_content_pure(url, correlation_id, request_id)
-
-        if is_twitter_url(normalized_url) and self.cfg.twitter.enabled:
-            logger.info(
-                "twitter_url_detected_pure",
-                extra={"url": url, "normalized": normalized_url, "cid": correlation_id},
-            )
-            return await self._extract_twitter_content_pure(url, correlation_id, request_id)
+        )
+        if platform_result is not None:
+            metadata = dict(platform_result.metadata)
+            if platform_result.request_id is not None:
+                metadata.setdefault("request_id", platform_result.request_id)
+            metadata.setdefault("detected_lang", platform_result.detected_lang)
+            return platform_result.content_text, platform_result.content_source, metadata
 
         logger.info(
             "pure_extraction_start",
@@ -194,40 +249,31 @@ class ContentExtractor(
         progress_tracker: ProgressTracker | None = None,
     ) -> tuple[int, str, str, str, str | None, list[str]]:
         """Extract content from URL and return request/content metadata tuple."""
-        from app.core.url_utils import is_twitter_url, is_youtube_url
-
         norm = normalize_url(url_text)
-
-        if is_twitter_url(norm) and self.cfg.twitter.enabled:
-            logger.info("twitter_url_detected", extra={"url": url_text, "cid": correlation_id})
-            (
-                req_id,
-                content_text,
-                content_source,
-                detected_lang,
-                meta,
-            ) = await self._extract_twitter_content(
-                message, url_text, norm, correlation_id, interaction_id, silent
+        platform_result = await self._get_platform_router().extract(
+            PlatformExtractionRequest(
+                message=message,
+                url_text=url_text,
+                normalized_url=norm,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                silent=silent,
+                progress_tracker=progress_tracker,
+                mode="interactive",
             )
-            title = meta.get("title") if isinstance(meta, dict) else None
-            return req_id, content_text, content_source, detected_lang, title, []
-
-        if is_youtube_url(norm):
-            logger.info(
-                "youtube_url_detected",
-                extra={"url": url_text, "normalized": norm, "cid": correlation_id},
+        )
+        if platform_result is not None:
+            if platform_result.request_id is None:
+                msg = "Interactive platform extraction requires a request_id"
+                raise RuntimeError(msg)
+            return (
+                platform_result.request_id,
+                platform_result.content_text,
+                platform_result.content_source,
+                platform_result.detected_lang,
+                platform_result.title,
+                platform_result.images,
             )
-            (
-                req_id,
-                transcript_text,
-                content_source,
-                detected_lang,
-                video_metadata,
-            ) = await self._extract_youtube_content(
-                message, url_text, norm, correlation_id, interaction_id, silent, progress_tracker
-            )
-            title = video_metadata.get("title") if isinstance(video_metadata, dict) else None
-            return req_id, transcript_text, content_source, detected_lang, title, []
 
         dedupe = url_hash_sha256(norm)
         logger.info(

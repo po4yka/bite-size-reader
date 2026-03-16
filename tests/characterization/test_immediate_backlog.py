@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -61,7 +62,8 @@ async def test_characterization_youtube_uses_vtt_fallback_when_api_transcript_em
     pytest.importorskip("yt_dlp", reason="yt-dlp not installed")
     pytest.importorskip("youtube_transcript_api", reason="youtube-transcript-api not installed")
 
-    from app.adapters.youtube.youtube_downloader import YouTubeDownloader
+    from app.adapters.content.platform_extraction.lifecycle import PlatformRequestLifecycle
+    from app.adapters.youtube.platform_extractor import YouTubePlatformExtractor
 
     cfg = MagicMock()
     cfg.youtube.storage_path = str(tmp_path / "videos")
@@ -78,25 +80,49 @@ async def test_characterization_youtube_uses_vtt_fallback_when_api_transcript_em
     rf.notifications.send_youtube_download_notification = AsyncMock()
     rf.notifications.send_youtube_download_complete_notification = AsyncMock()
 
-    downloader: Any = YouTubeDownloader(
-        cfg=cfg, db=MagicMock(), response_formatter=rf, audit_func=lambda *_a, **_k: None
+    lifecycle = PlatformRequestLifecycle(
+        response_formatter=rf,
+        message_persistence=SimpleNamespace(
+            request_repo=SimpleNamespace(
+                async_create_request=AsyncMock(return_value=500),
+                async_get_request_by_dedupe_hash=AsyncMock(return_value=None),
+            ),
+            user_repo=SimpleNamespace(
+                async_upsert_chat=AsyncMock(),
+                async_upsert_user=AsyncMock(),
+            ),
+            persist_message_snapshot=AsyncMock(),
+        ),
+        audit_func=lambda *_a, **_k: None,
+        route_version=1,
+    )
+    downloader: Any = YouTubePlatformExtractor(
+        cfg=cfg,
+        db=MagicMock(),
+        response_formatter=rf,
+        audit_func=lambda *_a, **_k: None,
+        lifecycle=lifecycle,
     )
 
-    downloader._check_storage_limits = AsyncMock()
-    downloader.request_repo = MagicMock()
-    downloader.video_repo = MagicMock()
+    downloader._session_service.check_storage_limits = AsyncMock()
+    downloader._session_service.request_repo = MagicMock()
+    downloader._session_service.video_repo = MagicMock()
 
-    downloader.request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
-    downloader.video_repo.async_get_video_download_by_request = AsyncMock(return_value=None)
-    downloader.video_repo.async_create_video_download = AsyncMock(return_value=900)
-    downloader.video_repo.async_update_video_download_status = AsyncMock()
-    downloader.video_repo.async_update_video_download = AsyncMock()
-    downloader.request_repo.async_update_request_status = AsyncMock()
-    downloader.request_repo.async_update_request_lang_detected = AsyncMock()
-    downloader._create_video_request = AsyncMock(return_value=500)
+    downloader._session_service.request_repo.async_get_request_by_dedupe_hash = AsyncMock(
+        return_value=None
+    )
+    downloader._session_service.video_repo.async_get_video_download_by_request = AsyncMock(
+        return_value=None
+    )
+    downloader._session_service.video_repo.async_create_video_download = AsyncMock(return_value=900)
+    downloader._session_service.video_repo.async_update_video_download_status = AsyncMock()
+    downloader._session_service.video_repo.async_update_video_download = AsyncMock()
+    downloader._session_service.request_repo.async_update_request_status = AsyncMock()
+    downloader._session_service.request_repo.async_update_request_lang_detected = AsyncMock()
+    downloader._session_service._create_video_request = AsyncMock(return_value=500)
 
-    downloader._extract_transcript_api = AsyncMock(return_value=("", "", False, "api"))
-    downloader._download_video_sync = MagicMock(
+    downloader._pipeline._extract_transcript_api = AsyncMock(return_value=("", "", False, "api"))
+    downloader._pipeline._download_video_sync = MagicMock(
         return_value={
             "title": "Example video",
             "channel": "Channel",
@@ -113,25 +139,34 @@ async def test_characterization_youtube_uses_vtt_fallback_when_api_transcript_em
             "subtitle_file_path": str(tmp_path / "captions.en.vtt"),
         }
     )
-    downloader._load_transcript_from_vtt = MagicMock(return_value=("vtt transcript body", "en"))
-
-    (
-        req_id,
-        combined_text,
-        transcript_source,
-        detected_lang,
-        _metadata,
-    ) = await downloader.download_and_extract(
-        message=MagicMock(),
-        url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        silent=True,
+    downloader._pipeline._load_transcript_from_vtt = MagicMock(
+        return_value=("vtt transcript body", "en")
     )
+
+    result = await downloader.extract(
+        SimpleNamespace(
+            message=MagicMock(),
+            url_text="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            normalized_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            correlation_id=None,
+            interaction_id=None,
+            silent=True,
+            progress_tracker=None,
+            request_id_override=None,
+            mode="interactive",
+        )
+    )
+    req_id = result.request_id
+    combined_text = result.content_text
+    transcript_source = result.content_source
+    detected_lang = result.detected_lang
+    _metadata = result.metadata
 
     assert req_id == 500
     assert transcript_source == "vtt"
     assert detected_lang == "en"
     assert "vtt transcript body" in combined_text
-    downloader.video_repo.async_update_video_download.assert_awaited_once()
+    downloader._session_service.video_repo.async_update_video_download.assert_awaited_once()
 
 
 @pytest.mark.asyncio

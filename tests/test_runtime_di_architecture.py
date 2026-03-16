@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = PROJECT_ROOT / "app"
 EXCLUDED_GLOBS = [
@@ -41,4 +40,6 @@ def test_runtime_resource_construction_is_centralized_in_app_di() -> None:
             check=False,
         )
         assert result.returncode in (0, 1)
-        assert result.stdout.strip() == "", f"found forbidden runtime construction for {pattern!r}:\n{result.stdout}"
+        assert result.stdout.strip() == "", (
+            f"found forbidden runtime construction for {pattern!r}:\n{result.stdout}"
+        )
