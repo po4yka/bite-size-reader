@@ -14,13 +14,14 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
     from typing import Self
 
-    from app.models.llm.llm_models import ChatRequest, LLMCallResult
+    from app.models.llm.llm_models import LLMCallResult
     from app.utils.circuit_breaker import CircuitBreaker
 
 import httpx
 
 from app.adapters.llm.base_client import BaseLLMClient
-from app.adapters.openrouter import chat_completions, client_validation
+from app.adapters.openrouter import client_validation
+from app.adapters.openrouter.chat_engine import OpenRouterChatEngine
 from app.adapters.openrouter.error_handler import ErrorHandler
 from app.adapters.openrouter.exceptions import (
     ClientError,
@@ -273,6 +274,7 @@ class OpenRouterClient:
                 log_truncate_length=log_truncate_length,
             ),
         )
+        self.chat_engine = self._init_component("chat_engine", lambda: OpenRouterChatEngine(self))
 
     def _init_component(self, component: str, factory: Callable[[], Any]) -> Any:
         try:
@@ -415,8 +417,7 @@ class OpenRouterClient:
         fallback_models_override: tuple[str, ...] | list[str] | None = None,
         on_stream_delta: Callable[[str], Any] | None = None,
     ) -> LLMCallResult:
-        return await chat_completions.chat(
-            self,
+        return await self.chat_engine.chat(
             messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -427,105 +428,6 @@ class OpenRouterClient:
             model_override=model_override,
             fallback_models_override=fallback_models_override,
             on_stream_delta=on_stream_delta,
-        )
-
-    async def _attempt_request(
-        self,
-        client: httpx.AsyncClient,
-        model: str,
-        attempt: int,
-        sanitized_messages: list[dict[str, Any]],
-        request: ChatRequest,
-        rf_mode_current: str,
-        response_format_current: dict[str, Any] | None,
-        message_lengths: list[int],
-        message_roles: list[str],
-        total_chars: int,
-        request_id: int | None,
-        on_stream_delta: Any | None = None,
-    ) -> dict[str, Any]:
-        return await chat_completions._attempt_request(
-            self,
-            client=client,
-            model=model,
-            attempt=attempt,
-            sanitized_messages=sanitized_messages,
-            request=request,
-            rf_mode_current=rf_mode_current,
-            response_format_current=response_format_current,
-            message_lengths=message_lengths,
-            message_roles=message_roles,
-            total_chars=total_chars,
-            request_id=request_id,
-            on_stream_delta=on_stream_delta,
-        )
-
-    async def _handle_successful_response(
-        self,
-        data: dict[str, Any],
-        rf_included: bool,
-        rf_mode_current: str,
-        response_format_current: dict[str, Any] | None,
-        model: str,
-        model_reported: str,
-        latency: int,
-        attempt: int,
-        request_id: int | None,
-        structured_output_used: bool,
-        structured_output_mode_used: str | None,
-        headers: dict[str, str],
-        sanitized_messages: list[dict[str, Any]],
-        max_tokens: int | None = None,
-    ) -> dict[str, Any]:
-        return await chat_completions._handle_successful_response(
-            self,
-            data=data,
-            rf_included=rf_included,
-            rf_mode_current=rf_mode_current,
-            response_format_current=response_format_current,
-            model=model,
-            model_reported=model_reported,
-            latency=latency,
-            attempt=attempt,
-            request_id=request_id,
-            structured_output_used=structured_output_used,
-            structured_output_mode_used=structured_output_mode_used,
-            headers=headers,
-            sanitized_messages=sanitized_messages,
-            max_tokens=max_tokens,
-        )
-
-    async def _handle_error_response(
-        self,
-        status_code: int,
-        data: dict[str, Any],
-        resp: httpx.Response,
-        rf_included: bool,
-        rf_mode_current: str,
-        response_format_current: dict[str, Any] | None,
-        model: str,
-        model_reported: str,
-        latency: int,
-        attempt: int,
-        request_id: int | None,
-        headers: dict[str, str],
-        sanitized_messages: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        return await chat_completions._handle_error_response(
-            self,
-            status_code=status_code,
-            data=data,
-            resp=resp,
-            rf_included=rf_included,
-            rf_mode_current=rf_mode_current,
-            response_format_current=response_format_current,
-            model=model,
-            model_reported=model_reported,
-            latency=latency,
-            attempt=attempt,
-            request_id=request_id,
-            headers=headers,
-            sanitized_messages=sanitized_messages,
         )
 
     async def get_models(self) -> dict[str, Any]:
