@@ -366,8 +366,8 @@ class EmbeddingConfig(BaseModel):
         except ValueError as exc:
             msg = "GEMINI_EMBEDDING_DIMENSIONS must be a valid integer"
             raise ValueError(msg) from exc
-        if parsed < 1 or parsed > 3072:
-            msg = "GEMINI_EMBEDDING_DIMENSIONS must be between 1 and 3072"
+        if parsed < 128 or parsed > 3072:
+            msg = "GEMINI_EMBEDDING_DIMENSIONS must be between 128 and 3072"
             raise ValueError(msg)
         return parsed
 

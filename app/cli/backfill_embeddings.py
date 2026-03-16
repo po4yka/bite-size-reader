@@ -14,20 +14,23 @@ from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
 logger = logging.getLogger(__name__)
 
 
-def get_summaries_without_embeddings(
-    db: DatabaseSessionManager, limit: int | None = None
+def get_summaries_for_embedding_backfill(
+    db: DatabaseSessionManager,
+    *,
+    limit: int | None = None,
+    force: bool = False,
 ) -> list[dict]:
-    """Fetch summaries that don't have embeddings yet."""
+    """Fetch summaries that need embeddings, or all summaries when force=True."""
     from app.db.models import Request, model_to_dict
 
     def _query() -> list[dict]:
-        query = (
-            Summary.select(Summary, Request)
-            .join(Request)
-            .join_from(Summary, SummaryEmbedding, peewee.JOIN.LEFT_OUTER)
-            .where(SummaryEmbedding.id.is_null(True))
-            .order_by(Summary.created_at.desc())
-        )
+        query = Summary.select(Summary, Request).join(Request).order_by(Summary.created_at.desc())
+        if force:
+            query = query.where(Summary.json_payload.is_null(False))
+        else:
+            query = query.join_from(Summary, SummaryEmbedding, peewee.JOIN.LEFT_OUTER).where(
+                SummaryEmbedding.id.is_null(True)
+            )
         if limit:
             query = query.limit(limit)
 
@@ -58,8 +61,8 @@ async def backfill_embeddings(db_path: str, limit: int | None = None, force: boo
     )
 
     # Fetch summaries to process
-    logger.info("Fetching summaries without embeddings...")
-    summaries = get_summaries_without_embeddings(db, limit=limit)
+    logger.info("Fetching summaries for embedding backfill...")
+    summaries = get_summaries_for_embedding_backfill(db, limit=limit, force=force)
 
     if not summaries:
         logger.info("No summaries found without embeddings")

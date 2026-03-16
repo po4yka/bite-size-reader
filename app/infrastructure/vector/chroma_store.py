@@ -32,6 +32,7 @@ class ChromaVectorStore:
         environment: str,
         user_scope: str,
         collection_version: str = "v1",
+        embedding_space: str | None = None,
         required: bool = False,
         connection_timeout: float = 10.0,
     ) -> None:
@@ -44,13 +45,14 @@ class ChromaVectorStore:
         self._environment = environment
         self._user_scope = user_scope
         self._collection_version = collection_version
+        self._embedding_space = embedding_space
         self._required = required
         self._connection_timeout = connection_timeout
         self._available = False
         self._client: Any = None
         self._collection: Any = None
         self._collection_name = self._build_collection_name(
-            environment, user_scope, collection_version
+            environment, user_scope, collection_version, embedding_space
         )
 
         # Attempt initial connection
@@ -83,6 +85,7 @@ class ChromaVectorStore:
                     "environment": self._environment,
                     "user_scope": self._user_scope,
                     "version": self._collection_version,
+                    "embedding_space": self._embedding_space,
                 },
             )
             self._available = True
@@ -139,15 +142,34 @@ class ChromaVectorStore:
         return self._collection_version
 
     @property
+    def embedding_space(self) -> str | None:
+        return self._embedding_space
+
+    @property
     def collection_name(self) -> str:
         return self._collection_name
 
     @staticmethod
-    def _build_collection_name(environment: str, user_scope: str, version: str) -> str:
+    def _build_collection_name(
+        environment: str,
+        user_scope: str,
+        version: str,
+        embedding_space: str | None = None,
+    ) -> str:
         safe_env = environment.replace(" ", "_")
         safe_scope = user_scope.replace(" ", "_")
         safe_version = version.replace(" ", "_")
-        return f"notes_{safe_env}_{safe_scope}_{safe_version}"
+        base_name = f"notes_{safe_env}_{safe_scope}_{safe_version}"
+        if not embedding_space:
+            return base_name
+
+        safe_embedding_space = "".join(
+            char if char.isalnum() or char in {"-", "_"} else "_"
+            for char in str(embedding_space).strip().lower()
+        ).strip("_")
+        if not safe_embedding_space:
+            return base_name
+        return f"{base_name}_{safe_embedding_space}"
 
     def upsert_notes(
         self,
@@ -476,6 +498,7 @@ class ChromaVectorStore:
                     "environment": self._environment,
                     "user_scope": self._user_scope,
                     "version": self._collection_version,
+                    "embedding_space": self._embedding_space,
                 },
             )
         except Exception as e:

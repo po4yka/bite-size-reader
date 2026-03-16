@@ -78,17 +78,31 @@ class SummaryEmbeddingGenerator:
         """
         # Determine model based on language
         model_name = self._embedding_service.get_model_name(language)
+        expected_dimensions = self._embedding_service.get_dimensions(language)
 
         # Check if embedding already exists
         if not force:
             existing = await self.embedding_repo.async_get_summary_embedding(summary_id)
-            if existing and existing.get("model_name") == model_name:
+            existing_dimensions = existing.get("dimensions") if existing else None
+            try:
+                existing_dimensions = (
+                    int(existing_dimensions) if existing_dimensions is not None else None
+                )
+            except (TypeError, ValueError):
+                existing_dimensions = None
+
+            if (
+                existing
+                and existing.get("model_name") == model_name
+                and existing_dimensions == expected_dimensions
+            ):
                 logger.debug(
                     "embedding_already_exists",
                     extra={
                         "summary_id": summary_id,
                         "model": existing.get("model_name"),
                         "language": language,
+                        "dimensions": existing_dimensions,
                     },
                 )
                 return False

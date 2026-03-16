@@ -61,9 +61,13 @@ class TestEmbeddingConfig:
 
     def test_dimensions_bounds(self) -> None:
         with pytest.raises(ValueError):
-            EmbeddingConfig(gemini_dimensions=0)
+            EmbeddingConfig(gemini_dimensions=127)
         with pytest.raises(ValueError):
             EmbeddingConfig(gemini_dimensions=5000)
+
+    def test_supported_gemini_dimensions_include_128(self) -> None:
+        config = EmbeddingConfig(gemini_dimensions=128)
+        assert config.gemini_dimensions == 128
 
     def test_max_token_length_bounds(self) -> None:
         with pytest.raises(ValueError):

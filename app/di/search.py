@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
 from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
+from app.core.embedding_space import resolve_embedding_space_identifier
 from app.di.repositories import (
     build_embedding_repository,
     build_request_repository,
@@ -69,6 +70,7 @@ def build_search_dependencies(
             environment=cfg.vector_store.environment,
             user_scope=cfg.vector_store.user_scope,
             collection_version=cfg.vector_store.collection_version,
+            embedding_space=resolve_embedding_space_identifier(cfg.embedding),
             required=cfg.vector_store.required,
             connection_timeout=cfg.vector_store.connection_timeout,
         )

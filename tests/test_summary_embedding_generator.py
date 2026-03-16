@@ -11,6 +11,7 @@ from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
 def generator_fixture():
     embedding_service = MagicMock()
     embedding_service.get_model_name.return_value = "test-model"
+    embedding_service.get_dimensions.return_value = 3
     embedding_service.generate_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
     embedding_service.serialize_embedding.return_value = b"serialized"
 
@@ -50,7 +51,10 @@ async def test_generate_embedding_for_summary_skips_existing_matching_model(
     generator_fixture,
 ) -> None:
     generator, embedding_service, embedding_repo, _, _ = generator_fixture
-    embedding_repo.async_get_summary_embedding.return_value = {"model_name": "test-model"}
+    embedding_repo.async_get_summary_embedding.return_value = {
+        "model_name": "test-model",
+        "dimensions": 3,
+    }
 
     created = await generator.generate_embedding_for_summary(
         10,
@@ -60,6 +64,26 @@ async def test_generate_embedding_for_summary_skips_existing_matching_model(
 
     assert created is False
     embedding_service.generate_embedding.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generate_embedding_for_summary_regenerates_when_dimensions_change(
+    generator_fixture,
+) -> None:
+    generator, embedding_service, embedding_repo, _, _ = generator_fixture
+    embedding_repo.async_get_summary_embedding.return_value = {
+        "model_name": "test-model",
+        "dimensions": 768,
+    }
+
+    created = await generator.generate_embedding_for_summary(
+        10,
+        {"summary_250": "Summary text"},
+        language="en",
+    )
+
+    assert created is True
+    embedding_service.generate_embedding.assert_awaited_once()
 
 
 @pytest.mark.asyncio

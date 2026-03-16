@@ -318,11 +318,12 @@ EMBEDDING_PROVIDER=local
 EMBEDDING_PROVIDER=gemini
 GEMINI_API_KEY=your-api-key-here
 GEMINI_EMBEDDING_MODEL=gemini-embedding-2-preview   # default
-GEMINI_EMBEDDING_DIMENSIONS=768                      # 1-3072
+GEMINI_EMBEDDING_DIMENSIONS=768                      # 128-3072; 768/1536/3072 recommended
 EMBEDDING_MAX_TOKEN_LENGTH=2048                      # Gemini supports up to 8192
 ```
 
 Gemini uses task-type-aware embeddings automatically: `RETRIEVAL_DOCUMENT` when indexing summaries, `RETRIEVAL_QUERY` when searching. The `google-genai` package is lazily imported and only required when `EMBEDDING_PROVIDER=gemini`.
+Gemini-backed Chroma collections are automatically namespaced by model + output dimensionality so newer Gemini Embedding 2 indexes do not collide with older embedding spaces.
 
 **Switching providers** requires re-embedding all data (dimensions differ):
 

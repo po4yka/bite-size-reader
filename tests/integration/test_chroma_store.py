@@ -149,6 +149,30 @@ def test_collection_name_includes_version(vector_store, chroma_config):
 
 
 @pytest.mark.integration
+def test_collection_name_includes_embedding_space(chroma_config):
+    mock_client = MagicMock()
+    mock_collection = MagicMock()
+    mock_client.get_or_create_collection.return_value = mock_collection
+
+    with patch(
+        "app.infrastructure.vector.chroma_store.chromadb.HttpClient", return_value=mock_client
+    ):
+        store = ChromaVectorStore(
+            host=chroma_config.host,
+            auth_token=chroma_config.auth_token,
+            environment=chroma_config.environment,
+            user_scope=chroma_config.user_scope,
+            collection_version=chroma_config.collection_version,
+            embedding_space="gemini-embedding-2-preview_1536d",
+        )
+
+    assert (
+        store.collection_name
+        == f"notes_{chroma_config.environment}_{chroma_config.user_scope}_{chroma_config.collection_version}_gemini-embedding-2-preview_1536d"
+    )
+
+
+@pytest.mark.integration
 def test_upsert_requires_summary_id(vector_store):
     vectors = [[0.1, 0.2]]
     metadatas = [{"request_id": 1, "text": "note without summary"}]

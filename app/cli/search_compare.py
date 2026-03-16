@@ -8,6 +8,9 @@ import sys
 from pathlib import Path
 from typing import cast
 
+from app.config import load_config
+from app.core.embedding_space import resolve_embedding_space_identifier
+
 logging.basicConfig(
     level=logging.WARNING,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -26,7 +29,6 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
     Returns:
         Dict with keys 'fts', 'vector', 'hybrid' containing search results
     """
-    from app.config import ChromaConfig
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.vector.chroma_store import ChromaVectorStore
     from app.services.chroma_vector_search_service import ChromaVectorSearchService
@@ -34,18 +36,22 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
     from app.services.hybrid_search_service import HybridSearchService
     from app.services.topic_search import LocalTopicSearchService, TopicArticle
 
+    cfg = load_config(allow_stub_telegram=True)
     db = DatabaseSessionManager(path=db_path)
 
     # Initialize services
-    embedding_service = create_embedding_service()
+    embedding_service = create_embedding_service(cfg.embedding)
     fts_service = LocalTopicSearchService(db=db, max_results=max_results)
-    chroma_cfg = ChromaConfig()
+    chroma_cfg = cfg.vector_store
     vector_store = ChromaVectorStore(
         host=chroma_cfg.host,
         auth_token=chroma_cfg.auth_token,
         environment=chroma_cfg.environment,
         user_scope=chroma_cfg.user_scope,
         collection_version=chroma_cfg.collection_version,
+        embedding_space=resolve_embedding_space_identifier(cfg.embedding),
+        required=chroma_cfg.required,
+        connection_timeout=chroma_cfg.connection_timeout,
     )
     vector_service = ChromaVectorSearchService(
         vector_store=vector_store,

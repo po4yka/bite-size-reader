@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import ChromaConfig, load_config
+from app.core.embedding_space import resolve_embedding_space_identifier
 from app.db.session import DatabaseSessionManager
 from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
     SqliteEmbeddingRepositoryAdapter,
@@ -71,6 +72,7 @@ async def backfill_chroma_store(
         environment=chroma_cfg.environment,
         user_scope=chroma_cfg.user_scope,
         collection_version=chroma_cfg.collection_version,
+        embedding_space=resolve_embedding_space_identifier(app_cfg.embedding),
         required=chroma_cfg.required,
         connection_timeout=chroma_cfg.connection_timeout,
     )

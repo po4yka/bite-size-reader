@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
 
 from app.config import load_config
+from app.core.embedding_space import resolve_embedding_space_identifier
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.services.embedding_factory import create_embedding_service
 
@@ -27,7 +28,8 @@ def upgrade(db: DatabaseSessionManager) -> None:
     """
 
     # Use full app config so environment overrides (e.g., CHROMA_HOST) are honored
-    chroma_cfg = load_config(allow_stub_telegram=True).vector_store
+    app_cfg = load_config(allow_stub_telegram=True)
+    chroma_cfg = app_cfg.vector_store
     embedding_service = create_embedding_service()
     vector_store = ChromaVectorStore(
         host=chroma_cfg.host,
@@ -35,6 +37,7 @@ def upgrade(db: DatabaseSessionManager) -> None:
         environment=chroma_cfg.environment,
         user_scope=chroma_cfg.user_scope,
         collection_version=chroma_cfg.collection_version,
+        embedding_space=resolve_embedding_space_identifier(app_cfg.embedding),
         required=chroma_cfg.required,
         connection_timeout=chroma_cfg.connection_timeout,
     )

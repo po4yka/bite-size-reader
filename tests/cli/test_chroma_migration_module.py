@@ -54,7 +54,14 @@ def test_upgrade_preserves_full_metadata_when_upserting(monkeypatch) -> None:
     monkeypatch.setattr(
         migration,
         "load_config",
-        lambda allow_stub_telegram=True: SimpleNamespace(vector_store=cfg),
+        lambda allow_stub_telegram=True: SimpleNamespace(
+            vector_store=cfg,
+            embedding=SimpleNamespace(
+                provider="gemini",
+                gemini_model="gemini-embedding-2-preview",
+                gemini_dimensions=1536,
+            ),
+        ),
     )
     monkeypatch.setattr(migration, "create_embedding_service", lambda: _FakeEmbeddingService())
     monkeypatch.setattr(migration, "ChromaVectorStore", _FakeStore)
@@ -83,6 +90,7 @@ def test_upgrade_preserves_full_metadata_when_upserting(monkeypatch) -> None:
         "environment": "test",
         "user_scope": "scope",
         "collection_version": "v2",
+        "embedding_space": "gemini-embedding-2-preview_1536d",
         "required": True,
         "connection_timeout": 4.25,
     }

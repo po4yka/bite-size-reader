@@ -83,9 +83,9 @@ async def test_get_chroma_service_forwards_required_and_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import app.di.mcp as mcp_di
+    import app.infrastructure.embedding.embedding_factory as embedding_factory_module
+    import app.infrastructure.search.chroma_vector_search_service as chroma_service_module
     import app.infrastructure.vector.chroma_store as chroma_store_module
-    import app.services.chroma_vector_search_service as chroma_service_module
-    import app.services.embedding_factory as embedding_factory_module
 
     captured: dict[str, Any] = {}
 
@@ -131,6 +131,7 @@ async def test_get_chroma_service_forwards_required_and_timeout(
         "environment": "test",
         "user_scope": "scope",
         "collection_version": "v5",
+        "embedding_space": None,
         "required": True,
         "connection_timeout": 7.5,
     }

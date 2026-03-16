@@ -6,6 +6,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.config import load_config
+from app.core.embedding_space import resolve_embedding_space_identifier
 from app.di.database import init_read_only_database_proxy
 from app.di.types import McpRuntime, McpScope
 
@@ -25,13 +26,12 @@ def build_mcp_runtime(
     """Build the MCP runtime with read-only SQLite binding and lazy service state."""
     path = db_path or os.getenv("DB_PATH", "/data/app.db")
     database = init_read_only_database_proxy(path)
-    runtime = McpRuntime(
+    return McpRuntime(
         cfg=cfg,
         db_path=path,
         database=database,
         scope=McpScope(user_id=user_id),
     )
-    return runtime
 
 
 def set_mcp_user_scope(runtime: McpRuntime, user_id: int | None) -> None:
@@ -45,7 +45,10 @@ async def get_mcp_chroma_service(runtime: McpRuntime) -> Any:
         return state.service
 
     now = time.monotonic()
-    if state.last_failed_at is not None and (now - state.last_failed_at) < CHROMA_RETRY_INTERVAL_SEC:
+    if (
+        state.last_failed_at is not None
+        and (now - state.last_failed_at) < CHROMA_RETRY_INTERVAL_SEC
+    ):
         return None
 
     if state.init_lock is None:
@@ -56,13 +59,18 @@ async def get_mcp_chroma_service(runtime: McpRuntime) -> Any:
             return state.service
 
         now = time.monotonic()
-        if state.last_failed_at is not None and (now - state.last_failed_at) < CHROMA_RETRY_INTERVAL_SEC:
+        if (
+            state.last_failed_at is not None
+            and (now - state.last_failed_at) < CHROMA_RETRY_INTERVAL_SEC
+        ):
             return None
 
         try:
+            from app.infrastructure.embedding.embedding_factory import create_embedding_service
+            from app.infrastructure.search.chroma_vector_search_service import (
+                ChromaVectorSearchService,
+            )
             from app.infrastructure.vector.chroma_store import ChromaVectorStore
-            from app.services.chroma_vector_search_service import ChromaVectorSearchService
-            from app.services.embedding_factory import create_embedding_service
 
             if runtime.cfg is None:
                 runtime.cfg = load_config(allow_stub_telegram=True)
@@ -74,6 +82,7 @@ async def get_mcp_chroma_service(runtime: McpRuntime) -> Any:
                 environment=cfg.environment,
                 user_scope=cfg.user_scope,
                 collection_version=cfg.collection_version,
+                embedding_space=resolve_embedding_space_identifier(runtime.cfg.embedding),
                 required=cfg.required,
                 connection_timeout=cfg.connection_timeout,
             )
@@ -97,7 +106,10 @@ async def get_mcp_local_vector_service(runtime: McpRuntime) -> Any:
         return state.service
 
     now = time.monotonic()
-    if state.last_failed_at is not None and (now - state.last_failed_at) < LOCAL_VECTOR_RETRY_INTERVAL_SEC:
+    if (
+        state.last_failed_at is not None
+        and (now - state.last_failed_at) < LOCAL_VECTOR_RETRY_INTERVAL_SEC
+    ):
         return None
 
     if state.init_lock is None:
@@ -107,11 +119,14 @@ async def get_mcp_local_vector_service(runtime: McpRuntime) -> Any:
         if state.service is not None:
             return state.service
         now = time.monotonic()
-        if state.last_failed_at is not None and (now - state.last_failed_at) < LOCAL_VECTOR_RETRY_INTERVAL_SEC:
+        if (
+            state.last_failed_at is not None
+            and (now - state.last_failed_at) < LOCAL_VECTOR_RETRY_INTERVAL_SEC
+        ):
             return None
 
         try:
-            from app.services.embedding_factory import create_embedding_service
+            from app.infrastructure.embedding.embedding_factory import create_embedding_service
 
             if runtime.cfg is None:
                 runtime.cfg = load_config(allow_stub_telegram=True)
