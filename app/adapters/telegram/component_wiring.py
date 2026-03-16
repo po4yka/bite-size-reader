@@ -4,20 +4,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.repository_ports import create_batch_session_repository
-
 if TYPE_CHECKING:
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
     from app.di.types import TelegramRuntime
 
 
 class TelegramComponentWiring:
     """Applies wiring and patching rules for Telegram bot components."""
 
-    def __init__(self, *, cfg: AppConfig, db: DatabaseSessionManager) -> None:
+    def __init__(self, *, cfg: AppConfig) -> None:
         self._cfg = cfg
-        self._db = db
 
     def apply_client_shims(
         self,
@@ -53,11 +49,10 @@ class TelegramComponentWiring:
         bot.query_expansion_service = components.search.query_expansion_service
         bot.hybrid_search_service = components.search.hybrid_search_service
         bot.vector_store = components.search.vector_store
-        bot._container = components.container
+        bot._application_services = components.application_services
+        bot._adaptive_timeout_service = components.adaptive_timeout_service
 
         bot.message_handler.command_processor.url_processor = bot.url_processor
         bot.message_handler.url_processor = bot.url_processor
-
-        bot._batch_session_repo = create_batch_session_repository(self._db)
 
         bot._awaiting_url_users = bot.message_handler.url_handler._awaiting_url_users

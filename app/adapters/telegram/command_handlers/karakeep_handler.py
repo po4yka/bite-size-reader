@@ -10,9 +10,9 @@ import logging
 import time
 from typing import TYPE_CHECKING, ClassVar, cast
 
-from app.adapters.repository_ports import create_karakeep_sync_repository
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.di.repositories import build_karakeep_sync_repository
 
 if TYPE_CHECKING:
     from app.adapters.karakeep.sync.protocols import KarakeepSyncRepository
@@ -96,9 +96,7 @@ class KarakeepHandlerImpl(HandlerDependenciesMixin):
         from app.adapters.karakeep import KarakeepSyncService
 
         try:
-            karakeep_repo = cast(
-                "KarakeepSyncRepository", create_karakeep_sync_repository(self._db)
-            )
+            karakeep_repo = cast("KarakeepSyncRepository", build_karakeep_sync_repository(self._db))
             service = KarakeepSyncService(
                 api_url=self._cfg.karakeep.api_url,
                 api_key=self._cfg.karakeep.api_key,
@@ -170,9 +168,7 @@ class KarakeepHandlerImpl(HandlerDependenciesMixin):
         await self._formatter.safe_reply(ctx.message, f"Starting Karakeep sync{mode_label}...")
 
         try:
-            karakeep_repo = cast(
-                "KarakeepSyncRepository", create_karakeep_sync_repository(self._db)
-            )
+            karakeep_repo = cast("KarakeepSyncRepository", build_karakeep_sync_repository(self._db))
             service = KarakeepSyncService(
                 api_url=self._cfg.karakeep.api_url,
                 api_key=self._cfg.karakeep.api_key,
@@ -252,7 +248,7 @@ class KarakeepHandlerImpl(HandlerDependenciesMixin):
             ctx: The command execution context.
         """
         try:
-            karakeep_repo = create_karakeep_sync_repository(self._db)
+            karakeep_repo = build_karakeep_sync_repository(self._db)
             deleted = await karakeep_repo.async_delete_all_sync_records()
             await self._formatter.safe_reply(
                 ctx.message,

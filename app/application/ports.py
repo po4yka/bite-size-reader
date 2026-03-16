@@ -1,12 +1,12 @@
-"""Application-layer ports for use case dependencies.
+"""Canonical application-layer ports.
 
-Use cases should depend on these Protocol contracts rather than concrete
-infrastructure adapters.
+Production code outside ``app/di`` should depend on these contracts rather than
+concrete SQLite adapters or adapter-local compatibility protocols.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.domain.models.summary import Summary as DomainSummary
 
 
+@runtime_checkable
 class SummaryRepositoryPort(Protocol):
     """Port for summary query/update operations used in application use cases."""
 
@@ -65,11 +66,62 @@ class SummaryRepositoryPort(Protocol):
     ) -> dict[int, dict[str, Any]]:
         """Return summaries mapped by request ID."""
 
+    async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        """Return all summaries for sync operations."""
+
+    async def async_get_summary_for_sync_apply(
+        self, summary_id: int, user_id: int
+    ) -> dict[str, Any] | None:
+        """Return a summary validated for sync-apply ownership."""
+
+    async def async_apply_sync_change(
+        self,
+        summary_id: int,
+        *,
+        is_deleted: bool | None = None,
+        deleted_at: datetime | None = None,
+        is_read: bool | None = None,
+    ) -> int:
+        """Apply a sync mutation and return the new server version."""
+
     async def async_mark_summary_as_read(self, summary_id: int) -> None:
         """Mark summary as read."""
 
     async def async_mark_summary_as_unread(self, summary_id: int) -> None:
         """Mark summary as unread."""
+
+    async def async_get_unread_summary_by_request_id(
+        self, request_id: int
+    ) -> dict[str, Any] | None:
+        """Return unread summary by request ID."""
+
+    async def async_upsert_summary(
+        self,
+        request_id: int,
+        lang: str,
+        json_payload: dict[str, Any],
+        insights_json: dict[str, Any] | None = None,
+        is_read: bool = False,
+    ) -> int:
+        """Create or update a summary."""
+
+    async def async_finalize_request_summary(
+        self,
+        request_id: int,
+        lang: str,
+        json_payload: dict[str, Any],
+        insights_json: dict[str, Any] | None = None,
+        is_read: bool = False,
+        request_status: str = "ok",
+    ) -> int:
+        """Persist summary and update request status."""
+
+    async def async_update_summary_insights(
+        self,
+        summary_id: int,
+        insights_json: dict[str, Any],
+    ) -> None:
+        """Persist summary insights JSON."""
 
     async def async_soft_delete_summary(self, summary_id: int) -> None:
         """Soft-delete summary."""
@@ -81,6 +133,7 @@ class SummaryRepositoryPort(Protocol):
         """Convert persistence dictionary into a domain model."""
 
 
+@runtime_checkable
 class RequestRepositoryPort(Protocol):
     """Port for request read operations used in application use cases."""
 
@@ -101,14 +154,68 @@ class RequestRepositoryPort(Protocol):
     ) -> dict[int, dict[str, Any]]:
         """Return requests mapped by ID."""
 
+    async def async_create_request(self, *args: Any, **kwargs: Any) -> int:
+        """Create a request."""
 
+    async def async_create_minimal_request(self, *args: Any, **kwargs: Any) -> tuple[int, bool]:
+        """Create a minimal request row."""
+
+    async def async_get_request_by_forward(
+        self, cid: int, fwd_message_id: int
+    ) -> dict[str, Any] | None:
+        """Return request by forward source identifiers."""
+
+    async def async_update_request_status(self, request_id: int, status: str) -> None:
+        """Update request status."""
+
+    async def async_update_request_status_with_correlation(
+        self,
+        request_id: int,
+        status: str,
+        correlation_id: str | None,
+    ) -> None:
+        """Update request status and correlation ID."""
+
+    async def async_update_request_lang_detected(self, request_id: int, lang: str) -> None:
+        """Update detected language."""
+
+    async def async_update_request_correlation_id(
+        self,
+        request_id: int,
+        correlation_id: str,
+    ) -> None:
+        """Update correlation ID."""
+
+    async def async_update_request_error(
+        self,
+        request_id: int,
+        status: str,
+        error_type: str | None = None,
+        error_message: str | None = None,
+        processing_time_ms: int | None = None,
+        error_context_json: Any | None = None,
+    ) -> None:
+        """Persist structured request error details."""
+
+    async def async_get_request_error_context(self, request_id: int) -> dict[str, Any] | None:
+        """Return structured request error context."""
+
+    async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        """Return all request rows for sync operations."""
+
+
+@runtime_checkable
 class CrawlResultRepositoryPort(Protocol):
     """Port for crawl-result query operations."""
 
     async def async_get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Return crawl result by request ID."""
 
+    async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        """Return all crawl rows for sync operations."""
 
+
+@runtime_checkable
 class LLMRepositoryPort(Protocol):
     """Port for LLM-call query operations."""
 
@@ -118,7 +225,20 @@ class LLMRepositoryPort(Protocol):
     async def async_count_llm_calls_by_request(self, request_id: int) -> int:
         """Return the number of LLM calls by request ID."""
 
+    async def async_insert_llm_call(self, *args: Any, **kwargs: Any) -> int:
+        """Persist an LLM call."""
 
+    async def async_insert_llm_calls_batch(self, calls: list[dict[str, Any]]) -> list[int]:
+        """Persist a batch of LLM calls."""
+
+    async def async_get_latest_llm_model_by_request_id(self, request_id: int) -> str | None:
+        """Return the latest model used for a request."""
+
+    async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        """Return all LLM rows for sync operations."""
+
+
+@runtime_checkable
 class TopicSearchRepositoryPort(Protocol):
     """Port for topic search query operations."""
 
@@ -126,3 +246,238 @@ class TopicSearchRepositoryPort(Protocol):
         self, query: str, *, limit: int = 20, offset: int = 0
     ) -> tuple[list[dict[str, Any]], int]:
         """Execute paginated FTS query."""
+
+    async def async_search_request_ids(
+        self,
+        query: str,
+        *,
+        candidate_limit: int,
+    ) -> list[int]:
+        """Return request IDs matching the topic query."""
+
+    async def async_search_documents(self, query: str, *, limit: int) -> list[Any]:
+        """Return indexed topic-search documents."""
+
+    async def async_scan_documents(
+        self,
+        *,
+        terms: list[str],
+        normalized_query: str,
+        seen_urls: set[str],
+        limit: int,
+        max_scan: int,
+    ) -> list[Any]:
+        """Return fallback-scanned topic-search documents."""
+
+
+@runtime_checkable
+class UserRepositoryPort(Protocol):
+    async def async_insert_user_interaction(self, *args: Any, **kwargs: Any) -> int:
+        """Persist a user interaction."""
+
+    async def async_update_user_interaction(self, *args: Any, **kwargs: Any) -> None:
+        """Update a persisted user interaction."""
+
+    async def async_upsert_user(self, *args: Any, **kwargs: Any) -> int | None:
+        """Upsert a user row."""
+
+    async def async_upsert_chat(self, *args: Any, **kwargs: Any) -> int | None:
+        """Upsert a chat row."""
+
+    async def async_get_user_by_telegram_id(self, telegram_user_id: int) -> dict[str, Any] | None:
+        """Return user by Telegram identifier."""
+
+    async def async_get_or_create_user(
+        self,
+        telegram_user_id: int,
+        *,
+        username: str | None = None,
+        is_owner: bool = False,
+    ) -> tuple[dict[str, Any], bool]:
+        """Return an existing user or create one."""
+
+    async def async_set_link_nonce(
+        self,
+        *,
+        telegram_user_id: int,
+        nonce: str,
+        expires_at: datetime,
+    ) -> None:
+        """Store a Telegram linking nonce."""
+
+    async def async_clear_link_nonce(self, *, telegram_user_id: int) -> None:
+        """Clear a Telegram linking nonce."""
+
+    async def async_complete_telegram_link(
+        self,
+        *,
+        telegram_user_id: int,
+        linked_telegram_user_id: int,
+        username: str | None,
+        photo_url: str | None,
+        first_name: str | None,
+        last_name: str | None,
+        linked_at: datetime,
+    ) -> None:
+        """Persist completed Telegram link metadata."""
+
+    async def async_unlink_telegram(self, *, telegram_user_id: int) -> None:
+        """Remove Telegram link metadata."""
+
+    async def async_delete_user(self, *, telegram_user_id: int) -> None:
+        """Delete a user and related data."""
+
+    async def async_update_user_preferences(
+        self,
+        telegram_user_id: int,
+        preferences: dict[str, Any],
+    ) -> None:
+        """Update user preferences."""
+
+
+@runtime_checkable
+class VideoDownloadRepositoryPort(Protocol):
+    async def async_get_video_download_by_request(
+        self,
+        request_id: int,
+    ) -> dict[str, Any] | None:
+        """Return video-download record by request ID."""
+
+    async def async_create_video_download(self, *args: Any, **kwargs: Any) -> int:
+        """Create a video-download row."""
+
+    async def async_update_video_download(self, download_id: int, **kwargs: Any) -> None:
+        """Update a video-download row."""
+
+    async def async_update_video_download_status(
+        self,
+        download_id: int,
+        status: str,
+        error_text: str | None = None,
+        download_started_at: Any | None = None,
+    ) -> None:
+        """Update video-download status."""
+
+
+@runtime_checkable
+class AuditLogRepositoryPort(Protocol):
+    async def async_insert_audit_log(self, *args: Any, **kwargs: Any) -> int:
+        """Persist an audit log row."""
+
+
+@runtime_checkable
+class BatchSessionRepositoryPort(Protocol):
+    async def async_create_batch_session(self, *args: Any, **kwargs: Any) -> int:
+        """Create a batch session."""
+
+    async def async_add_batch_session_item(self, *args: Any, **kwargs: Any) -> int:
+        """Persist a batch session item."""
+
+    async def async_get_batch_session_items(self, session_id: int) -> list[dict[str, Any]]:
+        """Return batch session items."""
+
+    async def async_update_batch_session_status(self, *args: Any, **kwargs: Any) -> None:
+        """Update batch session status."""
+
+    async def async_update_batch_session_counts(self, *args: Any, **kwargs: Any) -> None:
+        """Update batch session counters."""
+
+    async def async_update_batch_session_relationship(self, *args: Any, **kwargs: Any) -> None:
+        """Update batch relationship state."""
+
+    async def async_update_batch_session_combined_summary(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Persist combined batch summary state."""
+
+    async def async_update_batch_session_item_series_info(
+        self,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Persist per-item series metadata."""
+
+
+@runtime_checkable
+class KarakeepSyncRepositoryPort(Protocol):
+    async def async_get_synced_hashes_by_direction(self, sync_direction: str) -> set[str]:
+        """Return hashes already synced in the given direction."""
+
+    async def async_create_sync_record(self, *args: Any, **kwargs: Any) -> int | None:
+        """Create a sync record."""
+
+    async def async_get_summaries_for_sync(
+        self, user_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Return summaries prepared for Karakeep sync."""
+
+    async def async_get_existing_request_hashes(self) -> set[str]:
+        """Return hashes for existing request rows."""
+
+    async def async_create_request_from_karakeep(self, *args: Any, **kwargs: Any) -> int:
+        """Create a request row from Karakeep data."""
+
+    async def async_get_sync_stats(self) -> dict[str, Any]:
+        """Return aggregate sync statistics."""
+
+    async def async_get_crawl_result_title(self, request_id: int) -> str | None:
+        """Return crawl-result title for a request."""
+
+    async def async_get_synced_items_with_bookmark_and_summary(self) -> list[dict[str, Any]]:
+        """Return synced bookmark/summary rows."""
+
+    async def async_get_summary_by_id(self, summary_id: int) -> dict[str, Any] | None:
+        """Return summary by ID."""
+
+    async def async_update_summary_status(
+        self,
+        summary_id: int,
+        is_read: bool | None = None,
+        is_favorited: bool | None = None,
+    ) -> None:
+        """Update summary sync status fields."""
+
+    async def async_update_sync_timestamps(
+        self,
+        sync_id: int,
+        bsr_modified_at: datetime | None = None,
+        karakeep_modified_at: datetime | None = None,
+    ) -> None:
+        """Update persisted sync timestamps."""
+
+    async def async_delete_all_sync_records(self, direction: str | None = None) -> int:
+        """Delete sync rows."""
+
+    async def async_upsert_sync_record(self, *args: Any, **kwargs: Any) -> int:
+        """Create or update a sync record."""
+
+
+@runtime_checkable
+class EmbeddingRepositoryPort(Protocol):
+    async def async_get_all_embeddings(self) -> list[dict[str, Any]]:
+        """Return all summary embeddings."""
+
+    async def async_get_embeddings_by_request_ids(
+        self,
+        request_ids: list[int],
+    ) -> list[dict[str, Any]]:
+        """Return embeddings for selected request IDs."""
+
+    async def async_get_recent_embeddings(self, *, limit: int) -> list[dict[str, Any]]:
+        """Return recent embeddings."""
+
+    async def async_create_or_update_summary_embedding(
+        self,
+        summary_id: int,
+        embedding_blob: bytes,
+        model_name: str,
+        model_version: str,
+        dimensions: int,
+        language: str | None = None,
+    ) -> None:
+        """Upsert a summary embedding."""
+
+    async def async_get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
+        """Return summary embedding by summary ID."""

@@ -79,15 +79,18 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 - **ElevenLabs TTS** (`app/adapters/elevenlabs/`) -- Text-to-speech audio generation via ElevenLabs API
 - **Attachment Processing** (`app/adapters/attachment/`) -- Attachment handling and processing
 - **Digest** (`app/adapters/digest/`, `app/adapters/telegram/command_handlers/digest*.py`) -- Channel digest orchestration with userbot, scheduler, and bot-mediated session init via Mini App
-- **Application Layer** (`app/application/`) -- DTOs (`dto/`) and use cases (`use_cases/`) for orchestrating domain logic
+- **Domain Layer** (`app/domain/`) -- Business models and domain services
+- **Application Layer** (`app/application/`) -- DTOs (`dto/`), ports, use cases (`use_cases/`), and application services for orchestrating domain logic
 - **Core Utilities** (`app/core/`) -- URL normalization, JSON parsing/repair, summary contract validation, language detection, structured logging
 - **Database** (`app/db/`) -- SQLite schema, Peewee ORM models (31 model classes), migrations. `DatabaseSessionManager` (`app/db/session.py`) is the sole DB entry point (connection management, migrations, FTS5 indexing, async RW lock)
+- **Infrastructure** (`app/infrastructure/`) -- Persistence layer, event bus, vector store, cache, HTTP clients, and concrete search/embedding implementations
+- **Dependency Injection** (`app/di/`) -- Runtime composition only; production code outside `app/di/` should not assemble concrete dependency graphs
 - **CLI Tools** (`app/cli/`) -- Summary runner, search, migrations, MCP server, embedding backfill, Chroma backfill, search comparison, performance indexes
 - **Mobile API** (`app/api/`) -- FastAPI REST API with JWT auth, sync, background processing
 - **Web Frontend** (`web/`) -- Carbon web interface (library/article/search/submit/collections/digest/preferences), hybrid auth (Telegram WebApp + JWT), React Query data layer
 - **Legacy Mini App Frontend** (`frontend/`) -- Telegram mini app bundle served under `/static/digest/*`
 - **Multi-Agent System** (`app/agents/`) -- Content extraction, summarization with self-correction, validation, web search agents. See `docs/multi_agent_architecture.md`
-- **Search Services** (`app/services/`) -- Topic search, vector/hybrid search, embeddings (local/Gemini via protocol+factory), reranking, query expansion
+- **Search Services** (`app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/`) -- Topic search workflows, vector/hybrid search, embeddings (local/Gemini via protocol+factory), reranking, query expansion
 - **MCP Server** (`app/mcp/`) -- Model Context Protocol server for AI agent access. See `docs/mcp_server.md`
 - **Observability** (`app/observability/`) -- Metrics, tracing, and telemetry infrastructure
 - **Domain Layer** (`app/domain/`) -- DDD models and services
@@ -322,7 +325,7 @@ Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch
 - **Collections** -- User-created collections with items, collaborators, and invite links (`app/db/models.py`: Collection, CollectionItem, CollectionCollaborator, CollectionInvite)
 - **Device Sync** -- Multi-device sync with full/delta modes and conflict resolution (`app/api/routers/sync.py`, UserDevice model)
 - **Event Bus** -- Internal event publishing/subscribing (`app/infrastructure/messaging/`)
-- **Chroma Vector Store** -- Semantic search via ChromaDB embeddings (`app/infrastructure/`, `app/cli/backfill_chroma_store.py`). Embedding provider switchable via `EmbeddingConfig` (local sentence-transformers or Gemini API); see `app/services/embedding_factory.py`
+- **Chroma Vector Store** -- Semantic search via ChromaDB embeddings (`app/infrastructure/`, `app/cli/backfill_chroma_store.py`). Embedding provider switchable via `EmbeddingConfig` (local sentence-transformers or Gemini API); see `app/infrastructure/embedding/embedding_factory.py`
 - **PDF Export** -- Summary export to PDF via weasyprint
 - **Background Scheduling** -- APScheduler-based background task processing with Redis distributed locks
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Pyrogram userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow.

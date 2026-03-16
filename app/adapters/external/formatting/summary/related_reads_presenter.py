@@ -9,7 +9,7 @@ from app.core.ui_strings import t
 
 if TYPE_CHECKING:
     from app.adapters.external.formatting.protocols import ResponseSender
-    from app.services.related_reads_service import RelatedReadItem
+    from app.application.services.related_reads_service import RelatedReadItem
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from app.adapters.external.formatting.protocols import DataFormatter, ResponseSender
-    from app.services.topic_search import TopicArticle
+    from app.application.services.topic_search import TopicArticle
 
 
 class DatabasePresenterImpl:

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.adapters.repository_ports import UserRepositoryPort
+    from app.application.ports import UserRepositoryPort
 
 logger = logging.getLogger(__name__)
 

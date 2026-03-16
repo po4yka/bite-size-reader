@@ -35,9 +35,19 @@ class SearchDependencies:
 
 
 @dataclass(frozen=True, slots=True)
+class ApplicationServices:
+    unread_summaries: Any
+    mark_summary_as_read: Any
+    mark_summary_as_unread: Any
+    search_topics: Any | None
+    event_bus: Any
+
+
+@dataclass(frozen=True, slots=True)
 class TelegramRuntime:
     core: CoreDependencies
     search: SearchDependencies
+    application_services: ApplicationServices
     telegram_client: Any
     response_formatter: Any
     url_processor: Any
@@ -46,16 +56,15 @@ class TelegramRuntime:
     message_handler: Any
     adaptive_timeout_service: Any | None = None
     verbosity_resolver: Any | None = None
-    container: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class SummaryCliRuntime:
     core: CoreDependencies
     search: SearchDependencies
+    application_services: ApplicationServices
     url_processor: Any
     command_processor: Any
-    container: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +77,7 @@ class ApiRuntime:
     background_processor: Any
     summary_read_model_use_case: Any
     search_read_model_use_case: Any
+    request_service: Any
     sync_service: Any
 
 

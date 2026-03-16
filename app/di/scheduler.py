@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.di.types import SchedulerDependencies
 
@@ -38,16 +38,14 @@ def _resolve_default_user_id(cfg: AppConfig) -> int | None:
 
 def _create_karakeep_service(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
     from app.adapters.karakeep import KarakeepSyncService
-    from app.infrastructure.persistence.sqlite.repositories.karakeep_sync_repository import (
-        SqliteKarakeepSyncRepositoryAdapter,
-    )
+    from app.di.repositories import build_karakeep_sync_repository
 
-    karakeep_repo = SqliteKarakeepSyncRepositoryAdapter(db)
+    karakeep_repo = build_karakeep_sync_repository(db)
     return KarakeepSyncService(
         api_url=cfg.karakeep.api_url,
         api_key=cfg.karakeep.api_key,
         sync_tag=cfg.karakeep.sync_tag,
-        repository=karakeep_repo,
+        repository=cast("Any", karakeep_repo),
     )
 
 

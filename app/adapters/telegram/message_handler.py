@@ -5,11 +5,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.repository_ports import (
-    AuditLogRepositoryPort,
-    create_audit_log_repository,
-    create_batch_session_repository,
-)
 from app.adapters.telegram.access_controller import AccessController
 from app.adapters.telegram.callback_handler import CallbackHandler
 from app.adapters.telegram.command_processor import CommandProcessor
@@ -17,6 +12,7 @@ from app.adapters.telegram.message_router import MessageRouter
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.url_handler import URLHandler
 from app.core.async_utils import raise_if_cancelled
+from app.di.repositories import build_audit_log_repository, build_batch_session_repository
 from app.security.file_validation import SecureFileValidator
 
 if TYPE_CHECKING:
@@ -24,11 +20,12 @@ if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.forward_processor import ForwardProcessor
+    from app.application.ports import AuditLogRepositoryPort
+    from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.infrastructure.search.hybrid_search_service import HybridSearchService
     from app.services.adaptive_timeout import AdaptiveTimeoutService
-    from app.services.hybrid_search_service import HybridSearchService
-    from app.services.topic_search import LocalTopicSearchService, TopicSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +42,6 @@ class MessageHandler:
         forward_processor: ForwardProcessor,
         topic_searcher: TopicSearchService | None = None,
         local_searcher: LocalTopicSearchService | None = None,
-        container: Any | None = None,
         hybrid_search: HybridSearchService | None = None,
         attachment_processor: AttachmentProcessor | None = None,
         verbosity_resolver: Any | None = None,
@@ -55,10 +51,11 @@ class MessageHandler:
         batch_session_repo: Any | None = None,
         batch_config: Any | None = None,
         file_validator: SecureFileValidator | None = None,
+        application_services: Any | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
-        self.audit_repo = audit_repo or create_audit_log_repository(db)
+        self.audit_repo = audit_repo or build_audit_log_repository(db)
 
         # Initialize components
         self.task_manager = UserTaskManager()
@@ -76,7 +73,7 @@ class MessageHandler:
             adaptive_timeout_service=adaptive_timeout_service,
             verbosity_resolver=verbosity_resolver,
             llm_client=llm_client,
-            batch_session_repo=batch_session_repo or create_batch_session_repository(db),
+            batch_session_repo=batch_session_repo or build_batch_session_repository(db),
             batch_config=batch_config,
             file_validator=file_validator or SecureFileValidator(max_file_size=10 * 1024 * 1024),
         )
@@ -93,9 +90,9 @@ class MessageHandler:
             topic_searcher=topic_searcher,
             local_searcher=local_searcher,
             task_manager=self.task_manager,
-            container=container,
             hybrid_search=hybrid_search,
             verbosity_resolver=verbosity_resolver,
+            application_services=application_services,
         )
 
         # Resolve UI language from response formatter

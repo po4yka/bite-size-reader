@@ -6,12 +6,6 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.repository_ports import (
-    RequestRepositoryPort,
-    UserRepositoryPort,
-    create_request_repository,
-    create_user_repository,
-)
 from app.adapters.telegram.batch_relationship_analysis_service import (
     BatchRelationshipAnalysisService,
 )
@@ -25,11 +19,13 @@ from app.adapters.telegram.url_state_store import URLAwaitingStateStore
 from app.core.async_utils import raise_if_cancelled
 from app.core.url_utils import extract_all_urls, normalize_url
 from app.core.verbosity import VerbosityLevel
+from app.di.repositories import build_request_repository, build_user_repository
 from app.security.file_validation import FileValidationError, SecureFileValidator
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.application.ports import RequestRepositoryPort, UserRepositoryPort
     from app.core.verbosity import VerbosityResolver
     from app.db.session import DatabaseSessionManager
     from app.services.adaptive_timeout import AdaptiveTimeoutService
@@ -59,8 +55,8 @@ class URLHandler:
         relationship_analysis_service: BatchRelationshipAnalysisService | None = None,
     ) -> None:
         self.db = db
-        self.user_repo = user_repo or create_user_repository(db)
-        self.request_repo = request_repo or create_request_repository(db)
+        self.user_repo = user_repo or build_user_repository(db)
+        self.request_repo = request_repo or build_request_repository(db)
         self.response_formatter = response_formatter
         self.url_processor = url_processor
         self._llm_client = llm_client

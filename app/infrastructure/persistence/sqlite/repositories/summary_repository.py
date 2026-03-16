@@ -12,6 +12,7 @@ from typing import Any
 
 import peewee
 
+from app.application.services.topic_search_utils import ensure_mapping, tokenize
 from app.core.time_utils import UTC
 from app.db.models import CrawlResult, Request, Summary, model_to_dict
 from app.db.utils import prepare_json_payload
@@ -21,7 +22,6 @@ from app.infrastructure.persistence.sqlite.repositories._joined_row_utils import
     aliased_model_fields,
     extract_aliased_model,
 )
-from app.services.topic_search_utils import ensure_mapping, tokenize
 
 
 def _upsert_summary_record(

@@ -7,15 +7,11 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
-from app.adapters.repository_ports import (
-    LLMRepositoryPort,
-    RequestRepositoryPort,
-    SummaryRepositoryPort,
-    UserRepositoryPort,
-    create_llm_repository,
-    create_request_repository,
-    create_summary_repository,
-    create_user_repository,
+from app.di.repositories import (
+    build_llm_repository,
+    build_request_repository,
+    build_summary_repository,
+    build_user_repository,
 )
 from app.utils.json_validation import parse_summary_response  # noqa: F401
 
@@ -27,6 +23,12 @@ from .llm_response_workflow_storage import LLMWorkflowStorageMixin
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from app.application.ports import (
+        LLMRepositoryPort,
+        RequestRepositoryPort,
+        SummaryRepositoryPort,
+        UserRepositoryPort,
+    )
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
 
@@ -157,10 +159,10 @@ class LLMResponseWorkflow(
         self._sem = sem
         self._db_write_queue = db_write_queue
         self._adaptive_timeout = adaptive_timeout_service
-        self.summary_repo = summary_repo or create_summary_repository(db)
-        self.request_repo = request_repo or create_request_repository(db)
-        self.llm_repo = llm_repo or create_llm_repository(db)
-        self.user_repo = user_repo or create_user_repository(db)
+        self.summary_repo = summary_repo or build_summary_repository(db)
+        self.request_repo = request_repo or build_request_repository(db)
+        self.llm_repo = llm_repo or build_llm_repository(db)
+        self.user_repo = user_repo or build_user_repository(db)
         self._background_tasks: set[Any] = set()
 
         try:

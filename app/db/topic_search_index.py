@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING, Any
 
 import peewee
 
-from app.db.models import Request, Summary, TopicSearchIndex
-from app.services.topic_search_utils import (
+from app.application.services.topic_search_utils import (
     TopicSearchDocument,
     build_topic_search_document,
     ensure_mapping,
     tokenize,
 )
+from app.db.models import Request, Summary, TopicSearchIndex
 
 if TYPE_CHECKING:
     import logging

@@ -31,11 +31,11 @@ from app.api.models.responses import (
     success_response,
 )
 from app.api.routers.auth import get_current_user
+from app.application.services.topic_search_utils import ensure_mapping
 from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.services.topic_search_utils import ensure_mapping
 
 logger = get_logger(__name__)
 router = APIRouter()

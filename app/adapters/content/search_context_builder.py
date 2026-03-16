@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.services.topic_search import TopicArticle
+    from app.application.services.topic_search import TopicArticle
 
 logger = logging.getLogger(__name__)
 

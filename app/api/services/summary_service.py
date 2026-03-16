@@ -1,23 +1,21 @@
 """Summary service - business logic for summary operations."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.api.dependencies.database import resolve_repository_session
+from app.api.dependencies.database import get_summary_read_model_use_case
 from app.api.exceptions import ResourceNotFoundError
 from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
-    SqliteCrawlResultRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
-    SqliteLLMRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
+
+if TYPE_CHECKING:
+    from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+        SqliteSummaryRepositoryAdapter,
+    )
+else:
+
+    class SqliteSummaryRepositoryAdapter:
+        pass
+
 
 logger = get_logger(__name__)
 
@@ -27,13 +25,7 @@ class SummaryService:
 
     @staticmethod
     def _build_use_case() -> SummaryReadModelUseCase:
-        session = resolve_repository_session()
-        return SummaryReadModelUseCase(
-            summary_repository=SqliteSummaryRepositoryAdapter(session),
-            request_repository=SqliteRequestRepositoryAdapter(session),
-            crawl_result_repository=SqliteCrawlResultRepositoryAdapter(session),
-            llm_repository=SqliteLLMRepositoryAdapter(session),
-        )
+        return get_summary_read_model_use_case()
 
     @staticmethod
     async def get_user_summaries(

@@ -13,7 +13,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from app.adapters.repository_ports import UserRepositoryPort
+    from app.application.ports import UserRepositoryPort
 
 logger = logging.getLogger(__name__)
 

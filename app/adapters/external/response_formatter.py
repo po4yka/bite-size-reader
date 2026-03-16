@@ -42,9 +42,9 @@ if TYPE_CHECKING:
         TextProcessor,
     )
     from app.adapters.telegram.topic_manager import TopicManager
+    from app.application.services.topic_search import TopicArticle
     from app.core.progress_tracker import ProgressTracker
     from app.core.verbosity import VerbosityResolver
-    from app.services.topic_search import TopicArticle
 
 logger = logging.getLogger(__name__)
 

@@ -10,8 +10,7 @@ from app.di.api import get_current_api_runtime, get_or_create_api_runtime, resol
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from fastapi import Request
-    from app.services.embedding_protocol import EmbeddingServiceProtocol
+    from app.infrastructure.embedding.embedding_protocol import EmbeddingServiceProtocol
 
 logger = get_logger(__name__)
 
@@ -24,10 +23,15 @@ _test_config_factory: Callable[[], Any] | None = None
 
 
 async def get_chroma_search_service(
-    request: Request | None = None,
+    request: Any = None,
 ) -> Any:
     """FastAPI dependency for the shared Chroma search service."""
-    if request is None and _test_embedding_factory and _test_vector_store_factory and _test_config_factory:
+    if (
+        request is None
+        and _test_embedding_factory
+        and _test_vector_store_factory
+        and _test_config_factory
+    ):
         return await _get_test_service()
 
     runtime = None
@@ -87,7 +91,7 @@ async def _get_test_service() -> Any:
     config = _test_config_factory()
     _test_embedding = _test_embedding_factory()
     _test_vector_store = _test_vector_store_factory(config)
-    from app.services.chroma_vector_search_service import ChromaVectorSearchService
+    from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchService
 
     _test_service = ChromaVectorSearchService(
         vector_store=_test_vector_store,

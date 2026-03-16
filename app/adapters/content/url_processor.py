@@ -25,11 +25,8 @@ from app.adapters.content.url_flow_models import (
 )
 from app.adapters.content.url_post_summary_task_service import URLPostSummaryTaskService
 from app.adapters.content.url_summary_delivery_service import URLSummaryDeliveryService
-from app.adapters.repository_ports import (
-    SummaryRepositoryPort,
-    create_summary_repository,
-)
 from app.core.async_utils import raise_if_cancelled
+from app.di.repositories import build_summary_repository
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 
 if TYPE_CHECKING:
@@ -38,12 +35,13 @@ if TYPE_CHECKING:
     from app.adapters.content.scraper.protocol import ContentScraperProtocol
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
+    from app.application.ports import SummaryRepositoryPort
+    from app.application.services.related_reads_service import RelatedReadsService
+    from app.application.services.topic_search import TopicSearchService
     from app.config import AppConfig
     from app.core.progress_tracker import ProgressTracker
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
-    from app.services.related_reads_service import RelatedReadsService
-    from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +75,7 @@ class URLProcessor:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._db_write_queue = db_write_queue
-        self.summary_repo = summary_repo or create_summary_repository(db)
+        self.summary_repo = summary_repo or build_summary_repository(db)
 
         self.content_extractor = ContentExtractor(
             cfg=cfg,

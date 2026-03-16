@@ -54,7 +54,7 @@ class TelegramLifecycleManager:
         await self._cancel_task(self._rate_limiter_cleanup_task)
 
     async def _warm_adaptive_timeout_cache(self) -> None:
-        adaptive_timeout = getattr(self._bot._container, "adaptive_timeout_service", None)
+        adaptive_timeout = getattr(self._bot, "_adaptive_timeout_service", None)
         if adaptive_timeout is None:
             url_handler = getattr(self._bot.message_handler, "url_handler", None)
             if url_handler is not None:

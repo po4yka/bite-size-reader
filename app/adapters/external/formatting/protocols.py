@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from app.services.topic_search import TopicArticle
+    from app.application.services.topic_search import TopicArticle
 
 
 @runtime_checkable

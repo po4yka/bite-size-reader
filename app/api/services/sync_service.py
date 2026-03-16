@@ -21,20 +21,12 @@ from app.api.models.responses import (
 )
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
-    SqliteCrawlResultRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
-    SqliteLLMRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
+from app.di.repositories import (
+    build_crawl_result_repository,
+    build_llm_repository,
+    build_request_repository,
+    build_summary_repository,
+    build_user_repository,
 )
 from app.infrastructure.redis import get_redis, redis_key
 
@@ -42,8 +34,47 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from app.api.models.requests import SyncApplyItem
+    from app.application.ports import (
+        CrawlResultRepositoryPort,
+        LLMRepositoryPort,
+        RequestRepositoryPort,
+        SummaryRepositoryPort,
+        UserRepositoryPort,
+    )
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+        SqliteCrawlResultRepositoryAdapter,
+    )
+    from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
+        SqliteLLMRepositoryAdapter,
+    )
+    from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+        SqliteRequestRepositoryAdapter,
+    )
+    from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+        SqliteSummaryRepositoryAdapter,
+    )
+    from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+        SqliteUserRepositoryAdapter,
+    )
+else:
+
+    class SqliteCrawlResultRepositoryAdapter:
+        pass
+
+    class SqliteLLMRepositoryAdapter:
+        pass
+
+    class SqliteRequestRepositoryAdapter:
+        pass
+
+    class SqliteSummaryRepositoryAdapter:
+        pass
+
+    class SqliteUserRepositoryAdapter:
+        pass
+
 
 logger = get_logger(__name__)
 
@@ -80,16 +111,25 @@ def _prune_fallback_sessions(now: datetime, *, exclude_session_id: str | None = 
 class SyncService:
     """Sync protocol service implementing sessions, delta/full retrieval, and apply."""
 
-    def __init__(self, cfg: AppConfig, session_manager: DatabaseSessionManager) -> None:
+    def __init__(
+        self,
+        cfg: AppConfig,
+        session_manager: DatabaseSessionManager,
+        *,
+        user_repository: UserRepositoryPort | None = None,
+        request_repository: RequestRepositoryPort | None = None,
+        summary_repository: SummaryRepositoryPort | None = None,
+        crawl_result_repository: CrawlResultRepositoryPort | None = None,
+        llm_repository: LLMRepositoryPort | None = None,
+    ) -> None:
         self.cfg = cfg
         self._session_manager = session_manager
 
-        # Initialize repositories
-        self._user_repo = SqliteUserRepositoryAdapter(session_manager)
-        self._request_repo = SqliteRequestRepositoryAdapter(session_manager)
-        self._summary_repo = SqliteSummaryRepositoryAdapter(session_manager)
-        self._crawl_repo = SqliteCrawlResultRepositoryAdapter(session_manager)
-        self._llm_repo = SqliteLLMRepositoryAdapter(session_manager)
+        self._user_repo = user_repository or build_user_repository(session_manager)
+        self._request_repo = request_repository or build_request_repository(session_manager)
+        self._summary_repo = summary_repository or build_summary_repository(session_manager)
+        self._crawl_repo = crawl_result_repository or build_crawl_result_repository(session_manager)
+        self._llm_repo = llm_repository or build_llm_repository(session_manager)
 
     def _resolve_limit(self, requested: int | None) -> int:
         return max(

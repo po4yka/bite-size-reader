@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from app.application.ports import RequestRepositoryPort, UserRepositoryPort
 
 from app.adapters.attachment.image_extractor import ImageExtractor
 from app.adapters.attachment.pdf_extractor import PDFExtractor
@@ -28,14 +29,9 @@ from app.adapters.content.llm_response_workflow import (
     LLMSummaryPersistenceSettings,
     LLMWorkflowNotifications,
 )
-from app.adapters.repository_ports import (
-    RequestRepositoryPort,
-    UserRepositoryPort,
-    create_request_repository,
-    create_user_repository,
-)
 from app.core.lang import LANG_AUTO, LANG_RU, choose_language, detect_language
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.di.repositories import build_request_repository, build_user_repository
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -95,8 +91,8 @@ class AttachmentProcessor:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
-        self.request_repo = request_repo or create_request_repository(db)
-        self.user_repo = user_repo or create_user_repository(db)
+        self.request_repo = request_repo or build_request_repository(db)
+        self.user_repo = user_repo or build_user_repository(db)
         self._workflow = LLMResponseWorkflow(
             cfg=cfg,
             db=db,

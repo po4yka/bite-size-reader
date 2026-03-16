@@ -10,15 +10,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.repository_ports import (
-    create_audit_log_repository,
-)
 from app.adapters.telegram import telegram_client as telegram_client_module
 from app.adapters.telegram.component_wiring import TelegramComponentWiring
 from app.adapters.telegram.lifecycle_manager import TelegramLifecycleManager
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.time_utils import UTC, format_iso_z
+from app.di.repositories import build_audit_log_repository
 from app.di.telegram import build_telegram_runtime
 
 try:
@@ -67,7 +65,7 @@ class TelegramBot:
             },
         )
 
-        self._component_wiring = TelegramComponentWiring(cfg=self.cfg, db=self.db)
+        self._component_wiring = TelegramComponentWiring(cfg=self.cfg)
         self._component_wiring.apply_client_shims(
             telegram_client_module=telegram_client_module,
             client_cls=_PYRO_CLIENT_CLS,
@@ -75,7 +73,7 @@ class TelegramBot:
         )
 
         self._audit_tasks: set[asyncio.Task[Any]] = set()
-        self.audit_repo = create_audit_log_repository(self.db)
+        self.audit_repo = build_audit_log_repository(self.db)
         components = build_telegram_runtime(
             cfg=self.cfg,
             db=self.db,

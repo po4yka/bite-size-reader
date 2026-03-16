@@ -1,24 +1,29 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.attachment.attachment_processor import AttachmentProcessor
-from app.adapters.repository_ports import create_batch_session_repository, create_user_repository
 from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
 from app.adapters.telegram.url_handler import URLHandler
+from app.application.services.related_reads_service import RelatedReadsService
+from app.core.logging_utils import get_logger
 from app.core.verbosity import VerbosityResolver
-from app.di.container import Container
+from app.di.application import build_application_services
+from app.di.repositories import (
+    build_batch_session_repository,
+    build_embedding_repository,
+    build_topic_search_repository,
+    build_user_repository,
+)
 from app.di.search import build_search_dependencies, get_topic_search_limit
 from app.di.shared import build_async_audit_sink, build_core_dependencies, build_url_processor
 from app.di.types import SummaryCliRuntime, TelegramRuntime
+from app.infrastructure.search.vector_search_service import VectorSearchService
 from app.security.file_validation import SecureFileValidator
 from app.services.adaptive_timeout import AdaptiveTimeoutService
-from app.services.related_reads_service import RelatedReadsService
-from app.services.vector_search_service import VectorSearchService
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
@@ -26,7 +31,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def build_telegram_runtime(
@@ -39,7 +44,7 @@ def build_telegram_runtime(
     audit_task_registry: set[Any] | None = None,
 ) -> TelegramRuntime:
     """Build the full Telegram runtime graph from shared DI modules."""
-    user_repo = create_user_repository(db)
+    user_repo = build_user_repository(db)
     verbosity_resolver = VerbosityResolver(user_repo)
     audit_sink = build_async_audit_sink(db, task_registry=audit_task_registry)
     core = build_core_dependencies(
@@ -101,14 +106,12 @@ def build_telegram_runtime(
         forward_processor=forward_processor,
     )
 
-    container = Container(
-        database=db,
+    application_services = build_application_services(
+        db,
         topic_search_service=search.local_searcher,
-        analytics_service=None,
         vector_store=search.vector_store,
         embedding_generator=search.embedding_generator,
     )
-    container.wire_event_handlers_auto()
 
     telegram_client = TelegramClient(cfg=cfg)
     core.response_formatter.set_telegram_client(telegram_client)
@@ -119,7 +122,7 @@ def build_telegram_runtime(
     )
 
     adaptive_timeout_service = _create_adaptive_timeout_service(cfg=cfg, db=db)
-    batch_session_repo = create_batch_session_repository(db)
+    batch_session_repo = build_batch_session_repository(db)
     message_handler = MessageHandler(
         cfg=cfg,
         db=db,
@@ -128,7 +131,6 @@ def build_telegram_runtime(
         forward_processor=forward_processor,
         topic_searcher=search.topic_searcher,
         local_searcher=search.local_searcher,
-        container=container,
         hybrid_search=search.hybrid_search_service,
         attachment_processor=attachment_processor,
         verbosity_resolver=verbosity_resolver,
@@ -137,6 +139,7 @@ def build_telegram_runtime(
         batch_session_repo=batch_session_repo,
         batch_config=cfg.batch_analysis,
         file_validator=SecureFileValidator(max_file_size=10 * 1024 * 1024),
+        application_services=application_services,
     )
 
     logger.info(
@@ -149,6 +152,7 @@ def build_telegram_runtime(
     return TelegramRuntime(
         core=core,
         search=search,
+        application_services=application_services,
         telegram_client=telegram_client,
         response_formatter=core.response_formatter,
         url_processor=url_processor,
@@ -157,7 +161,6 @@ def build_telegram_runtime(
         message_handler=message_handler,
         adaptive_timeout_service=adaptive_timeout_service,
         verbosity_resolver=verbosity_resolver,
-        container=container,
     )
 
 
@@ -186,13 +189,12 @@ def build_summary_cli_runtime(
         sem=core.semaphore_factory,
         topic_search=search.topic_searcher if cfg.web_search.enabled else None,
     )
-    container = Container(
-        database=db,
+    application_services = build_application_services(
+        db,
         topic_search_service=search.local_searcher,
         vector_store=search.vector_store,
         embedding_generator=search.embedding_generator,
     )
-    container.wire_event_handlers_auto()
     url_handler = URLHandler(
         db=db,
         response_formatter=core.response_formatter,
@@ -207,14 +209,14 @@ def build_summary_cli_runtime(
         url_handler=url_handler,
         topic_searcher=search.topic_searcher,
         local_searcher=search.local_searcher,
-        container=container,
+        application_services=application_services,
     )
     return SummaryCliRuntime(
         core=core,
         search=search,
+        application_services=application_services,
         url_processor=url_processor,
         command_processor=command_processor,
-        container=container,
     )
 
 
@@ -276,7 +278,8 @@ def _wire_related_reads(
         return
     try:
         vector_search_service = VectorSearchService(
-            db=db,
+            embedding_repository=build_embedding_repository(db),
+            topic_search_repository=build_topic_search_repository(db),
             embedding_service=search.embedding_service,
             max_results=10,
             min_similarity=0.3,

@@ -12,15 +12,15 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.command_handlers.decorators import audit_command
 from app.adapters.telegram.command_handlers.utils import maybe_load_json
+from app.application.services.topic_search_utils import ensure_mapping
 from app.db.user_interactions import async_safe_update_user_interaction
-from app.services.topic_search_utils import ensure_mapping
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.adapters.repository_ports import LLMRepositoryPort, SummaryRepositoryPort
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
     )
+    from app.application.ports import LLMRepositoryPort, SummaryRepositoryPort
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,10 @@ class ContentHandlerImpl:
         response_formatter: ResponseFormatter,
         summary_repo: SummaryRepositoryPort,
         llm_repo: LLMRepositoryPort,
-        container: Any | None = None,
+        *,
+        unread_summaries_use_case: Any | None = None,
+        mark_summary_as_read_use_case: Any | None = None,
+        event_bus: Any | None = None,
     ) -> None:
         """Initialize the content handler.
 
@@ -45,12 +48,16 @@ class ContentHandlerImpl:
             response_formatter: Response formatter for sending messages.
             summary_repo: Repository for summary data.
             llm_repo: Repository for LLM call data.
-            container: DI container exposing application use cases.
+            unread_summaries_use_case: Application use case for unread summaries.
+            mark_summary_as_read_use_case: Application use case for read transitions.
+            event_bus: Domain event bus for side effects.
         """
         self._formatter = response_formatter
         self._summary_repo = summary_repo
         self._llm_repo = llm_repo
-        self._container = container
+        self._unread_summaries_use_case = unread_summaries_use_case
+        self._mark_summary_as_read_use_case = mark_summary_as_read_use_case
+        self._event_bus = event_bus
 
     @staticmethod
     def parse_unread_arguments(text: str | None) -> tuple[int, str | None]:
@@ -210,8 +217,8 @@ class ContentHandlerImpl:
         Returns:
             List of unread summary dictionaries.
         """
-        if self._container is None:
-            msg = "ContentHandler requires a DI container with use cases"
+        if self._unread_summaries_use_case is None:
+            msg = "ContentHandler requires the unread summaries use case"
             raise RuntimeError(msg)
 
         from app.application.use_cases.get_unread_summaries import GetUnreadSummariesQuery
@@ -222,8 +229,7 @@ class ContentHandlerImpl:
             limit=limit,
             topic=topic,
         )
-        use_case = self._container.get_unread_summaries_use_case()
-        domain_summaries = await use_case.execute(query)
+        domain_summaries = await self._unread_summaries_use_case.execute(query)
 
         # Convert domain models to database format for compatibility
         unread_summaries = []
@@ -410,8 +416,8 @@ class ContentHandlerImpl:
             summary: The summary data dictionary.
             request_id: The request ID.
         """
-        if self._container is None:
-            msg = "ContentHandler requires a DI container with use cases"
+        if self._mark_summary_as_read_use_case is None or self._event_bus is None:
+            msg = "ContentHandler requires read-marking application services"
             raise RuntimeError(msg)
 
         from app.application.use_cases.mark_summary_as_read import MarkSummaryAsReadCommand
@@ -425,9 +431,5 @@ class ContentHandlerImpl:
             summary_id=summary_id,
             user_id=ctx.uid,
         )
-        use_case = self._container.mark_summary_as_read_use_case()
-        event = await use_case.execute(command)
-
-        # Publish the event
-        event_bus = self._container.event_bus()
-        await event_bus.publish(event)
+        event = await self._mark_summary_as_read_use_case.execute(command)
+        await self._event_bus.publish(event)

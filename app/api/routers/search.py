@@ -13,6 +13,7 @@ from app.api.dependencies.database import (
     get_request_repository,
     get_summary_repository,
     get_topic_search_repository,
+    resolve_repository_session,
 )
 from app.api.dependencies.search_resources import get_chroma_search_service
 from app.api.exceptions import ProcessingError
@@ -31,19 +32,13 @@ from app.api.search_ranking import (
 from app.application.services.topic_search_utils import ensure_mapping
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
-    SqliteTopicSearchRepositoryAdapter,
-)
 from app.services.trending_cache import get_trending_payload
 
 logger = get_logger(__name__)
 router = APIRouter()
+SqliteTopicSearchRepositoryAdapter = get_topic_search_repository
+SqliteRequestRepositoryAdapter = get_request_repository
+SqliteSummaryRepositoryAdapter = get_summary_repository
 __all__ = [
     "SqliteRequestRepositoryAdapter",
     "SqliteSummaryRepositoryAdapter",
@@ -53,15 +48,19 @@ __all__ = [
 ]
 
 
-def _build_search_repositories() -> tuple[
-    SqliteTopicSearchRepositoryAdapter,
-    SqliteRequestRepositoryAdapter,
-    SqliteSummaryRepositoryAdapter,
-]:
+def _instantiate_repository(factory: Any) -> Any:
+    session = resolve_repository_session()
+    try:
+        return factory(session)
+    except TypeError:
+        return factory()
+
+
+def _build_search_repositories() -> tuple[Any, Any, Any]:
     return (
-        get_topic_search_repository(),
-        get_request_repository(),
-        get_summary_repository(),
+        _instantiate_repository(SqliteTopicSearchRepositoryAdapter),
+        _instantiate_repository(SqliteRequestRepositoryAdapter),
+        _instantiate_repository(SqliteSummaryRepositoryAdapter),
     )
 
 

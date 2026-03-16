@@ -20,12 +20,7 @@ from app.core.lang import choose_language, detect_language
 from app.core.logging_utils import get_logger, log_exception
 from app.core.url_utils import normalize_url
 from app.di.database import build_runtime_database
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
+from app.di.repositories import build_request_repository, build_summary_repository
 from app.infrastructure.redis import redis_key
 from app.observability.failure_observability import (
     REASON_UNKNOWN_EXTRACTION_FAILURE,
@@ -83,8 +78,8 @@ class BackgroundProcessor:
     ) -> None:
         self.cfg = cfg
         self.db = db
-        self.summary_repo = SqliteSummaryRepositoryAdapter(db)
-        self.request_repo = SqliteRequestRepositoryAdapter(db)
+        self.summary_repo = build_summary_repository(db)
+        self.request_repo = build_request_repository(db)
         self.url_processor = url_processor
         self._url_processor_factory = url_processor_factory
         self.redis = redis
@@ -206,12 +201,10 @@ class BackgroundProcessor:
         finally:
             await self._release_lock(lock_handle)
 
-    def _get_request_repo_for_db(
-        self, db: DatabaseSessionManager
-    ) -> SqliteRequestRepositoryAdapter:
+    def _get_request_repo_for_db(self, db: DatabaseSessionManager) -> Any:
         if db == self.db:
             return self.request_repo
-        return SqliteRequestRepositoryAdapter(db)
+        return build_request_repository(db)
 
     async def _handle_stage_error(
         self,
@@ -506,7 +499,7 @@ class BackgroundProcessor:
         )
 
         await self._publish_update(request_id, "PROCESSING", "SAVING", "Saving summary...", 0.9)
-        repo = self.summary_repo if db == self.db else SqliteSummaryRepositoryAdapter(db)
+        repo = self.summary_repo if db == self.db else build_summary_repository(db)
         await repo.async_upsert_summary(
             request_id=request_id,
             lang=lang,
@@ -574,7 +567,7 @@ class BackgroundProcessor:
             )
 
         await self._publish_update(request_id, "PROCESSING", "SAVING", "Saving summary...", 0.9)
-        repo = self.summary_repo if db == self.db else SqliteSummaryRepositoryAdapter(db)
+        repo = self.summary_repo if db == self.db else build_summary_repository(db)
         await repo.async_upsert_summary(
             request_id=request_id,
             lang=lang,
@@ -633,7 +626,7 @@ class BackgroundProcessor:
         raise RuntimeError("Retry loop exited without result or error")
 
     async def _has_existing_summary(self, db: DatabaseSessionManager, request_id: int) -> bool:
-        repo = self.summary_repo if db == self.db else SqliteSummaryRepositoryAdapter(db)
+        repo = self.summary_repo if db == self.db else build_summary_repository(db)
         try:
             return bool(await repo.async_get_summary_by_request(request_id))
         except Exception as exc:
@@ -650,7 +643,7 @@ class BackgroundProcessor:
     async def _mark_status(
         self, db: DatabaseSessionManager, request_id: int, status: str, correlation_id: str | None
     ) -> None:
-        repo = self.request_repo if db == self.db else SqliteRequestRepositoryAdapter(db)
+        repo = self.request_repo if db == self.db else build_request_repository(db)
         try:
             await repo.async_update_request_status_with_correlation(
                 request_id, status, correlation_id

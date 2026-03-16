@@ -22,16 +22,6 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.repository_ports import (
-    LLMRepositoryPort,
-    RequestRepositoryPort,
-    SummaryRepositoryPort,
-    UserRepositoryPort,
-    create_llm_repository,
-    create_request_repository,
-    create_summary_repository,
-    create_user_repository,
-)
 from app.adapters.telegram.command_handlers.admin_handler import AdminHandlerImpl
 from app.adapters.telegram.command_handlers.content_handler import ContentHandlerImpl
 from app.adapters.telegram.command_handlers.digest_handler import DigestHandlerImpl
@@ -45,15 +35,27 @@ from app.adapters.telegram.command_handlers.settings_handler import SettingsHand
 from app.adapters.telegram.command_handlers.url_commands_handler import URLCommandsHandlerImpl
 from app.adapters.telegram.command_handlers.utils import maybe_load_json
 from app.adapters.telegram.task_manager import UserTaskManager
+from app.application.ports import (
+    LLMRepositoryPort,
+    RequestRepositoryPort,
+    SummaryRepositoryPort,
+    UserRepositoryPort,
+)
+from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
 from app.config import AppConfig
-from app.services.topic_search import LocalTopicSearchService, TopicSearchService
+from app.di.repositories import (
+    build_llm_repository,
+    build_request_repository,
+    build_summary_repository,
+    build_user_repository,
+)
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.url_handler import URLHandler
     from app.db.session import DatabaseSessionManager
-    from app.services.hybrid_search_service import HybridSearchService
+    from app.infrastructure.search.hybrid_search_service import HybridSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -81,13 +83,13 @@ class CommandProcessor:
         topic_searcher: TopicSearchService | None = None,
         local_searcher: LocalTopicSearchService | None = None,
         task_manager: UserTaskManager | None = None,
-        container: Any | None = None,
         hybrid_search: HybridSearchService | None = None,
         verbosity_resolver: Any | None = None,
         user_repo: UserRepositoryPort | None = None,
         summary_repo: SummaryRepositoryPort | None = None,
         request_repo: RequestRepositoryPort | None = None,
         llm_repo: LLMRepositoryPort | None = None,
+        application_services: Any | None = None,
     ) -> None:
         """Initialize the CommandProcessor facade.
 
@@ -110,10 +112,10 @@ class CommandProcessor:
         self._audit = audit_func
 
         # Initialize repositories
-        self.user_repo = user_repo or create_user_repository(db)
-        self.summary_repo = summary_repo or create_summary_repository(db)
-        self.request_repo = request_repo or create_request_repository(db)
-        self.llm_repo = llm_repo or create_llm_repository(db)
+        self.user_repo = user_repo or build_user_repository(db)
+        self.summary_repo = summary_repo or build_summary_repository(db)
+        self.request_repo = request_repo or build_request_repository(db)
+        self.llm_repo = llm_repo or build_llm_repository(db)
 
         # Store references for backward compatibility and delegation
         self.url_processor = url_processor
@@ -121,7 +123,7 @@ class CommandProcessor:
         self.topic_searcher = topic_searcher
         self.local_searcher = local_searcher
         self._task_manager = task_manager
-        self._container = container
+        self._application_services = application_services
         self.hybrid_search = hybrid_search
 
         # Initialize handler components
@@ -143,13 +145,17 @@ class CommandProcessor:
             response_formatter=response_formatter,
             summary_repo=self.summary_repo,
             llm_repo=self.llm_repo,
-            container=container,
+            unread_summaries_use_case=getattr(application_services, "unread_summaries", None),
+            mark_summary_as_read_use_case=getattr(
+                application_services, "mark_summary_as_read", None
+            ),
+            event_bus=getattr(application_services, "event_bus", None),
         )
 
         self._search = SearchHandlerImpl(
             response_formatter=response_formatter,
             searcher_provider=self,  # Pass self so handler can access current searcher values
-            container=container,
+            search_topics_use_case=getattr(application_services, "search_topics", None),
         )
 
         self._karakeep = KarakeepHandlerImpl(

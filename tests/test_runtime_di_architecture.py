@@ -46,21 +46,30 @@ FORMATTER_PRIVATE_PATTERNS = {
 }
 
 
+def _run_rg(
+    *, pattern: str, path: str = "app", fixed: bool = False, globs: list[str] | None = None
+):
+    glob_args: list[str] = []
+    for glob in globs or []:
+        glob_args.extend(["--glob", glob])
+    cmd = ["rg", "-n"]
+    if fixed:
+        cmd.append("-F")
+    cmd.extend([pattern, path, *glob_args])
+    return subprocess.run(
+        cmd,
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 @pytest.mark.skipif(shutil.which("rg") is None, reason="rg is required for architecture guard")
 def test_runtime_resource_construction_is_centralized_in_app_di() -> None:
     """Production runtime resources should only be assembled in app/di or CLI binaries."""
     for pattern in PATTERNS:
-        glob_args: list[str] = []
-        for glob in EXCLUDED_GLOBS:
-            glob_args.extend(["--glob", glob])
-        cmd = ["rg", "-n", "-F", pattern, "app", *glob_args]
-        result = subprocess.run(
-            cmd,
-            cwd=PROJECT_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        result = _run_rg(pattern=pattern, fixed=True, globs=EXCLUDED_GLOBS)
         assert result.returncode in (0, 1)
         assert result.stdout.strip() == "", (
             f"found forbidden runtime construction for {pattern!r}:\n{result.stdout}"
@@ -86,3 +95,60 @@ def test_formatter_private_surfaces_are_not_used_outside_formatting_package() ->
         assert offenders == [], f"found forbidden formatter surface usage in {path}:\n" + "\n".join(
             offenders
         )
+
+
+@pytest.mark.skipif(shutil.which("rg") is None, reason="rg is required for architecture guard")
+def test_removed_repository_port_layer_and_container_are_not_used() -> None:
+    patterns = [
+        "from app.adapters.repository_ports",
+        "import app.adapters.repository_ports",
+        "from app.di.container import",
+        "Container(",
+    ]
+    for pattern in patterns:
+        result = _run_rg(pattern=pattern, fixed=True)
+        assert result.returncode in (0, 1)
+        assert result.stdout.strip() == "", (
+            f"found removed architecture surface for {pattern!r}:\n{result.stdout}"
+        )
+
+
+@pytest.mark.skipif(shutil.which("rg") is None, reason="rg is required for architecture guard")
+def test_core_workflows_do_not_import_legacy_search_service_modules() -> None:
+    patterns = [
+        r"from app\.services\.(topic_search|summary_embedding_generator|vector_search_service|hybrid_search_service|related_reads_service|topic_search_utils)",
+        r"import app\.services\.(topic_search|summary_embedding_generator|vector_search_service|hybrid_search_service|related_reads_service|topic_search_utils)",
+    ]
+    globs = [
+        "!app/services/**",
+        "!app/cli/**",
+        "!app/application/services/topic_search_utils.py",
+    ]
+    for pattern in patterns:
+        result = _run_rg(pattern=pattern, globs=globs)
+        assert result.returncode in (0, 1)
+        assert result.stdout.strip() == "", (
+            f"found legacy search-service import still in production code for {pattern!r}:\n"
+            f"{result.stdout}"
+        )
+
+
+@pytest.mark.skipif(shutil.which("rg") is None, reason="rg is required for architecture guard")
+def test_core_workflows_do_not_construct_sqlite_repositories_outside_di() -> None:
+    result = _run_rg(
+        pattern=r"Sqlite[A-Za-z]+RepositoryAdapter\(",
+        path="app",
+        globs=[
+            "app/api/routers/**",
+            "app/api/services/**",
+            "app/adapters/telegram/**",
+            "app/application/**",
+            "!app/api/routers/auth/**",
+            "!app/api/services/collection_service.py",
+        ],
+    )
+    assert result.returncode in (0, 1)
+    assert result.stdout.strip() == "", (
+        "found direct Sqlite repository construction outside app/di in core workflows:\n"
+        f"{result.stdout}"
+    )

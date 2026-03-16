@@ -15,8 +15,8 @@ from app.core.json_utils import extract_json
 
 if TYPE_CHECKING:
     from app.adapters.llm import LLMClientProtocol
+    from app.application.services.topic_search import TopicArticle, TopicSearchService
     from app.config import WebSearchConfig
-    from app.services.topic_search import TopicArticle, TopicSearchService
 
 logger = logging.getLogger(__name__)
 

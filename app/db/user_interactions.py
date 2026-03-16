@@ -62,11 +62,9 @@ def safe_update_user_interaction(
                 **payload,
             )
         else:
-            from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-                SqliteUserRepositoryAdapter,
-            )
+            from app.di.repositories import build_user_repository
 
-            user_repo = SqliteUserRepositoryAdapter(db)
+            user_repo = build_user_repository(db)
             coro = user_repo.async_update_user_interaction(
                 interaction_id=interaction_id,
                 updates=update_mapping,

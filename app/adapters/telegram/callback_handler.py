@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.url_handler import URLHandler
     from app.db.session import DatabaseSessionManager
-    from app.services.hybrid_search_service import HybridSearchService
+    from app.infrastructure.search.hybrid_search_service import HybridSearchService
 
 logger = logging.getLogger(__name__)
 

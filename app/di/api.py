@@ -5,11 +5,19 @@ from typing import TYPE_CHECKING, Any
 
 from app.api.background_processor import BackgroundProcessor
 from app.api.services.sync_service import SyncService
+from app.application.services.request_service import RequestService
 from app.application.use_cases.search_read_model import SearchReadModelUseCase
 from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 from app.config import load_config
 from app.core.logging_utils import get_logger
 from app.di.database import build_runtime_database
+from app.di.repositories import (
+    build_crawl_result_repository,
+    build_llm_repository,
+    build_request_repository,
+    build_summary_repository,
+    build_topic_search_repository,
+)
 from app.di.search import build_search_dependencies
 from app.di.shared import (
     build_async_audit_sink,
@@ -18,21 +26,6 @@ from app.di.shared import (
     close_runtime_resources,
 )
 from app.di.types import ApiRuntime
-from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
-    SqliteCrawlResultRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
-    SqliteLLMRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
-    SqliteTopicSearchRepositoryAdapter,
-)
 from app.infrastructure.redis import get_redis
 
 if TYPE_CHECKING:
@@ -98,16 +91,27 @@ async def build_api_runtime(
         semaphore=core.semaphore_factory(),
         audit_func=core.audit_sink,
     )
+    request_repository = build_request_repository(database)
+    summary_repository = build_summary_repository(database)
+    crawl_result_repository = build_crawl_result_repository(database)
+    llm_repository = build_llm_repository(database)
     summary_read_model_use_case = SummaryReadModelUseCase(
-        summary_repository=SqliteSummaryRepositoryAdapter(database),
-        request_repository=SqliteRequestRepositoryAdapter(database),
-        crawl_result_repository=SqliteCrawlResultRepositoryAdapter(database),
-        llm_repository=SqliteLLMRepositoryAdapter(database),
+        summary_repository=summary_repository,
+        request_repository=request_repository,
+        crawl_result_repository=crawl_result_repository,
+        llm_repository=llm_repository,
     )
     search_read_model_use_case = SearchReadModelUseCase(
-        topic_search_repository=SqliteTopicSearchRepositoryAdapter(database),
-        request_repository=SqliteRequestRepositoryAdapter(database),
-        summary_repository=SqliteSummaryRepositoryAdapter(database),
+        topic_search_repository=build_topic_search_repository(database),
+        request_repository=request_repository,
+        summary_repository=summary_repository,
+    )
+    request_service = RequestService(
+        db=database,
+        request_repository=request_repository,
+        summary_repository=summary_repository,
+        crawl_result_repository=crawl_result_repository,
+        llm_repository=llm_repository,
     )
     sync_service = SyncService(app_cfg, database)
     return ApiRuntime(
@@ -119,6 +123,7 @@ async def build_api_runtime(
         background_processor=background_processor,
         summary_read_model_use_case=summary_read_model_use_case,
         search_read_model_use_case=search_read_model_use_case,
+        request_service=request_service,
         sync_service=sync_service,
     )
 

@@ -23,12 +23,15 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 | YouTube | `app/adapters/youtube/` | yt-dlp download, transcript extraction |
 | Twitter/X | `app/adapters/twitter/` | Firecrawl + Playwright extraction |
 | LLM | `app/adapters/llm/`, `app/adapters/openrouter/` | Provider-agnostic LLM interface |
-| Application | `app/application/` | DTOs and use cases |
+| Domain | `app/domain/` | Business models and domain services |
+| Application | `app/application/` | DTOs, ports, use cases, and application services |
+| Infrastructure | `app/infrastructure/` | Concrete persistence, vector search, cache, and messaging adapters |
+| DI | `app/di/` | Runtime composition only |
 | Core | `app/core/` | URL normalization, JSON parsing, summary contract, logging |
 | Database | `app/db/` | Peewee ORM models (31 classes), `DatabaseSessionManager` (`session.py`) is sole DB entry point |
 | API | `app/api/` | FastAPI REST API with JWT auth |
 | Web | `web/` | Carbon web interface (React + TypeScript + Vite) |
-| Search | `app/services/` | Topic search, vector/hybrid search, embeddings |
+| Search | `app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/` | Search workflows, vector search, and embedding services |
 | MCP | `app/mcp/` | Model Context Protocol server |
 
 ## Critical Files

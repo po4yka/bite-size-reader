@@ -7,7 +7,6 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from app.adapters.repository_ports import UserRepositoryPort, create_user_repository
 from app.adapters.telegram.routing import (
     MessageContentRouter,
     MessageInteractionRecorder,
@@ -16,6 +15,7 @@ from app.adapters.telegram.routing import (
     MessageRouteFailureHandler,
 )
 from app.core.logging_utils import generate_correlation_id
+from app.di.repositories import build_user_repository
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.routing.models import PreparedRouteContext
     from app.adapters.telegram.task_manager import UserTaskManager
     from app.adapters.telegram.url_handler import URLHandler
+    from app.application.ports import UserRepositoryPort
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.security.rate_limiter import RedisUserRateLimiter, UserRateLimiter
@@ -61,7 +62,7 @@ class MessageRouter:
         self.response_formatter = response_formatter
         self._task_manager = task_manager
 
-        self.user_repo = user_repo or create_user_repository(db)
+        self.user_repo = user_repo or build_user_repository(db)
         self._interaction_recorder = MessageInteractionRecorder(
             self.user_repo,
             structured_output_enabled=cfg.openrouter.enable_structured_outputs,

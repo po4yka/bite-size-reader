@@ -9,18 +9,18 @@ from app.adapters.content.scraper.factory import ContentScraperFactory
 from app.adapters.external.firecrawl_parser import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.llm import LLMClientFactory
-from app.adapters.repository_ports import create_audit_log_repository
+from app.di.repositories import build_audit_log_repository
 from app.di.types import CoreDependencies
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from app.adapters.repository_ports import SummaryRepositoryPort
+    from app.application.ports import SummaryRepositoryPort
+    from app.application.services.related_reads_service import RelatedReadsService
+    from app.application.services.topic_search import TopicSearchService
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
-    from app.services.related_reads_service import RelatedReadsService
-    from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def build_async_audit_sink(
     task_registry: set[asyncio.Task[Any]] | None = None,
 ) -> Callable[[str, str, dict[str, Any]], None]:
     """Create an async fire-and-forget audit callback backed by the DB."""
-    repo = create_audit_log_repository(db)
+    repo = build_audit_log_repository(db)
 
     def audit(level: str, event: str, details: dict[str, Any]) -> None:
         payload = details if isinstance(details, dict) else {"details": str(details)}

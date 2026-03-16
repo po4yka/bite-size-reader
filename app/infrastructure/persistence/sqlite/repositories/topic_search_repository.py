@@ -13,9 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import peewee
 
-from app.db.models import Request, Summary, TopicSearchIndex, model_to_dict
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
-from app.services.topic_search_utils import (
+from app.application.services.topic_search_utils import (
     TopicSearchDocument,
     build_snippet,
     build_topic_search_document,
@@ -25,6 +23,8 @@ from app.services.topic_search_utils import (
     normalize_text,
     tokenize,
 )
+from app.db.models import Request, Summary, TopicSearchIndex, model_to_dict
+from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -104,17 +104,37 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
         """
 
         def _search() -> tuple[list[dict[str, Any]], int]:
-            search_query = TopicSearchIndex.search(query).order_by(TopicSearchIndex.rank)
-            total = search_query.count()
+            fts_query = self._build_fts_query(query)
+            if not fts_query:
+                return [], 0
+
+            table_name = TopicSearchIndex._meta.table_name
+            count_sql = (
+                f"SELECT COUNT(*) FROM {table_name} "  # nosec B608
+                f"WHERE {table_name} MATCH ?"
+            )
+            search_sql = (
+                "SELECT request_id, title, snippet, source, published_at "
+                f"FROM {table_name} "  # nosec B608
+                f"WHERE {table_name} MATCH ? "
+                f"ORDER BY bm25({table_name}) ASC "
+                "LIMIT ? OFFSET ?"
+            )
+
+            count_cursor = self._session.database.execute_sql(count_sql, (fts_query,))
+            count_row = count_cursor.fetchone() if count_cursor else None
+            total = int(count_row[0]) if count_row and count_row[0] is not None else 0
+
+            cursor = self._session.database.execute_sql(search_sql, (fts_query, limit, offset))
             results = []
-            for row in search_query.limit(limit).offset(offset):
+            for row in cursor:
                 results.append(
                     {
-                        "request_id": row.request_id,
-                        "title": row.title,
-                        "snippet": row.snippet,
-                        "source": row.source,
-                        "published_at": row.published_at,
+                        "request_id": row[0],
+                        "title": row[1],
+                        "snippet": row[2],
+                        "source": row[3],
+                        "published_at": row[4],
                     }
                 )
             return results, total

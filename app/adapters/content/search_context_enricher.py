@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.async_utils import raise_if_cancelled
 
 if TYPE_CHECKING:
-    from app.services.topic_search import TopicSearchService
+    from app.application.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
 

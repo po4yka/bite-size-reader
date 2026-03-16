@@ -2,24 +2,32 @@
 
 import inspect
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from peewee import OperationalError
 
 from app.api.dependencies.database import (
     get_crawl_result_repository,
     get_llm_repository,
+    get_request_repository,
     get_summary_repository,
-    resolve_repository_session,
 )
 from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError
+from app.application.ports import RequestRepositoryPort
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.models import LLMCall, Request as RequestModel
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
+
+if TYPE_CHECKING:
+    from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+        SqliteRequestRepositoryAdapter,
+    )
+else:
+
+    class SqliteRequestRepositoryAdapter:
+        pass
+
 
 logger = get_logger(__name__)
 
@@ -28,13 +36,13 @@ class RequestService:
     """Service for request-related business logic."""
 
     @staticmethod
-    def _request_repo() -> SqliteRequestRepositoryAdapter:
+    def _request_repo() -> RequestRepositoryPort:
         """Create a request repository bound to the shared API DB session."""
-        return SqliteRequestRepositoryAdapter(resolve_repository_session())
+        return get_request_repository()
 
     @staticmethod
     async def _request_context(
-        request_repo: SqliteRequestRepositoryAdapter,
+        request_repo: RequestRepositoryPort,
         request_id: int,
     ) -> dict[str, Any] | None:
         """Load request context through the optimized repository path when available."""

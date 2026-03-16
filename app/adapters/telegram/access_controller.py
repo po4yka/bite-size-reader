@@ -7,16 +7,14 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.repository_ports import (
-    UserRepositoryPort,
-    create_user_repository,
-)
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.di.repositories import build_user_repository
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.application.ports import UserRepositoryPort
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
@@ -36,7 +34,7 @@ class AccessController:
     ) -> None:
         self.cfg = cfg
         self.db = db
-        self.user_repo = user_repo or create_user_repository(db)
+        self.user_repo = user_repo or build_user_repository(db)
         self.response_formatter = response_formatter
         self._audit = audit_func
 

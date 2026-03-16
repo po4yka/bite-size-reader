@@ -3,11 +3,18 @@ Request submission and status endpoints.
 """
 
 from datetime import datetime
+from typing import Any, cast
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from peewee import OperationalError
 
 from app.api.background_processor import process_url_request
+from app.api.dependencies.database import (
+    get_crawl_result_repository,
+    get_llm_repository,
+    get_request_repository,
+    get_summary_repository,
+)
 from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError, ValidationError
 from app.api.models.requests import SubmitForwardRequest, SubmitURLRequest
 from app.api.models.responses import (
@@ -24,13 +31,34 @@ from app.api.models.responses import (
     success_response,
 )
 from app.api.routers.auth import get_current_user
-from app.api.services.request_service import RequestService
+from app.application.services.request_service import RequestService
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import Request as RequestModel
+from app.di.api import resolve_api_runtime
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+
+def _get_request_service(request: Request) -> RequestService:
+    """Resolve the shared request workflow service from API runtime."""
+    try:
+        return resolve_api_runtime(request).request_service
+    except RuntimeError:
+        return RequestService(
+            db=None,
+            request_repository=get_request_repository(),
+            summary_repository=get_summary_repository(),
+            crawl_result_repository=get_crawl_result_repository(),
+            llm_repository=get_llm_repository(),
+        )
+
+
+def _resolve_request_service(service: Any) -> RequestService:
+    if hasattr(service, "create_url_request"):
+        return cast("RequestService", service)
+    return resolve_api_runtime().request_service
 
 
 @router.post("")
@@ -38,7 +66,9 @@ async def submit_request(
     request_data: SubmitURLRequest | SubmitForwardRequest,
     background_tasks: BackgroundTasks,
     user=Depends(get_current_user),
+    request_service: RequestService = Depends(_get_request_service),
 ):
+    request_service = _resolve_request_service(request_service)
     """
     Submit a new URL or forwarded message for processing.
 
@@ -51,7 +81,7 @@ async def submit_request(
         input_url = str(request_data.input_url)
 
         # Check for duplicate using service
-        duplicate_info = await RequestService.check_duplicate_url(user["user_id"], input_url)
+        duplicate_info = await request_service.check_duplicate_url(user["user_id"], input_url)
         if duplicate_info:
             return success_response(
                 DuplicateDetectionResponse(
@@ -65,7 +95,7 @@ async def submit_request(
 
         # Create new request using service
         try:
-            new_request = await RequestService.create_url_request(
+            new_request = await request_service.create_url_request(
                 user_id=user["user_id"],
                 input_url=input_url,
                 lang_preference=request_data.lang_preference,
@@ -96,7 +126,7 @@ async def submit_request(
 
     # Handle forward request
     # Create new forward request using service
-    new_request = await RequestService.create_forward_request(
+    new_request = await request_service.create_forward_request(
         user_id=user["user_id"],
         content_text=request_data.content_text,
         from_chat_id=request_data.forward_metadata.from_chat_id,
@@ -123,11 +153,13 @@ async def submit_request(
 async def get_request(
     request_id: int,
     user=Depends(get_current_user),
+    request_service: RequestService = Depends(_get_request_service),
 ):
+    request_service = _resolve_request_service(request_service)
     """Get details about a specific request."""
     # Use service layer to get request with authorization
     try:
-        result = await RequestService.get_request_by_id(user["user_id"], request_id)
+        result = await request_service.get_request_by_id(user["user_id"], request_id)
     except (AttributeError, OperationalError) as err:
         if isinstance(err, AttributeError) and "uninitialized Proxy" not in str(err):
             raise
@@ -201,10 +233,12 @@ async def get_request(
 async def get_request_status(
     request_id: int,
     user=Depends(get_current_user),
+    request_service: RequestService = Depends(_get_request_service),
 ):
+    request_service = _resolve_request_service(request_service)
     """Poll for real-time processing status."""
     # Use service layer to get status
-    status_info = await RequestService.get_request_status(user["user_id"], request_id)
+    status_info = await request_service.get_request_status(user["user_id"], request_id)
 
     status_payload = RequestStatus(
         request_id=status_info["request_id"],
@@ -232,11 +266,13 @@ async def retry_request(
     request_id: int,
     background_tasks: BackgroundTasks,
     user=Depends(get_current_user),
+    request_service: RequestService = Depends(_get_request_service),
 ):
+    request_service = _resolve_request_service(request_service)
     """Retry a failed request. Processes asynchronously in the background."""
     # Use service layer to create retry request
     try:
-        new_request = await RequestService.retry_failed_request(user["user_id"], request_id)
+        new_request = await request_service.retry_failed_request(user["user_id"], request_id)
     except ValueError as e:
         raise ValidationError(str(e)) from e
 

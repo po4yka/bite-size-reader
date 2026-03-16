@@ -18,8 +18,8 @@ if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
     )
-    from app.services.hybrid_search_service import HybridSearchService
-    from app.services.topic_search import LocalTopicSearchService, TopicSearchService
+    from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
+    from app.infrastructure.search.hybrid_search_service import HybridSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,8 @@ class SearchHandlerImpl:
         self,
         response_formatter: ResponseFormatter,
         searcher_provider: Any,
-        container: Any | None = None,
+        *,
+        search_topics_use_case: Any | None = None,
     ) -> None:
         """Initialize the search handler.
 
@@ -46,11 +47,11 @@ class SearchHandlerImpl:
             searcher_provider: Object with topic_searcher, local_searcher, and
                 hybrid_search attributes that can be dynamically accessed.
                 This allows tests to modify the searchers after initialization.
-            container: DI container exposing application use cases.
+            search_topics_use_case: Application use case for library topic search.
         """
         self._formatter = response_formatter
         self._searcher_provider = searcher_provider
-        self._container = container
+        self._search_topics_use_case = search_topics_use_case
 
     @property
     def _topic_searcher(self) -> TopicSearchService | None:
@@ -295,8 +296,8 @@ class SearchHandlerImpl:
             if callable(find_articles):
                 return await find_articles(topic, correlation_id=ctx.correlation_id)
 
-            if self._container is None:
-                msg = "SearchHandler requires a DI container for library search"
+            if self._search_topics_use_case is None:
+                msg = "SearchHandler requires the search topics use case for library search"
                 raise RuntimeError(msg)
             from app.application.use_cases.search_topics import SearchTopicsQuery
 
@@ -306,11 +307,7 @@ class SearchHandlerImpl:
                 max_results=getattr(searcher, "max_results", 5),
                 correlation_id=ctx.correlation_id,
             )
-            use_case = self._container.search_topics_use_case()
-            if use_case is None:
-                msg = "Search topics use case is not configured in container"
-                raise RuntimeError(msg)
-            return await use_case.execute(query)
+            return await self._search_topics_use_case.execute(query)
 
         # Online search remains a direct adapter/service call.
         return await searcher.find_articles(topic, correlation_id=ctx.correlation_id)

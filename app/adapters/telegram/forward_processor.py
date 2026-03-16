@@ -9,25 +9,27 @@ from collections.abc import Callable, Coroutine, Mapping
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.summarization_runtime import SummarizationRuntime
-from app.adapters.repository_ports import (
-    RequestRepositoryPort,
-    SummaryRepositoryPort,
-    UserRepositoryPort,
-    create_request_repository,
-    create_summary_repository,
-    create_user_repository,
-)
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
 from app.adapters.telegram.forward_summarizer import ForwardSummarizer
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.di.repositories import (
+    build_request_repository,
+    build_summary_repository,
+    build_user_repository,
+)
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
+    from app.application.ports import (
+        RequestRepositoryPort,
+        SummaryRepositoryPort,
+        UserRepositoryPort,
+    )
+    from app.application.services.related_reads_service import RelatedReadsService
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
-    from app.services.related_reads_service import RelatedReadsService
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +57,9 @@ class ForwardProcessor:
     ) -> None:
         self.cfg = cfg
         self.db = db
-        self.summary_repo = summary_repo or create_summary_repository(db)
-        self.request_repo = request_repo or create_request_repository(db)
-        self.user_repo = user_repo or create_user_repository(db)
+        self.summary_repo = summary_repo or build_summary_repository(db)
+        self.request_repo = request_repo or build_request_repository(db)
+        self.user_repo = user_repo or build_user_repository(db)
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
