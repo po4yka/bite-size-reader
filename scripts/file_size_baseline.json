@@ -1,0 +1,11 @@
+{
+  ".desloppify_t2.json": 2468,
+  "app/adapters/openrouter/chat_completions.py": 1742,
+  "app/mcp/server.py": 2247,
+  "docs/openapi/mobile_api.json": 9168,
+  "docs/openapi/mobile_api.yaml": 6296,
+  "frontend/package-lock.json": 1966,
+  "monitoring/grafana/provisioning/dashboards/bsr-overview.json": 1666,
+  "uv.lock": 4602,
+  "web/package-lock.json": 6503
+}

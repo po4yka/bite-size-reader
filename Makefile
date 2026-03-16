@@ -1,4 +1,4 @@
-.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate
+.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate check-file-loc
 
 format:
 	ruff format .
@@ -6,6 +6,10 @@ format:
 
 lint:
 	ruff check .
+	python scripts/check_file_size.py --max-loc 1500 --baseline scripts/file_size_baseline.json
+
+check-file-loc:
+	python scripts/check_file_size.py --max-loc 1500 --baseline scripts/file_size_baseline.json
 
 type:
 	uv run --frozen mypy app tests

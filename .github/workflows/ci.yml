@@ -293,6 +293,9 @@ jobs:
       - name: Enforce class size limit
         run: python scripts/check_class_size.py --max-loc 1000 --baseline scripts/class_size_baseline.json
 
+      - name: Enforce file size limit
+        run: python scripts/check_file_size.py --max-loc 1500 --baseline scripts/file_size_baseline.json
+
       - name: Check code complexity
         run: |
           echo "Checking code complexity with radon..."
