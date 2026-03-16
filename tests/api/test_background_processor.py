@@ -6,7 +6,7 @@ import fakeredis.aioredis
 import pytest
 
 from app.api.background_processor import BackgroundProcessor
-from app.di.background import build_background_processor
+from app.di.api import build_background_processor
 
 
 class DummyBackgroundConfig:

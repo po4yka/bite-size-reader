@@ -11,10 +11,12 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.time_utils import UTC
+from app.di.scheduler import build_scheduler_dependencies
 
 if TYPE_CHECKING:
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.di.types import SchedulerDependencies
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,13 @@ logger = logging.getLogger(__name__)
 class SchedulerService:
     """Manages background scheduled tasks like Karakeep sync."""
 
-    def __init__(self, cfg: AppConfig, db: DatabaseSessionManager) -> None:
+    def __init__(
+        self,
+        cfg: AppConfig,
+        db: DatabaseSessionManager,
+        *,
+        deps: SchedulerDependencies | None = None,
+    ) -> None:
         """Initialize scheduler service.
 
         Args:
@@ -31,6 +39,7 @@ class SchedulerService:
         """
         self.cfg = cfg
         self.db = db
+        self._deps = deps or build_scheduler_dependencies(cfg, db)
         self._scheduler: AsyncIOScheduler | None = None
         self._started = False
 
@@ -113,30 +122,12 @@ class SchedulerService:
 
     async def _run_karakeep_sync(self) -> None:
         """Execute scheduled Karakeep sync."""
-        from app.adapters.karakeep import KarakeepSyncService
-        from app.infrastructure.persistence.sqlite.repositories.karakeep_sync_repository import (
-            SqliteKarakeepSyncRepositoryAdapter,
-        )
-
         correlation_id = f"scheduled_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
         logger.info("scheduled_karakeep_sync_starting", extra={"cid": correlation_id})
 
         try:
-            karakeep_repo = SqliteKarakeepSyncRepositoryAdapter(self.db)
-            service = KarakeepSyncService(
-                api_url=self.cfg.karakeep.api_url,
-                api_key=self.cfg.karakeep.api_key,
-                sync_tag=self.cfg.karakeep.sync_tag,
-                repository=karakeep_repo,
-            )
-
-            # Get default user ID from allowed users
-            user_id = (
-                self.cfg.telegram.allowed_user_ids[0]
-                if self.cfg.telegram.allowed_user_ids
-                else None
-            )
-
+            service = self._deps.karakeep_service_factory()
+            user_id = self._deps.karakeep_user_id_resolver()
             if user_id is None:
                 logger.warning(
                     "scheduled_karakeep_sync_no_user_id",
@@ -170,48 +161,17 @@ class SchedulerService:
 
     async def _run_channel_digest(self) -> None:
         """Execute scheduled channel digest delivery for all subscribed users."""
-        from pathlib import Path
-
-        from app.adapters.digest.analyzer import DigestAnalyzer
-        from app.adapters.digest.channel_reader import ChannelReader
-        from app.adapters.digest.digest_service import DigestService
-        from app.adapters.digest.formatter import DigestFormatter
-        from app.adapters.digest.userbot_client import UserbotClient
-
         correlation_id = f"digest_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
         logger.info("scheduled_digest_starting", extra={"cid": correlation_id})
 
-        userbot: UserbotClient | None = None
+        userbot: Any | None = None
+        llm_client: Any | None = None
         try:
-            # Initialize userbot
-            session_dir = Path("/data")
-            userbot = UserbotClient(self.cfg, session_dir)
+            userbot = self._deps.digest_userbot_factory()
             await userbot.start()
 
-            # Build LLM client (reuse OpenRouter)
-            from app.adapters.openrouter.openrouter_client import OpenRouterClient
-
-            llm_client = OpenRouterClient(
-                api_key=self.cfg.openrouter.api_key,
-                model=self.cfg.openrouter.model,
-                fallback_models=self.cfg.openrouter.fallback_models,
-            )
-
-            reader = ChannelReader(self.cfg, userbot)
-            analyzer = DigestAnalyzer(self.cfg, llm_client)
-            formatter = DigestFormatter()
-
-            # Create a send function using the bot (not the userbot)
-            # The bot client is not available here; use pyrogram bot directly
-            from pyrogram import Client as PyroClient
-
-            bot = PyroClient(
-                name="digest_bot_sender",
-                api_id=self.cfg.telegram.api_id,
-                api_hash=self.cfg.telegram.api_hash,
-                bot_token=self.cfg.telegram.bot_token,
-                in_memory=True,
-            )
+            llm_client = self._deps.digest_llm_factory()
+            bot = self._deps.digest_bot_client_factory()
 
             async with bot:
 
@@ -222,12 +182,10 @@ class SchedulerService:
                         reply_markup=reply_markup,
                     )
 
-                service = DigestService(
-                    cfg=self.cfg,
-                    reader=reader,
-                    analyzer=analyzer,
-                    formatter=formatter,
-                    send_message_func=send_message,
+                service = self._deps.digest_service_factory(
+                    userbot,
+                    llm_client,
+                    send_message,
                 )
 
                 # Deliver to all users with subscriptions
@@ -260,14 +218,14 @@ class SchedulerService:
                             extra={"cid": correlation_id, "uid": uid, "error": str(e)},
                         )
 
-            await llm_client.aclose()
-
         except Exception as e:
             logger.exception(
                 "scheduled_digest_failed",
                 extra={"cid": correlation_id, "error": str(e)},
             )
         finally:
+            if llm_client is not None:
+                await llm_client.aclose()
             if userbot:
                 await userbot.stop()
 

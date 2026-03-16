@@ -84,9 +84,9 @@ class McpServiceState:
     resources: tuple[Any, ...] = ()
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class McpRuntime:
-    cfg: AppConfig
+    cfg: AppConfig | None
     db_path: str
     database: Any
     scope: McpScope

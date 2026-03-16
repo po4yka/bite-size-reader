@@ -90,8 +90,13 @@ def clear_cached_runtime_database() -> None:
     """Reset the fallback runtime DB cache used outside managed lifespans."""
     global _cached_runtime_db
     if _cached_runtime_db is not None:
-        _cached_runtime_db.database.close()
+        database = getattr(_cached_runtime_db, "database", None)
+        if database is not None:
+            database.close()
     _cached_runtime_db = None
+    cache_clear = getattr(_get_env_db_config, "cache_clear", None)
+    if callable(cache_clear):
+        cache_clear()
 
 
 def migrate_with_self_heal(db: DatabaseSessionManager) -> None:

@@ -13,13 +13,13 @@ import time
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
-from app.api.dependencies.database import get_session_manager
 from app.api.models.responses import success_response
 from app.config import load_config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC, format_iso_z
+from app.di.api import resolve_api_runtime
 
 logger = get_logger(__name__)
 
@@ -37,9 +37,8 @@ def clear_health_check_cache() -> None:
     _database_details_cached_at = 0.0
 
 
-def _compute_database_details() -> dict[str, Any]:
+def _compute_database_details(db: Any) -> dict[str, Any]:
     """Compute heavier database diagnostics using the shared session manager."""
-    db = get_session_manager()
     db_conn = db.database
 
     cursor = db_conn.execute_sql(
@@ -58,7 +57,7 @@ def _compute_database_details() -> dict[str, Any]:
     return result
 
 
-async def _get_cached_database_details() -> dict[str, Any]:
+async def _get_cached_database_details(request: Request | None = None) -> dict[str, Any]:
     """Return cached database diagnostics, recomputing only when stale."""
     global _database_details_cache, _database_details_cached_at
 
@@ -77,17 +76,21 @@ async def _get_cached_database_details() -> dict[str, Any]:
         ):
             return dict(_database_details_cache)
 
-        details = await asyncio.to_thread(_compute_database_details)
+        details = await asyncio.to_thread(_compute_database_details, resolve_api_runtime(request).db)
         _database_details_cache = details
         _database_details_cached_at = now
         return dict(details)
 
 
-async def _check_database(*, include_details: bool = True) -> dict[str, Any]:
+async def _check_database(
+    *,
+    include_details: bool = True,
+    request: Request | None = None,
+) -> dict[str, Any]:
     """Check database connectivity and health."""
     start = time.perf_counter()
     try:
-        db = get_session_manager()
+        db = resolve_api_runtime(request).db
         db_conn = db.database
         cursor = db_conn.execute_sql("SELECT 1")
         cursor.fetchone()
@@ -98,7 +101,7 @@ async def _check_database(*, include_details: bool = True) -> dict[str, Any]:
             "latency_ms": round(latency_ms, 2),
         }
         if include_details:
-            result.update(await _get_cached_database_details())
+            result.update(await _get_cached_database_details(request))
         return result
     except Exception as exc:
         latency_ms = (time.perf_counter() - start) * 1000
@@ -201,7 +204,7 @@ def _get_circuit_breaker_states() -> dict[str, Any]:
 
 
 @router.get("/health/detailed")
-async def detailed_health_check():
+async def detailed_health_check(request: Request):
     """Comprehensive health check with component status.
 
     Returns detailed status of all system components:
@@ -216,7 +219,7 @@ async def detailed_health_check():
     try:
         async with asyncio.timeout(10.0):
             db_status, redis_status, scraper_status = await asyncio.gather(
-                _check_database(include_details=True),
+                _check_database(include_details=True, request=request),
                 _check_redis(),
                 _check_scraper(),
                 return_exceptions=True,

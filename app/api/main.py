@@ -16,8 +16,6 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError as PydanticValidationError
 
-from app.api.dependencies import search_resources
-from app.api.dependencies.database import get_session_manager
 from app.api.error_handlers import (
     api_exception_handler,
     database_exception_handler,
@@ -49,25 +47,26 @@ from app.api.routers import (
 from app.config import Config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
+from app.di.api import build_api_runtime, close_api_runtime, set_current_api_runtime
 from app.infrastructure.redis import close_redis
 
 logger = get_logger(__name__)
-_db = None
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
-    global _db
+async def lifespan(app: FastAPI):
+    runtime = None
     try:
-        _db = get_session_manager()
-        _db.database.connect(reuse_if_open=True)
-        logger.info("database_initialized", extra={"db_path": _db.path})
+        runtime = await build_api_runtime()
+        app.state.runtime = runtime
+        set_current_api_runtime(runtime)
+        logger.info("database_initialized", extra={"db_path": runtime.db.path})
         yield
     finally:
-        await search_resources.shutdown_chroma_search_resources()
         await close_redis()
-        if _db is not None:
-            _db.database.close()
+        if runtime is not None:
+            await close_api_runtime(runtime)
+            set_current_api_runtime(None)
             logger.info("database_closed")
 
 

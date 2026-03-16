@@ -12,25 +12,13 @@ import sys
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from app.adapters.content.scraper.factory import ContentScraperFactory
-from app.adapters.content.url_processor import URLProcessor
-from app.adapters.external.firecrawl_parser import FirecrawlClient
-from app.adapters.external.response_formatter import ResponseFormatter
-from app.adapters.llm import LLMClientFactory
-from app.adapters.telegram.command_processor import CommandProcessor
 from app.config import AppConfig, load_config
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
-from app.db.session import DatabaseSessionManager
-from app.di.container import Container
-from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
-    SqliteAuditLogRepositoryAdapter,
-)
-from app.services.topic_search import LocalTopicSearchService, TopicSearchService
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
+from app.di.database import build_runtime_database
+from app.di.shared import close_runtime_resources
+from app.di.telegram import build_summary_cli_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -119,19 +107,6 @@ class CLIMessage:
                 "username": self.from_user.username,
             },
         }
-
-
-class _SemaphoreFactory:
-    """Lazy semaphore factory mirroring the Telegram bot pattern."""
-
-    def __init__(self, permits: int) -> None:
-        self._permits = max(1, permits)
-        self._sem: asyncio.Semaphore | None = None
-
-    def __call__(self) -> asyncio.Semaphore:
-        if self._sem is None:
-            self._sem = asyncio.Semaphore(self._permits)
-        return self._sem
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -257,36 +232,6 @@ def _prepare_config(args: argparse.Namespace) -> AppConfig:
     return cfg
 
 
-_audit_tasks: set[asyncio.Task] = set()
-
-
-def _build_audit(db: DatabaseSessionManager) -> Callable[[str, str, dict[str, Any]], None]:
-    """Create an audit callback compatible with bot components."""
-    repo = SqliteAuditLogRepositoryAdapter(db)
-
-    def audit(level: str, event: str, details: dict[str, Any]) -> None:
-        try:
-            payload: dict[str, Any]
-            payload = details if isinstance(details, dict) else {"details": str(details)}
-            # Using fire-and-forget task for CLI audit
-            task = asyncio.create_task(
-                repo.async_insert_audit_log(log_level=level, event_type=event, details=payload)
-            )
-            _audit_tasks.add(task)
-            task.add_done_callback(_audit_tasks.discard)
-        except Exception as exc:
-            logger.debug(
-                "audit_log_failed",
-                extra={
-                    "event": event,
-                    "error": str(exc),
-                    "error_type": type(exc).__name__,
-                },
-            )
-
-    return audit
-
-
 async def run_summary_cli(args: argparse.Namespace) -> None:
     """Execute the /summary flow based on parsed CLI arguments."""
     text = _resolve_text(args)
@@ -294,111 +239,8 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
 
     setup_json_logging(cfg.runtime.log_level)
 
-    db = DatabaseSessionManager(
-        path=cfg.runtime.db_path,
-        operation_timeout=cfg.database.operation_timeout,
-        max_retries=cfg.database.max_retries,
-        json_max_size=cfg.database.json_max_size,
-        json_max_depth=cfg.database.json_max_depth,
-        json_max_array_length=cfg.database.json_max_array_length,
-        json_max_dict_keys=cfg.database.json_max_dict_keys,
-    )
-    db.migrate()
-
-    audit = _build_audit(db)
-    max_concurrency = cfg.runtime.max_concurrent_calls
-    sem_factory = _SemaphoreFactory(max_concurrency)
-
-    _ui_lang = cfg.runtime.preferred_lang
-    if _ui_lang == "auto":
-        _ui_lang = "en"
-    response_formatter = ResponseFormatter(
-        telegram_limits=cfg.telegram_limits,
-        telegram_config=cfg.telegram,
-        lang=_ui_lang,
-    )
-
-    firecrawl: FirecrawlClient | None = None
-    if cfg.firecrawl.api_key:
-        firecrawl = FirecrawlClient(
-            api_key=cfg.firecrawl.api_key,
-            timeout_sec=cfg.firecrawl.timeout_sec,
-            audit=audit,
-            debug_payloads=cfg.runtime.debug_payloads,
-            log_truncate_length=cfg.runtime.log_truncate_length,
-            max_connections=cfg.firecrawl.max_connections,
-            max_keepalive_connections=cfg.firecrawl.max_keepalive_connections,
-            keepalive_expiry=cfg.firecrawl.keepalive_expiry,
-            credit_warning_threshold=cfg.firecrawl.credit_warning_threshold,
-            credit_critical_threshold=cfg.firecrawl.credit_critical_threshold,
-            max_age_seconds=cfg.firecrawl.max_age_seconds,
-            remove_base64_images=cfg.firecrawl.remove_base64_images,
-            block_ads=cfg.firecrawl.block_ads,
-            skip_tls_verification=cfg.firecrawl.skip_tls_verification,
-            include_markdown_format=cfg.firecrawl.include_markdown_format,
-            include_html_format=cfg.firecrawl.include_html_format,
-            include_links_format=cfg.firecrawl.include_links_format,
-            include_summary_format=cfg.firecrawl.include_summary_format,
-            include_images_format=cfg.firecrawl.include_images_format,
-            enable_screenshot_format=cfg.firecrawl.enable_screenshot_format,
-            screenshot_full_page=cfg.firecrawl.screenshot_full_page,
-            screenshot_quality=cfg.firecrawl.screenshot_quality,
-            screenshot_viewport_width=cfg.firecrawl.screenshot_viewport_width,
-            screenshot_viewport_height=cfg.firecrawl.screenshot_viewport_height,
-            json_prompt=cfg.firecrawl.json_prompt,
-            json_schema=cfg.firecrawl.json_schema,
-            wait_for_ms=cfg.firecrawl.wait_for_ms,
-        )
-
-    # Create LLM client using factory based on LLM_PROVIDER config
-    llm_client = LLMClientFactory.create_from_config(cfg, audit=audit)
-
-    # Create topic search service for web search enrichment if enabled
-    topic_search = None
-    if cfg.web_search.enabled and firecrawl is not None:
-        topic_search = TopicSearchService(
-            firecrawl=firecrawl,
-            max_results=5,
-            audit_func=audit,
-        )
-        logger.info("web_search_enabled_in_cli", extra={"max_queries": cfg.web_search.max_queries})
-
-    # Build multi-provider scraper chain for content extraction
-    scraper_chain = ContentScraperFactory.create_from_config(cfg, audit=audit)
-
-    url_processor = URLProcessor(
-        cfg=cfg,
-        db=db,
-        firecrawl=scraper_chain,
-        openrouter=llm_client,  # URLProcessor still uses 'openrouter' param name for compatibility
-        response_formatter=response_formatter,
-        audit_func=audit,
-        sem=sem_factory,
-        topic_search=topic_search,
-    )
-
-    # Mirror production architecture wiring: always provide DI container.
-    local_searcher = LocalTopicSearchService(
-        db=db,
-        max_results=cfg.runtime.topic_search_max_results,
-        audit_func=audit,
-    )
-    container = Container(
-        database=db,
-        topic_search_service=local_searcher,
-    )
-    container.wire_event_handlers_auto()
-
-    command_processor = CommandProcessor(
-        cfg=cfg,
-        response_formatter=response_formatter,
-        db=db,
-        url_processor=url_processor,
-        audit_func=audit,
-        topic_searcher=topic_search,
-        local_searcher=local_searcher,
-        container=container,
-    )
+    db = build_runtime_database(cfg, migrate=True)
+    runtime = build_summary_cli_runtime(cfg, db)
 
     message = CLIMessage(text=text, json_output_path=args.json_path)
 
@@ -406,7 +248,7 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
     logger.info("cli_summary_start", extra={"cid": correlation_id})
 
     try:
-        _next_action, _ = await command_processor.handle_summarize_command(
+        _next_action, _ = await runtime.command_processor.handle_summarize_command(
             message=message,
             text=text,
             uid=message.from_user.id,
@@ -416,9 +258,13 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
         )
 
     finally:
-        if firecrawl is not None:
-            await firecrawl.aclose()
-        await llm_client.aclose()
+        await close_runtime_resources(
+            runtime.url_processor,
+            runtime.search.vector_store,
+            runtime.search.embedding_service,
+            runtime.core.firecrawl_client,
+            runtime.core.llm_client,
+        )
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -25,11 +25,12 @@ import os
 import re
 import sys
 import time
-from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+
+import app.di.mcp as mcp_di
 
 # ---------------------------------------------------------------------------
 # Logging — MCP stdio transport requires NO stdout writes, so we direct
@@ -43,160 +44,87 @@ logging.basicConfig(
 logger = logging.getLogger("bsr.mcp")
 
 # ---------------------------------------------------------------------------
-# Database bootstrap — we initialise the Peewee proxy *once* at import time
-# so that every tool handler can query the DB without re-connecting.
+# Database bootstrap.
 # ---------------------------------------------------------------------------
 _DB_PATH = os.getenv("DB_PATH", "/data/app.db")
-
-
-def _sqlite_read_only_uri(path: str) -> str:
-    """Build a file URI that forces SQLite read-only mode."""
-    resolved = Path(path).expanduser().resolve()
-    return f"{resolved.as_uri()}?mode=ro"
+_runtime: Any = None
+_scope_user_id: int | None = None
+_CHROMA_RETRY_INTERVAL_SEC = mcp_di.CHROMA_RETRY_INTERVAL_SEC
+_LOCAL_VECTOR_RETRY_INTERVAL_SEC = mcp_di.LOCAL_VECTOR_RETRY_INTERVAL_SEC
 
 
 def _init_database(db_path: str | None = None) -> None:
-    """Connect Peewee proxy to the SQLite database file."""
-    import peewee
+    """Initialize the shared MCP runtime and bind the read-only DB proxy."""
+    global _runtime
+    _runtime = mcp_di.build_mcp_runtime(db_path=db_path or _DB_PATH, user_id=_scope_user_id)
+    _sync_runtime_aliases()
+    logger.info("Database connected (read-only): %s", _runtime.db_path)
 
-    from app.db.models import database_proxy
 
-    path = db_path or _DB_PATH
-    sqlite_uri = _sqlite_read_only_uri(path)
-    db = peewee.SqliteDatabase(
-        sqlite_uri,
-        uri=True,
-        pragmas={
-            "foreign_keys": 1,
-            "busy_timeout": 5000,
-        },
-    )
-    database_proxy.initialize(db)
-    db.connect(reuse_if_open=True)
-    logger.info("Database connected (read-only): %s", path)
+def _ensure_runtime(db_path: str | None = None) -> Any:
+    if _runtime is None:
+        _init_database(db_path)
+    return _runtime
+
+
+def _sync_runtime_aliases() -> None:
+    """Keep legacy module globals aligned with the runtime-backed state."""
+    global _MCP_USER_ID
+    global _chroma_service, _chroma_last_failed_at, _chroma_init_lock
+    global _local_vector_service, _local_vector_last_failed_at, _local_vector_init_lock
+
+    if _runtime is None:
+        _MCP_USER_ID = _scope_user_id
+        _chroma_service = None
+        _chroma_last_failed_at = None
+        _chroma_init_lock = None
+        _local_vector_service = None
+        _local_vector_last_failed_at = None
+        _local_vector_init_lock = None
+        return
+
+    _MCP_USER_ID = _runtime.scope.user_id
+    _chroma_service = _runtime.chroma_state.service
+    _chroma_last_failed_at = _runtime.chroma_state.last_failed_at
+    _chroma_init_lock = _runtime.chroma_state.init_lock
+    _local_vector_service = _runtime.local_vector_state.service
+    _local_vector_last_failed_at = _runtime.local_vector_state.last_failed_at
+    _local_vector_init_lock = _runtime.local_vector_state.init_lock
 
 
 # ---------------------------------------------------------------------------
-# ChromaDB / semantic search — lazy singleton, optional (graceful degradation)
+# ChromaDB / semantic search state is owned by the MCP runtime.
 # ---------------------------------------------------------------------------
 _chroma_service: Any = None
 _chroma_last_failed_at: float | None = None
-_CHROMA_RETRY_INTERVAL_SEC = 60.0
 _chroma_init_lock: asyncio.Lock | None = None
 _local_vector_service: Any = None
 _local_vector_last_failed_at: float | None = None
-_LOCAL_VECTOR_RETRY_INTERVAL_SEC = 60.0
 _local_vector_init_lock: asyncio.Lock | None = None
 
 
 async def _get_chroma_service() -> Any:
-    """Lazily initialise and return the ChromaVectorSearchService singleton.
-
-    Returns None if ChromaDB is unavailable (the semantic_search tool
-    will degrade to a helpful error message).
-    """
-    global _chroma_service, _chroma_last_failed_at, _chroma_init_lock
-
-    if _chroma_service is not None:
-        return _chroma_service
-    now = time.monotonic()
-    if (
-        _chroma_last_failed_at is not None
-        and (now - _chroma_last_failed_at) < _CHROMA_RETRY_INTERVAL_SEC
-    ):
-        return None
-
-    if _chroma_init_lock is None:
-        _chroma_init_lock = asyncio.Lock()
-
-    async with _chroma_init_lock:
-        if _chroma_service is not None:
-            return _chroma_service
-
-        now = time.monotonic()
-        if (
-            _chroma_last_failed_at is not None
-            and (now - _chroma_last_failed_at) < _CHROMA_RETRY_INTERVAL_SEC
-        ):
-            return None
-
-        try:
-            from app.config import load_config
-            from app.infrastructure.vector.chroma_store import ChromaVectorStore
-            from app.services.chroma_vector_search_service import ChromaVectorSearchService
-            from app.services.embedding_factory import create_embedding_service
-
-            app_cfg = load_config(allow_stub_telegram=True)
-            cfg = app_cfg.vector_store
-            embedding = create_embedding_service(app_cfg.embedding)
-            store = ChromaVectorStore(
-                host=cfg.host,
-                auth_token=cfg.auth_token,
-                environment=cfg.environment,
-                user_scope=cfg.user_scope,
-                collection_version=cfg.collection_version,
-                required=cfg.required,
-                connection_timeout=cfg.connection_timeout,
-            )
-            _chroma_service = ChromaVectorSearchService(
-                vector_store=store,
-                embedding_service=embedding,
-                default_top_k=100,
-            )
-            _chroma_last_failed_at = None
-            logger.info("ChromaDB search service initialised")
-            return _chroma_service
-        except Exception:
-            _chroma_last_failed_at = time.monotonic()
-            logger.warning(
-                "ChromaDB unavailable — semantic_search tool will be disabled",
-                exc_info=True,
-            )
-            return None
+    """Return the runtime-owned Chroma search service."""
+    mcp_di.CHROMA_RETRY_INTERVAL_SEC = _CHROMA_RETRY_INTERVAL_SEC
+    service = await mcp_di.get_mcp_chroma_service(_ensure_runtime())
+    _sync_runtime_aliases()
+    if service is None:
+        logger.warning("ChromaDB unavailable — semantic_search tool will be disabled")
+    else:
+        logger.info("ChromaDB search service initialised")
+    return service
 
 
 async def _get_local_vector_service() -> Any:
-    """Lazily initialize local embedding service for semantic fallback search."""
-    global _local_vector_service, _local_vector_last_failed_at, _local_vector_init_lock
-
-    if _local_vector_service is not None:
-        return _local_vector_service
-
-    now = time.monotonic()
-    if (
-        _local_vector_last_failed_at is not None
-        and (now - _local_vector_last_failed_at) < _LOCAL_VECTOR_RETRY_INTERVAL_SEC
-    ):
-        return None
-
-    if _local_vector_init_lock is None:
-        _local_vector_init_lock = asyncio.Lock()
-
-    async with _local_vector_init_lock:
-        if _local_vector_service is not None:
-            return _local_vector_service
-
-        now = time.monotonic()
-        if (
-            _local_vector_last_failed_at is not None
-            and (now - _local_vector_last_failed_at) < _LOCAL_VECTOR_RETRY_INTERVAL_SEC
-        ):
-            return None
-
-        try:
-            from app.services.embedding_factory import create_embedding_service
-
-            _local_vector_service = create_embedding_service()
-            _local_vector_last_failed_at = None
-            logger.info("Local vector fallback service initialised")
-            return _local_vector_service
-        except Exception:
-            _local_vector_last_failed_at = time.monotonic()
-            logger.warning(
-                "Local vector fallback unavailable",
-                exc_info=True,
-            )
-            return None
+    """Return the runtime-owned local embedding fallback service."""
+    mcp_di.LOCAL_VECTOR_RETRY_INTERVAL_SEC = _LOCAL_VECTOR_RETRY_INTERVAL_SEC
+    service = await mcp_di.get_mcp_local_vector_service(_ensure_runtime())
+    _sync_runtime_aliases()
+    if service is None:
+        logger.warning("Local vector fallback unavailable")
+    else:
+        logger.info("Local vector fallback service initialised")
+    return service
 
 
 # ---------------------------------------------------------------------------
@@ -221,8 +149,11 @@ _MCP_USER_ID: int | None = None
 
 def _set_user_scope(user_id: int | None) -> None:
     """Configure optional MCP user scope for all DB queries."""
-    global _MCP_USER_ID
-    _MCP_USER_ID = user_id
+    global _scope_user_id
+    _scope_user_id = user_id
+    if _runtime is not None:
+        mcp_di.set_mcp_user_scope(_runtime, user_id)
+    _sync_runtime_aliases()
 
 
 def _request_scope_filters(request_model: Any) -> list[Any]:

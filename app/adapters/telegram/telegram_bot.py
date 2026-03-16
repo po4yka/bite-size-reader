@@ -19,6 +19,7 @@ from app.adapters.telegram.lifecycle_manager import TelegramLifecycleManager
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id, setup_json_logging
 from app.core.time_utils import UTC, format_iso_z
+from app.di.telegram import build_telegram_runtime
 
 try:
     from pyrogram import Client as _PyroClient, filters as _pyro_filters
@@ -53,9 +54,10 @@ class TelegramBot:
     url_processor: Any = field(default=None, init=False, repr=False)
     forward_processor: Any = field(default=None, init=False, repr=False)
     message_handler: Any = field(default=None, init=False, repr=False)
+    _ext_sem_obj: asyncio.Semaphore | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        """Initialize bot components using factory pattern."""
+        """Initialize bot components using the shared DI runtime."""
         setup_json_logging(self.cfg.runtime.log_level)
         logger.info(
             "bot_init",
@@ -72,33 +74,21 @@ class TelegramBot:
             filters_obj=_PYRO_FILTERS,
         )
 
-        # Initialize semaphore for concurrency control
-        self._ext_sem_size = max(1, self.cfg.runtime.max_concurrent_calls)
-        self._ext_sem_obj: asyncio.Semaphore | None = None
-
+        self._audit_tasks: set[asyncio.Task[Any]] = set()
         self.audit_repo = create_audit_log_repository(self.db)
-
-        # Create external clients using factory
-        from app.adapters.telegram.bot_factory import BotFactory
-
-        clients = BotFactory.create_external_clients(
-            cfg=self.cfg,
-            audit_func=self._audit,
-        )
-        self._firecrawl = clients.firecrawl
-        self._llm_client = clients.llm_client
-
-        # Create all bot components using factory
-        components = BotFactory.create_components(
+        components = build_telegram_runtime(
             cfg=self.cfg,
             db=self.db,
-            clients=clients,
-            audit_func=self._audit,
             safe_reply_func=self._safe_reply,
             reply_json_func=self._reply_json,
-            sem_func=self._sem,
             db_write_queue=self.db_write_queue,
+            audit_task_registry=self._audit_tasks,
         )
+        self._runtime = components
+        self._firecrawl = components.core.firecrawl_client
+        self._llm_client = components.core.llm_client
+        self._ext_sem_obj = None
+        self._ext_sem_size = max(1, self.cfg.runtime.max_concurrent_calls)
 
         self._component_wiring.bind_runtime_components(
             bot=self,
@@ -123,6 +113,9 @@ class TelegramBot:
         This avoids creating an asyncio.Semaphore at import/constructor time in tests
         that instantiate the bot without a running event loop.
         """
+        runtime_sem_factory = getattr(getattr(self, "_runtime", None), "core", None)
+        if runtime_sem_factory is not None:
+            return self._runtime.core.semaphore_factory()
         if self._ext_sem_obj is None:
             self._ext_sem_obj = asyncio.Semaphore(self._ext_sem_size)
         return self._ext_sem_obj
@@ -173,7 +166,7 @@ class TelegramBot:
             task = asyncio.create_task(_do_audit())
             # Keep a set of strong references to tasks to avoid them being GC'd
             if not hasattr(self, "_audit_tasks"):
-                self._audit_tasks: set[asyncio.Task] = set()
+                self._audit_tasks = set()
             self._audit_tasks.add(task)
             task.add_done_callback(self._audit_tasks.discard)
         except RuntimeError as exc:

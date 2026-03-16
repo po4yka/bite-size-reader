@@ -33,17 +33,15 @@ def mcp_test_db(tmp_path):
 @pytest.fixture(autouse=True)
 def reset_mcp_state():
     """Reset global MCP server state between tests."""
+    mcp_server._runtime = None
+    mcp_server._scope_user_id = None
     mcp_server._set_user_scope(None)
-    mcp_server._chroma_service = None
-    mcp_server._chroma_last_failed_at = None
-    mcp_server._local_vector_service = None
-    mcp_server._local_vector_last_failed_at = None
+    mcp_server._sync_runtime_aliases()
     yield
+    mcp_server._runtime = None
+    mcp_server._scope_user_id = None
     mcp_server._set_user_scope(None)
-    mcp_server._chroma_service = None
-    mcp_server._chroma_last_failed_at = None
-    mcp_server._local_vector_service = None
-    mcp_server._local_vector_last_failed_at = None
+    mcp_server._sync_runtime_aliases()
 
 
 def _insert_summary(
@@ -229,8 +227,6 @@ def test_init_database_opens_sqlite_read_only(tmp_path: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_get_chroma_service_retries_after_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
-    import app.config as app_config
-
     clock = {"now": 0.0}
     attempts = {"count": 0}
 
@@ -241,8 +237,8 @@ async def test_get_chroma_service_retries_after_backoff(monkeypatch: pytest.Monk
         attempts["count"] += 1
         raise RuntimeError("chroma down")
 
-    monkeypatch.setattr(mcp_server.time, "monotonic", _fake_monotonic)
-    monkeypatch.setattr(app_config, "load_config", _failing_load_config)
+    monkeypatch.setattr(mcp_server.mcp_di.time, "monotonic", _fake_monotonic)
+    monkeypatch.setattr(mcp_server.mcp_di, "load_config", _failing_load_config)
     monkeypatch.setattr(mcp_server, "_CHROMA_RETRY_INTERVAL_SEC", 60.0)
 
     assert await mcp_server._get_chroma_service() is None
@@ -261,7 +257,6 @@ async def test_get_chroma_service_retries_after_backoff(monkeypatch: pytest.Monk
 async def test_get_chroma_service_forwards_required_and_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import app.config as app_config
     import app.infrastructure.vector.chroma_store as chroma_store_module
     import app.services.chroma_vector_search_service as chroma_service_module
     import app.services.embedding_factory as embedding_factory_module
@@ -277,7 +272,7 @@ async def test_get_chroma_service_forwards_required_and_timeout(
             self._vector_store = kwargs["vector_store"]
 
     monkeypatch.setattr(
-        app_config,
+        mcp_server.mcp_di,
         "load_config",
         lambda *_args, **_kwargs: SimpleNamespace(
             vector_store=SimpleNamespace(

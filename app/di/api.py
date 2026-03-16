@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING, Any
+
+from app.adapters.content.url_processor import URLProcessor
+from app.api.background_processor import BackgroundProcessor
+from app.api.services.sync_service import SyncService
+from app.application.use_cases.search_read_model import SearchReadModelUseCase
+from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
+from app.config import load_config
+from app.core.logging_utils import get_logger
+from app.di.database import build_runtime_database
+from app.di.search import build_search_dependencies
+from app.di.shared import build_async_audit_sink, build_core_dependencies, close_runtime_resources
+from app.di.types import ApiRuntime
+from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+    SqliteCrawlResultRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
+    SqliteLLMRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    SqliteTopicSearchRepositoryAdapter,
+)
+from app.infrastructure.redis import get_redis
+
+if TYPE_CHECKING:
+    from fastapi import Request
+
+    from app.config import AppConfig
+    from app.db.session import DatabaseSessionManager
+
+logger = get_logger(__name__)
+
+_current_runtime: ApiRuntime | None = None
+_runtime_lock = asyncio.Lock()
+
+
+async def build_api_runtime(
+    cfg: AppConfig | None = None,
+    *,
+    db: DatabaseSessionManager | None = None,
+    redis_client: Any | None = None,
+) -> ApiRuntime:
+    """Build the shared API runtime graph."""
+    app_cfg = cfg or load_config(allow_stub_telegram=True)
+    database = db or build_runtime_database(app_cfg, connect=True, migrate=True)
+    audit_sink = build_async_audit_sink(database)
+    core = build_core_dependencies(app_cfg, database, audit_sink=audit_sink)
+    search = build_search_dependencies(
+        app_cfg,
+        database,
+        llm_client=core.llm_client,
+        audit_func=core.audit_sink,
+        firecrawl_client=core.firecrawl_client,
+    )
+    redis = redis_client if redis_client is not None else await get_redis(app_cfg)
+    url_processor = URLProcessor(
+        cfg=app_cfg,
+        db=database,
+        firecrawl=core.scraper_chain,
+        openrouter=core.llm_client,
+        response_formatter=core.response_formatter,
+        audit_func=core.audit_sink,
+        sem=core.semaphore_factory,
+        topic_search=search.topic_searcher if app_cfg.web_search.enabled else None,
+    )
+    background_processor = BackgroundProcessor(
+        cfg=app_cfg,
+        db=database,
+        url_processor=url_processor,
+        redis=redis,
+        semaphore=core.semaphore_factory(),
+        audit_func=core.audit_sink,
+    )
+    summary_read_model_use_case = SummaryReadModelUseCase(
+        summary_repository=SqliteSummaryRepositoryAdapter(database),
+        request_repository=SqliteRequestRepositoryAdapter(database),
+        crawl_result_repository=SqliteCrawlResultRepositoryAdapter(database),
+        llm_repository=SqliteLLMRepositoryAdapter(database),
+    )
+    search_read_model_use_case = SearchReadModelUseCase(
+        topic_search_repository=SqliteTopicSearchRepositoryAdapter(database),
+        request_repository=SqliteRequestRepositoryAdapter(database),
+        summary_repository=SqliteSummaryRepositoryAdapter(database),
+    )
+    sync_service = SyncService(app_cfg, database)
+    return ApiRuntime(
+        cfg=app_cfg,
+        db=database,
+        redis_client=redis,
+        core=core,
+        search=search,
+        background_processor=background_processor,
+        summary_read_model_use_case=summary_read_model_use_case,
+        search_read_model_use_case=search_read_model_use_case,
+        sync_service=sync_service,
+    )
+
+
+async def build_background_processor(
+    cfg: AppConfig | None = None,
+    *,
+    db: DatabaseSessionManager | None = None,
+    redis_client: Any | None = None,
+) -> BackgroundProcessor:
+    """Compatibility helper for tests that need only the background processor."""
+    runtime = await build_api_runtime(cfg, db=db, redis_client=redis_client)
+    return runtime.background_processor
+
+
+async def get_or_create_api_runtime() -> ApiRuntime:
+    """Get the process-wide API runtime, creating it if needed."""
+    global _current_runtime
+    if _current_runtime is not None:
+        return _current_runtime
+
+    async with _runtime_lock:
+        if _current_runtime is not None:
+            return _current_runtime
+        _current_runtime = await build_api_runtime()
+        return _current_runtime
+
+
+def get_current_api_runtime() -> ApiRuntime:
+    """Return the active API runtime, requiring explicit initialization."""
+    if _current_runtime is None:
+        msg = "API runtime is not initialized"
+        raise RuntimeError(msg)
+    return _current_runtime
+
+
+def set_current_api_runtime(runtime: ApiRuntime | None) -> None:
+    global _current_runtime
+    _current_runtime = runtime
+
+
+def resolve_api_runtime(request: Request | None = None) -> ApiRuntime:
+    """Resolve runtime from FastAPI request state or the process-global cache."""
+    if request is not None:
+        runtime = getattr(request.app.state, "runtime", None)
+        if runtime is not None:
+            return runtime
+    return get_current_api_runtime()
+
+
+async def close_api_runtime(runtime: ApiRuntime) -> None:
+    """Release resources owned by the API runtime."""
+    await close_runtime_resources(
+        runtime.background_processor.url_processor,
+        runtime.search.vector_store,
+        runtime.search.embedding_service,
+        runtime.core.firecrawl_client,
+        runtime.core.llm_client,
+    )
+    runtime.db.database.close()
+    logger.info("api_runtime_closed")

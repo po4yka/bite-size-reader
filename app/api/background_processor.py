@@ -6,7 +6,7 @@ import asyncio
 import json
 import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.summarization_models import (
@@ -14,19 +14,18 @@ from app.adapters.content.summarization_models import (
     PureSummaryRequest,
 )
 from app.adapters.content.url_processor import URLProcessor, _get_system_prompt
-from app.config import AppConfig, load_config
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import choose_language, detect_language
 from app.core.logging_utils import get_logger, log_exception
 from app.core.url_utils import normalize_url
-from app.db.session import DatabaseSessionManager
+from app.di.database import build_runtime_database
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
-from app.infrastructure.redis import get_redis, redis_key
+from app.infrastructure.redis import redis_key
 from app.observability.failure_observability import (
     REASON_UNKNOWN_EXTRACTION_FAILURE,
     persist_request_failure,
@@ -34,6 +33,9 @@ from app.observability.failure_observability import (
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+
+    from app.config import AppConfig
+    from app.db.session import DatabaseSessionManager
 
 logger = get_logger(__name__)
 
@@ -317,15 +319,11 @@ class BackgroundProcessor:
         if not db_path:
             return self.db, self.url_processor
 
-        override_db = DatabaseSessionManager(
-            path=db_path,
-            operation_timeout=self.cfg.database.operation_timeout,
-            max_retries=self.cfg.database.max_retries,
-            json_max_size=self.cfg.database.json_max_size,
-            json_max_depth=self.cfg.database.json_max_depth,
-            json_max_array_length=self.cfg.database.json_max_array_length,
-            json_max_dict_keys=self.cfg.database.json_max_dict_keys,
+        override_cfg = replace(
+            self.cfg,
+            runtime=replace(self.cfg.runtime, db_path=db_path),
         )
+        override_db = build_runtime_database(override_cfg)
 
         override_processor = URLProcessor(
             cfg=self.cfg,
@@ -722,12 +720,9 @@ async def _get_default_processor() -> BackgroundProcessor:
     async with _default_lock:
         if _default_processor:
             return _default_processor
+        from app.di.api import get_current_api_runtime
 
-        cfg = load_config()
-        redis_client = await get_redis(cfg)
-        from app.di.background import build_background_processor
-
-        _default_processor = await build_background_processor(cfg, redis_client=redis_client)
+        _default_processor = get_current_api_runtime().background_processor
         return _default_processor
 
 

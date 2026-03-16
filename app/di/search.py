@@ -4,8 +4,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.di.types import SearchDependencies
-from app.infrastructure.vector.chroma_store import ChromaVectorStore
-from app.services.chroma_vector_search_service import ChromaVectorSearchService
 from app.services.embedding_factory import create_embedding_service
 from app.services.hybrid_search_service import HybridSearchService
 from app.services.query_expansion_service import QueryExpansionService
@@ -54,9 +52,11 @@ def build_search_dependencies(
 ) -> SearchDependencies:
     """Build the shared local, vector, and hybrid search stack."""
     max_results = topic_search_max_results or get_topic_search_limit(cfg)
-    vector_store: ChromaVectorStore | None = None
+    vector_store: Any | None = None
 
     try:
+        from app.infrastructure.vector.chroma_store import ChromaVectorStore
+
         vector_store = ChromaVectorStore(
             host=cfg.vector_store.host,
             auth_token=cfg.vector_store.auth_token,
@@ -100,8 +100,10 @@ def build_search_dependencies(
     )
     query_expansion_service = QueryExpansionService(max_expansions=5, use_synonyms=True)
 
-    chroma_vector_search_service: ChromaVectorSearchService | None = None
+    chroma_vector_search_service: Any | None = None
     if vector_store is not None:
+        from app.services.chroma_vector_search_service import ChromaVectorSearchService
+
         chroma_vector_search_service = ChromaVectorSearchService(
             vector_store=vector_store,
             embedding_service=embedding_service,

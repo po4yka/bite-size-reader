@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.repository_ports import create_batch_session_repository
 
 if TYPE_CHECKING:
-    from app.adapters.telegram.bot_factory import BotComponents
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.di.types import TelegramRuntime
 
 
 class TelegramComponentWiring:
@@ -36,7 +36,7 @@ class TelegramComponentWiring:
         self,
         *,
         bot: Any,
-        components: BotComponents,
+        components: TelegramRuntime,
         llm_client: Any,
     ) -> None:
         """Assign components to bot and wire cross-component dependencies."""
@@ -46,13 +46,13 @@ class TelegramComponentWiring:
         bot.url_processor = components.url_processor
         bot.forward_processor = components.forward_processor
         bot.message_handler = components.message_handler
-        bot.topic_searcher = components.topic_searcher
-        bot.local_searcher = components.local_searcher
-        bot.embedding_service = components.embedding_service
-        bot.vector_search_service = components.chroma_vector_search_service
-        bot.query_expansion_service = components.query_expansion_service
-        bot.hybrid_search_service = components.hybrid_search_service
-        bot.vector_store = components.vector_store
+        bot.topic_searcher = components.search.topic_searcher
+        bot.local_searcher = components.search.local_searcher
+        bot.embedding_service = components.search.embedding_service
+        bot.vector_search_service = components.search.chroma_vector_search_service
+        bot.query_expansion_service = components.search.query_expansion_service
+        bot.hybrid_search_service = components.search.hybrid_search_service
+        bot.vector_store = components.search.vector_store
         bot._container = components.container
 
         bot.message_handler.command_processor.url_processor = bot.url_processor

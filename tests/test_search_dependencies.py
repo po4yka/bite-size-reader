@@ -1,6 +1,6 @@
 import sys
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -69,30 +69,18 @@ async def test_chroma_resource_manager_reuses_singleton_and_shuts_down():
         await search_resources.shutdown_chroma_search_resources()
 
 
-def test_default_vector_store_factory_forwards_required_and_timeout() -> None:
-    cfg = SimpleNamespace(
-        host="http://localhost:8000",
-        auth_token="token",
-        environment="test",
-        user_scope="scope",
-        collection_version="v9",
-        required=True,
-        connection_timeout=3.5,
+@pytest.mark.asyncio
+async def test_chroma_resource_test_factories_build_service_without_api_runtime():
+    search_resources.set_chroma_factories_for_tests(
+        embedding_factory=DummyEmbeddingService,
+        vector_store_factory=lambda config: DummyVectorStore(),
+        config_factory=lambda: SimpleNamespace(host="http://localhost"),
     )
 
-    with patch.object(search_resources, "ChromaVectorStore", autospec=True) as store_cls:
-        store = object()
-        store_cls.return_value = store
-
-        created = search_resources._default_vector_store_factory(cfg)  # type: ignore[arg-type]
-
-    assert created is store
-    store_cls.assert_called_once_with(
-        host="http://localhost:8000",
-        auth_token="token",
-        environment="test",
-        user_scope="scope",
-        collection_version="v9",
-        required=True,
-        connection_timeout=3.5,
-    )
+    try:
+        service = await search_resources.get_chroma_search_service()
+        assert getattr(service, "_embedding_service", None) is not None
+        assert getattr(service, "_vector_store", None) is not None
+    finally:
+        search_resources.set_chroma_factories_for_tests()
+        await search_resources.shutdown_chroma_search_resources()

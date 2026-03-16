@@ -1,8 +1,7 @@
 """Database synchronization endpoints for offline mobile support."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
-from app.api.dependencies.database import get_session_manager
 from app.api.models.requests import SyncApplyRequest, SyncSessionRequest
 from app.api.models.responses import (
     DeltaSyncResponseData,
@@ -12,42 +11,25 @@ from app.api.models.responses import (
 )
 from app.api.routers.auth import get_current_user
 from app.api.services.sync_service import SyncService
-from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
-from app.db.session import DatabaseSessionManager
+from app.di.api import resolve_api_runtime
 
 logger = get_logger(__name__)
 router = APIRouter()
 
-_cfg: AppConfig | None = None
 
-
-def _get_cfg() -> AppConfig:
-    global _cfg
-    if _cfg is None:
-        _cfg = load_config(allow_stub_telegram=True)
-    return _cfg
-
-
-def _get_sync_service(
-    cfg: AppConfig | None = None,
-    session_manager: DatabaseSessionManager | None = None,
-) -> SyncService:
-    """Create a SyncService instance with proper dependencies."""
-    if cfg is None:
-        cfg = _get_cfg()
-    if session_manager is None:
-        session_manager = get_session_manager()
-    return SyncService(cfg, session_manager)
+def _get_sync_service(request: Request | None = None) -> SyncService:
+    """Resolve the shared sync service from the API runtime."""
+    return resolve_api_runtime(request).sync_service
 
 
 @router.post("/sessions")
 async def create_sync_session(
     body: SyncSessionRequest | None = None,
     user=Depends(get_current_user),
+    svc: SyncService = Depends(_get_sync_service),
 ) -> dict:
     """Create or resume a sync session."""
-    svc = _get_sync_service()
     session = await svc.start_session(
         user_id=user["user_id"],
         client_id=user.get("client_id"),
@@ -68,10 +50,9 @@ async def full_sync(
     session_id: str = Query(..., description="Sync session identifier"),
     limit: int | None = Query(None, ge=1, le=500),
     user=Depends(get_current_user),
+    svc: SyncService = Depends(_get_sync_service),
 ) -> dict:
     """Fetch full sync data in bounded chunks."""
-    cfg = _get_cfg()
-    svc = _get_sync_service(cfg)
     page: FullSyncResponseData = await svc.get_full(
         session_id=session_id,
         user_id=user["user_id"],
@@ -87,10 +68,9 @@ async def delta_sync(
     since: int = Query(..., ge=0, description="Last seen server_version cursor"),
     limit: int | None = Query(None, ge=1, le=500),
     user=Depends(get_current_user),
+    svc: SyncService = Depends(_get_sync_service),
 ) -> dict:
     """Fetch delta sync (created/updated/deleted) since a cursor."""
-    cfg = _get_cfg()
-    svc = _get_sync_service(cfg)
     page: DeltaSyncResponseData = await svc.get_delta(
         session_id=session_id,
         user_id=user["user_id"],
@@ -100,7 +80,7 @@ async def delta_sync(
     )
     pagination = {
         "total": len(page.created) + len(page.updated) + len(page.deleted),
-        "limit": limit or cfg.sync.default_limit,
+        "limit": limit or svc.cfg.sync.default_limit,
         "offset": 0,
         "has_more": page.has_more,
     }
@@ -111,9 +91,9 @@ async def delta_sync(
 async def apply_changes(
     payload: SyncApplyRequest,
     user=Depends(get_current_user),
+    svc: SyncService = Depends(_get_sync_service),
 ) -> dict:
     """Apply client-side changes with conflict detection."""
-    svc = _get_sync_service()
     result: SyncApplyResponseData = await svc.apply_changes(
         session_id=payload.session_id,
         user_id=user["user_id"],

@@ -10,6 +10,7 @@ sys.modules.setdefault("chromadb.config", MagicMock())
 sys.modules.setdefault("chromadb.errors", MagicMock())
 
 from app.api.dependencies import database as database_dependency
+from app.di import database as di_database
 
 
 def test_get_session_manager_runs_migrations_once(monkeypatch, tmp_path) -> None:
@@ -23,11 +24,16 @@ def test_get_session_manager_runs_migrations_once(monkeypatch, tmp_path) -> None
         def migrate(self) -> None:
             self.migrate_calls += 1
 
-    monkeypatch.setattr(database_dependency, "_session_manager", None)
-    monkeypatch.setattr(database_dependency, "DatabaseSessionManager", _FakeDatabaseSessionManager)
+    di_database.clear_cached_runtime_database()
     monkeypatch.setattr(
         database_dependency,
-        "_get_db_config",
+        "resolve_api_runtime",
+        lambda request=None: (_ for _ in ()).throw(RuntimeError("runtime not ready")),
+    )
+    monkeypatch.setattr(di_database, "DatabaseSessionManager", _FakeDatabaseSessionManager)
+    monkeypatch.setattr(
+        di_database,
+        "_get_env_db_config",
         lambda: SimpleNamespace(
             operation_timeout=30.0,
             max_retries=3,
@@ -47,4 +53,4 @@ def test_get_session_manager_runs_migrations_once(monkeypatch, tmp_path) -> None
     assert manager.migrate_calls == 1
     assert kwargs["path"] == str(tmp_path / "app.db")
 
-    monkeypatch.setattr(database_dependency, "_session_manager", None)
+    di_database.clear_cached_runtime_database()
