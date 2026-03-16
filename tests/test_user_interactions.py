@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 from unittest.mock import Mock
 
 import pytest
 
-from app.adapters.telegram.message_router import MessageRouter
+from app.adapters.telegram.routing.interactions import MessageInteractionRecorder
+from app.adapters.telegram.routing.models import PreparedRouteContext
 from app.config import AppConfig  # noqa: TC001 - used for type annotation
 from app.db.session import DatabaseSessionManager
 from app.db.user_interactions import (
@@ -24,8 +25,6 @@ from tests.conftest import make_test_app_config
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-
-    from app.adapters.telegram.url_handler import URLHandler
 
 
 def _make_config() -> AppConfig:
@@ -55,33 +54,30 @@ def db(tmp_path) -> Generator[DatabaseSessionManager]:
 
 def test_message_router_logs_interaction(db: DatabaseSessionManager) -> None:
     cfg = _make_config()
-
-    router = MessageRouter(
-        cfg=cfg,
-        db=db,
-        access_controller=Mock(),
-        command_processor=Mock(),
-        url_handler=cast("URLHandler", SimpleNamespace(url_processor=Mock())),
-        forward_processor=Mock(),
-        response_formatter=Mock(),
-        audit_func=lambda *args, **kwargs: None,
+    recorder = MessageInteractionRecorder(
+        user_repo=SqliteUserRepositoryAdapter(db),
+        structured_output_enabled=cfg.openrouter.enable_structured_outputs,
     )
 
     interaction_id = asyncio.run(
-        router._log_user_interaction(
-            user_id=42,
-            chat_id=99,
-            message_id=7,
-            interaction_type="command",
-            command="/start",
-            input_text="hello",
-            input_url=None,
-            has_forward=True,
-            forward_from_chat_id=555,
-            forward_from_chat_title="Forwarded",
-            forward_from_message_id=321,
-            media_type="text",
-            correlation_id="cid-123",
+        recorder.log(
+            PreparedRouteContext(
+                message=SimpleNamespace(),
+                telegram_message=Mock(),
+                text="hello",
+                uid=42,
+                chat_id=99,
+                message_id=7,
+                has_forward=True,
+                forward_from_chat_id=555,
+                forward_from_chat_title="Forwarded",
+                forward_from_message_id=321,
+                interaction_type="command",
+                command="/start",
+                first_url=None,
+                media_type="text",
+                correlation_id="cid-123",
+            )
         )
     )
 

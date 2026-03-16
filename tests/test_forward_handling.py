@@ -710,9 +710,14 @@ async def test_forward_caption_only_routes_to_forward_flow(
         handle_awaited_url=AsyncMock(),
         handle_direct_url=AsyncMock(),
         add_awaiting_user=MagicMock(),
+        can_handle_document=MagicMock(return_value=False),
+        handle_document_file=AsyncMock(),
     )
     forward_processor: Any = SimpleNamespace(handle_forward_flow=AsyncMock())
-    response_formatter: Any = SimpleNamespace(safe_reply=AsyncMock())
+    response_formatter: Any = SimpleNamespace(
+        safe_reply=AsyncMock(),
+        send_error_notification=AsyncMock(),
+    )
 
     router = MessageRouter(
         cfg=cfg,
@@ -726,8 +731,16 @@ async def test_forward_caption_only_routes_to_forward_flow(
     )
 
     message = SimpleNamespace(
+        id=700,
+        chat=SimpleNamespace(id=777),
+        from_user=SimpleNamespace(id=1, is_bot=False),
+        outgoing=False,
         text=None,
         caption="Photo caption with content",
+        contact=None,
+        web_app_data=None,
+        photo=None,
+        document=None,
         forward_from=SimpleNamespace(id=1111, first_name="Captioner", last_name=None),
         forward_from_chat=None,
         forward_from_message_id=None,
@@ -735,15 +748,7 @@ async def test_forward_caption_only_routes_to_forward_flow(
         forward_date=1700000000,
     )
 
-    await router._route_message_content(
-        message,
-        text="",
-        uid=1,
-        has_forward=True,
-        correlation_id="cid-cap",
-        interaction_id=200,
-        start_time=0.0,
-    )
+    await router.route_message(message)
 
     forward_processor.handle_forward_flow.assert_awaited_once()
     url_handler.handle_direct_url.assert_not_awaited()
@@ -767,9 +772,14 @@ async def test_channel_forward_missing_msg_id_falls_to_user_path(
         handle_awaited_url=AsyncMock(),
         handle_direct_url=AsyncMock(),
         add_awaiting_user=MagicMock(),
+        can_handle_document=MagicMock(return_value=False),
+        handle_document_file=AsyncMock(),
     )
     forward_processor: Any = SimpleNamespace(handle_forward_flow=AsyncMock())
-    response_formatter: Any = SimpleNamespace(safe_reply=AsyncMock())
+    response_formatter: Any = SimpleNamespace(
+        safe_reply=AsyncMock(),
+        send_error_notification=AsyncMock(),
+    )
 
     router = MessageRouter(
         cfg=cfg,
@@ -785,7 +795,16 @@ async def test_channel_forward_missing_msg_id_falls_to_user_path(
     # Channel forward but missing forward_from_message_id
     # This happens with some forwarded messages from restricted channels
     message = SimpleNamespace(
+        id=701,
+        chat=SimpleNamespace(id=778),
+        from_user=SimpleNamespace(id=1, is_bot=False),
+        outgoing=False,
         text="Channel text without msg id",
+        caption=None,
+        contact=None,
+        web_app_data=None,
+        photo=None,
+        document=None,
         forward_from_chat=SimpleNamespace(id=-100555, title="Restricted"),
         forward_from_message_id=None,
         forward_from=None,
@@ -793,15 +812,7 @@ async def test_channel_forward_missing_msg_id_falls_to_user_path(
         forward_date=1700000000,
     )
 
-    await router._route_message_content(
-        message,
-        text=message.text,
-        uid=1,
-        has_forward=True,
-        correlation_id="cid-nomsg",
-        interaction_id=300,
-        start_time=0.0,
-    )
+    await router.route_message(message)
 
     # Should NOT go through the channel forward path (needs both chat AND msg_id)
     # And no forward_from or sender_name set, so user forward path also doesn't match

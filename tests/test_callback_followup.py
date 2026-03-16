@@ -6,7 +6,9 @@ import pytest
 
 from app.adapters.external.formatting.summary_presenter_parts.actions import create_action_buttons
 from app.adapters.telegram.callback_handler import CallbackHandler
-from app.adapters.telegram.message_router_content import MessageRouterContentMixin
+from app.adapters.telegram.routing.content_router import MessageContentRouter
+from app.adapters.telegram.routing.interactions import MessageInteractionRecorder
+from app.adapters.telegram.routing.models import PreparedRouteContext
 from app.models.llm.llm_models import LLMCallResult
 
 
@@ -109,45 +111,68 @@ async def test_action_buttons_include_followup_callback() -> None:
 
 @pytest.mark.asyncio
 async def test_message_router_prioritizes_followup_questions() -> None:
-    class _DummyRouter(MessageRouterContentMixin):
-        pass
-
-    router = _DummyRouter()
-    router._lang = "en"
-    router._should_handle_attachment = lambda _msg: False
-    router.attachment_processor = None
-    router.command_processor = SimpleNamespace(has_active_init_session=lambda _uid: False)
-    cast("Any", router)._route_command_message = AsyncMock(return_value=False)
-    cast("Any", router)._route_forward_message = AsyncMock(return_value=False)
-    router.url_handler = SimpleNamespace(
-        is_awaiting_url=AsyncMock(return_value=False),
-        handle_awaited_url=AsyncMock(),
-        handle_direct_url=AsyncMock(),
-    )
-    router.response_formatter = _ResponseFormatterStub()
-    router.callback_handler = SimpleNamespace(
+    command_processor = MagicMock()
+    command_processor.has_active_init_session.return_value = False
+    callback_handler = SimpleNamespace(
         has_pending_followup=AsyncMock(return_value=True),
         clear_pending_followup=AsyncMock(),
         handle_followup_question=AsyncMock(return_value=True),
     )
-    router.user_repo = MagicMock()
-
-    message = SimpleNamespace(
-        contact=None,
-        web_app_data=None,
-        text="Can you clarify the timeline?",
-        caption=None,
+    response_formatter = _ResponseFormatterStub()
+    router = MessageContentRouter(
+        command_processor=cast("Any", command_processor),
+        url_handler=cast(
+            "Any",
+            SimpleNamespace(
+                is_awaiting_url=AsyncMock(return_value=False),
+                handle_awaited_url=AsyncMock(),
+                handle_direct_url=AsyncMock(),
+                handle_document_file=AsyncMock(),
+                can_handle_document=MagicMock(return_value=False),
+                add_awaiting_user=AsyncMock(),
+            ),
+        ),
+        forward_processor=cast(
+            "Any",
+            SimpleNamespace(handle_forward_flow=AsyncMock()),
+        ),
+        response_formatter=cast("Any", response_formatter),
+        interaction_recorder=MessageInteractionRecorder(
+            user_repo=SimpleNamespace(async_insert_user_interaction=AsyncMock()),
+            structured_output_enabled=True,
+        ),
+        callback_handler=cast("Any", callback_handler),
+        attachment_processor=None,
+        lang="en",
     )
 
-    await router._route_message_content(
-        message=message,
+    context = PreparedRouteContext(
+        message=SimpleNamespace(
+            contact=None,
+            web_app_data=None,
+            text="Can you clarify the timeline?",
+            caption=None,
+            photo=None,
+            document=None,
+            forward_from_chat=None,
+        ),
+        telegram_message=MagicMock(),
         text="Can you clarify the timeline?",
         uid=11,
+        chat_id=100,
+        message_id=55,
         has_forward=False,
+        forward_from_chat_id=None,
+        forward_from_chat_title=None,
+        forward_from_message_id=None,
+        interaction_type="text",
+        command=None,
+        first_url=None,
+        media_type=None,
         correlation_id="cid-11",
-        interaction_id=0,
-        start_time=0.0,
     )
 
-    router.callback_handler.handle_followup_question.assert_awaited_once()
-    router.response_formatter.safe_reply.assert_not_awaited()
+    await router.route(context, interaction_id=0, start_time=0.0)
+
+    callback_handler.handle_followup_question.assert_awaited_once()
+    response_formatter.safe_reply.assert_not_awaited()

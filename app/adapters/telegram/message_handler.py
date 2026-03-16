@@ -101,6 +101,14 @@ class MessageHandler:
         # Resolve UI language from response formatter
         _lang = getattr(response_formatter, "_lang", "en")
 
+        self.callback_handler = CallbackHandler(
+            db=db,
+            response_formatter=response_formatter,
+            url_handler=self.url_handler,
+            hybrid_search=hybrid_search,
+            lang=_lang,
+        )
+
         self.message_router = MessageRouter(
             cfg=cfg,
             db=db,
@@ -112,18 +120,9 @@ class MessageHandler:
             audit_func=self._audit,
             task_manager=self.task_manager,
             attachment_processor=attachment_processor,
+            callback_handler=self.callback_handler,
             lang=_lang,
         )
-
-        # Initialize callback handler for post-summary actions
-        self.callback_handler = CallbackHandler(
-            db=db,
-            response_formatter=response_formatter,
-            url_handler=self.url_handler,
-            hybrid_search=hybrid_search,
-            lang=_lang,
-        )
-        self.message_router.callback_handler = self.callback_handler
 
     async def handle_message(self, message: Any) -> None:
         """Main message handling entry point."""
