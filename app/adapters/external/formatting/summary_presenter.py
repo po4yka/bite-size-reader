@@ -7,6 +7,20 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.external.formatting.summary.action_buttons import (
+    create_action_buttons,
+    create_inline_keyboard,
+)
+from app.adapters.external.formatting.summary.card_renderer import (
+    build_compact_card_html,
+    compact_tldr,
+    extract_domain_from_url,
+    truncate_plain_text,
+)
+from app.adapters.external.formatting.summary.crosspost_publisher import crosspost_to_topic
+from app.adapters.external.formatting.summary.related_reads_presenter import (
+    send_related_reads as present_related_reads,
+)
 from app.core.async_utils import raise_if_cancelled
 from app.core.ui_strings import t
 
@@ -19,6 +33,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.topic_manager import TopicManager
     from app.core.progress_tracker import ProgressTracker
     from app.core.verbosity import VerbosityResolver
+    from app.services.related_reads_service import RelatedReadItem
 
 logger = logging.getLogger(__name__)
 
@@ -28,24 +43,14 @@ class SummaryPresenterImpl:
 
     @staticmethod
     def _truncate_plain_text(text: str, max_len: int) -> str:
-        from app.adapters.external.formatting.summary_presenter_parts.card import (
-            truncate_plain_text,
-        )
-
         return truncate_plain_text(text, max_len)
 
     @staticmethod
     def _extract_domain_from_url(url: str) -> str | None:
-        from app.adapters.external.formatting.summary_presenter_parts.card import (
-            extract_domain_from_url,
-        )
-
         return extract_domain_from_url(url)
 
     def _compact_tldr(self, text: str, *, max_sentences: int = 3, max_chars: int = 520) -> str:
         """Return the first 2-3 sentences (best-effort) for the card TL;DR."""
-        from app.adapters.external.formatting.summary_presenter_parts.card import compact_tldr
-
         return compact_tldr(
             text,
             text_processor=self._text_processor,
@@ -57,10 +62,6 @@ class SummaryPresenterImpl:
         self, summary_shaped: dict[str, Any], llm: Any, chunks: int | None, *, reader: bool
     ) -> str:
         """Build a compact, scannable summary card in Telegram HTML format."""
-        from app.adapters.external.formatting.summary_presenter_parts.card import (
-            build_compact_card_html,
-        )
-
         return build_compact_card_html(
             summary_shaped,
             llm,
@@ -101,25 +102,21 @@ class SummaryPresenterImpl:
         self._topic_manager = topic_manager
         self._lang = lang
 
+    def set_topic_manager(self, topic_manager: TopicManager | None) -> None:
+        """Update forum-topic routing without rebuilding the presenter."""
+        self._topic_manager = topic_manager
+
     def _create_action_buttons(self, summary_id: int | str) -> list[list[dict[str, str]]]:
         """Create inline keyboard buttons for post-summary actions.
 
         Returns a 2D list of button rows for InlineKeyboardMarkup.
         """
-        from app.adapters.external.formatting.summary_presenter_parts.actions import (
-            create_action_buttons,
-        )
-
         return create_action_buttons(summary_id, lang=self._lang)
 
     def _create_inline_keyboard(
         self, summary_id: int | str, correlation_id: str | None = None
     ) -> Any:
         """Create an inline keyboard markup for post-summary actions."""
-        from app.adapters.external.formatting.summary_presenter_parts.actions import (
-            create_inline_keyboard,
-        )
-
         return create_inline_keyboard(summary_id, correlation_id, lang=self._lang)
 
     async def _send_action_buttons(
@@ -483,10 +480,6 @@ class SummaryPresenterImpl:
         """Delegate to crosspost module for forum topic routing."""
         if self._topic_manager is None:
             return
-        from app.adapters.external.formatting.summary_presenter_parts.crosspost import (
-            crosspost_to_topic,
-        )
-
         if card_text is None:
             card_text = self._build_compact_card_html(summary_shaped, llm, chunks, reader=True)
         await crosspost_to_topic(
@@ -748,6 +741,21 @@ class SummaryPresenterImpl:
             await self._response_sender.reply_json(message, article)
         except Exception as exc:
             raise_if_cancelled(exc)
+
+    async def send_related_reads(
+        self,
+        message: Any,
+        items: list[RelatedReadItem],
+        *,
+        lang: str | None = None,
+    ) -> None:
+        """Send related-read shortcuts as a follow-up keyboard."""
+        await present_related_reads(
+            self._response_sender,
+            message,
+            items,
+            lang or self._lang,
+        )
 
     async def send_forward_summary_response(
         self, message: Any, forward_shaped: dict[str, Any], summary_id: int | str | None = None

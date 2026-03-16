@@ -111,7 +111,7 @@ def build_telegram_runtime(
     container.wire_event_handlers_auto()
 
     telegram_client = TelegramClient(cfg=cfg)
-    core.response_formatter._telegram_client = telegram_client
+    core.response_formatter.set_telegram_client(telegram_client)
     _configure_forum_topics(
         cfg=cfg,
         response_formatter=core.response_formatter,
@@ -229,7 +229,7 @@ def _configure_forum_topics(
     from app.adapters.telegram.topic_manager import TopicManager
 
     topic_manager = TopicManager()
-    response_formatter._summary_presenter._topic_manager = topic_manager
+    response_formatter.set_topic_manager(topic_manager)
     telegram_client.topic_manager = topic_manager
     logger.info("forum_topic_manager_initialized")
 

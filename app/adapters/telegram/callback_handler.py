@@ -122,7 +122,7 @@ class CallbackHandler:
                 "callback_handler_error",
                 extra={"action": action, "uid": uid, "error": str(exc), "cid": correlation_id},
             )
-            await self.response_formatter.notifications.send_error_notification(
+            await self.response_formatter.send_error_notification(
                 message,
                 "unexpected_error",
                 correlation_id,

@@ -56,9 +56,7 @@ class CallbackActionService:
             msg_id = int(parts[2])
         except (ValueError, IndexError):
             logger.warning("digest_callback_invalid_params", extra={"parts": parts})
-            await self.response_formatter.sender.safe_reply(
-                message, "Invalid digest callback data."
-            )
+            await self.response_formatter.safe_reply(message, "Invalid digest callback data.")
             return True
 
         from app.db.models import Channel, ChannelPost
@@ -74,12 +72,10 @@ class CallbackActionService:
         )
 
         if not post:
-            await self.response_formatter.sender.safe_reply(message, "Post not found in database.")
+            await self.response_formatter.safe_reply(message, "Post not found in database.")
             return True
 
-        await self.response_formatter.sender.safe_reply(
-            message, t("cb_generating_summary", self._lang)
-        )
+        await self.response_formatter.safe_reply(message, t("cb_generating_summary", self._lang))
 
         post_url = post.url or ""
         if post_url and self.url_handler:
@@ -115,7 +111,7 @@ class CallbackActionService:
         reply_text = f"**Full Post**\n\n{text_preview}"
         if post_url:
             reply_text += f"\n\n[Original]({post_url})"
-        await self.response_formatter.sender.safe_reply(message, reply_text)
+        await self.response_formatter.safe_reply(message, reply_text)
 
     async def handle_export(
         self,
@@ -139,7 +135,7 @@ class CallbackActionService:
             return False
 
         if export_format not in ("pdf", "md", "html"):
-            await self.response_formatter.sender.safe_reply(
+            await self.response_formatter.safe_reply(
                 message, f"Unknown export format: {export_format}"
             )
             return True
@@ -149,7 +145,7 @@ class CallbackActionService:
         exporter = ExportFormatter(self.db)
 
         try:
-            await self.response_formatter.sender.safe_reply(
+            await self.response_formatter.safe_reply(
                 message, t("cb_export_generating", self._lang).format(fmt=export_format.upper())
             )
 
@@ -170,7 +166,7 @@ class CallbackActionService:
                     },
                 )
             else:
-                await self.response_formatter.sender.safe_reply(
+                await self.response_formatter.safe_reply(
                     message,
                     t("cb_export_failed", self._lang).format(cid=correlation_id),
                 )
@@ -179,7 +175,7 @@ class CallbackActionService:
                 "export_failed",
                 extra={"format": export_format, "summary_id": summary_id, "error": str(exc)},
             )
-            await self.response_formatter.sender.safe_reply(
+            await self.response_formatter.safe_reply(
                 message,
                 f"Export failed: {type(exc).__name__}. Error ID: {correlation_id}",
             )
@@ -197,7 +193,7 @@ class CallbackActionService:
 
         path = Path(file_path)
         if not path.exists():
-            await self.response_formatter.sender.safe_reply(message, "Export file not found.")
+            await self.response_formatter.safe_reply(message, "Export file not found.")
             return
 
         caption_map = {
@@ -211,7 +207,7 @@ class CallbackActionService:
             if hasattr(message, "reply_document"):
                 await message.reply_document(str(path), caption=caption)
             else:
-                await self.response_formatter.sender.safe_reply(
+                await self.response_formatter.safe_reply(
                     message,
                     f"File ready: {filename} (unable to send as document)",
                 )
@@ -235,19 +231,17 @@ class CallbackActionService:
         summary_id = ":".join(parts[1:]).strip()
         summary_data = await self.load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
-            await self.response_formatter.sender.safe_reply(
-                message, t("cb_summary_not_found", self._lang)
-            )
+            await self.response_formatter.safe_reply(message, t("cb_summary_not_found", self._lang))
             return True
 
         if summary_data.get("lang") == "ru":
-            await self.response_formatter.sender.safe_reply(
+            await self.response_formatter.safe_reply(
                 message, t("cb_translation_already_ru", self._lang)
             )
             return True
 
         if not self.url_handler:
-            await self.response_formatter.notifications.send_error_notification(
+            await self.response_formatter.send_error_notification(
                 message,
                 "unexpected_error",
                 correlation_id,
@@ -255,7 +249,7 @@ class CallbackActionService:
             )
             return True
 
-        await self.response_formatter.sender.safe_reply(
+        await self.response_formatter.safe_reply(
             message, t("cb_translation_processing", self._lang)
         )
 
@@ -272,13 +266,13 @@ class CallbackActionService:
             )
 
             if translated_text:
-                await self.response_formatter.summaries.send_russian_translation(
+                await self.response_formatter.send_russian_translation(
                     message,
                     translated_text,
                     correlation_id=correlation_id,
                 )
             else:
-                await self.response_formatter.sender.safe_reply(
+                await self.response_formatter.safe_reply(
                     message,
                     "Translation failed to generate meaningful output.",
                 )
@@ -287,7 +281,7 @@ class CallbackActionService:
                 "translation_failed",
                 extra={"summary_id": summary_id, "error": str(exc), "cid": correlation_id},
             )
-            await self.response_formatter.notifications.send_error_notification(
+            await self.response_formatter.send_error_notification(
                 message,
                 "unexpected_error",
                 correlation_id,
@@ -314,13 +308,11 @@ class CallbackActionService:
         summary_id = ":".join(parts[1:]).strip()
         summary_data = await self.load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
-            await self.response_formatter.sender.safe_reply(
-                message, t("cb_summary_not_found", self._lang)
-            )
+            await self.response_formatter.safe_reply(message, t("cb_summary_not_found", self._lang))
             return True
 
         if not self.hybrid_search:
-            await self.response_formatter.sender.safe_reply(
+            await self.response_formatter.safe_reply(
                 message,
                 t("cb_search_unavailable", self._lang),
             )
@@ -345,12 +337,10 @@ class CallbackActionService:
 
         query = " ".join(query_parts).strip()
         if not query:
-            await self.response_formatter.sender.safe_reply(
-                message, t("cb_not_enough_info", self._lang)
-            )
+            await self.response_formatter.safe_reply(message, t("cb_not_enough_info", self._lang))
             return True
 
-        await self.response_formatter.sender.safe_reply(
+        await self.response_formatter.safe_reply(
             message,
             f"🔍 {t('cb_finding_similar', self._lang).format(title=html.escape(title or 'this item'))}",
             parse_mode="HTML",
@@ -365,11 +355,9 @@ class CallbackActionService:
             ]
 
             if not filtered_results:
-                await self.response_formatter.sender.safe_reply(
-                    message, t("cb_no_similar", self._lang)
-                )
+                await self.response_formatter.safe_reply(message, t("cb_no_similar", self._lang))
             else:
-                await self.response_formatter.database.send_topic_search_results(
+                await self.response_formatter.send_topic_search_results(
                     message,
                     topic=f"Similar to: {title[:30]}...",
                     articles=filtered_results,
@@ -380,7 +368,7 @@ class CallbackActionService:
                 "find_similar_failed",
                 extra={"summary_id": summary_id, "error": str(exc), "cid": correlation_id},
             )
-            await self.response_formatter.notifications.send_error_notification(
+            await self.response_formatter.send_error_notification(
                 message,
                 "unexpected_error",
                 correlation_id,
@@ -424,7 +412,7 @@ class CallbackActionService:
                     if summary.is_favorited
                     else t("cb_removed", self._lang)
                 )
-                await self.response_formatter.sender.safe_reply(message, status_msg)
+                await self.response_formatter.safe_reply(message, status_msg)
                 logger.info(
                     "summary_favorite_toggled",
                     extra={
@@ -435,7 +423,7 @@ class CallbackActionService:
                     },
                 )
             else:
-                await self.response_formatter.sender.safe_reply(
+                await self.response_formatter.safe_reply(
                     message, t("cb_summary_not_found", self._lang)
                 )
         except Exception as exc:
@@ -443,7 +431,7 @@ class CallbackActionService:
                 "toggle_save_failed",
                 extra={"summary_id": summary_id, "error": str(exc), "cid": correlation_id},
             )
-            await self.response_formatter.sender.safe_reply(
+            await self.response_formatter.safe_reply(
                 message,
                 f"Failed to update favorite status. Error ID: {correlation_id}",
             )
@@ -475,7 +463,7 @@ class CallbackActionService:
             if rating > 0
             else t("cb_feedback_negative", self._lang)
         )
-        await self.response_formatter.sender.safe_reply(
+        await self.response_formatter.safe_reply(
             message,
             t("cb_feedback_thanks", self._lang).format(rating=rating_text),
         )
@@ -504,9 +492,7 @@ class CallbackActionService:
         summary_id = ":".join(parts[1:]).strip()
         summary_data = await self.load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
-            await self.response_formatter.sender.safe_reply(
-                message, t("cb_summary_not_found", self._lang)
-            )
+            await self.response_formatter.safe_reply(message, t("cb_summary_not_found", self._lang))
             return True
 
         meta = summary_data.get("metadata") or {}
@@ -615,7 +601,7 @@ class CallbackActionService:
                 )
 
         text = "\n".join(lines).strip() or t("cb_no_details", self._lang)
-        await self.response_formatter.sender.safe_reply(message, text, parse_mode="HTML")
+        await self.response_formatter.safe_reply(message, text, parse_mode="HTML")
         logger.info(
             "more_details_sent",
             extra={"summary_id": summary_id, "uid": uid, "cid": correlation_id},
@@ -643,9 +629,7 @@ class CallbackActionService:
             f"req:{request_id}", correlation_id=correlation_id
         )
         if not summary_data:
-            await self.response_formatter.sender.safe_reply(
-                message, t("cb_related_not_found", self._lang)
-            )
+            await self.response_formatter.safe_reply(message, t("cb_related_not_found", self._lang))
             return True
 
         title = summary_data.get("title") or ""
@@ -672,7 +656,7 @@ class CallbackActionService:
         if not text:
             text = t("cb_no_details", self._lang)
 
-        from app.adapters.external.formatting.summary_presenter_parts.actions import (
+        from app.adapters.external.formatting.summary.action_buttons import (
             create_inline_keyboard,
         )
 
@@ -680,7 +664,7 @@ class CallbackActionService:
         keyboard = create_inline_keyboard(
             summary_id, correlation_id=correlation_id, lang=self._lang
         )
-        await self.response_formatter.sender.safe_reply(
+        await self.response_formatter.safe_reply(
             message, text, parse_mode="HTML", reply_markup=keyboard
         )
         return True

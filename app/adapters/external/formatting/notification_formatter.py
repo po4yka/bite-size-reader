@@ -8,8 +8,6 @@ from app.core.async_utils import raise_if_cancelled
 from app.core.ui_strings import t
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
     from app.adapters.external.formatting.protocols import DataFormatter, ResponseSender
     from app.core.progress_tracker import ProgressTracker
     from app.core.verbosity import VerbosityResolver
@@ -23,7 +21,6 @@ class NotificationFormatterImpl:
         response_sender: ResponseSender,
         data_formatter: DataFormatter,
         *,
-        safe_reply_func: Callable[[Any, str], Awaitable[None]] | None = None,
         verbosity_resolver: VerbosityResolver | None = None,
         progress_tracker: ProgressTracker | None = None,
         lang: str = "en",
@@ -33,7 +30,6 @@ class NotificationFormatterImpl:
         Args:
             response_sender: Response sender for sending messages.
             data_formatter: Data formatter for formatting values.
-            safe_reply_func: Optional callback for test compatibility.
             verbosity_resolver: Optional resolver for per-user verbosity.
                 When *None*, all methods behave in DEBUG mode (legacy).
             progress_tracker: Optional tracker for editable progress messages
@@ -42,7 +38,6 @@ class NotificationFormatterImpl:
         """
         self._response_sender = response_sender
         self._data_formatter = data_formatter
-        self._safe_reply_func = safe_reply_func
         self._verbosity_resolver = verbosity_resolver
         self._progress_tracker = progress_tracker
         self._lang = lang

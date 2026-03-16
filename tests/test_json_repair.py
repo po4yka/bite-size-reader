@@ -236,9 +236,6 @@ class TestJsonRepair(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()
             bot._reply_json = AsyncMock()
-            # Also update the response formatter's internal references
-            bot.response_formatter._reply_json_func = bot._reply_json
-            bot.response_formatter._response_sender._reply_json_func = bot._reply_json
 
             # Mock json_repair to prevent local repair from working
             with patch.dict(
@@ -309,12 +306,6 @@ class TestJsonRepair(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()
             bot._reply_json = AsyncMock()
-            # Also update the response formatter's internal references
-            bot.response_formatter._safe_reply_func = bot._safe_reply
-            bot.response_formatter._reply_json_func = bot._reply_json
-            bot.response_formatter._response_sender._safe_reply_func = bot._safe_reply
-            bot.response_formatter._response_sender._reply_json_func = bot._reply_json
-            bot.response_formatter._notification_formatter._safe_reply_func = bot._safe_reply
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -376,9 +367,6 @@ class TestJsonRepair(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()
             bot._reply_json = AsyncMock()
-            # Also update the response formatter's internal references
-            bot.response_formatter._reply_json_func = bot._reply_json
-            bot.response_formatter._response_sender._reply_json_func = bot._reply_json
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -453,9 +441,6 @@ class TestJsonRepair(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()
             bot._reply_json = AsyncMock()
-            # Also update the response formatter's internal references
-            bot.response_formatter._reply_json_func = bot._reply_json
-            bot.response_formatter._response_sender._reply_json_func = bot._reply_json
 
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
@@ -519,9 +504,6 @@ class TestJsonRepair(unittest.TestCase):
 
             bot._safe_reply = AsyncMock()
             bot._reply_json = AsyncMock()
-            # Also update the response formatter's internal references
-            bot.response_formatter._reply_json_func = bot._reply_json
-            bot.response_formatter._response_sender._reply_json_func = bot._reply_json
 
             fixed_payload = '{"summary_250": "One", "tldr": "Two"}'
 

@@ -24,11 +24,9 @@ async def test_progress_message_editing():
 
     # Create response formatter
     rf = ResponseFormatter()
-    rf._telegram_client = Mock()
-    rf._telegram_client.client = mock_client
-
-    # Test 1: safe_reply_with_id should return message ID
-    rf._safe_reply_func = None  # Use client directly
+    telegram_client = Mock()
+    telegram_client.client = mock_client
+    rf.set_telegram_client(telegram_client)
 
     # Mock the send_message method to return a message ID
     mock_client.send_message = AsyncMock(return_value=Mock(id=987654321))

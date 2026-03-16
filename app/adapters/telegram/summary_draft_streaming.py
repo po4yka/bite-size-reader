@@ -40,7 +40,7 @@ class SummaryDraftStreamCoordinator:
         self._section_emit_count += len(snapshots)
         record_draft_stream_event("section_emit_count", amount=len(snapshots))
         preview = self._assembler.render_preview()
-        ok = await self.response_formatter.sender.send_message_draft(self.message, preview)
+        ok = await self.response_formatter.send_message_draft(self.message, preview)
         if not ok and not self._draft_fallback:
             self._draft_fallback = True
             logger.info(
@@ -50,9 +50,9 @@ class SummaryDraftStreamCoordinator:
 
     async def finalize(self) -> None:
         if self._assembler.sections:
-            await self.response_formatter.sender.send_message_draft(
+            await self.response_formatter.send_message_draft(
                 self.message,
                 self._assembler.render_preview(finalizing=True),
                 force=True,
             )
-        self.response_formatter.sender.clear_message_draft(self.message)
+        self.response_formatter.clear_message_draft(self.message)

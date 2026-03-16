@@ -45,7 +45,7 @@ class YouTubeFeedbackService:
             return state
 
         if not request.silent:
-            await self._response_formatter.notifications.send_youtube_download_notification(
+            await self._response_formatter.send_youtube_download_notification(
                 request.message,
                 request.url_text,
                 silent=request.silent,
@@ -154,14 +154,12 @@ class YouTubeFeedbackService:
             )
             await state.updater.finalize(success_msg)
         elif request.mode == "interactive" and request.message is not None and not request.silent:
-            await (
-                self._response_formatter.notifications.send_youtube_download_complete_notification(
-                    request.message,
-                    video_metadata["title"],
-                    video_metadata["resolution"],
-                    video_metadata["file_size"] / (1024 * 1024),
-                    silent=request.silent,
-                )
+            await self._response_formatter.send_youtube_download_complete_notification(
+                request.message,
+                video_metadata["title"],
+                video_metadata["resolution"],
+                video_metadata["file_size"] / (1024 * 1024),
+                silent=request.silent,
             )
         if state.typing_ctx is not None:
             await state.typing_ctx.__aexit__(None, None, None)
@@ -198,10 +196,7 @@ class YouTubeFeedbackService:
     ) -> None:
         if request.mode != "interactive" or request.silent or request.message is None:
             return
-        sender = getattr(self._response_formatter, "sender", None)
-        if sender is None:
-            return
-        send_message_draft = getattr(sender, "send_message_draft", None)
+        send_message_draft = getattr(self._response_formatter, "send_message_draft", None)
         if send_message_draft is None:
             return
         await send_message_draft(request.message, text, force=False)

@@ -222,11 +222,11 @@ class ForwardProcessor:
                 summary_payload, exclude_request_id=request_id
             )
             if items:
-                from app.adapters.external.formatting.summary_presenter_parts.related_reads import (
-                    send_related_reads,
+                await self.response_formatter.send_related_reads(
+                    message,
+                    items,
+                    lang=lang,
                 )
-
-                await send_related_reads(self.response_formatter.sender, message, items, lang)
         except Exception as exc:
             logger.warning(
                 "related_reads_forward_failed",

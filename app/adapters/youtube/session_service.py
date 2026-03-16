@@ -217,7 +217,7 @@ class YouTubeDownloadSessionService:
     ) -> PlatformExtractionResult:
         if request.mode == "interactive" and not request.silent and request.message is not None:
             try:
-                await self._response_formatter.sender.safe_reply(request.message, reuse_message)
+                await self._response_formatter.safe_reply(request.message, reuse_message)
             except Exception as exc:
                 raise_if_cancelled(exc)
                 logger.warning(warning_key, exc_info=True)

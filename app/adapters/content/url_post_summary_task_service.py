@@ -335,15 +335,10 @@ class URLPostSummaryTaskService:
                 exclude_request_id=request_id,
             )
             if items:
-                from app.adapters.external.formatting.summary_presenter_parts.related_reads import (
-                    send_related_reads,
-                )
-
-                await send_related_reads(
-                    self._response_formatter.sender,
+                await self._response_formatter.send_related_reads(
                     message,
                     items,
-                    lang,
+                    lang=lang,
                 )
         except Exception as exc:
             logger.warning(

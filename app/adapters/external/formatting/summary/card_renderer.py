@@ -1,4 +1,4 @@
-"""Compact summary card rendering (Telegram HTML)."""
+"""Compact summary card rendering for Telegram HTML."""
 
 from __future__ import annotations
 

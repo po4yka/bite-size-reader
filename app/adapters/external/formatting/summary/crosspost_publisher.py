@@ -25,11 +25,7 @@ async def crosspost_to_topic(
     card_text: str,
     create_keyboard_fn: Any,
 ) -> None:
-    """Send a compact summary card to the matching forum topic thread.
-
-    Silently returns when topic resolution fails or topics are not
-    initialized for this chat.
-    """
+    """Send a compact summary card to the matching forum topic thread."""
     chat_id = getattr(getattr(message, "chat", None), "id", None)
     if chat_id is None:
         return

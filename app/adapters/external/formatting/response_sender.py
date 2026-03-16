@@ -796,6 +796,18 @@ class ResponseSenderImpl:
         self._telegram_client = telegram_client
         self._draft_stream_sender.set_telegram_client(telegram_client)
 
+    def set_reply_callbacks(
+        self,
+        *,
+        safe_reply_func: Any = ...,
+        reply_json_func: Any = ...,
+    ) -> None:
+        """Update transport callback overrides without rebuilding the sender."""
+        if safe_reply_func is not ...:
+            self._safe_reply_func = safe_reply_func
+        if reply_json_func is not ...:
+            self._reply_json_func = reply_json_func
+
     async def stream_or_edit_message(
         self,
         message: Any,

@@ -714,7 +714,7 @@ class TelegramBot:
             if hasattr(self, "_sync_client_dependencies"):
                 self._sync_client_dependencies()
         if name in {"_safe_reply", "_reply_json"} and hasattr(self, "response_formatter"):
-            if name == "_safe_reply":
-                self.response_formatter.sender._safe_reply_func = value
-            else:
-                self.response_formatter.sender._reply_json_func = value
+            self.response_formatter.set_reply_callbacks(
+                safe_reply_func=getattr(self, "_safe_reply", None),
+                reply_json_func=getattr(self, "_reply_json", None),
+            )

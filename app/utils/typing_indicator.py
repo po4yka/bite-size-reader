@@ -140,7 +140,7 @@ async def typing_indicator(
     """Context manager for typing indicators.
 
     Args:
-        response_formatter: ResponseFormatter instance with sender.send_chat_action method
+        response_formatter: ResponseFormatter instance with send_chat_action method
         message: Telegram message object (to extract chat_id)
         action: The action type (default: "typing")
         interval: Refresh interval in seconds
@@ -152,13 +152,13 @@ async def typing_indicator(
     chat = getattr(message, "chat", None)
     chat_id = getattr(chat, "id", None) if chat else None
 
-    if not chat_id or not hasattr(response_formatter, "sender"):
+    if not chat_id or not hasattr(response_formatter, "send_chat_action"):
         # No chat ID or formatter doesn't support typing indicators
         yield
         return
 
     indicator = TypingIndicator(
-        send_chat_action_func=response_formatter.sender.send_chat_action,
+        send_chat_action_func=response_formatter.send_chat_action,
         chat_id=chat_id,
         action=action,
         interval=interval,
@@ -189,10 +189,10 @@ async def send_typing_once(
     chat = getattr(message, "chat", None)
     chat_id = getattr(chat, "id", None) if chat else None
 
-    if not chat_id or not hasattr(response_formatter, "sender"):
+    if not chat_id or not hasattr(response_formatter, "send_chat_action"):
         return False
 
     try:
-        return await response_formatter.sender.send_chat_action(chat_id, action)
+        return await response_formatter.send_chat_action(chat_id, action)
     except Exception:
         return False

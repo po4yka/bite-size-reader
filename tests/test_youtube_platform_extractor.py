@@ -92,12 +92,10 @@ def _make_cfg(tmp_path: Path) -> Any:
 
 def _make_response_formatter() -> Any:
     formatter = MagicMock()
-    formatter.sender = MagicMock()
-    formatter.sender.safe_reply = AsyncMock()
-    formatter.sender.send_message_draft = AsyncMock()
-    formatter.notifications = MagicMock()
-    formatter.notifications.send_youtube_download_notification = AsyncMock()
-    formatter.notifications.send_youtube_download_complete_notification = AsyncMock()
+    formatter.safe_reply = AsyncMock()
+    formatter.send_message_draft = AsyncMock()
+    formatter.send_youtube_download_notification = AsyncMock()
+    formatter.send_youtube_download_complete_notification = AsyncMock()
     return formatter
 
 

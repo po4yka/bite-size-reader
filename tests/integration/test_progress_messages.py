@@ -6,7 +6,7 @@ from app.adapters.external.response_formatter import ResponseFormatter
 
 # Create a mock response formatter
 rf = ResponseFormatter()
-rf._telegram_client = None
+rf.set_telegram_client(None)
 
 # Test progress messages
 test_messages = [

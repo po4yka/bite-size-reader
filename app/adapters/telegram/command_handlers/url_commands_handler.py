@@ -94,15 +94,11 @@ class URLCommandsHandlerImpl:
                 if valid_urls:
                     progress_id: int | None = None
                     draft_enabled = False
-                    draft_checker = getattr(
-                        self._formatter.sender, "is_draft_streaming_enabled", None
-                    )
-                    if callable(draft_checker):
-                        try:
-                            enabled = draft_checker()
-                            draft_enabled = enabled if isinstance(enabled, bool) else False
-                        except Exception:
-                            draft_enabled = False
+                    try:
+                        enabled = self._formatter.is_draft_streaming_enabled()
+                        draft_enabled = enabled if isinstance(enabled, bool) else False
+                    except Exception:
+                        draft_enabled = False
                     if not draft_enabled:
                         progress_id = await self._formatter.safe_reply_with_id(
                             ctx.message, f"Processing {len(valid_urls)} links in parallel..."
@@ -203,13 +199,11 @@ class URLCommandsHandlerImpl:
         # Use a single progress message that updates in-place
         progress_message_id: int | None = None
         draft_enabled = False
-        draft_checker = getattr(self._formatter.sender, "is_draft_streaming_enabled", None)
-        if callable(draft_checker):
-            try:
-                enabled = draft_checker()
-                draft_enabled = enabled if isinstance(enabled, bool) else False
-            except Exception:
-                draft_enabled = False
+        try:
+            enabled = self._formatter.is_draft_streaming_enabled()
+            draft_enabled = enabled if isinstance(enabled, bool) else False
+        except Exception:
+            draft_enabled = False
         if not draft_enabled:
             progress_message_id = await self._formatter.safe_reply_with_id(
                 ctx.message, f"🚀 Preparing to process {len(urls)} links..."

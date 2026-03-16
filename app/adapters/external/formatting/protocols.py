@@ -372,10 +372,6 @@ class SummaryPresenter(Protocol):
         """Send the custom generated article with a nice header and downloadable JSON."""
         ...
 
-    async def _send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
-        """Compatibility seam for legacy callers needing field-level detail messages."""
-        ...
-
 
 @runtime_checkable
 class DatabasePresenter(Protocol):

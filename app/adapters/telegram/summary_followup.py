@@ -79,13 +79,13 @@ class SummaryFollowupManager:
     ) -> bool:
         summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
-            await self._response_formatter.sender.safe_reply(
+            await self._response_formatter.safe_reply(
                 message, t("cb_summary_not_found", self._lang)
             )
             return True
 
         await self.activate(uid, summary_id)
-        await self._response_formatter.sender.safe_reply(
+        await self._response_formatter.safe_reply(
             message,
             f"{t('cb_followup_prompt', self._lang)}\n\n{t('cb_followup_continue', self._lang)}",
         )
@@ -117,14 +117,14 @@ class SummaryFollowupManager:
         summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
             await self.clear(uid)
-            await self._response_formatter.sender.safe_reply(
+            await self._response_formatter.safe_reply(
                 message, t("cb_summary_not_found", self._lang)
             )
             return True
 
         llm_client = self._resolve_llm_client()
         if llm_client is None:
-            await self._response_formatter.sender.safe_reply(
+            await self._response_formatter.safe_reply(
                 message, t("cb_followup_unavailable", self._lang)
             )
             return True
@@ -144,7 +144,7 @@ class SummaryFollowupManager:
         if not answer_text:
             answer_text = t("cb_followup_no_answer", self._lang)
 
-        await self._response_formatter.sender.safe_reply(
+        await self._response_formatter.safe_reply(
             message,
             f"{answer_text}\n\n{t('cb_followup_continue', self._lang)}",
         )

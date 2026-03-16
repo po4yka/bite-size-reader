@@ -106,7 +106,7 @@ class TestResponseFormatter(unittest.IsolatedAsyncioTestCase):
         mock_telegram_client.client = mock_client
 
         formatter = ResponseFormatter()
-        formatter._telegram_client = mock_telegram_client
+        formatter.set_telegram_client(mock_telegram_client)
         formatter.MIN_MESSAGE_INTERVAL_MS = 0
 
         result = await formatter.edit_message(chat_id=12345, message_id=67890, text="Updated text")
@@ -151,7 +151,7 @@ class TestResponseFormatter(unittest.IsolatedAsyncioTestCase):
         mock_telegram_client.client = mock_client
 
         formatter = ResponseFormatter()
-        formatter._telegram_client = mock_telegram_client
+        formatter.set_telegram_client(mock_telegram_client)
         formatter.MIN_MESSAGE_INTERVAL_MS = 0
 
         # Invalid chat_id (not an int) - intentionally testing bad input
@@ -177,7 +177,7 @@ class TestResponseFormatter(unittest.IsolatedAsyncioTestCase):
         mock_telegram_client.client = mock_client
 
         formatter = ResponseFormatter()
-        formatter._telegram_client = mock_telegram_client
+        formatter.set_telegram_client(mock_telegram_client)
         formatter.MIN_MESSAGE_INTERVAL_MS = 0
 
         result = await formatter.edit_message(chat_id=12345, message_id=67890, text="Test")
@@ -235,6 +235,31 @@ class TestResponseFormatter(unittest.IsolatedAsyncioTestCase):
         assert payload["success"] is True
         assert payload["data"] == {"foo": "bar"}
         assert payload["meta"]["correlation_id"] == "cid-123"
+
+    async def test_set_reply_callbacks_rebinds_transport_hooks(self) -> None:
+        recorded_replies: list[str] = []
+        recorded_json: list[dict] = []
+
+        async def record_reply(_message: DummyMessage, text: str, **kwargs: object) -> None:
+            _ = kwargs
+            recorded_replies.append(text)
+
+        async def record_json(_: DummyMessage, payload: dict) -> None:
+            recorded_json.append(payload)
+
+        formatter = ResponseFormatter()
+        formatter.set_reply_callbacks(
+            safe_reply_func=record_reply,
+            reply_json_func=record_json,
+        )
+
+        message = DummyMessage()
+        await formatter.safe_reply(message, "callback reply")
+        await formatter.reply_json(message, {"hello": "world"}, correlation_id="cid-setters")
+
+        assert recorded_replies == ["callback reply"]
+        assert recorded_json[0]["data"] == {"hello": "world"}
+        assert recorded_json[0]["meta"]["correlation_id"] == "cid-setters"
 
 
 if __name__ == "__main__":

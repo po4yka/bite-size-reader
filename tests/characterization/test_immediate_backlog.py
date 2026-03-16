@@ -75,10 +75,10 @@ async def test_characterization_youtube_uses_vtt_fallback_when_api_transcript_em
     cfg.youtube.cleanup_after_days = 30
 
     rf = MagicMock()
-    rf.sender.send_message_draft = AsyncMock()
-    rf.sender.safe_reply = AsyncMock()
-    rf.notifications.send_youtube_download_notification = AsyncMock()
-    rf.notifications.send_youtube_download_complete_notification = AsyncMock()
+    rf.send_message_draft = AsyncMock()
+    rf.safe_reply = AsyncMock()
+    rf.send_youtube_download_notification = AsyncMock()
+    rf.send_youtube_download_complete_notification = AsyncMock()
 
     lifecycle = PlatformRequestLifecycle(
         response_formatter=rf,

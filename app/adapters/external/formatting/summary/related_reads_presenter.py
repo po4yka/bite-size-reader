@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.ui_strings import t
 
 if TYPE_CHECKING:
+    from app.adapters.external.formatting.protocols import ResponseSender
     from app.services.related_reads_service import RelatedReadItem
 
 logger = logging.getLogger(__name__)
@@ -19,10 +20,7 @@ def build_related_reads_keyboard(
     items: list[RelatedReadItem],
     lang: str = "en",
 ) -> Any | None:
-    """Build an InlineKeyboardMarkup with one button per related item.
-
-    Returns None if items is empty or Pyrogram is unavailable.
-    """
+    """Build an InlineKeyboardMarkup with one button per related item."""
     if not items:
         return None
     try:
@@ -45,7 +43,7 @@ def build_related_reads_keyboard(
 
 
 async def send_related_reads(
-    sender: Any,
+    response_sender: ResponseSender,
     message: Any,
     items: list[RelatedReadItem],
     lang: str = "en",
@@ -57,7 +55,7 @@ async def send_related_reads(
     if keyboard is None:
         return
     try:
-        await sender.safe_reply(
+        await response_sender.safe_reply(
             message,
             t("related_header", lang),
             reply_markup=keyboard,

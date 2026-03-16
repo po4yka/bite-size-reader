@@ -11,14 +11,14 @@ from app.services.related_reads_service import RelatedReadItem
 
 class TestBuildRelatedReadsKeyboard:
     def test_empty_items_returns_none(self) -> None:
-        from app.adapters.external.formatting.summary_presenter_parts.related_reads import (
+        from app.adapters.external.formatting.summary.related_reads_presenter import (
             build_related_reads_keyboard,
         )
 
         assert build_related_reads_keyboard([]) is None
 
     def test_builds_keyboard_with_items(self) -> None:
-        from app.adapters.external.formatting.summary_presenter_parts.related_reads import (
+        from app.adapters.external.formatting.summary.related_reads_presenter import (
             build_related_reads_keyboard,
         )
 
@@ -47,7 +47,7 @@ class TestBuildRelatedReadsKeyboard:
             assert "rel:20" in result.inline_keyboard[1][0].callback_data
 
     def test_truncates_long_title(self) -> None:
-        from app.adapters.external.formatting.summary_presenter_parts.related_reads import (
+        from app.adapters.external.formatting.summary.related_reads_presenter import (
             build_related_reads_keyboard,
         )
 
@@ -69,7 +69,7 @@ class TestBuildRelatedReadsKeyboard:
 class TestSendRelatedReads:
     @pytest.mark.asyncio
     async def test_empty_items_sends_nothing(self) -> None:
-        from app.adapters.external.formatting.summary_presenter_parts.related_reads import (
+        from app.adapters.external.formatting.summary.related_reads_presenter import (
             send_related_reads,
         )
 
@@ -82,7 +82,7 @@ class TestSendRelatedReads:
 
     @pytest.mark.asyncio
     async def test_sends_message_with_keyboard(self) -> None:
-        from app.adapters.external.formatting.summary_presenter_parts.related_reads import (
+        from app.adapters.external.formatting.summary.related_reads_presenter import (
             send_related_reads,
         )
 

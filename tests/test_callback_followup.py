@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.adapters.external.formatting.summary_presenter_parts.actions import create_action_buttons
+from app.adapters.external.formatting.summary.action_buttons import create_action_buttons
 from app.adapters.telegram.callback_handler import CallbackHandler
 from app.adapters.telegram.routing.content_router import MessageContentRouter
 from app.adapters.telegram.routing.interactions import MessageInteractionRecorder
@@ -14,11 +14,10 @@ from app.models.llm.llm_models import LLMCallResult
 
 class _ResponseFormatterStub:
     def __init__(self) -> None:
-        self.sender = SimpleNamespace(safe_reply=AsyncMock())
-        self.notifications = SimpleNamespace(send_error_notification=AsyncMock())
-        self.database = SimpleNamespace(send_topic_search_results=AsyncMock())
-        self.summaries = SimpleNamespace(send_russian_translation=AsyncMock())
         self.safe_reply = AsyncMock()
+        self.send_error_notification = AsyncMock()
+        self.send_topic_search_results = AsyncMock()
+        self.send_russian_translation = AsyncMock()
 
 
 @pytest.mark.asyncio
@@ -41,8 +40,8 @@ async def test_callback_ask_starts_followup_session() -> None:
 
     assert handled is True
     assert await handler.has_pending_followup(7) is True
-    formatter.sender.safe_reply.assert_awaited()
-    sent_text = formatter.sender.safe_reply.await_args.args[1]
+    formatter.safe_reply.assert_awaited()
+    sent_text = formatter.safe_reply.await_args.args[1]
     assert "follow-up" in sent_text.lower()
 
 
@@ -96,8 +95,8 @@ async def test_followup_question_uses_llm_grounded_context() -> None:
     llm_client.chat.assert_awaited_once()
     call_messages = llm_client.chat.await_args.args[0]
     assert "main claim" in call_messages[-1]["content"].lower()
-    formatter.sender.safe_reply.assert_awaited()
-    sent_text = formatter.sender.safe_reply.await_args.args[1]
+    formatter.safe_reply.assert_awaited()
+    sent_text = formatter.safe_reply.await_args.args[1]
     assert "stored summary and source" in sent_text
     assert await handler.has_pending_followup(9) is True
 

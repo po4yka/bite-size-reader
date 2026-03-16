@@ -19,13 +19,14 @@ the original API signatures for backward compatibility.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.adapters.external.formatting.data_formatter import DataFormatterImpl
 from app.adapters.external.formatting.database_presenter import DatabasePresenterImpl
 from app.adapters.external.formatting.message_validator import MessageValidatorImpl
 from app.adapters.external.formatting.notification_formatter import NotificationFormatterImpl
 from app.adapters.external.formatting.response_sender import ResponseSenderImpl
+from app.adapters.external.formatting.services import FormattingServices
 from app.adapters.external.formatting.summary_presenter import SummaryPresenterImpl
 from app.adapters.external.formatting.text_processor import TextProcessorImpl
 
@@ -37,7 +38,6 @@ if TYPE_CHECKING:
         DataFormatter,
         MessageValidator,
         NotificationFormatter,
-        ResponseSender,
         SummaryPresenter,
         TextProcessor,
     )
@@ -79,10 +79,6 @@ class ResponseFormatter:
                 When *None*, all notification methods behave as DEBUG (legacy).
             admin_log_chat_id: Optional chat ID for admin-level debug logging.
         """
-        # Store original references for backward compatibility
-        self._safe_reply_func = safe_reply_func
-        self._reply_json_func = reply_json_func
-        self._telegram_client = telegram_client
         self._verbosity_resolver = verbosity_resolver
         self._lang = lang
 
@@ -100,14 +96,14 @@ class ResponseFormatter:
             self.MIN_MESSAGE_INTERVAL_MS = 100
 
         # Initialize components
-        self._data_formatter: DataFormatter = DataFormatterImpl(lang=lang)
+        data_formatter: DataFormatter = DataFormatterImpl(lang=lang)
 
-        self._message_validator: MessageValidator = MessageValidatorImpl(
+        message_validator: MessageValidator = MessageValidatorImpl(
             min_message_interval_ms=self.MIN_MESSAGE_INTERVAL_MS
         )
 
-        self._response_sender: ResponseSender = ResponseSenderImpl(
-            self._message_validator,
+        response_sender = ResponseSenderImpl(
+            message_validator,
             max_message_chars=self.MAX_MESSAGE_CHARS,
             safe_reply_func=safe_reply_func,
             reply_json_func=reply_json_func,
@@ -121,38 +117,48 @@ class ResponseFormatter:
             ),
         )
 
-        self._text_processor: TextProcessor = TextProcessorImpl(
-            self._response_sender,
+        text_processor: TextProcessor = TextProcessorImpl(
+            response_sender,
             max_message_chars=self.MAX_MESSAGE_CHARS,
         )
 
         # Create progress tracker for Reader mode
         from app.core.progress_tracker import ProgressTracker
 
-        self._progress_tracker = ProgressTracker(self._response_sender)
+        progress_tracker = ProgressTracker(response_sender)
 
-        self._notification_formatter: NotificationFormatter = NotificationFormatterImpl(
-            self._response_sender,
-            self._data_formatter,
-            safe_reply_func=safe_reply_func,
+        notification_formatter: NotificationFormatter = NotificationFormatterImpl(
+            response_sender,
+            data_formatter,
             verbosity_resolver=verbosity_resolver,
-            progress_tracker=self._progress_tracker,
+            progress_tracker=progress_tracker,
             lang=lang,
         )
 
-        self._summary_presenter: SummaryPresenterImpl = SummaryPresenterImpl(
-            self._response_sender,
-            self._text_processor,
-            self._data_formatter,
+        summary_presenter: SummaryPresenter = SummaryPresenterImpl(
+            response_sender,
+            text_processor,
+            data_formatter,
             verbosity_resolver=verbosity_resolver,
-            progress_tracker=self._progress_tracker,
+            progress_tracker=progress_tracker,
             topic_manager=topic_manager,
             lang=lang,
         )
 
-        self._database_presenter: DatabasePresenter = DatabasePresenterImpl(
-            self._response_sender,
-            self._data_formatter,
+        database_presenter: DatabasePresenter = DatabasePresenterImpl(
+            response_sender,
+            data_formatter,
+        )
+
+        self._services = FormattingServices(
+            sender=response_sender,
+            notifications=notification_formatter,
+            summaries=summary_presenter,
+            database=database_presenter,
+            validator=message_validator,
+            text_processor=text_processor,
+            data_formatter=data_formatter,
+            progress_tracker=progress_tracker,
         )
 
         # Expose internal state for backward compatibility with existing code
@@ -162,27 +168,55 @@ class ResponseFormatter:
     @property
     def progress_tracker(self) -> ProgressTracker:
         """Expose progress tracker for single-URL progress messages."""
-        return self._progress_tracker
+        return self._services.progress_tracker
 
     @property
-    def sender(self) -> ResponseSender:
-        """Expose response sender for backward-compatible direct access."""
-        return self._response_sender
+    def _response_sender(self) -> ResponseSenderImpl:
+        return cast("ResponseSenderImpl", self._services.sender)
 
     @property
-    def notifications(self) -> NotificationFormatter:
-        """Expose notification formatter for backward-compatible direct access."""
-        return self._notification_formatter
+    def _notification_formatter(self) -> NotificationFormatter:
+        return self._services.notifications
 
     @property
-    def summaries(self) -> SummaryPresenter:
-        """Expose summary presenter for backward-compatible direct access."""
-        return self._summary_presenter
+    def _summary_presenter(self) -> SummaryPresenterImpl:
+        return cast("SummaryPresenterImpl", self._services.summaries)
 
     @property
-    def database(self) -> DatabasePresenter:
-        """Expose database presenter for backward-compatible direct access."""
-        return self._database_presenter
+    def _database_presenter(self) -> DatabasePresenter:
+        return self._services.database
+
+    @property
+    def _message_validator(self) -> MessageValidator:
+        return self._services.validator
+
+    @property
+    def _text_processor(self) -> TextProcessor:
+        return self._services.text_processor
+
+    @property
+    def _data_formatter(self) -> DataFormatter:
+        return self._services.data_formatter
+
+    def set_telegram_client(self, telegram_client: Any) -> None:
+        """Rebind Telegram transport dependencies for runtime wiring and tests."""
+        self._response_sender.set_telegram_client(telegram_client)
+
+    def set_reply_callbacks(
+        self,
+        *,
+        safe_reply_func: Any = ...,
+        reply_json_func: Any = ...,
+    ) -> None:
+        """Update transport callback overrides without mutating internals."""
+        self._response_sender.set_reply_callbacks(
+            safe_reply_func=safe_reply_func,
+            reply_json_func=reply_json_func,
+        )
+
+    def set_topic_manager(self, topic_manager: TopicManager | None) -> None:
+        """Rebind forum-topic routing without mutating presenter internals."""
+        self._summary_presenter.set_topic_manager(topic_manager)
 
     async def is_reader_mode(self, message: Any) -> bool:
         """Return True when the user prefers Reader (consolidated) UX."""
@@ -195,14 +229,6 @@ class ResponseFormatter:
         except Exception:
             logger.debug("verbosity_level_import_failed", exc_info=True)
             return False
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        """Intercept attribute assignments to propagate telegram_client to components."""
-        super().__setattr__(name, value)
-        # Propagate telegram_client changes to response sender for backward compatibility
-        # with tests that set _telegram_client after initialization
-        if name == "_telegram_client" and hasattr(self, "_response_sender"):
-            self._response_sender.set_telegram_client(value)
 
     # =========================================================================
     # ResponseSender delegation (core Telegram sending)
@@ -275,6 +301,10 @@ class ResponseFormatter:
     def clear_message_draft(self, message: Any) -> None:
         """Clear request-scoped draft state."""
         self._response_sender.clear_message_draft(message)
+
+    def is_draft_streaming_enabled(self) -> bool:
+        """Return whether Telegram draft streaming is enabled."""
+        return self._response_sender.is_draft_streaming_enabled()
 
     async def reply_json(
         self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True
@@ -535,6 +565,16 @@ class ResponseFormatter:
         """Send the custom generated article with a nice header and downloadable JSON."""
         await self._summary_presenter.send_custom_article(message, article)
 
+    async def send_related_reads(
+        self,
+        message: Any,
+        items: list[Any],
+        *,
+        lang: str | None = None,
+    ) -> None:
+        """Send related-read shortcuts as a follow-up keyboard."""
+        await self._summary_presenter.send_related_reads(message, items, lang=lang)
+
     # =========================================================================
     # DatabasePresenter delegation (database UI)
     # =========================================================================
@@ -648,7 +688,3 @@ class ResponseFormatter:
     def _format_firecrawl_options(self, options: dict[str, Any] | None) -> str | None:
         """Format Firecrawl options into a display string."""
         return self._data_formatter.format_firecrawl_options(options)
-
-    async def _send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
-        """Send messages for new fields like extractive quotes, highlights, etc."""
-        await self._summary_presenter._send_new_field_messages(message, shaped)
