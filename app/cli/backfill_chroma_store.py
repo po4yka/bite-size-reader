@@ -78,8 +78,19 @@ async def backfill_chroma_store(
     processed = 0
     deleted = 0
     skipped = 0
-    pending_vectors = []
-    pending_metadata = []
+    pending_requests: list[tuple[int, list[list[float]], list[dict[str, Any]]]] = []
+    pending_vector_count = 0
+
+    def flush_pending() -> None:
+        nonlocal pending_vector_count
+        for pending_request_id, request_vectors, request_metadata in pending_requests:
+            vector_store.replace_request_notes(
+                pending_request_id,
+                request_vectors,
+                request_metadata,
+            )
+        pending_requests.clear()
+        pending_vector_count = 0
 
     for summary in summaries:
         summary_id = summary.get("id")
@@ -126,15 +137,17 @@ async def backfill_chroma_store(
             user_id=user_id,
         )
 
+        request_vectors: list[list[float]] = []
+        request_metadata: list[dict[str, Any]] = []
+
         if chunk_windows:
             for text, metadata in chunk_windows:
                 embedding = await embedding_service.generate_embedding(
                     text, language=metadata.get("language"), task_type="document"
                 )
                 vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
-                pending_vectors.append(vector)
-                pending_metadata.append(metadata)
-                processed += 1
+                request_vectors.append(vector)
+                request_metadata.append(metadata)
         else:
             text, metadata = MetadataBuilder.prepare_for_upsert(
                 request_id=request_id,
@@ -159,17 +172,27 @@ async def backfill_chroma_store(
             embedding = embedding_service.deserialize_embedding(existing["embedding_blob"])
             vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
 
-            pending_vectors.append(vector)
-            pending_metadata.append(metadata)
-            processed += 1
+            request_vectors.append(vector)
+            request_metadata.append(metadata)
 
-        if len(pending_vectors) >= batch_size:
-            vector_store.upsert_notes(pending_vectors, pending_metadata)
-            pending_vectors.clear()
-            pending_metadata.clear()
+        if not request_vectors:
+            logger.info(
+                "Deleting vector due to empty generated vectors",
+                extra={"request_id": request_id, "summary_id": summary_id},
+            )
+            vector_store.delete_by_request_id(request_id)
+            deleted += 1
+            continue
 
-    if pending_vectors:
-        vector_store.upsert_notes(pending_vectors, pending_metadata)
+        pending_requests.append((request_id, request_vectors, request_metadata))
+        pending_vector_count += len(request_vectors)
+        processed += len(request_vectors)
+
+        if pending_vector_count >= batch_size:
+            flush_pending()
+
+    if pending_requests:
+        flush_pending()
 
     logger.info(
         "Backfill complete",
@@ -185,13 +208,15 @@ def _load_chroma_config(
     user_scope: str | None,
     collection_version: str | None = None,
 ) -> ChromaConfig:
-    base_cfg = ChromaConfig()
+    base_cfg = load_config(allow_stub_telegram=True).vector_store
     return ChromaConfig(
         host=host or base_cfg.host,
         auth_token=auth_token if auth_token is not None else base_cfg.auth_token,
         environment=environment or base_cfg.environment,
         user_scope=user_scope or base_cfg.user_scope,
         collection_version=collection_version or base_cfg.collection_version,
+        required=base_cfg.required,
+        connection_timeout=base_cfg.connection_timeout,
     )
 
 

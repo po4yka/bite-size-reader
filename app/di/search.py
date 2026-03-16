@@ -3,13 +3,19 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
+from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
+from app.di.repositories import (
+    build_embedding_repository,
+    build_request_repository,
+    build_summary_repository,
+    build_topic_search_repository,
+)
 from app.di.types import SearchDependencies
-from app.services.embedding_factory import create_embedding_service
-from app.services.hybrid_search_service import HybridSearchService
-from app.services.query_expansion_service import QueryExpansionService
-from app.services.reranking_service import OpenRouterRerankingService
-from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
-from app.services.topic_search import LocalTopicSearchService, TopicSearchService
+from app.infrastructure.embedding.embedding_factory import create_embedding_service
+from app.infrastructure.search.hybrid_search_service import HybridSearchService
+from app.infrastructure.search.query_expansion_service import QueryExpansionService
+from app.infrastructure.search.reranking_service import OpenRouterRerankingService
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -72,6 +78,8 @@ def build_search_dependencies(
                 extra={"host": cfg.vector_store.host},
             )
     except Exception as exc:
+        if cfg.vector_store.required:
+            raise
         logger.warning(
             "chroma_init_failed_continuing_without_vector_search",
             extra={"error": str(exc), "host": cfg.vector_store.host},
@@ -79,7 +87,7 @@ def build_search_dependencies(
         vector_store = None
 
     local_searcher = LocalTopicSearchService(
-        db=db,
+        repository=build_topic_search_repository(db),
         max_results=max_results,
         audit_func=audit_func,
     )
@@ -94,7 +102,9 @@ def build_search_dependencies(
     )
     embedding_service = create_embedding_service(cfg.embedding)
     embedding_generator = SummaryEmbeddingGenerator(
-        db=db,
+        embedding_repository=build_embedding_repository(db),
+        request_repository=build_request_repository(db),
+        summary_repository=build_summary_repository(db),
         embedding_service=embedding_service,
         max_token_length=cfg.embedding.max_token_length,
     )
@@ -102,7 +112,7 @@ def build_search_dependencies(
 
     chroma_vector_search_service: Any | None = None
     if vector_store is not None:
-        from app.services.chroma_vector_search_service import ChromaVectorSearchService
+        from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchService
 
         chroma_vector_search_service = ChromaVectorSearchService(
             vector_store=vector_store,

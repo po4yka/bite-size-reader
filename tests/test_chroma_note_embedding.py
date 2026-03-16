@@ -57,9 +57,10 @@ def test_sync_vector_store_embeds_note_text_and_user_notes():
         expected_text, language="en", task_type="document"
     )
 
-    vector_store.upsert_notes.assert_called_once()
-    vectors, metadatas = vector_store.upsert_notes.call_args.args
+    vector_store.replace_request_notes.assert_called_once()
+    replaced_request_id, vectors, metadatas = vector_store.replace_request_notes.call_args.args
 
+    assert replaced_request_id == request_id
     assert vectors == [[0.1, 0.2, 0.3]]
     assert metadatas[0]["text"] == expected_text
     assert metadatas[0]["request_id"] == request_id
@@ -119,7 +120,9 @@ def test_sync_vector_store_chunk_windows():
 
     # Two chunk windows should be embedded
     assert embedding_service.generate_embedding.await_count == 2
-    vectors, metadatas = vector_store.upsert_notes.call_args.args
+    vector_store.replace_request_notes.assert_called_once()
+    replaced_request_id, vectors, metadatas = vector_store.replace_request_notes.call_args.args
+    assert replaced_request_id == request_id
     assert vectors == [[0.1, 0.2], [0.3, 0.4]]
     assert len(metadatas) == 2
     assert metadatas[0]["window_id"]

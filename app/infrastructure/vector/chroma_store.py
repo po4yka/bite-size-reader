@@ -177,20 +177,7 @@ class ChromaVectorStore:
             msg = "IDs must have the same length as vectors"
             raise ValueError(msg)
 
-        final_ids = list(ids) if ids else [self._extract_id(metadata) for metadata in metadatas]
-
-        validated_metadata = []
-        for metadata in metadatas:
-            safe_metadata = {
-                k: v for k, v in dict(metadata).items() if k not in {"environment", "user_scope"}
-            }
-            validated_metadata.append(
-                ChromaMetadata(
-                    **safe_metadata,
-                    environment=self._environment,
-                    user_scope=self._user_scope,
-                ).model_dump()
-            )
+        final_ids, validated_metadata = self._prepare_upsert_payload(metadatas, ids)
 
         try:
             collection = cast("Any", self._collection)
@@ -203,6 +190,62 @@ class ChromaVectorStore:
             logger.error(
                 "chroma_upsert_failed",
                 extra={"count": len(vectors), "error": str(e)},
+            )
+            if self._required:
+                raise
+            self._available = False
+
+    def replace_request_notes(
+        self,
+        request_id: int | str,
+        vectors: Sequence[Sequence[float]],
+        metadatas: Sequence[dict[str, Any]],
+        ids: Sequence[str] | None = None,
+    ) -> None:
+        """Replace all vectors for a request without dropping data on failed upserts.
+
+        The method upserts the refreshed vectors first, then deletes any stale IDs that
+        belonged to the same request but were not part of this write.
+        """
+        if not self._available:
+            self.ensure_available()
+        if not self._available:
+            logger.warning(
+                "chroma_replace_skipped",
+                extra={"reason": "not_available", "request_id": request_id, "count": len(vectors)},
+            )
+            return
+
+        if len(vectors) != len(metadatas):
+            msg = "Vectors and metadatas must have the same length"
+            raise ValueError(msg)
+
+        if ids and len(ids) != len(vectors):
+            msg = "IDs must have the same length as vectors"
+            raise ValueError(msg)
+
+        final_ids, validated_metadata = self._prepare_upsert_payload(metadatas, ids)
+        normalized_request_id = str(request_id)
+        metadata_request_ids = {str(metadata["request_id"]) for metadata in validated_metadata}
+        if metadata_request_ids != {normalized_request_id}:
+            msg = "All metadatas must belong to the same request_id for replacement"
+            raise ValueError(msg)
+
+        try:
+            collection = cast("Any", self._collection)
+            existing_ids = self._fetch_request_ids(collection, request_id)
+            collection.upsert(
+                embeddings=[list(vector) for vector in vectors],
+                metadatas=validated_metadata,
+                ids=final_ids,
+            )
+            stale_ids = sorted(set(existing_ids) - set(final_ids))
+            if stale_ids:
+                collection.delete(ids=stale_ids)
+        except ChromaError as e:
+            logger.error(
+                "chroma_replace_failed",
+                extra={"request_id": request_id, "count": len(vectors), "error": str(e)},
             )
             if self._required:
                 raise
@@ -226,6 +269,48 @@ class ChromaVectorStore:
             return base
 
         return uuid4().hex
+
+    def _prepare_upsert_payload(
+        self,
+        metadatas: Sequence[dict[str, Any]],
+        ids: Sequence[str] | None,
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        final_ids = list(ids) if ids else [self._extract_id(metadata) for metadata in metadatas]
+
+        validated_metadata = []
+        for metadata in metadatas:
+            safe_metadata = {
+                k: v for k, v in dict(metadata).items() if k not in {"environment", "user_scope"}
+            }
+            validated_metadata.append(
+                ChromaMetadata(
+                    **safe_metadata,
+                    environment=self._environment,
+                    user_scope=self._user_scope,
+                ).model_dump()
+            )
+
+        return final_ids, validated_metadata
+
+    @staticmethod
+    def _normalize_ids(raw_ids: Any) -> list[str]:
+        if not raw_ids:
+            return []
+        if isinstance(raw_ids, list):
+            if raw_ids and isinstance(raw_ids[0], list):
+                flat: list[str] = []
+                for batch in raw_ids:
+                    if isinstance(batch, list):
+                        flat.extend(str(item) for item in batch if item is not None)
+                return flat
+            return [str(item) for item in raw_ids if item is not None]
+        return [str(raw_ids)]
+
+    def _fetch_request_ids(self, collection: Any, request_id: int | str) -> list[str]:
+        payload = collection.get(where={"request_id": request_id})
+        if not isinstance(payload, dict):
+            return []
+        return self._normalize_ids(payload.get("ids"))
 
     def query(
         self,

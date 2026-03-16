@@ -156,7 +156,12 @@ class EmbeddingGenerationEventHandler:
             await asyncio.to_thread(self._vector_store.delete_by_request_id, request_id)
             return
 
-        await asyncio.to_thread(self._vector_store.upsert_notes, vectors, metadatas)
+        await asyncio.to_thread(
+            self._vector_store.replace_request_notes,
+            request_id,
+            vectors,
+            metadatas,
+        )
 
         logger.info(
             "vector_store_synced",

@@ -113,6 +113,19 @@ def test_delete_by_request_id(vector_store):
 
 
 @pytest.mark.integration
+def test_replace_request_notes_deletes_only_stale_ids(vector_store):
+    vector_store._collection.get.return_value = {"ids": ["old-id", "fresh-id"]}
+
+    vectors = [[0.1, 0.2, 0.3]]
+    metadatas = [{"request_id": 123, "summary_id": 11, "text": "note 1"}]
+
+    vector_store.replace_request_notes(123, vectors, metadatas, ids=["fresh-id"])
+
+    vector_store._collection.upsert.assert_called_once()
+    vector_store._collection.delete.assert_called_once_with(ids=["old-id"])
+
+
+@pytest.mark.integration
 def test_reset(vector_store):
     # Mock count behavior: first call returns 1, second call returns 0
     vector_store._collection.count.side_effect = [1, 0]
