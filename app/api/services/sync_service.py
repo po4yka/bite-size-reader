@@ -131,6 +131,19 @@ class SyncService:
         self._crawl_repo = crawl_result_repository or build_crawl_result_repository(session_manager)
         self._llm_repo = llm_repository or build_llm_repository(session_manager)
 
+    async def get_max_server_version(self, user_id: int) -> int:
+        """Get the maximum server_version across all synced entity tables."""
+        import asyncio
+
+        versions = await asyncio.gather(
+            self._user_repo.async_get_max_server_version(user_id),
+            self._request_repo.async_get_max_server_version(user_id),
+            self._summary_repo.async_get_max_server_version(user_id),
+            self._crawl_repo.async_get_max_server_version(user_id),
+            self._llm_repo.async_get_max_server_version(user_id),
+        )
+        return max((v for v in versions if v is not None), default=0)
+
     def _resolve_limit(self, requested: int | None) -> int:
         return max(
             self.cfg.sync.min_limit,

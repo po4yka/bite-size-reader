@@ -472,6 +472,20 @@ class SqliteRequestRepositoryAdapter(SqliteBaseRepository):
 
         return result
 
+    async def async_get_max_server_version(self, user_id: int) -> int | None:
+        """Return the maximum server_version across requests owned by *user_id*."""
+
+        def _query() -> int | None:
+            return (
+                Request.select(peewee.fn.MAX(Request.server_version))
+                .where(Request.user_id == user_id)
+                .scalar()
+            )
+
+        return await self._execute(
+            _query, operation_name="get_max_server_version_request", read_only=True
+        )
+
     async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
         """Get all requests for a user (for sync operations).
 

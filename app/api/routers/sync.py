@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 
 from app.api.models.requests import SyncApplyRequest, SyncSessionRequest
 from app.api.models.responses import (
@@ -65,13 +65,25 @@ async def full_sync(
 
 @router.get("/delta")
 async def delta_sync(
+    request: Request,
+    response: Response,
     session_id: str = Query(..., description="Sync session identifier"),
     since: int = Query(..., ge=0, description="Last seen server_version cursor"),
     limit: int | None = Query(None, ge=1, le=500),
     user=Depends(get_current_user),
     svc: Any = Depends(_get_sync_service),
-) -> dict:
+) -> dict | Response:
     """Fetch delta sync (created/updated/deleted) since a cursor."""
+    # Compute ETag from max server_version
+    max_sv = await svc.get_max_server_version(user["user_id"])
+    etag = f'W/"sv-{max_sv}"'
+
+    # Check If-None-Match
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match and if_none_match == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+
+    # Normal path -- fetch delta data
     page: DeltaSyncResponseData = await svc.get_delta(
         session_id=session_id,
         user_id=user["user_id"],
@@ -85,6 +97,8 @@ async def delta_sync(
         "offset": 0,
         "has_more": page.has_more,
     }
+    # Set ETag header on successful response
+    response.headers["ETag"] = etag
     return success_response(page, pagination=pagination)
 
 

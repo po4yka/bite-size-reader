@@ -21,6 +21,20 @@ if TYPE_CHECKING:
 class SqliteUserRepositoryAdapter(SqliteBaseRepository):
     """Adapter for user and interaction operations."""
 
+    async def async_get_max_server_version(self, user_id: int) -> int | None:
+        """Return the maximum server_version for the user identified by *user_id* (telegram_user_id)."""
+
+        def _query() -> int | None:
+            return (
+                User.select(peewee.fn.MAX(User.server_version))
+                .where(User.telegram_user_id == user_id)
+                .scalar()
+            )
+
+        return await self._execute(
+            _query, operation_name="get_max_server_version_user", read_only=True
+        )
+
     async def async_get_user_by_telegram_id(self, telegram_user_id: int) -> dict[str, Any] | None:
         """Get a user by Telegram user ID."""
 

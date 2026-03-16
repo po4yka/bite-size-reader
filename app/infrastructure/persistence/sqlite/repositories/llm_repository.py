@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import peewee
+
 from app.db.models import LLMCall, model_to_dict
 from app.db.utils import prepare_json_payload
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
@@ -119,6 +121,24 @@ class SqliteLLMRepositoryAdapter(SqliteBaseRepository):
             _count,
             operation_name="count_llm_calls_by_request",
             read_only=True,
+        )
+
+    async def async_get_max_server_version(self, user_id: int) -> int | None:
+        """Return the maximum server_version across LLM calls owned by *user_id*."""
+        from peewee import JOIN
+
+        from app.db.models import Request
+
+        def _query() -> int | None:
+            return (
+                LLMCall.select(peewee.fn.MAX(LLMCall.server_version))
+                .join(Request, JOIN.INNER)
+                .where(Request.user_id == user_id)
+                .scalar()
+            )
+
+        return await self._execute(
+            _query, operation_name="get_max_server_version_llm_call", read_only=True
         )
 
     async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:

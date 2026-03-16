@@ -129,6 +129,9 @@ class SummaryRepositoryPort(Protocol):
     async def async_toggle_favorite(self, summary_id: int) -> bool:
         """Toggle favorite status and return the new state."""
 
+    async def async_get_max_server_version(self, user_id: int) -> int | None:
+        """Return the maximum server_version for summaries owned by *user_id*."""
+
     def to_domain_model(self, db_summary: dict[str, Any]) -> DomainSummary:
         """Convert persistence dictionary into a domain model."""
 
@@ -203,6 +206,9 @@ class RequestRepositoryPort(Protocol):
     async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
         """Return all request rows for sync operations."""
 
+    async def async_get_max_server_version(self, user_id: int) -> int | None:
+        """Return the maximum server_version for requests owned by *user_id*."""
+
 
 @runtime_checkable
 class CrawlResultRepositoryPort(Protocol):
@@ -213,6 +219,9 @@ class CrawlResultRepositoryPort(Protocol):
 
     async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
         """Return all crawl rows for sync operations."""
+
+    async def async_get_max_server_version(self, user_id: int) -> int | None:
+        """Return the maximum server_version for crawl results owned by *user_id*."""
 
 
 @runtime_checkable
@@ -236,6 +245,9 @@ class LLMRepositoryPort(Protocol):
 
     async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
         """Return all LLM rows for sync operations."""
+
+    async def async_get_max_server_version(self, user_id: int) -> int | None:
+        """Return the maximum server_version for LLM calls owned by *user_id*."""
 
 
 @runtime_checkable
@@ -333,6 +345,9 @@ class UserRepositoryPort(Protocol):
         preferences: dict[str, Any],
     ) -> None:
         """Update user preferences."""
+
+    async def async_get_max_server_version(self, user_id: int) -> int | None:
+        """Return the maximum server_version for the user identified by *user_id* (telegram_user_id)."""
 
 
 @runtime_checkable
