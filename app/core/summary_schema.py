@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.core.summary_contract_impl.field_names import FIELD_NAME_MAPPING
 from app.core.summary_text_utils import (
     cap_text as _cap_text,
     hash_tagify as _hash_tagify,
@@ -19,41 +20,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Helper utilities used by validators.
 # ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# Field-name normalization mapping (camelCase -> snake_case)
-# ---------------------------------------------------------------------------
-
-_FIELD_NAME_MAPPING: dict[str, str] = {
-    "summary": "summary_1000",
-    "summary250": "summary_250",
-    "summary1000": "summary_1000",
-    "keyideas": "key_ideas",
-    "keyIdeas": "key_ideas",
-    "topictags": "topic_tags",
-    "topicTags": "topic_tags",
-    "estimatedreadingtimemin": "estimated_reading_time_min",
-    "estimatedReadingTimeMin": "estimated_reading_time_min",
-    "keystats": "key_stats",
-    "keyStats": "key_stats",
-    "answeredquestions": "answered_questions",
-    "answeredQuestions": "answered_questions",
-    "seokeywords": "seo_keywords",
-    "seoKeywords": "seo_keywords",
-    "extractivequotes": "extractive_quotes",
-    "extractiveQuotes": "extractive_quotes",
-    "questionsanswered": "questions_answered",
-    "questionsAnswered": "questions_answered",
-    "topictaxonomy": "topic_taxonomy",
-    "topicTaxonomy": "topic_taxonomy",
-    "hallucinationrisk": "hallucination_risk",
-    "hallucinationRisk": "hallucination_risk",
-    "forwardedpostextras": "forwarded_post_extras",
-    "forwardedPostExtras": "forwarded_post_extras",
-    "keypointstoremember": "key_points_to_remember",
-    "keyPointsToRemember": "key_points_to_remember",
-}
-
 
 # ---------------------------------------------------------------------------
 # Pydantic sub-models
@@ -223,7 +189,7 @@ class SummaryModel(BaseModel):
         # --- 1. Normalize field names (camelCase -> snake_case) ---
         normalized: dict[str, Any] = {}
         for key, value in data.items():
-            normalized_key = _FIELD_NAME_MAPPING.get(key, key)
+            normalized_key = FIELD_NAME_MAPPING.get(key, key)
             normalized[normalized_key] = value
         data = normalized
 
