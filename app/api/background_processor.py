@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import random
 import time
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.adapters.content.summarization_models import (
     EnsureSummaryPayloadRequest,
     PureSummaryRequest,
 )
-from app.adapters.content.url_processor import URLProcessor, _get_system_prompt
+from app.adapters.content.url_flow_context_builder import get_url_system_prompt
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import choose_language, detect_language
 from app.core.logging_utils import get_logger, log_exception
@@ -34,6 +35,7 @@ from app.observability.failure_observability import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from app.adapters.content.url_processor import URLProcessor
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
@@ -77,12 +79,14 @@ class BackgroundProcessor:
         redis: Any | None,
         semaphore: asyncio.Semaphore,
         audit_func: Callable[[str, str, dict], None],
+        url_processor_factory: Callable[[DatabaseSessionManager], URLProcessor] | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
         self.summary_repo = SqliteSummaryRepositoryAdapter(db)
         self.request_repo = SqliteRequestRepositoryAdapter(db)
         self.url_processor = url_processor
+        self._url_processor_factory = url_processor_factory
         self.redis = redis
         self._sem = semaphore
         self._audit = audit_func
@@ -319,21 +323,19 @@ class BackgroundProcessor:
         if not db_path:
             return self.db, self.url_processor
 
-        override_cfg = replace(
-            self.cfg,
-            runtime=replace(self.cfg.runtime, db_path=db_path),
-        )
-        override_db = build_runtime_database(override_cfg)
+        if self._url_processor_factory is None:
+            msg = "BackgroundProcessor requires url_processor_factory for DB overrides"
+            raise RuntimeError(msg)
 
-        override_processor = URLProcessor(
-            cfg=self.cfg,
-            db=override_db,
-            firecrawl=self.url_processor.content_extractor.firecrawl,
-            openrouter=self.url_processor.summarization_runtime.openrouter,
-            response_formatter=self.url_processor.response_formatter,
-            audit_func=self._audit,
-            sem=lambda: self._sem,
-        )
+        try:
+            override_cfg = replace(self.cfg, runtime=replace(self.cfg.runtime, db_path=db_path))
+        except TypeError:
+            override_cfg = copy.copy(self.cfg)
+            override_runtime = copy.copy(self.cfg.runtime)
+            cast("Any", override_runtime).db_path = db_path
+            cast("Any", override_cfg).runtime = override_runtime
+        override_db = build_runtime_database(override_cfg)
+        override_processor = self._url_processor_factory(override_db)
 
         return override_db, override_processor
 
@@ -463,7 +465,7 @@ class BackgroundProcessor:
             )
 
         lang = self._resolve_request_language(request, content_text, metadata=metadata)
-        system_prompt = _get_system_prompt(lang)
+        system_prompt = get_url_system_prompt(lang)
 
         await self._publish_update(
             request_id, "PROCESSING", "SUMMARIZATION", "Summarizing content...", 0.5
@@ -548,7 +550,7 @@ class BackgroundProcessor:
             content_text = request.get("content_text") or ""
             detected = detect_language(content_text)
             lang = choose_language(self.cfg.runtime.preferred_lang, detected)
-        system_prompt = _get_system_prompt(lang)
+        system_prompt = get_url_system_prompt(lang)
 
         await self._publish_update(
             request_id, "PROCESSING", "SUMMARIZATION", "Summarizing content...", 0.5

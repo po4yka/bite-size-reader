@@ -439,3 +439,30 @@ def test_resolve_request_language_falls_back_to_detected_content_when_metadata_i
         metadata={"detected_lang": "de"},
     )
     assert lang == "ru"
+
+
+def test_db_override_uses_injected_url_processor_factory(monkeypatch):
+    cfg = DummyCfg()
+    base_processor = StubURLProcessor(StubExtractor(), StubPureSummaryService())
+    factory = MagicMock(return_value=StubURLProcessor(StubExtractor(), StubPureSummaryService()))
+    processor = BackgroundProcessor(
+        cfg=cfg,
+        db=StubDB(),
+        url_processor=base_processor,
+        redis=None,
+        semaphore=asyncio.Semaphore(1),
+        audit_func=lambda *_args, **_kwargs: None,
+        url_processor_factory=factory,
+    )
+    override_db = StubDB()
+
+    monkeypatch.setattr(
+        "app.api.background_processor.build_runtime_database",
+        lambda _cfg: override_db,
+    )
+
+    resolved_db, resolved_processor = processor._maybe_override_db("/tmp/override.db")
+
+    assert resolved_db is override_db
+    assert resolved_processor is factory.return_value
+    factory.assert_called_once_with(override_db)

@@ -131,6 +131,7 @@ class CommandProcessor:
             db=db,
             response_formatter=response_formatter,
             url_processor=url_processor,
+            url_handler=url_handler,
         )
 
         self._url_commands = URLCommandsHandlerImpl(
@@ -321,7 +322,10 @@ class CommandProcessor:
         from app.db.user_interactions import async_safe_update_user_interaction
 
         try:
-            count = await self.url_processor.clear_cache()
+            if self.url_handler is None:
+                msg = "URL handler is unavailable"
+                raise RuntimeError(msg)
+            count = await self.url_handler.clear_extraction_cache()
             await self.response_formatter.safe_reply(
                 message, f"✅ Cache cleared. Removed {count} keys."
             )

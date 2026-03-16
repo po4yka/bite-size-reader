@@ -120,21 +120,39 @@ class URLCommandsHandlerImpl:
                 # Fallback: process sequentially
                 for u in urls:
                     per_link_cid = generate_correlation_id()
-                    await self._url_processor.handle_url_flow(
-                        ctx.message, u, correlation_id=per_link_cid
-                    )
+                    if self._url_handler is not None:
+                        await self._url_handler.handle_single_url(
+                            message=ctx.message,
+                            url=u,
+                            correlation_id=per_link_cid,
+                            interaction_id=ctx.interaction_id,
+                        )
+                    else:
+                        await self._url_processor.handle_url_flow(
+                            ctx.message,
+                            u,
+                            correlation_id=per_link_cid,
+                        )
 
             logger.debug("multi_url_processed", extra={"uid": ctx.uid, "count": len(urls)})
             return None, False
 
         if len(urls) == 1:
             # Single URL - process directly
-            await self._url_processor.handle_url_flow(
-                ctx.message,
-                urls[0],
-                correlation_id=ctx.correlation_id,
-                interaction_id=ctx.interaction_id,
-            )
+            if self._url_handler is not None:
+                await self._url_handler.handle_single_url(
+                    message=ctx.message,
+                    url=urls[0],
+                    correlation_id=ctx.correlation_id,
+                    interaction_id=ctx.interaction_id,
+                )
+            else:
+                await self._url_processor.handle_url_flow(
+                    ctx.message,
+                    urls[0],
+                    correlation_id=ctx.correlation_id,
+                    interaction_id=ctx.interaction_id,
+                )
             return None, False
 
         # No URL - prompt user
@@ -215,9 +233,19 @@ class URLCommandsHandlerImpl:
                 logger.debug(
                     "processing_link_seq", extra={"uid": ctx.uid, "url": u, "cid": per_link_cid}
                 )
-                await self._url_processor.handle_url_flow(
-                    ctx.message, u, correlation_id=per_link_cid
-                )
+                if self._url_handler is not None:
+                    await self._url_handler.handle_single_url(
+                        message=ctx.message,
+                        url=u,
+                        correlation_id=per_link_cid,
+                        interaction_id=ctx.interaction_id,
+                    )
+                else:
+                    await self._url_processor.handle_url_flow(
+                        ctx.message,
+                        u,
+                        correlation_id=per_link_cid,
+                    )
 
     @audit_command("command_cancel")
     async def handle_cancel(self, ctx: CommandExecutionContext) -> None:

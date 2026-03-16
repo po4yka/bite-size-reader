@@ -89,7 +89,37 @@ async def test_handle_awaited_url_filters_invalid_before_processing() -> None:
     )
 
     assert handle_url_flow_mock.await_count == 1
-    assert safe_reply_mock.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_handle_single_url_delegates_to_processor() -> None:
+    handle_url_flow_mock = AsyncMock(return_value="ok")
+    url_processor = cast(
+        "URLProcessor",
+        SimpleNamespace(handle_url_flow=handle_url_flow_mock),
+    )
+    handler = URLHandler(
+        db=cast("DatabaseSessionManager", SimpleNamespace()),
+        response_formatter=cast(
+            "ResponseFormatter",
+            SimpleNamespace(
+                MAX_BATCH_URLS=5,
+                safe_reply=AsyncMock(),
+                send_error_notification=AsyncMock(),
+            ),
+        ),
+        url_processor=url_processor,
+    )
+
+    result = await handler.handle_single_url(
+        message=SimpleNamespace(chat=None),
+        url="https://example.com",
+        correlation_id="cid",
+        interaction_id=7,
+    )
+
+    assert result == "ok"
+    handle_url_flow_mock.assert_awaited_once()
 
 
 def _make_handler() -> URLHandler:

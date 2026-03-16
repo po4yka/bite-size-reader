@@ -1,17 +1,18 @@
-"""Tests for URLProcessor batch_mode and on_phase_change parameters."""
+"""Tests for URLProcessor orchestration with batch-mode aware collaborators."""
 
 from __future__ import annotations
 
 import unittest
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from app.adapters.content.summarization_models import InteractiveSummaryResult
+from app.adapters.content.url_flow_models import (
+    URLFlowContext,
+    URLFlowRequest,
+    URLProcessingFlowResult,
+)
 from app.adapters.content.url_processor import URLProcessor
-
-# Shared patch targets for module-level helpers
-_PATCH_LANG = "app.adapters.content.url_processor.choose_language"
-_PATCH_PROMPT = "app.adapters.content.url_processor._get_system_prompt"
 
 
 class DummyChat:
@@ -23,385 +24,197 @@ class DummyMessage:
         self.chat = DummyChat()
 
 
+def _make_context(*, should_chunk: bool = False) -> URLFlowContext:
+    return URLFlowContext(
+        dedupe_hash="hash",
+        req_id=1,
+        content_text="Test content for the article.",
+        title="Test Title",
+        images=[],
+        chosen_lang="en",
+        needs_ru_translation=False,
+        system_prompt="prompt",
+        should_chunk=should_chunk,
+        max_chars=10_000,
+        chunks=["chunk-1", "chunk-2"] if should_chunk else None,
+    )
+
+
 def _make_processor(
     *,
-    content_extractor: Any = None,
-    content_chunker: Any = None,
-    interactive_summary_service: Any = None,
-    response_formatter: Any = None,
-    summary_repo: Any = None,
-    message_persistence: Any = None,
-    cfg: Any = None,
-) -> URLProcessor:
-    """Create a URLProcessor with mocked dependencies via __new__ (skip __init__)."""
-    proc = URLProcessor.__new__(URLProcessor)
-
-    # Config
-    if cfg is None:
-        cfg = MagicMock()
-        cfg.runtime.preferred_lang = "auto"
-        cfg.runtime.summary_prompt_version = "v1"
-        cfg.runtime.summary_two_pass_enabled = False
-        cfg.openrouter.model = "test-model"
-        cfg.openrouter.structured_output_mode = "json"
-        cfg.openrouter.long_context_model = None
-        cfg.openrouter.temperature = 0.2
-        cfg.openrouter.top_p = 0.9
-        cfg.openrouter.fallback_models = ()
-        cfg.openrouter.flash_model = None
-        cfg.openrouter.flash_fallback_models = ()
-        cfg.openrouter.summary_temperature_json_fallback = None
-        cfg.openrouter.summary_top_p_json_fallback = None
-        cfg.attachment.vision_model = "vision-model"
+    cached_result: URLProcessingFlowResult | None = None,
+    context: URLFlowContext | None = None,
+    summary_result: InteractiveSummaryResult | None = None,
+    chunk_summary: dict[str, Any] | None = None,
+) -> Any:
+    proc: Any = URLProcessor.__new__(URLProcessor)
+    cfg = MagicMock()
+    cfg.openrouter.model = "test-model"
     proc.cfg = cfg
-
-    # Content extractor
-    if content_extractor is None:
-        content_extractor = AsyncMock()
-        content_extractor.extract_and_process_content = AsyncMock(
-            return_value=(1, "Test content for the article.", "firecrawl", "en", "Test Title", [])
+    proc.response_formatter = AsyncMock()
+    proc.cached_summary_responder = MagicMock()
+    proc.cached_summary_responder.maybe_reply = AsyncMock(return_value=cached_result)
+    proc.context_builder = MagicMock()
+    proc.context_builder.build = AsyncMock(return_value=context or _make_context())
+    proc.content_chunker = MagicMock()
+    proc.content_chunker.process_chunks = AsyncMock(
+        return_value=chunk_summary or {"summary_250": "chunked", "tldr": "chunked"}
+    )
+    proc.semantic_helper = MagicMock()
+    proc.semantic_helper.enrich_with_rag_fields = AsyncMock(
+        side_effect=lambda payload, **_kwargs: payload
+    )
+    proc.interactive_summary_service = MagicMock()
+    proc.interactive_summary_service.summarize = AsyncMock(
+        return_value=summary_result
+        or InteractiveSummaryResult(
+            summary={"summary_250": "ok", "tldr": "ok"},
+            llm_result=MagicMock(),
+            served_from_cache=False,
+            model_used="test-model",
         )
-    proc.content_extractor = content_extractor
-
-    # Content chunker
-    if content_chunker is None:
-        content_chunker = MagicMock()
-        content_chunker.should_chunk_content = MagicMock(return_value=(False, 10000, None))
-    proc.content_chunker = content_chunker
-
-    # Interactive summary service
-    if interactive_summary_service is None:
-        interactive_summary_service = AsyncMock()
-        interactive_summary_service.summarize = AsyncMock(
-            return_value=InteractiveSummaryResult(
-                summary={"summary_250": "Test summary", "tldr": "Test tldr"},
-                llm_result=MagicMock(
-                    status="ok",
-                    latency_ms=100,
-                    model="test-model",
-                    cost_usd=0.01,
-                ),
-                served_from_cache=False,
-                model_used="test-model",
-            )
+    )
+    proc.summary_delivery = MagicMock()
+    proc.summary_delivery.deliver_summary = AsyncMock(
+        return_value=URLProcessingFlowResult.from_summary(
+            {"summary_250": "ok", "tldr": "ok"},
+            request_id=1,
         )
-    proc.interactive_summary_service = interactive_summary_service
-    proc.article_generator = AsyncMock()
-    proc.insights_generator = AsyncMock()
-    proc.semantic_helper = AsyncMock()
+    )
+    proc.summary_delivery.send_processing_failure = AsyncMock(
+        return_value=URLProcessingFlowResult(success=False)
+    )
+    proc.post_summary_tasks = MagicMock()
+    proc.post_summary_tasks.schedule_tasks = AsyncMock()
     proc.summarization_runtime = MagicMock()
-
-    # Response formatter
-    if response_formatter is None:
-        response_formatter = AsyncMock()
-    proc.response_formatter = response_formatter
-
-    # Summary repo
-    if summary_repo is None:
-        summary_repo = AsyncMock()
-    proc.summary_repo = summary_repo
-
-    # Message persistence
-    if message_persistence is None:
-        message_persistence = MagicMock()
-        message_persistence.request_repo = AsyncMock()
-        message_persistence.request_repo.async_get_request_by_dedupe_hash = AsyncMock(
-            return_value=None
-        )
-    proc.message_persistence = message_persistence
-
-    # Audit function
-    proc._audit = MagicMock()
-
     return proc
 
 
-class TestBatchModeSuppressesNotifications(unittest.IsolatedAsyncioTestCase):
-    """Verify that batch_mode=True suppresses all intermediate Telegram notifications."""
-
-    async def test_batch_mode_skips_language_detection_notification(self) -> None:
-        formatter = AsyncMock()
-        proc = _make_processor(response_formatter=formatter)
-
-        with patch(_PATCH_LANG, return_value="en"), patch(_PATCH_PROMPT, return_value="prompt"):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-1",
-                batch_mode=True,
-            )
-
-        assert result.success
-        formatter.send_language_detection_notification.assert_not_called()
-
-    async def test_batch_mode_skips_content_analysis_notification(self) -> None:
-        formatter = AsyncMock()
-        proc = _make_processor(response_formatter=formatter)
-
-        with patch(_PATCH_LANG, return_value="en"), patch(_PATCH_PROMPT, return_value="prompt"):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-2",
-                batch_mode=True,
-            )
-
-        assert result.success
-        formatter.send_content_analysis_notification.assert_not_called()
-
-    async def test_batch_mode_skips_structured_summary_response(self) -> None:
-        formatter = AsyncMock()
-        proc = _make_processor(response_formatter=formatter)
-
-        with patch(_PATCH_LANG, return_value="en"), patch(_PATCH_PROMPT, return_value="prompt"):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-3",
-                batch_mode=True,
-            )
-
-        assert result.success
-        formatter.send_structured_summary_response.assert_not_called()
-
+class TestURLProcessorBatchMode(unittest.IsolatedAsyncioTestCase):
     async def test_batch_mode_skips_post_summary_tasks(self) -> None:
-        formatter = AsyncMock()
-        proc = _make_processor(response_formatter=formatter)
+        proc = _make_processor()
 
-        with (
-            patch(_PATCH_LANG, return_value="en"),
-            patch(_PATCH_PROMPT, return_value="prompt"),
-            patch.object(proc, "_schedule_post_summary_tasks", new_callable=AsyncMock) as mock_pst,
-        ):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-4",
-                batch_mode=True,
-            )
+        result = await proc.handle_url_flow(
+            DummyMessage(),
+            "https://example.com/article",
+            correlation_id="cid-1",
+            batch_mode=True,
+        )
 
         assert result.success
-        mock_pst.assert_not_called()
+        proc.post_summary_tasks.schedule_tasks.assert_not_called()
+        proc.summary_delivery.deliver_summary.assert_awaited_once()
 
-    async def test_batch_mode_skips_error_notification_on_summarization_failure(self) -> None:
-        formatter = AsyncMock()
-        summarizer = AsyncMock()
-        summarizer.summarize = AsyncMock(
-            return_value=InteractiveSummaryResult(
+    async def test_default_mode_schedules_post_summary_tasks(self) -> None:
+        proc = _make_processor()
+
+        result = await proc.handle_url_flow(
+            DummyMessage(),
+            "https://example.com/article",
+            correlation_id="cid-2",
+        )
+
+        assert result.success
+        proc.post_summary_tasks.schedule_tasks.assert_awaited_once()
+
+    async def test_cached_result_short_circuits_remaining_flow(self) -> None:
+        cached = URLProcessingFlowResult.from_summary(
+            {"summary_250": "cached", "tldr": "cached"},
+            cached=True,
+            request_id=10,
+        )
+        proc = _make_processor(cached_result=cached)
+
+        result = await proc.handle_url_flow(
+            DummyMessage(),
+            "https://example.com/cached",
+            correlation_id="cid-cache",
+        )
+
+        assert result.cached is True
+        proc.context_builder.build.assert_not_called()
+        proc.interactive_summary_service.summarize.assert_not_called()
+        proc.summary_delivery.deliver_summary.assert_not_called()
+
+    async def test_summary_failure_routes_to_delivery_failure_handler(self) -> None:
+        proc = _make_processor(
+            summary_result=InteractiveSummaryResult(
                 summary=None,
                 llm_result=None,
                 served_from_cache=False,
                 model_used=None,
             )
         )
-        proc = _make_processor(response_formatter=formatter, interactive_summary_service=summarizer)
 
-        with patch(_PATCH_LANG, return_value="en"), patch(_PATCH_PROMPT, return_value="prompt"):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-5",
-                batch_mode=True,
-            )
-
-        assert not result.success
-        formatter.send_error_notification.assert_not_called()
-
-    async def test_batch_mode_skips_error_notification_on_exception(self) -> None:
-        formatter = AsyncMock()
-        extractor = AsyncMock()
-        extractor.extract_and_process_content = AsyncMock(
-            side_effect=RuntimeError("network failure")
+        result = await proc.handle_url_flow(
+            DummyMessage(),
+            "https://example.com/fail",
+            correlation_id="cid-fail",
+            batch_mode=True,
         )
-        proc = _make_processor(response_formatter=formatter, content_extractor=extractor)
 
-        with patch(_PATCH_LANG, return_value="en"), patch(_PATCH_PROMPT, return_value="prompt"):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-6",
-                batch_mode=True,
-            )
+        assert result.success is False
+        proc.summary_delivery.send_processing_failure.assert_awaited_once()
+        proc.post_summary_tasks.schedule_tasks.assert_not_called()
 
-        assert not result.success
-        formatter.send_error_notification.assert_not_called()
+    async def test_chunked_flow_uses_chunker_and_skips_interactive_service(self) -> None:
+        proc = _make_processor(context=_make_context(should_chunk=True))
 
-
-class TestNonBatchModeBackwardCompat(unittest.IsolatedAsyncioTestCase):
-    """Verify that without batch_mode, all notifications are still sent (backward compat)."""
-
-    async def test_default_mode_sends_language_detection_notification(self) -> None:
-        formatter = AsyncMock()
-        proc = _make_processor(response_formatter=formatter)
-
-        with (
-            patch(_PATCH_LANG, return_value="en"),
-            patch(_PATCH_PROMPT, return_value="prompt"),
-            patch.object(proc, "_schedule_post_summary_tasks", new_callable=AsyncMock),
-        ):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-bc-1",
-            )
-
-        assert result.success
-        formatter.send_language_detection_notification.assert_called_once()
-
-    async def test_default_mode_sends_content_analysis_notification(self) -> None:
-        formatter = AsyncMock()
-        proc = _make_processor(response_formatter=formatter)
-
-        with (
-            patch(_PATCH_LANG, return_value="en"),
-            patch(_PATCH_PROMPT, return_value="prompt"),
-            patch.object(proc, "_schedule_post_summary_tasks", new_callable=AsyncMock),
-        ):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-bc-2",
-            )
-
-        assert result.success
-        formatter.send_content_analysis_notification.assert_called_once()
-
-    async def test_default_mode_sends_structured_summary_response(self) -> None:
-        formatter = AsyncMock()
-        proc = _make_processor(response_formatter=formatter)
-
-        with (
-            patch(_PATCH_LANG, return_value="en"),
-            patch(_PATCH_PROMPT, return_value="prompt"),
-            patch.object(proc, "_schedule_post_summary_tasks", new_callable=AsyncMock),
-        ):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-bc-3",
-            )
-
-        assert result.success
-        formatter.send_structured_summary_response.assert_called_once()
-
-    async def test_default_mode_calls_post_summary_tasks(self) -> None:
-        formatter = AsyncMock()
-        proc = _make_processor(response_formatter=formatter)
-
-        with (
-            patch(_PATCH_LANG, return_value="en"),
-            patch(_PATCH_PROMPT, return_value="prompt"),
-            patch.object(proc, "_schedule_post_summary_tasks", new_callable=AsyncMock) as mock_pst,
-        ):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-bc-4",
-            )
-
-        assert result.success
-        mock_pst.assert_called_once()
-
-    async def test_default_mode_sends_error_notification_on_failure(self) -> None:
-        formatter = AsyncMock()
-        summarizer = AsyncMock()
-        summarizer.summarize = AsyncMock(
-            return_value=InteractiveSummaryResult(
-                summary=None,
-                llm_result=None,
-                served_from_cache=False,
-                model_used=None,
-            )
+        result = await proc.handle_url_flow(
+            DummyMessage(),
+            "https://example.com/chunked",
+            correlation_id="cid-chunk",
         )
-        proc = _make_processor(response_formatter=formatter, interactive_summary_service=summarizer)
-
-        with patch(_PATCH_LANG, return_value="en"), patch(_PATCH_PROMPT, return_value="prompt"):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-bc-5",
-            )
-
-        assert not result.success
-        formatter.send_error_notification.assert_called_once()
-
-
-class TestOnPhaseChangeCallback(unittest.IsolatedAsyncioTestCase):
-    """Verify on_phase_change callback is invoked at the right processing phases."""
-
-    async def test_phase_change_called_for_extracting_and_analyzing(self) -> None:
-        formatter = AsyncMock()
-        proc = _make_processor(response_formatter=formatter)
-        phases: list[str] = []
-
-        async def track_phase(
-            phase: str,
-            title: str | None = None,
-            content_length: int | None = None,
-            model: str | None = None,
-        ) -> None:
-            phases.append(phase)
-
-        with (
-            patch(_PATCH_LANG, return_value="en"),
-            patch(_PATCH_PROMPT, return_value="prompt"),
-            patch.object(proc, "_schedule_post_summary_tasks", new_callable=AsyncMock),
-        ):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-phase-1",
-                on_phase_change=track_phase,
-            )
 
         assert result.success
-        assert "extracting" in phases
-        assert "analyzing" in phases
-        # Extracting should come before analyzing
-        assert phases.index("extracting") < phases.index("analyzing")
+        proc.content_chunker.process_chunks.assert_awaited_once()
+        proc.semantic_helper.enrich_with_rag_fields.assert_awaited_once()
+        proc.interactive_summary_service.summarize.assert_not_called()
 
-    async def test_phase_change_none_does_not_break(self) -> None:
-        """on_phase_change=None (default) should not cause any errors."""
-        formatter = AsyncMock()
-        proc = _make_processor(response_formatter=formatter)
+    async def test_exception_sends_error_notification_only_when_not_batch(self) -> None:
+        proc = _make_processor()
+        proc.context_builder.build = AsyncMock(side_effect=RuntimeError("boom"))
 
-        with (
-            patch(_PATCH_LANG, return_value="en"),
-            patch(_PATCH_PROMPT, return_value="prompt"),
-            patch.object(proc, "_schedule_post_summary_tasks", new_callable=AsyncMock),
-        ):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-phase-2",
-                on_phase_change=None,
-            )
+        result = await proc.handle_url_flow(
+            DummyMessage(),
+            "https://example.com/error",
+            correlation_id="cid-error",
+        )
 
-        assert result.success
+        assert result.success is False
+        proc.response_formatter.send_error_notification.assert_awaited_once()
 
-    async def test_phase_change_works_with_batch_mode(self) -> None:
-        """on_phase_change should still fire even in batch_mode."""
-        formatter = AsyncMock()
-        proc = _make_processor(response_formatter=formatter)
-        phases: list[str] = []
+    async def test_batch_mode_exception_suppresses_error_notification(self) -> None:
+        proc = _make_processor()
+        proc.context_builder.build = AsyncMock(side_effect=RuntimeError("boom"))
 
-        async def track_phase(
-            phase: str,
-            title: str | None = None,
-            content_length: int | None = None,
-            model: str | None = None,
-        ) -> None:
-            phases.append(phase)
+        result = await proc.handle_url_flow(
+            DummyMessage(),
+            "https://example.com/error",
+            correlation_id="cid-error-batch",
+            batch_mode=True,
+        )
 
-        with patch(_PATCH_LANG, return_value="en"), patch(_PATCH_PROMPT, return_value="prompt"):
-            result = await proc.handle_url_flow(
-                DummyMessage(),
-                "https://example.com/article",
-                correlation_id="cid-phase-3",
-                batch_mode=True,
-                on_phase_change=track_phase,
-            )
+        assert result.success is False
+        proc.response_formatter.send_error_notification.assert_not_called()
 
-        assert result.success
-        assert "extracting" in phases
-        assert "analyzing" in phases
+    async def test_context_builder_receives_full_request_envelope(self) -> None:
+        proc = _make_processor()
+
+        await proc.handle_url_flow(
+            DummyMessage(),
+            "https://example.com/request",
+            correlation_id="cid-request",
+            interaction_id=9,
+            silent=True,
+            batch_mode=True,
+            on_phase_change=AsyncMock(),
+            progress_tracker=MagicMock(),
+        )
+
+        request = proc.context_builder.build.await_args.args[0]
+        assert isinstance(request, URLFlowRequest)
+        assert request.correlation_id == "cid-request"
+        assert request.interaction_id == 9
+        assert request.silent is True
+        assert request.batch_mode is True

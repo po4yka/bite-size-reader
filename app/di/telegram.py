@@ -9,11 +9,11 @@ from app.adapters.telegram.command_processor import CommandProcessor
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
-from app.adapters.content.url_processor import URLProcessor
+from app.adapters.telegram.url_handler import URLHandler
 from app.core.verbosity import VerbosityResolver
 from app.di.container import Container
 from app.di.search import build_search_dependencies, get_topic_search_limit
-from app.di.shared import build_async_audit_sink, build_core_dependencies
+from app.di.shared import build_async_audit_sink, build_core_dependencies, build_url_processor
 from app.di.types import SummaryCliRuntime, TelegramRuntime
 from app.security.file_validation import SecureFileValidator
 from app.services.adaptive_timeout import AdaptiveTimeoutService
@@ -21,6 +21,7 @@ from app.services.related_reads_service import RelatedReadsService
 from app.services.vector_search_service import VectorSearchService
 
 if TYPE_CHECKING:
+    from app.adapters.content.url_processor import URLProcessor
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
@@ -62,7 +63,7 @@ def build_telegram_runtime(
         topic_search_max_results=topic_search_max_results,
     )
 
-    url_processor = URLProcessor(
+    url_processor = build_url_processor(
         cfg=cfg,
         db=db,
         firecrawl=core.scraper_chain,
@@ -175,7 +176,7 @@ def build_summary_cli_runtime(
         firecrawl_client=core.firecrawl_client,
     )
 
-    url_processor = URLProcessor(
+    url_processor = build_url_processor(
         cfg=cfg,
         db=db,
         firecrawl=core.scraper_chain,
@@ -192,12 +193,18 @@ def build_summary_cli_runtime(
         embedding_generator=search.embedding_generator,
     )
     container.wire_event_handlers_auto()
+    url_handler = URLHandler(
+        db=db,
+        response_formatter=core.response_formatter,
+        url_processor=url_processor,
+    )
     command_processor = CommandProcessor(
         cfg=cfg,
         response_formatter=core.response_formatter,
         db=db,
         url_processor=url_processor,
         audit_func=core.audit_sink,
+        url_handler=url_handler,
         topic_searcher=search.topic_searcher,
         local_searcher=search.local_searcher,
         container=container,
@@ -278,7 +285,7 @@ def _wire_related_reads(
             vector_search_service,
             min_similarity=cfg.runtime.related_reads_min_similarity,
         )
-        url_processor._related_reads_service = related_reads_service
+        url_processor.post_summary_tasks._related_reads_service = related_reads_service
         forward_processor._related_reads_service = related_reads_service
         logger.info("related_reads_service_initialized")
     except Exception as exc:

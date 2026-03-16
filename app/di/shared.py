@@ -15,8 +15,12 @@ from app.di.types import CoreDependencies
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from app.adapters.repository_ports import SummaryRepositoryPort
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
+    from app.db.write_queue import DbWriteQueue
+    from app.services.related_reads_service import RelatedReadsService
+    from app.services.topic_search import TopicSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +112,38 @@ def build_core_dependencies(
         scraper_chain=scraper_chain,
         response_formatter=response_formatter,
         firecrawl_client=firecrawl_client,
+    )
+
+
+def build_url_processor(
+    *,
+    cfg: AppConfig,
+    db: DatabaseSessionManager,
+    firecrawl: Any,
+    openrouter: Any,
+    response_formatter: Any,
+    audit_func: Callable[[str, str, dict[str, Any]], None],
+    sem: Callable[[], asyncio.Semaphore],
+    topic_search: TopicSearchService | None = None,
+    db_write_queue: DbWriteQueue | None = None,
+    summary_repo: SummaryRepositoryPort | None = None,
+    related_reads_service: RelatedReadsService | None = None,
+) -> Any:
+    """Build the shared URL processor graph for Telegram, API, and CLI runtimes."""
+    from app.adapters.content.url_processor import URLProcessor
+
+    return URLProcessor(
+        cfg=cfg,
+        db=db,
+        firecrawl=firecrawl,
+        openrouter=openrouter,
+        response_formatter=response_formatter,
+        audit_func=audit_func,
+        sem=sem,
+        topic_search=topic_search,
+        db_write_queue=db_write_queue,
+        summary_repo=summary_repo,
+        related_reads_service=related_reads_service,
     )
 
 

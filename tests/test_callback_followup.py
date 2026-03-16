@@ -58,7 +58,6 @@ async def test_followup_question_uses_llm_grounded_context() -> None:
     )
     url_handler = SimpleNamespace(
         _llm_client=llm_client,
-        url_processor=SimpleNamespace(summarization_runtime=SimpleNamespace(openrouter=llm_client)),
     )
     handler = CallbackHandler(
         db=MagicMock(),

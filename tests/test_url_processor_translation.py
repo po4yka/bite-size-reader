@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from typing import Any, cast
 
-from app.adapters.content.url_processor import URLProcessor
+from app.adapters.content.url_post_summary_task_service import URLPostSummaryTaskService
 
 
 class DummyMessage:
@@ -16,7 +16,10 @@ class StubFormatter:
         self.messages: list[tuple[str, str | None, str | None]] = []
 
     async def send_russian_translation(
-        self, message: DummyMessage, translated_text: str, correlation_id: str | None = None
+        self,
+        message: DummyMessage,
+        translated_text: str,
+        correlation_id: str | None = None,
     ) -> None:
         self.messages.append(("translation", translated_text, correlation_id))
 
@@ -25,14 +28,14 @@ class StubFormatter:
         message.replies.append(text)
 
 
-class StubSummarizer:
+class StubArticleGenerator:
     def __init__(self, translated_text: str | None) -> None:
         self.translated_text = translated_text
-        self.calls: list[tuple[dict, int, str | None]] = []
+        self.calls: list[tuple[dict[str, Any], int, str | None]] = []
 
     async def translate_summary_to_ru(
         self,
-        summary: dict,
+        summary: dict[str, Any],
         *,
         req_id: int,
         correlation_id: str | None = None,
@@ -43,15 +46,27 @@ class StubSummarizer:
         return self.translated_text
 
 
+def _make_service(
+    translated_text: str | None,
+) -> tuple[URLPostSummaryTaskService, StubFormatter, StubArticleGenerator]:
+    formatter = StubFormatter()
+    article_generator = StubArticleGenerator(translated_text)
+    service = URLPostSummaryTaskService(
+        response_formatter=cast("Any", formatter),
+        summary_repo=cast("Any", object()),
+        article_generator=cast("Any", article_generator),
+        insights_generator=cast("Any", object()),
+        summary_delivery=cast("Any", object()),
+        related_reads_service=None,
+    )
+    return service, formatter, article_generator
+
+
 class TestURLProcessorTranslation(unittest.IsolatedAsyncioTestCase):
     async def test_translation_skipped_when_not_needed(self) -> None:
-        processor = URLProcessor.__new__(URLProcessor)
-        formatter = StubFormatter()
-        summarizer = StubSummarizer("перевод")
-        processor.response_formatter = cast("Any", formatter)
-        processor.article_generator = cast("Any", summarizer)
+        service, formatter, _article_generator = _make_service("перевод")
 
-        await processor._maybe_send_russian_translation(
+        await service._maybe_send_russian_translation(
             DummyMessage(),
             {"summary_250": "hi"},
             req_id=1,
@@ -62,14 +77,9 @@ class TestURLProcessorTranslation(unittest.IsolatedAsyncioTestCase):
         assert formatter.messages == []
 
     async def test_translation_sent_when_available(self) -> None:
-        formatter = StubFormatter()
-        summarizer = StubSummarizer("Готовый перевод")
+        service, formatter, article_generator = _make_service("Готовый перевод")
 
-        processor = URLProcessor.__new__(URLProcessor)
-        processor.response_formatter = cast("Any", formatter)
-        processor.article_generator = cast("Any", summarizer)
-
-        await processor._maybe_send_russian_translation(
+        await service._maybe_send_russian_translation(
             DummyMessage(),
             {"summary_250": "hello"},
             req_id=7,
@@ -78,17 +88,12 @@ class TestURLProcessorTranslation(unittest.IsolatedAsyncioTestCase):
         )
 
         assert ("translation", "Готовый перевод", "cid-ru") in formatter.messages
-        assert summarizer.calls == [({"summary_250": "hello"}, 7, "cid-ru")]
+        assert article_generator.calls == [({"summary_250": "hello"}, 7, "cid-ru")]
 
     async def test_translation_fallback_notice_on_none(self) -> None:
-        formatter = StubFormatter()
-        summarizer = StubSummarizer(None)
+        service, formatter, _article_generator = _make_service(None)
 
-        processor = URLProcessor.__new__(URLProcessor)
-        processor.response_formatter = cast("Any", formatter)
-        processor.article_generator = cast("Any", summarizer)
-
-        await processor._maybe_send_russian_translation(
+        await service._maybe_send_russian_translation(
             DummyMessage(),
             {"summary_250": "hello"},
             req_id=3,
@@ -96,5 +101,4 @@ class TestURLProcessorTranslation(unittest.IsolatedAsyncioTestCase):
             needs_translation=True,
         )
 
-        # Expect a safe reply when translation fails
         assert any(msg[0] == "safe" for msg in formatter.messages)

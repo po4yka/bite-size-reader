@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.content.url_processor import URLProcessor
 from app.api.background_processor import BackgroundProcessor
 from app.api.services.sync_service import SyncService
 from app.application.use_cases.search_read_model import SearchReadModelUseCase
@@ -12,7 +11,12 @@ from app.config import load_config
 from app.core.logging_utils import get_logger
 from app.di.database import build_runtime_database
 from app.di.search import build_search_dependencies
-from app.di.shared import build_async_audit_sink, build_core_dependencies, close_runtime_resources
+from app.di.shared import (
+    build_async_audit_sink,
+    build_core_dependencies,
+    build_url_processor,
+    close_runtime_resources,
+)
 from app.di.types import ApiRuntime
 from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
     SqliteCrawlResultRepositoryAdapter,
@@ -62,7 +66,7 @@ async def build_api_runtime(
         firecrawl_client=core.firecrawl_client,
     )
     redis = redis_client if redis_client is not None else await get_redis(app_cfg)
-    url_processor = URLProcessor(
+    url_processor = build_url_processor(
         cfg=app_cfg,
         db=database,
         firecrawl=core.scraper_chain,
@@ -72,10 +76,24 @@ async def build_api_runtime(
         sem=core.semaphore_factory,
         topic_search=search.topic_searcher if app_cfg.web_search.enabled else None,
     )
+
+    def url_processor_factory(runtime_db: Any) -> Any:
+        return build_url_processor(
+            cfg=app_cfg,
+            db=runtime_db,
+            firecrawl=core.scraper_chain,
+            openrouter=core.llm_client,
+            response_formatter=core.response_formatter,
+            audit_func=core.audit_sink,
+            sem=core.semaphore_factory,
+            topic_search=search.topic_searcher if app_cfg.web_search.enabled else None,
+        )
+
     background_processor = BackgroundProcessor(
         cfg=app_cfg,
         db=database,
         url_processor=url_processor,
+        url_processor_factory=url_processor_factory,
         redis=redis,
         semaphore=core.semaphore_factory(),
         audit_func=core.audit_sink,

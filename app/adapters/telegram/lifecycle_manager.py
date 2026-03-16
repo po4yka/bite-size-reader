@@ -75,7 +75,7 @@ class TelegramLifecycleManager:
 
     async def _clear_startup_cache(self) -> None:
         try:
-            cleaned = await self._bot.url_processor.clear_cache()
+            cleaned = await self._bot.message_handler.url_handler.clear_extraction_cache()
             logger.info("startup_cache_cleared", extra={"count": cleaned})
         except Exception as exc:
             raise_if_cancelled(exc)

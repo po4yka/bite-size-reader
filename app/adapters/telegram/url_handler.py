@@ -63,6 +63,7 @@ class URLHandler:
         self.request_repo = request_repo or create_request_repository(db)
         self.response_formatter = response_formatter
         self.url_processor = url_processor
+        self._llm_client = llm_client
         self._adaptive_timeout = adaptive_timeout_service
         self.verbosity_resolver = verbosity_resolver
         self._file_validator = file_validator or SecureFileValidator()
@@ -79,10 +80,11 @@ class URLHandler:
             )
         )
         self._batch_processor = batch_processor or URLBatchProcessor(
-            url_processor=self.url_processor,
             response_formatter=self.response_formatter,
             request_repo=self.request_repo,
             user_repo=self.user_repo,
+            summary_repo=getattr(url_processor, "summary_repo", None),
+            audit_func=getattr(url_processor, "_audit", None),
             relationship_analysis_service=self._relationship_analysis_service,
         )
 
@@ -138,6 +140,7 @@ class URLHandler:
                 max_concurrent=max_concurrent,
                 max_retries=self._batch_policy.max_retries,
                 compute_timeout=self._compute_url_timeout,
+                handle_single_url=self.handle_single_url,
             )
         )
 
@@ -187,7 +190,7 @@ class URLHandler:
             )
             return
 
-        await self._process_single_url(
+        await self.handle_single_url(
             message=message,
             url=urls[0],
             correlation_id=correlation_id,
@@ -226,7 +229,7 @@ class URLHandler:
             )
             return
 
-        await self._process_single_url(
+        await self.handle_single_url(
             message=message,
             url=urls[0],
             correlation_id=correlation_id,
@@ -350,22 +353,49 @@ class URLHandler:
             if file_path:
                 await self._cleanup_downloaded_file(file_path, correlation_id)
 
-    async def _process_single_url(
+    async def handle_single_url(
         self,
         *,
         message: Any,
         url: str,
         correlation_id: str,
-        interaction_id: int,
-    ) -> None:
-        progress_tracker = await self._resolve_progress_tracker(message)
-        await self.url_processor.handle_url_flow(
+        interaction_id: int | None = None,
+        batch_mode: bool = False,
+        on_phase_change: Any | None = None,
+        progress_tracker: Any | None = None,
+    ) -> Any:
+        resolved_progress_tracker = progress_tracker
+        if resolved_progress_tracker is None and not batch_mode:
+            resolved_progress_tracker = await self._resolve_progress_tracker(message)
+        return await self.url_processor.handle_url_flow(
             message,
             url,
             correlation_id=correlation_id,
             interaction_id=interaction_id,
-            progress_tracker=progress_tracker,
+            batch_mode=batch_mode,
+            on_phase_change=on_phase_change,
+            progress_tracker=resolved_progress_tracker,
         )
+
+    async def translate_summary_to_ru(
+        self,
+        summary: dict[str, Any],
+        *,
+        req_id: int,
+        correlation_id: str | None = None,
+        url_hash: str | None = None,
+        source_lang: str | None = None,
+    ) -> str | None:
+        return await self.url_processor.post_summary_tasks.translate_summary_to_ru(
+            summary,
+            req_id=req_id,
+            correlation_id=correlation_id,
+            url_hash=url_hash,
+            source_lang=source_lang,
+        )
+
+    async def clear_extraction_cache(self) -> int:
+        return await self.url_processor.content_extractor.clear_cache()
 
     async def _resolve_progress_tracker(self, message: Any) -> Any | None:
         if not self.verbosity_resolver:

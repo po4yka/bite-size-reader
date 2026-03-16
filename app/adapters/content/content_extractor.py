@@ -66,6 +66,10 @@ class ContentExtractor(
         self._youtube_downloader: YouTubeDownloader | None = None
         self._twitter_extractor: Any | None = None
 
+    async def clear_cache(self) -> int:
+        """Clear the extraction cache."""
+        return await self._cache.clear()
+
     async def extract_content_pure(
         self,
         url: str,

@@ -347,44 +347,33 @@ class TestSearchHandlerAuditCancelledError:
 
 
 # ---------------------------------------------------------------------------
-# url_processor -- Russian translation fallback
+# url_post_summary_task_service -- Russian translation fallback
 # ---------------------------------------------------------------------------
 
 
-class TestURLProcessorRuTranslationCancelledError:
+class TestURLPostSummaryTaskServiceRuTranslationCancelledError:
     """Russian translation error reply must propagate CancelledError."""
 
     @pytest.mark.asyncio
     async def test_propagates_cancelled(self) -> None:
-        from app.adapters.content.url_processor import URLProcessor
+        from app.adapters.content.url_post_summary_task_service import URLPostSummaryTaskService
 
-        cfg = MagicMock()
-        cfg.openrouter.model = "test"
-        cfg.openrouter.structured_output_mode = "json_object"
-        cfg.openrouter.long_context_model = None
-        cfg.runtime.preferred_lang = "en"
         formatter = MagicMock()
         formatter.safe_reply = AsyncMock(side_effect=asyncio.CancelledError())
-        sem_ctx = MagicMock()
-        sem_ctx.__aenter__ = AsyncMock(return_value=None)
-        sem_ctx.__aexit__ = AsyncMock(return_value=False)
-
-        processor = URLProcessor(
-            cfg=cfg,
-            db=MagicMock(),
-            firecrawl=MagicMock(),
-            openrouter=MagicMock(),
+        service = URLPostSummaryTaskService(
             response_formatter=formatter,
-            audit_func=MagicMock(),
-            sem=MagicMock(return_value=sem_ctx),
+            summary_repo=MagicMock(),
+            article_generator=MagicMock(),
+            insights_generator=MagicMock(),
+            summary_delivery=MagicMock(),
         )
 
-        processor.article_generator.translate_summary_to_ru = AsyncMock(  # type: ignore[method-assign]
+        service.translate_summary_to_ru = AsyncMock(  # type: ignore[method-assign]
             side_effect=RuntimeError("translate failed")
         )
 
         with pytest.raises(asyncio.CancelledError):
-            await processor._maybe_send_russian_translation(
+            await service._maybe_send_russian_translation(
                 message=MagicMock(),
                 summary={"tldr": "test"},
                 req_id=1,

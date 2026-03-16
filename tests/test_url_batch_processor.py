@@ -26,12 +26,7 @@ def _make_processor(
         edit_message=AsyncMock(return_value=True),
         sender=None,
     )
-    url_processor = SimpleNamespace(
-        handle_url_flow=AsyncMock(),
-        summary_repo=SimpleNamespace(async_get_summary_by_request=AsyncMock(return_value=None)),
-    )
     return URLBatchProcessor(
-        url_processor=url_processor,
         response_formatter=response_formatter,
         request_repo=request_repo
         or SimpleNamespace(
@@ -40,6 +35,7 @@ def _make_processor(
             async_update_request_error=AsyncMock(),
         ),
         user_repo=user_repo or SimpleNamespace(async_update_user_interaction=AsyncMock()),
+        summary_repo=SimpleNamespace(async_get_summary_by_request=AsyncMock(return_value=None)),
         relationship_analysis_service=None,
     )
 
@@ -52,7 +48,7 @@ async def test_cache_hit_delivers_cached_summary_without_new_request() -> None:
         async_update_request_error=AsyncMock(),
     )
     processor = _make_processor(request_repo=request_repo)
-    processor._url_processor.summary_repo.async_get_summary_by_request = AsyncMock(
+    processor._summary_repo.async_get_summary_by_request = AsyncMock(
         return_value={"json_payload": {"title": "Cached article", "summary_250": "Cached summary"}}
     )
 
@@ -61,6 +57,7 @@ async def test_cache_hit_delivers_cached_summary_without_new_request() -> None:
         urls=["https://example.com/cached"],
         uid=1,
         correlation_id="cid",
+        handle_single_url=AsyncMock(),
     )
 
     with (
@@ -113,9 +110,7 @@ async def test_batch_completion_updates_interaction_once_processing_finishes() -
         async_update_request_error=AsyncMock(),
     )
     processor = _make_processor(request_repo=request_repo, user_repo=user_repo)
-    processor._url_processor.handle_url_flow = AsyncMock(
-        return_value=SimpleNamespace(title="Processed")
-    )
+    handle_single_url = AsyncMock(return_value=SimpleNamespace(title="Processed"))
 
     request = BatchProcessRequest(
         message=SimpleNamespace(chat=SimpleNamespace(id=1)),
@@ -124,6 +119,7 @@ async def test_batch_completion_updates_interaction_once_processing_finishes() -
         correlation_id="cid",
         interaction_id=77,
         start_time=time.time() - 1,
+        handle_single_url=handle_single_url,
     )
 
     with (

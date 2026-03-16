@@ -10,6 +10,7 @@ import asyncio
 import time
 import unittest
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -96,8 +97,8 @@ def _make_url_handler() -> URLHandler:
     response_formatter.edit_message = AsyncMock(return_value=True)
     response_formatter.MAX_BATCH_URLS = 20
     url_processor = MagicMock()
-    url_processor.handle_url_flow = AsyncMock()
     handler = URLHandler(db=db, response_formatter=response_formatter, url_processor=url_processor)
+    cast("Any", handler).handle_single_url = AsyncMock()
 
     # Avoid hitting real repository internals in fail-fast timing tests.
     next_request_id = 0
@@ -113,6 +114,7 @@ def _make_url_handler() -> URLHandler:
         side_effect=_create_minimal_request
     )
     handler.request_repo.async_update_request_error = AsyncMock()
+    handler._batch_processor._request_repo = handler.request_repo
     return handler
 
 
@@ -142,7 +144,7 @@ async def test_concurrent_same_domain_cancel_on_timeout():
     async def _slow_handler(*args, **kwargs):
         await asyncio.sleep(999)
 
-    handler.url_processor.handle_url_flow = AsyncMock(side_effect=_slow_handler)
+    cast("Any", handler).handle_single_url = AsyncMock(side_effect=_slow_handler)
     handler._batch_policy = URLBatchPolicyService(
         initial_timeout_sec=test_timeout,
         max_timeout_sec=test_timeout * 2,
@@ -188,7 +190,7 @@ async def test_mixed_domains_only_cancel_affected():
             return None
         return SimpleNamespace(title=f"Title for {url}")
 
-    handler.url_processor.handle_url_flow = AsyncMock(side_effect=_domain_aware_handler)
+    handler.handle_single_url = AsyncMock(side_effect=_domain_aware_handler)
     handler._batch_policy = URLBatchPolicyService(
         initial_timeout_sec=test_timeout,
         max_timeout_sec=test_timeout * 2,
@@ -227,7 +229,7 @@ async def test_event_already_set_skips_immediately():
     async def _hang_forever(*args, **kwargs):
         await asyncio.sleep(999)
 
-    handler.url_processor.handle_url_flow = AsyncMock(side_effect=_hang_forever)
+    handler.handle_single_url = AsyncMock(side_effect=_hang_forever)
     handler._batch_policy = URLBatchPolicyService(
         initial_timeout_sec=test_timeout,
         max_timeout_sec=test_timeout * 2,

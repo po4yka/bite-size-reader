@@ -12,7 +12,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Coroutine
 
 from app.adapters.external.formatting import BatchProgressFormatter
 from app.core.async_utils import raise_if_cancelled
@@ -79,6 +79,7 @@ class BatchProcessRequest:
     max_concurrent: int = 4
     max_retries: int = 2
     compute_timeout: Callable[[str, int], Awaitable[float]] | None = None
+    handle_single_url: Callable[..., Coroutine[Any, Any, Any]] | None = None
 
 
 @dataclass(slots=True)
@@ -123,16 +124,18 @@ class URLBatchProcessor:
     def __init__(
         self,
         *,
-        url_processor: Any,
         response_formatter: Any,
         request_repo: Any,
         user_repo: Any,
+        summary_repo: Any,
+        audit_func: Any | None = None,
         relationship_analysis_service: Any | None = None,
     ) -> None:
-        self._url_processor = url_processor
         self._response_formatter = response_formatter
         self._request_repo = request_repo
         self._user_repo = user_repo
+        self._summary_repo = summary_repo
+        self._audit = audit_func
         self._relationship_analysis_service = relationship_analysis_service
 
     async def process(self, batch_request: BatchProcessRequest) -> BatchProcessingResult | None:
@@ -247,7 +250,7 @@ class URLBatchProcessor:
 
         request_id = existing_request.get("id")
         summary = await _await_if_needed(
-            self._url_processor.summary_repo.async_get_summary_by_request(request_id)
+            self._summary_repo.async_get_summary_by_request(request_id)
         )
         if not summary:
             return False
@@ -272,8 +275,8 @@ class URLBatchProcessor:
             "batch_url_cache_hit",
             extra={"url": url, "request_id": request_id, "uid": state.request.uid},
         )
-        if hasattr(self._url_processor, "_audit"):
-            self._url_processor._audit(
+        if self._audit is not None:
+            self._audit(
                 "INFO",
                 "batch_url_cache_hit",
                 {"url": url, "request_id": request_id, "uid": state.request.uid},
@@ -575,10 +578,13 @@ class URLBatchProcessor:
         current_timeout: float,
         phase_callback: Callable[..., Awaitable[None]],
     ) -> Any | None:
-        processing_task = asyncio.create_task(
-            self._url_processor.handle_url_flow(
-                state.request.message,
-                url,
+        if state.request.handle_single_url is None:
+            msg = "BatchProcessRequest.handle_single_url is required"
+            raise RuntimeError(msg)
+        processing_task: asyncio.Task[Any] = asyncio.create_task(
+            state.request.handle_single_url(
+                message=state.request.message,
+                url=url,
                 correlation_id=per_link_cid,
                 batch_mode=True,
                 on_phase_change=phase_callback,

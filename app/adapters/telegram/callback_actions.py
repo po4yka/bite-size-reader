@@ -82,12 +82,13 @@ class CallbackActionService:
         )
 
         post_url = post.url or ""
-        if post_url and self.url_handler and hasattr(self.url_handler, "url_processor"):
+        if post_url and self.url_handler:
             try:
-                await self.url_handler.url_processor.handle_url_flow(
-                    message,
-                    post_url,
+                await self.url_handler.handle_single_url(
+                    message=message,
+                    url=post_url,
                     correlation_id=correlation_id,
+                    interaction_id=0,
                 )
             except Exception as exc:
                 logger.exception(
@@ -245,7 +246,7 @@ class CallbackActionService:
             )
             return True
 
-        if not self.url_handler or not hasattr(self.url_handler, "url_processor"):
+        if not self.url_handler:
             await self.response_formatter.notifications.send_error_notification(
                 message,
                 "unexpected_error",
@@ -263,7 +264,7 @@ class CallbackActionService:
             if not isinstance(request_id, int):
                 raise ValueError("Invalid request ID for translation")
 
-            translated_text = await self.url_handler.url_processor.translate_summary_to_ru(
+            translated_text = await self.url_handler.translate_summary_to_ru(
                 summary=summary_data,
                 req_id=request_id,
                 correlation_id=correlation_id,

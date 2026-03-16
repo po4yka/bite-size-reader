@@ -56,7 +56,6 @@ class TelegramComponentWiring:
         bot._container = components.container
 
         bot.message_handler.command_processor.url_processor = bot.url_processor
-        bot.message_handler.url_handler.url_processor = bot.url_processor
         bot.message_handler.url_processor = bot.url_processor
 
         bot._batch_session_repo = create_batch_session_repository(self._db)

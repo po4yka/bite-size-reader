@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
     )
+    from app.adapters.telegram.url_handler import URLHandler
     from app.db.session import DatabaseSessionManager
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class AdminHandlerImpl:
         db: DatabaseSessionManager,
         response_formatter: ResponseFormatter,
         url_processor: URLProcessor,
+        url_handler: URLHandler | None = None,
     ) -> None:
         """Initialize the admin handler.
 
@@ -43,10 +45,12 @@ class AdminHandlerImpl:
             db: Database session manager for queries.
             response_formatter: Response formatter for sending messages.
             url_processor: URL processor for reprocessing failed requests.
+            url_handler: URL handler for Telegram URL flows.
         """
         self._db = db
         self._formatter = response_formatter
         self._url_processor = url_processor
+        self._url_handler = url_handler
 
     @audit_command("command_dbinfo")
     async def handle_dbinfo(self, ctx: CommandExecutionContext) -> None:
@@ -207,11 +211,19 @@ class AdminHandlerImpl:
             )
 
             try:
-                await self._url_processor.handle_url_flow(
-                    ctx.message,
-                    url,
-                    correlation_id=per_link_cid,
-                )
+                if self._url_handler is not None:
+                    await self._url_handler.handle_single_url(
+                        message=ctx.message,
+                        url=url,
+                        correlation_id=per_link_cid,
+                        interaction_id=ctx.interaction_id,
+                    )
+                else:
+                    await self._url_processor.handle_url_flow(
+                        ctx.message,
+                        url,
+                        correlation_id=per_link_cid,
+                    )
             except Exception as exc:
                 logger.exception(
                     "dbverify_reprocess_failed",
