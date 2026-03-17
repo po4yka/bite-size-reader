@@ -133,6 +133,8 @@ app/static/web/
 # --- Claude Code ---
 # Local Claude Code settings (user-specific)
 .claude/settings.local.json
+.claude/worktrees/
+.agents/
 
 # --- Desloppify ---
 .desloppify/
