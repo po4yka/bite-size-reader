@@ -1,17 +1,25 @@
 """
-User preferences and statistics endpoints.
+User preferences, statistics, goals, and streaks endpoints.
 """
 
-from datetime import datetime
-from typing import Any
+import datetime as _dt
+import uuid
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies.database import get_summary_repository, get_user_repository
-from app.api.models.requests import UpdatePreferencesRequest
+from app.api.models.requests import CreateGoalRequest, UpdatePreferencesRequest
 from app.api.models.responses import (
+    GoalProgressResponse,
+    GoalResponse,
     PreferencesData,
     PreferencesUpdateResult,
+    StreakResponse,
     UserStatsData,
     success_response,
 )
@@ -236,3 +244,242 @@ async def get_user_stats(user=Depends(get_current_user)):
             last_summary_at=last_summary_at,
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Goals CRUD
+# ---------------------------------------------------------------------------
+
+
+@router.get("/goals")
+async def list_goals(user: dict[str, Any] = Depends(get_current_user)):
+    """List all reading goals for the current user."""
+    from app.db.models import UserGoal
+
+    goals: Sequence[UserGoal] = list(UserGoal.select().where(UserGoal.user == user["user_id"]))
+    return success_response(
+        {
+            "goals": [
+                GoalResponse(
+                    goal_type=g.goal_type,
+                    target_count=g.target_count,
+                    created_at=_safe_isoformat(g.created_at) or "",
+                    updated_at=_safe_isoformat(g.updated_at) or "",
+                ).model_dump(by_alias=True)
+                for g in goals
+            ],
+        }
+    )
+
+
+@router.post("/goals")
+async def upsert_goal(
+    body: CreateGoalRequest,
+    user: dict[str, Any] = Depends(get_current_user),
+):
+    """Create or update a reading goal (one per goal_type per user)."""
+    from app.db.models import UserGoal
+
+    goal, created = UserGoal.get_or_create(
+        user=user["user_id"],
+        goal_type=body.goal_type,
+        defaults={
+            "id": uuid.uuid4(),
+            "target_count": body.target_count,
+        },
+    )
+
+    if not created:
+        goal.target_count = body.target_count
+        goal.save()
+
+    return success_response(
+        GoalResponse(
+            goal_type=goal.goal_type,
+            target_count=goal.target_count,
+            created_at=_safe_isoformat(goal.created_at) or "",
+            updated_at=_safe_isoformat(goal.updated_at) or "",
+        )
+    )
+
+
+@router.delete("/goals/{goal_type}")
+async def delete_goal(
+    goal_type: str,
+    user: dict[str, Any] = Depends(get_current_user),
+):
+    """Remove a reading goal."""
+    from app.db.models import UserGoal
+
+    deleted_count = (
+        UserGoal.delete()
+        .where((UserGoal.user == user["user_id"]) & (UserGoal.goal_type == goal_type))
+        .execute()
+    )
+    if deleted_count == 0:
+        from app.api.exceptions import ResourceNotFoundError
+
+        raise ResourceNotFoundError("Goal", goal_type)
+
+    return success_response({"deleted": True})
+
+
+# ---------------------------------------------------------------------------
+# Streak
+# ---------------------------------------------------------------------------
+
+
+def _compute_streak_data(
+    user_id: int,
+) -> dict[str, Any]:
+    """Compute streak and period counts from summary creation dates.
+
+    Approach:
+    - Query distinct dates (UTC) of summaries for the user over the last 365
+      days, ordered descending.
+    - Walk backwards from today/yesterday to count the current consecutive
+      streak and track the longest streak overall.
+    - Also compute today / this-week / this-month counts for goal progress.
+    """
+    from app.db.models import Request, Summary
+
+    now = datetime.now(UTC)
+    today = now.date()
+    cutoff = now - timedelta(days=365)
+
+    # Fetch created_at timestamps for the user's non-deleted summaries in the
+    # last 365 days, ordered descending.
+    rows = (
+        Summary.select(Summary.created_at)
+        .join(Request)
+        .where(
+            (Request.user_id == user_id) & (Summary.created_at >= cutoff) & (~Summary.is_deleted)
+        )
+        .order_by(Summary.created_at.desc())
+    )
+
+    # Build set of unique active dates + period counters
+    active_dates: set[_dt.date] = set()
+    today_count = 0
+    start_of_week = today - timedelta(days=today.weekday())  # Monday
+    week_count = 0
+    start_of_month = today.replace(day=1)
+    month_count = 0
+
+    for row in rows:
+        created = row.created_at
+        if isinstance(created, str):
+            created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+        if not hasattr(created, "date"):
+            continue
+        d = created.date()
+        active_dates.add(d)
+        if d == today:
+            today_count += 1
+        if d >= start_of_week:
+            week_count += 1
+        if d >= start_of_month:
+            month_count += 1
+
+    last_activity_date: str | None = None
+
+    if not active_dates:
+        return {
+            "current_streak": 0,
+            "longest_streak": 0,
+            "last_activity_date": None,
+            "today_count": 0,
+            "week_count": 0,
+            "month_count": 0,
+        }
+
+    sorted_dates = sorted(active_dates, reverse=True)
+    last_activity_date = sorted_dates[0].isoformat()
+
+    # Current streak: consecutive days ending today or yesterday
+    current_streak = 0
+    check_date: _dt.date | None = today
+    # Allow starting from yesterday if today has no activity yet
+    if check_date not in active_dates:
+        yesterday = today - timedelta(days=1)
+        check_date = yesterday if yesterday in active_dates else None
+
+    if check_date is not None:
+        while check_date in active_dates:
+            current_streak += 1
+            check_date -= timedelta(days=1)
+
+    # Longest streak: walk through all sorted dates
+    longest_streak = 0
+    streak = 1
+    for i in range(1, len(sorted_dates)):
+        if sorted_dates[i] == sorted_dates[i - 1] - timedelta(days=1):
+            streak += 1
+        else:
+            longest_streak = max(longest_streak, streak)
+            streak = 1
+    longest_streak = max(longest_streak, streak)
+
+    return {
+        "current_streak": current_streak,
+        "longest_streak": longest_streak,
+        "last_activity_date": last_activity_date,
+        "today_count": today_count,
+        "week_count": week_count,
+        "month_count": month_count,
+    }
+
+
+@router.get("/streak")
+async def get_streak(user: dict[str, Any] = Depends(get_current_user)):
+    """Compute and return the user's reading streak data."""
+    data = _compute_streak_data(user["user_id"])
+    return success_response(
+        StreakResponse(
+            current_streak=data["current_streak"],
+            longest_streak=data["longest_streak"],
+            last_activity_date=data["last_activity_date"],
+            today_count=data["today_count"],
+            week_count=data["week_count"],
+            month_count=data["month_count"],
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# Goal progress
+# ---------------------------------------------------------------------------
+
+
+@router.get("/goals/progress")
+async def get_goal_progress(user: dict[str, Any] = Depends(get_current_user)):
+    """Return each goal with current progress."""
+    from app.db.models import UserGoal
+
+    goals: Sequence[UserGoal] = list(UserGoal.select().where(UserGoal.user == user["user_id"]))
+    if not goals:
+        return success_response({"progress": []})
+
+    streak_data = _compute_streak_data(user["user_id"])
+
+    progress_list: list[dict[str, Any]] = []
+    for g in goals:
+        if g.goal_type == "daily":
+            current = streak_data["today_count"]
+        elif g.goal_type == "weekly":
+            current = streak_data["week_count"]
+        elif g.goal_type == "monthly":
+            current = streak_data["month_count"]
+        else:
+            current = 0
+
+        progress_list.append(
+            GoalProgressResponse(
+                goal_type=g.goal_type,
+                target_count=g.target_count,
+                current_count=current,
+                achieved=current >= g.target_count,
+            ).model_dump(by_alias=True)
+        )
+
+    return success_response({"progress": progress_list})

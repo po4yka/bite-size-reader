@@ -4,10 +4,18 @@ OAuth login endpoints (Apple / Google).
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import AuthenticationError, AuthorizationError
 from app.api.models.auth import AppleLoginRequest, GoogleLoginRequest  # noqa: TC001
-from app.api.models.responses import AuthTokensResponse, TokenPair, success_response
+from app.api.models.responses import (
+    LoginData,
+    PreferencesData,
+    TokenPair,
+    UserInfo,
+    success_response,
+)
 from app.api.routers.auth._fastapi import APIRouter
 from app.api.routers.auth.oauth import (
     derive_user_id_from_sub,
@@ -25,6 +33,45 @@ from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+
+def _build_preferences(user_record: dict[str, Any]) -> PreferencesData:
+    """Build preferences payload from a user record, matching user.py logic."""
+    default_preferences: dict[str, Any] = {
+        "lang_preference": "en",
+        "notification_settings": {"enabled": True, "frequency": "daily"},
+        "app_settings": {"theme": "dark", "font_size": "medium"},
+    }
+    preferences: dict[str, Any] = {
+        "lang_preference": default_preferences["lang_preference"],
+        "notification_settings": {**default_preferences["notification_settings"]},
+        "app_settings": {**default_preferences["app_settings"]},
+    }
+    stored_preferences = user_record.get("preferences_json")
+    if isinstance(stored_preferences, dict):
+        lang_preference = stored_preferences.get("lang_preference")
+        if isinstance(lang_preference, str) and lang_preference:
+            preferences["lang_preference"] = lang_preference
+        notification_settings = stored_preferences.get("notification_settings")
+        if isinstance(notification_settings, dict):
+            preferences["notification_settings"].update(notification_settings)
+        app_settings = stored_preferences.get("app_settings")
+        if isinstance(app_settings, dict):
+            preferences["app_settings"].update(app_settings)
+    return PreferencesData(
+        user_id=user_record.get("telegram_user_id", 0),
+        telegram_username=user_record.get("username"),
+        lang_preference=preferences.get("lang_preference"),
+        notification_settings=preferences.get("notification_settings"),
+        app_settings=preferences.get("app_settings"),
+    )
+
+
+def _isotime(dt: Any) -> str:
+    """Safely convert datetime to ISO string."""
+    if hasattr(dt, "isoformat"):
+        return dt.isoformat() + "Z"
+    return str(dt)
 
 
 def _ensure_allowed_user_id(user_id: int, *, provider: str, sub: str) -> None:
@@ -80,7 +127,22 @@ async def apple_login(login_data: AppleLoginRequest):
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         token_type="Bearer",
     )
-    return success_response(AuthTokensResponse(tokens=tokens, session_id=session_id))
+    user_info = UserInfo(
+        user_id=user_id,
+        username=username or "",
+        client_id=login_data.client_id,
+        is_owner=user.get("is_owner", False),
+        created_at=_isotime(user.get("created_at", "")),
+    )
+    preferences = _build_preferences(user)
+    return success_response(
+        LoginData(
+            tokens=tokens,
+            user=user_info,
+            preferences=preferences,
+            session_id=session_id,
+        )
+    )
 
 
 @router.post("/google-login")
@@ -128,4 +190,19 @@ async def google_login(login_data: GoogleLoginRequest):
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         token_type="Bearer",
     )
-    return success_response(AuthTokensResponse(tokens=tokens, session_id=session_id))
+    user_info = UserInfo(
+        user_id=user_id,
+        username=username or "",
+        client_id=login_data.client_id,
+        is_owner=user.get("is_owner", False),
+        created_at=_isotime(user.get("created_at", "")),
+    )
+    preferences = _build_preferences(user)
+    return success_response(
+        LoginData(
+            tokens=tokens,
+            user=user_info,
+            preferences=preferences,
+            session_id=session_id,
+        )
+    )

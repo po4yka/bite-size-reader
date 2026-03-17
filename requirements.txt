@@ -311,3 +311,5 @@ wrapt==2.1.1
     # via smart-open
 yarl==1.23.0
     # via crawlee
+prometheus-client>=0.21.0
+    # via bite-size-reader (pyproject.toml) [monitoring]

@@ -358,6 +358,32 @@ class SyncService:
                 return datetime.now(UTC).isoformat() + "Z"
         return datetime.now(UTC).isoformat() + "Z"
 
+    def _serialize_highlight(self, highlight: dict[str, Any]) -> SyncEntityEnvelope:
+        """Serialize a highlight dict to SyncEntityEnvelope."""
+        # Handle summary as either dict or int/UUID
+        summary_val = highlight.get("summary")
+        summary_id = summary_val.get("id") if isinstance(summary_val, dict) else summary_val
+
+        payload = {
+            "id": str(highlight.get("id")),
+            "summary_id": str(summary_id) if summary_id is not None else None,
+            "text": highlight.get("text"),
+            "start_offset": highlight.get("start_offset"),
+            "end_offset": highlight.get("end_offset"),
+            "color": highlight.get("color"),
+            "note": highlight.get("note"),
+            "created_at": self._coerce_iso(highlight.get("created_at")),
+            "updated_at": self._coerce_iso(highlight.get("updated_at")),
+        }
+
+        return SyncEntityEnvelope(
+            entity_type="highlight",
+            id=str(highlight.get("id")),
+            server_version=int(highlight.get("server_version") or 0),
+            updated_at=self._coerce_iso(highlight.get("updated_at")),
+            highlight=payload,
+        )
+
     def _serialize_user(self, user: dict[str, Any]) -> SyncEntityEnvelope:
         """Serialize a user dict to SyncEntityEnvelope."""
         updated_at = user.get("updated_at")
@@ -374,6 +400,14 @@ class SyncService:
                 "created_at": self._coerce_iso(created_at),
             },
         )
+
+    @staticmethod
+    def _get_highlights_for_user(user_id: int) -> list[dict[str, Any]]:
+        """Fetch all highlights for a user as dicts."""
+        from app.db.models import SummaryHighlight, model_to_dict
+
+        rows = SummaryHighlight.select().where(SummaryHighlight.user == user_id)
+        return [model_to_dict(row) for row in rows if model_to_dict(row) is not None]
 
     async def _collect_records(self, user_id: int) -> list[SyncEntityEnvelope]:
         """Collect all sync records for a user using repository adapters."""
@@ -403,6 +437,11 @@ class SyncService:
         llm_calls = await self._llm_repo.async_get_all_for_user(user_id)
         for call in llm_calls:
             records.append(self._serialize_llm_call(call))
+
+        # Get all highlights for user
+        highlights = self._get_highlights_for_user(user_id)
+        for highlight in highlights:
+            records.append(self._serialize_highlight(highlight))
 
         # Sort by server_version and id for consistent ordering
         records.sort(key=lambda r: (r.server_version, str(r.id)))

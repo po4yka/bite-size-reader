@@ -32,8 +32,10 @@ from app.api.models.responses import success_response
 from app.api.routers import (
     auth,
     collections,
+    custom_digests,
     digest,
     health,
+    highlights,
     notifications,
     proxy,
     requests,
@@ -141,6 +143,8 @@ app.include_router(system.router, prefix="/v1/system", tags=["System"])
 app.include_router(proxy.router, prefix="/v1/proxy", tags=["Proxy"])
 app.include_router(notifications.router, prefix="/v1/notifications", tags=["Notifications"])
 app.include_router(digest.router, prefix="/v1/digest", tags=["Digest"])
+app.include_router(custom_digests.router, prefix="/v1/digests/custom", tags=["custom-digests"])
+app.include_router(highlights.router, prefix="/v1/summaries", tags=["Highlights"])
 app.include_router(tts.router, prefix="/v1/summaries", tags=["TTS"])
 app.include_router(health.router, tags=["Health"])
 
@@ -156,6 +160,24 @@ def _serve_web_index() -> FileResponse:
     if not _web_index.is_file():
         raise HTTPException(status_code=404, detail="Web interface is not built")
     return FileResponse(str(_web_index))
+
+
+@app.get("/web/privacy.html")
+async def privacy_policy():
+    """Serve Privacy Policy static page."""
+    _privacy = _static_dir / "web" / "privacy.html"
+    if not _privacy.is_file():
+        raise HTTPException(status_code=404, detail="Privacy policy page not found")
+    return FileResponse(str(_privacy))
+
+
+@app.get("/web/terms.html")
+async def terms_of_service():
+    """Serve Terms of Service static page."""
+    _terms = _static_dir / "web" / "terms.html"
+    if not _terms.is_file():
+        raise HTTPException(status_code=404, detail="Terms of service page not found")
+    return FileResponse(str(_terms))
 
 
 @app.get("/web")

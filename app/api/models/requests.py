@@ -143,3 +143,45 @@ class CollectionInviteRequest(BaseModel):
 
     role: Literal["editor", "viewer"]
     expires_at: str | None = None
+
+
+class SubmitFeedbackRequest(BaseModel):
+    """Request body for submitting summary feedback."""
+
+    rating: int | None = None
+    issues: list[str] | None = None
+    comment: str | None = None
+
+
+class CreateCustomDigestRequest(BaseModel):
+    """Request body for creating a custom digest."""
+
+    summary_ids: list[str] = Field(alias="summaryIds", min_length=1)
+    format: str = "markdown"
+    title: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class CreateHighlightRequest(BaseModel):
+    """Request body for creating a highlight on a summary."""
+
+    text: str = Field(min_length=1)
+    start_offset: int | None = None
+    end_offset: int | None = None
+    color: str | None = None
+    note: str | None = None
+
+
+class UpdateHighlightRequest(BaseModel):
+    """Request body for updating a highlight (color/note only)."""
+
+    color: str | None = None
+    note: str | None = None
+
+
+class CreateGoalRequest(BaseModel):
+    """Request body for creating or upserting a reading goal."""
+
+    goal_type: Literal["daily", "weekly", "monthly"]
+    target_count: int = Field(ge=1, le=1000)

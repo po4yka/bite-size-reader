@@ -6,7 +6,7 @@ from app.application.use_cases.get_unread_summaries import GetUnreadSummariesUse
 from app.application.use_cases.mark_summary_as_read import MarkSummaryAsReadUseCase
 from app.application.use_cases.mark_summary_as_unread import MarkSummaryAsUnreadUseCase
 from app.application.use_cases.search_topics import SearchTopicsUseCase
-from app.di.repositories import build_summary_repository
+from app.di.repositories import build_request_repository, build_summary_repository
 from app.di.types import ApplicationServices
 from app.infrastructure.messaging.event_bus import EventBus
 from app.infrastructure.messaging.handlers.wiring import wire_event_handlers
@@ -27,8 +27,10 @@ def build_application_services(
     webhook_url: str | None = None,
     vector_store: Any | None = None,
     embedding_generator: Any | None = None,
+    push_notification_service: Any | None = None,
 ) -> ApplicationServices:
     summary_repository = build_summary_repository(db)
+    request_repository = build_request_repository(db)
     event_bus = EventBus()
     wire_event_handlers(
         event_bus=event_bus,
@@ -42,6 +44,8 @@ def build_application_services(
         embedding_generator=embedding_generator,
         vector_store=vector_store,
         summary_repository=summary_repository,
+        push_notification_service=push_notification_service,
+        request_repository=request_repository,
     )
     return ApplicationServices(
         unread_summaries=GetUnreadSummariesUseCase(summary_repository=summary_repository),

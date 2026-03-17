@@ -27,6 +27,10 @@ _COMPAT_EXPORTS: dict[str, tuple[str, str]] = {
         "app.infrastructure.messaging.handlers.notification",
         "NotificationEventHandler",
     ),
+    "PushNotificationEventHandler": (
+        "app.infrastructure.messaging.handlers.push_notification",
+        "PushNotificationEventHandler",
+    ),
     "SearchIndexEventHandler": (
         "app.infrastructure.messaging.handlers.search_index",
         "SearchIndexEventHandler",

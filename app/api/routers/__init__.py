@@ -5,8 +5,10 @@ API route handlers.
 from . import (
     auth,
     collections,
+    custom_digests,
     digest,
     health,
+    highlights,
     notifications,
     proxy,
     requests,
@@ -21,8 +23,10 @@ from . import (
 __all__ = [
     "auth",
     "collections",
+    "custom_digests",
     "digest",
     "health",
+    "highlights",
     "notifications",
     "proxy",
     "requests",

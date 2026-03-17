@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — Bite-Size Reader</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'IBM Plex Sans', Arial, sans-serif;
+      font-size: 1rem;
+      line-height: 1.6;
+      background: #f4f4f4;
+      color: #161616;
+    }
+    header {
+      background: #0f62fe;
+      color: #ffffff;
+      padding: 2rem 1.5rem;
+    }
+    header h1 { font-size: 1.75rem; font-weight: 600; margin-bottom: 0.25rem; }
+    header p  { font-size: 0.875rem; opacity: 0.85; }
+    main {
+      max-width: 720px;
+      margin: 2rem auto;
+      padding: 0 1.5rem 4rem;
+    }
+    section { margin-bottom: 2rem; }
+    h2 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: #0f62fe;
+      margin-bottom: 0.75rem;
+      border-bottom: 1px solid #e0e0e0;
+      padding-bottom: 0.25rem;
+    }
+    p, li { margin-bottom: 0.5rem; }
+    ul { padding-left: 1.5rem; }
+    a { color: #0f62fe; }
+    footer {
+      text-align: center;
+      font-size: 0.8rem;
+      color: #6f6f6f;
+      padding: 1.5rem;
+      border-top: 1px solid #e0e0e0;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Privacy Policy</h1>
+    <p>Bite-Size Reader &mdash; Effective date: 2026-03-17</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>1. Introduction</h2>
+      <p>
+        Bite-Size Reader ("the App", "the Service") is a personal, self-hosted tool
+        for AI-powered summarisation of web articles and YouTube videos. This policy
+        describes what data is collected, how it is used, and how it is protected.
+      </p>
+    </section>
+
+    <section>
+      <h2>2. Data We Collect</h2>
+      <ul>
+        <li><strong>Telegram user ID</strong> — used to authenticate you and
+          associate your content with your account. No phone number or real name
+          is stored.</li>
+        <li><strong>Reading history</strong> — URLs you submit, the AI-generated
+          summaries, read/unread status, highlights, and reading time.</li>
+        <li><strong>Preferences</strong> — language preference, daily reading goal
+          settings, collection organisation, and digest channel subscriptions.</li>
+        <li><strong>Device session metadata</strong> — platform identifier and
+          last-seen timestamp, used to support multi-device sync.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>3. Data We Do Not Collect</h2>
+      <ul>
+        <li>Passwords — the App uses OAuth only (Telegram, Apple, Google Sign-In);
+          no passwords are stored.</li>
+        <li>Payment information — the Service is free and processes no payments.</li>
+        <li>Advertising identifiers or tracking pixels.</li>
+        <li>Contacts, location, camera, or microphone data.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>4. How We Use Your Data</h2>
+      <ul>
+        <li>Authenticate you and maintain your session.</li>
+        <li>Store and serve your article summaries and reading history.</li>
+        <li>Synchronise your data across devices.</li>
+        <li>Deliver scheduled channel digests you have subscribed to.</li>
+        <li>Compute reading statistics shown in the Stats screen.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>5. Data Storage</h2>
+      <p>
+        All data is stored in a SQLite database on a self-hosted server controlled
+        solely by the Service operator. No data is stored on third-party cloud
+        databases.
+      </p>
+    </section>
+
+    <section>
+      <h2>6. Data Sharing</h2>
+      <p>
+        Your data is not shared with any third parties. Article content is sent to
+        the OpenRouter API for AI summarisation; only the article text and URL are
+        transmitted — no personally identifiable information is included in those
+        requests.
+      </p>
+    </section>
+
+    <section>
+      <h2>7. Data Retention</h2>
+      <p>
+        Your data is retained for as long as your account exists. You may request
+        deletion of your account and all associated data at any time using the
+        "Delete Account" option in the Settings screen.
+      </p>
+    </section>
+
+    <section>
+      <h2>8. Security</h2>
+      <p>
+        Access tokens are stored in the platform keychain (iOS) or
+        EncryptedSharedPreferences (Android). Server communication uses HTTPS.
+        The server is access-controlled by a Telegram user ID allowlist.
+      </p>
+    </section>
+
+    <section>
+      <h2>9. Contact</h2>
+      <p>
+        For questions or data requests, please open an issue at
+        <a href="https://github.com/po4yka" target="_blank" rel="noopener">
+          github.com/po4yka
+        </a>.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    &copy; 2026 Bite-Size Reader. All rights reserved.
+  </footer>
+</body>
+</html>

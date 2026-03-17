@@ -209,6 +209,16 @@ gemini = [
   "google-genai>=1.0.0",
 ]
 
+# Push notifications (Firebase Cloud Messaging / APNS)
+push = [
+  "firebase-admin>=6.0.0",
+]
+
+# Monitoring and observability
+monitoring = [
+  "prometheus_client>=0.21.0",
+]
+
 # MCP (Model Context Protocol) server for AI agent integrations
 mcp = [
   "mcp>=1.26,<2",
