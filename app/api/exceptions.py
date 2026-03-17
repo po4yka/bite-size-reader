@@ -8,7 +8,12 @@ from typing import Any
 
 
 class ErrorCode(StrEnum):
-    """Standard error codes for API responses."""
+    """Standard error codes for API responses.
+
+    These are the coarse-grained codes used by exception classes and match the
+    OpenAPI spec (docs/openapi/mobile_api.yaml). For fine-grained wire codes used
+    in direct response construction see app.api.models.responses.ErrorCode.
+    """
 
     # Client errors (4xx)
     VALIDATION_ERROR = "VALIDATION_ERROR"
@@ -48,7 +53,11 @@ class ErrorCode(StrEnum):
 
 
 class ErrorType(StrEnum):
-    """Categories of errors for client handling."""
+    """Categories of errors for client handling.
+
+    These match the OpenAPI spec. For the ErrorType used in response models
+    see app.api.models.responses.ErrorType (which extends this set).
+    """
 
     AUTHENTICATION = "authentication"
     AUTHORIZATION = "authorization"
