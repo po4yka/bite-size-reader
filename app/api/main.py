@@ -50,7 +50,12 @@ from app.api.routers.auth import get_current_user
 from app.config import Config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.di.api import build_api_runtime, close_api_runtime, set_current_api_runtime
+from app.di.api import (
+    build_api_runtime,
+    clear_current_api_runtime,
+    close_api_runtime,
+    set_current_api_runtime,
+)
 from app.infrastructure.redis import close_redis
 
 logger = get_logger(__name__)
@@ -69,7 +74,7 @@ async def lifespan(app: FastAPI):
         await close_redis()
         if runtime is not None:
             await close_api_runtime(runtime)
-            set_current_api_runtime(None)
+            clear_current_api_runtime()
             logger.info("database_closed")
 
 

@@ -9,7 +9,7 @@ from app.application.use_cases.search_read_model import SearchReadModelUseCase
 from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 from app.core.logging_utils import get_logger
 from app.db.models import database_proxy
-from app.di.api import get_current_api_runtime, resolve_api_runtime, set_current_api_runtime
+from app.di.api import clear_current_api_runtime, get_current_api_runtime, resolve_api_runtime
 from app.di.database import clear_cached_runtime_database, get_or_create_runtime_database_from_env
 from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
     SqliteAuthRepositoryAdapter,
@@ -73,7 +73,7 @@ def clear_session_manager() -> None:
         database = getattr(runtime.db, "database", None)
         if database is not None:
             database.close()
-    set_current_api_runtime(None)
+    clear_current_api_runtime()
     clear_cached_runtime_database()
 
 

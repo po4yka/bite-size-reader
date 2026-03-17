@@ -139,8 +139,8 @@ async def build_background_processor(
     return runtime.background_processor
 
 
-async def get_or_create_api_runtime() -> ApiRuntime:
-    """Get the process-wide API runtime, creating it if needed."""
+async def ensure_api_runtime() -> ApiRuntime:
+    """Initialize and return the process-wide API runtime if not already running."""
     global _current_runtime
     if _current_runtime is not None:
         return _current_runtime
@@ -160,9 +160,15 @@ def get_current_api_runtime() -> ApiRuntime:
     return _current_runtime
 
 
-def set_current_api_runtime(runtime: ApiRuntime | None) -> None:
+def set_current_api_runtime(runtime: ApiRuntime) -> None:
     global _current_runtime
     _current_runtime = runtime
+
+
+def clear_current_api_runtime() -> None:
+    """Clear the process-wide API runtime (call during shutdown)."""
+    global _current_runtime
+    _current_runtime = None
 
 
 def resolve_api_runtime(request: Request | None = None) -> ApiRuntime:

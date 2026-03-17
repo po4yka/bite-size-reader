@@ -14,6 +14,7 @@ from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError
 from app.core.time_utils import UTC
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.models import LLMCall, Request as RequestModel
+from app.domain.models.request import RequestStatus
 
 if TYPE_CHECKING:
     from app.application.ports import (
@@ -95,7 +96,7 @@ class RequestService:
         correlation_id = f"api-{user_id}-{int(datetime.now(UTC).timestamp())}"
         request_id = await self._request_repo.async_create_request(
             type_="url",
-            status="pending",
+            status=RequestStatus.PENDING,
             correlation_id=correlation_id,
             user_id=user_id,
             input_url=input_url,
@@ -121,7 +122,7 @@ class RequestService:
         correlation_id = f"api-{user_id}-{int(datetime.now(UTC).timestamp())}"
         request_id = await self._request_repo.async_create_request(
             type_="forward",
-            status="pending",
+            status=RequestStatus.PENDING,
             correlation_id=correlation_id,
             user_id=user_id,
             content_text=content_text,
@@ -259,7 +260,7 @@ class RequestService:
         correlation_id = f"{original_request.get('correlation_id')}-retry-1"
         new_request_id = await self._request_repo.async_create_request(
             type_=original_request.get("type"),
-            status="pending",
+            status=RequestStatus.PENDING,
             correlation_id=correlation_id,
             user_id=user_id,
             input_url=original_request.get("input_url"),

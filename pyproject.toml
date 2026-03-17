@@ -159,26 +159,29 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Shared inference stack used by both api (semantic search) and ml (training/backfill)
+inference_core = [
+  "chromadb>=1.5.0",
+  "sentence-transformers>=5.2.2",  # semantic embedding generation
+  "onnxruntime>=1.24.1",  # Python 3.14 support (chromadb dependency)
+]
+
 # Mobile REST API dependencies (FastAPI, JWT auth, vector search client)
 api = [
+  "bite-size-reader[inference_core]",
   "fastapi>=0.128.0",
   "uvicorn[standard]>=0.40.0",
   "starlette>=0.50.0",
   "pyjwt>=2.11.0",
   "python-multipart>=0.0.22",
-  "chromadb>=1.5.0",
-  "sentence-transformers>=5.2.2",  # required by /search/semantic embedding generation
-  "onnxruntime>=1.24.1",  # Python 3.14 support (chromadb dependency)
 ]
 
 # Machine learning dependencies (embeddings, vector search, transformers)
 ml = [
+  "bite-size-reader[inference_core]",
   "torch>=2.10.0",
   "transformers>=5.0.0",
   "scikit-learn>=1.8.0",
-  "sentence-transformers>=5.2.2",
-  "chromadb>=1.5.0",
-  "onnxruntime>=1.24.1",
 ]
 
 # YouTube video download and transcript extraction

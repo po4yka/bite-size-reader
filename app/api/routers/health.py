@@ -280,10 +280,12 @@ async def detailed_health_check(request: Request, _: dict = Depends(get_current_
 
 @router.get("/health/ready")
 async def readiness_check():
-    """Kubernetes readiness probe.
+    """Kubernetes readiness probe — intentionally unauthenticated.
 
     Returns 200 if the service is ready to handle requests.
-    Checks database connectivity only.
+    Checks database connectivity only. No auth required: probes are
+    called by the orchestrator before user traffic is routed, so
+    enforcing auth would prevent startup and break pod scheduling.
     """
     db_status = await _check_database(include_details=False)
 
@@ -309,9 +311,11 @@ async def readiness_check():
 
 @router.get("/health/live")
 async def liveness_check():
-    """Kubernetes liveness probe.
+    """Kubernetes liveness probe — intentionally unauthenticated.
 
-    Returns 200 if the service is running.
+    Returns 200 if the service is running. No auth required: probes
+    are called by the orchestrator to detect hangs/crashes and cannot
+    carry credentials.
     Minimal check - just verifies the process is responsive.
     """
     return success_response(
