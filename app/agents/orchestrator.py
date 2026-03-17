@@ -544,23 +544,7 @@ class SingleAgentOrchestrator:
         Returns:
             Result dictionary
         """
-        self.logger.info(
-            f"[SingleAgentOrchestrator] Executing {self.agent.name}",
-            extra={"correlation_id": correlation_id},
-        )
-
         result = await self.agent.execute(input_data)
-
-        if result.success:
-            self.logger.info(
-                f"[SingleAgentOrchestrator] {self.agent.name} succeeded",
-                extra={"correlation_id": correlation_id},
-            )
-        else:
-            self.logger.error(
-                f"[SingleAgentOrchestrator] {self.agent.name} failed: {result.error}",
-                extra={"correlation_id": correlation_id},
-            )
 
         return {
             "success": result.success,

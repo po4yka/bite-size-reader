@@ -12,8 +12,6 @@ from app.core.summary_text_utils import (
     hash_tagify as _hash_tagify,
 )
 
-# Kept as a constant for backward compatibility with any code that imports it.
-PydanticAvailable = True
 logger = logging.getLogger(__name__)
 
 

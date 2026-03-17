@@ -288,7 +288,7 @@ class TestAsyncRWLock(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.lock._write_lock.locked())
 
         # Release in separate task to avoid blocking
-        await self.lock.release_write()
+        self.lock.release_write()
         self.assertFalse(self.lock._write_lock.locked())
 
     async def test_concurrent_readers_performance(self) -> None:

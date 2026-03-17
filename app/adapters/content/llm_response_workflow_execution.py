@@ -64,17 +64,16 @@ class LLMWorkflowExecutionMixin:
             return
 
         tasks = list(self._background_tasks)
-        if tasks:
-            try:
-                async with asyncio.timeout(timeout):
-                    await asyncio.gather(*tasks, return_exceptions=True)
-            except TimeoutError:
-                logger.warning(
-                    "llm_workflow_shutdown_timeout", extra={"pending": len(self._background_tasks)}
-                )
-            except Exception as e:
-                raise_if_cancelled(e)
-                logger.error("llm_workflow_shutdown_error", extra={"error": str(e)})
+        try:
+            async with asyncio.timeout(timeout):
+                await asyncio.gather(*tasks, return_exceptions=True)
+        except TimeoutError:
+            logger.warning(
+                "llm_workflow_shutdown_timeout", extra={"pending": len(self._background_tasks)}
+            )
+        except Exception as e:
+            raise_if_cancelled(e)
+            logger.error("llm_workflow_shutdown_error", extra={"error": str(e)})
 
     async def execute_summary_workflow(
         self,

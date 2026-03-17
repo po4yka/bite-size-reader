@@ -81,27 +81,20 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 )
 
             # Use the existing validation function for final check
-            try:
-                validated_summary = validate_and_shape_summary(summary)
-                self.log_info("Summary validation successful")
+            validated_summary = validate_and_shape_summary(summary)
+            self.log_info("Summary validation successful")
 
-                if warnings:
-                    self.log_warning(f"Validation warnings: {'; '.join(warnings)}")
+            if warnings:
+                self.log_warning(f"Validation warnings: {'; '.join(warnings)}")
 
-                return AgentResult.success_result(
-                    ValidationOutput(
-                        summary_json=validated_summary,
-                        validation_warnings=warnings,
-                        corrections_applied=corrections,
-                    ),
-                    warning_count=len(warnings),
-                )
-
-            except Exception as e:
-                self.log_error(f"Contract validation failed: {e}")
-                return AgentResult.error_result(
-                    f"Summary contract validation failed: {e!s}", exception_type=type(e).__name__
-                )
+            return AgentResult.success_result(
+                ValidationOutput(
+                    summary_json=validated_summary,
+                    validation_warnings=warnings,
+                    corrections_applied=corrections,
+                ),
+                warning_count=len(warnings),
+            )
 
         except Exception as e:
             self.log_error(f"Validation error: {e}")

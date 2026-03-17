@@ -76,8 +76,12 @@ class _InteractiveSummaryCallbacks:
             silent=attempt.silent,
         )
 
+    @property
+    def _silent(self) -> bool:
+        return self._request.silent
+
     async def on_llm_error(self, llm_result: Any, details: str | None) -> None:
-        if self._request.silent:
+        if self._silent:
             return
         await self._runtime.response_formatter.send_error_notification(
             self._request.message,
@@ -87,7 +91,7 @@ class _InteractiveSummaryCallbacks:
         )
 
     async def on_repair_failure(self) -> None:
-        if self._request.silent:
+        if self._silent:
             return
         await self._runtime.response_formatter.send_error_notification(
             self._request.message,
@@ -97,7 +101,7 @@ class _InteractiveSummaryCallbacks:
         )
 
     async def on_parsing_failure(self) -> None:
-        if self._request.silent:
+        if self._silent:
             return
         await self._runtime.response_formatter.send_error_notification(
             self._request.message,

@@ -95,7 +95,6 @@ class PromptManager:
             Complete system prompt with optional examples
 
         Raises:
-            PromptValidationError: If prompt fails validation
             FileNotFoundError: If prompt file not found
         """
         lang = self._normalize_language(lang)

@@ -221,15 +221,17 @@ def health_check(request: Request):
 
 
 @app.get("/metrics")
-def metrics(_: dict = Depends(get_current_user)):
+async def metrics(user: dict = Depends(get_current_user)):
     """Prometheus metrics endpoint (owner-only).
 
     Returns metrics in Prometheus text format for scraping.
     """
     from fastapi.responses import Response
 
+    from app.api.services.auth_service import AuthService
     from app.observability.metrics import get_metrics, get_metrics_content_type
 
+    await AuthService.require_owner(user)
     return Response(
         content=get_metrics(),
         media_type=get_metrics_content_type(),

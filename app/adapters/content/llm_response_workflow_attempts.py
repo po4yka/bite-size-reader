@@ -173,10 +173,9 @@ class LLMWorkflowAttemptsMixin:
         on_success: Any | None,
         defer_persistence: bool,
     ) -> dict[str, Any]:
-        from app.adapters.external.formatting.data_formatter import DataFormatterImpl
+        from app.adapters.external.formatting.data_formatter import normalize_metric_names
 
-        formatter = DataFormatterImpl()
-        summary = formatter.normalize_metric_names(summary)
+        summary = normalize_metric_names(summary)
 
         if ensure_summary is not None:
             summary = await ensure_summary(summary)

@@ -5,6 +5,8 @@ Formats progress messages for single-URL processing (LLM analysis, YouTube downl
 Similar to BatchProgressFormatter but tailored for single-URL workflows.
 """
 
+from __future__ import annotations
+
 import time
 
 from app.core.ui_strings import t

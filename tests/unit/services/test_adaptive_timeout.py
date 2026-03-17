@@ -348,7 +348,7 @@ class TestAdaptiveTimeoutService:
 
     @pytest.mark.asyncio
     async def test_get_stats_summary(self, service: AdaptiveTimeoutService) -> None:
-        summary = await service.get_stats_summary()
+        summary = service.get_stats_summary()
 
         assert "enabled" in summary
         assert "initialized" in summary
