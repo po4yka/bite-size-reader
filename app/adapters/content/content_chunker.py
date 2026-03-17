@@ -233,7 +233,7 @@ class ContentChunker:
 
         # Aggregate chunk summaries into final draft
         if chunk_summaries:
-            aggregated = await self._resolve_aggregated_summary(
+            aggregated = self._resolve_aggregated_summary(
                 chunk_summaries=chunk_summaries,
                 req_id=req_id,
                 correlation_id=correlation_id,
@@ -251,7 +251,7 @@ class ContentChunker:
             return validate_and_shape_summary(aggregated)
         return None
 
-    async def _resolve_aggregated_summary(
+    def _resolve_aggregated_summary(
         self,
         *,
         chunk_summaries: list[dict[str, Any]],
@@ -269,7 +269,7 @@ class ContentChunker:
         correlation_id: str | None,
     ) -> dict[str, Any] | None:
         """Synthesize a final cohesive summary from aggregated chunk summaries."""
-        user_content = await self._resolve_chunk_synthesis_prompt(
+        user_content = self._resolve_chunk_synthesis_prompt(
             aggregated=aggregated,
             chosen_lang=chosen_lang,
             req_id=req_id,
@@ -332,7 +332,7 @@ class ContentChunker:
 
         return parsed
 
-    async def _resolve_chunk_synthesis_prompt(
+    def _resolve_chunk_synthesis_prompt(
         self,
         *,
         aggregated: dict[str, Any],
