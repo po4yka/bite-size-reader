@@ -15,7 +15,7 @@ import asyncio
 import contextlib
 import logging
 import sqlite3
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -144,6 +144,78 @@ class DatabaseSessionManager:
         self._run_database_maintenance()
         self._logger.info("db_migrated", extra={"path": self._mask_path(self.path)})
 
+    async def _retry_with_backoff(
+        self,
+        run_fn: Callable[[], Awaitable[Any]],
+        *,
+        timeout: float,
+        operation_name: str,
+        log_prefix: str,
+    ) -> Any:
+        """Shared retry/backoff/logging loop for DB operations and transactions."""
+        retries = 0
+        last_error: peewee.OperationalError | None = None
+
+        while retries <= self.max_retries:
+            try:
+                return await asyncio.wait_for(run_fn(), timeout=timeout)
+
+            except TimeoutError:
+                self._logger.exception(
+                    f"{log_prefix}_timeout",
+                    extra={"operation": operation_name, "timeout": timeout, "retries": retries},
+                )
+                raise
+
+            except peewee.OperationalError as e:
+                last_error = e
+                error_msg = str(e).lower()
+                if "locked" in error_msg or "busy" in error_msg:
+                    if retries < self.max_retries:
+                        retries += 1
+                        wait_time = 0.1 * (2**retries)
+                        self._logger.warning(
+                            f"{log_prefix}_locked_retrying",
+                            extra={
+                                "operation": operation_name,
+                                "retry": retries,
+                                "max_retries": self.max_retries,
+                                "wait_time": wait_time,
+                                "error": str(e),
+                            },
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+                self._logger.exception(
+                    f"{log_prefix}_operational_error",
+                    extra={"operation": operation_name, "retries": retries, "error": str(e)},
+                )
+                raise
+
+            except peewee.IntegrityError as e:
+                self._logger.exception(
+                    f"{log_prefix}_integrity_error",
+                    extra={"operation": operation_name, "error": str(e)},
+                )
+                raise
+
+            except Exception as e:
+                self._logger.exception(
+                    f"{log_prefix}_unexpected_error",
+                    extra={
+                        "operation": operation_name,
+                        "retries": retries,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    },
+                )
+                raise
+
+        if last_error:
+            raise last_error
+        msg = f"Database {log_prefix} {operation_name} failed after {self.max_retries} retries"
+        raise RuntimeError(msg)
+
     async def _safe_db_operation(
         self,
         operation: Any,
@@ -175,97 +247,27 @@ class DatabaseSessionManager:
         if timeout is None:
             timeout = self.operation_timeout
 
-        retries = 0
-        last_error = None
+        async def _run_with_lock() -> Any:
+            def _op_wrapper() -> Any:
+                with self._database.connection_context():
+                    return operation(*args, **kwargs)
 
-        while retries <= self.max_retries:
-            try:
+            if read_only:
+                # Read operations don't need application-level locking.
+                # SQLite WAL mode (configured in __post_init__) handles
+                # reader-writer coordination at the database level,
+                # allowing concurrent reads with a single writer.
+                return await asyncio.shield(asyncio.to_thread(_op_wrapper))
 
-                async def _run_with_lock() -> Any:
-                    def _op_wrapper() -> Any:
-                        with self._database.connection_context():
-                            return operation(*args, **kwargs)
+            async with self._rw_lock.write_lock():
+                return await asyncio.shield(asyncio.to_thread(_op_wrapper))
 
-                    if read_only:
-                        # Read operations don't need application-level locking.
-                        # SQLite WAL mode (configured in __post_init__) handles
-                        # reader-writer coordination at the database level,
-                        # allowing concurrent reads with a single writer.
-                        return await asyncio.shield(asyncio.to_thread(_op_wrapper))
-
-                    async with self._rw_lock.write_lock():
-                        return await asyncio.shield(asyncio.to_thread(_op_wrapper))
-
-                return await asyncio.wait_for(_run_with_lock(), timeout=timeout)
-
-            except TimeoutError:
-                self._logger.exception(
-                    "db_operation_timeout",
-                    extra={
-                        "operation": operation_name,
-                        "timeout": timeout,
-                        "retries": retries,
-                    },
-                )
-                raise
-
-            except peewee.OperationalError as e:
-                last_error = e
-                error_msg = str(e).lower()
-
-                if "locked" in error_msg or "busy" in error_msg:
-                    if retries < self.max_retries:
-                        retries += 1
-                        wait_time = 0.1 * (2**retries)  # Exponential backoff
-                        self._logger.warning(
-                            "db_locked_retrying",
-                            extra={
-                                "operation": operation_name,
-                                "retry": retries,
-                                "max_retries": self.max_retries,
-                                "wait_time": wait_time,
-                                "error": str(e),
-                            },
-                        )
-                        await asyncio.sleep(wait_time)
-                        continue
-
-                self._logger.exception(
-                    "db_operational_error",
-                    extra={
-                        "operation": operation_name,
-                        "retries": retries,
-                        "error": str(e),
-                    },
-                )
-                raise
-
-            except peewee.IntegrityError as e:
-                self._logger.exception(
-                    "db_integrity_error",
-                    extra={
-                        "operation": operation_name,
-                        "error": str(e),
-                    },
-                )
-                raise
-
-            except Exception as e:
-                self._logger.exception(
-                    "db_unexpected_error",
-                    extra={
-                        "operation": operation_name,
-                        "retries": retries,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                    },
-                )
-                raise
-
-        if last_error:
-            raise last_error
-        msg = f"Database operation {operation_name} failed after {self.max_retries} retries"
-        raise RuntimeError(msg)
+        return await self._retry_with_backoff(
+            _run_with_lock,
+            timeout=timeout,
+            operation_name=operation_name,
+            log_prefix="db_operation",
+        )
 
     async def _safe_db_transaction(
         self,
@@ -299,95 +301,26 @@ class DatabaseSessionManager:
         if timeout is None:
             timeout = self.operation_timeout
 
-        retries = 0
-        last_error = None
+        # Transactions always require write lock
+        async def _run_transaction() -> Any:
+            async with self._rw_lock.write_lock():
 
-        while retries <= self.max_retries:
-            try:
-                # Transactions always require write lock
-                async def _run_transaction() -> Any:
-                    async with self._rw_lock.write_lock():
+                def _execute_in_transaction() -> Any:
+                    with self._database.atomic() as txn:
+                        try:
+                            return operation(*args, **kwargs)
+                        except BaseException:
+                            txn.rollback()
+                            raise
 
-                        def _execute_in_transaction() -> Any:
-                            with self._database.atomic() as txn:
-                                try:
-                                    return operation(*args, **kwargs)
-                                except BaseException:
-                                    txn.rollback()
-                                    raise
+                return await asyncio.shield(asyncio.to_thread(_execute_in_transaction))
 
-                        return await asyncio.shield(asyncio.to_thread(_execute_in_transaction))
-
-                return await asyncio.wait_for(_run_transaction(), timeout=timeout)
-
-            except TimeoutError:
-                self._logger.exception(
-                    "db_transaction_timeout",
-                    extra={
-                        "operation": operation_name,
-                        "timeout": timeout,
-                        "retries": retries,
-                    },
-                )
-                raise
-
-            except peewee.OperationalError as e:
-                last_error = e
-                error_msg = str(e).lower()
-
-                if "locked" in error_msg or "busy" in error_msg:
-                    if retries < self.max_retries:
-                        retries += 1
-                        wait_time = 0.1 * (2**retries)
-                        self._logger.warning(
-                            "db_transaction_locked_retrying",
-                            extra={
-                                "operation": operation_name,
-                                "retry": retries,
-                                "max_retries": self.max_retries,
-                                "wait_time": wait_time,
-                                "error": str(e),
-                            },
-                        )
-                        await asyncio.sleep(wait_time)
-                        continue
-
-                self._logger.exception(
-                    "db_transaction_operational_error",
-                    extra={
-                        "operation": operation_name,
-                        "retries": retries,
-                        "error": str(e),
-                    },
-                )
-                raise
-
-            except peewee.IntegrityError as e:
-                self._logger.exception(
-                    "db_transaction_integrity_error",
-                    extra={
-                        "operation": operation_name,
-                        "error": str(e),
-                    },
-                )
-                raise
-
-            except Exception as e:
-                self._logger.exception(
-                    "db_transaction_unexpected_error",
-                    extra={
-                        "operation": operation_name,
-                        "retries": retries,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                    },
-                )
-                raise
-
-        if last_error:
-            raise last_error
-        msg = f"Database transaction {operation_name} failed after {self.max_retries} retries"
-        raise RuntimeError(msg)
+        return await self._retry_with_backoff(
+            _run_transaction,
+            timeout=timeout,
+            operation_name=operation_name,
+            log_prefix="db_transaction",
+        )
 
     def execute(self, sql: str, params: Iterable | None = None) -> None:
         """Execute raw SQL synchronously."""
