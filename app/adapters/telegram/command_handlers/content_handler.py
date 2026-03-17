@@ -78,8 +78,9 @@ class ContentHandler:
         tokens = remainder.split()
 
         # Handle bot mention (e.g., @botname)
-        had_mention = bool(tokens and tokens[0].startswith("@"))
-        if had_mention:
+        had_mention = False
+        if tokens and tokens[0].startswith("@"):
+            had_mention = True
             tokens = tokens[1:]
 
         if not tokens:
