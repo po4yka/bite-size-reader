@@ -55,7 +55,7 @@ def _normalize_hallucination_risk(raw: str) -> Literal["low", "medium", "high", 
     result = _HR_NORMALIZE.get(raw, raw)
     if result not in {"low", "medium", "high", "unknown"}:
         return "unknown"
-    return result  # type: ignore[return-value]
+    return cast("Literal['low', 'medium', 'high', 'unknown']", result)
 
 
 def _get_summary_use_case() -> SummaryReadModelUseCase:
