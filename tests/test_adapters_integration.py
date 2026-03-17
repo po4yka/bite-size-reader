@@ -4,7 +4,10 @@ from typing import Any, cast
 
 import pytest
 
-from app.adapters.external.firecrawl_parser import FirecrawlClient, httpx as firecrawl_httpx
+import app.adapters.external.firecrawl.client as _fc_client_module
+from app.adapters.external.firecrawl.client import FirecrawlClient
+
+firecrawl_httpx = _fc_client_module.httpx
 from app.adapters.openrouter.openrouter_client import OpenRouterClient, httpx as or_httpx
 
 

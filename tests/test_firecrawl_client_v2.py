@@ -5,11 +5,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.adapters.external.firecrawl_parser import (
-    FIRECRAWL_CRAWL_URL,
-    FIRECRAWL_SCRAPE_ENDPOINT,
-    FirecrawlClient,
-)
+from app.adapters.external.firecrawl.client import FirecrawlClient
+from app.adapters.external.firecrawl.constants import FIRECRAWL_CRAWL_URL, FIRECRAWL_SCRAPE_ENDPOINT
 
 
 class _FakeResponse:

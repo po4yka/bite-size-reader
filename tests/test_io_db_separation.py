@@ -12,7 +12,7 @@ from app.adapters.content.llm_response_workflow import (
     LLMResponseWorkflow,
     LLMSummaryPersistenceSettings,
 )
-from app.adapters.external.firecrawl_parser import FirecrawlResult
+from app.adapters.external.firecrawl.client import FirecrawlResult
 from app.core.lang import LANG_EN
 
 

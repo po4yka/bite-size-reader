@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from app.adapters import repository_ports
 from app.adapters.content import llm_response_workflow_execution
 from app.adapters.content.scraper import diagnostics as scraper_diagnostics
 from app.adapters.external.firecrawl import options as firecrawl_options
 from app.adapters.external.formatting import export_formatter
 from app.adapters.openrouter import chat_engine, request_builder
+from app.application import ports as repository_ports
 from app.core import async_utils, logging_utils, ui_strings
 from app.core.summary_contract_impl import contract as summary_contract
 from app.infrastructure.cache import batch_progress_cache, karakeep_cache
@@ -53,5 +53,4 @@ def test_ui_strings_lookup() -> None:
 
 
 def test_repository_ports_exports() -> None:
-    assert callable(repository_ports.create_request_repository)
     assert hasattr(repository_ports, "RequestRepositoryPort")

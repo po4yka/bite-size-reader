@@ -1,4 +1,4 @@
-"""Tests for DigestHandlerImpl (subscribe / unsubscribe commands)."""
+"""Tests for DigestHandler (subscribe / unsubscribe commands)."""
 
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ def _setup_db():
 
 
 class TestHandleSubscribe:
-    """Tests for DigestHandlerImpl.handle_subscribe."""
+    """Tests for DigestHandler.handle_subscribe."""
 
     @pytest.mark.asyncio
     async def test_digest_disabled_replies_not_enabled(self) -> None:
@@ -221,7 +221,7 @@ class TestHandleSubscribe:
 
 
 class TestHandleUnsubscribe:
-    """Tests for DigestHandlerImpl.handle_unsubscribe."""
+    """Tests for DigestHandler.handle_unsubscribe."""
 
     @pytest.mark.asyncio
     async def test_no_argument_replies_usage(self) -> None:

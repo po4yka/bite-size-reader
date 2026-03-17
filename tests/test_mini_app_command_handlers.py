@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandlerImpl
-from app.adapters.telegram.command_handlers.settings_handler import SettingsHandlerImpl
+from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandler
+from app.adapters.telegram.command_handlers.settings_handler import SettingsHandler
 from app.adapters.telegram.session_init_state import SESSION_INIT_TTL_SECONDS, SessionInitState
 
 
@@ -32,12 +32,12 @@ def _make_settings_ctx() -> tuple[Any, AsyncMock]:
     return ctx, safe_reply
 
 
-def _make_init_handler() -> InitSessionHandlerImpl:
+def _make_init_handler() -> InitSessionHandler:
     cfg = SimpleNamespace(
         digest=SimpleNamespace(enabled=True, session_name="test-userbot"),
         telegram=SimpleNamespace(api_id=1, api_hash="hash", api_base_url="https://api.example.com"),
     )
-    return InitSessionHandlerImpl(
+    return InitSessionHandler(
         cfg=cast("Any", cfg),
         response_formatter=cast("Any", SimpleNamespace(safe_reply=AsyncMock())),
     )
@@ -58,11 +58,11 @@ def _make_contact_message(
     )
 
 
-class TestSettingsHandlerImpl:
+class TestSettingsHandler:
     @pytest.mark.asyncio
     async def test_handle_settings_requires_api_base_url(self) -> None:
         ctx, safe_reply = _make_settings_ctx()
-        handler = SettingsHandlerImpl(
+        handler = SettingsHandler(
             verbosity_resolver=None,
             cfg=cast("Any", SimpleNamespace(telegram=SimpleNamespace(api_base_url=""))),
         )
@@ -78,7 +78,7 @@ class TestSettingsHandlerImpl:
         pytest.importorskip("pyrogram")
 
         ctx, safe_reply = _make_settings_ctx()
-        handler = SettingsHandlerImpl(
+        handler = SettingsHandler(
             verbosity_resolver=None,
             cfg=cast(
                 "Any",
@@ -96,7 +96,7 @@ class TestSettingsHandlerImpl:
         assert button.web_app.url == "https://example.com/web/digest"
 
 
-class TestInitSessionHandlerImpl:
+class TestInitSessionHandler:
     @pytest.mark.asyncio
     async def test_handle_contact_rejects_mismatched_contact_owner(self) -> None:
         handler = _make_init_handler()

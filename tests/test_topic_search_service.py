@@ -4,11 +4,8 @@ from typing import cast
 
 import pytest
 
-from app.adapters.external.firecrawl_parser import (
-    FirecrawlClient,
-    FirecrawlSearchItem,
-    FirecrawlSearchResult,
-)
+from app.adapters.external.firecrawl.client import FirecrawlClient  # noqa: TC001
+from app.adapters.external.firecrawl.models import FirecrawlSearchItem, FirecrawlSearchResult
 from app.db.models import database_proxy
 from app.db.session import DatabaseSessionManager
 from app.services.topic_search import LocalTopicSearchService, TopicSearchService

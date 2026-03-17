@@ -9,7 +9,7 @@ import pytest
 
 from app.adapters.content.content_extractor import ContentExtractor
 from app.adapters.content.quality_filters import detect_low_value_content
-from app.adapters.external.firecrawl_parser import FirecrawlResult
+from app.adapters.external.firecrawl.client import FirecrawlResult
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

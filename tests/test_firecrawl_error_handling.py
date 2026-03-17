@@ -1,7 +1,10 @@
 import unittest
 from typing import Any, cast
 
-from app.adapters.external.firecrawl_parser import FirecrawlClient, httpx as fc_httpx
+import app.adapters.external.firecrawl.client as _fc_client_module
+from app.adapters.external.firecrawl.client import FirecrawlClient
+
+fc_httpx = _fc_client_module.httpx
 
 
 class _SeqAsyncClient:

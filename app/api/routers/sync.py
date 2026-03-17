@@ -63,7 +63,7 @@ async def full_sync(
     return success_response(page, pagination=page.pagination)
 
 
-@router.get("/delta")
+@router.get("/delta", response_model=None)
 async def delta_sync(
     request: Request,
     response: Response,
