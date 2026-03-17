@@ -34,7 +34,23 @@ logger = logging.getLogger(__name__)
 
 
 class URLHandler:
-    """Handles URL-related message processing and state management."""
+    """Telegram-layer orchestrator for URL message processing.
+
+    Responsibilities:
+    - Batch policy enforcement: delegates to URLBatchPolicyService
+    - Awaiting-URL state: delegates to URLAwaitingStateStore
+    - Batch processing: delegates to URLBatchProcessor
+    - Document file handling (.txt uploads → URL lists)
+    - Security checks (URL validation, rate limits) via ResponseFormatter
+    - Wires above into the correct sequence for each Telegram message path
+
+    Boundary with URLProcessor (app/adapters/content/url_processor.py):
+      URLHandler owns Telegram UX (message replies, user state, batch policy).
+      URLProcessor owns content extraction and summarization (scraper chain,
+      LLM calls, DB persistence). URLHandler calls URLProcessor for the
+      single-URL extraction+summarization step; all Telegram-specific logic
+      (progress messages, awaiting state, translation commands) stays here.
+    """
 
     def __init__(
         self,
