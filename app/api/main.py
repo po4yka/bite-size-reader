@@ -169,7 +169,7 @@ def _serve_web_index() -> FileResponse:
 
 
 @app.get("/web/privacy.html")
-async def privacy_policy():
+def privacy_policy():
     """Serve Privacy Policy static page."""
     _privacy = _static_dir / "web" / "privacy.html"
     if not _privacy.is_file():
@@ -178,7 +178,7 @@ async def privacy_policy():
 
 
 @app.get("/web/terms.html")
-async def terms_of_service():
+def terms_of_service():
     """Serve Terms of Service static page."""
     _terms = _static_dir / "web" / "terms.html"
     if not _terms.is_file():
@@ -188,14 +188,14 @@ async def terms_of_service():
 
 @app.get("/web")
 @app.get("/web/{path:path}")
-async def web_interface(path: str = ""):
+def web_interface(path: str = ""):
     """Serve Carbon web SPA entrypoint."""
     del path
     return _serve_web_index()
 
 
 @app.get("/")
-async def root(request: Request):
+def root(request: Request):
     """API root endpoint."""
     return success_response(
         {
@@ -209,7 +209,7 @@ async def root(request: Request):
 
 
 @app.get("/health")
-async def health_check(request: Request):
+def health_check(request: Request):
     """Health check endpoint."""
     return success_response(
         {
@@ -221,7 +221,7 @@ async def health_check(request: Request):
 
 
 @app.get("/metrics")
-async def metrics(_: dict = Depends(get_current_user)):
+def metrics(_: dict = Depends(get_current_user)):
     """Prometheus metrics endpoint (owner-only).
 
     Returns metrics in Prometheus text format for scraping.

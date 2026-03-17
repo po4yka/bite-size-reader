@@ -30,7 +30,7 @@ router = APIRouter()
 
 
 @router.get("/channels")
-async def list_channels(
+def list_channels(
     current_user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
@@ -40,7 +40,7 @@ async def list_channels(
 
 
 @router.post("/channels/subscribe")
-async def subscribe_channel(
+def subscribe_channel(
     body: SubscribeRequest,
     current_user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
@@ -51,7 +51,7 @@ async def subscribe_channel(
 
 
 @router.post("/channels/unsubscribe")
-async def unsubscribe_channel(
+def unsubscribe_channel(
     body: SubscribeRequest,
     current_user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
@@ -73,7 +73,7 @@ async def resolve_channel(
 
 
 @router.get("/channels/{username}/posts")
-async def list_channel_posts(
+def list_channel_posts(
     username: str = Path(..., min_length=5, max_length=32),
     limit: int = Query(10, ge=1, le=50),
     offset: int = Query(0, ge=0),
@@ -88,7 +88,7 @@ async def list_channel_posts(
 
 
 @router.post("/channels/bulk-unsubscribe")
-async def bulk_unsubscribe(
+def bulk_unsubscribe(
     body: BulkUnsubscribeRequest,
     current_user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
@@ -99,7 +99,7 @@ async def bulk_unsubscribe(
 
 
 @router.patch("/channels/bulk-category")
-async def bulk_assign_category(
+def bulk_assign_category(
     body: BulkCategoryRequest,
     current_user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
@@ -112,7 +112,7 @@ async def bulk_assign_category(
 
 
 @router.get("/preferences")
-async def get_preferences(
+def get_preferences(
     current_user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
@@ -122,7 +122,7 @@ async def get_preferences(
 
 
 @router.patch("/preferences")
-async def update_preferences(
+def update_preferences(
     body: UpdatePreferenceRequest,
     current_user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
@@ -134,7 +134,7 @@ async def update_preferences(
 
 
 @router.get("/history")
-async def list_history(
+def list_history(
     current_user: dict[str, Any] = Depends(get_webapp_user),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -175,7 +175,7 @@ async def trigger_channel_digest(
 
 
 @router.get("/categories")
-async def list_categories(
+def list_categories(
     current_user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
@@ -185,7 +185,7 @@ async def list_categories(
 
 
 @router.post("/categories")
-async def create_category(
+def create_category(
     body: CategoryRequest,
     current_user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
@@ -196,7 +196,7 @@ async def create_category(
 
 
 @router.patch("/categories/{category_id}")
-async def update_category(
+def update_category(
     body: CategoryRequest,
     category_id: int = Path(...),
     current_user: dict[str, Any] = Depends(get_webapp_user),
@@ -208,7 +208,7 @@ async def update_category(
 
 
 @router.delete("/categories/{category_id}")
-async def delete_category(
+def delete_category(
     category_id: int = Path(...),
     current_user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
@@ -219,7 +219,7 @@ async def delete_category(
 
 
 @router.patch("/channels/{subscription_id}/category")
-async def assign_category(
+def assign_category(
     body: AssignCategoryRequest,
     subscription_id: int = Path(...),
     current_user: dict[str, Any] = Depends(get_webapp_user),
