@@ -8,7 +8,10 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Telegram message length limit
+# Telegram hard message length limit.
+# Digest messages are pre-formatted in bulk and use the full Telegram limit (4096).
+# ResponseFormatter uses 3500 (TelegramLimitsConfig.max_message_chars) as a safety
+# margin for interactive replies. The difference is intentional.
 MAX_MESSAGE_LENGTH = 4096
 
 CONTENT_TYPE_EMOJI: dict[str, str] = {
@@ -30,7 +33,7 @@ class DigestFormatter:
 
         Returns a header/TOC message followed by one message group per channel.
         Each channel block is self-contained with its posts and inline buttons.
-        If a single channel's content exceeds 4096 chars, it is split into
+        If a single channel's content exceeds MAX_MESSAGE_LENGTH chars, it is split into
         multiple messages.
 
         Args:
