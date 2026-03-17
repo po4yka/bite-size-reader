@@ -32,7 +32,7 @@ from app.api.search_ranking import (
 from app.application.services.topic_search_utils import ensure_mapping
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.services.trending_cache import get_trending_payload
+from app.infrastructure.cache.trending_cache import get_trending_payload
 
 logger = get_logger(__name__)
 router = APIRouter()

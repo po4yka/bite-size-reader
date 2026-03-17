@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING
 import peewee
 
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
-from app.core.channel_utils import parse_channel_input
-from app.db.models import Channel, ChannelSubscription
-from app.services.digest_subscription_ops import (
+from app.application.services.digest_subscription_ops import (
     subscribe_channel_atomic,
     unsubscribe_channel_atomic,
 )
+from app.core.channel_utils import parse_channel_input
+from app.db.models import Channel, ChannelSubscription
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

@@ -8,6 +8,7 @@ from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.telegram_client import TelegramClient
 from app.adapters.telegram.url_handler import URLHandler
+from app.application.services.adaptive_timeout import AdaptiveTimeoutService
 from app.application.services.related_reads_service import RelatedReadsService
 from app.core.logging_utils import get_logger
 from app.core.verbosity import VerbosityResolver
@@ -23,7 +24,6 @@ from app.di.shared import build_async_audit_sink, build_core_dependencies, build
 from app.di.types import SummaryCliRuntime, TelegramRuntime
 from app.infrastructure.search.vector_search_service import VectorSearchService
 from app.security.file_validation import SecureFileValidator
-from app.services.adaptive_timeout import AdaptiveTimeoutService
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor

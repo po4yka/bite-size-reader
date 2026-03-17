@@ -32,7 +32,7 @@ def _get_tts_service():
     """Return a shared TTSService instance (lazy init)."""
     global _tts_service
     if _tts_service is None:
-        from app.services.tts_service import TTSService
+        from app.application.services.tts_service import TTSService
 
         _tts_service = TTSService(_get_tts_config())
     return _tts_service

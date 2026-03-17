@@ -95,7 +95,7 @@ class EmbeddingGenerationEventHandler:
             await asyncio.to_thread(self._vector_store.delete_by_request_id, request_id)
             return
 
-        from app.services.metadata_builder import MetadataBuilder
+        from app.infrastructure.vector.metadata_builder import MetadataBuilder
 
         user_scope = getattr(self._vector_store, "user_scope", None) or "public"
         environment = getattr(self._vector_store, "environment", None) or "dev"

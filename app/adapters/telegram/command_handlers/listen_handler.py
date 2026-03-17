@@ -78,7 +78,7 @@ class ListenHandler(HandlerDependenciesMixin):
         # Generate audio
         await self._formatter.safe_reply(ctx.message, "Generating audio...")
 
-        from app.services.tts_service import TTSService
+        from app.application.services.tts_service import TTSService
 
         service = TTSService(self._cfg.tts)
         try:

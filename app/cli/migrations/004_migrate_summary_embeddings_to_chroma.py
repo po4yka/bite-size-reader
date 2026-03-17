@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 
 from app.config import load_config
 from app.core.embedding_space import resolve_embedding_space_identifier
+from app.infrastructure.embedding.embedding_factory import create_embedding_service
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
-from app.services.embedding_factory import create_embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ def _fetch_summary_embeddings(
     db: DatabaseSessionManager, *, environment: str, user_scope: str
 ) -> Iterable[dict[str, Any]]:
     from app.db.models import Request, Summary, SummaryEmbedding
-    from app.services.metadata_builder import MetadataBuilder
+    from app.infrastructure.vector.metadata_builder import MetadataBuilder
 
     with db._database.atomic():  # Use atomic transaction for proper management
         query = (

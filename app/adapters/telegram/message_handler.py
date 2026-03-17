@@ -21,11 +21,11 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.forward_processor import ForwardProcessor
     from app.application.ports import AuditLogRepositoryPort
+    from app.application.services.adaptive_timeout import AdaptiveTimeoutService
     from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.search.hybrid_search_service import HybridSearchService
-    from app.services.adaptive_timeout import AdaptiveTimeoutService
 
 logger = logging.getLogger(__name__)
 
