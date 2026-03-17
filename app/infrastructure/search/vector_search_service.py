@@ -13,7 +13,7 @@ from app.core.lang import detect_language
 if TYPE_CHECKING:
     from app.application.ports import EmbeddingRepositoryPort, TopicSearchRepositoryPort
     from app.infrastructure.embedding.embedding_protocol import EmbeddingServiceProtocol
-    from app.services.search_filters import SearchFilters
+    from app.infrastructure.search.search_filters import SearchFilters
 
 logger = logging.getLogger(__name__)
 

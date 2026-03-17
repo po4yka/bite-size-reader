@@ -23,7 +23,7 @@ from app.infrastructure.persistence.sqlite.repositories.summary_repository impor
     SqliteSummaryRepositoryAdapter,
 )
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
-from app.services.metadata_builder import MetadataBuilder
+from app.infrastructure.vector.metadata_builder import MetadataBuilder
 
 logger = logging.getLogger(__name__)
 

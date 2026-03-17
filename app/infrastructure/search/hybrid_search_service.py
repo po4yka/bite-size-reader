@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from app.application.services.topic_search import LocalTopicSearchService
     from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchResult
     from app.infrastructure.search.query_expansion_service import QueryExpansionService
-    from app.services.search_filters import SearchFilters
+    from app.infrastructure.search.search_filters import SearchFilters
 
 
 class RerankerProtocol(Protocol):

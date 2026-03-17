@@ -242,7 +242,7 @@ async def main() -> int:
     # Extract query and options
     import datetime as dt
 
-    from app.services.search_filters import SearchFilters
+    from app.infrastructure.search.search_filters import SearchFilters
 
     query_parts = []
     db_path = "/data/app.db"
