@@ -132,7 +132,7 @@ services:
       - MCP_TRANSPORT=sse
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8200
-      - MCP_USER_ID=${MCP_USER_ID:-}
+      - MCP_USER_ID=${MCP_USER_ID:?MCP_USER_ID must be set in .env to scope MCP server access to a specific user}
       - MCP_ALLOW_REMOTE_SSE=true
       - DB_PATH=/data/app.db
       - CHROMA_HOST=http://chroma:8000
@@ -178,12 +178,15 @@ services:
           memory: 128M
           cpus: "0.10"
   firecrawl:
-    image: ghcr.io/mendableai/firecrawl:latest
+    # Pin to a specific version tag; never use :latest in production.
+    # To update: check https://github.com/mendableai/firecrawl/releases for the
+    # latest tag, then update this value and test before deploying.
+    image: ghcr.io/mendableai/firecrawl:v0.0.57
     container_name: bsr-firecrawl
     init: true
     environment:
       - PORT=3002
-      - FIRECRAWL_API_KEY=fc-bsr-local
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-fc-bsr-local}
       - NUM_WORKERS_PER_QUEUE=1
     ports:
       - "127.0.0.1:3002:3002"
@@ -213,8 +216,9 @@ services:
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     volumes:
       - redis_data:/data
-    ports:
-      - "127.0.0.1:6379:6379"
+    # No host port binding: Redis is internal-only, accessed by other containers
+    # via Docker DNS (redis:6379). Exposing the port to the host would allow any
+    # process on the host to reach an unauthenticated Redis instance.
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
