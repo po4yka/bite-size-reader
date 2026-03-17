@@ -56,6 +56,22 @@ class NotificationFormatterImpl:
         """Forward *text* to the admin log chat (no-op when not configured)."""
         await self._response_sender.send_to_admin_log(text, correlation_id=correlation_id)
 
+    async def _dispatch(
+        self,
+        message: Any,
+        debug_text: str,
+        user_text: str,
+        *,
+        correlation_id: str | None = None,
+    ) -> None:
+        """Shared 3-step reader-mode dispatch: route message, then admin-log."""
+        reader = await self._is_reader_mode(message)
+        if reader and self._progress_tracker is not None:
+            await self._progress_tracker.update(message, user_text)
+        else:
+            await self._response_sender.safe_reply(message, user_text)
+        await self._admin_log(debug_text, correlation_id=correlation_id)
+
     async def send_help(self, message: Any) -> None:
         """Send help message to user."""
         help_text = (
@@ -138,12 +154,7 @@ class NotificationFormatterImpl:
             else:
                 user_text = debug_text
 
-            if reader and self._progress_tracker is not None:
-                await self._progress_tracker.update(message, user_text)
-            else:
-                await self._response_sender.safe_reply(message, user_text)
-
-            await self._admin_log(debug_text, correlation_id=correlation_id)
+            await self._dispatch(message, debug_text, user_text, correlation_id=correlation_id)
         except Exception as exc:
             raise_if_cancelled(exc)
 
@@ -173,12 +184,7 @@ class NotificationFormatterImpl:
             else:
                 user_text = debug_text
 
-            if reader and self._progress_tracker is not None:
-                await self._progress_tracker.update(message, user_text)
-            else:
-                await self._response_sender.safe_reply(message, user_text)
-
-            await self._admin_log(debug_text)
+            await self._dispatch(message, debug_text, user_text)
         except Exception as exc:
             raise_if_cancelled(exc)
 
@@ -236,12 +242,7 @@ class NotificationFormatterImpl:
             else:
                 user_text = debug_text
 
-            if reader and self._progress_tracker is not None:
-                await self._progress_tracker.update(message, user_text)
-            else:
-                await self._response_sender.safe_reply(message, user_text)
-
-            await self._admin_log(debug_text, correlation_id=correlation_id)
+            await self._dispatch(message, debug_text, user_text, correlation_id=correlation_id)
         except Exception as exc:
             raise_if_cancelled(exc)
 
@@ -293,12 +294,7 @@ class NotificationFormatterImpl:
             else:
                 user_text = debug_text
 
-            if reader and self._progress_tracker is not None:
-                await self._progress_tracker.update(message, user_text)
-            else:
-                await self._response_sender.safe_reply(message, user_text)
-
-            await self._admin_log(debug_text, correlation_id=correlation_id)
+            await self._dispatch(message, debug_text, user_text, correlation_id=correlation_id)
         except Exception as exc:
             raise_if_cancelled(exc)
 
@@ -338,12 +334,7 @@ class NotificationFormatterImpl:
             else:
                 user_text = debug_text
 
-            if reader and self._progress_tracker is not None:
-                await self._progress_tracker.update(message, user_text)
-            else:
-                await self._response_sender.safe_reply(message, user_text)
-
-            await self._admin_log(debug_text)
+            await self._dispatch(message, debug_text, user_text)
         except Exception as exc:
             raise_if_cancelled(exc)
 
@@ -391,12 +382,7 @@ class NotificationFormatterImpl:
             else:
                 user_text = debug_text
 
-            if reader and self._progress_tracker is not None:
-                await self._progress_tracker.update(message, user_text)
-            else:
-                await self._response_sender.safe_reply(message, user_text)
-
-            await self._admin_log(debug_text)
+            await self._dispatch(message, debug_text, user_text)
         except Exception as exc:
             raise_if_cancelled(exc)
 
@@ -447,12 +433,7 @@ class NotificationFormatterImpl:
             else:
                 user_text = debug_text
 
-            if reader and self._progress_tracker is not None:
-                await self._progress_tracker.update(message, user_text)
-            else:
-                await self._response_sender.safe_reply(message, user_text)
-
-            await self._admin_log(debug_text)
+            await self._dispatch(message, debug_text, user_text)
         except Exception as exc:
             raise_if_cancelled(exc)
 
@@ -509,12 +490,7 @@ class NotificationFormatterImpl:
             else:
                 user_text = debug_text
 
-            if reader and self._progress_tracker is not None:
-                await self._progress_tracker.update(message, user_text)
-            else:
-                await self._response_sender.safe_reply(message, user_text)
-
-            await self._admin_log(debug_text)
+            await self._dispatch(message, debug_text, user_text)
         except Exception as exc:
             raise_if_cancelled(exc)
 
