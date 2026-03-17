@@ -161,7 +161,14 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
 
             summaries_list = []
             for row in query.limit(limit).offset(offset):
-                summaries_list.append(model_to_dict(row))
+                data = model_to_dict(row)
+                if (
+                    data is not None
+                    and hasattr(row, "request")
+                    and isinstance(row.request, Request)
+                ):
+                    data["request"] = model_to_dict(row.request)
+                summaries_list.append(data)
 
             # Unread count
             unread_count = (
