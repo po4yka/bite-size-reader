@@ -71,7 +71,7 @@ class SummaryFollowupManager:
                 "updated_at": now,
             }
 
-    async def handle_entry(
+    async def start_session(
         self,
         *,
         message: Any,

@@ -168,7 +168,7 @@ class CallbackHandler:
         if not summary_id:
             return False
 
-        await self._followup.handle_entry(
+        await self._followup.start_session(
             message=message,
             uid=uid,
             summary_id=summary_id,
