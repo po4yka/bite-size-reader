@@ -130,7 +130,7 @@ class SummaryFollowupManager:
             )
             return True
 
-        source_context = await self._load_source_context(
+        source_context = self._load_source_context(
             summary_data.get("request_id"),
             correlation_id=correlation_id,
         )
@@ -212,7 +212,7 @@ class SummaryFollowupManager:
         plain = html.unescape(without_tags)
         return re.sub(r"\\s+", " ", plain).strip()
 
-    async def _load_source_context(
+    def _load_source_context(
         self,
         request_id: Any,
         *,

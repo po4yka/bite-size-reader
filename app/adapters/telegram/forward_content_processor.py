@@ -111,7 +111,7 @@ class ForwardContentProcessor:
             logger.exception("persist_lang_detected_error", extra={"error": str(e)})
 
         chosen_lang = choose_language(self.cfg.runtime.preferred_lang, detected)
-        system_prompt = await self._load_system_prompt(chosen_lang)
+        system_prompt = self._load_system_prompt(chosen_lang)
 
         logger.debug(
             "forward_processing_plan_resolved",
@@ -247,7 +247,7 @@ class ForwardContentProcessor:
                     extra={"user_id": user_id, "error": str(exc)},
                 )
 
-    async def _load_system_prompt(self, lang: str) -> str:
+    def _load_system_prompt(self, lang: str) -> str:
         """Load system prompt file based on language using PromptManager.
 
         Uses the unified PromptManager for prompt loading, caching, validation,
