@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from app.adapters.external.formatting.error_types import ErrorNotificationType
 from app.models.batch_processing import URLStatus
 
 if TYPE_CHECKING:
@@ -388,25 +389,25 @@ class BatchProgressFormatter:
         e_type = str(error_type).lower() if error_type else ""
         e_msg = str(error_message).lower() if error_message else ""
 
-        if e_type == "timeout":
+        if e_type == ErrorNotificationType.TIMEOUT:
             if "after" in e_msg:
                 return f"Timed out ({e_msg.split('after ')[-1]})"
             return "Timed out"
 
-        if e_type == "domain_timeout":
+        if e_type == ErrorNotificationType.DOMAIN_TIMEOUT:
             return "Skipped (slow site)"
 
-        if e_type == "network":
+        if e_type == ErrorNotificationType.NETWORK_ERROR:
             if "403" in e_msg:
                 return "Access Denied (403)"
             if "404" in e_msg:
                 return "Not Found (404)"
             return "Network error"
 
-        if e_type == "validation":
+        if e_type == ErrorNotificationType.VALIDATION:
             return "Invalid URL"
 
-        if e_type in {"rate_limit", "429"}:
+        if e_type in {ErrorNotificationType.RATE_LIMIT, "429"}:
             return "Rate limited"
 
         if "refused" in e_msg:
