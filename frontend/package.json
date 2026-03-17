@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "generate:api": "openapi-typescript ../docs/openapi/mobile_api.yaml -o src/api/generated.ts"
   },
   "dependencies": {
     "@telegram-apps/sdk-react": "^2.0.0",
@@ -24,6 +25,7 @@
     "jsdom": "^26.0.0",
     "typescript": "~5.7.2",
     "vite": "^6.0.5",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "openapi-typescript": "^7.0.0"
   }
 }

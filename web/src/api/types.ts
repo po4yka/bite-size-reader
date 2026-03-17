@@ -1,10 +1,27 @@
-export interface PaginationInfo {
-  total: number;
-  limit: number;
-  offset: number;
-  hasMore: boolean;
-}
+/**
+ * API domain types for the web frontend.
+ *
+ * Types are aligned with the OpenAPI spec at docs/openapi/mobile_api.yaml,
+ * accessible via components["schemas"] in ./generated.ts.
+ *
+ * Where the generated schema matches exactly, types are re-exported directly.
+ * Where there are minor shape differences (e.g. requestId: string vs number,
+ * Collection missing serverVersion/isShared), manual types are kept with a
+ * reference comment pointing to the corresponding generated schema.
+ */
+import type { components } from "./generated";
 
+// ---------------------------------------------------------------------------
+// Pagination — re-exported from generated (exact match)
+// spec: components["schemas"]["Pagination"]
+// ---------------------------------------------------------------------------
+export type PaginationInfo = components["schemas"]["Pagination"];
+
+// ---------------------------------------------------------------------------
+// Summaries
+// spec: components["schemas"]["SummaryListItem"] (requestId is number in spec;
+// kept as string here for backward compat with existing component code)
+// ---------------------------------------------------------------------------
 export interface SummaryCompact {
   id: number;
   requestId: string;
@@ -39,6 +56,11 @@ export interface SummaryDetail {
   keyStats: Array<{ label: string; value: string; sourceExcerpt?: string }>;
 }
 
+// ---------------------------------------------------------------------------
+// Collections
+// spec: components["schemas"]["Collection"] (includes additional fields:
+// createdAt, updatedAt, serverVersion, isShared not used by current UI)
+// ---------------------------------------------------------------------------
 export interface Collection {
   id: number;
   name: string;
@@ -59,6 +81,11 @@ export interface CollectionItem {
   domain?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Search
+// spec: components["schemas"]["SearchResultItem"] (snake_case — normalizeKeys
+// converts to camelCase at runtime; manual type reflects runtime shape)
+// ---------------------------------------------------------------------------
 export interface SearchResult {
   id: number;
   requestId: string;
@@ -98,6 +125,11 @@ export interface SearchResponse {
   facets?: SearchFacets;
 }
 
+// ---------------------------------------------------------------------------
+// Requests
+// spec: components["schemas"]["RequestStatusData"] (uses progress.percentage
+// instead of progressPct; kept as-is for existing component compatibility)
+// ---------------------------------------------------------------------------
 export interface RequestStatus {
   requestId: string;
   status: "pending" | "crawling" | "processing" | "completed" | "failed";

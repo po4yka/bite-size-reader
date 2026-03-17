@@ -226,6 +226,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify generated API types are fresh
+        run: |
+          npx openapi-typescript ../docs/openapi/mobile_api.yaml -o src/api/generated.check.ts
+          diff src/api/generated.ts src/api/generated.check.ts
+          rm src/api/generated.check.ts
+
       - name: Run web static checks
         run: npm run check:static
 
