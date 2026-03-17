@@ -16,7 +16,7 @@ Synced with `web/src/App.tsx`. Update this file when routes change.
 | `/web/collections/:id` | `CollectionsPage` | Yes | Collection detail (same component) |
 | `/web/digest` | `DigestPage` | Yes | Channel digest (requires Telegram WebApp auth) |
 | `/web/preferences` | `PreferencesPage` | Yes | User settings |
-| `/web/admin` | `NotFoundPage` | Yes | Gated by `FEATURE_FLAGS.admin` |
+| `/web/admin` | `AdminPage` | Yes | Gated by `FEATURE_FLAGS.admin`; falls back to `NotFoundPage` when flag is false |
 | `/web/login` | `LoginRoute` | No | Auth entry point |
 | `*` | `NotFoundPage` | No | Catch-all 404 |
 
