@@ -38,7 +38,7 @@ class LLMWorkflowAttemptsMixin:
         if ctx.llm.status != "ok":
             salvage = None
             if (ctx.llm.error_text or "") == "structured_output_parse_error":
-                salvage = await self._attempt_salvage_parsing(ctx.llm, ctx.correlation_id)
+                salvage = self._attempt_salvage_parsing(ctx.llm, ctx.correlation_id)
             if salvage is not None:
                 return await self._finalize_success(
                     salvage,

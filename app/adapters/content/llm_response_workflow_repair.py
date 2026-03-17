@@ -29,7 +29,7 @@ class LLMWorkflowRepairMixin:
     request_repo: Any
     user_repo: Any
 
-    async def _attempt_salvage_parsing(
+    def _attempt_salvage_parsing(
         self, llm: Any, correlation_id: str | None
     ) -> dict[str, Any] | None:
         from app.core.json_utils import extract_json
