@@ -40,7 +40,7 @@ class ExportFormatter:
             Tuple of (file_path, filename) or (None, None) if export failed
         """
         # Load summary from database
-        summary_data = await self._load_summary(summary_id)
+        summary_data = self._load_summary(summary_id)
         if not summary_data:
             logger.warning(
                 "export_summary_not_found",
@@ -50,11 +50,11 @@ class ExportFormatter:
 
         # Generate based on format
         if export_format == "pdf":
-            return await self._export_pdf(summary_data, correlation_id)
+            return self._export_pdf(summary_data, correlation_id)
         if export_format == "md":
-            return await self._export_markdown(summary_data, correlation_id)
+            return self._export_markdown(summary_data, correlation_id)
         if export_format == "html":
-            return await self._export_html(summary_data, correlation_id)
+            return self._export_html(summary_data, correlation_id)
 
         logger.warning(
             "export_unknown_format",
@@ -62,7 +62,7 @@ class ExportFormatter:
         )
         return None, None
 
-    async def _load_summary(self, summary_id: str) -> dict[str, Any] | None:
+    def _load_summary(self, summary_id: str) -> dict[str, Any] | None:
         """Load summary data from database.
 
         The summary_id can be either:
@@ -106,7 +106,7 @@ class ExportFormatter:
             )
             return None
 
-    async def _export_markdown(
+    def _export_markdown(
         self,
         data: dict[str, Any],
         correlation_id: str | None = None,
@@ -149,7 +149,7 @@ class ExportFormatter:
             )
             return None, None
 
-    async def _export_html(
+    def _export_html(
         self,
         data: dict[str, Any],
         correlation_id: str | None = None,
@@ -190,7 +190,7 @@ class ExportFormatter:
             logger.exception("export_html_failed", extra={"error": str(e), "cid": correlation_id})
             return None, None
 
-    async def _export_pdf(
+    def _export_pdf(
         self,
         data: dict[str, Any],
         correlation_id: str | None = None,
