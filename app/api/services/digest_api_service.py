@@ -2,6 +2,10 @@
 
 Reuses subscribe/unsubscribe transaction logic from digest_handler.py
 and preference merging with ChannelDigestConfig global defaults.
+
+TODO: Migrate to app/application/services/ following the pattern established
+by request_service.py. This file remains in app/api/services/ for backward
+compatibility until the migration is complete.
 """
 
 from __future__ import annotations

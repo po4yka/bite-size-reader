@@ -1,4 +1,9 @@
-"""Service logic for collections (nesting, sharing, move/reorder)."""
+"""Service logic for collections (nesting, sharing, move/reorder).
+
+TODO: Migrate to app/application/services/ following the pattern established
+by request_service.py. This file remains in app/api/services/ for backward
+compatibility until the migration is complete.
+"""
 
 from __future__ import annotations
 
