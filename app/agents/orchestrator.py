@@ -175,6 +175,12 @@ class AgentOrchestrator:
         self.validation_agent = validation_agent
         self.logger = logger
 
+    def _log(self, level: str, message: str, correlation_id: str) -> None:
+        getattr(self.logger, level)(
+            f"[Orchestrator] {message}",
+            extra={"correlation_id": correlation_id},
+        )
+
     async def execute_pipeline(self, input_data: PipelineInput) -> dict[str, Any]:
         """Execute the complete multi-agent summarization pipeline.
 
@@ -189,15 +195,10 @@ class AgentOrchestrator:
         """
         correlation_id = input_data.correlation_id
 
-        self.logger.info(
-            f"[Orchestrator] Starting pipeline for URL: {input_data.url}",
-            extra={"correlation_id": correlation_id},
-        )
+        self._log("info", f"Starting pipeline for URL: {input_data.url}", correlation_id)
 
         # Phase 1: Content Extraction
-        self.logger.info(
-            "[Orchestrator] Phase 1: Content Extraction", extra={"correlation_id": correlation_id}
-        )
+        self._log("info", "Phase 1: Content Extraction", correlation_id)
 
         extraction_result = await self.extraction_agent.execute(
             ExtractionInput(
@@ -208,23 +209,18 @@ class AgentOrchestrator:
         )
 
         if not extraction_result.success:
-            self.logger.error(
-                f"[Orchestrator] Extraction failed: {extraction_result.error}",
-                extra={"correlation_id": correlation_id},
-            )
+            self._log("error", f"Extraction failed: {extraction_result.error}", correlation_id)
             raise Exception(f"Content extraction failed: {extraction_result.error}") from None
 
         extracted_output = extraction_result.output
-        self.logger.info(
-            f"[Orchestrator] Extraction successful - {len(extracted_output.content_markdown)} chars",
-            extra={"correlation_id": correlation_id},
+        self._log(
+            "info",
+            f"Extraction successful - {len(extracted_output.content_markdown)} chars",
+            correlation_id,
         )
 
         # Phase 2: Summarization with Validation Feedback Loop
-        self.logger.info(
-            "[Orchestrator] Phase 2: Summarization with Feedback Loop",
-            extra={"correlation_id": correlation_id},
-        )
+        self._log("info", "Phase 2: Summarization with Feedback Loop", correlation_id)
 
         summarization_result = await self.summarization_agent.execute(
             SummarizationInput(
@@ -237,16 +233,16 @@ class AgentOrchestrator:
         )
 
         if not summarization_result.success:
-            self.logger.error(
-                f"[Orchestrator] Summarization failed: {summarization_result.error}",
-                extra={"correlation_id": correlation_id},
+            self._log(
+                "error", f"Summarization failed: {summarization_result.error}", correlation_id
             )
             raise Exception(f"Summarization failed: {summarization_result.error}") from None
 
         summary_output = summarization_result.output
-        self.logger.info(
-            f"[Orchestrator] Summarization successful after {summary_output.attempts} attempt(s)",
-            extra={"correlation_id": correlation_id},
+        self._log(
+            "info",
+            f"Summarization successful after {summary_output.attempts} attempt(s)",
+            correlation_id,
         )
 
         # Build final output
@@ -259,10 +255,7 @@ class AgentOrchestrator:
             validation_warnings=summary_output.corrections_applied,
         )
 
-        self.logger.info(
-            "[Orchestrator] Pipeline completed successfully",
-            extra={"correlation_id": correlation_id},
-        )
+        self._log("info", "Pipeline completed successfully", correlation_id)
 
         return {
             "success": True,
