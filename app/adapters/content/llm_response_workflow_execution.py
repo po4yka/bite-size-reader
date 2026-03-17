@@ -159,14 +159,10 @@ class LLMWorkflowExecutionMixin:
                     },
                 )
                 self._set_failure_context(llm, "summary_processing_exception")
-                try:
-                    context = getattr(llm, "error_context", None) or {}
-                    context.setdefault("message", "summary_processing_exception")
-                    context.setdefault("exception", str(exc))
-                    llm.error_context = context
-                except Exception as exc:
-                    raise_if_cancelled(exc)
-                    logger.exception("failed_to_attach_summary_processing_exception")
+                context = getattr(llm, "error_context", None) or {}
+                context.setdefault("message", "summary_processing_exception")
+                context.setdefault("exception", str(exc))
+                llm.error_context = context
 
             if summary is not None:
                 return summary

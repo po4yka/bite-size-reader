@@ -8,7 +8,6 @@ import logging
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from app.core.async_utils import raise_if_cancelled
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.utils.json_validation import finalize_summary_texts
 
@@ -287,18 +286,12 @@ class LLMWorkflowAttemptsMixin:
 
     def _set_failure_context(self, llm: Any, reason: str) -> None:
         """Attach a human-readable failure reason to an LLM attempt."""
-        try:
-            if not getattr(llm, "error_text", None):
-                llm.error_text = reason
-        except Exception as exc:
-            raise_if_cancelled(exc)
+        if not getattr(llm, "error_text", None):
+            llm.error_text = reason
 
-        try:
-            context = getattr(llm, "error_context", None)
-            if context is None:
-                llm.error_context = {"message": reason}
-            elif isinstance(context, dict):
-                context.setdefault("message", reason)
-                llm.error_context = context
-        except Exception as exc:
-            raise_if_cancelled(exc)
+        context = getattr(llm, "error_context", None)
+        if context is None:
+            llm.error_context = {"message": reason}
+        elif isinstance(context, dict):
+            context.setdefault("message", reason)
+            llm.error_context = context
