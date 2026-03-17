@@ -34,13 +34,13 @@ class DigestFacade:
 
     # --- Channels ---
 
-    def list_channels(self, user_id: int) -> dict[str, Any]:
+    async def list_channels(self, user_id: int) -> dict[str, Any]:
         return self._service().list_subscriptions(user_id)
 
-    def subscribe_channel(self, user_id: int, channel_username: str) -> dict[str, str]:
+    async def subscribe_channel(self, user_id: int, channel_username: str) -> dict[str, str]:
         return self._service().subscribe_channel(user_id, channel_username)
 
-    def unsubscribe_channel(self, user_id: int, channel_username: str) -> dict[str, str]:
+    async def unsubscribe_channel(self, user_id: int, channel_username: str) -> dict[str, str]:
         return self._service().unsubscribe_channel(user_id, channel_username)
 
     async def resolve_channel(self, user_id: int, username: str) -> ResolveChannelResponse:
@@ -48,22 +48,22 @@ class DigestFacade:
 
     # --- Posts ---
 
-    def list_channel_posts(
+    async def list_channel_posts(
         self, user_id: int, username: str, *, limit: int, offset: int
     ) -> dict[str, Any]:
         return self._service().list_channel_posts(user_id, username, limit=limit, offset=offset)
 
     # --- Preferences ---
 
-    def get_preferences(self, user_id: int) -> DigestPreferenceResponse:
+    async def get_preferences(self, user_id: int) -> DigestPreferenceResponse:
         return self._service().get_preferences(user_id)
 
-    def update_preferences(self, user_id: int, **fields: Any) -> DigestPreferenceResponse:
+    async def update_preferences(self, user_id: int, **fields: Any) -> DigestPreferenceResponse:
         return self._service().update_preferences(user_id, **fields)
 
     # --- History ---
 
-    def list_history(self, user_id: int, *, limit: int, offset: int) -> dict[str, Any]:
+    async def list_history(self, user_id: int, *, limit: int, offset: int) -> dict[str, Any]:
         return self._service().list_deliveries(user_id, limit=limit, offset=offset)
 
     # --- Triggers ---
@@ -89,29 +89,31 @@ class DigestFacade:
 
     # --- Categories ---
 
-    def list_categories(self, user_id: int) -> list[CategoryResponse]:
+    async def list_categories(self, user_id: int) -> list[CategoryResponse]:
         return self._service().list_categories(user_id)
 
-    def create_category(self, user_id: int, name: str) -> CategoryResponse:
+    async def create_category(self, user_id: int, name: str) -> CategoryResponse:
         return self._service().create_category(user_id, name)
 
-    def update_category(self, user_id: int, category_id: int, **fields: Any) -> CategoryResponse:
+    async def update_category(
+        self, user_id: int, category_id: int, **fields: Any
+    ) -> CategoryResponse:
         return self._service().update_category(user_id, category_id, **fields)
 
-    def delete_category(self, user_id: int, category_id: int) -> dict[str, str]:
+    async def delete_category(self, user_id: int, category_id: int) -> dict[str, str]:
         return self._service().delete_category(user_id, category_id)
 
-    def assign_category(
+    async def assign_category(
         self, user_id: int, subscription_id: int, category_id: int | None
     ) -> dict[str, str]:
         return self._service().assign_category(user_id, subscription_id, category_id)
 
     # --- Bulk operations ---
 
-    def bulk_unsubscribe(self, user_id: int, usernames: list[str]) -> dict[str, Any]:
+    async def bulk_unsubscribe(self, user_id: int, usernames: list[str]) -> dict[str, Any]:
         return self._service().bulk_unsubscribe(user_id, usernames)
 
-    def bulk_assign_category(
+    async def bulk_assign_category(
         self, user_id: int, subscription_ids: list[int], category_id: int | None
     ) -> dict[str, Any]:
         return self._service().bulk_assign_category(user_id, subscription_ids, category_id)

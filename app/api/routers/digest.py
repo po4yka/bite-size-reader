@@ -36,7 +36,7 @@ async def list_channels(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """List user's channel subscriptions and slot usage."""
-    data = digest_facade.list_channels(current_user["user_id"])
+    data = await digest_facade.list_channels(current_user["user_id"])
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None),
@@ -51,7 +51,7 @@ async def subscribe_channel(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Subscribe to a Telegram channel."""
-    data = digest_facade.subscribe_channel(current_user["user_id"], body.channel_username)
+    data = await digest_facade.subscribe_channel(current_user["user_id"], body.channel_username)
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None),
@@ -66,7 +66,7 @@ async def unsubscribe_channel(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Unsubscribe from a Telegram channel."""
-    data = digest_facade.unsubscribe_channel(current_user["user_id"], body.channel_username)
+    data = await digest_facade.unsubscribe_channel(current_user["user_id"], body.channel_username)
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None),
@@ -98,7 +98,7 @@ async def list_channel_posts(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """List recent posts for a subscribed channel."""
-    data = digest_facade.list_channel_posts(
+    data = await digest_facade.list_channel_posts(
         current_user["user_id"], username, limit=limit, offset=offset
     )
     return success_response(
@@ -115,7 +115,7 @@ async def bulk_unsubscribe(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Unsubscribe from multiple channels at once."""
-    data = digest_facade.bulk_unsubscribe(current_user["user_id"], body.channel_usernames)
+    data = await digest_facade.bulk_unsubscribe(current_user["user_id"], body.channel_usernames)
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None),
@@ -130,7 +130,7 @@ async def bulk_assign_category(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Assign multiple subscriptions to a category."""
-    data = digest_facade.bulk_assign_category(
+    data = await digest_facade.bulk_assign_category(
         current_user["user_id"], body.subscription_ids, body.category_id
     )
     return success_response(
@@ -146,7 +146,7 @@ async def get_preferences(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Get merged digest preferences (user overrides + global defaults)."""
-    data = digest_facade.get_preferences(current_user["user_id"])
+    data = await digest_facade.get_preferences(current_user["user_id"])
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None),
@@ -162,7 +162,7 @@ async def update_preferences(
 ) -> dict[str, Any]:
     """Update user digest preferences."""
     fields = body.model_dump(exclude_none=True)
-    data = digest_facade.update_preferences(current_user["user_id"], **fields)
+    data = await digest_facade.update_preferences(current_user["user_id"], **fields)
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None),
@@ -178,7 +178,7 @@ async def list_history(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Paginated list of past digest deliveries."""
-    data = digest_facade.list_history(current_user["user_id"], limit=limit, offset=offset)
+    data = await digest_facade.list_history(current_user["user_id"], limit=limit, offset=offset)
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None),
@@ -229,7 +229,7 @@ async def list_categories(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """List user's channel categories."""
-    data = digest_facade.list_categories(current_user["user_id"])
+    data = await digest_facade.list_categories(current_user["user_id"])
     return success_response(
         {"categories": data},
         correlation_id=getattr(request.state, "correlation_id", None),
@@ -244,7 +244,7 @@ async def create_category(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Create a new channel category."""
-    data = digest_facade.create_category(current_user["user_id"], body.name)
+    data = await digest_facade.create_category(current_user["user_id"], body.name)
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None),
@@ -260,7 +260,7 @@ async def update_category(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Update a channel category."""
-    data = digest_facade.update_category(current_user["user_id"], category_id, name=body.name)
+    data = await digest_facade.update_category(current_user["user_id"], category_id, name=body.name)
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None),
@@ -275,7 +275,7 @@ async def delete_category(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Delete a channel category."""
-    data = digest_facade.delete_category(current_user["user_id"], category_id)
+    data = await digest_facade.delete_category(current_user["user_id"], category_id)
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None),
@@ -291,7 +291,9 @@ async def assign_category(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Assign a subscription to a category (or remove with null)."""
-    data = digest_facade.assign_category(current_user["user_id"], subscription_id, body.category_id)
+    data = await digest_facade.assign_category(
+        current_user["user_id"], subscription_id, body.category_id
+    )
     return success_response(
         data,
         correlation_id=getattr(request.state, "correlation_id", None),
