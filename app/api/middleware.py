@@ -19,8 +19,14 @@ from app.infrastructure.redis import get_redis, redis_key
 
 logger = get_logger(__name__)
 
-# Cached config for middleware usage
+# Cached config for middleware usage.
+# Lazy-initialized on the first request rather than at startup because:
+# (1) middleware is loaded before lifespan runs, and (2) config only needs
+# to be read once. _get_cfg() below provides thread-safe lazy access.
 _cfg: AppConfig | None = None
+
+# One-time warning flag — intentionally global so the "Redis unavailable"
+# warning is emitted at most once per process, not once per request.
 _redis_warning_logged = False
 
 # In-memory rate limiting fallback when Redis is unavailable
