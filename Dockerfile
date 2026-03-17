@@ -78,8 +78,13 @@ RUN set -eux; \
 COPY --from=builder /app/.venv /app/.venv
 
 # Install Chromium for Playwright-based scraping fallback.
+# Set WITH_PLAYWRIGHT=0 at build time to produce a slimmer image without
+# the browser engine (e.g. when SCRAPER_PLAYWRIGHT_ENABLED=false).
+ARG WITH_PLAYWRIGHT=1
 RUN set -eux; \
-    playwright install --with-deps chromium
+    if [ "${WITH_PLAYWRIGHT}" = "1" ]; then \
+        playwright install --with-deps chromium; \
+    fi
 
 # Copy application code
 COPY app ./app

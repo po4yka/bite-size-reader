@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import copy
-import json
 import random
 import time
 from dataclasses import dataclass, replace
@@ -16,6 +15,7 @@ from app.adapters.content.summarization_models import (
 )
 from app.adapters.content.url_flow_context_builder import get_url_system_prompt
 from app.core.async_utils import raise_if_cancelled
+from app.core.json_utils import dumps as json_dumps
 from app.core.lang import choose_language, detect_language
 from app.core.logging_utils import get_logger, log_exception
 from app.core.url_utils import normalize_url
@@ -679,7 +679,7 @@ class BackgroundProcessor:
         }
         channel = f"processing:request:{request_id}"
         try:
-            await self.redis.publish(channel, json.dumps(payload))
+            await self.redis.publish(channel, json_dumps(payload))
         except Exception as exc:
             logger.warning(
                 "bg_redis_publish_failed",

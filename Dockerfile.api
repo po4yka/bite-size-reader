@@ -60,7 +60,10 @@ RUN apt-get update \
 COPY --from=builder /app/.venv /app/.venv
 
 # Install Chromium for Playwright-based scraping fallback.
-RUN playwright install --with-deps chromium
+# Set WITH_PLAYWRIGHT=0 at build time to produce a slimmer image without
+# the browser engine (e.g. when SCRAPER_PLAYWRIGHT_ENABLED=false).
+ARG WITH_PLAYWRIGHT=1
+RUN if [ "${WITH_PLAYWRIGHT}" = "1" ]; then playwright install --with-deps chromium; fi
 
 # Copy application source
 COPY app ./app

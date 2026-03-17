@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -19,6 +18,7 @@ from app.api.models.responses import (
     SyncEntityEnvelope,
     SyncSessionData,
 )
+from app.core.json_utils import dumps as json_dumps, loads as json_loads
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.di.repositories import (
@@ -156,7 +156,7 @@ class SyncService:
 
         if redis_client:
             key = redis_key(self.cfg.redis.prefix, "sync", "session", payload["session_id"])
-            await redis_client.set(key, json.dumps(payload), ex=ttl_seconds)
+            await redis_client.set(key, json_dumps(payload), ex=ttl_seconds)
             return
 
         global _redis_warning_logged
@@ -178,7 +178,7 @@ class SyncService:
             if payload_raw is None or ttl == -2:
                 raise SyncSessionNotFoundError(session_id)
 
-            payload = json.loads(payload_raw)
+            payload = json_loads(payload_raw)
         else:
             _prune_fallback_sessions(datetime.now(UTC), exclude_session_id=session_id)
             payload = _sync_sessions.get(session_id)
