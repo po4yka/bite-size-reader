@@ -63,6 +63,25 @@ def _get_summary_use_case() -> SummaryReadModelUseCase:
     return get_summary_read_model_use_case()
 
 
+def _extract_request_fields(
+    summary_dict: dict[str, Any],
+) -> tuple[int | None, str, str]:
+    """Extract (request_id, input_url, normalized_url) from a joined summary dict.
+
+    The repository may return ``request`` as a nested dict (normal case) or as
+    a bare integer ID (legacy/partial join).  Both shapes are handled here so
+    callers don't duplicate the guard.
+    """
+    request_data = summary_dict.get("request") or {}
+    if isinstance(request_data, int):
+        return request_data, "", ""
+    return (
+        request_data.get("id", summary_dict.get("request_id")),
+        request_data.get("input_url", ""),
+        request_data.get("normalized_url", ""),
+    )
+
+
 def _resolve_use_case(use_case: Any) -> SummaryReadModelUseCase:
     """Resolve FastAPI Depends defaults when handlers are called directly in tests."""
     if isinstance(use_case, SummaryReadModelUseCase):
@@ -113,17 +132,7 @@ async def get_summaries(
     # Build response from dictionary data
     summary_list: list[SummaryCompact] = []
     for summary_dict in summaries:
-        # Extract request data from the joined dict
-        request_data = summary_dict.get("request") or {}
-        if isinstance(request_data, int):
-            # If request is just an ID, we need to get request data separately
-            request_id = request_data
-            input_url = ""
-            normalized_url = ""
-        else:
-            request_id = request_data.get("id", summary_dict.get("request_id"))
-            input_url = request_data.get("input_url", "")
-            normalized_url = request_data.get("normalized_url", "")
+        request_id, input_url, normalized_url = _extract_request_fields(summary_dict)
 
         json_payload = ensure_mapping(summary_dict.get("json_payload"))
         metadata = ensure_mapping(json_payload.get("metadata"))
@@ -231,15 +240,7 @@ async def get_recommendations(
 
     summary_list: list[SummaryCompact] = []
     for summary_dict in top:
-        request_data = summary_dict.get("request") or {}
-        if isinstance(request_data, int):
-            request_id = request_data
-            input_url = ""
-            normalized_url = ""
-        else:
-            request_id = request_data.get("id", summary_dict.get("request_id"))
-            input_url = request_data.get("input_url", "")
-            normalized_url = request_data.get("normalized_url", "")
+        request_id, input_url, normalized_url = _extract_request_fields(summary_dict)
 
         json_payload = ensure_mapping(summary_dict.get("json_payload"))
         metadata = ensure_mapping(json_payload.get("metadata"))
