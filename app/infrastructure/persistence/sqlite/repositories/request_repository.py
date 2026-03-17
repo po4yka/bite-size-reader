@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any
 import peewee
 
 from app.core.time_utils import UTC
+from app.db.json_utils import prepare_json_payload
 from app.db.models import CrawlResult, Request, Summary, TelegramMessage, model_to_dict
-from app.db.utils import prepare_json_payload
 from app.domain.models.request import Request as DomainRequest, RequestStatus, RequestType
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 from app.infrastructure.persistence.sqlite.repositories._joined_row_utils import (

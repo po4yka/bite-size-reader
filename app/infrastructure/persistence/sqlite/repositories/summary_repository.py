@@ -14,8 +14,8 @@ import peewee
 
 from app.application.services.topic_search_utils import ensure_mapping, tokenize
 from app.core.time_utils import UTC
+from app.db.json_utils import prepare_json_payload
 from app.db.models import CrawlResult, Request, Summary, model_to_dict
-from app.db.utils import prepare_json_payload
 from app.domain.models.summary import Summary as DomainSummary
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 from app.infrastructure.persistence.sqlite.repositories._joined_row_utils import (

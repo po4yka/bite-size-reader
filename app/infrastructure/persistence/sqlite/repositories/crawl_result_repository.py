@@ -9,8 +9,8 @@ from typing import Any
 
 import peewee
 
+from app.db.json_utils import prepare_json_payload
 from app.db.models import CrawlResult, model_to_dict
-from app.db.utils import prepare_json_payload
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
 
