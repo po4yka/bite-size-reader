@@ -3,7 +3,7 @@ Request submission and status endpoints.
 """
 
 from datetime import datetime
-from typing import Any, cast
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from peewee import OperationalError
@@ -55,12 +55,6 @@ def _get_request_service(request: Request) -> RequestService:
         )
 
 
-def _resolve_request_service(service: Any) -> RequestService:
-    if hasattr(service, "create_url_request"):
-        return cast("RequestService", service)
-    return resolve_api_runtime().request_service
-
-
 @router.post("")
 async def submit_request(
     request_data: SubmitURLRequest | SubmitForwardRequest,
@@ -74,7 +68,6 @@ async def submit_request(
     Checks for duplicates and returns existing summary if found.
     Processing happens asynchronously in the background.
     """
-    request_service = _resolve_request_service(request_service)
     # Handle URL request
     if isinstance(request_data, SubmitURLRequest):
         input_url = str(request_data.input_url)
@@ -154,7 +147,6 @@ async def get_request(
     user: dict[str, Any] = Depends(get_current_user),
     request_service: RequestService = Depends(_get_request_service),
 ):
-    request_service = _resolve_request_service(request_service)
     """Get details about a specific request."""
     # Use service layer to get request with authorization
     try:
@@ -234,7 +226,6 @@ async def get_request_status(
     user: dict[str, Any] = Depends(get_current_user),
     request_service: RequestService = Depends(_get_request_service),
 ):
-    request_service = _resolve_request_service(request_service)
     """Poll for real-time processing status."""
     # Use service layer to get status
     status_info = await request_service.get_request_status(user["user_id"], request_id)
@@ -267,7 +258,6 @@ async def retry_request(
     user: dict[str, Any] = Depends(get_current_user),
     request_service: RequestService = Depends(_get_request_service),
 ):
-    request_service = _resolve_request_service(request_service)
     """Retry a failed request. Processes asynchronously in the background."""
     # Use service layer to create retry request
     try:
