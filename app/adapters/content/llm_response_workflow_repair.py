@@ -260,6 +260,42 @@ class LLMWorkflowRepairMixin:
                     extra={"cid": correlation_id, "error": str(exc)},
                 )
 
+    async def _apply_failure_outcome(
+        self,
+        req_id: int,
+        correlation_id: str | None,
+        notification_cb: Any | None,
+        notification_label: str,
+        interaction_id: Any | None,
+        interaction_kwargs: dict | None,
+        interaction_label: str,
+    ) -> None:
+        """Update request status to error, notify, and update interaction record."""
+        await self.request_repo.async_update_request_status(req_id, "error")
+
+        if notification_cb:
+            try:
+                await notification_cb()
+            except Exception as notif_exc:
+                logger.warning(
+                    f"{notification_label}_notification_failed",
+                    extra={"error": str(notif_exc), "cid": correlation_id},
+                )
+
+        if interaction_id and interaction_kwargs:
+            try:
+                await async_safe_update_user_interaction(
+                    self.user_repo,
+                    interaction_id=interaction_id,
+                    logger_=logger,
+                    **interaction_kwargs,
+                )
+            except Exception as exc:
+                logger.exception(
+                    f"interaction_{interaction_label}_update_failed",
+                    extra={"cid": correlation_id, "error": str(exc)},
+                )
+
     async def _handle_repair_failure(
         self,
         message: Any,
@@ -268,30 +304,15 @@ class LLMWorkflowRepairMixin:
         interaction_config: Any,
         notifications: Any | None,
     ) -> None:
-        await self.request_repo.async_update_request_status(req_id, "error")
-
-        if notifications and notifications.repair_failure:
-            try:
-                await notifications.repair_failure()
-            except Exception as notif_exc:
-                logger.warning(
-                    "repair_failure_notification_failed",
-                    extra={"error": str(notif_exc), "cid": correlation_id},
-                )
-
-        if interaction_config.interaction_id and interaction_config.repair_failure_kwargs:
-            try:
-                await async_safe_update_user_interaction(
-                    self.user_repo,
-                    interaction_id=interaction_config.interaction_id,
-                    logger_=logger,
-                    **interaction_config.repair_failure_kwargs,
-                )
-            except Exception as exc:
-                logger.exception(
-                    "interaction_repair_update_failed",
-                    extra={"cid": correlation_id, "error": str(exc)},
-                )
+        await self._apply_failure_outcome(
+            req_id,
+            correlation_id,
+            notifications.repair_failure if notifications else None,
+            "repair_failure",
+            interaction_config.interaction_id,
+            interaction_config.repair_failure_kwargs,
+            "repair",
+        )
 
     async def _handle_parsing_failure(
         self,
@@ -301,30 +322,15 @@ class LLMWorkflowRepairMixin:
         interaction_config: Any,
         notifications: Any | None,
     ) -> None:
-        await self.request_repo.async_update_request_status(req_id, "error")
-
-        if notifications and notifications.parsing_failure:
-            try:
-                await notifications.parsing_failure()
-            except Exception as notif_exc:
-                logger.warning(
-                    "parsing_failure_notification_failed",
-                    extra={"error": str(notif_exc), "cid": correlation_id},
-                )
-
-        if interaction_config.interaction_id and interaction_config.parsing_failure_kwargs:
-            try:
-                await async_safe_update_user_interaction(
-                    self.user_repo,
-                    interaction_id=interaction_config.interaction_id,
-                    logger_=logger,
-                    **interaction_config.parsing_failure_kwargs,
-                )
-            except Exception as exc:
-                logger.exception(
-                    "interaction_parsing_update_failed",
-                    extra={"cid": correlation_id, "error": str(exc)},
-                )
+        await self._apply_failure_outcome(
+            req_id,
+            correlation_id,
+            notifications.parsing_failure if notifications else None,
+            "parsing_failure",
+            interaction_config.interaction_id,
+            interaction_config.parsing_failure_kwargs,
+            "parsing",
+        )
 
     async def _handle_all_attempts_failed(
         self,

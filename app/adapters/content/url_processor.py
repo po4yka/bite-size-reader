@@ -112,9 +112,6 @@ class URLProcessor:
             pure_summary_service=self.pure_summary_service,
         )
 
-        self.article_generator = self.summarization_runtime.article_generator
-        self.insights_generator = self.summarization_runtime.insights_generator
-        self.semantic_helper = self.summarization_runtime.semantic_helper
         self.message_persistence = MessagePersistence(db=db)
 
         self.cached_summary_responder = CachedSummaryResponder(
@@ -140,8 +137,8 @@ class URLProcessor:
         self.post_summary_tasks = URLPostSummaryTaskService(
             response_formatter=response_formatter,
             summary_repo=self.summary_repo,
-            article_generator=self.article_generator,
-            insights_generator=self.insights_generator,
+            article_generator=self.summarization_runtime.article_generator,
+            insights_generator=self.summarization_runtime.insights_generator,
             summary_delivery=self.summary_delivery,
             related_reads_service=related_reads_service,
         )
@@ -191,11 +188,13 @@ class URLProcessor:
                     request.correlation_id,
                 )
                 if summary_json:
-                    summary_json = await self.semantic_helper.enrich_with_rag_fields(
-                        summary_json,
-                        content_text=context.content_text,
-                        chosen_lang=context.chosen_lang,
-                        req_id=context.req_id,
+                    summary_json = (
+                        await self.summarization_runtime.semantic_helper.enrich_with_rag_fields(
+                            summary_json,
+                            content_text=context.content_text,
+                            chosen_lang=context.chosen_lang,
+                            req_id=context.req_id,
+                        )
                     )
                 summary_result: InteractiveSummaryResult | None = InteractiveSummaryResult(
                     summary=summary_json,
