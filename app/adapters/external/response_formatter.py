@@ -24,6 +24,7 @@ TODO(migration): This facade has 190 importers and no removal milestone.
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import TYPE_CHECKING, Any, cast
 
 from app.adapters.external.formatting.data_formatter import DataFormatterImpl
@@ -75,6 +76,13 @@ class ResponseFormatter:
     ) -> None:
         """Initialize the ResponseFormatter facade.
 
+        .. deprecated::
+            ResponseFormatter is a 55+-method delegation facade. Migrate callers
+            to concrete components directly: NotificationFormatterImpl for
+            status notifications, ResponseSenderImpl for core Telegram sending,
+            SummaryPresenterImpl for summary presentation. Track new callers
+            in GitHub and prefer the concrete component in new code.
+
         Args:
             safe_reply_func: Optional callback for test compatibility.
             reply_json_func: Optional callback for test compatibility.
@@ -84,6 +92,12 @@ class ResponseFormatter:
                 When *None*, all notification methods behave as DEBUG (legacy).
             admin_log_chat_id: Optional chat ID for admin-level debug logging.
         """
+        warnings.warn(
+            "ResponseFormatter is deprecated; import from concrete components "
+            "(NotificationFormatterImpl, ResponseSenderImpl, SummaryPresenterImpl) directly.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._verbosity_resolver = verbosity_resolver
         self._lang = lang
 
