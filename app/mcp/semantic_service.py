@@ -253,7 +253,7 @@ class SemanticSearchService:
     ) -> list[dict[str, Any]]:
         from app.db.models import Request, Summary, SummaryEmbedding
 
-        embedding_service = await self.context.get_local_vector_service()
+        embedding_service = await self.context.init_local_vector_service()
         if embedding_service is None:
             return []
 
@@ -353,7 +353,7 @@ class SemanticSearchService:
         min_similarity = clamp_similarity(min_similarity)
         fetch_limit = max(limit * 6, limit + 8)
 
-        chroma = await self.context.get_chroma_service()
+        chroma = await self.context.init_chroma_service()
         if chroma is not None:
             try:
                 chroma_results = await chroma.search(
@@ -641,8 +641,8 @@ class SemanticSearchService:
 
     async def chroma_health(self) -> dict[str, Any]:
         try:
-            chroma = await self.context.get_chroma_service()
-            local = await self.context.get_local_vector_service()
+            chroma = await self.context.init_chroma_service()
+            local = await self.context.init_local_vector_service()
             chroma_store = getattr(chroma, "_vector_store", None) if chroma else None
 
             now = time.monotonic()
@@ -676,7 +676,7 @@ class SemanticSearchService:
         scan_limit = max(100, min(50000, int(scan_limit)))
 
         try:
-            chroma = await self.context.get_chroma_service()
+            chroma = await self.context.init_chroma_service()
             if chroma is None:
                 return {"error": "ChromaDB unavailable", "chroma_available": False}
 
@@ -734,7 +734,7 @@ class SemanticSearchService:
         sample_size = max(1, min(100, int(sample_size)))
 
         try:
-            chroma = await self.context.get_chroma_service()
+            chroma = await self.context.init_chroma_service()
             if chroma is None:
                 return {"error": "ChromaDB unavailable", "chroma_available": False}
 
