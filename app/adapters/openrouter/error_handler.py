@@ -136,14 +136,18 @@ class ErrorHandler:
             error_context=error_context,
         )
 
+    def _audit_event(self, level: str, event: str, details: dict) -> None:
+        """Emit a single audit event if an audit function is configured."""
+        if self._audit:
+            self._audit(level, event, details)
+
     def log_attempt(self, attempt: int, model: str, request_id: int | None = None) -> None:
         """Log attempt information."""
-        if self._audit:
-            self._audit(
-                "INFO",
-                "openrouter_attempt",
-                {"attempt": attempt, "model": model, "request_id": request_id},
-            )
+        self._audit_event(
+            "INFO",
+            "openrouter_attempt",
+            {"attempt": attempt, "model": model, "request_id": request_id},
+        )
 
     def log_success(
         self,
@@ -156,20 +160,19 @@ class ErrorHandler:
         request_id: int | None = None,
     ) -> None:
         """Log successful request."""
-        if self._audit:
-            self._audit(
-                "INFO",
-                "openrouter_success",
-                {
-                    "attempt": attempt,
-                    "model": model,
-                    "status": status_code,
-                    "latency_ms": latency,
-                    "structured_output": structured_output_used,
-                    "rf_mode": structured_output_mode,
-                    "request_id": request_id,
-                },
-            )
+        self._audit_event(
+            "INFO",
+            "openrouter_success",
+            {
+                "attempt": attempt,
+                "model": model,
+                "status": status_code,
+                "latency_ms": latency,
+                "structured_output": structured_output_used,
+                "rf_mode": structured_output_mode,
+                "request_id": request_id,
+            },
+        )
 
     def log_error(
         self,
@@ -181,18 +184,17 @@ class ErrorHandler:
         severity: str = "ERROR",
     ) -> None:
         """Log error information."""
-        if self._audit:
-            self._audit(
-                severity,
-                "openrouter_error",
-                {
-                    "attempt": attempt,
-                    "model": model,
-                    "status": status_code,
-                    "error": error_message,
-                    "request_id": request_id,
-                },
-            )
+        self._audit_event(
+            severity,
+            "openrouter_error",
+            {
+                "attempt": attempt,
+                "model": model,
+                "status": status_code,
+                "error": error_message,
+                "request_id": request_id,
+            },
+        )
 
     def log_fallback(
         self,
@@ -201,16 +203,15 @@ class ErrorHandler:
         request_id: int | None = None,
     ) -> None:
         """Log model fallback."""
-        if self._audit:
-            self._audit(
-                "WARN",
-                "openrouter_fallback",
-                {
-                    "from_model": from_model,
-                    "to_model": to_model,
-                    "request_id": request_id,
-                },
-            )
+        self._audit_event(
+            "WARN",
+            "openrouter_fallback",
+            {
+                "from_model": from_model,
+                "to_model": to_model,
+                "request_id": request_id,
+            },
+        )
 
     def log_exhausted(
         self,
@@ -220,37 +221,34 @@ class ErrorHandler:
         request_id: int | None = None,
     ) -> None:
         """Log when all models and retries are exhausted."""
-        if self._audit:
-            self._audit(
-                "ERROR",
-                "openrouter_exhausted",
-                {
-                    "models_tried": models_tried,
-                    "attempts_each": attempts_each,
-                    "error": error,
-                    "request_id": request_id,
-                },
-            )
+        self._audit_event(
+            "ERROR",
+            "openrouter_exhausted",
+            {
+                "models_tried": models_tried,
+                "attempts_each": attempts_each,
+                "error": error,
+                "request_id": request_id,
+            },
+        )
 
     def log_skip_model(self, model: str, reason: str, request_id: int | None = None) -> None:
         """Log when a model is skipped."""
-        if self._audit:
-            self._audit(
-                "WARN",
-                f"openrouter_skip_model_{reason}",
-                {"model": model, "request_id": request_id},
-            )
+        self._audit_event(
+            "WARN",
+            f"openrouter_skip_model_{reason}",
+            {"model": model, "request_id": request_id},
+        )
 
     def log_response_format_downgrade(
         self, model: str, from_mode: str, to_mode: str, request_id: int | None = None
     ) -> None:
         """Log response format downgrade."""
-        if self._audit:
-            self._audit(
-                "WARN",
-                "openrouter_downgrade_json_schema_to_object",
-                {"model": model, "request_id": request_id},
-            )
+        self._audit_event(
+            "WARN",
+            "openrouter_downgrade_json_schema_to_object",
+            {"model": model, "request_id": request_id},
+        )
 
         self._logger.warning(
             "downgrade_response_format",
@@ -263,12 +261,11 @@ class ErrorHandler:
 
     def log_structured_outputs_disabled(self, model: str, request_id: int | None = None) -> None:
         """Log when structured outputs are disabled."""
-        if self._audit:
-            self._audit(
-                "WARN",
-                "openrouter_disable_structured_outputs",
-                {"model": model, "request_id": request_id},
-            )
+        self._audit_event(
+            "WARN",
+            "openrouter_disable_structured_outputs",
+            {"model": model, "request_id": request_id},
+        )
 
         self._logger.warning("disable_structured_outputs", extra={"model": model})
 
@@ -280,17 +277,16 @@ class ErrorHandler:
         request_id: int | None = None,
     ) -> None:
         """Log when a completion stops because of output length limits."""
-        if self._audit:
-            self._audit(
-                "WARN",
-                "openrouter_truncated_completion",
-                {
-                    "model": model,
-                    "finish_reason": finish_reason,
-                    "native_finish_reason": native_finish_reason,
-                    "request_id": request_id,
-                },
-            )
+        self._audit_event(
+            "WARN",
+            "openrouter_truncated_completion",
+            {
+                "model": model,
+                "finish_reason": finish_reason,
+                "native_finish_reason": native_finish_reason,
+                "request_id": request_id,
+            },
+        )
 
         self._logger.warning(
             "completion_truncated",
