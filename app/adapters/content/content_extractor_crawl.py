@@ -499,9 +499,6 @@ class ContentExtractorCrawlMixin:
             raise_if_cancelled(e)
             logger.debug("audit_failed", extra={"cid": correlation_id, "error": str(e)})
 
-        if interaction_id:
-            pass
-
     def _extract_images(self, crawl: FirecrawlResult) -> list[str]:
         """Extract image URLs from Firecrawl result metadata and markdown."""
         images: list[str] = []
