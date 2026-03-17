@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.dependencies.database import get_device_repository
+from app.api.exceptions import ResourceNotFoundError
 from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.sqlite.repositories.device_repository import (  # noqa: TC001 - used at runtime by FastAPI
@@ -48,6 +49,6 @@ async def register_device(
             device_id=payload.device_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail="User not found") from exc
+        raise ResourceNotFoundError("User", user_id) from exc
 
     return BaseResponse(status="ok")

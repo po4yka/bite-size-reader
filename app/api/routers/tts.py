@@ -5,9 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse
 
+from app.api.exceptions import FeatureDisabledError, ResourceNotFoundError
 from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
 from app.config import load_config
@@ -46,7 +47,7 @@ def _get_user_summary(summary_id: int, user_id: int) -> Summary:
         .first()
     )
     if row is None:
-        raise HTTPException(status_code=404, detail="Summary not found")
+        raise ResourceNotFoundError("Summary", summary_id)
     return row
 
 
@@ -63,7 +64,7 @@ async def generate_audio(
     """
     tts_config = _get_tts_config()
     if not tts_config.enabled:
-        raise HTTPException(status_code=501, detail="TTS is not enabled")
+        raise FeatureDisabledError("tts")
 
     _get_user_summary(summary_id, user["user_id"])
 
@@ -89,7 +90,7 @@ async def get_audio(
     """Stream/download the generated audio file for a summary."""
     tts_config = _get_tts_config()
     if not tts_config.enabled:
-        raise HTTPException(status_code=501, detail="TTS is not enabled")
+        raise FeatureDisabledError("tts")
 
     _get_user_summary(summary_id, user["user_id"])
 
@@ -100,11 +101,11 @@ async def get_audio(
         .first()
     )
     if row is None or not row.file_path:
-        raise HTTPException(status_code=404, detail="Audio not generated yet")
+        raise ResourceNotFoundError("audio", summary_id)
 
     file_path = Path(row.file_path)
     if not file_path.is_file():
-        raise HTTPException(status_code=404, detail="Audio file missing")
+        raise ResourceNotFoundError("audio_file", summary_id)
 
     return FileResponse(
         path=str(file_path),

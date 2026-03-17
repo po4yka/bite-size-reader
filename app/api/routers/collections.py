@@ -5,8 +5,9 @@ Collections management endpoints.
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
+from app.api.exceptions import ValidationError
 from app.api.models.requests import (
     CollectionCreateRequest,
     CollectionInviteRequest,
@@ -99,7 +100,7 @@ async def create_collection(
             position=body.position,
         )
     except ValueError as err:
-        raise HTTPException(status_code=400, detail=str(err)) from err
+        raise ValidationError(str(err)) from err
 
     return success_response(
         CollectionResponse(
@@ -161,7 +162,7 @@ async def update_collection(
             position=body.position,
         )
     except ValueError as err:
-        raise HTTPException(status_code=400, detail=str(err)) from err
+        raise ValidationError(str(err)) from err
 
     return success_response(
         CollectionResponse(
@@ -293,7 +294,7 @@ async def move_collection(
             position=body.position,
         )
     except ValueError as err:
-        raise HTTPException(status_code=400, detail=str(err)) from err
+        raise ValidationError(str(err)) from err
     return success_response(
         CollectionMoveResponse(
             id=moved["id"],
@@ -407,7 +408,7 @@ async def create_collection_invite(
         try:
             expires = datetime.fromisoformat(body.expires_at.replace("Z", "+00:00"))
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid expires_at") from None
+            raise ValidationError("Invalid expires_at") from None
     invite = await CollectionService.create_invite(
         collection_id=collection_id,
         user_id=user["user_id"],
