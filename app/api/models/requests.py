@@ -156,11 +156,9 @@ class SubmitFeedbackRequest(BaseModel):
 class CreateCustomDigestRequest(BaseModel):
     """Request body for creating a custom digest."""
 
-    summary_ids: list[str] = Field(alias="summaryIds", min_length=1)
+    summary_ids: list[str] = Field(min_length=1)
     format: str = "markdown"
     title: str | None = None
-
-    model_config = {"populate_by_name": True}
 
 
 class CreateHighlightRequest(BaseModel):

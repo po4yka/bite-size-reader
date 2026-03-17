@@ -48,6 +48,17 @@ async def build_api_runtime(
 ) -> ApiRuntime:
     """Build the shared API runtime graph."""
     app_cfg = cfg or load_config(allow_stub_telegram=True)
+    if not app_cfg.telegram.allowed_user_ids:
+        logger.warning(
+            "api_access_control_unconfigured",
+            extra={
+                "detail": (
+                    "ALLOWED_USER_IDS is not set — all authenticated API users will be "
+                    "permitted. Set ALLOWED_USER_IDS to enforce a whitelist, consistent "
+                    "with the Telegram bot's fail-closed access control."
+                )
+            },
+        )
     database = db or build_runtime_database(app_cfg, connect=True, migrate=True)
     audit_sink = build_async_audit_sink(database)
     core = build_core_dependencies(app_cfg, database, audit_sink=audit_sink)
