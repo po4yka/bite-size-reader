@@ -14,6 +14,7 @@ from app.infrastructure.messaging.handlers.embedding_generation import (
     EmbeddingGenerationEventHandler,
 )
 from app.infrastructure.messaging.handlers.notification import NotificationEventHandler
+from app.infrastructure.messaging.handlers.push_notification import PushNotificationEventHandler
 from app.infrastructure.messaging.handlers.search_index import SearchIndexEventHandler
 from app.infrastructure.messaging.handlers.webhook import WebhookEventHandler
 
@@ -32,6 +33,8 @@ def wire_event_handlers(
     embedding_generator: Any | None = None,
     vector_store: Any | None = None,
     summary_repository: Any | None = None,
+    push_notification_service: Any | None = None,
+    request_repository: Any | None = None,
 ) -> None:
     search_index_handler = SearchIndexEventHandler(database)
     analytics_handler = AnalyticsEventHandler(analytics_service)
@@ -52,6 +55,15 @@ def wire_event_handlers(
     event_bus.subscribe(SummaryCreated, webhook_handler.on_summary_created)
     if embedding_handler:
         event_bus.subscribe(SummaryCreated, embedding_handler.on_summary_created)
+
+    push_handler: PushNotificationEventHandler | None = None
+    if push_notification_service and summary_repository and request_repository:
+        push_handler = PushNotificationEventHandler(
+            push_service=push_notification_service,
+            summary_repository=summary_repository,
+            request_repository=request_repository,
+        )
+        event_bus.subscribe(SummaryCreated, push_handler.on_summary_created)
 
     event_bus.subscribe(SummaryMarkedAsRead, search_index_handler.on_summary_marked_as_read)
     event_bus.subscribe(SummaryMarkedAsRead, analytics_handler.on_summary_marked_as_read)
@@ -80,6 +92,7 @@ def wire_event_handlers(
                 "cache": cache_service is not None,
                 "webhooks": webhook_client is not None and webhook_url is not None,
                 "embeddings": embedding_generator is not None,
+                "push_notifications": push_handler is not None,
             },
         },
     )

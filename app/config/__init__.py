@@ -11,6 +11,7 @@ from .firecrawl import FirecrawlConfig
 from .integrations import ChromaConfig, EmbeddingConfig, KarakeepConfig, McpConfig, WebSearchConfig
 from .llm import AnthropicConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
+from .push import PushNotificationConfig
 from .redis import RedisConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
@@ -40,6 +41,7 @@ __all__ = [
     "McpConfig",
     "OpenAIConfig",
     "OpenRouterConfig",
+    "PushNotificationConfig",
     "RedisConfig",
     "RuntimeConfig",
     "ScraperConfig",

@@ -809,6 +809,82 @@ class UserDigestPreference(BaseModel):
         table_name = "user_digest_preferences"
 
 
+class SummaryFeedback(BaseModel):
+    """User feedback on a summary."""
+
+    id = peewee.UUIDField(primary_key=True)
+    user = peewee.ForeignKeyField(User, backref="summary_feedbacks", on_delete="CASCADE")
+    summary = peewee.ForeignKeyField(Summary, backref="feedbacks", on_delete="CASCADE")
+    rating = peewee.IntegerField(null=True)
+    issues = peewee.TextField(null=True)  # JSON list of strings
+    comment = peewee.TextField(null=True)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "summary_feedbacks"
+        indexes = ((("user", "summary"), True),)
+
+
+class CustomDigest(BaseModel):
+    """User-created custom digest from selected summaries."""
+
+    id = peewee.UUIDField(primary_key=True)
+    user = peewee.ForeignKeyField(User, backref="custom_digests", on_delete="CASCADE")
+    title = peewee.TextField(null=True)
+    summary_ids = peewee.TextField()  # JSON list of summary IDs
+    format = peewee.TextField(default="markdown")
+    content = peewee.TextField(null=True)
+    status = peewee.TextField(default="pending")
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "custom_digests"
+        indexes = (
+            (("user",), False),
+            (("created_at",), False),
+        )
+
+
+class SummaryHighlight(BaseModel):
+    """User highlight on a summary's content."""
+
+    id = peewee.UUIDField(primary_key=True)
+    user = peewee.ForeignKeyField(User, backref="highlights", on_delete="CASCADE")
+    summary = peewee.ForeignKeyField(Summary, backref="highlights", on_delete="CASCADE")
+    text = peewee.TextField()
+    start_offset = peewee.IntegerField(null=True)
+    end_offset = peewee.IntegerField(null=True)
+    color = peewee.TextField(null=True)
+    note = peewee.TextField(null=True)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "summary_highlights"
+        indexes = (
+            (("user", "summary"), False),
+            (("updated_at",), False),
+        )
+
+
+class UserGoal(BaseModel):
+    """Reading goal per user per period type (daily/weekly/monthly)."""
+
+    id = peewee.UUIDField(primary_key=True)
+    user = peewee.ForeignKeyField(User, backref="goals", on_delete="CASCADE")
+    goal_type = peewee.TextField()  # daily | weekly | monthly
+    target_count = peewee.IntegerField()
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "user_goals"
+        indexes = ((("user", "goal_type"), True),)
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -841,6 +917,10 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     ChannelPostAnalysis,
     DigestDelivery,
     UserDigestPreference,
+    SummaryFeedback,
+    CustomDigest,
+    SummaryHighlight,
+    UserGoal,
 )
 
 

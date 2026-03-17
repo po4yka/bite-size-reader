@@ -322,7 +322,6 @@ app/
   types/         -- Type definitions
   utils/         -- Validation and helper utilities
 bot.py           -- Entrypoint wiring config, DB, and Telegram bot
-frontend/        -- Telegram Mini App frontend (legacy digest-focused app)
 web/             -- Carbon web interface (React + TypeScript + Vite)
 SPEC.md          -- Full technical specification
 ```

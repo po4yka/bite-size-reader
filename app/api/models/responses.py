@@ -667,6 +667,7 @@ class SyncEntityEnvelope(BaseModel):
     stat: dict[str, Any] | None = None
     crawl_result: dict[str, Any] | None = Field(default=None, serialization_alias="crawlResult")
     llm_call: dict[str, Any] | None = Field(default=None, serialization_alias="llmCall")
+    highlight: dict[str, Any] | None = None
 
 
 class FullSyncResponseData(BaseModel):
@@ -863,6 +864,84 @@ class SessionListResponse(BaseModel):
     """Response for GET /auth/sessions."""
 
     sessions: list[Any]
+
+
+class FeedbackResponse(BaseModel):
+    """Response for summary feedback."""
+
+    id: str
+    rating: int | None = None
+    issues: list[str] | None = None
+    comment: str | None = None
+    created_at: str = Field(serialization_alias="createdAt")
+
+
+class LoginData(BaseModel):
+    """Full login response with tokens, user info, preferences, and session."""
+
+    tokens: TokenPair
+    user: UserInfo
+    preferences: PreferencesData
+    session_id: int | None = Field(default=None, serialization_alias="sessionId")
+
+
+class HighlightResponse(BaseModel):
+    """Response for a single highlight."""
+
+    id: str
+    summary_id: str = Field(serialization_alias="summaryId")
+    text: str
+    start_offset: int | None = Field(default=None, serialization_alias="startOffset")
+    end_offset: int | None = Field(default=None, serialization_alias="endOffset")
+    color: str | None = None
+    note: str | None = None
+    created_at: str = Field(serialization_alias="createdAt")
+    updated_at: str = Field(serialization_alias="updatedAt")
+
+
+class HighlightListResponse(BaseModel):
+    """Response for listing highlights."""
+
+    highlights: list[HighlightResponse]
+
+
+class GoalResponse(BaseModel):
+    """A single reading goal."""
+
+    goal_type: str = Field(serialization_alias="goalType")
+    target_count: int = Field(serialization_alias="targetCount")
+    created_at: str = Field(serialization_alias="createdAt")
+    updated_at: str = Field(serialization_alias="updatedAt")
+
+
+class GoalProgressResponse(BaseModel):
+    """Progress towards a single reading goal."""
+
+    goal_type: str = Field(serialization_alias="goalType")
+    target_count: int = Field(serialization_alias="targetCount")
+    current_count: int = Field(serialization_alias="currentCount")
+    achieved: bool
+
+
+class StreakResponse(BaseModel):
+    """User reading streak data."""
+
+    current_streak: int = Field(serialization_alias="currentStreak")
+    longest_streak: int = Field(serialization_alias="longestStreak")
+    last_activity_date: str | None = Field(default=None, serialization_alias="lastActivityDate")
+    today_count: int = Field(serialization_alias="todayCount")
+    week_count: int = Field(serialization_alias="weekCount")
+    month_count: int = Field(serialization_alias="monthCount")
+
+
+class CustomDigestResponse(BaseModel):
+    """Response for a custom digest."""
+
+    id: str
+    title: str | None = None
+    content: str | None = None
+    status: str
+    created_at: str = Field(serialization_alias="createdAt")
 
 
 def _coerce_pagination(pagination: BaseModel | dict[str, Any] | None) -> PaginationInfo | None:

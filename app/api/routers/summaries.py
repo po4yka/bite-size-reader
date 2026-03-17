@@ -12,9 +12,10 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies.database import get_summary_read_model_use_case
 from app.api.exceptions import ResourceNotFoundError
-from app.api.models.requests import UpdateSummaryRequest
+from app.api.models.requests import SubmitFeedbackRequest, UpdateSummaryRequest
 from app.api.models.responses import (
     DeleteSummaryResponse,
+    FeedbackResponse,
     PaginationInfo,
     SummaryCompact,
     SummaryContent,
@@ -480,3 +481,62 @@ async def toggle_favorite(
     if is_favorited is None:
         raise ResourceNotFoundError("Summary", summary_id)
     return success_response(ToggleFavoriteResponse(success=True, is_favorited=is_favorited))
+
+
+@router.post("/{summary_id}/feedback")
+async def submit_feedback(
+    summary_id: int,
+    body: SubmitFeedbackRequest,
+    user=Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
+):
+    """Submit or update feedback for a summary."""
+    import json
+    import uuid
+
+    from app.db.models import SummaryFeedback
+
+    use_case = _resolve_use_case(use_case)
+
+    # Verify summary belongs to user
+    context = await use_case.get_summary_context_for_user(
+        user_id=user["user_id"],
+        summary_id=summary_id,
+    )
+    if not context:
+        raise ResourceNotFoundError("Summary", summary_id)
+
+    # Upsert feedback (one per user per summary)
+    feedback, created = SummaryFeedback.get_or_create(
+        user=user["user_id"],
+        summary=summary_id,
+        defaults={
+            "id": uuid.uuid4(),
+            "rating": body.rating,
+            "issues": json.dumps(body.issues) if body.issues is not None else None,
+            "comment": body.comment,
+        },
+    )
+
+    if not created:
+        if body.rating is not None:
+            feedback.rating = body.rating
+        if body.issues is not None:
+            feedback.issues = json.dumps(body.issues)
+        if body.comment is not None:
+            feedback.comment = body.comment
+        feedback.save()
+
+    issues_value: list[str] | None = None
+    if feedback.issues:
+        issues_value = json.loads(feedback.issues)
+
+    return success_response(
+        FeedbackResponse(
+            id=str(feedback.id),
+            rating=feedback.rating,
+            issues=issues_value,
+            comment=feedback.comment,
+            created_at=_isotime(feedback.created_at),
+        )
+    )

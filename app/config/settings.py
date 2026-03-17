@@ -32,6 +32,7 @@ from .integrations import (
 )
 from .llm import AnthropicConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
+from .push import PushNotificationConfig
 from .redis import RedisConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
@@ -105,6 +106,7 @@ class AppConfig:
     scraper: ScraperConfig = field(default_factory=ScraperConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     tts: ElevenLabsConfig = field(default_factory=ElevenLabsConfig)
+    push: PushNotificationConfig = field(default_factory=PushNotificationConfig)
 
 
 class Settings(BaseSettings):
@@ -151,6 +153,7 @@ class Settings(BaseSettings):
     scraper: ScraperConfig = Field(default_factory=ScraperConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     tts: ElevenLabsConfig = Field(default_factory=ElevenLabsConfig)
+    push: PushNotificationConfig = Field(default_factory=PushNotificationConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -268,6 +271,7 @@ class Settings(BaseSettings):
             scraper=self.scraper,
             embedding=self.embedding,
             tts=self.tts,
+            push=self.push,
         )
 
 
