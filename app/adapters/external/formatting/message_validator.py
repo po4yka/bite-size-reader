@@ -6,6 +6,8 @@ import asyncio
 import re
 import time
 
+from app.core.url_utils import validate_url_input
+
 
 class MessageValidatorImpl:
     """Implementation of message security validation."""
@@ -79,8 +81,7 @@ class MessageValidatorImpl:
     def validate_url(self, url: str) -> tuple[bool, str]:
         """Validate URL for security using consolidated validation from url_utils.
 
-        This method wraps the comprehensive _validate_url_input() function from
-        app/core/url_utils.py, which provides:
+        This method wraps validate_url_input() from app/core/url_utils.py, which provides:
         - Length limits (RFC 2616)
         - Dangerous content patterns
         - Scheme validation (only http/https)
@@ -91,14 +92,10 @@ class MessageValidatorImpl:
         Returns:
             tuple[bool, str]: (is_valid, error_message)
         """
-        from app.core.url_utils import _validate_url_input
-
         try:
-            # Use consolidated validation from url_utils
-            _validate_url_input(url)
+            validate_url_input(url)
             return True, ""
         except ValueError as e:
-            # Validation failed - return error message
             return False, str(e)
 
     async def check_rate_limit(self) -> bool:

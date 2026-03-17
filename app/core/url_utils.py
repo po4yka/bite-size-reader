@@ -108,7 +108,7 @@ _DANGEROUS_SCHEMES: frozenset[str] = frozenset(
 )
 
 
-def _validate_url_input(url: str) -> None:
+def validate_url_input(url: str) -> None:
     """Validate URL input for security.
 
     Comprehensive validation including:
@@ -293,7 +293,7 @@ def normalize_url(url: str) -> str:
 
     """
     # First pass validation - catches obvious security issues
-    _validate_url_input(url)
+    validate_url_input(url)
 
     # Add protocol if missing (only http or https)
     if "://" not in url:
