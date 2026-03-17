@@ -1,4 +1,15 @@
-"""Facade for digest API orchestration used by HTTP routers."""
+"""Facade for digest API orchestration used by HTTP routers.
+
+Rationale: trigger_digest() and trigger_channel_digest() must atomically
+compose service.trigger_*() with service.enqueue_*() — two operations that
+callers should not need to orchestrate themselves. The facade provides this
+combined step while also isolating routers from config-factory construction.
+The pass-through methods (list_channels, subscribe, etc.) exist to give
+routers a uniform interface without branching between the two sub-services.
+
+TODO: Migrate to app/application/services/ following the pattern established
+by request_service.py once the digest domain stabilizes.
+"""
 
 from __future__ import annotations
 
