@@ -1048,27 +1048,27 @@ def test_search_unicode_query(client, search_data, search_token, mock_fts_repos)
 
 def test_isotime_helper_none_value(client):
     """Test _isotime helper with None value."""
-    from app.api.routers.search import _isotime
+    from app.api.search_helpers import isotime
 
-    result = _isotime(None)
+    result = isotime(None)
     assert result == ""
 
 
 def test_isotime_helper_datetime_value(client):
     """Test _isotime helper with datetime object."""
-    from app.api.routers.search import _isotime
+    from app.api.search_helpers import isotime
 
     dt = datetime(2023, 1, 1, 12, 0, 0, tzinfo=UTC)
-    result = _isotime(dt)
+    result = isotime(dt)
     assert result.endswith("Z")
     assert "2023-01-01" in result
 
 
 def test_isotime_helper_string_value(client):
     """Test _isotime helper with string value."""
-    from app.api.routers.search import _isotime
+    from app.api.search_helpers import isotime
 
-    result = _isotime("2023-01-01")
+    result = isotime("2023-01-01")
     assert result == "2023-01-01"
 
 

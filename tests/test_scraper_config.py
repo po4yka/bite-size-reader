@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.config.scraper import ScraperConfig
-from app.config.settings import _raise_on_deprecated_scraper_env_vars
+from app.config.settings import raise_on_deprecated_scraper_env_vars
 
 
 def test_provider_order_accepts_csv() -> None:
@@ -41,7 +41,7 @@ def test_deprecated_scraper_env_vars_fail_fast(monkeypatch: pytest.MonkeyPatch, 
     monkeypatch.setenv("SCRAPLING_ENABLED", "true")
 
     with pytest.raises(RuntimeError, match="SCRAPLING_ENABLED -> SCRAPER_SCRAPLING_ENABLED"):
-        _raise_on_deprecated_scraper_env_vars()
+        raise_on_deprecated_scraper_env_vars()
 
 
 def test_deprecated_scraper_env_vars_detected_in_dotenv(
@@ -54,4 +54,4 @@ def test_deprecated_scraper_env_vars_detected_in_dotenv(
     with pytest.raises(
         RuntimeError, match="SCRAPLING_TIMEOUT_SEC -> SCRAPER_SCRAPLING_TIMEOUT_SEC"
     ):
-        _raise_on_deprecated_scraper_env_vars()
+        raise_on_deprecated_scraper_env_vars()

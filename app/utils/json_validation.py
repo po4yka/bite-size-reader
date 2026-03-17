@@ -36,7 +36,7 @@ def parse_summary_response(
     """
     errors: list[str] = []
 
-    candidate = _extract_structured_dict(response_json)
+    candidate = extract_structured_dict(response_json)
     if candidate is not None:
         shaped, err = _shape_candidate(candidate)
         if shaped is not None:
@@ -116,7 +116,7 @@ def finalize_summary_texts(summary: dict[str, Any]) -> None:
         summary[key] = cleaned
 
 
-def _extract_structured_dict(response_json: Any) -> dict[str, Any] | None:
+def extract_structured_dict(response_json: Any) -> dict[str, Any] | None:
     # Handle list responses (when model returns an array instead of object)
     if isinstance(response_json, list):
         if len(response_json) > 0:

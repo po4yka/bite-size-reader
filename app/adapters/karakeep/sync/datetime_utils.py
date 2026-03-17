@@ -9,7 +9,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def _ensure_datetime(value: Any) -> datetime | None:
+def ensure_datetime(value: Any) -> datetime | None:
     """Convert a value to datetime if it's a string, or return as-is if already datetime.
 
     SQLite may return datetime columns as strings depending on how they were inserted.

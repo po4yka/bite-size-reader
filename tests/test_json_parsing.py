@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.core.json_utils import extract_json
-from app.utils.json_validation import _extract_structured_dict
+from app.utils.json_validation import extract_structured_dict
 from tests.conftest import make_test_app_config
 
 
@@ -500,7 +500,7 @@ class TestExtractJson(unittest.TestCase):
             }
         ]
 
-        result = _extract_structured_dict(list_response)
+        result = extract_structured_dict(list_response)
         assert result is not None
         assert isinstance(result, dict)
         assert result["summary_250"] == "This is a short summary"
@@ -509,17 +509,17 @@ class TestExtractJson(unittest.TestCase):
         # Test with a list containing invalid items
         invalid_list_response = [{"invalid": "data"}, "string_item", 123]
 
-        result = _extract_structured_dict(invalid_list_response)
+        result = extract_structured_dict(invalid_list_response)
         assert result is None
 
         # Test with an empty list
         empty_list: list[Any] = []
-        result = _extract_structured_dict(empty_list)
+        result = extract_structured_dict(empty_list)
         assert result is None
 
         # Test with a list of non-dict items
         non_dict_list = ["string", 123, True]
-        result = _extract_structured_dict(non_dict_list)
+        result = extract_structured_dict(non_dict_list)
         assert result is None
 
 

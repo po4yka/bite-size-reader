@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-def _safe_isoformat(dt_value: Any) -> str | None:
+def safe_isoformat(dt_value: Any) -> str | None:
     """Safely convert datetime-ish values to ISO 8601 Z form.
 
     Handles:
@@ -228,7 +228,7 @@ async def get_user_stats(user: dict[str, Any] = Depends(get_current_user)):
         first_summary = summaries_list[0]
         request_data = first_summary.get("request") or {}
         if isinstance(request_data, dict):
-            last_summary_at = _safe_isoformat(request_data.get("created_at"))
+            last_summary_at = safe_isoformat(request_data.get("created_at"))
 
     return success_response(
         UserStatsData(
@@ -240,7 +240,7 @@ async def get_user_stats(user: dict[str, Any] = Depends(get_current_user)):
             favorite_topics=favorite_topics,
             favorite_domains=favorite_domains,
             language_distribution={"en": en_count, "ru": ru_count},
-            joined_at=_safe_isoformat(user_record.get("created_at")) if user_record else None,
+            joined_at=safe_isoformat(user_record.get("created_at")) if user_record else None,
             last_summary_at=last_summary_at,
         )
     )
@@ -263,8 +263,8 @@ async def list_goals(user: dict[str, Any] = Depends(get_current_user)):
                 GoalResponse(
                     goal_type=g.goal_type,
                     target_count=g.target_count,
-                    created_at=_safe_isoformat(g.created_at) or "",
-                    updated_at=_safe_isoformat(g.updated_at) or "",
+                    created_at=safe_isoformat(g.created_at) or "",
+                    updated_at=safe_isoformat(g.updated_at) or "",
                 ).model_dump(by_alias=True)
                 for g in goals
             ],
@@ -297,8 +297,8 @@ async def upsert_goal(
         GoalResponse(
             goal_type=goal.goal_type,
             target_count=goal.target_count,
-            created_at=_safe_isoformat(goal.created_at) or "",
-            updated_at=_safe_isoformat(goal.updated_at) or "",
+            created_at=safe_isoformat(goal.created_at) or "",
+            updated_at=safe_isoformat(goal.updated_at) or "",
         )
     )
 

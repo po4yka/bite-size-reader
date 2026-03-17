@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from app.adapters.karakeep.models import KarakeepBookmark
 from app.adapters.karakeep.sync.constants import TAG_BSR_READ
-from app.adapters.karakeep.sync.datetime_utils import _ensure_datetime
+from app.adapters.karakeep.sync.datetime_utils import ensure_datetime
 
 if TYPE_CHECKING:
     from app.adapters.karakeep.sync.cache import KarakeepBookmarkCache
@@ -186,10 +186,10 @@ class StatusUpdateSynchronizer:
         bookmark: KarakeepBookmark,
     ) -> bool:
         bsr_is_source = sync_record.get("sync_direction") == "bsr_to_karakeep"
-        summary_updated_at = _ensure_datetime(summary_data.get("updated_at"))
-        bookmark_updated_at = _ensure_datetime(bookmark.modified_at)
-        bsr_modified_at = _ensure_datetime(sync_record.get("bsr_modified_at"))
-        karakeep_modified_at = _ensure_datetime(sync_record.get("karakeep_modified_at"))
+        summary_updated_at = ensure_datetime(summary_data.get("updated_at"))
+        bookmark_updated_at = ensure_datetime(bookmark.modified_at)
+        bsr_modified_at = ensure_datetime(sync_record.get("bsr_modified_at"))
+        karakeep_modified_at = ensure_datetime(sync_record.get("karakeep_modified_at"))
         if summary_updated_at and bookmark_updated_at:
             if summary_updated_at > bookmark_updated_at:
                 return True

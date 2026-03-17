@@ -52,7 +52,7 @@ _DEPRECATED_SCRAPER_ENV_RENAMES = {
 }
 
 
-def _raise_on_deprecated_scraper_env_vars() -> None:
+def raise_on_deprecated_scraper_env_vars() -> None:
     present: dict[str, str] = {}
     for old_name, new_name in _DEPRECATED_SCRAPER_ENV_RENAMES.items():
         if old_name in os.environ:
@@ -289,7 +289,7 @@ def _build_config(*, allow_stub_telegram: bool) -> AppConfig:
     """Build a fresh immutable AppConfig from environment variables."""
     overrides: dict[str, Any] = {"allow_stub_telegram": allow_stub_telegram}
     using_stub_telegram = False
-    _raise_on_deprecated_scraper_env_vars()
+    raise_on_deprecated_scraper_env_vars()
 
     if allow_stub_telegram:
         telegram_overrides: dict[str, Any] = {}

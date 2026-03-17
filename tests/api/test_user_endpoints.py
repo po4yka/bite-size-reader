@@ -79,63 +79,63 @@ def user_db(tmp_path):
 
 def test_safe_isoformat_with_none():
     """Test _safe_isoformat with None returns None."""
-    from app.api.routers.user import _safe_isoformat
+    from app.api.routers.user import safe_isoformat
 
-    assert _safe_isoformat(None) is None
+    assert safe_isoformat(None) is None
 
 
 def test_safe_isoformat_with_datetime():
     """Test _safe_isoformat with datetime object."""
-    from app.api.routers.user import _safe_isoformat
+    from app.api.routers.user import safe_isoformat
 
     dt = datetime(2023, 1, 15, 10, 30, 0)
-    result = _safe_isoformat(dt)
+    result = safe_isoformat(dt)
     assert result == "2023-01-15T10:30:00Z"
     assert result.endswith("Z")
 
 
 def test_safe_isoformat_with_iso_string():
     """Test _safe_isoformat with ISO string."""
-    from app.api.routers.user import _safe_isoformat
+    from app.api.routers.user import safe_isoformat
 
     iso_str = "2023-01-15T10:30:00Z"
-    result = _safe_isoformat(iso_str)
+    result = safe_isoformat(iso_str)
     assert result is not None
     assert result.endswith("Z")
 
 
 def test_safe_isoformat_with_iso_string_plus_timezone():
     """Test _safe_isoformat with ISO string containing +00:00."""
-    from app.api.routers.user import _safe_isoformat
+    from app.api.routers.user import safe_isoformat
 
     iso_str = "2023-01-15T10:30:00+00:00"
-    result = _safe_isoformat(iso_str)
+    result = safe_isoformat(iso_str)
     assert result is not None
     assert result.endswith("Z")
 
 
 def test_safe_isoformat_with_invalid_string():
     """Test _safe_isoformat with invalid string returns the string or None."""
-    from app.api.routers.user import _safe_isoformat
+    from app.api.routers.user import safe_isoformat
 
-    result = _safe_isoformat("not-a-date")
+    result = safe_isoformat("not-a-date")
     # Should return the string or None based on validation logic
     assert result == "not-a-date" or result is None
 
 
 def test_safe_isoformat_with_empty_string():
     """Test _safe_isoformat with empty string returns None."""
-    from app.api.routers.user import _safe_isoformat
+    from app.api.routers.user import safe_isoformat
 
-    result = _safe_isoformat("")
+    result = safe_isoformat("")
     assert result is None
 
 
 def test_safe_isoformat_with_integer():
     """Test _safe_isoformat with non-datetime/string returns None."""
-    from app.api.routers.user import _safe_isoformat
+    from app.api.routers.user import safe_isoformat
 
-    result = _safe_isoformat(12345)
+    result = safe_isoformat(12345)
     assert result is None
 
 

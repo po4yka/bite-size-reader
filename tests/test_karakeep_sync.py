@@ -16,7 +16,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 from app.adapters.karakeep.models import KarakeepBookmark, SyncResult
-from app.adapters.karakeep.sync.datetime_utils import _ensure_datetime
+from app.adapters.karakeep.sync.datetime_utils import ensure_datetime
 from app.adapters.karakeep.sync.service import KarakeepSyncService
 from app.adapters.karakeep.sync.work_items import _SyncWorkItem
 
@@ -30,12 +30,12 @@ class TestEnsureDatetime(unittest.TestCase):
 
     def test_none_returns_none(self):
         """None input should return None without error."""
-        assert _ensure_datetime(None) is None
+        assert ensure_datetime(None) is None
 
     def test_naive_datetime_gets_utc(self):
         """A naive datetime should get UTC tzinfo attached."""
         dt = datetime(2025, 6, 15, 12, 30, 0)
-        result = _ensure_datetime(dt)
+        result = ensure_datetime(dt)
         assert result is not None
         assert result.tzinfo is UTC
         assert result == datetime(2025, 6, 15, 12, 30, 0, tzinfo=UTC)
@@ -43,13 +43,13 @@ class TestEnsureDatetime(unittest.TestCase):
     def test_aware_datetime_returns_same(self):
         """An aware datetime should be returned unchanged."""
         dt = datetime(2025, 6, 15, 12, 30, 0, tzinfo=UTC)
-        result = _ensure_datetime(dt)
+        result = ensure_datetime(dt)
         assert result is dt
 
     def test_iso_string_returns_parsed_datetime(self):
         """A naive ISO format string should be parsed into a UTC-aware datetime."""
         iso = "2025-06-15T12:30:00"
-        result = _ensure_datetime(iso)
+        result = ensure_datetime(iso)
         assert isinstance(result, datetime)
         assert result.tzinfo is UTC
         assert result.year == 2025
@@ -61,7 +61,7 @@ class TestEnsureDatetime(unittest.TestCase):
     def test_iso_string_with_timezone(self):
         """An ISO string with timezone offset should be parsed correctly."""
         iso_tz = "2025-06-15T12:30:00+03:00"
-        result = _ensure_datetime(iso_tz)
+        result = ensure_datetime(iso_tz)
         assert isinstance(result, datetime)
         assert result.tzinfo is not None
         assert result.year == 2025
@@ -70,38 +70,38 @@ class TestEnsureDatetime(unittest.TestCase):
     def test_iso_string_utc_z_suffix(self):
         """An ISO string with Z suffix (UTC) should be parsed correctly."""
         iso_z = "2025-06-15T12:30:00+00:00"
-        result = _ensure_datetime(iso_z)
+        result = ensure_datetime(iso_z)
         assert isinstance(result, datetime)
         assert result.tzinfo is not None
 
     def test_invalid_string_returns_none(self):
         """A non-parseable string should return None."""
-        result = _ensure_datetime("not-a-date")
+        result = ensure_datetime("not-a-date")
         assert result is None
 
     def test_empty_string_returns_none(self):
         """An empty string should return None."""
-        result = _ensure_datetime("")
+        result = ensure_datetime("")
         assert result is None
 
     def test_integer_returns_none(self):
         """An integer (non-datetime/non-string) should return None."""
-        result = _ensure_datetime(12345)
+        result = ensure_datetime(12345)
         assert result is None
 
     def test_float_returns_none(self):
         """A float should return None."""
-        result = _ensure_datetime(1718451000.0)
+        result = ensure_datetime(1718451000.0)
         assert result is None
 
     def test_list_returns_none(self):
         """A list should return None."""
-        result = _ensure_datetime([2025, 6, 15])
+        result = ensure_datetime([2025, 6, 15])
         assert result is None
 
     def test_dict_returns_none(self):
         """A dict should return None."""
-        result = _ensure_datetime({"year": 2025})
+        result = ensure_datetime({"year": 2025})
         assert result is None
 
 
