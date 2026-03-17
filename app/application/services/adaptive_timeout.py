@@ -523,7 +523,7 @@ class AdaptiveTimeoutService:
             )
             # Service remains functional with default fallback
 
-    async def get_stats_summary(self) -> dict:
+    def get_stats_summary(self) -> dict:
         """Get summary of current cache state for diagnostics."""
         return {
             "enabled": self._config.enabled,

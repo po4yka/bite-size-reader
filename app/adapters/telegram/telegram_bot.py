@@ -129,7 +129,7 @@ class TelegramBot:
         from app.application.services.scheduler import SchedulerService
 
         self._scheduler = SchedulerService(cfg=self.cfg, db=self.db)
-        await self._scheduler.start()
+        self._scheduler.start()
 
         try:
             await self.telegram_client.start(
@@ -139,7 +139,7 @@ class TelegramBot:
         finally:
             # Stop scheduler gracefully (if it was started)
             if self._scheduler is not None:
-                await self._scheduler.stop()
+                self._scheduler.stop()
 
             await self._lifecycle.on_shutdown()
 

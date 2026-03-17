@@ -460,14 +460,14 @@ class DigestAPIService:
             "correlation_id": correlation_id,
         }
 
-    async def enqueue_digest_trigger(self, *, user_id: int, correlation_id: str) -> None:
+    def enqueue_digest_trigger(self, *, user_id: int, correlation_id: str) -> None:
         """Dispatch digest generation in a background task."""
         task = asyncio.create_task(
             self._execute_digest_trigger(user_id=user_id, correlation_id=correlation_id)
         )
         _track_background_task(task)
 
-    async def enqueue_channel_digest_trigger(
+    def enqueue_channel_digest_trigger(
         self,
         *,
         user_id: int,

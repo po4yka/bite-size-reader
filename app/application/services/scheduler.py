@@ -43,7 +43,7 @@ class SchedulerService:
         self._scheduler: AsyncIOScheduler | None = None
         self._started = False
 
-    async def start(self) -> None:
+    def start(self) -> None:
         """Start the scheduler with configured jobs."""
         if self._started:
             logger.warning("scheduler_already_started")
@@ -112,7 +112,7 @@ class SchedulerService:
         self._started = True
         logger.info("scheduler_started")
 
-    async def stop(self) -> None:
+    def stop(self) -> None:
         """Stop the scheduler gracefully."""
         if self._scheduler and self._started:
             self._scheduler.shutdown(wait=True)
