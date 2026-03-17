@@ -109,7 +109,7 @@ export default function LibraryPage() {
           <button
             key={entry.key}
             className="filter-chip"
-            data-active={entry.key === filter}
+            aria-pressed={entry.key === filter}
             onClick={() => {
               setFilter(entry.key);
               setPage(1);
