@@ -69,23 +69,17 @@ class BaseAgent(ABC, Generic[TInput, TOutput]):
             AgentResult containing output or error information
         """
 
-    def log_info(self, message: str, **kwargs: Any) -> None:
-        """Log an info message with correlation ID."""
-        self.logger.info(
+    def _log(self, level: str, message: str, **kwargs: Any) -> None:
+        getattr(self.logger, level)(
             f"[{self.name}] {message}",
             extra={"correlation_id": self.correlation_id, **kwargs},
         )
+
+    def log_info(self, message: str, **kwargs: Any) -> None:
+        self._log("info", message, **kwargs)
 
     def log_warning(self, message: str, **kwargs: Any) -> None:
-        """Log a warning with correlation ID."""
-        self.logger.warning(
-            f"[{self.name}] {message}",
-            extra={"correlation_id": self.correlation_id, **kwargs},
-        )
+        self._log("warning", message, **kwargs)
 
     def log_error(self, message: str, **kwargs: Any) -> None:
-        """Log an error with correlation ID."""
-        self.logger.error(
-            f"[{self.name}] {message}",
-            extra={"correlation_id": self.correlation_id, **kwargs},
-        )
+        self._log("error", message, **kwargs)

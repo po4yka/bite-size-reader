@@ -19,16 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> dict:
-    """Run all three search modes and return results.
-
-    Args:
-        db_path: Path to database
-        query: Search query
-        max_results: Maximum results per mode
-
-    Returns:
-        Dict with keys 'fts', 'vector', 'hybrid' containing search results
-    """
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.vector.chroma_store import ChromaVectorStore
     from app.services.chroma_vector_search_service import ChromaVectorSearchService
@@ -99,12 +89,6 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
 
 
 def print_comparison(results: dict, query: str) -> None:
-    """Print comparison of search results.
-
-    Args:
-        results: Dict with search results from all modes
-        query: Search query
-    """
     print(f"\n{'=' * 100}")
     print("SEARCH COMPARISON")
     print(f"Query: '{query}'")
@@ -153,11 +137,6 @@ def print_comparison(results: dict, query: str) -> None:
 
 
 def print_mode_results(results: list) -> None:
-    """Print results for a single search mode.
-
-    Args:
-        results: List of search results
-    """
     if not results:
         print("  No results\n")
         return
