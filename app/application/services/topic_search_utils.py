@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -125,7 +125,7 @@ def compose_search_body(
     return normalized.casefold(), tags_text
 
 
-def yield_topic_fragments(value: Any) -> Iterable[str]:
+def yield_topic_fragments(value: Any) -> Iterator[str]:
     """Yield normalized text fragments from arbitrary payload values.
 
     This function recursively extracts all string content from nested data

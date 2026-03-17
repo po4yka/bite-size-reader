@@ -160,6 +160,9 @@ def _extract_tweet_sync(
     """Extract tweet data by intercepting X's GraphQL API via Playwright.
 
     This is a synchronous function -- call via asyncio.to_thread().
+
+    Raises:
+        ImportError: If playwright is not installed.
     """
     try:
         from playwright.sync_api import (
