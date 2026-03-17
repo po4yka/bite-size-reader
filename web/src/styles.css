@@ -355,3 +355,10 @@ body {
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
 }
+
+.digest-inline-margin-top { margin-top: var(--cds-spacing-05); }
+.digest-list { list-style: none; padding: 0; margin: 0; }
+.digest-list-item { padding: 0.5rem 0; border-bottom: 1px solid var(--cds-border-subtle-01); }
+.digest-list-item-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem; }
+.digest-text-xs { font-size: 0.75rem; }
+.digest-text-sm { font-size: 0.875rem; }
