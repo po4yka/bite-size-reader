@@ -1,6 +1,5 @@
 """Request service - business logic for request operations."""
 
-import inspect
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +17,7 @@ from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.models import LLMCall, Request as RequestModel
+from app.domain.models.request import RequestStatus
 
 if TYPE_CHECKING:
     from app.infrastructure.persistence.sqlite.repositories.request_repository import (
@@ -45,15 +45,11 @@ class RequestService:
         request_repo: RequestRepositoryPort,
         request_id: int,
     ) -> dict[str, Any] | None:
-        """Load request context through the optimized repository path when available."""
-        if inspect.iscoroutinefunction(
-            getattr(type(request_repo), "async_get_request_context", None)
-        ):
-            try:
-                return await request_repo.async_get_request_context(request_id)
-            except OperationalError:
-                return None
-        return None
+        """Load request context through the repository."""
+        try:
+            return await request_repo.async_get_request_context(request_id)
+        except OperationalError:
+            return None
 
     @staticmethod
     async def _safe_get_summary_by_request(request_id: int) -> dict[str, Any] | None:
@@ -133,7 +129,7 @@ class RequestService:
 
         request_id = await request_repo.async_create_request(
             type_="url",
-            status="pending",
+            status=RequestStatus.PENDING,
             correlation_id=correlation_id,
             user_id=user_id,
             input_url=input_url,
@@ -185,7 +181,7 @@ class RequestService:
 
         request_id = await request_repo.async_create_request(
             type_="forward",
-            status="pending",
+            status=RequestStatus.PENDING,
             correlation_id=correlation_id,
             user_id=user_id,
             content_text=content_text,
@@ -407,7 +403,7 @@ class RequestService:
 
         new_request_id = await request_repo.async_create_request(
             type_=original_request.get("type"),
-            status="pending",
+            status=RequestStatus.PENDING,
             correlation_id=correlation_id,
             user_id=user_id,
             input_url=original_request.get("input_url"),

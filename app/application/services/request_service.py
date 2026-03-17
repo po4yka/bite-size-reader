@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
 from datetime import datetime
 from types import SimpleNamespace
@@ -47,14 +46,10 @@ class RequestService:
         self._llm_repo = llm_repository
 
     async def _request_context(self, request_id: int) -> dict[str, Any] | None:
-        if inspect.iscoroutinefunction(
-            getattr(type(self._request_repo), "async_get_request_context", None)
-        ):
-            try:
-                return await self._request_repo.async_get_request_context(request_id)
-            except OperationalError:
-                return None
-        return None
+        try:
+            return await self._request_repo.async_get_request_context(request_id)
+        except OperationalError:
+            return None
 
     async def _safe_get_summary_by_request(self, request_id: int) -> dict[str, Any] | None:
         try:
