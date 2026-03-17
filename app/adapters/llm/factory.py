@@ -85,25 +85,7 @@ class LLMClientFactory:
         """Create an OpenRouter client."""
         from app.adapters.openrouter.openrouter_client import OpenRouterClient
 
-        return OpenRouterClient(
-            api_key=config.openrouter.api_key,
-            model=config.openrouter.model,
-            fallback_models=list(config.openrouter.fallback_models),
-            http_referer=config.openrouter.http_referer,
-            x_title=config.openrouter.x_title,
-            timeout_sec=config.runtime.request_timeout_sec,
-            audit=audit,
-            debug_payloads=config.runtime.debug_payloads,
-            provider_order=list(config.openrouter.provider_order),
-            enable_stats=config.openrouter.enable_stats,
-            log_truncate_length=config.runtime.log_truncate_length,
-            enable_structured_outputs=config.openrouter.enable_structured_outputs,
-            structured_output_mode=config.openrouter.structured_output_mode,
-            require_parameters=config.openrouter.require_parameters,
-            auto_fallback_structured=config.openrouter.auto_fallback_structured,
-            max_response_size_mb=config.openrouter.max_response_size_mb,
-            circuit_breaker=circuit_breaker,
-        )
+        return OpenRouterClient.from_config(config, circuit_breaker=circuit_breaker, audit=audit)
 
     @staticmethod
     def _create_openai(

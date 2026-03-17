@@ -1,19 +1,18 @@
 """Service logic for collections (nesting, sharing, move/reorder)."""
-# ruff: noqa: TC003
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from app.api.dependencies.database import get_collection_repository
 from app.api.exceptions import AuthorizationError, ResourceNotFoundError
+from app.infrastructure.persistence.sqlite.repositories.collection_repository import (  # noqa: TC001
+    SqliteCollectionRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
-    from app.infrastructure.persistence.sqlite.repositories.collection_repository import (
-        SqliteCollectionRepositoryAdapter,
-    )
+    from collections.abc import Iterable
+    from datetime import datetime
 
 Role = Literal["owner", "editor", "viewer"]
 ROLE_RANK = {"owner": 3, "editor": 2, "viewer": 1}

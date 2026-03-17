@@ -161,6 +161,37 @@ class OpenRouterClient:
         self._circuit_breaker = circuit_breaker
         self._cleanup_registry.add(self)
 
+    @classmethod
+    def from_config(
+        cls,
+        config: Any,
+        *,
+        circuit_breaker: Any | None = None,
+        audit: Callable[[str, str, dict[str, Any]], None] | None = None,
+    ) -> OpenRouterClient:
+        """Construct from AppConfig, extracting all relevant settings."""
+        or_cfg = config.openrouter
+        rt_cfg = config.runtime
+        return cls(
+            api_key=or_cfg.api_key,
+            model=or_cfg.model,
+            fallback_models=list(or_cfg.fallback_models),
+            http_referer=or_cfg.http_referer,
+            x_title=or_cfg.x_title,
+            timeout_sec=rt_cfg.request_timeout_sec,
+            audit=audit,
+            debug_payloads=rt_cfg.debug_payloads,
+            provider_order=list(or_cfg.provider_order),
+            enable_stats=or_cfg.enable_stats,
+            log_truncate_length=rt_cfg.log_truncate_length,
+            enable_structured_outputs=or_cfg.enable_structured_outputs,
+            structured_output_mode=or_cfg.structured_output_mode,
+            require_parameters=or_cfg.require_parameters,
+            auto_fallback_structured=or_cfg.auto_fallback_structured,
+            max_response_size_mb=or_cfg.max_response_size_mb,
+            circuit_breaker=circuit_breaker,
+        )
+
     def _set_core_configuration(
         self,
         *,
