@@ -18,7 +18,7 @@ class ResponseSizeError(ValueError):
         self.max_size = max_size
 
 
-async def validate_response_size(
+def validate_response_size(
     response: httpx.Response,
     max_size_bytes: int,
     service_name: str,

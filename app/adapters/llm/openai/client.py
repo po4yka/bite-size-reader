@@ -303,7 +303,7 @@ class OpenAIClient:
 
         # Validate response size
         try:
-            await validate_response_size(resp, self._max_response_size_bytes, "OpenAI")
+            validate_response_size(resp, self._max_response_size_bytes, "OpenAI")
         except ResponseSizeError as e:
             return LLMCallResult(
                 status="error",

@@ -203,7 +203,7 @@ class ChatTransport:
     ) -> AttemptOutcome:
         resp = await client.post("/chat/completions", headers=payload.headers, json=payload.body)
         try:
-            await validate_response_size(resp, self._client._max_response_size_bytes, "OpenRouter")
+            validate_response_size(resp, self._client._max_response_size_bytes, "OpenRouter")
         except ResponseSizeError as size_exc:
             latency = int((time.perf_counter() - started) * 1000)
             return AttemptOutcome(

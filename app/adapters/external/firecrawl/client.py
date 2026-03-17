@@ -212,7 +212,7 @@ class FirecrawlClient:
         started = time.perf_counter()
         try:
             resp = await self._client.post(self._search_url, headers=headers, json=body)
-            await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Search")
+            validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Search")
         except ResponseSizeError as exc:
             return self._error_handler.build_search_size_error(exc, trimmed_query, started)
         except httpx.HTTPError as exc:
@@ -280,13 +280,13 @@ class FirecrawlClient:
         payload.setdefault("formats", self._options.build_formats())
         headers = {"Authorization": f"Bearer {self._api_key}"}
         resp = await self._client.post(self._crawl_url, headers=headers, json=payload)
-        await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Crawl")
+        validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Crawl")
         return resp.json()
 
     async def get_crawl_status(self, job_id: str) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         resp = await self._client.get(f"{self._crawl_url}/{job_id}", headers=headers)
-        await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Crawl")
+        validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Crawl")
         return resp.json()
 
     async def crawl(
@@ -361,13 +361,13 @@ class FirecrawlClient:
         payload.setdefault("formats", self._options.build_formats())
         headers = {"Authorization": f"Bearer {self._api_key}"}
         resp = await self._client.post(self._batch_scrape_url, headers=headers, json=payload)
-        await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl BatchScrape")
+        validate_response_size(resp, self._max_response_size_bytes, "Firecrawl BatchScrape")
         return resp.json()
 
     async def get_batch_scrape_status(self, job_id: str) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         resp = await self._client.get(f"{self._batch_scrape_url}/{job_id}", headers=headers)
-        await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl BatchScrape")
+        validate_response_size(resp, self._max_response_size_bytes, "Firecrawl BatchScrape")
         return resp.json()
 
     async def extract(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -375,7 +375,7 @@ class FirecrawlClient:
         payload.setdefault("formats", self._options.build_formats())
         headers = {"Authorization": f"Bearer {self._api_key}"}
         resp = await self._client.post(self._extract_url, headers=headers, json=payload)
-        await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Extract")
+        validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Extract")
         return resp.json()
 
     async def scrape_markdown(
@@ -531,7 +531,7 @@ class FirecrawlClient:
 
         resp = await self._client.post(self._base_url, headers=headers, json=json_body)
         try:
-            await validate_response_size(resp, self._max_response_size_bytes, "Firecrawl")
+            validate_response_size(resp, self._max_response_size_bytes, "Firecrawl")
         except ResponseSizeError as size_exc:
             latency = int((time.perf_counter() - started) * 1000)
             error = str(size_exc)
