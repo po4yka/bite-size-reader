@@ -14,8 +14,6 @@ from app.adapters.external.formatting.summary.action_buttons import (
 from app.adapters.external.formatting.summary.card_renderer import (
     build_compact_card_html,
     compact_tldr,
-    extract_domain_from_url,
-    truncate_plain_text,
 )
 from app.adapters.external.formatting.summary.crosspost_publisher import crosspost_to_topic
 from app.adapters.external.formatting.summary.related_reads_presenter import (
@@ -40,14 +38,6 @@ logger = logging.getLogger(__name__)
 
 class SummaryPresenterImpl:
     """Implementation of summary presentation."""
-
-    @staticmethod
-    def _truncate_plain_text(text: str, max_len: int) -> str:
-        return truncate_plain_text(text, max_len)
-
-    @staticmethod
-    def _extract_domain_from_url(url: str) -> str | None:
-        return extract_domain_from_url(url)
 
     def _compact_tldr(self, text: str, *, max_sentences: int = 3, max_chars: int = 520) -> str:
         """Return the first 2-3 sentences (best-effort) for the card TL;DR."""
