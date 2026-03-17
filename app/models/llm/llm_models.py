@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
@@ -12,7 +12,7 @@ class LLMCallResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    status: str = Field(description="High-level result status (ok, error, etc.).")
+    status: Literal["ok", "error"] = Field(description="High-level result status.")
     model: str | None = Field(default=None, description="Model that produced the response.")
     response_text: str | None = Field(
         default=None, description="Primary text response returned by the provider."
