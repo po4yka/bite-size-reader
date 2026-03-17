@@ -231,6 +231,11 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
    - Always persist scraper responses in `crawl_results` table (`FirecrawlResult` is the universal output model)
    - Content extraction uses `ContentScraperChain` (ordered fallback: Scrapling -> Defuddle -> self-hosted Firecrawl -> Playwright -> Crawlee -> direct HTTP). See `app/adapters/content/scraper/` for protocol, chain, factory, and providers
    - Check `app/adapters/content/url_processor.py` for orchestration logic
+   - **URL Flow models** (`app/adapters/content/url_flow_models.py`):
+     - `URLFlowRequest` -- request envelope: wraps the Telegram message, raw URL text, correlation ID, and Telegram-specific callbacks (progress tracker, phase-change callback)
+     - `URLFlowContext` -- prepared state bag: populated after extraction, holds dedupe_hash, req_id, extracted content, chosen language, prompt, chunking config. Passed from context builder into the LLM summarization step
+     - `URLProcessingFlowResult` -- batch-mode result: success/failure status and title for batch progress tracking
+     - When adding fields to `URLFlowContext`, also update `URLFlowContextBuilder` (`url_flow_context_builder.py`) and any callers that destructure the context
 
 2. **Summary Contract Changes:**
    - Update `app/core/summary_contract.py` validation functions
