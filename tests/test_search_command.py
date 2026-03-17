@@ -7,8 +7,8 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
+from app.application.services.topic_search import TopicArticle
 from app.db.session import DatabaseSessionManager
-from app.services.topic_search import TopicArticle
 from tests.conftest import make_test_app_config
 from tests.db_helpers import get_user_interactions
 

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from app.core.time_utils import UTC
-from app.services import trending_cache
+from app.infrastructure.cache import trending_cache
 
 
 @pytest.mark.asyncio

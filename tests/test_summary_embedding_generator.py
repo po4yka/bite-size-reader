@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
+from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
 
 
 @pytest.fixture

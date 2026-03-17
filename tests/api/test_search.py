@@ -427,7 +427,7 @@ def test_semantic_search_success(
     mock_summary_repo_class, mock_request_repo_class, client, search_data, search_token
 ):
     """Test successful semantic search."""
-    from app.services.chroma_vector_search_service import (
+    from app.infrastructure.search.chroma_vector_search_service import (
         ChromaVectorSearchResult,
         ChromaVectorSearchResults,
     )
@@ -509,7 +509,7 @@ def test_semantic_search_with_filters(client, search_data, search_token):
     """Test semantic search with language and tag filters."""
     from app.api.dependencies.search_resources import get_chroma_search_service
     from app.api.main import app
-    from app.services.chroma_vector_search_service import ChromaVectorSearchResults
+    from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchResults
 
     mock_service = MagicMock()
     mock_service.search = AsyncMock(
@@ -552,7 +552,7 @@ def test_semantic_search_with_filters(client, search_data, search_token):
 
 def test_semantic_search_no_results(client, search_token):
     """Test semantic search with no results."""
-    from app.services.chroma_vector_search_service import ChromaVectorSearchResults
+    from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchResults
 
     mock_service = MagicMock()
     mock_service.search = AsyncMock(
@@ -1109,7 +1109,7 @@ def test_search_response_structure(client, search_data, search_token, mock_fts_r
 
 def test_semantic_search_response_structure(client, search_token):
     """Test semantic search response structure."""
-    from app.services.chroma_vector_search_service import ChromaVectorSearchResults
+    from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchResults
 
     mock_service = MagicMock()
     mock_service.search = AsyncMock(
@@ -1161,7 +1161,7 @@ def test_search_response_includes_mode_intent_and_facets(
 
 def test_semantic_search_response_includes_explanations(client, search_token):
     """Semantic results should include explainability fields."""
-    from app.services.chroma_vector_search_service import (
+    from app.infrastructure.search.chroma_vector_search_service import (
         ChromaVectorSearchResult,
         ChromaVectorSearchResults,
     )

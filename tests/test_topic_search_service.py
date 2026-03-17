@@ -6,9 +6,12 @@ import pytest
 
 from app.adapters.external.firecrawl.client import FirecrawlClient  # noqa: TC001
 from app.adapters.external.firecrawl.models import FirecrawlSearchItem, FirecrawlSearchResult
+from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
 from app.db.models import database_proxy
 from app.db.session import DatabaseSessionManager
-from app.services.topic_search import LocalTopicSearchService, TopicSearchService
+from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    SqliteTopicSearchRepositoryAdapter,
+)
 from tests.db_helpers import create_request, insert_summary
 
 
@@ -149,7 +152,7 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
         },
     )
 
-    service = LocalTopicSearchService(db=database, max_results=2)
+    service = LocalTopicSearchService(SqliteTopicSearchRepositoryAdapter(database), max_results=2)
 
     results = await service.find_articles("Android System Design")
 
@@ -166,7 +169,7 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
 async def test_local_search_handles_empty_results(test_database) -> None:
     database = test_database
 
-    service = LocalTopicSearchService(db=database, max_results=3)
+    service = LocalTopicSearchService(SqliteTopicSearchRepositoryAdapter(database), max_results=3)
     results = await service.find_articles("Nonexistent Topic")
     assert results == []
 
@@ -174,7 +177,7 @@ async def test_local_search_handles_empty_results(test_database) -> None:
 @pytest.mark.asyncio
 async def test_local_search_rejects_blank_queries(test_database) -> None:
     database = test_database
-    service = LocalTopicSearchService(db=database, max_results=2)
+    service = LocalTopicSearchService(SqliteTopicSearchRepositoryAdapter(database), max_results=2)
 
     with pytest.raises(ValueError):
         await service.find_articles("   ")
@@ -232,7 +235,9 @@ async def test_local_search_index_finds_older_match(test_database) -> None:
         },
     )
 
-    service = LocalTopicSearchService(db=database, max_results=1, max_scan=1)
+    service = LocalTopicSearchService(
+        SqliteTopicSearchRepositoryAdapter(database), max_results=1, max_scan=1
+    )
 
     results = await service.find_articles("Android modular design")
 

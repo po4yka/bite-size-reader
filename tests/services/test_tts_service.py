@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.adapters.elevenlabs.exceptions import ElevenLabsAPIError
-from app.services.tts_service import AudioGenerationResult, TTSService
+from app.application.services.tts_service import AudioGenerationResult, TTSService
 
 
 def _make_config(tmp_path) -> SimpleNamespace:

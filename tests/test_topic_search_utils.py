@@ -1,6 +1,6 @@
 """Tests for topic_search_utils ensure_mapping function."""
 
-from app.services.topic_search_utils import ensure_mapping
+from app.application.services.topic_search_utils import ensure_mapping
 
 
 class TestEnsureMapping:

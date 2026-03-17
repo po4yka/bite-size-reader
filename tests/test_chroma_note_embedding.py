@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from app.infrastructure.messaging.handlers.embedding_generation import (
     EmbeddingGenerationEventHandler,
 )
-from app.services.metadata_builder import MetadataBuilder
+from app.infrastructure.vector.metadata_builder import MetadataBuilder
 
 
 def test_sync_vector_store_embeds_note_text_and_user_notes():

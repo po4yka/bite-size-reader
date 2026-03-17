@@ -4,8 +4,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from app.services.hybrid_search_service import HybridSearchService
-from app.services.topic_search import TopicArticle
+from app.application.services.topic_search import TopicArticle
+from app.infrastructure.search.hybrid_search_service import HybridSearchService
 
 
 class FakeVectorResult:

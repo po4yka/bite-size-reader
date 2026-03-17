@@ -469,7 +469,7 @@ def get_unread_summaries(
     topic: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return unread summary rows filtered by owner/chat/topic constraints."""
-    from app.services.topic_search_utils import ensure_mapping, summary_matches_topic
+    from app.application.services.topic_search_utils import ensure_mapping, summary_matches_topic
 
     if limit <= 0:
         return []

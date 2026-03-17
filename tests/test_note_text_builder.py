@@ -1,5 +1,5 @@
-from app.services.embedding_service import prepare_text_for_embedding
-from app.services.note_text_builder import NoteText, build_note_text
+from app.infrastructure.embedding.embedding_service import prepare_text_for_embedding
+from app.infrastructure.vector.note_text_builder import NoteText, build_note_text
 
 
 def test_build_note_text_combines_summary_and_user_note():

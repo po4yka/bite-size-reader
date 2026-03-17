@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.services.query_expansion_service import QueryExpansionService
+from app.infrastructure.search.query_expansion_service import QueryExpansionService
 
 
 class TestQueryExpansionService(unittest.TestCase):

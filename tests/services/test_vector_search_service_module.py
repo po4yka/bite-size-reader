@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import pytest
 
-from app.services.vector_search_service import VectorSearchResult, VectorSearchService
+from app.infrastructure.search.vector_search_service import VectorSearchResult, VectorSearchService
 
 
 @dataclass
@@ -54,7 +54,8 @@ class _DummyEmbeddingRepo:
 
 def _build_service() -> VectorSearchService:
     return VectorSearchService(
-        db=object(),
+        embedding_repository=cast("Any", _DummyEmbeddingRepo([], [])),
+        topic_search_repository=cast("Any", _DummyTopicRepo([])),
         embedding_service=cast("Any", _DummyEmbeddingService()),
         max_results=5,
         min_similarity=0.3,
@@ -63,31 +64,22 @@ def _build_service() -> VectorSearchService:
     )
 
 
+_DUMMY_REPOS: dict[str, Any] = {
+    "embedding_repository": cast("Any", _DummyEmbeddingRepo([], [])),
+    "topic_search_repository": cast("Any", _DummyTopicRepo([])),
+    "embedding_service": cast("Any", _DummyEmbeddingService()),
+}
+
+
 def test_init_validates_constructor_arguments() -> None:
     with pytest.raises(ValueError, match="max_results must be positive"):
-        VectorSearchService(
-            db=object(),
-            embedding_service=cast("Any", _DummyEmbeddingService()),
-            max_results=0,
-        )
+        VectorSearchService(**_DUMMY_REPOS, max_results=0)
     with pytest.raises(ValueError, match=r"min_similarity must be between 0\.0 and 1\.0"):
-        VectorSearchService(
-            db=object(),
-            embedding_service=cast("Any", _DummyEmbeddingService()),
-            min_similarity=1.5,
-        )
+        VectorSearchService(**_DUMMY_REPOS, min_similarity=1.5)
     with pytest.raises(ValueError, match="candidate_multiplier must be positive"):
-        VectorSearchService(
-            db=object(),
-            embedding_service=cast("Any", _DummyEmbeddingService()),
-            candidate_multiplier=0,
-        )
+        VectorSearchService(**_DUMMY_REPOS, candidate_multiplier=0)
     with pytest.raises(ValueError, match="fallback_scan_limit must be positive"):
-        VectorSearchService(
-            db=object(),
-            embedding_service=cast("Any", _DummyEmbeddingService()),
-            fallback_scan_limit=0,
-        )
+        VectorSearchService(**_DUMMY_REPOS, fallback_scan_limit=0)
 
 
 def test_materialize_candidates_skips_invalid_rows() -> None:

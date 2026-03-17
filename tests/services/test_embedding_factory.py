@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from app.config.integrations import EmbeddingConfig
-from app.services.embedding_factory import create_embedding_service
-from app.services.embedding_protocol import EmbeddingServiceProtocol
-from app.services.embedding_service import EmbeddingService
+from app.infrastructure.embedding.embedding_factory import create_embedding_service
+from app.infrastructure.embedding.embedding_protocol import EmbeddingServiceProtocol
+from app.infrastructure.embedding.embedding_service import EmbeddingService
 
 
 class TestCreateEmbeddingService:
@@ -29,7 +29,7 @@ class TestCreateEmbeddingService:
             gemini_dimensions=768,
         )
         svc = create_embedding_service(config)
-        from app.services.gemini_embedding_service import GeminiEmbeddingService
+        from app.infrastructure.embedding.gemini_embedding_service import GeminiEmbeddingService
 
         assert isinstance(svc, GeminiEmbeddingService)
         assert isinstance(svc, EmbeddingServiceProtocol)

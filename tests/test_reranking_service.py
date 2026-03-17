@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.reranking_service import OpenRouterRerankingService, RerankingService
+from app.infrastructure.search.reranking_service import OpenRouterRerankingService, RerankingService
 
 
 @pytest.mark.asyncio

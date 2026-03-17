@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.related_reads_service import RelatedReadItem
+from app.application.services.related_reads_service import RelatedReadItem
 
 
 class TestBuildRelatedReadsKeyboard:

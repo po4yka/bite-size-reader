@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 from types import SimpleNamespace
 
-from app.services.search_filters import SearchFilters
+from app.infrastructure.search.search_filters import SearchFilters
 
 
 def _result(**kwargs: object) -> SimpleNamespace:

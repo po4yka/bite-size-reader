@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.services.metadata_builder import MetadataBuilder
+from app.infrastructure.vector.metadata_builder import MetadataBuilder
 
 
 def test_extract_user_note_prefers_payload_fields_before_metadata() -> None:

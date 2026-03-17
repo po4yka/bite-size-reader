@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.gemini_embedding_service import GeminiEmbeddingService
+from app.infrastructure.embedding.gemini_embedding_service import GeminiEmbeddingService
 
 
 class TestGeminiEmbeddingServiceInit:

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.related_reads_service import (
+from app.application.services.related_reads_service import (
     RelatedReadsService,
     _format_age,
 )
