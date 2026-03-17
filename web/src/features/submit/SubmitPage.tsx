@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Button,
   InlineLoading,
@@ -11,14 +10,13 @@ import {
   TextInput,
   Tile,
 } from "@carbon/react";
-import { checkDuplicate, fetchRequestStatus, retryRequest, submitUrl } from "../../api/requests";
+import { useDuplicateCheck, useRequestStatus, useSubmitUrl, useRetryRequest } from "../../hooks/useRequests";
 import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
 import { useTelegramMainButton } from "../../hooks/useTelegramMainButton";
 import { formatEta, isTerminalStatus, progressFromStatus, statusLabel } from "./status";
 import { validateSubmitUrl } from "./url";
 
 const DUPLICATE_DEBOUNCE_MS = 500;
-const POLL_INTERVAL_MS = 2500;
 const MAX_POLL_DURATION_MS = 6 * 60 * 1000;
 
 interface DuplicateState {
@@ -53,69 +51,10 @@ export default function SubmitPage() {
     return () => window.clearTimeout(timer);
   }, [urlValidation.isValid, urlValidation.normalizedUrl]);
 
-  const duplicateQuery = useQuery({
-    queryKey: ["duplicate-check", duplicateProbeUrl],
-    queryFn: () => checkDuplicate(duplicateProbeUrl),
-    enabled: duplicateProbeUrl.length > 0 && requestId == null,
-  });
-
-  const submitMutation = useMutation({
-    mutationFn: (payload: { inputUrl: string; langPreference: "auto" | "en" | "ru" }) =>
-      submitUrl(payload.inputUrl, payload.langPreference),
-    onMutate: () => {
-      setRequestId(null);
-      setPollingPaused(false);
-      setPollingStartedAt(null);
-      setSubmitDuplicate(null);
-    },
-    onSuccess: (result) => {
-      if (result.kind === "queued") {
-        setRequestId(result.requestId);
-        setPollingPaused(false);
-        setPollingStartedAt(Date.now());
-        setSubmitDuplicate(null);
-        return;
-      }
-
-      const duplicateState: DuplicateState = {
-        message: result.message,
-        summaryId: result.existingSummaryId,
-        requestId: result.existingRequestId,
-        summarizedAt: result.summarizedAt,
-      };
-      setSubmitDuplicate(duplicateState);
-
-      if (!result.existingSummaryId && result.existingRequestId) {
-        setRequestId(result.existingRequestId);
-        setPollingPaused(false);
-        setPollingStartedAt(Date.now());
-      } else {
-        setRequestId(null);
-      }
-    },
-  });
-
-  const statusQuery = useQuery({
-    queryKey: ["request-status", requestId],
-    queryFn: () => fetchRequestStatus(requestId ?? ""),
-    enabled: Boolean(requestId) && !pollingPaused,
-    retry: 2,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      if (!status) return POLL_INTERVAL_MS;
-      return isTerminalStatus(status) ? false : POLL_INTERVAL_MS;
-    },
-  });
-
-  const retryMutation = useMutation({
-    mutationFn: () => retryRequest(requestId ?? ""),
-    onSuccess: (result) => {
-      setRequestId(result.requestId);
-      setSubmitDuplicate(null);
-      setPollingPaused(false);
-      setPollingStartedAt(Date.now());
-    },
-  });
+  const duplicateQuery = useDuplicateCheck(duplicateProbeUrl, duplicateProbeUrl.length > 0 && requestId == null);
+  const submitMutation = useSubmitUrl();
+  const statusQuery = useRequestStatus(requestId, pollingPaused);
+  const retryMutation = useRetryRequest();
 
   useEffect(() => {
     if (!requestId || pollingPaused || isTerminalStatus(statusQuery.data?.status ?? "pending")) {
@@ -168,10 +107,38 @@ export default function SubmitPage() {
 
   const handleSubmit = useCallback(() => {
     if (!canSubmit) return;
-    submitMutation.mutate({
-      inputUrl: urlValidation.normalizedUrl,
-      langPreference,
-    });
+    setRequestId(null);
+    setPollingPaused(false);
+    setPollingStartedAt(null);
+    setSubmitDuplicate(null);
+    submitMutation.mutate(
+      { inputUrl: urlValidation.normalizedUrl, langPreference },
+      {
+        onSuccess: (result) => {
+          if (result.kind === "queued") {
+            setRequestId(result.requestId);
+            setPollingPaused(false);
+            setPollingStartedAt(Date.now());
+            setSubmitDuplicate(null);
+            return;
+          }
+          const duplicateState: DuplicateState = {
+            message: result.message,
+            summaryId: result.existingSummaryId,
+            requestId: result.existingRequestId,
+            summarizedAt: result.summarizedAt,
+          };
+          setSubmitDuplicate(duplicateState);
+          if (!result.existingSummaryId && result.existingRequestId) {
+            setRequestId(result.existingRequestId);
+            setPollingPaused(false);
+            setPollingStartedAt(Date.now());
+          } else {
+            setRequestId(null);
+          }
+        },
+      },
+    );
   }, [canSubmit, langPreference, submitMutation, urlValidation.normalizedUrl]);
 
   const handleOpenCompletedSummary = useCallback(() => {
@@ -180,9 +147,16 @@ export default function SubmitPage() {
   }, [completedSummaryId, navigate]);
 
   const handleRetry = useCallback(() => {
-    if (!canRetryStatus || retryMutation.isPending) return;
-    retryMutation.mutate();
-  }, [canRetryStatus, retryMutation]);
+    if (!canRetryStatus || retryMutation.isPending || !requestId) return;
+    retryMutation.mutate(requestId, {
+      onSuccess: (result) => {
+        setRequestId(result.requestId);
+        setSubmitDuplicate(null);
+        setPollingPaused(false);
+        setPollingStartedAt(Date.now());
+      },
+    });
+  }, [canRetryStatus, retryMutation, requestId]);
 
   useTelegramMainButton({
     visible: requestId == null || completedSummaryId != null || canRetryStatus,

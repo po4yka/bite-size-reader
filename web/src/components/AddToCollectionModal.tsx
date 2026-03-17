@@ -1,19 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   InlineLoading,
-  InlineNotification,
   Modal,
   Select,
   SelectItem,
   TextInput,
 } from "@carbon/react";
-import {
-  addSummaryToCollection,
-  createCollection,
-  fetchCollectionTree,
-} from "../api/collections";
-import type { Collection } from "../api/types";
+import { createCollection } from "../api/collections";
+import { flattenCollections } from "../lib/collections";
+import { useCollectionTree, useAddToCollection } from "../hooks/useCollections";
+import { QueryErrorNotification } from "./QueryErrorNotification";
 
 interface AddToCollectionModalProps {
   open: boolean;
@@ -21,33 +17,13 @@ interface AddToCollectionModalProps {
   onClose: () => void;
 }
 
-function flattenCollections(input: Collection[]): Collection[] {
-  const result: Collection[] = [];
-
-  function walk(items: Collection[], prefix: string): void {
-    for (const item of items) {
-      result.push({
-        ...item,
-        name: prefix ? `${prefix} / ${item.name}` : item.name,
-      });
-      walk(item.children ?? [], prefix ? `${prefix} / ${item.name}` : item.name);
-    }
-  }
-
-  walk(input, "");
-  return result;
-}
 
 export default function AddToCollectionModal({ open, summaryId, onClose }: AddToCollectionModalProps) {
-  const queryClient = useQueryClient();
   const [selectedCollectionId, setSelectedCollectionId] = useState<string>("");
   const [newCollectionName, setNewCollectionName] = useState("");
 
-  const collectionsQuery = useQuery({
-    queryKey: ["collections-tree"],
-    queryFn: fetchCollectionTree,
-    enabled: open,
-  });
+  const collectionsQuery = useCollectionTree();
+  const addMutation = useAddToCollection();
 
   const options = useMemo(() => flattenCollections(collectionsQuery.data ?? []), [collectionsQuery.data]);
 
@@ -61,31 +37,18 @@ export default function AddToCollectionModal({ open, summaryId, onClose }: AddTo
     }
   }, [open, options]);
 
-  const addMutation = useMutation({
-    mutationFn: async () => {
-      if (!summaryId) {
-        throw new Error("No summary selected.");
-      }
+  async function handleSubmit(): Promise<void> {
+    if (!summaryId) return;
 
-      let targetCollectionId = Number(selectedCollectionId) || null;
+    let targetCollectionId = Number(selectedCollectionId) || null;
+    if (newCollectionName.trim()) {
+      const created = await createCollection(newCollectionName.trim());
+      targetCollectionId = created.id;
+    }
+    if (!targetCollectionId) return;
 
-      if (newCollectionName.trim()) {
-        const created = await createCollection(newCollectionName.trim());
-        targetCollectionId = created.id;
-      }
-
-      if (!targetCollectionId) {
-        throw new Error("Select a collection or create a new one.");
-      }
-
-      await addSummaryToCollection(targetCollectionId, summaryId);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["collections-tree"] });
-      void queryClient.invalidateQueries({ queryKey: ["collection-items"] });
-      onClose();
-    },
-  });
+    addMutation.mutate({ collectionId: targetCollectionId, summaryId }, { onSuccess: () => onClose() });
+  }
 
   const canSubmit = Boolean(summaryId) && (Boolean(selectedCollectionId) || newCollectionName.trim().length > 0);
 
@@ -102,28 +65,13 @@ export default function AddToCollectionModal({ open, summaryId, onClose }: AddTo
         }
       }}
       onRequestSubmit={() => {
-        addMutation.mutate();
+        void handleSubmit();
       }}
     >
       {collectionsQuery.isLoading && <InlineLoading description="Loading collections…" />}
 
-      {collectionsQuery.error && (
-        <InlineNotification
-          kind="error"
-          title="Failed to load collections"
-          subtitle={collectionsQuery.error instanceof Error ? collectionsQuery.error.message : "Unknown error"}
-          hideCloseButton
-        />
-      )}
-
-      {addMutation.error && (
-        <InlineNotification
-          kind="error"
-          title="Failed to add summary"
-          subtitle={addMutation.error instanceof Error ? addMutation.error.message : "Unknown error"}
-          hideCloseButton
-        />
-      )}
+      <QueryErrorNotification error={collectionsQuery.error} title="Failed to load collections" />
+      <QueryErrorNotification error={addMutation.error} title="Failed to add summary" />
 
       <div className="digest-form-grid">
         <Select

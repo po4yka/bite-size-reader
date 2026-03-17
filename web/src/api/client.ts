@@ -1,12 +1,13 @@
 import { setStoredTokens } from "../auth/storage";
 import type { AuthTokens } from "../auth/types";
 import { normalizeKeys } from "../lib/case";
+import { config } from "../lib/config";
 import { getApiSession, setApiSession } from "./session";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+const BASE_URL = config.apiBaseUrl;
 const DEFAULT_TIMEOUT_MS = 20_000;
 
-if (!import.meta.env.VITE_API_BASE_URL && import.meta.env.DEV) {
+if (!config.apiBaseUrl && import.meta.env.DEV) {
   console.warn("[api] VITE_API_BASE_URL not set; using relative paths");
 }
 

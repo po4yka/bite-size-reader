@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import {
   Button,
   InlineLoading,
@@ -16,7 +15,8 @@ import {
   TextInput,
   Tile,
 } from "@carbon/react";
-import { fetchTrendingTopics, searchSummaries } from "../../api/search";
+import { useSearchResults, useTrendingTopics } from "../../hooks/useSearch";
+import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 
 interface SelectOption {
   id: string;
@@ -47,42 +47,20 @@ export default function SearchPage() {
 
   const semanticMode = mode === "semantic" || mode === "hybrid";
 
-  const trendingQuery = useQuery({
-    queryKey: ["trending-topics"],
-    queryFn: () => fetchTrendingTopics(20),
-  });
+  const trendingQuery = useTrendingTopics(20);
 
-  const searchQuery = useQuery({
-    queryKey: [
-      "search",
-      query,
-      mode,
-      language,
-      readState,
-      favoriteState,
-      startDate,
-      endDate,
-      minSimilarity,
-      selectedTags,
-      selectedDomains,
-      page,
-      pageSize,
-    ],
-    queryFn: () =>
-      searchSummaries(query, {
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-        mode,
-        language: language || undefined,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        isRead: readState === "all" ? undefined : readState === "read",
-        isFavorited: favoriteState === "all" ? undefined : favoriteState === "favorited",
-        minSimilarity: semanticMode ? minSimilarity : undefined,
-        tags: selectedTags,
-        domains: selectedDomains,
-      }),
-    enabled: query.trim().length > 1,
+  const searchQuery = useSearchResults(query, {
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+    mode,
+    language: language || undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+    isRead: readState === "all" ? undefined : readState === "read",
+    isFavorited: favoriteState === "all" ? undefined : favoriteState === "favorited",
+    minSimilarity: semanticMode ? minSimilarity : undefined,
+    tags: selectedTags,
+    domains: selectedDomains,
   });
 
   const knownDomains = useMemo(() => {
@@ -422,14 +400,7 @@ export default function SearchPage() {
       )}
 
       {searchQuery.isFetching && searchQuery.data && <InlineLoading description="Refreshing results…" />}
-      {searchQuery.error && (
-        <InlineNotification
-          kind="error"
-          title="Search failed"
-          subtitle={searchQuery.error instanceof Error ? searchQuery.error.message : "Unknown error"}
-          hideCloseButton
-        />
-      )}
+      <QueryErrorNotification error={searchQuery.error} title="Search failed" />
 
       {showInitialResultsSkeleton ? (
         <div className="result-grid">

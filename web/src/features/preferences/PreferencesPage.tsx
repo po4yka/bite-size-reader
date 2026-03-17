@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Button,
   InlineNotification,
@@ -10,7 +9,8 @@ import {
   Tile,
   TimePicker,
 } from "@carbon/react";
-import { fetchUserPreferences, fetchUserStats, updateUserPreferences } from "../../api/user";
+import { useUserPreferences, useUserStats, useUpdateUserPreferences } from "../../hooks/useUser";
+import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
 import { useTelegramMainButton } from "../../hooks/useTelegramMainButton";
 
@@ -20,15 +20,8 @@ function parseDeliveryTime(settings: Record<string, unknown> | null): string {
 }
 
 export default function PreferencesPage() {
-  const preferencesQuery = useQuery({
-    queryKey: ["user-preferences"],
-    queryFn: () => fetchUserPreferences(),
-  });
-
-  const statsQuery = useQuery({
-    queryKey: ["user-stats"],
-    queryFn: () => fetchUserStats(),
-  });
+  const preferencesQuery = useUserPreferences();
+  const statsQuery = useUserStats();
 
   const [langPreference, setLangPreference] = useState<"auto" | "en" | "ru">("auto");
   const [deliveryTime, setDeliveryTime] = useState("09:00");
@@ -45,18 +38,8 @@ export default function PreferencesPage() {
     }
   }, [preferencesQuery.data]);
 
-  const saveMutation = useMutation({
-    mutationFn: () =>
-      updateUserPreferences({
-        lang_preference: langPreference,
-        app_settings: {
-          delivery_time: deliveryTime,
-          daily_target: dailyTarget,
-        },
-      }),
-    onSuccess: () => {
-      void preferencesQuery.refetch();
-    },
+  const saveMutation = useUpdateUserPreferences(() => {
+    void preferencesQuery.refetch();
   });
 
   const initialLangPreference = useMemo(
@@ -85,8 +68,14 @@ export default function PreferencesPage() {
 
   const handleSave = useCallback(() => {
     if (!isDirty || saveMutation.isPending) return;
-    saveMutation.mutate();
-  }, [isDirty, saveMutation]);
+    saveMutation.mutate({
+      lang_preference: langPreference,
+      app_settings: {
+        delivery_time: deliveryTime,
+        daily_target: dailyTarget,
+      },
+    });
+  }, [isDirty, saveMutation, langPreference, deliveryTime, dailyTarget]);
 
   useTelegramMainButton({
     visible: Boolean(preferencesQuery.data),
@@ -114,14 +103,7 @@ export default function PreferencesPage() {
         </>
       )}
 
-      {(preferencesQuery.error || statsQuery.error) && (
-        <InlineNotification
-          kind="error"
-          title="Failed to load preferences"
-          subtitle={(preferencesQuery.error ?? statsQuery.error) instanceof Error ? ((preferencesQuery.error ?? statsQuery.error) as Error).message : "Unknown error"}
-          hideCloseButton
-        />
-      )}
+      <QueryErrorNotification error={preferencesQuery.error ?? statsQuery.error} title="Failed to load preferences" />
 
       {preferencesQuery.data && (
         <Tile>
@@ -159,14 +141,7 @@ export default function PreferencesPage() {
             Save preferences
           </Button>
 
-          {saveMutation.error && (
-            <InlineNotification
-              kind="error"
-              title="Save failed"
-              subtitle={saveMutation.error instanceof Error ? saveMutation.error.message : "Unknown error"}
-              hideCloseButton
-            />
-          )}
+          <QueryErrorNotification error={saveMutation.error} title="Save failed" />
 
           {saveMutation.isSuccess && (
             <InlineNotification
