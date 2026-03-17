@@ -118,7 +118,10 @@ async def get_current_user(
         if not user_id:
             raise TokenInvalidError("Missing user_id in token payload")
 
-        # Verify user is still in whitelist when configured
+        # Verify user is still in whitelist when configured.
+        # JWT auth is intentionally optional-whitelist: when ALLOWED_USER_IDS is unset,
+        # any JWT-authenticated user is permitted (supports multi-user deployments).
+        # WebApp auth (webapp_auth.py) is fail-closed: raises if whitelist is unset.
         allowed_ids = Config.get_allowed_user_ids()
         if allowed_ids and user_id not in allowed_ids:
             raise AuthorizationError("User not authorized")
