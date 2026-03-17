@@ -165,6 +165,9 @@ export async function generateSummaryAudio(
 }
 
 export function getSummaryAudioUrl(summaryId: number): string {
+  if (!Number.isFinite(summaryId) || summaryId <= 0) {
+    throw new Error(`getSummaryAudioUrl: invalid summaryId ${summaryId}`);
+  }
   const base = import.meta.env.VITE_API_BASE_URL ?? "";
   return `${base}/v1/summaries/${summaryId}/audio`;
 }

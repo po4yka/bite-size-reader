@@ -77,6 +77,10 @@ export async function fetchCollectionItems(collectionId: number): Promise<Collec
     .filter((id): id is number => typeof id === "number");
 
   const details = await Promise.allSettled(summaryIds.map((id) => fetchSummary(id)));
+  const failed = details.filter((r) => r.status === "rejected").length;
+  if (failed > 0) {
+    console.warn(`[collections] Failed to load ${failed} item detail(s)`);
+  }
   const detailMap = new Map<number, Awaited<ReturnType<typeof fetchSummary>>>();
   details.forEach((result, index) => {
     const summaryId = summaryIds[index];
