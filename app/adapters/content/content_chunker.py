@@ -90,20 +90,12 @@ class ContentChunker:
         self, content_text: str, chosen_lang: str
     ) -> tuple[bool, int, list[str] | None]:
         """Determine if content should be chunked and return chunking parameters."""
-        # Be defensive against MagicMock configs in tests: only honor proper types
-        _enable_chunking_val = getattr(self.cfg.runtime, "enable_chunking", False)
-        enable_chunking = _enable_chunking_val if isinstance(_enable_chunking_val, bool) else False
-        _max_chars_val = getattr(self.cfg.runtime, "chunk_max_chars", 200000)
-        configured_max = _max_chars_val if isinstance(_max_chars_val, int) else 200000
+        enable_chunking = self.cfg.runtime.enable_chunking
+        configured_max = self.cfg.runtime.chunk_max_chars
 
-        # Choose model to estimate context threshold: prefer long_context_model if configured and string
-        _lc_model = getattr(self.cfg.openrouter, "long_context_model", None)
-        _primary_model = getattr(self.cfg.openrouter, "model", "")
-        threshold_model = (
-            _lc_model
-            if isinstance(_lc_model, str) and _lc_model
-            else (_primary_model if isinstance(_primary_model, str) else "")
-        )
+        # Choose model to estimate context threshold: prefer long_context_model if configured
+        lc_model = self.cfg.openrouter.long_context_model
+        threshold_model = lc_model if lc_model else (self.cfg.openrouter.model or "")
         # Nudge toward chunking earlier to reduce long latencies
         tuned_base = int(configured_max * 0.8)
         max_chars = self.estimate_max_chars_for_model(threshold_model, tuned_base)
@@ -190,7 +182,7 @@ class ContentChunker:
                     raise_if_cancelled(exc)
             return None
 
-        _chunk_concurrency = getattr(self.cfg.runtime, "max_concurrent_calls", 4)
+        _chunk_concurrency = self.cfg.runtime.max_concurrent_calls
         _chunk_sem = asyncio.Semaphore(_chunk_concurrency)
 
         async def _bounded_process(idx: int, chunk: str) -> dict[str, Any] | None:
