@@ -151,12 +151,15 @@ dependencies = [
   "orjson>=3.11.6",
   "uvloop>=0.22.1",
   "redis>=7.1.0",
-  # Attachment processing: image handling + PDF extraction
+]
+
+[project.optional-dependencies]
+# Attachment processing: image handling + PDF extraction
+attachment = [
   "Pillow>=11.0.0",
   "pymupdf>=1.25.0",
 ]
 
-[project.optional-dependencies]
 # Browser-based scraper fallback providers (Playwright + Crawlee)
 browser_scraper = [
   "playwright>=1.40",
