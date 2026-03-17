@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     from app.application.services.related_reads_service import RelatedReadsService
     from app.application.services.topic_search import TopicSearchService
     from app.config import AppConfig
-    from app.core.progress_tracker import ProgressTracker
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
 
@@ -155,33 +154,14 @@ class URLProcessor:
 
     async def handle_url_flow(
         self,
-        message: Any,
-        url_text: str,
-        *,
-        correlation_id: str | None = None,
-        interaction_id: int | None = None,
-        silent: bool = False,
-        batch_mode: bool = False,
-        on_phase_change: Any | None = None,
-        progress_tracker: ProgressTracker | None = None,
+        request: URLFlowRequest,
     ) -> URLProcessingFlowResult:
         """Handle complete URL processing flow from extraction to follow-up tasks."""
-        request = URLFlowRequest(
-            message=message,
-            url_text=url_text,
-            correlation_id=correlation_id,
-            interaction_id=interaction_id,
-            silent=silent,
-            batch_mode=batch_mode,
-            on_phase_change=on_phase_change,
-            progress_tracker=progress_tracker,
-        )
-
         cached_result = await self.cached_summary_responder.maybe_reply(
-            message,
-            url_text,
-            correlation_id=correlation_id,
-            interaction_id=interaction_id,
+            request.message,
+            request.url_text,
+            correlation_id=request.correlation_id,
+            interaction_id=request.interaction_id,
             silent=request.notify_silent,
         )
         if cached_result is not None:
@@ -203,7 +183,7 @@ class URLProcessor:
                     context.system_prompt,
                     context.chosen_lang,
                     context.req_id,
-                    correlation_id,
+                    request.correlation_id,
                 )
                 if summary_json:
                     summary_json = await self.semantic_helper.enrich_with_rag_fields(
@@ -221,53 +201,53 @@ class URLProcessor:
             else:
                 summary_result = await self.interactive_summary_service.summarize(
                     InteractiveSummaryRequest(
-                        message=message,
+                        message=request.message,
                         content_text=context.content_text,
                         chosen_lang=context.chosen_lang,
                         system_prompt=context.system_prompt,
                         req_id=context.req_id,
                         max_chars=context.max_chars,
-                        correlation_id=correlation_id,
-                        interaction_id=interaction_id,
+                        correlation_id=request.correlation_id,
+                        interaction_id=request.interaction_id,
                         url_hash=context.dedupe_hash,
-                        url=url_text,
+                        url=request.url_text,
                         silent=request.notify_silent,
-                        on_phase_change=on_phase_change,
+                        on_phase_change=request.on_phase_change,
                         images=context.images,
-                        progress_tracker=progress_tracker,
+                        progress_tracker=request.progress_tracker,
                     )
                 )
 
             summary_json = summary_result.summary if summary_result else None
             if summary_json is None:
                 return await self.summary_delivery.send_processing_failure(
-                    message=message,
-                    url_text=url_text,
-                    correlation_id=correlation_id,
-                    silent=silent,
-                    batch_mode=batch_mode,
+                    message=request.message,
+                    url_text=request.url_text,
+                    correlation_id=request.correlation_id,
+                    silent=request.silent,
+                    batch_mode=request.batch_mode,
                 )
 
             result = await self.summary_delivery.deliver_summary(
-                message=message,
+                message=request.message,
                 summary_result=summary_result,
                 context=context,
-                correlation_id=correlation_id,
-                interaction_id=interaction_id,
-                silent=silent,
-                batch_mode=batch_mode,
+                correlation_id=request.correlation_id,
+                interaction_id=request.interaction_id,
+                silent=request.silent,
+                batch_mode=request.batch_mode,
             )
 
-            if not batch_mode:
+            if not request.batch_mode:
                 await self.post_summary_tasks.schedule_tasks(
-                    message,
+                    request.message,
                     context.content_text,
                     context.chosen_lang,
                     context.req_id,
-                    correlation_id,
+                    request.correlation_id,
                     summary_json,
                     needs_ru_translation=context.needs_ru_translation,
-                    silent=silent,
+                    silent=request.silent,
                     url_hash=context.dedupe_hash,
                 )
 
@@ -276,12 +256,12 @@ class URLProcessor:
             raise_if_cancelled(exc)
             logger.exception(
                 "url_processing_failed",
-                extra={"cid": correlation_id, "url": url_text, "error": str(exc)},
+                extra={"cid": request.correlation_id, "url": request.url_text, "error": str(exc)},
             )
-            if not silent and not batch_mode:
+            if not request.silent and not request.batch_mode:
                 await self.response_formatter.send_error_notification(
-                    message,
+                    request.message,
                     "processing_failed",
-                    correlation_id or "unknown",
+                    request.correlation_id or "unknown",
                 )
             return URLProcessingFlowResult(success=False)

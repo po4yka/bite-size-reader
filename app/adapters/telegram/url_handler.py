@@ -363,14 +363,18 @@ class URLHandler:
         resolved_progress_tracker = progress_tracker
         if resolved_progress_tracker is None and not batch_mode:
             resolved_progress_tracker = await self._resolve_progress_tracker(message)
+        from app.adapters.content.url_flow_models import URLFlowRequest
+
         return await self.url_processor.handle_url_flow(
-            message,
-            url,
-            correlation_id=correlation_id,
-            interaction_id=interaction_id,
-            batch_mode=batch_mode,
-            on_phase_change=on_phase_change,
-            progress_tracker=resolved_progress_tracker,
+            URLFlowRequest(
+                message=message,
+                url_text=url,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                batch_mode=batch_mode,
+                on_phase_change=on_phase_change,
+                progress_tracker=resolved_progress_tracker,
+            )
         )
 
     async def translate_summary_to_ru(

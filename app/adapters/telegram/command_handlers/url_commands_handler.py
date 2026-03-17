@@ -124,10 +124,12 @@ class URLCommandsHandler:
                             interaction_id=ctx.interaction_id,
                         )
                     else:
+                        from app.adapters.content.url_flow_models import URLFlowRequest
+
                         await self._url_processor.handle_url_flow(
-                            ctx.message,
-                            u,
-                            correlation_id=per_link_cid,
+                            URLFlowRequest(
+                                message=ctx.message, url_text=u, correlation_id=per_link_cid
+                            )
                         )
 
             logger.debug("multi_url_processed", extra={"uid": ctx.uid, "count": len(urls)})
@@ -143,11 +145,15 @@ class URLCommandsHandler:
                     interaction_id=ctx.interaction_id,
                 )
             else:
+                from app.adapters.content.url_flow_models import URLFlowRequest
+
                 await self._url_processor.handle_url_flow(
-                    ctx.message,
-                    urls[0],
-                    correlation_id=ctx.correlation_id,
-                    interaction_id=ctx.interaction_id,
+                    URLFlowRequest(
+                        message=ctx.message,
+                        url_text=urls[0],
+                        correlation_id=ctx.correlation_id,
+                        interaction_id=ctx.interaction_id,
+                    )
                 )
             return None, False
 
@@ -235,10 +241,10 @@ class URLCommandsHandler:
                         interaction_id=ctx.interaction_id,
                     )
                 else:
+                    from app.adapters.content.url_flow_models import URLFlowRequest
+
                     await self._url_processor.handle_url_flow(
-                        ctx.message,
-                        u,
-                        correlation_id=per_link_cid,
+                        URLFlowRequest(message=ctx.message, url_text=u, correlation_id=per_link_cid)
                     )
 
     @audit_command("command_cancel")

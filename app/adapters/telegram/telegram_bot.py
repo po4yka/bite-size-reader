@@ -661,12 +661,16 @@ class TelegramBot:
         silent: bool = False,
     ) -> None:
         """Process a URL message via the URL processor pipeline."""
+        from app.adapters.content.url_flow_models import URLFlowRequest
+
         await self.url_processor.handle_url_flow(
-            message,
-            url_text,
-            correlation_id=correlation_id,
-            interaction_id=interaction_id,
-            silent=silent,
+            URLFlowRequest(
+                message=message,
+                url_text=url_text,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                silent=silent,
+            )
         )
 
     async def _handle_forward_flow(

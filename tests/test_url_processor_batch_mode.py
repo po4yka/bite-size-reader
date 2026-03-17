@@ -95,10 +95,12 @@ class TestURLProcessorBatchMode(unittest.IsolatedAsyncioTestCase):
         proc = _make_processor()
 
         result = await proc.handle_url_flow(
-            DummyMessage(),
-            "https://example.com/article",
-            correlation_id="cid-1",
-            batch_mode=True,
+            URLFlowRequest(
+                message=DummyMessage(),
+                url_text="https://example.com/article",
+                correlation_id="cid-1",
+                batch_mode=True,
+            )
         )
 
         assert result.success
@@ -109,9 +111,11 @@ class TestURLProcessorBatchMode(unittest.IsolatedAsyncioTestCase):
         proc = _make_processor()
 
         result = await proc.handle_url_flow(
-            DummyMessage(),
-            "https://example.com/article",
-            correlation_id="cid-2",
+            URLFlowRequest(
+                message=DummyMessage(),
+                url_text="https://example.com/article",
+                correlation_id="cid-2",
+            )
         )
 
         assert result.success
@@ -126,9 +130,11 @@ class TestURLProcessorBatchMode(unittest.IsolatedAsyncioTestCase):
         proc = _make_processor(cached_result=cached)
 
         result = await proc.handle_url_flow(
-            DummyMessage(),
-            "https://example.com/cached",
-            correlation_id="cid-cache",
+            URLFlowRequest(
+                message=DummyMessage(),
+                url_text="https://example.com/cached",
+                correlation_id="cid-cache",
+            )
         )
 
         assert result.cached is True
@@ -147,10 +153,12 @@ class TestURLProcessorBatchMode(unittest.IsolatedAsyncioTestCase):
         )
 
         result = await proc.handle_url_flow(
-            DummyMessage(),
-            "https://example.com/fail",
-            correlation_id="cid-fail",
-            batch_mode=True,
+            URLFlowRequest(
+                message=DummyMessage(),
+                url_text="https://example.com/fail",
+                correlation_id="cid-fail",
+                batch_mode=True,
+            )
         )
 
         assert result.success is False
@@ -161,9 +169,11 @@ class TestURLProcessorBatchMode(unittest.IsolatedAsyncioTestCase):
         proc = _make_processor(context=_make_context(should_chunk=True))
 
         result = await proc.handle_url_flow(
-            DummyMessage(),
-            "https://example.com/chunked",
-            correlation_id="cid-chunk",
+            URLFlowRequest(
+                message=DummyMessage(),
+                url_text="https://example.com/chunked",
+                correlation_id="cid-chunk",
+            )
         )
 
         assert result.success
@@ -176,9 +186,11 @@ class TestURLProcessorBatchMode(unittest.IsolatedAsyncioTestCase):
         proc.context_builder.build = AsyncMock(side_effect=RuntimeError("boom"))
 
         result = await proc.handle_url_flow(
-            DummyMessage(),
-            "https://example.com/error",
-            correlation_id="cid-error",
+            URLFlowRequest(
+                message=DummyMessage(),
+                url_text="https://example.com/error",
+                correlation_id="cid-error",
+            )
         )
 
         assert result.success is False
@@ -189,10 +201,12 @@ class TestURLProcessorBatchMode(unittest.IsolatedAsyncioTestCase):
         proc.context_builder.build = AsyncMock(side_effect=RuntimeError("boom"))
 
         result = await proc.handle_url_flow(
-            DummyMessage(),
-            "https://example.com/error",
-            correlation_id="cid-error-batch",
-            batch_mode=True,
+            URLFlowRequest(
+                message=DummyMessage(),
+                url_text="https://example.com/error",
+                correlation_id="cid-error-batch",
+                batch_mode=True,
+            )
         )
 
         assert result.success is False
@@ -202,14 +216,16 @@ class TestURLProcessorBatchMode(unittest.IsolatedAsyncioTestCase):
         proc = _make_processor()
 
         await proc.handle_url_flow(
-            DummyMessage(),
-            "https://example.com/request",
-            correlation_id="cid-request",
-            interaction_id=9,
-            silent=True,
-            batch_mode=True,
-            on_phase_change=AsyncMock(),
-            progress_tracker=MagicMock(),
+            URLFlowRequest(
+                message=DummyMessage(),
+                url_text="https://example.com/request",
+                correlation_id="cid-request",
+                interaction_id=9,
+                silent=True,
+                batch_mode=True,
+                on_phase_change=AsyncMock(),
+                progress_tracker=MagicMock(),
+            )
         )
 
         request = proc.context_builder.build.await_args.args[0]

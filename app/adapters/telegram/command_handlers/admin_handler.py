@@ -211,10 +211,12 @@ class AdminHandler:
                         interaction_id=ctx.interaction_id,
                     )
                 else:
+                    from app.adapters.content.url_flow_models import URLFlowRequest
+
                     await self._url_processor.handle_url_flow(
-                        ctx.message,
-                        url,
-                        correlation_id=per_link_cid,
+                        URLFlowRequest(
+                            message=ctx.message, url_text=url, correlation_id=per_link_cid
+                        )
                     )
             except Exception as exc:
                 logger.exception(
