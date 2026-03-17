@@ -15,10 +15,16 @@ existing code while delegating to specialized components:
 All public methods are delegated to the appropriate component while maintaining
 the original API signatures for backward compatibility.
 
-TODO(migration): This facade has 190 importers. Subsystem-by-subsystem migration:
-  1. notification handlers -> NotificationFormatterImpl
-  2. Telegram command handlers -> ResponseSenderImpl
-  Target: no removal milestone set; track alongside app/services/ deprecation cleanup.
+Migration plan (track in parallel with app/services/ cleanup):
+  Phase 1 — notification handlers (app/adapters/telegram/notification_handlers/):
+    Replace ResponseFormatter with NotificationFormatterImpl directly.
+  Phase 2 — Telegram command handlers (app/adapters/telegram/command_handlers/):
+    Replace with ResponseSenderImpl for reply methods.
+  Phase 3 — remaining callers (app/api/, app/di/):
+    Replace with appropriate specialized formatter per caller domain.
+  Milestone: facade removal when importer count reaches 0.
+  Protocols (ResponseSender, NotificationFormatter, etc.) are in
+  app/adapters/external/formatting/protocols.py for use in type hints.
 """
 
 from __future__ import annotations
