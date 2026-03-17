@@ -239,17 +239,18 @@ class TestMessageRouterCleanup(unittest.IsolatedAsyncioTestCase):
         )
 
         now = time.time()
+        notified = router._rate_limit_coordinator.rate_limit_notified_until
         # Add expired entries (deadline in the past)
-        router._rate_limit_notified_until[111] = now - 100
-        router._rate_limit_notified_until[222] = now - 50
+        notified[111] = now - 100
+        notified[222] = now - 50
         # Add active entry (deadline in the future)
-        router._rate_limit_notified_until[333] = now + 100
+        notified[333] = now + 100
 
         await router.cleanup_rate_limiter()
 
-        assert 111 not in router._rate_limit_notified_until
-        assert 222 not in router._rate_limit_notified_until
-        assert 333 in router._rate_limit_notified_until
+        assert 111 not in notified
+        assert 222 not in notified
+        assert 333 in notified
 
     async def test_cleanup_removes_expired_recent_messages(self):
         """cleanup_rate_limiter should also clean _recent_message_ids."""
@@ -275,16 +276,17 @@ class TestMessageRouterCleanup(unittest.IsolatedAsyncioTestCase):
         )
 
         now = time.time()
+        recent = router._rate_limit_coordinator.recent_message_ids
         # _recent_message_ttl is 120 seconds
         # Add expired entry (timestamp older than TTL)
-        router._recent_message_ids[(1, 1, 100)] = (now - 200, "old text")
+        recent[(1, 1, 100)] = (now - 200, "old text")
         # Add active entry (recent timestamp)
-        router._recent_message_ids[(1, 1, 200)] = (now - 10, "new text")
+        recent[(1, 1, 200)] = (now - 10, "new text")
 
         await router.cleanup_rate_limiter()
 
-        assert (1, 1, 100) not in router._recent_message_ids
-        assert (1, 1, 200) in router._recent_message_ids
+        assert (1, 1, 100) not in recent
+        assert (1, 1, 200) in recent
 
 
 if __name__ == "__main__":

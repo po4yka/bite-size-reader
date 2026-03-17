@@ -99,18 +99,6 @@ class MessageRouter:
         """Public read-only accessor for the wired callback handler."""
         return self._content_router.callback_handler
 
-    @property
-    def _rate_limit_notified_until(self) -> dict[int, float]:
-        return self._rate_limit_coordinator.rate_limit_notified_until
-
-    @property
-    def _recent_message_ids(self) -> dict[tuple[int, int, int], tuple[float, str]]:
-        return self._rate_limit_coordinator.recent_message_ids
-
-    @property
-    def _recent_message_ttl(self) -> int:
-        return self._rate_limit_coordinator.recent_message_ttl
-
     async def route_message(self, message: object) -> None:
         """Main message routing entry point."""
         start_time = time.time()
