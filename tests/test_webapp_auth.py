@@ -5,10 +5,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import time
 from urllib.parse import urlencode
 
 import pytest
+
+# Fixed reference timestamp — avoids clock-skew flakiness in CI.
+_FIXED_NOW = 1700000000
 
 
 def _build_init_data(
@@ -23,7 +25,7 @@ def _build_init_data(
         user_data = {"id": 123456789, "first_name": "Test", "username": "testuser"}
 
     if auth_date is None:
-        auth_date = int(time.time())
+        auth_date = _FIXED_NOW
 
     fields = {
         "user": json.dumps(user_data),
@@ -46,9 +48,13 @@ def _build_init_data(
 
 @pytest.fixture(autouse=True)
 def _mock_config(monkeypatch):
-    """Mock Config to provide BOT_TOKEN and allowed user IDs."""
+    """Mock Config and freeze time.time() in the auth module to _FIXED_NOW."""
     monkeypatch.setenv("BOT_TOKEN", "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11")
     monkeypatch.setenv("ALLOWED_USER_IDS", "123456789")
+    monkeypatch.setattr(
+        "app.api.routers.auth.webapp_auth.time.time",
+        lambda: _FIXED_NOW,
+    )
 
 
 class TestVerifyInitData:
@@ -94,7 +100,7 @@ class TestVerifyInitData:
         from app.api.routers.auth.webapp_auth import verify_telegram_webapp_init_data
 
         token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-        old_date = int(time.time()) - 3600  # 1 hour ago
+        old_date = _FIXED_NOW - 3600  # 1 hour before _FIXED_NOW
         init_data = _build_init_data(token, auth_date=old_date)
 
         with pytest.raises(AuthenticationError, match="expired"):
@@ -105,7 +111,7 @@ class TestVerifyInitData:
         from app.api.routers.auth.webapp_auth import verify_telegram_webapp_init_data
 
         token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-        future = int(time.time()) + 600  # 10 min in future
+        future = _FIXED_NOW + 600  # 10 min after _FIXED_NOW
         init_data = _build_init_data(token, auth_date=future)
 
         with pytest.raises(AuthenticationError, match="future"):
@@ -141,7 +147,7 @@ class TestVerifyInitData:
 
         token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
         # Build without user field
-        auth_date = str(int(time.time()))
+        auth_date = str(_FIXED_NOW)
         fields = {"auth_date": auth_date}
         data_check_string = f"auth_date={auth_date}"
         secret_key = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
@@ -158,7 +164,7 @@ class TestVerifyInitData:
 
         token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
         # Build with invalid JSON user
-        auth_date = str(int(time.time()))
+        auth_date = str(_FIXED_NOW)
         fields = {"user": "not-json", "auth_date": auth_date}
         data_check_pairs = sorted(f"{k}={v}" for k, v in fields.items())
         data_check_string = "\n".join(data_check_pairs)
