@@ -173,6 +173,7 @@ class OpenAIClient:
         request_id: int | None = None,
         response_format: dict[str, Any] | None = None,
         model_override: str | None = None,
+        fallback_models_override: tuple[str, ...] | list[str] | None = None,
         on_stream_delta: Any | None = None,
     ) -> LLMCallResult:
         """Send a chat completion request to OpenAI.
