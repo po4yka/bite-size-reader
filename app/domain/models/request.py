@@ -98,6 +98,10 @@ class Request:
         """Mark request as failed with error.
 
         Can be called from any status except cancelled.
+
+        Raises:
+            ValueError: If request status is CANCELLED.
+
         """
         if self.status == RequestStatus.CANCELLED:
             msg = "Cannot mark cancelled request as error"
