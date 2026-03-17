@@ -131,6 +131,7 @@ def build_url_processor(
 ) -> Any:
     """Build the shared URL processor graph for Telegram, API, and CLI runtimes."""
     from app.adapters.content.url_processor import URLProcessor
+    from app.adapters.telegram.summary_draft_streaming import SummaryDraftStreamCoordinator
 
     return URLProcessor(
         cfg=cfg,
@@ -144,6 +145,7 @@ def build_url_processor(
         db_write_queue=db_write_queue,
         summary_repo=summary_repo,
         related_reads_service=related_reads_service,
+        stream_coordinator_factory=SummaryDraftStreamCoordinator,
     )
 
 

@@ -25,6 +25,10 @@ Migration plan (track in parallel with app/services/ cleanup):
   Milestone: facade removal when importer count reaches 0.
   Protocols (ResponseSender, NotificationFormatter, etc.) are in
   app/adapters/external/formatting/protocols.py for use in type hints.
+
+Progress gate: importer count must not grow beyond 46 (baseline 2026-03-18).
+  Verify with: grep -r "from app.adapters.external.response_formatter import" app/ | wc -l
+  Each new direct import is a regression against the migration.
 """
 
 from __future__ import annotations

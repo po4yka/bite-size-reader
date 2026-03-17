@@ -68,6 +68,7 @@ class URLProcessor:
         db_write_queue: DbWriteQueue | None = None,
         summary_repo: SummaryRepositoryPort | None = None,
         related_reads_service: RelatedReadsService | None = None,
+        stream_coordinator_factory: Callable[..., Any] | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -105,6 +106,7 @@ class URLProcessor:
         self.summary_request_factory = SummaryRequestFactory(
             runtime=self.summarization_runtime,
             select_max_tokens=self.pure_summary_service.select_max_tokens,
+            stream_coordinator_factory=stream_coordinator_factory,
         )
         self.interactive_summary_service = InteractiveSummaryService(
             runtime=self.summarization_runtime,

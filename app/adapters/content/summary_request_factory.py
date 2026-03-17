@@ -106,9 +106,11 @@ class SummaryRequestFactory:
         *,
         runtime: SummarizationRuntime,
         select_max_tokens: Callable[[str], int | None],
+        stream_coordinator_factory: Callable[..., Any] | None = None,
     ) -> None:
         self._runtime = runtime
         self._select_max_tokens = select_max_tokens
+        self._stream_coordinator_factory = stream_coordinator_factory
 
     async def prepare_interactive_request(
         self,
@@ -436,10 +438,10 @@ class SummaryRequestFactory:
     ) -> Any | None:
         if not self._summary_streaming_enabled(silent=silent):
             return None
+        if self._stream_coordinator_factory is None:
+            return None
 
-        from app.adapters.telegram.summary_draft_streaming import SummaryDraftStreamCoordinator
-
-        stream_coordinator = SummaryDraftStreamCoordinator(
+        stream_coordinator = self._stream_coordinator_factory(
             response_formatter=self._runtime.response_formatter,
             message=message,
             correlation_id=correlation_id,
