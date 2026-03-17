@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -157,10 +157,8 @@ class SummaryModel(BaseModel):
     article_id: str | None = None
 
     # Classification fields
-    source_type: Literal["news", "blog", "research", "opinion", "tutorial", "reference"] = Field(
-        default="blog"
-    )
-    temporal_freshness: Literal["breaking", "recent", "evergreen"] = Field(default="evergreen")
+    source_type: SourceType = Field(default=SourceType.BLOG)
+    temporal_freshness: TemporalFreshness = Field(default=TemporalFreshness.EVERGREEN)
 
     # New fields
     metadata: Metadata = Field(default_factory=Metadata)
