@@ -13,13 +13,102 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_client: aioredis.Redis | None = None
-_lock = asyncio.Lock()
 
-# Connection state tracking for reconnection logic
-_last_connection_attempt: float = 0.0
-_last_error: str | None = None
-_connection_failed: bool = False
+class _RedisConnectionManager:
+    """Encapsulates process-wide Redis connection state and reconnection logic."""
+
+    def __init__(self) -> None:
+        self.client: aioredis.Redis | None = None
+        self.lock = asyncio.Lock()
+        self.last_connection_attempt: float = 0.0
+        self.last_error: str | None = None
+        self.connection_failed: bool = False
+
+    async def get(self, cfg: AppConfig) -> aioredis.Redis | None:
+        """Get or create a shared Redis client.
+
+        Returns None when Redis is disabled or unavailable and not required.
+        Raises the connection error when required=True.
+
+        Implements reconnection logic with rate-limiting:
+        - If connection failed previously, waits for reconnect_interval before retrying
+        - Logs at INFO level (not WARNING) when Redis is optional and unavailable
+        - Only logs full traceback when REDIS_REQUIRED=true
+        """
+        if not cfg.redis.enabled:
+            return None
+
+        async with self.lock:
+            if self.client is not None:
+                return self.client
+
+            now = time.time()
+            reconnect_interval = cfg.redis.reconnect_interval
+            if self.connection_failed and reconnect_interval > 0:
+                elapsed = now - self.last_connection_attempt
+                if elapsed < reconnect_interval:
+                    return None
+
+            self.last_connection_attempt = now
+            url = _build_url(cfg.redis)
+
+            try:
+                self.client = aioredis.from_url(
+                    url,
+                    password=cfg.redis.password,
+                    socket_timeout=cfg.redis.socket_timeout,
+                    decode_responses=True,
+                )
+                ping_result = self.client.ping()
+                if inspect.isawaitable(ping_result):
+                    await ping_result
+
+                event = "redis_reconnected" if self.connection_failed else "redis_connected"
+                logger.info(
+                    event,
+                    extra={"url": url, "db": cfg.redis.db, "prefix": cfg.redis.prefix},
+                )
+
+                self.connection_failed = False
+                self.last_error = None
+                return self.client
+
+            except Exception as exc:
+                self.client = None
+                self.connection_failed = True
+                self.last_error = str(exc)
+
+                if cfg.redis.required:
+                    logger.error(
+                        "redis_connection_failed",
+                        exc_info=True,
+                        extra={"url": url, "db": cfg.redis.db, "required": True},
+                    )
+                    raise
+
+                logger.info("redis_unavailable", extra={"url": url, "error": self.last_error})
+                return None
+
+    def connection_state(self) -> dict[str, bool | float | str | None]:
+        return {
+            "connected": self.client is not None,
+            "last_attempt": self.last_connection_attempt,
+            "last_error": self.last_error,
+            "connection_failed": self.connection_failed,
+        }
+
+    async def close(self) -> None:
+        if self.client:
+            try:
+                await self.client.aclose()
+                logger.info("redis_closed")
+            finally:
+                self.client = None
+                self.connection_failed = False
+                self.last_error = None
+
+
+_manager = _RedisConnectionManager()
 
 
 def _build_url(cfg: RedisConfig) -> str:
@@ -35,86 +124,8 @@ def redis_key(prefix: str, *parts: str) -> str:
 
 
 async def get_redis(cfg: AppConfig) -> aioredis.Redis | None:
-    """Get or create a shared Redis client.
-
-    Returns None when Redis is disabled or unavailable and not required.
-    Raises the connection error when required=True.
-
-    Implements reconnection logic with rate-limiting:
-    - If connection failed previously, waits for reconnect_interval before retrying
-    - Logs at INFO level (not WARNING) when Redis is optional and unavailable
-    - Only logs full traceback when REDIS_REQUIRED=true
-    """
-    global _client, _last_connection_attempt, _last_error, _connection_failed
-
-    if not cfg.redis.enabled:
-        return None
-
-    async with _lock:
-        # Return existing healthy connection
-        if _client is not None:
-            return _client
-
-        # Rate-limit reconnection attempts
-        now = time.time()
-        reconnect_interval = cfg.redis.reconnect_interval
-        if _connection_failed and reconnect_interval > 0:
-            elapsed = now - _last_connection_attempt
-            if elapsed < reconnect_interval:
-                # Too soon to retry, return None silently
-                return None
-
-        _last_connection_attempt = now
-        url = _build_url(cfg.redis)
-
-        try:
-            _client = aioredis.from_url(
-                url,
-                password=cfg.redis.password,
-                socket_timeout=cfg.redis.socket_timeout,
-                decode_responses=True,
-            )
-            ping_result = _client.ping()
-            if inspect.isawaitable(ping_result):
-                await ping_result
-
-            # Log reconnection if we had failed before
-            if _connection_failed:
-                logger.info(
-                    "redis_reconnected",
-                    extra={"url": url, "db": cfg.redis.db, "prefix": cfg.redis.prefix},
-                )
-            else:
-                logger.info(
-                    "redis_connected",
-                    extra={"url": url, "db": cfg.redis.db, "prefix": cfg.redis.prefix},
-                )
-
-            # Reset failure state
-            _connection_failed = False
-            _last_error = None
-            return _client
-
-        except Exception as exc:
-            _client = None
-            _connection_failed = True
-            _last_error = str(exc)
-
-            if cfg.redis.required:
-                # Required: log error with full traceback
-                logger.error(
-                    "redis_connection_failed",
-                    exc_info=True,
-                    extra={"url": url, "db": cfg.redis.db, "required": True},
-                )
-                raise
-
-            # Optional: log as INFO without traceback (single line)
-            logger.info(
-                "redis_unavailable",
-                extra={"url": url, "error": _last_error},
-            )
-            return None
+    """Get or create the shared Redis client."""
+    return await _manager.get(cfg)
 
 
 def get_connection_state() -> dict[str, bool | float | str | None]:
@@ -127,22 +138,9 @@ def get_connection_state() -> dict[str, bool | float | str | None]:
         - last_error: str | None - last error message if connection failed
         - connection_failed: bool - whether last connection attempt failed
     """
-    return {
-        "connected": _client is not None,
-        "last_attempt": _last_connection_attempt,
-        "last_error": _last_error,
-        "connection_failed": _connection_failed,
-    }
+    return _manager.connection_state()
 
 
 async def close_redis() -> None:
     """Close shared Redis client if present."""
-    global _client, _connection_failed, _last_error
-    if _client:
-        try:
-            await _client.aclose()
-            logger.info("redis_closed")
-        finally:
-            _client = None
-            _connection_failed = False
-            _last_error = None
+    await _manager.close()
