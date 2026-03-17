@@ -15,13 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def print_results(results: list, mode: str, query: str) -> None:
-    """Pretty print search results.
-
-    Args:
-        results: List of search results
-        mode: Search mode used
-        query: Query string
-    """
+    """Pretty print search results."""
     print(f"\n{'=' * 80}")
     print(f"Search Mode: {mode.upper()}")
     print(f"Query: '{query}'")
@@ -60,16 +54,7 @@ def print_results(results: list, mode: str, query: str) -> None:
 
 
 async def search_fts(db_path: str, query: str, max_results: int = 10) -> list:
-    """Perform full-text search.
-
-    Args:
-        db_path: Path to database
-        query: Search query
-        max_results: Maximum results to return
-
-    Returns:
-        List of search results
-    """
+    """Perform full-text search."""
     from app.application.services.topic_search import LocalTopicSearchService
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
@@ -85,17 +70,7 @@ async def search_fts(db_path: str, query: str, max_results: int = 10) -> list:
 
 
 async def search_vector(db_path: str, query: str, max_results: int = 10, filters=None) -> list:
-    """Perform vector similarity search.
-
-    Args:
-        db_path: Path to database
-        query: Search query
-        max_results: Maximum results to return
-        filters: Optional SearchFilters object
-
-    Returns:
-        List of search results
-    """
+    """Perform vector similarity search."""
     from app.application.services.topic_search import TopicArticle
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
@@ -140,19 +115,7 @@ async def search_hybrid(
     use_expansion: bool = True,
     use_reranking: bool = False,
 ) -> list:
-    """Perform hybrid search (FTS + vector).
-
-    Args:
-        db_path: Path to database
-        query: Search query
-        max_results: Maximum results to return
-        filters: Optional SearchFilters object
-        use_expansion: Whether to use query expansion for FTS
-        use_reranking: Whether to use cross-encoder re-ranking
-
-    Returns:
-        List of search results
-    """
+    """Perform hybrid search (FTS + vector)."""
     from app.application.services.topic_search import LocalTopicSearchService
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
