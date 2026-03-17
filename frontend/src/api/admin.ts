@@ -14,11 +14,3 @@ export function clearCache(): Promise<{ cleared_keys: number }> {
   return apiRequest("/v1/system/clear-cache", { method: "POST" });
 }
 
-export function triggerChannelDigest(
-  channelUsername: string,
-): Promise<{ status: string; channel: string }> {
-  return apiRequest("/v1/digest/trigger-channel", {
-    method: "POST",
-    body: JSON.stringify({ channel_username: channelUsername }),
-  });
-}

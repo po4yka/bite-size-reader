@@ -1,5 +1,6 @@
 import { apiRequest } from "./client";
 import type { SummaryCompact, SummaryDetail, SummaryContent, PaginationInfo } from "../types/api";
+import { mapPagination, toDomain } from "./helpers";
 
 interface SummaryListResponse {
   summaries: SummaryCompact[];
@@ -112,15 +113,6 @@ function normalizeSort(sort?: string): string | undefined {
   return sort;
 }
 
-function mapPagination(pagination: BackendPaginationInfo): PaginationInfo {
-  return {
-    total: pagination.total,
-    limit: pagination.limit,
-    offset: pagination.offset,
-    has_more: Boolean(pagination.hasMore ?? pagination.has_more),
-  };
-}
-
 function mapSummaryCompact(item: BackendSummaryListItem): SummaryCompact {
   return {
     id: item.id,
@@ -147,14 +139,6 @@ function toEntities(summary: BackendSummaryDetailData["summary"]): SummaryDetail
     ...(entities.organizations ?? []).map((name) => ({ name, type: "organization" })),
     ...(entities.locations ?? []).map((name) => ({ name, type: "location" })),
   ];
-}
-
-function toDomain(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return "";
-  }
 }
 
 export function fetchSummaries(params: {
