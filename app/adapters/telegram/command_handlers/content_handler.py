@@ -114,7 +114,7 @@ class ContentHandler:
         # If no explicit limit, check if last token is a number (implicit limit)
         if not explicit_limit_set and topic_tokens:
             candidate_index = len(topic_tokens) - 1
-            if candidate_index >= 0 and topic_tokens[candidate_index][1]:
+            if topic_tokens[candidate_index][1]:
                 raw_limit_value = topic_tokens[candidate_index][0]
                 try:
                     parsed_limit = int(raw_limit_value)
