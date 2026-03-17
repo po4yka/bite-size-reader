@@ -197,14 +197,11 @@ class VectorSearchService:
 
         for row in rows:
             try:
-                # Deserialize embedding
                 embedding = self._embedding_service.deserialize_embedding(row["embedding_blob"])
 
-                # Extract metadata from summary payload
                 payload = row["json_payload"] or {}
                 metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
 
-                # Build URL
                 url = (
                     metadata.get("canonical_url")
                     or metadata.get("url")
@@ -212,17 +209,14 @@ class VectorSearchService:
                     or row.get("input_url")
                 )
 
-                # Extract title
                 title = metadata.get("title") or payload.get("title")
 
-                # Extract snippet
                 snippet = (
                     payload.get("summary_250") or payload.get("tldr") or payload.get("summary_1000")
                 )
                 if snippet and len(snippet) > 300:
                     snippet = snippet[:297] + "..."
 
-                # Extract source and published date
                 source = metadata.get("domain") or metadata.get("source")
                 published_at = (
                     metadata.get("published_at")

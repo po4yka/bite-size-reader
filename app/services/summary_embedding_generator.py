@@ -76,11 +76,9 @@ class SummaryEmbeddingGenerator:
         Returns:
             True if embedding was generated, False if skipped or failed
         """
-        # Determine model based on language
         model_name = self._embedding_service.get_model_name(language)
         expected_dimensions = self._embedding_service.get_dimensions(language)
 
-        # Check if embedding already exists
         if not force:
             existing = await self.embedding_repo.async_get_summary_embedding(summary_id)
             existing_dimensions = existing.get("dimensions") if existing else None
@@ -107,11 +105,9 @@ class SummaryEmbeddingGenerator:
                 )
                 return False
 
-        # Extract fields from payload
         metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
 
         try:
-            # Prepare text for embedding
             text = prepare_text_for_embedding(
                 title=metadata.get("title") or payload.get("title"),
                 summary_1000=payload.get("summary_1000"),
@@ -132,12 +128,10 @@ class SummaryEmbeddingGenerator:
                 )
                 return False
 
-            # Generate embedding with language-specific model
             embedding = await self._embedding_service.generate_embedding(
                 text, language=language, task_type="document"
             )
 
-            # Serialize and store
             embedding_blob = self._embedding_service.serialize_embedding(embedding)
             dimensions = len(embedding)
 

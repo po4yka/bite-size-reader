@@ -76,7 +76,7 @@ async def get_summaries(
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
     sort: str = Query("created_at_desc", pattern="^(created_at_desc|created_at_asc)$"),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """
@@ -169,7 +169,7 @@ async def get_summaries(
 @router.get("/by-url")
 async def get_summary_by_url(
     url: str = Query(..., description="Original URL of the article"),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Get a single summary (article) by its original URL."""
@@ -184,7 +184,7 @@ async def get_summary_by_url(
 @router.get("/{summary_id}")
 async def get_summary(
     summary_id: int,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Get a single summary with full details."""
@@ -313,7 +313,7 @@ async def get_summary(
 async def get_summary_content(
     summary_id: int,
     format: str = Query("markdown", pattern="^(markdown|text)$"),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Get full article content for offline reading."""
@@ -419,7 +419,7 @@ async def get_summary_content(
 async def update_summary(
     summary_id: int,
     update: UpdateSummaryRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Update summary metadata (e.g., mark as read)."""
@@ -446,7 +446,7 @@ async def update_summary(
 @router.delete("/{summary_id}")
 async def delete_summary(
     summary_id: int,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Delete a summary (soft delete)."""
@@ -466,7 +466,7 @@ async def delete_summary(
 @router.post("/{summary_id}/favorite")
 async def toggle_favorite(
     summary_id: int,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Toggle the favorite status of a summary."""
@@ -481,7 +481,7 @@ async def toggle_favorite(
 async def submit_feedback(
     summary_id: int,
     body: SubmitFeedbackRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Submit or update feedback for a summary."""

@@ -91,7 +91,7 @@ async def search_summaries(
     mode: str = Query("auto", pattern="^(auto|keyword|semantic|hybrid)$"),
     min_similarity: float = Query(0.2, ge=0.0, le=1.0),
     filters: SearchFilters = Depends(_search_filter_params),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """
     Full-text search across all summaries using FTS5.
@@ -178,7 +178,7 @@ async def semantic_search_summaries(
     user_scope: str | None = Query(None, min_length=1, max_length=50),
     min_similarity: float = Query(0.2, ge=0.0, le=1.0),
     filters: SearchFilters = Depends(_search_filter_params),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     chroma_service: Any = Depends(get_chroma_search_service),
 ):
     """Semantic search across summaries using Chroma embeddings."""
@@ -239,7 +239,7 @@ async def semantic_search_summaries(
 async def get_trending_topics(
     limit: int = Query(20, ge=1, le=100),
     days: int = Query(30, ge=1, le=365),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Get trending topic tags across recent summaries."""
     payload = await get_trending_payload(user["user_id"], limit=limit, days=days)
@@ -256,7 +256,7 @@ async def get_trending_topics(
 async def get_search_insights(
     days: int = Query(30, ge=7, le=365),
     limit: int = Query(20, ge=5, le=100),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Search analytics snapshot: trends, entities, diversity, mix and coverage gaps."""
     _, _, summary_repo = _build_search_repositories()
@@ -291,7 +291,7 @@ async def get_related_summaries(
     tag: str = Query(..., min_length=1),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Get summaries related to a specific topic tag."""
     _, _, summary_repo = _build_search_repositories()
@@ -341,7 +341,7 @@ async def get_related_summaries(
 async def check_duplicate(
     url: str = Query(..., min_length=10),
     include_summary: bool = Query(False),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Check if a URL has already been summarized."""
     from app.core.url_utils import compute_dedupe_hash, normalize_url

@@ -29,7 +29,7 @@ def _format_dt_z(dt_value: Any) -> str:
 
 
 @router.get("/me")
-async def get_current_user_info(user=Depends(get_current_user)):
+async def get_current_user_info(user: dict[str, Any] = Depends(get_current_user)):
     """Get current authenticated user information."""
     user_repo = get_user_repository()
     user_record, _ = await user_repo.async_get_or_create_user(
@@ -50,7 +50,7 @@ async def get_current_user_info(user=Depends(get_current_user)):
 
 
 @router.delete("/me")
-async def delete_account(user=Depends(get_current_user)):
+async def delete_account(user: dict[str, Any] = Depends(get_current_user)):
     """Delete the current user account and all associated data."""
     user_id = user["user_id"]
     await AuthService.ensure_user(user_id)

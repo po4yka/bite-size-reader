@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta
+from typing import Any
 
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import (
@@ -102,14 +103,14 @@ async def telegram_login(login_data: TelegramLoginRequest):
 
 
 @router.get("/me/telegram")
-async def get_telegram_link_status(user=Depends(get_current_user)):
+async def get_telegram_link_status(user: dict[str, Any] = Depends(get_current_user)):
     """Fetch current Telegram link status."""
     user_record = await AuthService.ensure_user(user["user_id"])
     return success_response(AuthService.build_link_status_payload(user_record))
 
 
 @router.post("/me/telegram/link")
-async def begin_telegram_link(user=Depends(get_current_user)):
+async def begin_telegram_link(user: dict[str, Any] = Depends(get_current_user)):
     """Begin linking by issuing a nonce."""
     await AuthService.ensure_user(user["user_id"])
     expires_at = datetime.now(UTC) + timedelta(minutes=15)
@@ -124,7 +125,7 @@ async def begin_telegram_link(user=Depends(get_current_user)):
 
 @router.post("/me/telegram/complete")
 async def complete_telegram_link(
-    payload: TelegramLinkCompleteRequest, user=Depends(get_current_user)
+    payload: TelegramLinkCompleteRequest, user: dict[str, Any] = Depends(get_current_user)
 ):
     """Complete Telegram linking by validating nonce and Telegram login payload."""
     user_id = user["user_id"]
@@ -185,7 +186,7 @@ async def complete_telegram_link(
 
 
 @router.delete("/me/telegram")
-async def unlink_telegram(user=Depends(get_current_user)):
+async def unlink_telegram(user: dict[str, Any] = Depends(get_current_user)):
     """Unlink Telegram account."""
     user_id = user["user_id"]
     await AuthService.unlink_telegram(user_id)

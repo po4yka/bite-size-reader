@@ -153,7 +153,9 @@ async def secret_login(login_data: SecretLoginRequest):
 
 
 @router.post("/secret-keys")
-async def create_secret_key(payload: SecretKeyCreateRequest, user=Depends(get_current_user)):
+async def create_secret_key(
+    payload: SecretKeyCreateRequest, user: dict[str, Any] = Depends(get_current_user)
+):
     """Create or register a client secret for a user (owner-only)."""
     ensure_secret_login_enabled()
     admin_user = await AuthService.require_owner(user)
@@ -190,7 +192,7 @@ async def create_secret_key(payload: SecretKeyCreateRequest, user=Depends(get_cu
 
 @router.post("/secret-keys/{key_id}/rotate")
 async def rotate_secret_key(
-    key_id: int, payload: SecretKeyRotateRequest, user=Depends(get_current_user)
+    key_id: int, payload: SecretKeyRotateRequest, user: dict[str, Any] = Depends(get_current_user)
 ):
     """Rotate an existing client secret (owner-only)."""
     ensure_secret_login_enabled()
@@ -247,7 +249,9 @@ async def rotate_secret_key(
 
 @router.post("/secret-keys/{key_id}/revoke")
 async def revoke_secret_key(
-    key_id: int, payload: SecretKeyRevokeRequest | None = None, user=Depends(get_current_user)
+    key_id: int,
+    payload: SecretKeyRevokeRequest | None = None,
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Revoke an existing client secret (owner-only)."""
     ensure_secret_login_enabled()
@@ -286,7 +290,7 @@ async def revoke_secret_key(
 
 @router.get("/secret-keys")
 async def list_secret_keys(
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     user_id: int | None = None,
     client_id: str | None = None,
     status: str | None = None,

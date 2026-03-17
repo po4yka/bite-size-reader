@@ -58,6 +58,8 @@ class McpServerContext:
         """Initialize the read-only MCP runtime immediately."""
         if db_path:
             self.db_path = db_path
+        mcp_di.CHROMA_RETRY_INTERVAL_SEC = self._chroma_retry_interval_sec
+        mcp_di.LOCAL_VECTOR_RETRY_INTERVAL_SEC = self._local_vector_retry_interval_sec
         self._runtime = mcp_di.build_mcp_runtime(db_path=self.db_path, user_id=self.user_id)
         self.logger.info("Database connected (read-only): %s", self._runtime.db_path)
         return self._runtime
@@ -86,7 +88,6 @@ class McpServerContext:
 
     async def get_chroma_service(self) -> Any:
         """Return the runtime-owned Chroma search service."""
-        mcp_di.CHROMA_RETRY_INTERVAL_SEC = self._chroma_retry_interval_sec
         service = await mcp_di.get_mcp_chroma_service(self.ensure_runtime())
         if service is None:
             self.logger.warning("ChromaDB unavailable — semantic_search tool will be disabled")
@@ -96,7 +97,6 @@ class McpServerContext:
 
     async def get_local_vector_service(self) -> Any:
         """Return the runtime-owned local embedding fallback service."""
-        mcp_di.LOCAL_VECTOR_RETRY_INTERVAL_SEC = self._local_vector_retry_interval_sec
         service = await mcp_di.get_mcp_local_vector_service(self.ensure_runtime())
         if service is None:
             self.logger.warning("Local vector fallback unavailable")

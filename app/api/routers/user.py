@@ -54,20 +54,20 @@ def _safe_isoformat(dt_value: Any) -> str | None:
 
 
 @router.get("/preferences")
-async def get_user_preferences(user=Depends(get_current_user)):
+async def get_user_preferences(user: dict[str, Any] = Depends(get_current_user)):
     """Get user preferences."""
     user_repo = get_user_repository()
     user_record = await user_repo.async_get_user_by_telegram_id(user["user_id"])
 
     # Default preferences
-    default_preferences = {
+    default_preferences: dict[str, Any] = {
         "lang_preference": "en",
         "notification_settings": {"enabled": True, "frequency": "daily"},
         "app_settings": {"theme": "dark", "font_size": "medium"},
     }
 
     # Build a normalized preference object with safe defaults.
-    preferences = {
+    preferences: dict[str, Any] = {
         "lang_preference": default_preferences["lang_preference"],
         "notification_settings": dict(default_preferences["notification_settings"]),
         "app_settings": dict(default_preferences["app_settings"]),
@@ -100,7 +100,7 @@ async def get_user_preferences(user=Depends(get_current_user)):
 @router.patch("/preferences")
 async def update_user_preferences(
     preferences: UpdatePreferencesRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Update user preferences."""
     user_repo = get_user_repository()
@@ -147,7 +147,7 @@ async def update_user_preferences(
 
 
 @router.get("/stats")
-async def get_user_stats(user=Depends(get_current_user)):
+async def get_user_stats(user: dict[str, Any] = Depends(get_current_user)):
     """Get user statistics."""
     from collections import Counter
     from urllib.parse import urlparse

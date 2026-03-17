@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -53,7 +54,7 @@ def _get_user_summary(summary_id: int, user_id: int) -> Summary:
 async def generate_audio(
     summary_id: int,
     source_field: str = Query("summary_1000", pattern="^(summary_250|summary_1000|tldr)$"),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Trigger audio generation for a summary.
 
@@ -83,7 +84,7 @@ async def generate_audio(
 @router.get("/{summary_id}/audio")
 async def get_audio(
     summary_id: int,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Stream/download the generated audio file for a summary."""
     tts_config = _get_tts_config()

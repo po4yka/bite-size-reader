@@ -3,6 +3,7 @@ Collections management endpoints.
 """
 
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -43,7 +44,7 @@ async def get_collections(
     parent_id: int | None = Query(default=None, ge=1),
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """List collections for the current user (and collaborations) under a parent."""
     if not isinstance(parent_id, (int, type(None))):
@@ -86,7 +87,7 @@ async def get_collections(
 @router.post("")
 async def create_collection(
     body: CollectionCreateRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Create a new collection."""
     try:
@@ -119,7 +120,7 @@ async def create_collection(
 @router.get("/{collection_id}")
 async def get_collection(
     collection_id: int,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Get collection details."""
     collection = await CollectionService.get_collection_with_auth(
@@ -147,7 +148,7 @@ async def get_collection(
 async def update_collection(
     collection_id: int,
     body: CollectionUpdateRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Update a collection."""
     try:
@@ -181,7 +182,7 @@ async def update_collection(
 @router.delete("/{collection_id}")
 async def delete_collection(
     collection_id: int,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Delete a collection (soft delete)."""
     await CollectionService.delete_collection(collection_id, user["user_id"])
@@ -192,7 +193,7 @@ async def delete_collection(
 async def add_collection_item(
     collection_id: int,
     body: CollectionItemCreateRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Add a summary to a collection."""
     await CollectionService.add_item(collection_id, body.summary_id, user["user_id"])
@@ -204,7 +205,7 @@ async def list_collection_items(
     collection_id: int,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     items = await CollectionService.list_items(collection_id, user["user_id"], limit, offset)
     payload = [
@@ -231,7 +232,7 @@ async def list_collection_items(
 async def reorder_collection_items(
     collection_id: int,
     body: CollectionItemReorderRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     await CollectionService.reorder_items(collection_id, user["user_id"], body.items)
     return success_response({"success": True})
@@ -241,7 +242,7 @@ async def reorder_collection_items(
 async def move_collection_items(
     collection_id: int,
     body: CollectionItemMoveRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     moved = await CollectionService.move_items(
         source_collection_id=collection_id,
@@ -257,7 +258,7 @@ async def move_collection_items(
 async def remove_collection_item(
     collection_id: int,
     summary_id: int,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     """Remove a summary from a collection."""
     await CollectionService.remove_item(collection_id, summary_id, user["user_id"])
@@ -268,7 +269,7 @@ async def remove_collection_item(
 async def reorder_collections(
     collection_id: int,
     body: CollectionReorderRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     await CollectionService.reorder_collections(
         parent_id=collection_id,
@@ -282,7 +283,7 @@ async def reorder_collections(
 async def move_collection(
     collection_id: int,
     body: CollectionMoveRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     try:
         moved = await CollectionService.move_collection(
@@ -307,7 +308,7 @@ async def move_collection(
 @router.get("/tree")
 async def get_collection_tree(
     max_depth: int = Query(3, ge=1, le=10),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     tree = await CollectionService.get_tree(user_id=user["user_id"], max_depth=max_depth)
 
@@ -333,7 +334,7 @@ async def get_collection_tree(
 
 
 @router.get("/{collection_id}/acl")
-async def get_collection_acl(collection_id: int, user=Depends(get_current_user)):
+async def get_collection_acl(collection_id: int, user: dict[str, Any] = Depends(get_current_user)):
     acl = await CollectionService.list_acl(collection_id, user["user_id"])
     payload = []
     for entry in acl:
@@ -372,7 +373,7 @@ async def get_collection_acl(collection_id: int, user=Depends(get_current_user))
 async def add_collection_collaborator(
     collection_id: int,
     body: CollectionShareRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     await CollectionService.add_collaborator(
         collection_id=collection_id,
@@ -387,7 +388,7 @@ async def add_collection_collaborator(
 async def remove_collection_collaborator(
     collection_id: int,
     target_user_id: int,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     await CollectionService.remove_collaborator(
         collection_id=collection_id, user_id=user["user_id"], target_user_id=target_user_id
@@ -399,7 +400,7 @@ async def remove_collection_collaborator(
 async def create_collection_invite(
     collection_id: int,
     body: CollectionInviteRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     expires = None
     if body.expires_at:
@@ -421,7 +422,7 @@ async def create_collection_invite(
 @router.post("/invites/{token}/accept")
 async def accept_collection_invite(
     token: str,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
 ):
     await CollectionService.accept_invite(token=token, user_id=user["user_id"])
     return success_response({"success": True})

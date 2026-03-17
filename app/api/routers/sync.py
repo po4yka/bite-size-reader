@@ -27,7 +27,7 @@ def _get_sync_service(request: Request) -> Any:
 @router.post("/sessions")
 async def create_sync_session(
     body: SyncSessionRequest | None = None,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     svc: Any = Depends(_get_sync_service),
 ) -> dict:
     """Create or resume a sync session."""
@@ -50,7 +50,7 @@ async def create_sync_session(
 async def full_sync(
     session_id: str = Query(..., description="Sync session identifier"),
     limit: int | None = Query(None, ge=1, le=500),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     svc: Any = Depends(_get_sync_service),
 ) -> dict:
     """Fetch full sync data in bounded chunks."""
@@ -70,7 +70,7 @@ async def delta_sync(
     session_id: str = Query(..., description="Sync session identifier"),
     since: int = Query(..., ge=0, description="Last seen server_version cursor"),
     limit: int | None = Query(None, ge=1, le=500),
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     svc: Any = Depends(_get_sync_service),
 ) -> dict | Response:
     """Fetch delta sync (created/updated/deleted) since a cursor."""
@@ -105,7 +105,7 @@ async def delta_sync(
 @router.post("/apply")
 async def apply_changes(
     payload: SyncApplyRequest,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     svc: Any = Depends(_get_sync_service),
 ) -> dict:
     """Apply client-side changes with conflict detection."""

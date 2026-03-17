@@ -65,7 +65,7 @@ def _resolve_request_service(service: Any) -> RequestService:
 async def submit_request(
     request_data: SubmitURLRequest | SubmitForwardRequest,
     background_tasks: BackgroundTasks,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     request_service: RequestService = Depends(_get_request_service),
 ):
     """Submit a new URL or forwarded message for processing.
@@ -151,7 +151,7 @@ async def submit_request(
 @router.get("/{request_id}")
 async def get_request(
     request_id: int,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     request_service: RequestService = Depends(_get_request_service),
 ):
     request_service = _resolve_request_service(request_service)
@@ -231,7 +231,7 @@ async def get_request(
 @router.get("/{request_id}/status")
 async def get_request_status(
     request_id: int,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     request_service: RequestService = Depends(_get_request_service),
 ):
     request_service = _resolve_request_service(request_service)
@@ -264,7 +264,7 @@ async def get_request_status(
 async def retry_request(
     request_id: int,
     background_tasks: BackgroundTasks,
-    user=Depends(get_current_user),
+    user: dict[str, Any] = Depends(get_current_user),
     request_service: RequestService = Depends(_get_request_service),
 ):
     request_service = _resolve_request_service(request_service)
