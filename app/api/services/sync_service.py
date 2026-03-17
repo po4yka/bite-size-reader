@@ -78,9 +78,6 @@ else:
 
 logger = get_logger(__name__)
 
-_sync_sessions: dict[str, dict[str, Any]] = {}
-_redis_warning_logged = False
-
 
 def _parse_session_expires_at(payload: dict[str, Any]) -> datetime | None:
     """Parse a fallback session expiry timestamp."""
@@ -91,21 +88,6 @@ def _parse_session_expires_at(payload: dict[str, Any]) -> datetime | None:
         return datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
     except ValueError:
         return None
-
-
-def _prune_fallback_sessions(now: datetime, *, exclude_session_id: str | None = None) -> int:
-    """Remove expired in-memory sync sessions."""
-    expired_session_ids = []
-    for session_id, payload in _sync_sessions.items():
-        if exclude_session_id is not None and session_id == exclude_session_id:
-            continue
-        expires_at = _parse_session_expires_at(payload)
-        if expires_at is not None and now >= expires_at:
-            expired_session_ids.append(session_id)
-
-    for session_id in expired_session_ids:
-        _sync_sessions.pop(session_id, None)
-    return len(expired_session_ids)
 
 
 class SyncService:
@@ -124,6 +106,8 @@ class SyncService:
     ) -> None:
         self.cfg = cfg
         self._session_manager = session_manager
+        self._sync_sessions: dict[str, dict[str, Any]] = {}
+        self._redis_warning_logged = False
 
         self._user_repo = user_repository or build_user_repository(session_manager)
         self._request_repo = request_repository or build_request_repository(session_manager)
@@ -144,6 +128,22 @@ class SyncService:
         )
         return max((v for v in versions if v is not None), default=0)
 
+    def _prune_fallback_sessions(
+        self, now: datetime, *, exclude_session_id: str | None = None
+    ) -> int:
+        """Remove expired in-memory sync sessions."""
+        expired_session_ids = []
+        for session_id, payload in self._sync_sessions.items():
+            if exclude_session_id is not None and session_id == exclude_session_id:
+                continue
+            expires_at = _parse_session_expires_at(payload)
+            if expires_at is not None and now >= expires_at:
+                expired_session_ids.append(session_id)
+
+        for session_id in expired_session_ids:
+            self._sync_sessions.pop(session_id, None)
+        return len(expired_session_ids)
+
     def _resolve_limit(self, requested: int | None) -> int:
         return max(
             self.cfg.sync.min_limit,
@@ -159,12 +159,11 @@ class SyncService:
             await redis_client.set(key, json_dumps(payload), ex=ttl_seconds)
             return
 
-        global _redis_warning_logged
-        if not _redis_warning_logged:
+        if not self._redis_warning_logged:
             logger.warning("sync_session_redis_unavailable_fallback")
-            _redis_warning_logged = True
-        _prune_fallback_sessions(datetime.now(UTC))
-        _sync_sessions[payload["session_id"]] = payload
+            self._redis_warning_logged = True
+        self._prune_fallback_sessions(datetime.now(UTC))
+        self._sync_sessions[payload["session_id"]] = payload
 
     async def _load_session(
         self, session_id: str, user_id: int, client_id: str | None
@@ -180,8 +179,8 @@ class SyncService:
 
             payload = json_loads(payload_raw)
         else:
-            _prune_fallback_sessions(datetime.now(UTC), exclude_session_id=session_id)
-            payload = _sync_sessions.get(session_id)
+            self._prune_fallback_sessions(datetime.now(UTC), exclude_session_id=session_id)
+            payload = self._sync_sessions.get(session_id)
             if not payload:
                 raise SyncSessionNotFoundError(session_id)
 
@@ -192,7 +191,7 @@ class SyncService:
         expires_at = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
         if datetime.now(UTC) >= expires_at:
             if redis_client is None:
-                _sync_sessions.pop(session_id, None)
+                self._sync_sessions.pop(session_id, None)
             raise SyncSessionExpiredError(session_id)
 
         return payload
