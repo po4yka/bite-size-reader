@@ -8,16 +8,22 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
 from app.config import ChromaConfig, load_config
 from app.core.embedding_space import resolve_embedding_space_identifier
 from app.db.session import DatabaseSessionManager
+from app.infrastructure.embedding.embedding_factory import create_embedding_service
 from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
     SqliteEmbeddingRepositoryAdapter,
 )
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
-from app.services.embedding_factory import create_embedding_service
 from app.services.metadata_builder import MetadataBuilder
-from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +64,9 @@ async def backfill_chroma_store(
     embedding_repo = SqliteEmbeddingRepositoryAdapter(db)
     embedding_service = create_embedding_service(app_cfg.embedding)
     generator = SummaryEmbeddingGenerator(
-        db=db,
+        embedding_repository=embedding_repo,
+        request_repository=SqliteRequestRepositoryAdapter(db),
+        summary_repository=SqliteSummaryRepositoryAdapter(db),
         embedding_service=embedding_service,
         max_token_length=app_cfg.embedding.max_token_length,
     )

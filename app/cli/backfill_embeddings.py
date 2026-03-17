@@ -5,11 +5,20 @@ import logging
 import sys
 from pathlib import Path
 
+from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
 from app.config import load_config
 from app.db.models import Summary, SummaryEmbedding
 from app.db.session import DatabaseSessionManager
-from app.services.embedding_factory import create_embedding_service
-from app.services.summary_embedding_generator import SummaryEmbeddingGenerator
+from app.infrastructure.embedding.embedding_factory import create_embedding_service
+from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
+    SqliteEmbeddingRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +64,9 @@ async def backfill_embeddings(db_path: str, limit: int | None = None, force: boo
     db = DatabaseSessionManager(path=db_path)
     embedding_service = create_embedding_service(cfg.embedding)
     generator = SummaryEmbeddingGenerator(
-        db=db,
+        embedding_repository=SqliteEmbeddingRepositoryAdapter(db),
+        request_repository=SqliteRequestRepositoryAdapter(db),
+        summary_repository=SqliteSummaryRepositoryAdapter(db),
         embedding_service=embedding_service,
         max_token_length=cfg.embedding.max_token_length,
     )
