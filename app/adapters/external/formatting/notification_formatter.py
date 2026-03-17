@@ -9,7 +9,7 @@ from app.core.ui_strings import t
 
 if TYPE_CHECKING:
     from app.adapters.external.formatting.protocols import DataFormatter, ResponseSender
-    from app.core.progress_tracker import ProgressTracker
+    from app.core.telegram_progress_message import TelegramProgressMessage
     from app.core.verbosity import VerbosityResolver
 
 
@@ -22,7 +22,7 @@ class NotificationFormatterImpl:
         data_formatter: DataFormatter,
         *,
         verbosity_resolver: VerbosityResolver | None = None,
-        progress_tracker: ProgressTracker | None = None,
+        progress_tracker: TelegramProgressMessage | None = None,
         lang: str = "en",
     ) -> None:
         """Initialize the notification formatter.

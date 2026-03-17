@@ -15,7 +15,7 @@ if TYPE_CHECKING:
         SummaryPresenter,
         TextProcessor,
     )
-    from app.core.progress_tracker import ProgressTracker
+    from app.core.telegram_progress_message import TelegramProgressMessage
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,4 +29,4 @@ class FormattingServices:
     validator: MessageValidator
     text_processor: TextProcessor
     data_formatter: DataFormatter
-    progress_tracker: ProgressTracker
+    progress_tracker: TelegramProgressMessage

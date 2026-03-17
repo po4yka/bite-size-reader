@@ -1,4 +1,4 @@
-"""Tests for the core ProgressTracker (editable progress messages)."""
+"""Tests for the core TelegramProgressMessage (editable progress messages)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from app.core.progress_tracker import ProgressTracker
+from app.core.telegram_progress_message import TelegramProgressMessage
 
 
 def _msg(chat_id: int = 100, msg_id: int = 1) -> SimpleNamespace:
@@ -20,7 +20,7 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         sender.edit_message = AsyncMock(return_value=True)
         sender.safe_reply = AsyncMock()
 
-        tracker = ProgressTracker(sender)
+        tracker = TelegramProgressMessage(sender)
         await tracker.update(_msg(), "Processing...")
 
         sender.safe_reply_with_id.assert_awaited_once()
@@ -32,7 +32,7 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         sender.edit_message = AsyncMock(return_value=True)
         sender.safe_reply = AsyncMock()
 
-        tracker = ProgressTracker(sender)
+        tracker = TelegramProgressMessage(sender)
         msg = _msg()
         await tracker.update(msg, "Processing...")
         await tracker.update(msg, "Analyzing...")
@@ -53,7 +53,7 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         sender.edit_message = AsyncMock(return_value=False)
         sender.safe_reply = AsyncMock()
 
-        tracker = ProgressTracker(sender)
+        tracker = TelegramProgressMessage(sender)
         msg = _msg()
         await tracker.update(msg, "First")
         await tracker.update(msg, "Second")
@@ -66,7 +66,7 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         sender.edit_message = AsyncMock(return_value=True)
         sender.safe_reply = AsyncMock()
 
-        tracker = ProgressTracker(sender)
+        tracker = TelegramProgressMessage(sender)
         msg = _msg()
         await tracker.update(msg, "Processing...")
         tracker.clear(msg)
@@ -79,7 +79,7 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         sender = MagicMock()
         sender.safe_reply = AsyncMock()
 
-        tracker = ProgressTracker(sender)
+        tracker = TelegramProgressMessage(sender)
         msg = SimpleNamespace()  # no chat/id
         await tracker.update(msg, "fallback")
 
@@ -93,7 +93,7 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
 
     async def test_clear_on_unknown_message_is_noop(self) -> None:
         sender = MagicMock()
-        tracker = ProgressTracker(sender)
+        tracker = TelegramProgressMessage(sender)
         tracker.clear(_msg())  # should not raise
 
     async def test_safe_reply_with_id_returns_none(self) -> None:
@@ -103,7 +103,7 @@ class TestProgressTracker(unittest.IsolatedAsyncioTestCase):
         sender.edit_message = AsyncMock(return_value=True)
         sender.safe_reply = AsyncMock()
 
-        tracker = ProgressTracker(sender)
+        tracker = TelegramProgressMessage(sender)
         msg = _msg()
         await tracker.update(msg, "First")
         await tracker.update(msg, "Second")

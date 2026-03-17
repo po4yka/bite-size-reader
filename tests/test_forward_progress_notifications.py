@@ -13,7 +13,7 @@ class TestForwardProgressNotifications(unittest.IsolatedAsyncioTestCase):
         from app.adapters.external.formatting.notification_formatter import (
             NotificationFormatterImpl,
         )
-        from app.core.progress_tracker import ProgressTracker
+        from app.core.telegram_progress_message import TelegramProgressMessage
         from app.core.verbosity import VerbosityLevel
 
         response_sender = MagicMock()
@@ -25,7 +25,7 @@ class TestForwardProgressNotifications(unittest.IsolatedAsyncioTestCase):
         verbosity_resolver = MagicMock()
         verbosity_resolver.get_verbosity = AsyncMock(return_value=VerbosityLevel.READER)
 
-        progress_tracker = ProgressTracker(response_sender)
+        progress_tracker = TelegramProgressMessage(response_sender)
         data_formatter = MagicMock()
 
         fmt = NotificationFormatterImpl(

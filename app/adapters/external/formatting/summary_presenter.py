@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     )
     from app.adapters.telegram.topic_manager import TopicManager
     from app.application.services.related_reads_service import RelatedReadItem
-    from app.core.progress_tracker import ProgressTracker
+    from app.core.telegram_progress_message import TelegramProgressMessage
     from app.core.verbosity import VerbosityResolver
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ class SummaryPresenterImpl:
         data_formatter: DataFormatter,
         *,
         verbosity_resolver: VerbosityResolver | None = None,
-        progress_tracker: ProgressTracker | None = None,
+        progress_tracker: TelegramProgressMessage | None = None,
         topic_manager: TopicManager | None = None,
         lang: str = "en",
     ) -> None:

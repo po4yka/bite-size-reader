@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from app.core.progress_tracker import ProgressTracker
+from app.core.telegram_progress_message import TelegramProgressMessage
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +29,14 @@ class ProgressMessageUpdater:
 
     def __init__(
         self,
-        progress_tracker: ProgressTracker,
+        progress_tracker: TelegramProgressMessage,
         message: Any,
         update_interval: float = 4.0,
     ):
         """Initialize progress message updater.
 
         Args:
-            progress_tracker: ProgressTracker instance for message updates
+            progress_tracker: TelegramProgressMessage instance for message updates
             message: Telegram message object
             update_interval: Seconds between progress updates (default: 4.0)
         """

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from app.core.progress_tracker import ProgressTracker
+    from app.core.telegram_progress_message import TelegramProgressMessage
 
 PlatformExtractionMode = Literal["interactive", "pure"]
 
@@ -21,7 +21,7 @@ class PlatformExtractionRequest:
     correlation_id: str | None = None
     interaction_id: int | None = None
     silent: bool = False
-    progress_tracker: ProgressTracker | None = None
+    progress_tracker: TelegramProgressMessage | None = None
     request_id_override: int | None = None
     mode: PlatformExtractionMode = "interactive"
 

@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     )
     from app.adapters.telegram.topic_manager import TopicManager
     from app.application.services.topic_search import TopicArticle
-    from app.core.progress_tracker import ProgressTracker
+    from app.core.telegram_progress_message import TelegramProgressMessage
     from app.core.verbosity import VerbosityResolver
 
 logger = logging.getLogger(__name__)
@@ -142,9 +142,9 @@ class ResponseFormatter:
         )
 
         # Create progress tracker for Reader mode
-        from app.core.progress_tracker import ProgressTracker
+        from app.core.telegram_progress_message import TelegramProgressMessage
 
-        progress_tracker = ProgressTracker(response_sender)
+        progress_tracker = TelegramProgressMessage(response_sender)
 
         notification_formatter: NotificationFormatter = NotificationFormatterImpl(
             response_sender,
@@ -185,7 +185,7 @@ class ResponseFormatter:
         self._notified_error_ids: set[str] = set()
 
     @property
-    def progress_tracker(self) -> ProgressTracker:
+    def progress_tracker(self) -> TelegramProgressMessage:
         """Expose progress tracker for single-URL progress messages."""
         return self._services.progress_tracker
 

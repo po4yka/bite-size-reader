@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from app.adapters.external.formatting.notification_formatter import NotificationFormatterImpl
-from app.core.progress_tracker import ProgressTracker
+from app.core.telegram_progress_message import TelegramProgressMessage
 from app.core.verbosity import VerbosityLevel, VerbosityResolver
 
 
@@ -31,7 +31,7 @@ def _make_sender() -> MagicMock:
 
 def _make_formatter(
     *, verbosity: VerbosityLevel | None = None
-) -> tuple[NotificationFormatterImpl, MagicMock, ProgressTracker]:
+) -> tuple[NotificationFormatterImpl, MagicMock, TelegramProgressMessage]:
     sender = _make_sender()
     data_fmt = MagicMock()
     data_fmt.format_firecrawl_options = MagicMock(return_value=None)
@@ -41,7 +41,7 @@ def _make_formatter(
         resolver = MagicMock(spec=VerbosityResolver)
         resolver.get_verbosity = AsyncMock(return_value=verbosity)
 
-    tracker = ProgressTracker(sender)
+    tracker = TelegramProgressMessage(sender)
 
     formatter = NotificationFormatterImpl(
         sender,

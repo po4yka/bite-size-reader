@@ -34,7 +34,7 @@ from app.observability.failure_observability import (
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.core.progress_tracker import ProgressTracker
+    from app.core.telegram_progress_message import TelegramProgressMessage
 
 logger = logging.getLogger(__name__)
 
@@ -246,7 +246,7 @@ class ContentExtractor(
         correlation_id: str | None = None,
         interaction_id: int | None = None,
         silent: bool = False,
-        progress_tracker: ProgressTracker | None = None,
+        progress_tracker: TelegramProgressMessage | None = None,
     ) -> tuple[int, str, str, str, str | None, list[str]]:
         """Extract content from URL and return request/content metadata tuple."""
         norm = normalize_url(url_text)

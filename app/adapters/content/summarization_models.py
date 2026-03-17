@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from app.core.progress_tracker import ProgressTracker
+    from app.core.telegram_progress_message import TelegramProgressMessage
 
     PhaseChangeCallback = Callable[
         [str, str | None, int | None, str | None],
@@ -36,7 +36,7 @@ class InteractiveSummaryRequest:
     defer_persistence: bool = False
     on_phase_change: PhaseChangeCallback | None = None
     images: list[str] | None = None
-    progress_tracker: ProgressTracker | None = None
+    progress_tracker: TelegramProgressMessage | None = None
 
 
 @dataclass(slots=True)
