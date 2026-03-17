@@ -18,9 +18,17 @@ import {
 } from "@carbon/react";
 import { Play, PauseFilled, StopFilled } from "@carbon/icons-react";
 import { getSummaryAudioUrl, generateSummaryAudio } from "../../api/summaries";
-import { useMarkRead, useSummaryContent, useSummaryDetail, useToggleFavorite } from "../../hooks/useSummaries";
+import {
+  useExportSummaryPdf,
+  useMarkRead,
+  useSaveReadingPosition,
+  useSummaryContent,
+  useSummaryDetail,
+  useToggleFavorite,
+} from "../../hooks/useSummaries";
 import AddToCollectionModal from "../../components/AddToCollectionModal";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
+import HighlightsPanel from "./HighlightsPanel";
 
 type ReaderTextScale = "sm" | "md" | "lg";
 type ReaderDensity = "compact" | "comfortable";
@@ -61,6 +69,8 @@ export default function ArticlePage() {
   const contentQuery = useSummaryContent(summaryId, showContent);
   const readMutation = useMarkRead(summaryId);
   const favoriteMutation = useToggleFavorite(summaryId);
+  const savePositionMutation = useSaveReadingPosition();
+  const exportPdfMutation = useExportSummaryPdf();
 
   useEffect(() => {
     readMutation.reset();
@@ -95,6 +105,21 @@ export default function ArticlePage() {
       window.removeEventListener("resize", updateProgress);
     };
   }, [showContent, summaryId]);
+
+  // Debounce-save reading position 500ms after scroll stops.
+  // TODO: on mount, restore scroll position from summaryQuery.data.readingProgress once
+  // the API returns that field.
+  useEffect(() => {
+    if (summaryId <= 0) return;
+    const timer = setTimeout(() => {
+      savePositionMutation.mutate({
+        summaryId,
+        progress: readProgress,
+        lastReadOffset: Math.round(window.scrollY),
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [readProgress, summaryId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const detail = summaryQuery.data;
 
@@ -281,6 +306,13 @@ export default function ArticlePage() {
             <Button kind="ghost" onClick={() => setShowContent((prev) => !prev)}>
               {showContent ? "Hide full content" : "Show full content"}
             </Button>
+            {exportPdfMutation.isPending ? (
+              <InlineLoading description="Exporting PDF…" />
+            ) : (
+              <Button kind="ghost" onClick={() => exportPdfMutation.mutate(summaryId)}>
+                Export PDF
+              </Button>
+            )}
           </ButtonSet>
 
           {audioState === "error" && audioError && (
@@ -297,6 +329,7 @@ export default function ArticlePage() {
               <Tab>Summary</Tab>
               <Tab>Details</Tab>
               <Tab>Entities</Tab>
+              <Tab>Highlights</Tab>
             </TabList>
             <TabPanels>
               <TabPanel>
@@ -369,6 +402,9 @@ export default function ArticlePage() {
                     ))}
                   </div>
                 </Tile>
+              </TabPanel>
+              <TabPanel>
+                <HighlightsPanel summaryId={summaryId} />
               </TabPanel>
             </TabPanels>
           </Tabs>

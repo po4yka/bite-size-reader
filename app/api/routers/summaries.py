@@ -12,7 +12,11 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies.database import get_summary_read_model_use_case
 from app.api.exceptions import ResourceNotFoundError
-from app.api.models.requests import SubmitFeedbackRequest, UpdateSummaryRequest
+from app.api.models.requests import (
+    SaveReadingPositionRequest,
+    SubmitFeedbackRequest,
+    UpdateSummaryRequest,
+)
 from app.api.models.responses import (
     DeleteSummaryResponse,
     FeedbackResponse,
@@ -179,6 +183,99 @@ async def get_summary_by_url(
         raise ResourceNotFoundError("Article", url)
 
     return await get_summary(summary_id=summary_id, user=user, use_case=use_case)
+
+
+@router.get("/recommendations")
+async def get_recommendations(
+    limit: int = Query(10, ge=1, le=50),
+    user: dict[str, Any] = Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
+):
+    """Get personalized summary recommendations based on reading history."""
+    use_case = _resolve_use_case(use_case)
+    user_id = user["user_id"]
+
+    # Get recently-read summaries to determine interest tags
+    read_summaries, _, _ = await use_case.get_user_summaries(
+        user_id=user_id,
+        limit=10,
+        offset=0,
+        is_read=True,
+        sort="created_at_desc",
+    )
+
+    interest_tags: set[str] = set()
+    for s in read_summaries:
+        payload = ensure_mapping(s.get("json_payload"))
+        for tag in payload.get("topic_tags", []):
+            if isinstance(tag, str):
+                interest_tags.add(tag.lower())
+
+    # Get unread summaries to recommend from
+    unread_summaries, _, _ = await use_case.get_user_summaries(
+        user_id=user_id,
+        limit=100,
+        offset=0,
+        is_read=False,
+        sort="created_at_desc",
+    )
+
+    # Score by tag overlap
+    def _score(s: dict) -> int:
+        payload = ensure_mapping(s.get("json_payload"))
+        tags = {t.lower() for t in payload.get("topic_tags", []) if isinstance(t, str)}
+        return len(tags & interest_tags)
+
+    scored = sorted(unread_summaries, key=_score, reverse=True)
+    top = scored[:limit]
+
+    summary_list: list[SummaryCompact] = []
+    for summary_dict in top:
+        request_data = summary_dict.get("request") or {}
+        if isinstance(request_data, int):
+            request_id = request_data
+            input_url = ""
+            normalized_url = ""
+        else:
+            request_id = request_data.get("id", summary_dict.get("request_id"))
+            input_url = request_data.get("input_url", "")
+            normalized_url = request_data.get("normalized_url", "")
+
+        json_payload = ensure_mapping(summary_dict.get("json_payload"))
+        metadata = ensure_mapping(json_payload.get("metadata"))
+
+        summary_list.append(
+            SummaryCompact(
+                id=summary_dict.get("id"),
+                request_id=request_id,
+                title=metadata.get("title", "Untitled"),
+                domain=metadata.get("domain", ""),
+                url=input_url or normalized_url or "",
+                tldr=json_payload.get("tldr", ""),
+                summary_250=json_payload.get("summary_250", ""),
+                reading_time_min=json_payload.get("estimated_reading_time_min", 0),
+                topic_tags=json_payload.get("topic_tags", []),
+                is_read=summary_dict.get("is_read", False),
+                is_favorited=summary_dict.get("is_favorited", False),
+                lang=summary_dict.get("lang") or "auto",
+                created_at=isotime(summary_dict.get("created_at")),
+                confidence=json_payload.get("confidence", 0.0),
+                hallucination_risk=_normalize_hallucination_risk(
+                    json_payload.get("hallucination_risk", "unknown")
+                ),
+                image_url=metadata.get("image")
+                or metadata.get("og:image")
+                or metadata.get("ogImage"),
+            )
+        )
+
+    return success_response(
+        {
+            "recommendations": [s.model_dump(by_alias=True) for s in summary_list],
+            "reason": "based_on_reading_history" if interest_tags else "most_recent_unread",
+            "count": len(summary_list),
+        }
+    )
 
 
 @router.get("/{summary_id}")
@@ -415,6 +512,59 @@ async def get_summary_content(
     )
 
 
+@router.get("/{summary_id}/export")
+async def export_summary(
+    summary_id: int,
+    format: str = Query("pdf", pattern="^(pdf|md|html)$"),
+    user: dict[str, Any] = Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
+):
+    """Export a summary as PDF, Markdown, or HTML."""
+    import os
+
+    from fastapi.responses import FileResponse
+
+    from app.adapters.external.formatting.export_formatter import ExportFormatter
+    from app.api.dependencies.database import get_session_manager
+
+    use_case = _resolve_use_case(use_case)
+    summary = await use_case.get_summary_by_id_for_user(
+        user_id=user["user_id"],
+        summary_id=summary_id,
+    )
+    if not summary:
+        raise ResourceNotFoundError("Summary", summary_id)
+
+    db = get_session_manager()
+    formatter = ExportFormatter(db)
+    file_path, filename = await formatter.export_summary(
+        summary_id=str(summary_id),
+        export_format=format,
+    )
+    if not file_path or not filename:
+        raise ResourceNotFoundError("Export", summary_id)
+
+    media_type_map = {
+        "pdf": "application/pdf",
+        "md": "text/markdown",
+        "html": "text/html",
+    }
+    media_type = media_type_map.get(format, "application/octet-stream")
+
+    def _cleanup(path: str) -> None:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type=media_type,
+        background=None,
+    )
+
+
 @router.patch("/{summary_id}")
 async def update_summary(
     summary_id: int,
@@ -440,6 +590,39 @@ async def update_summary(
             is_read=resolved_is_read,
             updated_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
+    )
+
+
+@router.patch("/{summary_id}/reading-position")
+async def save_reading_position(
+    summary_id: int,
+    body: SaveReadingPositionRequest,
+    user: dict[str, Any] = Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
+):
+    """Save the reading position (scroll progress) for a summary."""
+    from app.db.models import Summary
+
+    use_case = _resolve_use_case(use_case)
+    summary = await use_case.get_summary_by_id_for_user(
+        user_id=user["user_id"],
+        summary_id=summary_id,
+    )
+    if not summary:
+        raise ResourceNotFoundError("Summary", summary_id)
+
+    Summary.update(
+        reading_progress=body.progress,
+        last_read_offset=body.last_read_offset,
+        updated_at=datetime.now(UTC),
+    ).where(Summary.id == summary_id).execute()
+
+    return success_response(
+        {
+            "id": summary_id,
+            "progress": body.progress,
+            "last_read_offset": body.last_read_offset,
+        }
     )
 
 

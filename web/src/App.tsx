@@ -15,6 +15,7 @@ import { FEATURE_FLAGS } from "./routes/features";
 
 const CollectionsPage = lazy(() => import("./features/collections/CollectionsPage"));
 const DigestPage = lazy(() => import("./features/digest/DigestPage"));
+const CustomDigestViewPage = lazy(() => import("./features/digest/CustomDigestViewPage"));
 const SearchPage = lazy(() => import("./features/search/SearchPage"));
 const AdminPage = lazy(() => import("./features/admin/AdminPage"));
 
@@ -111,6 +112,10 @@ export default function App() {
         <Route
           path="digest"
           element={<Suspense fallback={<RouteLoader />}><DigestPage /></Suspense>}
+        />
+        <Route
+          path="digest/custom/:id"
+          element={<Suspense fallback={<RouteLoader />}><CustomDigestViewPage /></Suspense>}
         />
         {FEATURE_FLAGS.admin && (
           <Route

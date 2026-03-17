@@ -36,3 +36,67 @@ export function updateUserPreferences(payload: {
 export function fetchUserStats(): Promise<UserStats> {
   return apiRequest<UserStats>("/v1/user/stats");
 }
+
+export interface ReadingGoal {
+  goalType: string;
+  target: number;
+  period: string;
+  currentCount: number;
+  isCompleted: boolean;
+}
+
+export interface GoalProgress {
+  goalType: string;
+  target: number;
+  current: number;
+  percentage: number;
+  isCompleted: boolean;
+}
+
+export interface ReadingStreak {
+  currentStreak: number;
+  longestStreak: number;
+  todayCount: number;
+  thisWeekCount: number;
+  thisMonthCount: number;
+  lastReadAt: string | null;
+}
+
+interface ReadingGoalsResponse {
+  goals: ReadingGoal[];
+}
+
+interface GoalsProgressResponse {
+  progress: GoalProgress[];
+}
+
+export async function fetchReadingGoals(): Promise<ReadingGoal[]> {
+  const result = await apiRequest<ReadingGoalsResponse>("/v1/user/goals");
+  return result.goals;
+}
+
+export async function fetchGoalsProgress(): Promise<GoalProgress[]> {
+  const result = await apiRequest<GoalsProgressResponse>("/v1/user/goals/progress");
+  return result.progress;
+}
+
+export async function createReadingGoal(
+  goalType: string,
+  target: number,
+  period: string,
+): Promise<ReadingGoal> {
+  return apiRequest<ReadingGoal>("/v1/user/goals", {
+    method: "POST",
+    body: JSON.stringify({ goal_type: goalType, target, period }),
+  });
+}
+
+export async function deleteReadingGoal(goalType: string): Promise<void> {
+  await apiRequest<Record<string, never>>(`/v1/user/goals/${goalType}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchReadingStreak(): Promise<ReadingStreak> {
+  return apiRequest<ReadingStreak>("/v1/user/streak");
+}

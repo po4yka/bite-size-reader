@@ -136,3 +136,18 @@ async def list_sessions(
         )
 
     return success_response(SessionListResponse(sessions=formatted_sessions))
+
+
+@router.delete("/sessions/{session_id}")
+async def revoke_session(
+    session_id: int,
+    current_user: dict = Depends(get_current_user),
+    auth_repo: SqliteAuthRepositoryAdapter = Depends(get_auth_repository),
+) -> dict:
+    """Revoke a specific session by ID. Cannot revoke the current session via this endpoint."""
+    user_id = current_user["user_id"]
+    revoked = await auth_repo.async_revoke_session_by_id(session_id, user_id)
+    if not revoked:
+        raise ResourceNotFoundError("Session", session_id)
+    logger.info("session_revoked", extra={"user_id": user_id, "session_id": session_id})
+    return success_response({"id": session_id, "revoked": True})

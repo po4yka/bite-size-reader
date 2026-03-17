@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Button,
+  ContentSwitcher,
   InlineLoading,
   InlineNotification,
   ProgressBar,
   Select,
   SelectItem,
+  Switch,
   TextInput,
   Tile,
 } from "@carbon/react";
@@ -15,6 +17,7 @@ import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingCo
 import { useTelegramMainButton } from "../../hooks/useTelegramMainButton";
 import { formatEta, isTerminalStatus, progressFromStatus, statusLabel } from "./status";
 import { validateSubmitUrl } from "./url";
+import { ForwardForm } from "./ForwardForm";
 
 const DUPLICATE_DEBOUNCE_MS = 500;
 const MAX_POLL_DURATION_MS = 6 * 60 * 1000;
@@ -26,9 +29,12 @@ interface DuplicateState {
   summarizedAt: string | null;
 }
 
+type SubmitMode = "url" | "forward";
+
 export default function SubmitPage() {
   const navigate = useNavigate();
 
+  const [submitMode, setSubmitMode] = useState<SubmitMode>("url");
   const [url, setUrl] = useState("");
   const [langPreference, setLangPreference] = useState<"auto" | "en" | "ru">("auto");
   const [urlTouched, setUrlTouched] = useState(false);
@@ -187,8 +193,80 @@ export default function SubmitPage() {
 
   return (
     <section className="page-section">
-      <h1>Submit URL</h1>
+      <h1>Submit</h1>
 
+      <div style={{ marginBottom: "1rem" }}>
+        <ContentSwitcher
+          selectedIndex={submitMode === "url" ? 0 : 1}
+          onChange={({ index }) => {
+            setSubmitMode(index === 0 ? "url" : "forward");
+            setRequestId(null);
+            setPollingPaused(false);
+            setPollingStartedAt(null);
+            setSubmitDuplicate(null);
+          }}
+        >
+          <Switch name="url" text="URL" />
+          <Switch name="forward" text="Forward" />
+        </ContentSwitcher>
+      </div>
+
+      {submitMode === "forward" && (
+        <>
+          <ForwardForm
+            onRequestCreated={(id) => {
+              setRequestId(id);
+              setPollingPaused(false);
+              setPollingStartedAt(Date.now());
+            }}
+          />
+          {requestId && statusQuery.data && (
+            <Tile style={{ marginTop: "1rem" }}>
+              <ProgressBar label="Processing status" value={progress} helperText={statusHelperText || undefined} />
+              <div className="form-actions">
+                {statusQuery.data.status === "completed" && statusQuery.data.summaryId && (
+                  <Button onClick={handleOpenCompletedSummary}>Open summary</Button>
+                )}
+                {statusQuery.data.status === "failed" && (statusQuery.data.canRetry || statusQuery.data.retryable) && (
+                  <Button onClick={handleRetry} disabled={retryMutation.isPending}>
+                    {retryMutation.isPending ? "Retrying..." : "Retry processing"}
+                  </Button>
+                )}
+                {pollingPaused && (
+                  <Button kind="tertiary" onClick={() => setPollingPaused(false)}>
+                    Resume polling
+                  </Button>
+                )}
+                <Button kind="ghost" onClick={() => void statusQuery.refetch()} disabled={statusQuery.isFetching}>
+                  Refresh now
+                </Button>
+              </div>
+              {statusQuery.data.correlationId && (
+                <p className="muted">Correlation ID: {statusQuery.data.correlationId}</p>
+              )}
+              {statusQuery.data.status === "failed" && (
+                <InlineNotification
+                  kind="error"
+                  title="Processing failed"
+                  subtitle={statusQuery.data.errorMessage ?? "Unknown error"}
+                  hideCloseButton
+                />
+              )}
+            </Tile>
+          )}
+          {requestId && statusQuery.isLoading && <InlineLoading description="Connecting to status stream..." />}
+          {requestId && statusQuery.error && (
+            <InlineNotification
+              kind="warning"
+              title="Status polling interrupted"
+              subtitle={statusQuery.error instanceof Error ? statusQuery.error.message : "Unknown error"}
+              hideCloseButton
+            />
+          )}
+        </>
+      )}
+
+      {submitMode === "url" && (
       <Tile>
         <div className="digest-form-grid">
           <TextInput
@@ -343,6 +421,7 @@ export default function SubmitPage() {
           />
         )}
       </Tile>
+      )}
     </section>
   );
 }

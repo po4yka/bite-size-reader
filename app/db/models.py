@@ -250,6 +250,8 @@ class Summary(BaseModel):
     is_favorited = peewee.BooleanField(default=False)
     is_deleted = peewee.BooleanField(default=False)
     deleted_at = peewee.DateTimeField(null=True)
+    reading_progress = peewee.FloatField(default=0.0, null=True)
+    last_read_offset = peewee.IntegerField(default=0, null=True)
     updated_at = peewee.DateTimeField(default=_utcnow)
     created_at = peewee.DateTimeField(default=_utcnow)
 

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, InlineLoading, InlineNotification, Tile } from "@carbon/react";
+import AppleSignInButton from "../features/auth/AppleSignInButton";
+import GoogleSignInButton from "../features/auth/GoogleSignInButton";
+import SecretLoginForm from "../features/auth/SecretLoginForm";
 import type { TelegramAuthPayload } from "./types";
 import { useAuth } from "./AuthProvider";
 
@@ -110,6 +113,22 @@ export default function LoginPage() {
             About Telegram Login
           </Button>
         </div>
+
+        <hr style={{ margin: "1.5rem 0", border: "none", borderTop: "1px solid var(--cds-border-subtle)" }} />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <GoogleSignInButton />
+          <AppleSignInButton />
+        </div>
+
+        <details style={{ marginTop: "1.5rem" }}>
+          <summary style={{ cursor: "pointer", userSelect: "none", color: "var(--cds-text-secondary)" }}>
+            Developer Access
+          </summary>
+          <div style={{ marginTop: "1rem" }}>
+            <SecretLoginForm />
+          </div>
+        </details>
       </Tile>
     </div>
   );

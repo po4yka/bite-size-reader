@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Tab, TabList, TabPanel, TabPanels, Tabs } from "@carbon/react";
 import { useAuth } from "../../auth/AuthProvider";
 import { ChannelsTab } from "./ChannelsTab";
+import { CustomDigestTab } from "./CustomDigestTab";
 import { DigestUnavailableNotice } from "./DigestUnavailableNotice";
 import { HistoryTab } from "./HistoryTab";
 import { PreferencesTab } from "./PreferencesTab";
@@ -22,6 +23,7 @@ export default function DigestPage() {
             <Tab>Channels</Tab>
             <Tab>Preferences</Tab>
             <Tab>History</Tab>
+            <Tab>Custom Digests</Tab>
           </TabList>
           <TabPanels>
             <TabPanel>
@@ -32,6 +34,9 @@ export default function DigestPage() {
             </TabPanel>
             <TabPanel>
               <HistoryTab />
+            </TabPanel>
+            <TabPanel>
+              <CustomDigestTab />
             </TabPanel>
           </TabPanels>
         </Tabs>

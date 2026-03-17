@@ -17,6 +17,7 @@ import {
 } from "@carbon/react";
 import { useSearchResults, useTrendingTopics } from "../../hooks/useSearch";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
+import { RecommendationsSection } from "./RecommendationsSection";
 
 interface SelectOption {
   id: string;
@@ -389,6 +390,8 @@ export default function SearchPage() {
           </div>
         </Tile>
       )}
+
+      {!query.trim() && <RecommendationsSection />}
 
       {query.trim().length > 0 && query.trim().length < 2 && (
         <InlineNotification

@@ -19,6 +19,12 @@ import {
   updateDigestPreferences,
 } from "../api/digest";
 import { queryKeys } from "../api/queryKeys";
+import {
+  createCustomDigest,
+  getCustomDigest,
+  listCustomDigests,
+} from "../api/customDigest";
+import type { CreateCustomDigestParams } from "../api/customDigest";
 
 const HISTORY_PAGE_SIZE = 20;
 
@@ -171,5 +177,32 @@ export function useUpdateDigestPreferences() {
 export function useResolveChannel() {
   return useMutation({
     mutationFn: (username: string) => resolveDigestChannel(username),
+  });
+}
+
+// --- Custom Digests ---
+
+export function useCustomDigests(page = 1) {
+  return useQuery({
+    queryKey: ["digest", "custom", page] as const,
+    queryFn: () => listCustomDigests(page),
+  });
+}
+
+export function useCustomDigest(id: number) {
+  return useQuery({
+    queryKey: ["digest", "custom", id] as const,
+    queryFn: () => getCustomDigest(id),
+    enabled: id > 0,
+  });
+}
+
+export function useCreateCustomDigest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: CreateCustomDigestParams) => createCustomDigest(params),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["digest", "custom"] });
+    },
   });
 }

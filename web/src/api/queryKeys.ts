@@ -37,6 +37,15 @@ export const queryKeys = {
   user: {
     preferences: ["user", "preferences"] as const,
     stats: ["user", "stats"] as const,
+    goals: {
+      all: ["user", "goals"] as const,
+      progress: ["user", "goals", "progress"] as const,
+    },
+    streak: ["user", "streak"] as const,
+  },
+  auth: {
+    sessions: ["auth", "sessions"] as const,
+    telegramLink: ["auth", "telegram-link"] as const,
   },
   admin: {
     dbInfo: ["admin", "db-info"] as const,

@@ -193,6 +193,40 @@ async function resolveSummaryId(requestId: string): Promise<number | null> {
   return detail.summary?.id ?? null;
 }
 
+export interface ForwardMetadata {
+  fromChatId: number;
+  fromMessageId: number;
+  fromChatTitle?: string;
+  forwardedAt?: string;
+}
+
+export async function submitForward(
+  contentText: string,
+  forwardMetadata?: ForwardMetadata,
+  langPreference = "auto",
+): Promise<SubmitUrlResult> {
+  const body: Record<string, unknown> = {
+    type: "forward",
+    content_text: contentText,
+    lang_preference: langPreference,
+  };
+
+  if (forwardMetadata) {
+    body.forward_metadata = {
+      from_chat_id: forwardMetadata.fromChatId,
+      from_message_id: forwardMetadata.fromMessageId,
+      from_chat_title: forwardMetadata.fromChatTitle,
+      forwarded_at: forwardMetadata.forwardedAt,
+    };
+  }
+
+  const data = await apiRequest<SubmitPayload>("/v1/requests", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return toSubmitResult(data);
+}
+
 export async function fetchRequestStatus(requestId: string): Promise<RequestStatus> {
   const data = await apiRequest<StatusPayload>(`/v1/requests/${requestId}/status`);
   const normalizedStatus = normalizeStatus(data);

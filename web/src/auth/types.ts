@@ -26,3 +26,21 @@ export interface TelegramAuthPayload {
   last_name?: string;
   photo_url?: string;
 }
+
+export interface AppleAuthPayload {
+  idToken: string;
+  clientId: string;
+  authCode?: string;
+  givenName?: string;
+  familyName?: string;
+}
+
+export interface GoogleAuthPayload {
+  idToken: string;
+  clientId: string;
+}
+
+export interface SecretAuthPayload {
+  secretKey: string;
+  clientId: string;
+}

@@ -1,5 +1,12 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { checkDuplicate, fetchRequestStatus, retryRequest, submitUrl } from "../api/requests";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  checkDuplicate,
+  fetchRequestStatus,
+  retryRequest,
+  submitForward,
+  submitUrl,
+} from "../api/requests";
+import type { ForwardMetadata } from "../api/requests";
 import { queryKeys } from "../api/queryKeys";
 
 const POLL_INTERVAL_MS = 2500;
@@ -40,5 +47,25 @@ export function useSubmitUrl() {
 export function useRetryRequest() {
   return useMutation({
     mutationFn: (requestId: string) => retryRequest(requestId),
+  });
+}
+
+export function useSubmitForward() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      contentText,
+      forwardMetadata,
+      langPreference,
+    }: {
+      contentText: string;
+      forwardMetadata?: ForwardMetadata;
+      langPreference?: string;
+    }) => submitForward(contentText, forwardMetadata, langPreference),
+    onSuccess: (data) => {
+      if (data.kind === "queued") {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.requests.status(data.requestId) });
+      }
+    },
   });
 }

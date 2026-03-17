@@ -13,6 +13,11 @@ import { useUserPreferences, useUserStats, useUpdateUserPreferences } from "../.
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
 import { useTelegramMainButton } from "../../hooks/useTelegramMainButton";
+import ReadingStreakSection from "./ReadingStreakSection";
+import ReadingGoalsSection from "./ReadingGoalsSection";
+import TelegramLinkSection from "./TelegramLinkSection";
+import SessionsSection from "./SessionsSection";
+import AccountSection from "./AccountSection";
 
 function parseDeliveryTime(settings: Record<string, unknown> | null): string {
   const raw = settings?.delivery_time;
@@ -166,6 +171,12 @@ export default function PreferencesPage() {
           </ul>
         </Tile>
       )}
+
+      <ReadingStreakSection />
+      <ReadingGoalsSection />
+      <TelegramLinkSection />
+      <SessionsSection />
+      <AccountSection />
     </section>
   );
 }

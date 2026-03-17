@@ -7,6 +7,7 @@ const ALLOWED_PREFIXES = [
   "/submit",
   "/collections",
   "/digest",
+  "/digest/custom",
   "/preferences",
   "/admin",
 ] as const;
@@ -17,7 +18,7 @@ export function sanitizeRedirectPath(candidate?: string | null): string {
   if (candidate.startsWith("//") || candidate.startsWith("/\\")) return DEFAULT_REDIRECT_PATH;
   if (candidate.startsWith("/login")) return DEFAULT_REDIRECT_PATH;
   for (const prefix of ALLOWED_PREFIXES) {
-    if (candidate === prefix || candidate.startsWith(prefix + "/")) {
+    if (candidate === prefix || candidate.startsWith(prefix + "/") || candidate.startsWith(prefix + "?") || candidate.startsWith(prefix + "#")) {
       return candidate;
     }
   }

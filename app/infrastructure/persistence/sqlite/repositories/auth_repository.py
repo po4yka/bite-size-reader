@@ -179,6 +179,45 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
 
         return revoked
 
+    async def async_revoke_session_by_id(self, session_id: int, user_id: int) -> bool:
+        """Revoke a specific session by its ID, ensuring it belongs to the given user.
+
+        Returns:
+            True if found, belongs to user, and revoked. False otherwise.
+        """
+
+        def _revoke() -> bool:
+            record = RefreshToken.get_or_none(
+                (RefreshToken.id == session_id) & (RefreshToken.user == user_id)
+            )
+            if not record or record.is_revoked:
+                return False
+            record.is_revoked = True
+            record.save()
+            return True
+
+        revoked = await self._execute(_revoke, operation_name="revoke_session_by_id")
+
+        if revoked and self._token_cache:
+            try:
+                # Best-effort: look up the token_hash to invalidate cache
+                def _get_hash() -> str | None:
+                    rec = RefreshToken.get_or_none(RefreshToken.id == session_id)
+                    return rec.token_hash if rec else None
+
+                token_hash = await self._execute(
+                    _get_hash, operation_name="get_session_hash", read_only=True
+                )
+                if token_hash:
+                    await self._token_cache.mark_revoked(token_hash)
+            except Exception as exc:
+                logger.warning(
+                    "auth_token_cache_revoke_failed",
+                    extra={"error": str(exc), "session_id": session_id},
+                )
+
+        return revoked
+
     async def async_update_refresh_token_last_used(self, token_id: int) -> None:
         """Update the last_used_at timestamp for a refresh token."""
 

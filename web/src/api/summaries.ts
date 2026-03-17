@@ -179,3 +179,43 @@ export async function toggleSummaryFavorite(summaryId: number): Promise<{ isFavo
   });
   return { isFavorited: Boolean(data.isFavorited) };
 }
+
+export async function saveReadingPosition(
+  summaryId: number,
+  progress: number,
+  lastReadOffset: number,
+): Promise<{ id: number; progress: number; lastReadOffset: number }> {
+  return apiRequest(`/v1/summaries/${summaryId}/reading-position`, {
+    method: "PATCH",
+    body: JSON.stringify({ progress, last_read_offset: lastReadOffset }),
+  });
+}
+
+interface RecommendationsData {
+  recommendations: SummaryCompact[];
+  reason: string;
+  count: number;
+}
+
+export async function fetchRecommendations(limit = 10): Promise<RecommendationsData> {
+  return apiRequest<RecommendationsData>(`/v1/summaries/recommendations?limit=${limit}`);
+}
+
+export async function exportSummaryPdf(summaryId: number): Promise<void> {
+  const token = localStorage.getItem("access_token");
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const response = await fetch(`/v1/summaries/${summaryId}/export?format=pdf`, { headers });
+  if (!response.ok) throw new Error(`Export failed: ${response.status}`);
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `summary-${summaryId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

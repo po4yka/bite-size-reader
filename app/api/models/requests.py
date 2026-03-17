@@ -185,3 +185,10 @@ class CreateGoalRequest(BaseModel):
 
     goal_type: Literal["daily", "weekly", "monthly"]
     target_count: int = Field(ge=1, le=1000)
+
+
+class SaveReadingPositionRequest(BaseModel):
+    """Save reading progress for a summary."""
+
+    progress: float = Field(..., ge=0.0, le=1.0, description="Scroll progress 0.0-1.0")
+    last_read_offset: int = Field(default=0, ge=0, description="Pixel or character offset")

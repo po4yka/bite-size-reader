@@ -126,6 +126,21 @@ export interface SearchResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Highlights
+// spec: POST/GET /v1/summaries/{id}/highlights
+// ---------------------------------------------------------------------------
+export interface Highlight {
+  id: string;
+  text: string;
+  startOffset: number;
+  endOffset: number;
+  color: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // Requests
 // spec: components["schemas"]["RequestStatusData"] (uses progress.percentage
 // instead of progressPct; kept as-is for existing component compatibility)
