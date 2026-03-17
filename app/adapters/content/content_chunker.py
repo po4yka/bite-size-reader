@@ -233,11 +233,7 @@ class ContentChunker:
 
         # Aggregate chunk summaries into final draft
         if chunk_summaries:
-            aggregated = self._resolve_aggregated_summary(
-                chunk_summaries=chunk_summaries,
-                req_id=req_id,
-                correlation_id=correlation_id,
-            )
+            aggregated = aggregate_chunk_summaries(chunk_summaries)
 
             # Recursive Summarization: Synthesize the final summary from the aggregated chunks
             # This ensures the final output is cohesive and not just a concatenation of parts
@@ -251,15 +247,6 @@ class ContentChunker:
             return validate_and_shape_summary(aggregated)
         return None
 
-    def _resolve_aggregated_summary(
-        self,
-        *,
-        chunk_summaries: list[dict[str, Any]],
-        req_id: int,
-        correlation_id: str | None,
-    ) -> dict[str, Any]:
-        return aggregate_chunk_summaries(chunk_summaries)
-
     async def _synthesize_chunks(
         self,
         aggregated: dict[str, Any],
@@ -269,12 +256,7 @@ class ContentChunker:
         correlation_id: str | None,
     ) -> dict[str, Any] | None:
         """Synthesize a final cohesive summary from aggregated chunk summaries."""
-        user_content = self._resolve_chunk_synthesis_prompt(
-            aggregated=aggregated,
-            chosen_lang=chosen_lang,
-            req_id=req_id,
-            correlation_id=correlation_id,
-        )
+        user_content = build_chunk_synthesis_user_content(aggregated, chosen_lang)
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -331,16 +313,6 @@ class ContentChunker:
                 parsed = None
 
         return parsed
-
-    def _resolve_chunk_synthesis_prompt(
-        self,
-        *,
-        aggregated: dict[str, Any],
-        chosen_lang: str,
-        req_id: int,
-        correlation_id: str | None,
-    ) -> str:
-        return build_chunk_synthesis_user_content(aggregated, chosen_lang)
 
     def _build_structured_response_format(self) -> dict[str, Any]:
         """Build response format configuration for structured outputs."""
