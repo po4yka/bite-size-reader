@@ -320,8 +320,8 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
 
     async def async_get_unread_summaries(
         self,
-        uid: int | None,
-        cid: int | None,
+        user_id: int | None,
+        chat_id: int | None,
         limit: int = 10,
         topic: str | None = None,
     ) -> list[dict[str, Any]]:
@@ -339,13 +339,13 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
                 .order_by(Summary.created_at.asc())
             )
 
-            if uid is not None:
+            if user_id is not None:
                 base_query = base_query.where(
-                    (Request.user_id == uid) | (Request.user_id.is_null(True))
+                    (Request.user_id == user_id) | (Request.user_id.is_null(True))
                 )
-            if cid is not None:
+            if chat_id is not None:
                 base_query = base_query.where(
-                    (Request.chat_id == cid) | (Request.chat_id.is_null(True))
+                    (Request.chat_id == chat_id) | (Request.chat_id.is_null(True))
                 )
 
             fetch_limit: int | None = limit

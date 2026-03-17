@@ -86,8 +86,8 @@ class GetUnreadSummariesUseCase:
 
         # Query repository
         db_summaries = await self._summary_repo.async_get_unread_summaries(
-            uid=query.user_id,
-            cid=query.chat_id,
+            user_id=query.user_id,
+            chat_id=query.chat_id,
             limit=query.limit,
             topic=query.topic,
         )

@@ -229,13 +229,13 @@ class SqliteRequestRepositoryAdapter(SqliteBaseRepository):
         return await self._execute(_get, operation_name="get_requests_by_ids", read_only=True)
 
     async def async_get_request_by_forward(
-        self, cid: int, fwd_message_id: int
+        self, chat_id: int, fwd_message_id: int
     ) -> dict[str, Any] | None:
         """Get a request by forwarded message details."""
 
         def _get() -> dict[str, Any] | None:
             request = Request.get_or_none(
-                (Request.fwd_from_chat_id == cid) & (Request.fwd_from_msg_id == fwd_message_id)
+                (Request.fwd_from_chat_id == chat_id) & (Request.fwd_from_msg_id == fwd_message_id)
             )
             return model_to_dict(request)
 

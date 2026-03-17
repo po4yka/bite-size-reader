@@ -43,8 +43,8 @@ class SummaryRepositoryPort(Protocol):
 
     async def async_get_unread_summaries(
         self,
-        uid: int | None,
-        cid: int | None,
+        user_id: int | None,
+        chat_id: int | None,
         limit: int = 10,
         topic: str | None = None,
     ) -> list[dict[str, Any]]:
@@ -193,7 +193,7 @@ class RequestRepositoryPort(Protocol):
         """Create a minimal request row."""
 
     async def async_get_request_by_forward(
-        self, cid: int, fwd_message_id: int
+        self, chat_id: int, fwd_message_id: int
     ) -> dict[str, Any] | None:
         """Return request by forward source identifiers."""
 
