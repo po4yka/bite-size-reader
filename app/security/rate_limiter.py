@@ -209,6 +209,9 @@ class UserRateLimiter:
     async def get_user_status(self, user_id: int) -> dict[str, Any]:
         """Get current rate limit status for a user.
 
+        Also prunes expired entries from the user request window as a side
+        effect of computing the current count.
+
         Args:
             user_id: Telegram user ID
 
