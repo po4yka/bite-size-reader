@@ -322,6 +322,42 @@ class DatabaseSessionManager:
             log_prefix="db_transaction",
         )
 
+    async def async_execute(
+        self,
+        operation: Any,
+        *args: Any,
+        timeout: float | None = None,
+        operation_name: str = "repository_operation",
+        read_only: bool = False,
+        **kwargs: Any,
+    ) -> Any:
+        """Public interface for DatabaseSessionProtocol; delegates to _safe_db_operation."""
+        return await self._safe_db_operation(
+            operation,
+            *args,
+            timeout=timeout,
+            operation_name=operation_name,
+            read_only=read_only,
+            **kwargs,
+        )
+
+    async def async_execute_transaction(
+        self,
+        operation: Any,
+        *args: Any,
+        timeout: float | None = None,
+        operation_name: str = "repository_transaction",
+        **kwargs: Any,
+    ) -> Any:
+        """Public interface for DatabaseSessionProtocol; delegates to _safe_db_transaction."""
+        return await self._safe_db_transaction(
+            operation,
+            *args,
+            timeout=timeout,
+            operation_name=operation_name,
+            **kwargs,
+        )
+
     def execute(self, sql: str, params: Iterable | None = None) -> None:
         """Execute raw SQL synchronously."""
         params = tuple(params or ())

@@ -13,13 +13,12 @@ from tests.conftest import make_test_app_config
 def _create_mock_db() -> MagicMock:
     """Create a mock DatabaseSessionManager with all required async methods."""
     db = MagicMock()
-    # Mock the _safe_db_operation method used by repositories
-    db._safe_db_operation = AsyncMock(
+    # Mock the public DatabaseSessionProtocol methods used by repositories
+    db.async_execute = AsyncMock(
         side_effect=lambda op, *a, **kw: op(*a, **kw) if callable(op) else None
     )
-    # Mock connection_context for fallback
-    db.connection_context = MagicMock(
-        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock())
+    db.async_execute_transaction = AsyncMock(
+        side_effect=lambda op, *a, **kw: op(*a, **kw) if callable(op) else None
     )
     # Mock path for backup functionality
     db.path = ":memory:"
