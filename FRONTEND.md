@@ -22,6 +22,49 @@ Legacy Telegram Mini App in `frontend/` remains operational and separate in V1.
 
 ---
 
+## Feature Ownership
+
+The project has two frontend surfaces. This section defines their ownership boundaries to prevent drift.
+
+| Feature         | `web/` (Carbon)     | `frontend/` (Mini App) |
+|-----------------|---------------------|------------------------|
+| Library         | canonical           | legacy                 |
+| Search          | canonical           | legacy                 |
+| Submit URL      | canonical           | legacy                 |
+| Collections     | canonical           | legacy                 |
+| Digest          | canonical           | legacy                 |
+| Preferences     | canonical           | legacy                 |
+| Admin / ops     | canonical (owner)   | legacy (port to `web/`)|
+| Sync API        | planned             | legacy                 |
+| Auth — JWT      | supported           | not supported          |
+| Auth — Telegram WebApp | supported   | only mode              |
+
+**Rules:**
+
+- **`web/` is the canonical surface for all new features.** Do not add features to `frontend/`.
+- **`frontend/` is legacy.** Accept bug fixes only; no new features.
+- **Admin/ops features** (cache controls, DB info, user stats) currently live in `frontend/` under `/more/admin` and should be ported to `web/` when prioritized.
+- **Sync API** (`/v1/sync`) is only integrated in `frontend/` today; new sync work targets `web/`.
+
+### Adding New Features
+
+Use this decision tree:
+
+```
+New feature?
+  → Add to web/ only. Do not touch frontend/.
+
+Bug fix?
+  → Fix it in whichever surface has the bug.
+  → If the bug exists in both, fix web/ first; frontend/ only if impact warrants it.
+
+Admin / ops feature?
+  → Add to web/ (owner-facing, requires full auth stack).
+  → If it exists only in frontend/, port it to web/ before extending.
+```
+
+---
+
 ## Directory Layout
 
 ```text
