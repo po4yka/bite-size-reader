@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { InlineLoading, InlineNotification } from "@carbon/react";
 import { useAuth } from "./auth/AuthProvider";
@@ -7,14 +8,23 @@ import RouteGuard from "./auth/RouteGuard";
 import AppShell from "./components/AppShell";
 import ArticlePage from "./features/article/ArticlePage";
 import ArticlesPage from "./features/articles/ArticlesPage";
-import CollectionsPage from "./features/collections/CollectionsPage";
-import DigestPage from "./features/digest/DigestPage";
 import LibraryPage from "./features/library/LibraryPage";
-import AdminPage from "./features/admin/AdminPage";
 import PreferencesPage from "./features/preferences/PreferencesPage";
-import SearchPage from "./features/search/SearchPage";
 import SubmitPage from "./features/submit/SubmitPage";
 import { FEATURE_FLAGS } from "./routes/features";
+
+const CollectionsPage = lazy(() => import("./features/collections/CollectionsPage"));
+const DigestPage = lazy(() => import("./features/digest/DigestPage"));
+const SearchPage = lazy(() => import("./features/search/SearchPage"));
+const AdminPage = lazy(() => import("./features/admin/AdminPage"));
+
+function RouteLoader() {
+  return (
+    <section className="page-section">
+      <InlineLoading description="Loading..." />
+    </section>
+  );
+}
 
 function HomeRedirect() {
   return <Navigate to="/library" replace />;
@@ -84,13 +94,30 @@ export default function App() {
         <Route path="library" element={<LibraryPage />} />
         <Route path="library/:id" element={<ArticlePage />} />
         <Route path="articles" element={<ArticlesPage />} />
-        <Route path="search" element={<SearchPage />} />
         <Route path="submit" element={<SubmitPage />} />
-        <Route path="collections" element={<CollectionsPage />} />
-        <Route path="collections/:id" element={<CollectionsPage />} />
-        <Route path="digest" element={<DigestPage />} />
         <Route path="preferences" element={<PreferencesPage />} />
-        {FEATURE_FLAGS.admin && <Route path="admin" element={<AdminPage />} />}
+        <Route
+          path="search"
+          element={<Suspense fallback={<RouteLoader />}><SearchPage /></Suspense>}
+        />
+        <Route
+          path="collections"
+          element={<Suspense fallback={<RouteLoader />}><CollectionsPage /></Suspense>}
+        />
+        <Route
+          path="collections/:id"
+          element={<Suspense fallback={<RouteLoader />}><CollectionsPage /></Suspense>}
+        />
+        <Route
+          path="digest"
+          element={<Suspense fallback={<RouteLoader />}><DigestPage /></Suspense>}
+        />
+        {FEATURE_FLAGS.admin && (
+          <Route
+            path="admin"
+            element={<Suspense fallback={<RouteLoader />}><AdminPage /></Suspense>}
+          />
+        )}
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

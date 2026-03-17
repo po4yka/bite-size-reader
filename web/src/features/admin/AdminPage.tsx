@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Button,
   InlineNotification,
@@ -11,25 +10,17 @@ import {
   StructuredListWrapper,
   Tile,
 } from "@carbon/react";
-import { clearCache, fetchDbInfo } from "../../api/admin";
+import { useDbInfo, useClearCache } from "../../hooks/useAdmin";
+import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 
 export default function AdminPage() {
   const [cacheMessage, setCacheMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
-  const dbQuery = useQuery({
-    queryKey: ["admin-db-info"],
-    queryFn: () => fetchDbInfo(),
-  });
-
-  const cacheMutation = useMutation({
-    mutationFn: () => clearCache(),
-    onSuccess: (result) => {
-      setCacheMessage({ kind: "success", text: `Cleared ${result.clearedKeys} cached key(s).` });
-    },
-    onError: (err) => {
-      setCacheMessage({ kind: "error", text: err instanceof Error ? err.message : "Failed to clear cache" });
-    },
-  });
+  const dbQuery = useDbInfo();
+  const cacheMutation = useClearCache(
+    (result) => setCacheMessage({ kind: "success", text: `Cleared ${result.clearedKeys} cached key(s).` }),
+    (err) => setCacheMessage({ kind: "error", text: err instanceof Error ? err.message : "Failed to clear cache" }),
+  );
 
   const totalRows = dbQuery.data
     ? Object.values(dbQuery.data.tableCounts).reduce((sum, count) => sum + Math.max(0, count), 0)
@@ -48,14 +39,7 @@ export default function AdminPage() {
           </>
         )}
 
-        {dbQuery.error && (
-          <InlineNotification
-            kind="error"
-            title="Failed to load DB info"
-            subtitle={dbQuery.error instanceof Error ? dbQuery.error.message : "Unknown error"}
-            hideCloseButton
-          />
-        )}
+        <QueryErrorNotification error={dbQuery.error} title="Failed to load DB info" />
 
         {dbQuery.data && (
           <>

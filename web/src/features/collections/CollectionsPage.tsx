@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   DataTable,
@@ -21,17 +21,19 @@ import {
   TreeNode,
   TreeView,
 } from "@carbon/react";
-import {
-  createCollection,
-  deleteCollection,
-  fetchCollectionItems,
-  fetchCollectionTree,
-  moveCollectionItems,
-  removeSummaryFromCollection,
-  reorderCollectionItems,
-  updateCollection,
-} from "../../api/collections";
+import { createCollection, moveCollectionItems } from "../../api/collections";
 import type { Collection, CollectionItem } from "../../api/types";
+import { queryKeys } from "../../api/queryKeys";
+import { QueryErrorNotification } from "../../components/QueryErrorNotification";
+import {
+  useCollectionTree,
+  useCollectionItems,
+  useCreateCollection,
+  useRenameCollection,
+  useDeleteCollection,
+  useRemoveFromCollection,
+  useReorderCollectionItems,
+} from "../../hooks/useCollections";
 import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
 
 function RenderTree({
@@ -118,16 +120,8 @@ export default function CollectionsPage() {
     setCreateParentMode("root");
   }, [selectedCollectionId]);
 
-  const treeQuery = useQuery({
-    queryKey: ["collections-tree"],
-    queryFn: () => fetchCollectionTree(),
-  });
-
-  const itemsQuery = useQuery({
-    queryKey: ["collection-items", selectedCollectionId],
-    queryFn: () => fetchCollectionItems(selectedCollectionId ?? 0),
-    enabled: Boolean(selectedCollectionId),
-  });
+  const treeQuery = useCollectionTree();
+  const itemsQuery = useCollectionItems(selectedCollectionId);
 
   const flatCollections = useMemo(() => flattenCollections(treeQuery.data ?? []), [treeQuery.data]);
 
@@ -171,45 +165,11 @@ export default function CollectionsPage() {
     setMoveTargetCollectionId(moveTargetOptions[0] ? String(moveTargetOptions[0].id) : "");
   }, [moveSummaryId, moveTargetOptions]);
 
-  const createMutation = useMutation({
-    mutationFn: ({ name, parentId }: { name: string; parentId?: number }) => createCollection(name, parentId),
-    onSuccess: (collection) => {
-      setNewCollectionName("");
-      setSelectedCollectionId(collection.id);
-      navigate(`/collections/${collection.id}`);
-      void queryClient.invalidateQueries({ queryKey: ["collections-tree"] });
-    },
-  });
-
-  const renameMutation = useMutation({
-    mutationFn: ({ collectionId, name }: { collectionId: number; name: string }) =>
-      updateCollection(collectionId, { name }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["collections-tree"] });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (collectionId: number) => deleteCollection(collectionId),
-    onSuccess: (_, collectionId) => {
-      if (selectedCollectionId === collectionId) {
-        setSelectedCollectionId(null);
-        navigate("/collections");
-      }
-      setDeleteModalOpen(false);
-      void queryClient.invalidateQueries({ queryKey: ["collections-tree"] });
-      void queryClient.invalidateQueries({ queryKey: ["collection-items"] });
-    },
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: ({ collectionId, summaryId }: { collectionId: number; summaryId: number }) =>
-      removeSummaryFromCollection(collectionId, summaryId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["collection-items", selectedCollectionId] });
-      void queryClient.invalidateQueries({ queryKey: ["collections-tree"] });
-    },
-  });
+  const createMutation = useCreateCollection();
+  const renameMutation = useRenameCollection();
+  const deleteMutation = useDeleteCollection();
+  const removeMutation = useRemoveFromCollection();
+  const reorderMutation = useReorderCollectionItems(selectedCollectionId);
 
   const moveItemMutation = useMutation({
     mutationFn: async () => {
@@ -235,20 +195,7 @@ export default function CollectionsPage() {
     onSuccess: () => {
       setMoveSummaryId(null);
       setMoveNewCollectionName("");
-      void queryClient.invalidateQueries({ queryKey: ["collection-items"] });
-      void queryClient.invalidateQueries({ queryKey: ["collections-tree"] });
-    },
-  });
-
-  const reorderMutation = useMutation({
-    mutationFn: (items: Array<{ summary_id: number; position: number }>) => {
-      if (!selectedCollectionId) {
-        throw new Error("Select a collection first.");
-      }
-      return reorderCollectionItems(selectedCollectionId, items);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["collection-items", selectedCollectionId] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
     },
   });
 
@@ -354,10 +301,19 @@ export default function CollectionsPage() {
           <Button
             kind="secondary"
             onClick={() =>
-              createMutation.mutate({
-                name: newCollectionName.trim(),
-                parentId: createParentMode === "selected" ? selectedCollectionId ?? undefined : undefined,
-              })
+              createMutation.mutate(
+                {
+                  name: newCollectionName.trim(),
+                  parentId: createParentMode === "selected" ? selectedCollectionId ?? undefined : undefined,
+                },
+                {
+                  onSuccess: (collection) => {
+                    setNewCollectionName("");
+                    setSelectedCollectionId(collection.id);
+                    navigate(`/collections/${collection.id}`);
+                  },
+                },
+              )
             }
             disabled={!canCreate || createMutation.isPending}
           >
@@ -366,14 +322,7 @@ export default function CollectionsPage() {
         </div>
 
         {treeQuery.isLoading && <InlineLoading description="Loading collections…" />}
-        {treeQuery.error && (
-          <InlineNotification
-            kind="error"
-            title="Failed to load collections"
-            subtitle={treeQuery.error instanceof Error ? treeQuery.error.message : "Unknown error"}
-            hideCloseButton
-          />
-        )}
+        <QueryErrorNotification error={treeQuery.error} title="Failed to load collections" />
 
         {firstMutationError && (
           <InlineNotification
@@ -434,14 +383,7 @@ export default function CollectionsPage() {
         {itemsQuery.isLoading && selectedCollectionId && (
           <DataTableSkeleton columnCount={headers.length} rowCount={6} showToolbar={false} />
         )}
-        {itemsQuery.error && (
-          <InlineNotification
-            kind="error"
-            title="Failed to load collection items"
-            subtitle={itemsQuery.error instanceof Error ? itemsQuery.error.message : "Unknown error"}
-            hideCloseButton
-          />
-        )}
+        <QueryErrorNotification error={itemsQuery.error} title="Failed to load collection items" />
 
         {selectedCollectionId && (
           <DataTable rows={rows} headers={headers}>
@@ -592,7 +534,15 @@ export default function CollectionsPage() {
         }}
         onRequestSubmit={() => {
           if (selectedCollectionId) {
-            deleteMutation.mutate(selectedCollectionId);
+            deleteMutation.mutate(selectedCollectionId, {
+              onSuccess: (_, collectionId) => {
+                if (selectedCollectionId === collectionId) {
+                  setSelectedCollectionId(null);
+                  navigate("/collections");
+                }
+                setDeleteModalOpen(false);
+              },
+            });
           }
         }}
       >

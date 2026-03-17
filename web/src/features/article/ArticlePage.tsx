@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   ButtonSet,
@@ -18,15 +17,10 @@ import {
   Tile,
 } from "@carbon/react";
 import { Play, PauseFilled, StopFilled } from "@carbon/icons-react";
-import {
-  fetchSummary,
-  fetchSummaryContent,
-  generateSummaryAudio,
-  getSummaryAudioUrl,
-  markSummaryRead,
-  toggleSummaryFavorite,
-} from "../../api/summaries";
+import { getSummaryAudioUrl, generateSummaryAudio } from "../../api/summaries";
+import { useMarkRead, useSummaryContent, useSummaryDetail, useToggleFavorite } from "../../hooks/useSummaries";
 import AddToCollectionModal from "../../components/AddToCollectionModal";
+import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 
 type ReaderTextScale = "sm" | "md" | "lg";
 type ReaderDensity = "compact" | "comfortable";
@@ -52,7 +46,6 @@ function riskTagType(risk: string): "green" | "red" | "gray" | "warm-gray" {
 
 export default function ArticlePage() {
   const summaryId = useSummaryId();
-  const queryClient = useQueryClient();
 
   const [showContent, setShowContent] = useState(false);
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
@@ -64,32 +57,10 @@ export default function ArticlePage() {
   const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const summaryQuery = useQuery({
-    queryKey: ["summary", summaryId],
-    queryFn: () => fetchSummary(summaryId),
-    enabled: Number.isFinite(summaryId) && summaryId > 0,
-  });
-
-  const contentQuery = useQuery({
-    queryKey: ["summary-content", summaryId],
-    queryFn: () => fetchSummaryContent(summaryId),
-    enabled: showContent && Number.isFinite(summaryId) && summaryId > 0,
-  });
-
-  const readMutation = useMutation({
-    mutationFn: () => markSummaryRead(summaryId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["summaries"] });
-    },
-  });
-
-  const favoriteMutation = useMutation({
-    mutationFn: () => toggleSummaryFavorite(summaryId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["summaries"] });
-      void queryClient.invalidateQueries({ queryKey: ["summary", summaryId] });
-    },
-  });
+  const summaryQuery = useSummaryDetail(summaryId);
+  const contentQuery = useSummaryContent(summaryId, showContent);
+  const readMutation = useMarkRead(summaryId);
+  const favoriteMutation = useToggleFavorite(summaryId);
 
   useEffect(() => {
     readMutation.reset();
@@ -212,14 +183,7 @@ export default function ArticlePage() {
   return (
     <section className="page-section article-reader-shell">
       {summaryQuery.isLoading && <InlineLoading description="Loading article…" />}
-      {summaryQuery.error && (
-        <InlineNotification
-          kind="error"
-          title="Failed to load article"
-          subtitle={summaryQuery.error instanceof Error ? summaryQuery.error.message : "Unknown error"}
-          hideCloseButton
-        />
-      )}
+      <QueryErrorNotification error={summaryQuery.error} title="Failed to load article" />
 
       {detail && (
         <>
@@ -292,7 +256,7 @@ export default function ArticlePage() {
             <Button kind="secondary" disabled={readMutation.isSuccess || readMutation.isPending} onClick={() => readMutation.mutate()}>
               {readMutation.isSuccess ? "Marked as read" : "Mark as read"}
             </Button>
-            <Button kind="secondary" onClick={() => favoriteMutation.mutate()}>
+            <Button kind="secondary" onClick={() => favoriteMutation.mutate(undefined)}>
               Toggle favorite
             </Button>
             <Button kind="secondary" onClick={() => setIsCollectionModalOpen(true)}>
@@ -352,16 +316,7 @@ export default function ArticlePage() {
                     <>
                       <h3>Source Content</h3>
                       {contentQuery.isFetching && <InlineLoading description="Loading source content…" />}
-                      {contentQuery.error && (
-                        <InlineNotification
-                          kind="warning"
-                          title="Could not load source content"
-                          subtitle={
-                            contentQuery.error instanceof Error ? contentQuery.error.message : "Unknown error"
-                          }
-                          hideCloseButton
-                        />
-                      )}
+                      <QueryErrorNotification error={contentQuery.error} title="Could not load source content" />
                       {contentQuery.data?.content && (
                         <pre
                           className={`content-preview article-content-preview article-text-${readerTextScale} article-density-${readerDensity}`}

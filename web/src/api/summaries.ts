@@ -1,5 +1,6 @@
 import { apiRequest } from "./client";
 import type { PaginationInfo, SummaryCompact, SummaryDetail } from "./types";
+import { config } from "../lib/config";
 
 interface SummariesPayload {
   summaries?: Array<Record<string, unknown>>;
@@ -168,7 +169,7 @@ export function getSummaryAudioUrl(summaryId: number): string {
   if (!Number.isFinite(summaryId) || summaryId <= 0) {
     throw new Error(`getSummaryAudioUrl: invalid summaryId ${summaryId}`);
   }
-  const base = import.meta.env.VITE_API_BASE_URL ?? "";
+  const base = config.apiBaseUrl;
   return `${base}/v1/summaries/${summaryId}/audio`;
 }
 
