@@ -91,7 +91,9 @@ class PushNotificationEventHandler:
                     if tldr and isinstance(tldr, str):
                         return tldr[:100] + ("..." if len(tldr) > 100 else "")
         except Exception:
-            pass
+            logger.debug(
+                "push_body_tldr_failed", exc_info=True, extra={"summary_id": event.summary_id}
+            )
 
         # Fall back to URL domain
         url = request_data.get("input_url") or request_data.get("normalized_url")
@@ -103,7 +105,11 @@ class PushNotificationEventHandler:
                 if domain:
                     return domain
             except Exception:
-                pass
+                logger.debug(
+                    "push_body_url_parse_failed",
+                    exc_info=True,
+                    extra={"summary_id": event.summary_id},
+                )
 
         return "Tap to read your new summary"
 
@@ -119,4 +125,5 @@ class PushNotificationEventHandler:
             summary = Summary.get_or_none(Summary.id == summary_id)
             return model_to_dict(summary)
         except Exception:
+            logger.debug("push_get_summary_failed", exc_info=True, extra={"summary_id": summary_id})
             return None
