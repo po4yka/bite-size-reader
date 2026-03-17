@@ -111,8 +111,8 @@ class TwitterExtractionCoordinator:
         content_text = ""
         content_source = "none"
 
-        run_firecrawl_tier = self._tier_policy.run_firecrawl_tier()
-        run_playwright_tier = self._tier_policy.run_playwright_tier()
+        run_firecrawl_tier = self._tier_policy.should_use_firecrawl_tier()
+        run_playwright_tier = self._tier_policy.should_use_playwright_tier()
         firecrawl_ok = False
         if run_firecrawl_tier:
             firecrawl_ok, content_text, content_source = await self._firecrawl_extractor.extract(

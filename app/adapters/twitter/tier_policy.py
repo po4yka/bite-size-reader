@@ -16,12 +16,12 @@ class TwitterTierPolicy:
     def force_tier(self) -> str:
         return str(getattr(self._cfg.twitter, "force_tier", "auto")).strip().lower() or "auto"
 
-    def run_firecrawl_tier(self) -> bool:
+    def should_use_firecrawl_tier(self) -> bool:
         if self.force_tier() == "playwright":
             return False
         return bool(getattr(self._cfg.twitter, "prefer_firecrawl", True))
 
-    def run_playwright_tier(self) -> bool:
+    def should_use_playwright_tier(self) -> bool:
         if self.force_tier() == "firecrawl":
             return False
         return bool(getattr(self._cfg.twitter, "playwright_enabled", False))
