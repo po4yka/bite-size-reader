@@ -3,40 +3,29 @@ import type { PaginationInfo, SummaryCompact, SummaryDetail } from "./types";
 
 interface SummariesPayload {
   summaries?: Array<Record<string, unknown>>;
-  items?: Array<Record<string, unknown>>;
   pagination: {
     total: number;
     limit: number;
     offset: number;
-    hasMore?: boolean;
-    has_more?: boolean;
-  };
-}
-
-function mapPagination(raw: SummariesPayload["pagination"]): PaginationInfo {
-  return {
-    total: raw.total,
-    limit: raw.limit,
-    offset: raw.offset,
-    hasMore: Boolean(raw.hasMore ?? raw.has_more),
+    hasMore: boolean;
   };
 }
 
 function mapSummaryCompact(raw: Record<string, unknown>): SummaryCompact {
   return {
     id: Number(raw.id ?? 0),
-    requestId: String(raw.requestId ?? raw.request_id ?? ""),
+    requestId: String(raw.requestId ?? ""),
     title: String(raw.title ?? "Untitled"),
     url: String(raw.url ?? ""),
     domain: String(raw.domain ?? ""),
     tldr: String(raw.tldr ?? ""),
-    summary250: String(raw.summary250 ?? raw.summary_250 ?? ""),
-    topicTags: (raw.topicTags as string[] | undefined) ?? (raw.topic_tags as string[] | undefined) ?? [],
-    readingTimeMin: Number(raw.readingTimeMin ?? raw.reading_time_min ?? raw.estimatedReadingTimeMin ?? 0),
-    isRead: Boolean(raw.isRead ?? raw.is_read),
-    isFavorited: Boolean(raw.isFavorited ?? raw.is_favorited),
+    summary250: String(raw.summary250 ?? ""),
+    topicTags: (raw.topicTags as string[] | undefined) ?? [],
+    readingTimeMin: Number(raw.readingTimeMin ?? raw.estimatedReadingTimeMin ?? 0),
+    isRead: Boolean(raw.isRead),
+    isFavorited: Boolean(raw.isFavorited),
     lang: String(raw.lang ?? "auto"),
-    createdAt: String(raw.createdAt ?? raw.created_at ?? ""),
+    createdAt: String(raw.createdAt ?? ""),
   };
 }
 
@@ -55,10 +44,9 @@ export async function fetchSummaries(params: {
   if (params.sort) query.set("sort", params.sort);
 
   const data = await apiRequest<SummariesPayload>(`/v1/summaries?${query.toString()}`);
-  const rows = data.summaries ?? data.items ?? [];
   return {
-    summaries: rows.map(mapSummaryCompact),
-    pagination: mapPagination(data.pagination),
+    summaries: (data.summaries ?? []).map(mapSummaryCompact),
+    pagination: data.pagination,
   };
 }
 
@@ -182,11 +170,8 @@ export function getSummaryAudioUrl(summaryId: number): string {
 }
 
 export async function toggleSummaryFavorite(summaryId: number): Promise<{ isFavorited: boolean }> {
-  const data = await apiRequest<{ isFavorited?: boolean; is_favorited?: boolean }>(
-    `/v1/summaries/${summaryId}/favorite`,
-    {
-      method: "POST",
-    },
-  );
-  return { isFavorited: Boolean(data.isFavorited ?? data.is_favorited) };
+  const data = await apiRequest<{ isFavorited: boolean }>(`/v1/summaries/${summaryId}/favorite`, {
+    method: "POST",
+  });
+  return { isFavorited: Boolean(data.isFavorited) };
 }

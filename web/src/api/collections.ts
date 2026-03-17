@@ -7,10 +7,8 @@ interface CollectionPayload {
   name: string;
   description?: string | null;
   parentId?: number | null;
-  parent_id?: number | null;
   position?: number | null;
   itemCount?: number;
-  item_count?: number;
   children?: CollectionPayload[];
 }
 
@@ -19,9 +17,9 @@ function mapCollection(raw: CollectionPayload): Collection {
     id: raw.id,
     name: raw.name,
     description: raw.description ?? null,
-    parentId: raw.parentId ?? raw.parent_id ?? null,
+    parentId: raw.parentId ?? null,
     position: raw.position ?? null,
-    itemCount: raw.itemCount ?? raw.item_count ?? 0,
+    itemCount: raw.itemCount ?? 0,
     children: raw.children?.map(mapCollection),
   };
 }
@@ -32,25 +30,13 @@ export async function fetchCollections(parentId?: number): Promise<{ collections
   q.set("offset", "0");
   if (parentId != null) q.set("parent_id", String(parentId));
 
-  const data = await apiRequest<{
-    collections: CollectionPayload[];
-    pagination: {
-      total: number;
-      limit: number;
-      offset: number;
-      hasMore?: boolean;
-      has_more?: boolean;
-    };
-  }>(`/v1/collections?${q.toString()}`);
+  const data = await apiRequest<{ collections: CollectionPayload[]; pagination: PaginationInfo }>(
+    `/v1/collections?${q.toString()}`,
+  );
 
   return {
     collections: data.collections.map(mapCollection),
-    pagination: {
-      total: data.pagination.total,
-      limit: data.pagination.limit,
-      offset: data.pagination.offset,
-      hasMore: Boolean(data.pagination.hasMore ?? data.pagination.has_more),
-    },
+    pagination: data.pagination,
   };
 }
 
@@ -80,17 +66,14 @@ export async function fetchCollectionItems(collectionId: number): Promise<Collec
   const data = await apiRequest<{
     items: Array<{
       collectionId?: number;
-      collection_id?: number;
       summaryId?: number;
-      summary_id?: number;
       position?: number;
       createdAt?: string;
-      created_at?: string;
     }>;
   }>(`/v1/collections/${collectionId}/items?limit=100&offset=0`);
 
   const summaryIds = data.items
-    .map((item) => item.summaryId ?? item.summary_id)
+    .map((item) => item.summaryId)
     .filter((id): id is number => typeof id === "number");
 
   const details = await Promise.allSettled(summaryIds.map((id) => fetchSummary(id)));
@@ -103,14 +86,14 @@ export async function fetchCollectionItems(collectionId: number): Promise<Collec
   });
 
   return data.items.map((item) => {
-    const summaryId = item.summaryId ?? item.summary_id ?? 0;
+    const summaryId = item.summaryId ?? 0;
     const detail = detailMap.get(summaryId);
     return {
       id: summaryId,
-      collectionId: item.collectionId ?? item.collection_id ?? collectionId,
+      collectionId: item.collectionId ?? collectionId,
       summaryId,
       position: item.position ?? 0,
-      createdAt: item.createdAt ?? item.created_at ?? "",
+      createdAt: item.createdAt ?? "",
       title: detail?.title,
       domain: detail?.domain,
     };
@@ -157,18 +140,15 @@ export function moveCollectionItems(
   summaryIds: number[],
   targetCollectionId: number,
   position?: number,
-): Promise<{ movedSummaryIds: number[]; moved_summary_ids?: number[] }> {
-  return apiRequest<{ movedSummaryIds: number[]; moved_summary_ids?: number[] }>(
-    `/v1/collections/${collectionId}/items/move`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        summary_ids: summaryIds,
-        target_collection_id: targetCollectionId,
-        position: position ?? null,
-      }),
-    },
-  );
+): Promise<{ movedSummaryIds: number[] }> {
+  return apiRequest<{ movedSummaryIds: number[] }>(`/v1/collections/${collectionId}/items/move`, {
+    method: "POST",
+    body: JSON.stringify({
+      summary_ids: summaryIds,
+      target_collection_id: targetCollectionId,
+      position: position ?? null,
+    }),
+  });
 }
 
 export function reorderCollectionItems(

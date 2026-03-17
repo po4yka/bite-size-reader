@@ -17,42 +17,31 @@ export interface DuplicateCheckResult {
   summarizedAt: string | null;
 }
 
+// spec: components["schemas"]["DuplicateDetectionResponse"] (camelCase after normalizeKeys)
 interface DuplicateCheckPayload {
   isDuplicate?: boolean;
-  is_duplicate?: boolean;
   requestId?: number;
-  request_id?: number;
   summaryId?: number;
-  summary_id?: number;
   normalizedUrl?: string | null;
-  normalized_url?: string | null;
   summarizedAt?: string | null;
-  summarized_at?: string | null;
 }
 
+// spec: components["schemas"]["SubmitRequestData"] (camelCase after normalizeKeys)
 interface SubmitRequestPayload {
   requestId?: number;
-  request_id?: number;
   correlationId?: string;
-  correlation_id?: string;
   status?: string;
   estimatedWaitSeconds?: number | null;
-  estimated_wait_seconds?: number | null;
   createdAt?: string | null;
-  created_at?: string | null;
 }
 
 interface SubmitPayload {
   request?: SubmitRequestPayload;
   isDuplicate?: boolean;
-  is_duplicate?: boolean;
   existingRequestId?: number;
-  existing_request_id?: number;
   existingSummaryId?: number;
-  existing_summary_id?: number;
   message?: string | null;
   summarizedAt?: string | null;
-  summarized_at?: string | null;
 }
 
 export interface SubmitQueuedResult {
@@ -74,41 +63,31 @@ export interface SubmitDuplicateResult {
 
 export type SubmitUrlResult = SubmitQueuedResult | SubmitDuplicateResult;
 
+// spec: components["schemas"]["RequestRetryResponseEnvelope"].data (snake_case — normalizeKeys converts)
 interface RetryPayload {
   newRequestId?: number;
-  new_request_id?: number;
   correlationId?: string;
-  correlation_id?: string;
   status?: string;
   createdAt?: string;
-  created_at?: string;
 }
 
+// spec: components["schemas"]["RequestStatusData"] (camelCase)
 interface StatusPayload {
   requestId?: number;
-  request_id?: number;
   status?: string;
   stage?: string;
   progress?: {
     percentage?: number;
   } | null;
   errorMessage?: string | null;
-  error_message?: string | null;
   canRetry?: boolean;
-  can_retry?: boolean;
   retryable?: boolean | null;
   queuePosition?: number | null;
-  queue_position?: number | null;
   estimatedSecondsRemaining?: number | null;
-  estimated_seconds_remaining?: number | null;
   correlationId?: string | null;
-  correlation_id?: string | null;
   updatedAt?: string | null;
-  updated_at?: string | null;
   errorType?: string | null;
-  error_type?: string | null;
   errorReasonCode?: string | null;
-  error_reason_code?: string | null;
 }
 
 interface RequestDetailPayload {
@@ -128,7 +107,7 @@ function normalizeStatus(payload: StatusPayload): RequestStatus["status"] {
 
 function toSubmitResult(data: SubmitPayload): SubmitUrlResult {
   if (data.request) {
-    const requestId = data.request.requestId ?? data.request.request_id;
+    const requestId = data.request.requestId;
     if (requestId == null) {
       throw new Error("Submit response is missing request id.");
     }
@@ -137,22 +116,20 @@ function toSubmitResult(data: SubmitPayload): SubmitUrlResult {
       kind: "queued",
       requestId: String(requestId),
       status: data.request.status ?? "pending",
-      correlationId: data.request.correlationId ?? data.request.correlation_id ?? "",
-      estimatedWaitSeconds:
-        data.request.estimatedWaitSeconds ?? data.request.estimated_wait_seconds ?? null,
-      createdAt: data.request.createdAt ?? data.request.created_at ?? null,
+      correlationId: data.request.correlationId ?? "",
+      estimatedWaitSeconds: data.request.estimatedWaitSeconds ?? null,
+      createdAt: data.request.createdAt ?? null,
     };
   }
 
-  const isDuplicate = Boolean(data.isDuplicate ?? data.is_duplicate);
+  const isDuplicate = Boolean(data.isDuplicate);
   if (isDuplicate) {
-    const existingRequestId = data.existingRequestId ?? data.existing_request_id;
     return {
       kind: "duplicate",
-      existingRequestId: existingRequestId != null ? String(existingRequestId) : null,
-      existingSummaryId: data.existingSummaryId ?? data.existing_summary_id ?? null,
+      existingRequestId: data.existingRequestId != null ? String(data.existingRequestId) : null,
+      existingSummaryId: data.existingSummaryId ?? null,
       message: data.message ?? "This URL was already summarized.",
-      summarizedAt: data.summarizedAt ?? data.summarized_at ?? null,
+      summarizedAt: data.summarizedAt ?? null,
     };
   }
 
@@ -172,11 +149,11 @@ export async function checkDuplicate(url: string): Promise<DuplicateCheckResult>
   const data = await apiRequest<DuplicateCheckPayload>(`/v1/urls/check-duplicate?url=${encodeURIComponent(url)}`);
 
   return {
-    isDuplicate: Boolean(data.isDuplicate ?? data.is_duplicate),
-    requestId: String(data.requestId ?? data.request_id ?? "") || null,
-    summaryId: data.summaryId ?? data.summary_id ?? null,
-    normalizedUrl: data.normalizedUrl ?? data.normalized_url ?? null,
-    summarizedAt: data.summarizedAt ?? data.summarized_at ?? null,
+    isDuplicate: Boolean(data.isDuplicate),
+    requestId: String(data.requestId ?? "") || null,
+    summaryId: data.summaryId ?? null,
+    normalizedUrl: data.normalizedUrl ?? null,
+    summarizedAt: data.summarizedAt ?? null,
   };
 }
 
@@ -198,17 +175,16 @@ export async function retryRequest(requestId: string): Promise<SubmitQueuedResul
   const data = await apiRequest<RetryPayload>(`/v1/requests/${requestId}/retry`, {
     method: "POST",
   });
-  const newRequestId = data.newRequestId ?? data.new_request_id;
-  if (newRequestId == null) {
+  if (data.newRequestId == null) {
     throw new Error("Retry response is missing request id.");
   }
   return {
     kind: "queued",
-    requestId: String(newRequestId),
+    requestId: String(data.newRequestId),
     status: data.status ?? "pending",
-    correlationId: data.correlationId ?? data.correlation_id ?? "",
+    correlationId: data.correlationId ?? "",
     estimatedWaitSeconds: null,
-    createdAt: data.createdAt ?? data.created_at ?? null,
+    createdAt: data.createdAt ?? null,
   };
 }
 
@@ -225,18 +201,18 @@ export async function fetchRequestStatus(requestId: string): Promise<RequestStat
   const rawProgress = Number(data.progress?.percentage ?? 0);
 
   return {
-    requestId: String(data.requestId ?? data.request_id ?? requestId),
+    requestId: String(data.requestId ?? requestId),
     status: resolvedStatus,
     progressPct: normalizeProgress(resolvedStatus, rawProgress),
     summaryId,
-    errorMessage: (data.errorMessage ?? data.error_message ?? null) as string | null,
-    queuePosition: data.queuePosition ?? data.queue_position ?? null,
-    estimatedSecondsRemaining: data.estimatedSecondsRemaining ?? data.estimated_seconds_remaining ?? null,
-    canRetry: Boolean(data.canRetry ?? data.can_retry),
+    errorMessage: data.errorMessage ?? null,
+    queuePosition: data.queuePosition ?? null,
+    estimatedSecondsRemaining: data.estimatedSecondsRemaining ?? null,
+    canRetry: Boolean(data.canRetry),
     retryable: data.retryable ?? null,
-    correlationId: data.correlationId ?? data.correlation_id ?? null,
-    updatedAt: data.updatedAt ?? data.updated_at ?? null,
-    errorType: data.errorType ?? data.error_type ?? null,
-    errorReasonCode: data.errorReasonCode ?? data.error_reason_code ?? null,
+    correlationId: data.correlationId ?? null,
+    updatedAt: data.updatedAt ?? null,
+    errorType: data.errorType ?? null,
+    errorReasonCode: data.errorReasonCode ?? null,
   };
 }
