@@ -4,7 +4,7 @@ fastapi==0.135.1
 httpx[http2]==0.28.1
 json_repair==0.58.1
 orjson==3.11.7
-peewee==3.19.0
+peewee==4.0.1
 pyjwt==2.11.0
 pydantic==2.12.5
 pydantic-settings==2.13.1
