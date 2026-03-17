@@ -139,7 +139,7 @@ app/
 +-- observability/      # Metrics, tracing, telemetry
 +-- prompts/            # LLM system prompts (en/ru)
 +-- security/           # Security utilities
-+-- services/           # Search and other domain services
++-- services/           # DEPRECATED backward-compat re-exports (migrate to app/application/services/ or app/infrastructure/)
 +-- types/              # Type definitions
 +-- utils/              # Helper utilities (progress, formatting, validation)
 web/                    # Carbon web interface (React + TypeScript + Vite)
