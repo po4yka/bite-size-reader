@@ -7,7 +7,7 @@ local database search, and hybrid semantic search.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from app.adapters.telegram.command_handlers.decorators import audit_command
 from app.core.async_utils import raise_if_cancelled
@@ -20,6 +20,15 @@ if TYPE_CHECKING:
     )
     from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
     from app.infrastructure.search.hybrid_search_service import HybridSearchService
+
+
+class SearcherProvider(Protocol):
+    """Protocol for objects that supply the three search backends."""
+
+    topic_searcher: TopicSearchService | None
+    local_searcher: LocalTopicSearchService | None
+    hybrid_search: HybridSearchService | None
+
 
 logger = logging.getLogger(__name__)
 
@@ -36,37 +45,25 @@ class SearchHandler:
     def __init__(
         self,
         response_formatter: ResponseFormatter,
-        searcher_provider: Any,
+        searcher_provider: SearcherProvider,
         *,
         search_topics_use_case: Any | None = None,
     ) -> None:
-        """Initialize the search handler.
-
-        Args:
-            response_formatter: Response formatter for sending messages.
-            searcher_provider: Object with topic_searcher, local_searcher, and
-                hybrid_search attributes that can be dynamically accessed.
-                This allows tests to modify the searchers after initialization.
-            search_topics_use_case: Application use case for library topic search.
-        """
         self._formatter = response_formatter
         self._searcher_provider = searcher_provider
         self._search_topics_use_case = search_topics_use_case
 
     @property
     def _topic_searcher(self) -> TopicSearchService | None:
-        """Get the current topic searcher from the provider."""
-        return getattr(self._searcher_provider, "topic_searcher", None)
+        return self._searcher_provider.topic_searcher
 
     @property
     def _local_searcher(self) -> LocalTopicSearchService | None:
-        """Get the current local searcher from the provider."""
-        return getattr(self._searcher_provider, "local_searcher", None)
+        return self._searcher_provider.local_searcher
 
     @property
     def _hybrid_search(self) -> HybridSearchService | None:
-        """Get the current hybrid search from the provider."""
-        return getattr(self._searcher_provider, "hybrid_search", None)
+        return self._searcher_provider.hybrid_search
 
     async def handle_find_online(
         self,
