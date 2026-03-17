@@ -11,22 +11,32 @@ from app.core.logging_utils import get_logger
 from app.db.models import database_proxy
 from app.di.api import get_current_api_runtime, resolve_api_runtime, set_current_api_runtime
 from app.di.database import clear_cached_runtime_database, get_or_create_runtime_database_from_env
-from app.di.repositories import (
-    build_crawl_result_repository,
-    build_llm_repository,
-    build_request_repository,
-    build_summary_repository,
-    build_topic_search_repository,
-    build_user_repository,
-)
 from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
     SqliteAuthRepositoryAdapter,
 )
 from app.infrastructure.persistence.sqlite.repositories.collection_repository import (
     SqliteCollectionRepositoryAdapter,
 )
+from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+    SqliteCrawlResultRepositoryAdapter,
+)
 from app.infrastructure.persistence.sqlite.repositories.device_repository import (
     SqliteDeviceRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
+    SqliteLLMRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    SqliteTopicSearchRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -90,7 +100,7 @@ def get_request_repository(
     request: Any = None,
 ) -> RequestRepositoryPort:
     """Build a request repository bound to the shared session manager."""
-    return build_request_repository(resolve_repository_session(session_manager, request))
+    return SqliteRequestRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_summary_repository(
@@ -98,7 +108,7 @@ def get_summary_repository(
     request: Any = None,
 ) -> SummaryRepositoryPort:
     """Build a summary repository bound to the shared session manager."""
-    return build_summary_repository(resolve_repository_session(session_manager, request))
+    return SqliteSummaryRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_crawl_result_repository(
@@ -106,7 +116,7 @@ def get_crawl_result_repository(
     request: Any = None,
 ) -> CrawlResultRepositoryPort:
     """Build a crawl-result repository bound to the shared session manager."""
-    return build_crawl_result_repository(resolve_repository_session(session_manager, request))
+    return SqliteCrawlResultRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_llm_repository(
@@ -114,7 +124,7 @@ def get_llm_repository(
     request: Any = None,
 ) -> LLMRepositoryPort:
     """Build an LLM repository bound to the shared session manager."""
-    return build_llm_repository(resolve_repository_session(session_manager, request))
+    return SqliteLLMRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_user_repository(
@@ -122,7 +132,7 @@ def get_user_repository(
     request: Any = None,
 ) -> UserRepositoryPort:
     """Build a user repository bound to the shared session manager."""
-    return build_user_repository(resolve_repository_session(session_manager, request))
+    return SqliteUserRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_auth_repository(
@@ -158,7 +168,7 @@ def get_topic_search_repository(
     request: Any = None,
 ) -> TopicSearchRepositoryPort:
     """Build a topic-search repository bound to the shared session manager."""
-    return build_topic_search_repository(resolve_repository_session(session_manager, request))
+    return SqliteTopicSearchRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_summary_read_model_use_case(
