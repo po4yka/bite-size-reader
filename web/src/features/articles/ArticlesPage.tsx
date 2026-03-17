@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -78,11 +78,14 @@ export default function ArticlesPage() {
     status: summary,
   }));
 
-  function handleRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, rowId: string): void {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    navigate(`/library/${rowId}`);
-  }
+  const handleRowKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTableRowElement>, rowId: string): void => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      navigate(`/library/${rowId}`);
+    },
+    [navigate],
+  );
 
   const isInitialLoading = summariesQuery.isLoading && !summariesQuery.data;
 
@@ -145,7 +148,9 @@ export default function ArticlesPage() {
                   </TableHead>
                   <TableBody>
                     {rows.map((row) => {
-                      const summary = row.cells.find((cell) => cell.info.header === "Status")?.value as SummaryCompact;
+                      const cellValue = row.cells.find((cell) => cell.info.header === "Status")?.value;
+                      if (!cellValue || typeof cellValue !== "object") return null;
+                      const summary = cellValue as SummaryCompact;
                       return (
                         <TableRow
                           {...getRowProps({ row })}

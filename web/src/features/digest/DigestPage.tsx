@@ -107,7 +107,7 @@ function ChannelPostsPreview({ username }: { username: string }) {
   }
 
   return (
-    <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+    <ul className="digest-list">
       {posts.map((post) => (
         <li
           key={post.id}
@@ -116,15 +116,15 @@ function ChannelPostsPreview({ username }: { username: string }) {
             borderBottom: "1px solid var(--cds-border-subtle)",
           }}
         >
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.25rem" }}>
-            <span className="muted" style={{ fontSize: "0.75rem" }}>
+          <div className="digest-list-item-row">
+            <span className="muted digest-text-xs">
               {new Date(post.date).toLocaleString()}
             </span>
             <Tag type="blue" size="sm">
               {post.contentType}
             </Tag>
             {post.views != null && (
-              <span className="muted" style={{ fontSize: "0.75rem" }}>
+              <span className="muted digest-text-xs">
                 {post.views} views
               </span>
             )}
@@ -215,7 +215,7 @@ function CategoryManagementModal({
 
         {categories.length === 0 && <p className="muted">No categories yet.</p>}
 
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        <ul className="digest-list">
           {categories.map((cat) => (
             <li
               key={cat.id}
@@ -354,14 +354,14 @@ function ChannelResolvePreview({
           <h4>@{resolvedData.username}</h4>
           {resolvedData.title && <p><strong>{resolvedData.title}</strong></p>}
           {resolvedData.description && (
-            <p className="muted" style={{ fontSize: "0.875rem" }}>
+            <p className="muted digest-text-sm">
               {resolvedData.description.length > 300
                 ? `${resolvedData.description.slice(0, 300)}...`
                 : resolvedData.description}
             </p>
           )}
           {resolvedData.memberCount != null && (
-            <p className="muted" style={{ fontSize: "0.75rem" }}>
+            <p className="muted digest-text-xs">
               {resolvedData.memberCount.toLocaleString()} members
             </p>
           )}

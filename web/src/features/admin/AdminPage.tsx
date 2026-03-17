@@ -104,7 +104,7 @@ export default function AdminPage() {
         </Button>
 
         {cacheMessage && (
-          <div style={{ marginTop: "1rem" }}>
+          <div className="digest-inline-margin-top">
             <InlineNotification
               kind={cacheMessage.kind}
               title={cacheMessage.kind === "success" ? "Cache cleared" : "Error"}

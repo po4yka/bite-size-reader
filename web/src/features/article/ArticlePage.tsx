@@ -60,7 +60,6 @@ export default function ArticlePage() {
   const [readerDensity, setReaderDensity] = useState<ReaderDensity>("comfortable");
   const [copyState, setCopyState] = useState<"idle" | "success" | "error">("idle");
   const [readProgress, setReadProgress] = useState(0);
-  const [markedReadLocally, setMarkedReadLocally] = useState(false);
   const [audioState, setAudioState] = useState<"idle" | "loading" | "playing" | "paused" | "error">("idle");
   const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -80,7 +79,6 @@ export default function ArticlePage() {
   const readMutation = useMutation({
     mutationFn: () => markSummaryRead(summaryId),
     onSuccess: () => {
-      setMarkedReadLocally(true);
       void queryClient.invalidateQueries({ queryKey: ["summaries"] });
     },
   });
@@ -94,7 +92,7 @@ export default function ArticlePage() {
   });
 
   useEffect(() => {
-    setMarkedReadLocally(false);
+    readMutation.reset();
     setCopyState("idle");
     setReadProgress(0);
     setAudioState("idle");
@@ -104,7 +102,7 @@ export default function ArticlePage() {
       audioRef.current.pause();
       audioRef.current = null;
     }
-  }, [summaryId]);
+  }, [summaryId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const updateProgress = () => {
@@ -291,8 +289,8 @@ export default function ArticlePage() {
           </Tile>
 
           <ButtonSet>
-            <Button kind="secondary" disabled={markedReadLocally || readMutation.isPending} onClick={() => readMutation.mutate()}>
-              {markedReadLocally ? "Marked as read" : "Mark as read"}
+            <Button kind="secondary" disabled={readMutation.isSuccess || readMutation.isPending} onClick={() => readMutation.mutate()}>
+              {readMutation.isSuccess ? "Marked as read" : "Mark as read"}
             </Button>
             <Button kind="secondary" onClick={() => favoriteMutation.mutate()}>
               Toggle favorite
