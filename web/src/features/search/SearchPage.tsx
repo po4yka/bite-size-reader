@@ -24,6 +24,7 @@ interface SelectOption {
 }
 
 function toggleValue(list: string[], value: string): string[] {
+  if (!value || !value.trim()) return list;
   if (list.includes(value)) {
     return list.filter((item) => item !== value);
   }
@@ -126,7 +127,7 @@ export default function SearchPage() {
     favoriteState !== "all",
     Boolean(startDate),
     Boolean(endDate),
-    semanticMode && minSimilarity > 0.2,
+    semanticMode && minSimilarity > 0.2, // 0.2 is the default; > means user changed it
     selectedTags.length > 0,
     selectedDomains.length > 0,
   ].filter(Boolean).length;
@@ -329,6 +330,7 @@ export default function SearchPage() {
                     key={`domain-${facet.value}`}
                     type="button"
                     className="filter-chip"
+                    aria-pressed={selectedDomains.includes(facet.value)}
                     onClick={() => {
                       setSelectedDomains((prev) => toggleValue(prev, facet.value));
                       setPage(1);
@@ -350,6 +352,7 @@ export default function SearchPage() {
                     key={`tag-${facet.value}`}
                     type="button"
                     className="filter-chip"
+                    aria-pressed={selectedTags.includes(facet.value)}
                     onClick={() => {
                       setSelectedTags((prev) => toggleValue(prev, facet.value));
                       setPage(1);
@@ -371,6 +374,7 @@ export default function SearchPage() {
                     key={`lang-${facet.value}`}
                     type="button"
                     className="filter-chip"
+                    aria-pressed={language === facet.value}
                     onClick={() => {
                       setLanguage((prev) => (prev === facet.value ? "" : facet.value));
                       setPage(1);

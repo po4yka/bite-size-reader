@@ -45,6 +45,7 @@ export function useTelegramMainButton(options: TelegramMainButtonOptions): void 
     return () => {
       mainButton.offClick?.(options.onClick);
       mainButton.hideProgress?.();
+      mainButton.hide?.();
     };
   }, [mode, options.disabled, options.loading, options.onClick, options.text, options.visible]);
 }
