@@ -641,9 +641,9 @@ class ResponseFormatter:
     # Private methods exposed for backward compatibility with tests
     # =========================================================================
 
-    def _is_safe_content(self, text: str) -> tuple[bool, str]:
+    def _validate_content(self, text: str) -> tuple[bool, str]:
         """Validate content for security issues."""
-        return self._message_validator.is_safe_content(text)
+        return self._message_validator.validate_content(text)
 
     def _validate_url(self, url: str) -> tuple[bool, str]:
         """Validate URL for security."""

@@ -104,7 +104,7 @@ class ResponseSenderImpl:
             return
 
         # Security content check
-        is_safe, error_msg = self._validator.is_safe_content(text)
+        is_safe, error_msg = self._validator.validate_content(text)
         if not is_safe:
             logger.warning(
                 "safe_reply_unsafe_content_blocked",
@@ -190,7 +190,7 @@ class ResponseSenderImpl:
             )
             return None
 
-        is_safe, error_msg = self._validator.is_safe_content(text)
+        is_safe, error_msg = self._validator.validate_content(text)
         if not is_safe:
             logger.warning(
                 "safe_reply_with_id_unsafe_content_blocked",
@@ -558,7 +558,7 @@ class ResponseSenderImpl:
             )
             return None
 
-        is_safe, error_msg = self._validator.is_safe_content(text)
+        is_safe, error_msg = self._validator.validate_content(text)
         if not is_safe:
             logger.warning(
                 "edit_message_unsafe_content_blocked",

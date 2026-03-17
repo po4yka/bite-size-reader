@@ -39,7 +39,7 @@ class DataFormatter(Protocol):
 class MessageValidator(Protocol):
     """Protocol for message security validation."""
 
-    def is_safe_content(self, text: str) -> tuple[bool, str]:
+    def validate_content(self, text: str) -> tuple[bool, str]:
         """Validate content for security issues."""
         ...
 

@@ -16,7 +16,7 @@ class MessageValidatorImpl:
         self._min_message_interval_ms = min_message_interval_ms
         self._last_message_time: float = 0.0
 
-    def is_safe_content(self, text: str) -> tuple[bool, str]:
+    def validate_content(self, text: str) -> tuple[bool, str]:
         """Validate content for security issues."""
         # Check for suspicious patterns
         suspicious_patterns = [
