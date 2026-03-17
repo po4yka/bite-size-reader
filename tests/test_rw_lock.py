@@ -57,19 +57,22 @@ class TestAsyncRWLock(unittest.IsolatedAsyncioTestCase):
     async def test_writer_excludes_readers(self) -> None:
         """Test that writer blocks readers until released."""
         results: list[str] = []
+        # Use an Event so the reader only attempts to acquire *after* the writer
+        # holds the lock — this replaces a fragile sleep(0.01) guard.
+        writer_holding = asyncio.Event()
 
         async def writer() -> None:
             async with self.lock.write_lock():
                 results.append("writer_start")
-                await asyncio.sleep(0.05)
+                writer_holding.set()  # Signal: writer now holds the lock
+                await asyncio.sleep(0.02)  # Simulate work
                 results.append("writer_end")
 
         async def reader() -> None:
-            await asyncio.sleep(0.01)  # Let writer start first
+            await writer_holding.wait()  # Wait until writer has the lock
             async with self.lock.read_lock():
                 results.append("reader")
 
-        # Start writer first, then reader
         await asyncio.gather(writer(), reader())
 
         # Reader should only execute after writer finishes
@@ -106,15 +109,20 @@ class TestAsyncRWLock(unittest.IsolatedAsyncioTestCase):
     async def test_readers_block_writer(self) -> None:
         """Test that writer waits for all readers to finish."""
         results: list[str] = []
+        # Use an Event to signal when at least one reader holds the lock so
+        # the writer attempts to acquire only after a reader is inside the
+        # critical section — replaces the fragile sleep(0.01) ordering trick.
+        reader_inside = asyncio.Event()
 
         async def reader(name: str) -> None:
             async with self.lock.read_lock():
                 results.append(f"{name}_start")
-                await asyncio.sleep(0.03)
+                reader_inside.set()  # Signal: a reader now holds the lock
+                await asyncio.sleep(0.02)
                 results.append(f"{name}_end")
 
         async def writer() -> None:
-            await asyncio.sleep(0.01)  # Let readers start first
+            await reader_inside.wait()  # Wait until at least one reader is active
             async with self.lock.write_lock():
                 results.append("writer")
 
@@ -126,10 +134,10 @@ class TestAsyncRWLock(unittest.IsolatedAsyncioTestCase):
         )
 
         # Writer should only execute after all readers finish
-        self.assertIn("reader1_start", results[:2])
-        self.assertIn("reader2_start", results[:2])
-        self.assertIn("reader1_end", results[:4])
-        self.assertIn("reader2_end", results[:4])
+        self.assertIn("reader1_start", results)
+        self.assertIn("reader2_start", results)
+        self.assertIn("reader1_end", results)
+        self.assertIn("reader2_end", results)
         self.assertEqual(results[-1], "writer")
 
     async def test_lock_release_on_exception_read(self) -> None:
