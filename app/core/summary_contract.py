@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.summary_contract_impl.contract import (
-    _cap_text,
-    _extract_keywords_tfidf,
-    _normalize_whitespace,
+    cap_text,
+    extract_keywords_tfidf,
     get_summary_json_schema,
+    normalize_whitespace,
     validate_and_shape_summary as _validate_python,
 )
 from app.types.summary_types import (
@@ -41,9 +41,9 @@ __all__ = [
     "SemanticChunk",
     "SummaryDict",
     "SummaryJSON",
-    "_cap_text",
-    "_extract_keywords_tfidf",
-    "_normalize_whitespace",
+    "cap_text",
+    "extract_keywords_tfidf",
     "get_summary_json_schema",
+    "normalize_whitespace",
     "validate_and_shape_summary",
 ]

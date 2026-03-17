@@ -9,7 +9,7 @@ from collections import Counter
 from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
-from app.core.summary_contract import _cap_text, _extract_keywords_tfidf, _normalize_whitespace
+from app.core.summary_contract import cap_text, extract_keywords_tfidf, normalize_whitespace
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ class LLMSemanticHelper:
         if not content_text.strip():
             return []
         try:
-            return await asyncio.to_thread(_extract_keywords_tfidf, content_text, topn=topn)
+            return await asyncio.to_thread(extract_keywords_tfidf, content_text, topn=topn)
         except Exception as exc:  # pragma: no cover - defensive
             raise_if_cancelled(exc)
             logger.warning("tfidf_async_failed", extra={"error": str(exc)})
@@ -166,14 +166,14 @@ class LLMSemanticHelper:
         boosters: list[str] = []
         from_summary = summary.get("semantic_boosters") or []
         if isinstance(from_summary, list):
-            boosters.extend([_cap_text(str(b), 320) for b in from_summary if str(b).strip()])
+            boosters.extend([cap_text(str(b), 320) for b in from_summary if str(b).strip()])
 
-        sentences = re.split(r"(?<=[.!?])\s+", _normalize_whitespace(base_text))
+        sentences = re.split(r"(?<=[.!?])\s+", normalize_whitespace(base_text))
         for sentence in sentences:
             if len(boosters) >= 15:
                 break
             if sentence and sentence not in boosters and len(sentence) > 20:
-                boosters.append(_cap_text(sentence, 320))
+                boosters.append(cap_text(sentence, 320))
 
         return boosters[:15]
 
@@ -226,6 +226,6 @@ class LLMSemanticHelper:
         sentences = re.split(r"(?<=[.!?])\s+", chunk_text)
         sentences = [s.strip() for s in sentences if s.strip()]
         if not sentences:
-            return _cap_text(chunk_text, 320)
+            return cap_text(chunk_text, 320)
         selected = " ".join(sentences[:2])
-        return _cap_text(selected, 320)
+        return cap_text(selected, 320)

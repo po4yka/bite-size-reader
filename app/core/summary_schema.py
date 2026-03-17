@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.summary_contract_impl.field_names import FIELD_NAME_MAPPING
 from app.core.summary_text_utils import (
-    cap_text as _cap_text,
+    cap_text,
     hash_tagify as _hash_tagify,
 )
 
@@ -206,9 +206,9 @@ class SummaryModel(BaseModel):
         if not s1000 and tldr:
             s1000 = tldr
         if not s250 and s1000:
-            s250 = _cap_text(s1000, 250)
+            s250 = cap_text(s1000, 250)
         if not s250 and tldr:
-            s250 = _cap_text(tldr, 250)
+            s250 = cap_text(tldr, 250)
         if not s1000 and s250:
             s1000 = s250
         if not tldr:
@@ -228,13 +228,13 @@ class SummaryModel(BaseModel):
     @classmethod
     def cap_summary_250(cls, v: Any) -> str:
         text = str(v).strip() if v is not None else ""
-        return _cap_text(text, 250)
+        return cap_text(text, 250)
 
     @field_validator("summary_1000", mode="before")
     @classmethod
     def cap_summary_1000(cls, v: Any) -> str:
         text = str(v).strip() if v is not None else ""
-        return _cap_text(text, 1000)
+        return cap_text(text, 1000)
 
     @field_validator("topic_tags", mode="before")
     @classmethod

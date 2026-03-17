@@ -13,12 +13,9 @@ from app.core.summary_contract_impl.summary_shaper import (
     shape_extended_summary_fields,
     validate_summary_payload_input,
 )
-from app.core.summary_contract_impl.text_shaping import (
-    extract_keywords_tfidf as _extract_keywords_tfidf,
-    normalize_whitespace as _normalize_whitespace,
-)
+from app.core.summary_contract_impl.text_shaping import extract_keywords_tfidf, normalize_whitespace
 from app.core.summary_schema import SummaryModel
-from app.core.summary_text_utils import cap_text as _cap_text
+from app.core.summary_text_utils import cap_text
 from app.types.summary_types import (
     Entities,
     KeyStat,
@@ -38,10 +35,10 @@ __all__ = [
     "SemanticChunk",
     "SummaryDict",
     "SummaryJSON",
-    "_cap_text",
-    "_extract_keywords_tfidf",
-    "_normalize_whitespace",
+    "cap_text",
+    "extract_keywords_tfidf",
     "get_summary_json_schema",
+    "normalize_whitespace",
     "validate_and_shape_summary",
 ]
 
