@@ -49,7 +49,10 @@ function resolveCarbonTheme(mode: "telegram-webapp" | "jwt"): CarbonTheme {
   if (mode !== "telegram-webapp") {
     return "white";
   }
-  return window.Telegram?.WebApp?.colorScheme === "dark" ? "g100" : "white";
+  const colorScheme =
+    (window as Window & { __tgColorScheme?: string }).__tgColorScheme ??
+    window.Telegram?.WebApp?.colorScheme;
+  return colorScheme === "dark" ? "g100" : "white";
 }
 
 export default function AppShell() {
