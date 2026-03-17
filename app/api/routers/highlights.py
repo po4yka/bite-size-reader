@@ -47,7 +47,7 @@ def _highlight_to_response(h: SummaryHighlight) -> HighlightResponse:
 
 
 @router.get("/{summary_id}/highlights")
-async def list_highlights(
+def list_highlights(
     summary_id: int,
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -67,7 +67,7 @@ async def list_highlights(
 
 
 @router.post("/{summary_id}/highlights", status_code=201)
-async def create_highlight(
+def create_highlight(
     summary_id: int,
     body: CreateHighlightRequest,
     user: dict[str, Any] = Depends(get_current_user),
@@ -90,7 +90,7 @@ async def create_highlight(
 
 
 @router.patch("/{summary_id}/highlights/{highlight_id}")
-async def update_highlight(
+def update_highlight(
     summary_id: int,
     highlight_id: str,
     body: UpdateHighlightRequest,
@@ -118,7 +118,7 @@ async def update_highlight(
 
 
 @router.delete("/{summary_id}/highlights/{highlight_id}")
-async def delete_highlight(
+def delete_highlight(
     summary_id: int,
     highlight_id: str,
     user: dict[str, Any] = Depends(get_current_user),

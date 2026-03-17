@@ -83,7 +83,7 @@ async def generate_audio(
 
 
 @router.get("/{summary_id}/audio")
-async def get_audio(
+def get_audio(
     summary_id: int,
     user: dict[str, Any] = Depends(get_current_user),
 ):

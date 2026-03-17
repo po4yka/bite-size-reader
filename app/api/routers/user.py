@@ -252,7 +252,7 @@ async def get_user_stats(user: dict[str, Any] = Depends(get_current_user)):
 
 
 @router.get("/goals")
-async def list_goals(user: dict[str, Any] = Depends(get_current_user)):
+def list_goals(user: dict[str, Any] = Depends(get_current_user)):
     """List all reading goals for the current user."""
     from app.db.models import UserGoal
 
@@ -273,7 +273,7 @@ async def list_goals(user: dict[str, Any] = Depends(get_current_user)):
 
 
 @router.post("/goals")
-async def upsert_goal(
+def upsert_goal(
     body: CreateGoalRequest,
     user: dict[str, Any] = Depends(get_current_user),
 ):
@@ -304,7 +304,7 @@ async def upsert_goal(
 
 
 @router.delete("/goals/{goal_type}")
-async def delete_goal(
+def delete_goal(
     goal_type: str,
     user: dict[str, Any] = Depends(get_current_user),
 ):
@@ -431,7 +431,7 @@ def _compute_streak_data(
 
 
 @router.get("/streak")
-async def get_streak(user: dict[str, Any] = Depends(get_current_user)):
+def get_streak(user: dict[str, Any] = Depends(get_current_user)):
     """Compute and return the user's reading streak data."""
     data = _compute_streak_data(user["user_id"])
     return success_response(
@@ -452,7 +452,7 @@ async def get_streak(user: dict[str, Any] = Depends(get_current_user)):
 
 
 @router.get("/goals/progress")
-async def get_goal_progress(user: dict[str, Any] = Depends(get_current_user)):
+def get_goal_progress(user: dict[str, Any] = Depends(get_current_user)):
     """Return each goal with current progress."""
     from app.db.models import UserGoal
 

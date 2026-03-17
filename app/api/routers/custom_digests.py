@@ -34,7 +34,7 @@ def _digest_to_response(digest: Any) -> CustomDigestResponse:
 
 
 @router.post("")
-async def create_custom_digest(
+def create_custom_digest(
     body: CreateCustomDigestRequest,
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -97,7 +97,7 @@ async def create_custom_digest(
 
 
 @router.get("")
-async def list_custom_digests(
+def list_custom_digests(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """List all custom digests for the current user, newest first."""
@@ -115,7 +115,7 @@ async def list_custom_digests(
 
 
 @router.get("/{digest_id}")
-async def get_custom_digest(
+def get_custom_digest(
     digest_id: str,
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:

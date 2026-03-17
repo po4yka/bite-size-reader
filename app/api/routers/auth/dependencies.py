@@ -84,7 +84,7 @@ def get_auth_repository() -> SqliteAuthRepositoryAdapter:
     return get_db_auth_repository(token_cache=token_cache)
 
 
-async def get_current_user(
+def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> dict:
@@ -148,7 +148,7 @@ async def get_current_user(
     raise AuthenticationError("Authentication required")
 
 
-async def get_webapp_user(request: Request) -> dict:
+def get_webapp_user(request: Request) -> dict:
     """Dependency to get user from Telegram WebApp initData.
 
     Validates the X-Telegram-Init-Data header using HMAC-SHA256.
