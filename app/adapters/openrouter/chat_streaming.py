@@ -166,7 +166,7 @@ class ChatStreamingHandler:
                 "stream_completion_ms": completion_ms,
             },
         )
-        return await self._response_handler.handle_successful_response(
+        return self._response_handler.handle_successful_response(
             data=synthesized_data,
             payload=payload,
             model=model,

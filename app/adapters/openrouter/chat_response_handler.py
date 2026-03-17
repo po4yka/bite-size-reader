@@ -20,7 +20,7 @@ class ChatResponseHandler:
     def __init__(self, client: OpenRouterChatClient) -> None:
         self._client = client
 
-    async def handle_successful_response(
+    def handle_successful_response(
         self,
         *,
         data: dict[str, Any],

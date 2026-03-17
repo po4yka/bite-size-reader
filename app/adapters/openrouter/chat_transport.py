@@ -231,7 +231,7 @@ class ChatTransport:
         status_code = resp.status_code
         model_reported = data.get("model", model) if isinstance(data, dict) else model
         if status_code == 200:
-            return await self._response_handler.handle_successful_response(
+            return self._response_handler.handle_successful_response(
                 data=data,
                 payload=payload,
                 model=model,

@@ -104,9 +104,7 @@ class SyncPreviewer:
             existing_hashes = await repository.async_get_existing_request_hashes()
             count = 0
 
-            async def process_preview_bookmark(
-                normalized_url: str, bookmark: KarakeepBookmark
-            ) -> bool:
+            def process_preview_bookmark(normalized_url: str, bookmark: KarakeepBookmark) -> bool:
                 nonlocal count
                 url_hash = _url_hash(bookmark.url or "")
 
@@ -140,13 +138,13 @@ class SyncPreviewer:
                     if not bookmark.url:
                         continue
                     normalized_url = normalize_url(bookmark.url) or bookmark.url
-                    if await process_preview_bookmark(normalized_url, bookmark):
+                    if process_preview_bookmark(normalized_url, bookmark):
                         break
             else:
                 async for normalized_url, bookmark in self._cache.iter_bookmarks(
                     client, correlation_id=correlation_id
                 ):
-                    if await process_preview_bookmark(normalized_url, bookmark):
+                    if process_preview_bookmark(normalized_url, bookmark):
                         break
 
         except KarakeepClientError as exc:
