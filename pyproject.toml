@@ -144,8 +144,6 @@ dependencies = [
   "pydantic-settings>=2.12.0",
   "peewee>=4.0.0",
   "scrapling>=0.2",
-  "playwright>=1.40",
-  "crawlee[beautifulsoup,playwright]>=1.4.0",
   "trafilatura>=2.0.0",
   "spacy>=3.8.11,<4",
   "json-repair>=0.55.1",
@@ -159,6 +157,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Browser-based scraper fallback providers (Playwright + Crawlee)
+browser_scraper = [
+  "playwright>=1.40",
+  "crawlee[beautifulsoup,playwright]>=1.4.0",
+]
+
 # Shared inference stack used by both api (semantic search) and ml (training/backfill)
 inference_core = [
   "chromadb>=1.5.0",
