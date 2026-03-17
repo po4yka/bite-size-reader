@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from datetime import datetime
 
     from app.domain.models.summary import Summary as DomainSummary
@@ -157,10 +158,38 @@ class RequestRepositoryPort(Protocol):
     ) -> dict[int, dict[str, Any]]:
         """Return requests mapped by ID."""
 
-    async def async_create_request(self, *args: Any, **kwargs: Any) -> int:
+    async def async_create_request(
+        self,
+        *,
+        type_: str = "url",
+        status: str = "pending",
+        correlation_id: str | None = None,
+        chat_id: int | None = None,
+        user_id: int | None = None,
+        input_url: str | None = None,
+        normalized_url: str | None = None,
+        dedupe_hash: str | None = None,
+        input_message_id: int | None = None,
+        fwd_from_chat_id: int | None = None,
+        fwd_from_msg_id: int | None = None,
+        lang_detected: str | None = None,
+        content_text: str | None = None,
+        route_version: int = 1,
+    ) -> int:
         """Create a request."""
 
-    async def async_create_minimal_request(self, *args: Any, **kwargs: Any) -> tuple[int, bool]:
+    async def async_create_minimal_request(
+        self,
+        *,
+        type_: str = "url",
+        status: str = "pending",
+        correlation_id: str | None = None,
+        chat_id: int | None = None,
+        user_id: int | None = None,
+        input_url: str | None = None,
+        normalized_url: str | None = None,
+        dedupe_hash: str | None = None,
+    ) -> tuple[int, bool]:
         """Create a minimal request row."""
 
     async def async_get_request_by_forward(
@@ -234,7 +263,27 @@ class LLMRepositoryPort(Protocol):
     async def async_count_llm_calls_by_request(self, request_id: int) -> int:
         """Return the number of LLM calls by request ID."""
 
-    async def async_insert_llm_call(self, *args: Any, **kwargs: Any) -> int:
+    async def async_insert_llm_call(
+        self,
+        *,
+        request_id: int | None = None,
+        provider: str | None = None,
+        model: str | None = None,
+        endpoint: str | None = None,
+        request_headers_json: Any = None,
+        request_messages_json: Any = None,
+        response_text: str | None = None,
+        response_json: Any = None,
+        tokens_prompt: int | None = None,
+        tokens_completion: int | None = None,
+        cost_usd: float | None = None,
+        latency_ms: int | None = None,
+        status: str | None = None,
+        error_text: str | None = None,
+        structured_output_used: bool | None = None,
+        structured_output_mode: str | None = None,
+        error_context_json: Any = None,
+    ) -> int:
         """Persist an LLM call."""
 
     async def async_insert_llm_calls_batch(self, calls: list[dict[str, Any]]) -> list[int]:
@@ -284,16 +333,52 @@ class TopicSearchRepositoryPort(Protocol):
 
 @runtime_checkable
 class UserRepositoryPort(Protocol):
-    async def async_insert_user_interaction(self, *args: Any, **kwargs: Any) -> int:
+    async def async_insert_user_interaction(
+        self,
+        *,
+        user_id: int,
+        interaction_type: str,
+        chat_id: int | None = None,
+        message_id: int | None = None,
+        command: str | None = None,
+        input_text: str | None = None,
+        input_url: str | None = None,
+        has_forward: bool = False,
+        forward_from_chat_id: int | None = None,
+        forward_from_chat_title: str | None = None,
+        forward_from_message_id: int | None = None,
+        media_type: str | None = None,
+        correlation_id: str | None = None,
+        structured_output_enabled: bool = False,
+    ) -> int:
         """Persist a user interaction."""
 
-    async def async_update_user_interaction(self, *args: Any, **kwargs: Any) -> None:
+    async def async_update_user_interaction(
+        self,
+        interaction_id: int,
+        *,
+        updates: Mapping[str, Any] | None = None,
+        **fields: Any,
+    ) -> None:
         """Update a persisted user interaction."""
 
-    async def async_upsert_user(self, *args: Any, **kwargs: Any) -> int | None:
+    async def async_upsert_user(
+        self,
+        *,
+        telegram_user_id: int,
+        username: str | None = None,
+        is_owner: bool = False,
+    ) -> None:
         """Upsert a user row."""
 
-    async def async_upsert_chat(self, *args: Any, **kwargs: Any) -> int | None:
+    async def async_upsert_chat(
+        self,
+        *,
+        chat_id: int,
+        type_: str,
+        title: str | None = None,
+        username: str | None = None,
+    ) -> None:
         """Upsert a chat row."""
 
     async def async_get_user_by_telegram_id(self, telegram_user_id: int) -> dict[str, Any] | None:
@@ -358,7 +443,12 @@ class VideoDownloadRepositoryPort(Protocol):
     ) -> dict[str, Any] | None:
         """Return video-download record by request ID."""
 
-    async def async_create_video_download(self, *args: Any, **kwargs: Any) -> int:
+    async def async_create_video_download(
+        self,
+        request_id: int,
+        video_id: str,
+        status: str = "pending",
+    ) -> int:
         """Create a video-download row."""
 
     async def async_update_video_download(self, download_id: int, **kwargs: Any) -> None:
@@ -376,41 +466,78 @@ class VideoDownloadRepositoryPort(Protocol):
 
 @runtime_checkable
 class AuditLogRepositoryPort(Protocol):
-    async def async_insert_audit_log(self, *args: Any, **kwargs: Any) -> int:
+    async def async_insert_audit_log(
+        self,
+        log_level: str,
+        event_type: str,
+        details: dict[str, Any] | None = None,
+    ) -> int:
         """Persist an audit log row."""
 
 
 @runtime_checkable
 class BatchSessionRepositoryPort(Protocol):
-    async def async_create_batch_session(self, *args: Any, **kwargs: Any) -> int:
+    async def async_create_batch_session(
+        self,
+        user_id: int,
+        correlation_id: str,
+        total_urls: int,
+    ) -> int:
         """Create a batch session."""
 
-    async def async_add_batch_session_item(self, *args: Any, **kwargs: Any) -> int:
+    async def async_add_batch_session_item(
+        self,
+        session_id: int,
+        request_id: int,
+        position: int,
+        is_series_part: bool = False,
+        series_order: int | None = None,
+        series_title: str | None = None,
+    ) -> int:
         """Persist a batch session item."""
 
     async def async_get_batch_session_items(self, session_id: int) -> list[dict[str, Any]]:
         """Return batch session items."""
 
-    async def async_update_batch_session_status(self, *args: Any, **kwargs: Any) -> None:
+    async def async_update_batch_session_status(
+        self,
+        session_id: int,
+        status: str,
+        analysis_status: str | None = None,
+        processing_time_ms: int | None = None,
+    ) -> None:
         """Update batch session status."""
 
-    async def async_update_batch_session_counts(self, *args: Any, **kwargs: Any) -> None:
+    async def async_update_batch_session_counts(
+        self,
+        session_id: int,
+        successful_count: int,
+        failed_count: int,
+    ) -> None:
         """Update batch session counters."""
 
-    async def async_update_batch_session_relationship(self, *args: Any, **kwargs: Any) -> None:
+    async def async_update_batch_session_relationship(
+        self,
+        session_id: int,
+        relationship_type: str,
+        relationship_confidence: float,
+        relationship_metadata: dict[str, Any] | None = None,
+    ) -> None:
         """Update batch relationship state."""
 
     async def async_update_batch_session_combined_summary(
         self,
-        *args: Any,
-        **kwargs: Any,
+        session_id: int,
+        combined_summary: dict[str, Any],
     ) -> None:
         """Persist combined batch summary state."""
 
     async def async_update_batch_session_item_series_info(
         self,
-        *args: Any,
-        **kwargs: Any,
+        item_id: int,
+        is_series_part: bool,
+        series_order: int | None = None,
+        series_title: str | None = None,
     ) -> None:
         """Persist per-item series metadata."""
 
@@ -420,7 +547,17 @@ class KarakeepSyncRepositoryPort(Protocol):
     async def async_get_synced_hashes_by_direction(self, sync_direction: str) -> set[str]:
         """Return hashes already synced in the given direction."""
 
-    async def async_create_sync_record(self, *args: Any, **kwargs: Any) -> int | None:
+    async def async_create_sync_record(
+        self,
+        *,
+        bsr_summary_id: int | None = None,
+        karakeep_bookmark_id: str | None = None,
+        url_hash: str,
+        sync_direction: str,
+        synced_at: datetime | None = None,
+        bsr_modified_at: datetime | None = None,
+        karakeep_modified_at: datetime | None = None,
+    ) -> int | None:
         """Create a sync record."""
 
     async def async_get_summaries_for_sync(
@@ -431,7 +568,14 @@ class KarakeepSyncRepositoryPort(Protocol):
     async def async_get_existing_request_hashes(self) -> set[str]:
         """Return hashes for existing request rows."""
 
-    async def async_create_request_from_karakeep(self, *args: Any, **kwargs: Any) -> int:
+    async def async_create_request_from_karakeep(
+        self,
+        *,
+        user_id: int,
+        input_url: str,
+        normalized_url: str | None,
+        dedupe_hash: str | None,
+    ) -> int:
         """Create a request row from Karakeep data."""
 
     async def async_get_sync_stats(self) -> dict[str, Any]:
@@ -465,7 +609,17 @@ class KarakeepSyncRepositoryPort(Protocol):
     async def async_delete_all_sync_records(self, direction: str | None = None) -> int:
         """Delete sync rows."""
 
-    async def async_upsert_sync_record(self, *args: Any, **kwargs: Any) -> int:
+    async def async_upsert_sync_record(
+        self,
+        *,
+        bsr_summary_id: int | None = None,
+        karakeep_bookmark_id: str | None = None,
+        url_hash: str,
+        sync_direction: str,
+        synced_at: datetime | None = None,
+        bsr_modified_at: datetime | None = None,
+        karakeep_modified_at: datetime | None = None,
+    ) -> int:
         """Create or update a sync record."""
 
 
