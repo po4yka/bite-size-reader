@@ -11,7 +11,8 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.api.context import correlation_id_ctx
-from app.api.models.responses import ErrorType, error_response, make_error
+from app.api.exceptions import ErrorType
+from app.api.models.responses import error_response, make_error
 from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
 from app.infrastructure.redis import get_redis, redis_key

@@ -12,22 +12,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.api.context import correlation_id_ctx
+from app.api.exceptions import ErrorType
 from app.core.time_utils import UTC
-
-
-class ErrorType(StrEnum):
-    """Categories of errors for client handling."""
-
-    AUTHENTICATION = "authentication"  # Auth failures, token issues
-    AUTHORIZATION = "authorization"  # Permission denied, access control
-    VALIDATION = "validation"  # Invalid input, schema errors
-    NOT_FOUND = "not_found"  # Resource doesn't exist
-    CONFLICT = "conflict"  # Duplicate, version mismatch
-    RATE_LIMIT = "rate_limit"  # Too many requests
-    EXTERNAL_SERVICE = "external_service"  # Firecrawl, OpenRouter failures
-    INTERNAL = "internal"  # Server errors, unexpected failures
-    SYNC = "sync"  # Sync session errors
-    CONFIGURATION = "configuration"  # Server configuration errors
 
 
 class ErrorCode(StrEnum):
