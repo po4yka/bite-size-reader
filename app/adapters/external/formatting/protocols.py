@@ -143,10 +143,6 @@ class TextProcessor(Protocol):
         """Split text into chunks respecting Telegram's message length limit."""
         ...
 
-    def _find_split_index(self, text: str, limit: int) -> int:
-        """Find a sensible split index before the length limit."""
-        ...
-
     def sanitize_summary_text(self, text: str) -> str:
         """Normalize and clean summary text for safe sending."""
         ...

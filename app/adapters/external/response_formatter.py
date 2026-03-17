@@ -657,10 +657,6 @@ class ResponseFormatter:
         """Split text into chunks respecting Telegram's message length limit."""
         return self._text_processor.chunk_text(text, max_len=max_len)
 
-    def _find_split_index(self, text: str, limit: int) -> int:
-        """Find a sensible split index before the limit."""
-        return self._text_processor._find_split_index(text, limit)
-
     def _sanitize_summary_text(self, text: str) -> str:
         """Normalize and clean summary text for safe sending."""
         return self._text_processor.sanitize_summary_text(text)
