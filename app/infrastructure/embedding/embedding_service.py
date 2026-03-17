@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import struct
 from typing import TYPE_CHECKING, Any
+
+from app.infrastructure.embedding.embedding_protocol import pack_embedding, unpack_embedding
 
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
@@ -86,30 +87,10 @@ class EmbeddingService:
         )
 
     def serialize_embedding(self, embedding: Any) -> bytes:
-        """Serialize embedding as packed float32 values for database storage.
-
-        Accepts numpy arrays or list[float]. Uses struct packing instead of
-        pickle to avoid deserialization attack vectors if the DB is compromised.
-        """
-        values: list[float] = (
-            embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
-        )
-        return struct.pack(f"<{len(values)}f", *values)
+        return pack_embedding(embedding)
 
     def deserialize_embedding(self, blob: bytes) -> list[float]:
-        """Deserialize embedding from database.
-
-        Supports both the current struct-packed format and legacy pickle format
-        for backward compatibility with existing stored embeddings.
-        """
-        try:
-            count = len(blob) // 4  # 4 bytes per float32
-            return list(struct.unpack(f"<{count}f", blob))
-        except struct.error:
-            # Legacy pickle format from before struct migration
-            import pickle
-
-            return pickle.loads(blob)  # nosec B301
+        return unpack_embedding(blob)
 
     def get_model_name(self, language: str | None = None) -> str:
         """Get model name for a specific language."""

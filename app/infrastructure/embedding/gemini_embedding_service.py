@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import struct
 from typing import Any
+
+from app.infrastructure.embedding.embedding_protocol import pack_embedding, unpack_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -80,24 +81,13 @@ class GeminiEmbeddingService:
         values: list[float] = result.embeddings[0].values
         return values
 
-    # -- Serialization (identical to EmbeddingService) -------------------------
+    # -- Serialization --------------------------------------------------------
 
     def serialize_embedding(self, embedding: Any) -> bytes:
-        """Serialize embedding as packed float32 values."""
-        values: list[float] = (
-            embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
-        )
-        return struct.pack(f"<{len(values)}f", *values)
+        return pack_embedding(embedding)
 
     def deserialize_embedding(self, blob: bytes) -> list[float]:
-        """Deserialize embedding from database."""
-        try:
-            count = len(blob) // 4
-            return list(struct.unpack(f"<{count}f", blob))
-        except struct.error:
-            import pickle
-
-            return pickle.loads(blob)  # nosec B301
+        return unpack_embedding(blob)
 
     # -- Metadata --------------------------------------------------------------
 

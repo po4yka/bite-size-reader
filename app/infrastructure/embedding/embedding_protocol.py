@@ -2,7 +2,33 @@
 
 from __future__ import annotations
 
+import struct
 from typing import Any, Protocol, runtime_checkable
+
+
+def pack_embedding(embedding: Any) -> bytes:
+    """Serialize an embedding vector as packed float32 bytes for DB storage.
+
+    Accepts numpy arrays or list[float]. Uses struct packing instead of pickle
+    to avoid deserialization attack vectors if the DB is compromised.
+    """
+    values: list[float] = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+    return struct.pack(f"<{len(values)}f", *values)
+
+
+def unpack_embedding(blob: bytes) -> list[float]:
+    """Deserialize an embedding vector from DB storage.
+
+    Supports both the current struct-packed format and the legacy pickle format
+    for backward compatibility with existing stored embeddings.
+    """
+    try:
+        count = len(blob) // 4  # 4 bytes per float32
+        return list(struct.unpack(f"<{count}f", blob))
+    except struct.error:
+        import pickle
+
+        return pickle.loads(blob)  # nosec B301
 
 
 @runtime_checkable
