@@ -146,6 +146,11 @@ class URLProcessor:
             related_reads_service=related_reads_service,
         )
 
+    @property
+    def audit_func(self) -> Callable[[str, str, dict], None]:
+        """Public accessor for the audit callable."""
+        return self._audit
+
     async def aclose(self, timeout: float = 5.0) -> None:
         """Drain runtime and follow-up tasks before shutdown."""
         await self.summarization_runtime.aclose(timeout=timeout)

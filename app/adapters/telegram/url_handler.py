@@ -80,7 +80,7 @@ class URLHandler:
             request_repo=self.request_repo,
             user_repo=self.user_repo,
             summary_repo=getattr(url_processor, "summary_repo", None),
-            audit_func=getattr(url_processor, "_audit", None),
+            audit_func=url_processor.audit_func,
             relationship_analysis_service=self._relationship_analysis_service,
         )
 
