@@ -116,11 +116,8 @@ class MessageContentRouter:
         if await self._route_command_message(context, interaction_id, start_time):
             return
 
-        if context.has_forward and await self._route_forward_message(
-            context,
-            interaction_id,
-            start_time,
-        ):
+        if context.has_forward:
+            await self._route_forward_message(context, interaction_id, start_time)
             return
 
         if self.callback_handler is not None and context.text and not context.text.startswith("/"):
@@ -359,7 +356,7 @@ class MessageContentRouter:
         context: PreparedRouteContext,
         interaction_id: int,
         start_time: float,
-    ) -> bool:
+    ) -> None:
         message = context.message
         fwd_chat = getattr(message, "forward_from_chat", None)
         fwd_msg_id = getattr(message, "forward_from_message_id", None)
@@ -372,7 +369,7 @@ class MessageContentRouter:
                 correlation_id=context.correlation_id,
                 interaction_id=interaction_id,
             )
-            return True
+            return
 
         if fwd_from_user is not None or fwd_sender_name:
             fwd_text = (
@@ -384,16 +381,16 @@ class MessageContentRouter:
                     correlation_id=context.correlation_id,
                     interaction_id=interaction_id,
                 )
-                return True
+                return
             if self.attachment_processor and self._should_handle_attachment(message):
                 await self.attachment_processor.handle_attachment_flow(
                     message,
                     correlation_id=context.correlation_id,
                     interaction_id=interaction_id,
                 )
-                return True
+                return
             await self._reply_forward_no_text(context, interaction_id, start_time)
-            return True
+            return
 
         fwd_text = (
             getattr(message, "text", None) or getattr(message, "caption", None) or ""
@@ -404,7 +401,7 @@ class MessageContentRouter:
                 correlation_id=context.correlation_id,
                 interaction_id=interaction_id,
             )
-            return True
+            return
 
         if self.attachment_processor and self._should_handle_attachment(message):
             await self.attachment_processor.handle_attachment_flow(
@@ -412,7 +409,7 @@ class MessageContentRouter:
                 correlation_id=context.correlation_id,
                 interaction_id=interaction_id,
             )
-            return True
+            return
 
         logger.info(
             "forward_skipped_unrecognized",
@@ -422,7 +419,6 @@ class MessageContentRouter:
             },
         )
         await self._reply_forward_no_text(context, interaction_id, start_time)
-        return True
 
     async def _reply_forward_no_text(
         self,
