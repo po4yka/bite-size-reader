@@ -182,25 +182,7 @@ class ContentChunker:
                 )
                 return None
 
-            # Prefer parsed payload
-            parsed: dict[str, Any] | None = None
-            try:
-                if resp.response_json and isinstance(resp.response_json, dict):
-                    ch = resp.response_json.get("choices") or []
-                    if ch and isinstance(ch[0], dict):
-                        msg0 = ch[0].get("message") or {}
-                        p = msg0.get("parsed")
-                        if p is not None:
-                            parsed = p if isinstance(p, dict) else None
-            except Exception as exc:
-                raise_if_cancelled(exc)
-                parsed = None
-            try:
-                if parsed is None and (resp.response_text or "").strip():
-                    parsed = json.loads((resp.response_text or "").strip().strip("` "))
-            except Exception as exc:
-                raise_if_cancelled(exc)
-                parsed = None
+            parsed = self._parse_llm_response_to_dict(resp)
             if parsed is not None:
                 try:
                     return validate_and_shape_summary(parsed)
@@ -289,7 +271,11 @@ class ContentChunker:
             )
             return None
 
-        # Parse response (reuse existing parsing logic pattern)
+        return self._parse_llm_response_to_dict(resp)
+
+    @staticmethod
+    def _parse_llm_response_to_dict(resp: Any) -> dict[str, Any] | None:
+        """Extract a dict from an LLM response, preferring structured parsed payload."""
         parsed: dict[str, Any] | None = None
         try:
             if resp.response_json and isinstance(resp.response_json, dict):
@@ -302,16 +288,14 @@ class ContentChunker:
         except Exception as exc:
             raise_if_cancelled(exc)
             parsed = None
-
         if parsed is None:
             try:
                 if (resp.response_text or "").strip():
                     parsed = json.loads((resp.response_text or "").strip().strip("` "))
             except Exception as exc:
                 raise_if_cancelled(exc)
-                logger.debug("chunk_json_parse_fallback_failed", exc_info=True)
+                logger.debug("llm_response_json_parse_failed", exc_info=True)
                 parsed = None
-
         return parsed
 
     def _build_structured_response_format(self) -> dict[str, Any]:
