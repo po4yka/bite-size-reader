@@ -6,6 +6,10 @@ import { getApiSession, setApiSession } from "./session";
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 const DEFAULT_TIMEOUT_MS = 20_000;
 
+if (!import.meta.env.VITE_API_BASE_URL && import.meta.env.DEV) {
+  console.warn("[api] VITE_API_BASE_URL not set; using relative paths");
+}
+
 interface ApiErrorPayload {
   error?: {
     message?: string;
@@ -81,7 +85,11 @@ async function refreshAccessToken(refreshToken: string): Promise<AuthTokens | nu
   return normalized;
 }
 
-async function requestOnce<T>(path: string, options: RequestInit = {}): Promise<T> {
+interface ApiRequestOptions extends RequestInit {
+  _skipRefresh?: boolean;
+}
+
+async function requestOnce<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const session = getApiSession();
   const headers = new Headers(options.headers ?? {});
 
@@ -97,8 +105,10 @@ async function requestOnce<T>(path: string, options: RequestInit = {}): Promise<
     headers.set("Authorization", `Bearer ${session.accessToken}`);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { _skipRefresh: _skip, ...fetchOptions } = options;
   const response = await fetch(`${BASE_URL}${path}`, {
-    ...options,
+    ...fetchOptions,
     headers,
     signal: withTimeout(options.signal),
   });
@@ -116,18 +126,29 @@ async function requestOnce<T>(path: string, options: RequestInit = {}): Promise<
     throw new Error("Invalid server response.");
   }
 
+  if (!json.success) {
+    const msg = json?.error?.message ?? "Request failed";
+    throw Object.assign(new Error(msg), { status: response.status });
+  }
+
   const payload = normalizeKeys(json.data ?? ({} as T));
   return payload;
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   try {
     return await requestOnce<T>(path, options);
   } catch (error) {
     const status = (error as { status?: number }).status;
     const session = getApiSession();
 
-    if (status !== 401 || session.mode !== "jwt" || !session.refreshToken || path === "/v1/auth/refresh") {
+    if (
+      status !== 401 ||
+      session.mode !== "jwt" ||
+      !session.refreshToken ||
+      path === "/v1/auth/refresh" ||
+      options._skipRefresh
+    ) {
       throw error;
     }
 
@@ -138,6 +159,6 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
       throw new Error("Session expired. Please sign in again.");
     }
 
-    return requestOnce<T>(path, options);
+    return requestOnce<T>(path, { ...options, _skipRefresh: true });
   }
 }
