@@ -162,7 +162,7 @@ class ProgressTracker:
 
         return completed, self.total
 
-    async def force_update(self) -> None:
+    def force_update(self) -> None:
         """Queue a progress update without incrementing the counter.
 
         Useful for phase changes that affect the display without completing items.

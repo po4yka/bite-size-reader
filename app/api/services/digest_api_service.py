@@ -7,7 +7,6 @@ and preference merging with ChannelDigestConfig global defaults.
 from __future__ import annotations
 
 import asyncio
-import logging
 import uuid
 from typing import Any
 
@@ -30,6 +29,7 @@ from app.application.services.digest_subscription_ops import (
 )
 from app.config.digest import ChannelDigestConfig  # noqa: TC001 - used at runtime
 from app.core.channel_utils import parse_channel_input
+from app.core.logging_utils import get_logger
 from app.db.models import (
     Channel,
     ChannelCategory,
@@ -41,7 +41,7 @@ from app.db.models import (
     _utcnow,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 _background_digest_tasks: set[asyncio.Task[None]] = set()
 
 

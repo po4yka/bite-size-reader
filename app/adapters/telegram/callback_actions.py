@@ -149,7 +149,7 @@ class CallbackActionService:
                 message, t("cb_export_generating", self._lang).format(fmt=export_format.upper())
             )
 
-            file_path, filename = await exporter.export_summary(
+            file_path, filename = exporter.export_summary(
                 summary_id=summary_id,
                 export_format=export_format,
                 correlation_id=correlation_id,

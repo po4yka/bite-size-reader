@@ -167,7 +167,7 @@ class AttachmentProcessor:
                 nonlocal current_status_text
                 current_status_text = text
                 if progress_tracker:
-                    await progress_tracker.force_update()
+                    progress_tracker.force_update()
 
             # Download the file
             if progress_tracker:

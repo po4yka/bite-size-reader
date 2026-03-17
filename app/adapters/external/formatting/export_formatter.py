@@ -23,7 +23,7 @@ class ExportFormatter:
     def __init__(self, db: DatabaseSessionManager) -> None:
         self.db = db
 
-    async def export_summary(
+    def export_summary(
         self,
         summary_id: str,
         export_format: str,

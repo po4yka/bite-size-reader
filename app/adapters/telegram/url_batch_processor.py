@@ -364,7 +364,7 @@ class URLBatchProcessor:
         while not progress_tracker.is_complete:
             try:
                 await asyncio.sleep(3)
-                await progress_tracker.force_update()
+                progress_tracker.force_update()
             except asyncio.CancelledError:
                 break
             except Exception as exc:
@@ -474,7 +474,7 @@ class URLBatchProcessor:
                     last_error = f"Timed out after {int(current_timeout)}s (ID: {per_link_cid[:8]})"
                     if attempt < state.request.max_retries:
                         state.batch_status.mark_retry_waiting(url)
-                        await state.progress_tracker.force_update()
+                        state.progress_tracker.force_update()
                         await asyncio.sleep(min(3.0 * (2**attempt), 60.0))
                         continue
                     self._record_domain_timeout(state, url_domain)
@@ -526,7 +526,7 @@ class URLBatchProcessor:
             state.batch_status.mark_retrying(url)
         elif phase == "waiting":
             state.batch_status.mark_retry_waiting(url)
-        await state.progress_tracker.force_update()
+        state.progress_tracker.force_update()
 
     async def _compute_timeout(
         self,

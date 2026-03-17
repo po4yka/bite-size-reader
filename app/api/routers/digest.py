@@ -5,7 +5,6 @@ All endpoints use Telegram WebApp initData authentication.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Path, Query
@@ -23,8 +22,9 @@ from app.api.models.responses import success_response
 from app.api.routers.auth.dependencies import get_webapp_user
 from app.api.services.auth_service import AuthService
 from app.api.services.digest_facade import DigestFacade, get_digest_facade
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
 
