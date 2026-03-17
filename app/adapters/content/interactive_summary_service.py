@@ -359,7 +359,7 @@ class InteractiveSummaryService:
     ) -> tuple[dict[str, Any], Any]:
         """Finalize response flow when Redis contains a cached summary."""
         llm_stub = self._runtime.cache_helper.build_cache_stub(plan.base_model)
-        shaped = await self._runtime.workflow._finalize_success(
+        shaped = await self._runtime.workflow.finalize_success(
             cached_summary,
             llm_stub,
             request.req_id,

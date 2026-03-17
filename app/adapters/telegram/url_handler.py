@@ -84,7 +84,7 @@ class URLHandler:
         self._relationship_analysis_service = (
             relationship_analysis_service
             or BatchRelationshipAnalysisService(
-                summary_repo=getattr(url_processor, "summary_repo", None),
+                summary_repo=url_processor.summary_repo,
                 batch_session_repo=batch_session_repo,
                 llm_client=llm_client,
                 batch_config=batch_config,
@@ -95,7 +95,7 @@ class URLHandler:
             response_formatter=self.response_formatter,
             request_repo=self.request_repo,
             user_repo=self.user_repo,
-            summary_repo=getattr(url_processor, "summary_repo", None),
+            summary_repo=url_processor.summary_repo,
             audit_func=url_processor.audit_func,
             relationship_analysis_service=self._relationship_analysis_service,
         )

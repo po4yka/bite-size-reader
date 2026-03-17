@@ -40,7 +40,7 @@ class LLMWorkflowAttemptsMixin:
             if (ctx.llm.error_text or "") == "structured_output_parse_error":
                 salvage = self._attempt_salvage_parsing(ctx.llm, ctx.correlation_id)
             if salvage is not None:
-                return await self._finalize_success(
+                return await self.finalize_success(
                     salvage,
                     ctx.llm,
                     ctx.req_id,
@@ -129,7 +129,7 @@ class LLMWorkflowAttemptsMixin:
                     parse_result=repair_hint,
                 )
                 if repaired and self._summary_has_content(repaired, ctx.required_summary_fields):
-                    return await self._finalize_success(
+                    return await self.finalize_success(
                         repaired,
                         ctx.llm,
                         ctx.req_id,
@@ -149,7 +149,7 @@ class LLMWorkflowAttemptsMixin:
             self._set_failure_context(ctx.llm, "summary_fields_empty")
             return None
 
-        return await self._finalize_success(
+        return await self.finalize_success(
             shaped,
             ctx.llm,
             ctx.req_id,
@@ -161,7 +161,7 @@ class LLMWorkflowAttemptsMixin:
             ctx.defer_persistence,
         )
 
-    async def _finalize_success(
+    async def finalize_success(
         self,
         summary: dict[str, Any],
         llm: Any,
