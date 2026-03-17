@@ -67,12 +67,10 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
             self._validate_reading_time(summary, errors, warnings)
             self._validate_classification_fields(summary, errors)
 
-            # Cross-field validation: summary distinctness
             cross_field_issues = self._validate_summary_distinctness(summary)
             errors.extend(cross_field_issues["errors"])
             warnings.extend(cross_field_issues["warnings"])
 
-            # If there are errors, return error result with details
             if errors:
                 error_message = self._format_validation_errors(errors)
                 self.log_error(f"Validation failed: {len(errors)} error(s)")
@@ -80,7 +78,6 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                     error_message, error_count=len(errors), warnings=warnings
                 )
 
-            # Use the existing validation function for final check
             validated_summary = validate_and_shape_summary(summary)
             self.log_info("Summary validation successful")
 
@@ -256,14 +253,6 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 )
 
     def _format_validation_errors(self, errors: list[str]) -> str:
-        """Format validation errors into a clear message.
-
-        Args:
-            errors: List of error messages
-
-        Returns:
-            Formatted error string
-        """
         if len(errors) == 1:
             return errors[0]
 
@@ -274,19 +263,6 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
         return formatted.strip()
 
     def _validate_summary_distinctness(self, summary: dict[str, Any]) -> dict[str, list[str]]:
-        """Validate that summary_250, summary_1000, and tldr are meaningfully distinct.
-
-        Checks:
-        - No excessive similarity between summary levels
-        - No exact sentence duplication across levels
-        - tldr should be longer than summary_1000
-
-        Args:
-            summary: The summary dictionary to validate
-
-        Returns:
-            Dictionary with 'errors' and 'warnings' lists
-        """
         errors: list[str] = []
         warnings: list[str] = []
 

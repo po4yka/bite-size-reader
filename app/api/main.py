@@ -8,6 +8,7 @@ Usage:
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path as _Path
+from typing import Any
 
 import peewee
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -169,7 +170,7 @@ def _serve_web_index() -> FileResponse:
 
 
 @app.get("/web/privacy.html")
-def privacy_policy():
+def privacy_policy() -> FileResponse:
     """Serve Privacy Policy static page."""
     _privacy = _static_dir / "web" / "privacy.html"
     if not _privacy.is_file():
@@ -178,7 +179,7 @@ def privacy_policy():
 
 
 @app.get("/web/terms.html")
-def terms_of_service():
+def terms_of_service() -> FileResponse:
     """Serve Terms of Service static page."""
     _terms = _static_dir / "web" / "terms.html"
     if not _terms.is_file():
@@ -188,14 +189,14 @@ def terms_of_service():
 
 @app.get("/web")
 @app.get("/web/{path:path}")
-def web_interface(path: str = ""):
+def web_interface(path: str = "") -> FileResponse:
     """Serve Carbon web SPA entrypoint."""
     del path
     return _serve_web_index()
 
 
 @app.get("/")
-def root(request: Request):
+def root(request: Request) -> dict[str, Any]:
     """API root endpoint."""
     return success_response(
         {
@@ -209,7 +210,7 @@ def root(request: Request):
 
 
 @app.get("/health")
-def health_check(request: Request):
+def health_check(request: Request) -> dict[str, Any]:
     """Health check endpoint."""
     return success_response(
         {

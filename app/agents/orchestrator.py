@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from enum import StrEnum
 from pathlib import Path  # noqa: TC003 - required at runtime for Pydantic
 from typing import TYPE_CHECKING, Any
@@ -20,9 +19,9 @@ if TYPE_CHECKING:
 
 from app.agents.content_extraction_agent import ExtractionInput
 from app.agents.summarization_agent import SummarizationInput
-from app.core.logging_utils import log_exception
+from app.core.logging_utils import get_logger, log_exception
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PipelineStage(StrEnum):
@@ -535,15 +534,6 @@ class SingleAgentOrchestrator:
         self.logger = logger
 
     async def execute(self, input_data: Any, correlation_id: str) -> dict[str, Any]:
-        """Execute a single agent.
-
-        Args:
-            input_data: Input for the agent
-            correlation_id: Correlation ID for tracing
-
-        Returns:
-            Result dictionary
-        """
         result = await self.agent.execute(input_data)
 
         return {

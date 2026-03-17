@@ -139,8 +139,7 @@ class ResponseSenderImpl:
         try:
             msg_any: Any = message
 
-            # Define send operation for retry logic
-            async def do_send() -> Any:
+            async def send() -> Any:
                 kwargs: dict[str, Any] = {}
                 if parse_mode:
                     kwargs["parse_mode"] = parse_mode
@@ -160,8 +159,7 @@ class ResponseSenderImpl:
 
                 return await msg_any.reply_text(text, **kwargs)
 
-            # Retry the send operation with exponential backoff
-            _, success = await retry_telegram_operation(do_send, operation_name="safe_reply")
+            _, success = await retry_telegram_operation(send, operation_name="safe_reply")
 
             if success:
                 logger.debug(
@@ -244,7 +242,7 @@ class ResponseSenderImpl:
     ) -> int | None:
         """Send using Telegram client.send_message and return message ID."""
 
-        async def do_send() -> Any:
+        async def send() -> Any:
             kwargs = {"chat_id": chat_id, "text": text}
             kwargs.update(
                 self._build_message_kwargs(
@@ -257,9 +255,7 @@ class ResponseSenderImpl:
                 kwargs["message_thread_id"] = message_thread_id
             return await client.send_message(**kwargs)
 
-        sent, success = await retry_telegram_operation(
-            do_send, operation_name="send_message_with_id"
-        )
+        sent, success = await retry_telegram_operation(send, operation_name="send_message_with_id")
         if not success or sent is None:
             logger.warning(
                 "reply_with_id_retry_failed",
@@ -310,7 +306,7 @@ class ResponseSenderImpl:
         """Fallback flow that replies to the incoming message and returns message ID."""
         msg_any: Any = message
 
-        async def do_reply() -> Any:
+        async def reply() -> Any:
             kwargs = self._build_message_kwargs(
                 parse_mode=parse_mode,
                 reply_markup=reply_markup,
@@ -319,7 +315,7 @@ class ResponseSenderImpl:
             return await msg_any.reply_text(text, **kwargs)
 
         sent_message, success = await retry_telegram_operation(
-            do_reply, operation_name="reply_text_with_id"
+            reply, operation_name="reply_text_with_id"
         )
         if not success or sent_message is None:
             logger.warning("reply_text_retry_failed", extra={"text_length": len(text)})
@@ -656,7 +652,7 @@ class ResponseSenderImpl:
         """Perform Telegram edit with retries and semantic success handling."""
         last_error_exc: Exception | None = None
 
-        async def do_edit() -> None:
+        async def edit() -> None:
             nonlocal last_error_exc
             kwargs: dict[str, Any] = {
                 "chat_id": chat_id,
@@ -677,7 +673,7 @@ class ResponseSenderImpl:
                 last_error_exc = e
                 raise
 
-        _, success = await retry_telegram_operation(do_edit, operation_name="edit_message")
+        _, success = await retry_telegram_operation(edit, operation_name="edit_message")
         if success:
             logger.debug(
                 "edit_message_success", extra={"chat_id": chat_id, "message_id": message_id}

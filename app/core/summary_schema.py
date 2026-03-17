@@ -298,13 +298,13 @@ class SummaryModel(BaseModel):
     @field_validator("source_type", mode="before")
     @classmethod
     def default_source_type(cls, v: Any) -> str:
-        valid = {"news", "blog", "research", "opinion", "tutorial", "reference"}
-        val = str(v).strip().lower() if v is not None else "blog"
-        return val if val in valid else "blog"
+        valid = {m.value for m in SourceType}
+        val = str(v).strip().lower() if v is not None else SourceType.BLOG
+        return val if val in valid else SourceType.BLOG
 
     @field_validator("temporal_freshness", mode="before")
     @classmethod
     def default_temporal_freshness(cls, v: Any) -> str:
-        valid = {"breaking", "recent", "evergreen"}
-        val = str(v).strip().lower() if v is not None else "evergreen"
-        return val if val in valid else "evergreen"
+        valid = {m.value for m in TemporalFreshness}
+        val = str(v).strip().lower() if v is not None else TemporalFreshness.EVERGREEN
+        return val if val in valid else TemporalFreshness.EVERGREEN

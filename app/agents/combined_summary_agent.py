@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.agents.base_agent import AgentResult, BaseAgent
 from app.core.json_utils import extract_json
+from app.core.logging_utils import get_logger
 from app.models.batch_analysis import (
     CombinedSummaryInput,
     CombinedSummaryOutput,
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from app.adapters.llm import LLMClientProtocol
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Prompt directory
 _PROMPT_DIR = Path(__file__).parent.parent / "prompts"

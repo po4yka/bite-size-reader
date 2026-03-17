@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.base_agent import AgentResult, BaseAgent
+from app.core.logging_utils import get_logger
 from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
     from app.adapters.content.pure_summary_service import PureSummaryService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SummarizationInput(BaseModel):
@@ -61,14 +61,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
         self.validator_agent = validator_agent
 
     async def execute(self, input_data: SummarizationInput) -> AgentResult[SummarizationOutput]:
-        """Generate a summary with self-correction feedback loop.
-
-        Args:
-            input_data: Content and parameters for summarization
-
-        Returns:
-            AgentResult with summary or error
-        """
+        """Generate a summary with self-correction feedback loop."""
         self.correlation_id = input_data.correlation_id
         self.log_info(
             f"Starting summarization - {len(input_data.content)} chars, lang={input_data.language}"

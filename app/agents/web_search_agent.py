@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -12,13 +11,14 @@ from pydantic import BaseModel, ConfigDict
 from app.adapters.content.search_context_builder import SearchContextBuilder
 from app.agents.base_agent import AgentResult, BaseAgent
 from app.core.json_utils import extract_json
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.adapters.llm import LLMClientProtocol
     from app.application.services.topic_search import TopicArticle, TopicSearchService
     from app.config import WebSearchConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Prompt directory
 _PROMPT_DIR = Path(__file__).parent.parent / "prompts"
