@@ -25,9 +25,9 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
     from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
         SqliteTopicSearchRepositoryAdapter,
     )
+    from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchService
+    from app.infrastructure.search.hybrid_search_service import HybridSearchService
     from app.infrastructure.vector.chroma_store import ChromaVectorStore
-    from app.services.chroma_vector_search_service import ChromaVectorSearchService
-    from app.services.hybrid_search_service import HybridSearchService
 
     cfg = load_config(allow_stub_telegram=True)
     db = DatabaseSessionManager(path=db_path)

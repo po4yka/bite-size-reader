@@ -99,12 +99,19 @@ async def search_vector(db_path: str, query: str, max_results: int = 10, filters
     from app.application.services.topic_search import TopicArticle
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
-    from app.services.vector_search_service import VectorSearchService
+    from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
+        SqliteEmbeddingRepositoryAdapter,
+    )
+    from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+        SqliteTopicSearchRepositoryAdapter,
+    )
+    from app.infrastructure.search.vector_search_service import VectorSearchService
 
     db = DatabaseSessionManager(path=db_path)
     embedding_service = create_embedding_service()
     service = VectorSearchService(
-        db=db,
+        embedding_repository=SqliteEmbeddingRepositoryAdapter(db),
+        topic_search_repository=SqliteTopicSearchRepositoryAdapter(db),
         embedding_service=embedding_service,
         max_results=max_results,
         min_similarity=0.3,
@@ -149,13 +156,16 @@ async def search_hybrid(
     from app.application.services.topic_search import LocalTopicSearchService
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
+    from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
+        SqliteEmbeddingRepositoryAdapter,
+    )
     from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
         SqliteTopicSearchRepositoryAdapter,
     )
-    from app.services.hybrid_search_service import HybridSearchService
-    from app.services.query_expansion_service import QueryExpansionService
-    from app.services.reranking_service import RerankingService
-    from app.services.vector_search_service import VectorSearchService
+    from app.infrastructure.search.hybrid_search_service import HybridSearchService
+    from app.infrastructure.search.query_expansion_service import QueryExpansionService
+    from app.infrastructure.search.reranking_service import RerankingService
+    from app.infrastructure.search.vector_search_service import VectorSearchService
 
     db = DatabaseSessionManager(path=db_path)
 
@@ -167,7 +177,8 @@ async def search_hybrid(
     # Initialize vector service
     embedding_service = create_embedding_service()
     vector_service = VectorSearchService(
-        db=db,
+        embedding_repository=SqliteEmbeddingRepositoryAdapter(db),
+        topic_search_repository=SqliteTopicSearchRepositoryAdapter(db),
         embedding_service=embedding_service,
         max_results=max_results,
         min_similarity=0.3,
