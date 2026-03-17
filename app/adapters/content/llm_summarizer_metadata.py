@@ -6,10 +6,10 @@ import json
 import logging
 import re
 from typing import Any
-from urllib.parse import urlparse
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.json_utils import extract_json
+from app.core.url_utils import extract_domain
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ class LLMSummaryMetadataHelper:
 
         if self._is_blank(metadata.get("domain")):
             domain_source = metadata.get("canonical_url") or request_url
-            domain_value = self._extract_domain_from_url(domain_source)
+            domain_value = extract_domain(domain_source)
             if domain_value:
                 metadata["domain"] = domain_value
                 missing_fields.discard("domain")
@@ -453,20 +453,3 @@ class LLMSummaryMetadataHelper:
         if candidate is None and response_text:
             candidate = extract_json(response_text) or None
         return candidate
-
-    @staticmethod
-    def _extract_domain_from_url(url_value: Any) -> str | None:
-        """Extract domain from a canonical URL."""
-        if not url_value:
-            return None
-        try:
-            parsed = urlparse(str(url_value))
-            netloc = parsed.netloc or ""
-            if not netloc and parsed.path:
-                netloc = parsed.path.split("/")[0]
-            netloc = netloc.strip().lower()
-            netloc = netloc.removeprefix("www.")
-            return netloc or None
-        except Exception:
-            logger.warning("domain_extraction_failed", exc_info=True)
-            return None
