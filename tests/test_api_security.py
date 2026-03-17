@@ -24,7 +24,7 @@ class TestTelegramAuth:
 
     def test_telegram_auth_verifies_hash(self):
         """Test that Telegram auth hash is properly verified."""
-        from app.api.routers.auth import verify_telegram_auth
+        from app.api.routers.auth.telegram import verify_telegram_auth
 
         # This should raise HTTPException with invalid hash
         with pytest.raises(Exception) as exc_info:
@@ -40,7 +40,7 @@ class TestTelegramAuth:
 
     def test_telegram_auth_checks_timestamp(self):
         """Test that expired timestamps are rejected."""
-        from app.api.routers.auth import verify_telegram_auth
+        from app.api.routers.auth.telegram import verify_telegram_auth
 
         # Timestamp from 1 hour ago (should fail)
         old_timestamp = int(time.time()) - 3600
@@ -58,7 +58,7 @@ class TestTelegramAuth:
 
     def test_telegram_auth_requires_whitelist(self):
         """Test that users must be in whitelist."""
-        from app.api.routers.auth import verify_telegram_auth
+        from app.api.routers.auth.telegram import verify_telegram_auth
         from app.config import Config
 
         # Create valid hash for non-whitelisted user

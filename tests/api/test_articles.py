@@ -1,6 +1,6 @@
 import pytest
 
-from app.api.routers.auth import create_access_token
+from app.api.routers.auth.tokens import create_access_token
 from app.db.models import Request, Summary, User
 
 

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from app.api.routers.auth import create_access_token, create_refresh_token
+from app.api.routers.auth.tokens import create_access_token, create_refresh_token
 from app.core.time_utils import UTC
 from app.db.models import RefreshToken, User
 

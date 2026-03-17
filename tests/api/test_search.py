@@ -29,7 +29,7 @@ import typing
 enum.StrEnum = StrEnum  # type: ignore[misc,assignment]
 typing.NotRequired = NotRequired  # type: ignore[assignment]
 
-from app.api.routers.auth import create_access_token
+from app.api.routers.auth.tokens import create_access_token
 from app.core.time_utils import UTC
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.models import Request, Summary, TopicSearchIndex, User

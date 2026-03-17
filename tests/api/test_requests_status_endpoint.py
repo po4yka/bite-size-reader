@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.api.routers.auth import create_access_token
+from app.api.routers.auth.tokens import create_access_token
 from app.config import Config
 from app.db.models import Request, User
 
