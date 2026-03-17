@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Any
 
-from app.infrastructure.embedding.embedding_protocol import pack_embedding, unpack_embedding
+from app.infrastructure.embedding.embedding_protocol import EmbeddingSerializationMixin
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ _TASK_TYPE_MAP: dict[str | None, str] = {
 }
 
 
-class GeminiEmbeddingService:
+class GeminiEmbeddingService(EmbeddingSerializationMixin):
     """Generate embeddings via Google Gemini Embedding API.
 
     Uses lazy import of ``google.genai`` so the app works without the
@@ -80,14 +80,6 @@ class GeminiEmbeddingService:
 
         values: list[float] = result.embeddings[0].values
         return values
-
-    # -- Serialization --------------------------------------------------------
-
-    def serialize_embedding(self, embedding: Any) -> bytes:
-        return pack_embedding(embedding)
-
-    def deserialize_embedding(self, blob: bytes) -> list[float]:
-        return unpack_embedding(blob)
 
     # -- Metadata --------------------------------------------------------------
 

@@ -31,6 +31,16 @@ def unpack_embedding(blob: bytes) -> list[float]:
         return pickle.loads(blob)  # nosec B301
 
 
+class EmbeddingSerializationMixin:
+    """Default serialize/deserialize implementations shared by all embedding providers."""
+
+    def serialize_embedding(self, embedding: Any) -> bytes:
+        return pack_embedding(embedding)
+
+    def deserialize_embedding(self, blob: bytes) -> list[float]:
+        return unpack_embedding(blob)
+
+
 @runtime_checkable
 class EmbeddingServiceProtocol(Protocol):
     """Interface that all embedding providers must satisfy."""

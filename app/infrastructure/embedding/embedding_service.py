@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.infrastructure.embedding.embedding_protocol import pack_embedding, unpack_embedding
+from app.infrastructure.embedding.embedding_protocol import EmbeddingSerializationMixin
 
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
@@ -23,7 +23,7 @@ DEFAULT_MODELS = {
 }
 
 
-class EmbeddingService:
+class EmbeddingService(EmbeddingSerializationMixin):
     """Generate and manage semantic embeddings for articles with multi-language support."""
 
     def __init__(
@@ -85,12 +85,6 @@ class EmbeddingService:
         return await asyncio.to_thread(
             model.encode, text, convert_to_numpy=True, show_progress_bar=False
         )
-
-    def serialize_embedding(self, embedding: Any) -> bytes:
-        return pack_embedding(embedding)
-
-    def deserialize_embedding(self, blob: bytes) -> list[float]:
-        return unpack_embedding(blob)
 
     def get_model_name(self, language: str | None = None) -> str:
         """Get model name for a specific language."""
