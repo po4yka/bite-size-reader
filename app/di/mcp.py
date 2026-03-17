@@ -159,8 +159,8 @@ async def close_mcp_runtime(runtime: McpRuntime) -> None:
                 try:
                     await close()
                 except Exception:
-                    logger.debug("mcp_resource_close_failed", exc_info=True)
+                    logger.warning("mcp_resource_close_failed", exc_info=True)
     try:
         runtime.database.close()
     except Exception:
-        logger.debug("mcp_database_close_failed", exc_info=True)
+        logger.warning("mcp_database_close_failed", exc_info=True)
