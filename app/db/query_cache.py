@@ -80,10 +80,10 @@ class QueryCache:
                     return func(*args, **kwargs)
 
             # Attach cache_clear method
-            wrapper.cache_clear = cached_func.cache_clear  # type: ignore
-            wrapper.cache_info = cached_func.cache_info  # type: ignore
+            wrapper.cache_clear = cached_func.cache_clear  # type: ignore[attr-defined]  # lru_cache exposes these attrs at runtime
+            wrapper.cache_info = cached_func.cache_info  # type: ignore[attr-defined]  # lru_cache exposes these attrs at runtime
 
-            return wrapper  # type: ignore
+            return wrapper  # type: ignore[return-value]  # decorator factory returns F but wrapper has different sig
 
         return decorator
 

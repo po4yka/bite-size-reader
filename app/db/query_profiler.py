@@ -73,8 +73,8 @@ def profile_query(
         import asyncio
 
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper  # type: ignore
-        return sync_wrapper  # type: ignore
+            return async_wrapper  # type: ignore[return-value]  # decorator factory returns F but wrapper has different async sig
+        return sync_wrapper  # type: ignore[return-value]  # decorator factory returns F but wrapper has different sync sig
 
     return decorator
 
