@@ -52,12 +52,19 @@ def _load_secret_key() -> str:
 
 
 # JWT configuration
-SECRET_KEY = _load_secret_key()
+_SECRET_KEY: str | None = None
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
-logger.info("JWT authentication initialized")
+
+def _get_secret_key() -> str:
+    """Return the JWT secret key, loading it lazily on first call."""
+    global _SECRET_KEY
+    if _SECRET_KEY is None:
+        _SECRET_KEY = _load_secret_key()
+        logger.info("JWT authentication initialized")
+    return _SECRET_KEY
 
 
 def create_token(
@@ -97,7 +104,7 @@ def create_token(
     else:
         raise ValueError(f"Invalid token type: {token_type}")
 
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(payload, _get_secret_key(), algorithm=ALGORITHM)
 
 
 def create_access_token(
@@ -164,7 +171,7 @@ def decode_token(token: str, expected_type: str | None = None) -> dict:
     from app.api.exceptions import TokenExpiredError, TokenInvalidError, TokenWrongTypeError
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, _get_secret_key(), algorithms=[ALGORITHM])
     except jwt.ExpiredSignatureError:
         token_type = expected_type or "access"
         raise TokenExpiredError(token_type) from None

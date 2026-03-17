@@ -41,14 +41,14 @@ def _get_auth_config():
 
 def _get_secret_pepper() -> str:
     """Resolve pepper used to hash secrets (prefers explicit pepper, falls back to JWT secret)."""
-    from app.api.routers.auth.tokens import SECRET_KEY
+    from app.api.routers.auth.tokens import _get_secret_key
 
     cfg = _get_cfg()
     if cfg.auth.secret_pepper:
         return cfg.auth.secret_pepper
     if cfg.runtime.jwt_secret_key:
         return cfg.runtime.jwt_secret_key
-    return SECRET_KEY
+    return _get_secret_key()
 
 
 def coerce_naive(dt_value: datetime | None) -> datetime | None:
