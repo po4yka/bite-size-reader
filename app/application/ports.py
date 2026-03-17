@@ -126,6 +126,14 @@ class SummaryRepositoryPort(Protocol):
     ) -> None:
         """Persist summary insights JSON."""
 
+    async def async_update_reading_progress(
+        self,
+        summary_id: int,
+        progress: float,
+        last_read_offset: int,
+    ) -> None:
+        """Update reading progress and last-read offset."""
+
     async def async_soft_delete_summary(self, summary_id: int) -> None:
         """Soft-delete summary."""
 

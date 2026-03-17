@@ -470,6 +470,25 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
 
         await self._execute(_update, operation_name="update_summary_insights")
 
+    async def async_update_reading_progress(
+        self,
+        summary_id: int,
+        progress: float,
+        last_read_offset: int,
+    ) -> None:
+        """Update reading progress and offset for a summary."""
+
+        def _update() -> None:
+            Summary.update(
+                {
+                    Summary.reading_progress: progress,
+                    Summary.last_read_offset: last_read_offset,
+                    Summary.updated_at: datetime.now(UTC),
+                }
+            ).where(Summary.id == summary_id).execute()
+
+        await self._execute(_update, operation_name="update_reading_progress")
+
     async def async_soft_delete_summary(self, summary_id: int) -> None:
         """Soft delete a summary."""
 

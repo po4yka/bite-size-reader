@@ -596,21 +596,15 @@ async def save_reading_position(
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Save the reading position (scroll progress) for a summary."""
-    from app.db.models import Summary
-
     use_case = _resolve_use_case(use_case)
-    summary = await use_case.get_summary_by_id_for_user(
+    updated = await use_case.update_reading_progress(
         user_id=user["user_id"],
         summary_id=summary_id,
-    )
-    if not summary:
-        raise ResourceNotFoundError("Summary", summary_id)
-
-    Summary.update(
-        reading_progress=body.progress,
+        progress=body.progress,
         last_read_offset=body.last_read_offset,
-        updated_at=datetime.now(UTC),
-    ).where(Summary.id == summary_id).execute()
+    )
+    if not updated:
+        raise ResourceNotFoundError("Summary", summary_id)
 
     return success_response(
         {

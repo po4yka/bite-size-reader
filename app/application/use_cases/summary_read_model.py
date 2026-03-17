@@ -127,6 +127,23 @@ class SummaryReadModelUseCase:
 
         return await self._summary_repo.async_get_summary_by_id(summary_id)
 
+    async def update_reading_progress(
+        self,
+        user_id: int,
+        summary_id: int,
+        progress: float,
+        last_read_offset: int,
+    ) -> bool:
+        """Update reading progress and offset. Returns False if summary not found/owned."""
+        summary = await self.get_summary_by_id_for_user(user_id=user_id, summary_id=summary_id)
+        if not summary:
+            return False
+
+        await self._summary_repo.async_update_reading_progress(
+            summary_id, progress, last_read_offset
+        )
+        return True
+
     async def soft_delete_summary(self, user_id: int, summary_id: int) -> bool:
         summary = await self.get_summary_by_id_for_user(user_id=user_id, summary_id=summary_id)
         if not summary:
