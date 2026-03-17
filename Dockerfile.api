@@ -31,16 +31,7 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra api
 
-# Stage 1.5: Frontend - Build React Mini App assets
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
-
-# Stage 1.55: Web - Build Carbon Web App assets
+# Stage 1.5: Web - Build Carbon Web App assets
 FROM node:20-alpine AS web-builder
 
 WORKDIR /app/web
@@ -74,8 +65,6 @@ RUN playwright install --with-deps chromium
 # Copy application source
 COPY app ./app
 
-# Copy built digest mini-app static assets
-COPY --from=frontend-builder /app/app/static/digest /app/app/static/digest
 # Copy built Carbon web static assets
 COPY --from=web-builder /app/app/static/web /app/app/static/web
 

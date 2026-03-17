@@ -185,7 +185,7 @@ Incoming updates are normalized via `MessageHandler`, which delegates access che
 
 Telegram and CLI entrypoints both wire the DI container by default; business flows in presentation adapters execute through application use cases rather than repository fallbacks.
 
-For FastAPI, routers are transport-focused: digest orchestration is delegated via `DigestFacade`, and DB/Redis/file maintenance tasks are delegated via `SystemMaintenanceService`. The same FastAPI host also serves static frontend assets (`/static/digest/*`, `/static/web/*`) and Carbon SPA entry routes (`/web`, `/web/*`).
+For FastAPI, routers are transport-focused: digest orchestration is delegated via `DigestFacade`, and DB/Redis/file maintenance tasks are delegated via `SystemMaintenanceService`. The same FastAPI host also serves static frontend assets (`/static/web/*`) and Carbon SPA entry routes (`/web`, `/web/*`).
 
 ### Telegram message routing
 
@@ -920,7 +920,7 @@ Carbon-based web client implemented in `web/` (React + TypeScript + Vite + `@car
 - FastAPI static mount: `/static/*` from `app/static`
 - Carbon bundle namespace: `/static/web/*`
 - SPA entrypoint routes: `/web` and `/web/{path:path}` (both return `app/static/web/index.html`)
-- Telegram Mini App bundle remains separate under `/static/digest/*`
+- Standalone session init page: `app/static/init_session.html` (served at `/static/init_session.html`)
 
 ### Web routes (V1)
 

@@ -21,11 +21,13 @@ import {
   Search as SearchIcon,
   Add,
   Notification,
+  Settings,
   User,
   Logout,
   Renew,
 } from "@carbon/icons-react";
 import { useAuth } from "../auth/AuthProvider";
+import { FEATURE_FLAGS } from "../routes/features";
 
 const NAV_ITEMS = [
   { path: "/library", label: "Library", icon: Book },
@@ -36,6 +38,8 @@ const NAV_ITEMS = [
   { path: "/digest", label: "Digest", icon: Notification },
   { path: "/preferences", label: "Preferences", icon: User },
 ] as const;
+
+const ADMIN_NAV_ITEM = { path: "/admin", label: "Admin", icon: Settings } as const;
 
 const NAV_ROOT_PATHS: ReadonlySet<string> = new Set(NAV_ITEMS.map((item) => item.path));
 
@@ -179,6 +183,20 @@ export default function AppShell() {
                 {item.label}
               </SideNavLink>
             ))}
+            {FEATURE_FLAGS.admin && (
+              <SideNavLink
+                href={`/web${ADMIN_NAV_ITEM.path}`}
+                isActive={activePath === ADMIN_NAV_ITEM.path}
+                renderIcon={ADMIN_NAV_ITEM.icon}
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigate(ADMIN_NAV_ITEM.path);
+                  setExpanded(false);
+                }}
+              >
+                {ADMIN_NAV_ITEM.label}
+              </SideNavLink>
+            )}
           </SideNavItems>
         </SideNav>
 

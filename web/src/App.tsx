@@ -10,6 +10,7 @@ import ArticlesPage from "./features/articles/ArticlesPage";
 import CollectionsPage from "./features/collections/CollectionsPage";
 import DigestPage from "./features/digest/DigestPage";
 import LibraryPage from "./features/library/LibraryPage";
+import AdminPage from "./features/admin/AdminPage";
 import PreferencesPage from "./features/preferences/PreferencesPage";
 import SearchPage from "./features/search/SearchPage";
 import SubmitPage from "./features/submit/SubmitPage";
@@ -89,7 +90,7 @@ export default function App() {
         <Route path="collections/:id" element={<CollectionsPage />} />
         <Route path="digest" element={<DigestPage />} />
         <Route path="preferences" element={<PreferencesPage />} />
-        {FEATURE_FLAGS.admin && <Route path="admin" element={<NotFoundPage />} />}
+        {FEATURE_FLAGS.admin && <Route path="admin" element={<AdminPage />} />}
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

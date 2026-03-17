@@ -1,4 +1,4 @@
 export const FEATURE_FLAGS = {
   digest: true,
-  admin: false,
+  admin: true,
 } as const;

@@ -11,7 +11,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - Accepts forwarded channel posts and summarizes them directly
 - Returns structured JSON summaries with a strict contract
 - Stores all artifacts (Telegram messages, crawl results, video downloads, LLM calls, summaries) in SQLite
-- Exposes two frontend surfaces: Telegram Mini App (`frontend/`) and Carbon web app (`web/`) served by FastAPI on `/web/*`
+- Exposes a Carbon web frontend (`web/`) served by FastAPI on `/web/*`
 - Runs as a single Docker container with owner-only access control
 
 **Tech Stack:**
@@ -87,8 +87,7 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 - **Dependency Injection** (`app/di/`) -- Runtime composition only; production code outside `app/di/` should not assemble concrete dependency graphs
 - **CLI Tools** (`app/cli/`) -- Summary runner, search, migrations, MCP server, embedding backfill, Chroma backfill, search comparison, performance indexes
 - **Mobile API** (`app/api/`) -- FastAPI REST API with JWT auth, sync, background processing
-- **Web Frontend** (`web/`) -- Carbon web interface (library/article/search/submit/collections/digest/preferences), hybrid auth (Telegram WebApp + JWT), React Query data layer
-- **Legacy Mini App Frontend** (`frontend/`) -- Telegram mini app bundle served under `/static/digest/*`
+- **Web Frontend** (`web/`) -- Carbon web interface (library/article/search/submit/collections/digest/preferences/admin), hybrid auth (Telegram WebApp + JWT), React Query data layer
 - **Multi-Agent System** (`app/agents/`) -- Content extraction, summarization with self-correction, validation, web search agents. See `docs/multi_agent_architecture.md`
 - **Search Services** (`app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/`) -- Topic search workflows, vector/hybrid search, embeddings (local/Gemini via protocol+factory), reranking, query expansion
 - **MCP Server** (`app/mcp/`) -- Model Context Protocol server for AI agent access. See `docs/mcp_server.md`
@@ -143,7 +142,6 @@ app/
 +-- services/           # Search and other domain services
 +-- types/              # Type definitions
 +-- utils/              # Helper utilities (progress, formatting, validation)
-frontend/               # Telegram Mini App frontend (legacy digest-focused app)
 web/                    # Carbon web interface (React + TypeScript + Vite)
 ```
 

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_DIGEST_MINI_APP_PATH = "/static/digest/index.html"
+_DIGEST_WEB_PATH = "/web/digest"
 
 
 class _UserPrefs(TypedDict, total=False):
@@ -79,7 +79,7 @@ class SettingsHandlerImpl:
 
         from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
-        url = f"{api_base.rstrip('/')}{_DIGEST_MINI_APP_PATH}"
+        url = f"{api_base.rstrip('/')}{_DIGEST_WEB_PATH}"
         keyboard = InlineKeyboardMarkup(
             [[InlineKeyboardButton("Digest Settings", web_app=WebAppInfo(url=url))]]
         )

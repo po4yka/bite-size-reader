@@ -2,66 +2,21 @@
 
 Reference for the Carbon-based web interface implemented in `web/`.
 
-**Audience:** Frontend developers, integrators, operators  
-**Type:** Reference  
+**Audience:** Frontend developers, integrators, operators
+**Type:** Reference
 **Related:** [README.md § Carbon Web Interface](README.md#carbon-web-interface-v1), [docs/MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ---
 
 ## Overview
 
-The web interface is a standalone SPA built with:
+The web interface is the sole frontend surface — a standalone SPA built with:
 
 - React 18 + TypeScript + Vite
 - IBM Carbon (`@carbon/react`, `@carbon/styles`, `@carbon/icons-react`)
 - `@tanstack/react-query` for server state and polling
 
 It is built into `app/static/web` and served by FastAPI on `/web` and `/web/*`.
-
-Legacy Telegram Mini App in `frontend/` remains operational and separate in V1.
-
----
-
-## Feature Ownership
-
-The project has two frontend surfaces. This section defines their ownership boundaries to prevent drift.
-
-| Feature         | `web/` (Carbon)     | `frontend/` (Mini App) |
-|-----------------|---------------------|------------------------|
-| Library         | canonical           | legacy                 |
-| Search          | canonical           | legacy                 |
-| Submit URL      | canonical           | legacy                 |
-| Collections     | canonical           | legacy                 |
-| Digest          | canonical           | legacy                 |
-| Preferences     | canonical           | legacy                 |
-| Admin / ops     | canonical (owner)   | legacy (port to `web/`)|
-| Sync API        | planned             | legacy                 |
-| Auth — JWT      | supported           | not supported          |
-| Auth — Telegram WebApp | supported   | only mode              |
-
-**Rules:**
-
-- **`web/` is the canonical surface for all new features.** Do not add features to `frontend/`.
-- **`frontend/` is legacy.** Accept bug fixes only; no new features.
-- **Admin/ops features** (cache controls, DB info, user stats) currently live in `frontend/` under `/more/admin` and should be ported to `web/` when prioritized.
-- **Sync API** (`/v1/sync`) is only integrated in `frontend/` today; new sync work targets `web/`.
-
-### Adding New Features
-
-Use this decision tree:
-
-```
-New feature?
-  → Add to web/ only. Do not touch frontend/.
-
-Bug fix?
-  → Fix it in whichever surface has the bug.
-  → If the bug exists in both, fix web/ first; frontend/ only if impact warrants it.
-
-Admin / ops feature?
-  → Add to web/ (owner-facing, requires full auth stack).
-  → If it exists only in frontend/, port it to web/ before extending.
-```
 
 ---
 
@@ -94,7 +49,7 @@ Build output contract:
 
 ---
 
-## Route Map (Current)
+## Route Map
 
 - `/web/library`
 - `/web/library/:id`
@@ -105,6 +60,7 @@ Build output contract:
 - `/web/collections/:id`
 - `/web/digest`
 - `/web/preferences`
+- `/web/admin`
 - `/web/login`
 
 Route-level feature flags live in `web/src/routes/features.ts`.
@@ -167,6 +123,11 @@ Digest flow parity (web route `/web/digest`) includes:
 
 Note: digest endpoints require Telegram WebApp auth context.
 
+Admin page (`/web/admin`) includes:
+
+- Database info (file size, table row counts)
+- Cache controls (clear Redis URL cache)
+
 ---
 
 ## UI Architecture
@@ -174,7 +135,7 @@ Note: digest endpoints require Telegram WebApp auth context.
 - Global shell: Carbon `Header` + `SideNav` (`web/src/components/AppShell.tsx`)
 - Session UX:
   - in-app session status label
-  - manual “Verify session” action
+  - manual "Verify session" action
   - inline session warnings + re-auth actions
 - Read experience polish (`/web/library/:id`):
   - reading progress bar
@@ -230,19 +191,13 @@ CI jobs in `.github/workflows/ci.yml`:
 - `web-test`
 - `web-static-check`
 
-Legacy mini app CI job remains:
-
-- `frontend-build`
-
 ---
 
 ## Deployment Notes
 
-- `Dockerfile` and `Dockerfile.api` both build `frontend/` and `web/`.
-- Runtime image ships both static bundles:
-  - `/app/app/static/digest`
-  - `/app/app/static/web`
-- Same-host deployment avoids CORS complexity for V1.
+- `Dockerfile` and `Dockerfile.api` both build `web/`.
+- Runtime image ships the static bundle at `/app/app/static/web`.
+- Same-host deployment avoids CORS complexity.
 
 ---
 
@@ -258,7 +213,7 @@ npm ci
 npm run build
 ```
 
-### Login page shows “Missing configuration”
+### Login page shows "Missing configuration"
 
 `VITE_TELEGRAM_BOT_USERNAME` is not set for JWT mode.
 
@@ -268,8 +223,8 @@ Digest endpoints require Telegram WebApp `initData`; use Telegram-launched conte
 
 ### Repeated auth failures in browser mode
 
-Clear stored tokens (login page has “Clear local session”) and sign in again.
+Clear stored tokens (login page has "Clear local session") and sign in again.
 
 ---
 
-**Last Updated:** 2026-03-07
+**Last Updated:** 2026-03-17

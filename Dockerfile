@@ -40,19 +40,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     echo "uv sync completed successfully"
 
 # =============================================================================
-# Stage 2: Frontend - Build React Mini App
-# =============================================================================
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
-# Output: /app/app/static/digest/
-
-# =============================================================================
-# Stage 2.1: Web - Build Carbon Web App
+# Stage 2: Web - Build Carbon Web App
 # =============================================================================
 FROM node:20-alpine AS web-builder
 
@@ -97,8 +85,6 @@ RUN set -eux; \
 COPY app ./app
 COPY bot.py ./
 
-# Copy built frontend assets from frontend-builder stage
-COPY --from=frontend-builder /app/app/static/digest /app/app/static/digest
 # Copy built Carbon web assets
 COPY --from=web-builder /app/app/static/web /app/app/static/web
 

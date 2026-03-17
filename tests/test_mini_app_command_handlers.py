@@ -93,7 +93,7 @@ class TestSettingsHandlerImpl:
         reply_markup = safe_reply.await_args.kwargs["reply_markup"]
         button = reply_markup.inline_keyboard[0][0]
         assert button.text == "Digest Settings"
-        assert button.web_app.url == "https://example.com/static/digest/index.html"
+        assert button.web_app.url == "https://example.com/web/digest"
 
 
 class TestInitSessionHandlerImpl:

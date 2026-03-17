@@ -67,9 +67,8 @@ Copy `.env.example` to `.env` and fill:
 
 ## Web Interface Serving Contract
 
-The FastAPI service serves both frontends from static bundles:
+The FastAPI service serves the Carbon web frontend from a static bundle:
 
-- Telegram Mini App static files: `/static/digest/*`
 - Carbon web static files: `/static/web/*`
 - Carbon SPA entry routes: `/web` and `/web/{path:path}` (returns `app/static/web/index.html`)
 
@@ -107,7 +106,7 @@ Notes
 - SQLite at `/data/app.db`; backups under `/data/backups`. Mount `/data` for durability.
 - Set `ALLOWED_USER_IDS`; keep `DEBUG_PAYLOADS=0` in prod.
 - If using mobile API, ensure `JWT_SECRET_KEY` is set and port 8000 exposed.
-- Docker build includes both `frontend/` and `web/` bundles and publishes them under `/static/digest/*` and `/static/web/*`.
+- Docker build includes the `web/` bundle and publishes it under `/static/web/*`.
 
 ## Docker Compose (recommended)
 

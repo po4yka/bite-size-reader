@@ -128,7 +128,6 @@ web/node_modules/
 web/tsconfig.tsbuildinfo
 web/test-results/
 web/playwright-report/
-app/static/digest/
 app/static/web/
 
 # --- Claude Code ---
