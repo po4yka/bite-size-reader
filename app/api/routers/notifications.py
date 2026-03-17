@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -5,6 +7,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.dependencies.database import get_device_repository
 from app.api.routers.auth import get_current_user
+from app.core.logging_utils import get_logger
+from app.infrastructure.persistence.sqlite.repositories.device_repository import (  # noqa: TC001 - used at runtime by FastAPI
+    SqliteDeviceRepositoryAdapter,
+)
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -25,12 +33,12 @@ class DeviceRegistrationPayload(BaseModel):
 async def register_device(
     payload: DeviceRegistrationPayload,
     user_data: Annotated[dict, Depends(get_current_user)],
+    device_repo: SqliteDeviceRepositoryAdapter = Depends(get_device_repository),
 ):
     """
     Register or update a device token for push notifications.
     """
     user_id = user_data["user_id"]
-    device_repo = get_device_repository()
 
     try:
         await device_repo.async_upsert_device(
