@@ -15,14 +15,7 @@ TOutput = TypeVar("TOutput")
 
 
 class AgentResult(BaseModel, Generic[TOutput]):
-    """Result of an agent execution.
-
-    Attributes:
-        success: Whether the agent completed successfully
-        output: The output data (if successful)
-        error: Error message (if failed)
-        metadata: Additional context and metrics
-    """
+    """Result of an agent execution."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -60,26 +53,22 @@ class BaseAgent(ABC, Generic[TInput, TOutput]):
 
     @abstractmethod
     async def execute(self, input_data: TInput) -> AgentResult[TOutput]:
-        """Execute the agent's primary task.
+        """Execute the agent's primary task."""
 
-        Args:
-            input_data: The input data required by this agent
-
-        Returns:
-            AgentResult containing output or error information
-        """
-
-    def _log(self, level: str, message: str, **kwargs: Any) -> None:
-        getattr(self.logger, level)(
+    def log_info(self, message: str, **kwargs: Any) -> None:
+        self.logger.info(
             f"[{self.name}] {message}",
             extra={"correlation_id": self.correlation_id, **kwargs},
         )
 
-    def log_info(self, message: str, **kwargs: Any) -> None:
-        self._log("info", message, **kwargs)
-
     def log_warning(self, message: str, **kwargs: Any) -> None:
-        self._log("warning", message, **kwargs)
+        self.logger.warning(
+            f"[{self.name}] {message}",
+            extra={"correlation_id": self.correlation_id, **kwargs},
+        )
 
     def log_error(self, message: str, **kwargs: Any) -> None:
-        self._log("error", message, **kwargs)
+        self.logger.error(
+            f"[{self.name}] {message}",
+            extra={"correlation_id": self.correlation_id, **kwargs},
+        )
