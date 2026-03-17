@@ -43,9 +43,13 @@ class FakeTime:
 class DummyFormatter:
     def __init__(self) -> None:
         self.replies: list[str] = []
+        self.error_notifications: list[tuple[str, str]] = []
 
     async def safe_reply(self, message, text, **_kwargs):
         self.replies.append(text)
+
+    async def send_error_notification(self, message, error_type, correlation_id, *, details=None):
+        self.error_notifications.append((error_type, details or ""))
 
 
 def _make_config(tmp_path: str, allowed_ids):
@@ -133,14 +137,27 @@ class TestAccessControllerBlockReset(unittest.IsolatedAsyncioTestCase):
                     allowed = await controller.check_access(uid, message, "cid", 0, fake_time())
                     assert allowed is False
 
-                assert controller._failed_attempts[uid] == controller.MAX_FAILED_ATTEMPTS
-                assert uid in controller._block_notified_until
+                # uid is now blocked — still denied within block window
+                fake_time.advance(1)
+                allowed = await controller.check_access(uid, message, "cid", 0, fake_time())
+                assert allowed is False
 
+                # Advance past block window — counter resets, uid gets fresh attempts
                 fake_time.advance(controller.BLOCK_DURATION_SECONDS + 1)
                 allowed = await controller.check_access(uid, message, "cid", 0, fake_time())
                 assert allowed is False
-                assert controller._failed_attempts[uid] == 1
-                assert uid not in controller._block_notified_until
+
+                # Verify the reset by confirming uid needs MAX-1 more attempts before blocking again.
+                # If the counter did NOT reset, the very next call would block (MAX+1 total).
+                # Instead, uid should not yet be block-notified on attempt 2 (below MAX).
+                formatter.error_notifications.clear()
+                fake_time.advance(1)
+                allowed = await controller.check_access(uid, message, "cid", 0, fake_time())
+                assert allowed is False
+                block_notifs = [
+                    e for e, _ in formatter.error_notifications if e == "access_blocked"
+                ]
+                assert not block_notifs, "uid should not be re-blocked after just 2 fresh attempts"
 
     async def test_stale_tracking_state_is_reclaimed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -154,23 +171,42 @@ class TestAccessControllerBlockReset(unittest.IsolatedAsyncioTestCase):
             controller.DENY_NOTIFICATION_COOLDOWN_SECONDS = 10
 
             stale_uid = 999
-            fake_time = FakeTime(20)
+            fake_time = FakeTime(1)
 
-            controller._failed_attempts[stale_uid] = 2
-            controller._last_attempt_time[stale_uid] = 1
-            controller._block_notified_until[stale_uid] = 5
-            controller._deny_notified_until[stale_uid] = 5
+            # Accumulate 2 failed attempts at early time (fewer than MAX_FAILED_ATTEMPTS)
+            with patch("app.adapters.telegram.access_controller.time.time", fake_time):
+                await controller.check_access(
+                    stale_uid, FakeMessage("/help", uid=stale_uid), "cid", 0, 0.0
+                )
+                fake_time.advance(0.5)
+                await controller.check_access(
+                    stale_uid, FakeMessage("/help", uid=stale_uid), "cid", 0, 0.0
+                )
+
+            # Advance far past the stale window (BLOCK_DURATION_SECONDS=10)
+            fake_time.value = 20
 
             with patch("app.adapters.telegram.access_controller.time.time", fake_time):
+                # Trigger cleanup via an allowed user call
                 allowed = await controller.check_access(
                     1, FakeMessage("/help", uid=1), "cid", 0, 0.0
                 )
+                assert allowed is True
 
-            assert allowed is True
-            assert stale_uid not in controller._failed_attempts
-            assert stale_uid not in controller._last_attempt_time
-            assert stale_uid not in controller._block_notified_until
-            assert stale_uid not in controller._deny_notified_until
+                # Verify stale tracking was reclaimed: stale_uid should need MAX fresh attempts
+                # to be blocked. Without reclaim, old 2 + 1 new = MAX → blocked immediately.
+                formatter.error_notifications.clear()
+                fake_time.advance(1)
+                result = await controller.check_access(
+                    stale_uid, FakeMessage("/help", uid=stale_uid), "cid", 0, 0.0
+                )
+                assert result is False  # Still denied (not in allowed list)
+                block_notifs = [
+                    e for e, _ in formatter.error_notifications if e == "access_blocked"
+                ]
+                assert not block_notifs, (
+                    "stale_uid should not be blocked on first fresh attempt after cleanup"
+                )
 
 
 if __name__ == "__main__":
