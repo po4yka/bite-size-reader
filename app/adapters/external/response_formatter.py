@@ -15,10 +15,10 @@ existing code while delegating to specialized components:
 All public methods are delegated to the appropriate component while maintaining
 the original API signatures for backward compatibility.
 
-TODO(migration): This facade has 190 importers and no removal milestone.
-  Migration plan: move callers subsystem by subsystem to import from the
-  concrete component directly (e.g. notification handlers -> NotificationFormatterImpl,
-  Telegram command handlers -> ResponseSenderImpl). Track progress in GitHub issue.
+TODO(migration): This facade has 190 importers. Subsystem-by-subsystem migration:
+  1. notification handlers -> NotificationFormatterImpl
+  2. Telegram command handlers -> ResponseSenderImpl
+  Target: no removal milestone set; track alongside app/services/ deprecation cleanup.
 """
 
 from __future__ import annotations
