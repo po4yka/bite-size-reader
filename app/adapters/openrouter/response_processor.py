@@ -324,7 +324,7 @@ class ResponseProcessor:
         # Invalid JSON with structured outputs
         return False, text_str
 
-    def is_completion_truncated(self, data: dict) -> tuple[bool, str | None, str | None]:
+    def inspect_completion_truncation(self, data: dict) -> tuple[bool, str | None, str | None]:
         """Inspect response metadata and determine if the completion was truncated."""
         try:
             choices = data.get("choices") or []

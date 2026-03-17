@@ -57,7 +57,7 @@ class ChatResponseHandler:
         )
 
         truncated, truncated_finish, truncated_native = (
-            self._client.response_processor.is_completion_truncated(data)
+            self._client.response_processor.inspect_completion_truncation(data)
         )
         if truncated:
             self._client.error_handler.log_truncated_completion(
