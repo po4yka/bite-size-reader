@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 _MINI_APP_PATH = "/static/init_session.html"
 
 
-class InitSessionHandlerImpl:
+class InitSessionHandler:
     """Handles the multi-step userbot session initialization flow."""
 
     def __init__(

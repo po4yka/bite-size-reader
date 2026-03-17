@@ -30,18 +30,12 @@ from app.api.models.responses import (
     success_response,
 )
 from app.api.routers.auth import get_current_user
+from app.api.search_helpers import isotime
 from app.api.services.collection_service import CollectionService
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()
-
-
-def _isotime(dt) -> str:
-    """Safely convert datetime to ISO string."""
-    if hasattr(dt, "isoformat"):
-        return dt.isoformat() + "Z"
-    return str(dt)
 
 
 @router.get("")
@@ -68,8 +62,8 @@ async def get_collections(
             description=c.get("description"),
             parent_id=c.get("parent_id") or c.get("parent"),
             position=c.get("position"),
-            created_at=_isotime(c.get("created_at")),
-            updated_at=_isotime(c.get("updated_at")),
+            created_at=isotime(c.get("created_at")),
+            updated_at=isotime(c.get("updated_at")),
             server_version=c.get("server_version"),
             is_shared=bool(c.get("is_shared", False)),
             share_count=c.get("share_count"),
@@ -113,8 +107,8 @@ async def create_collection(
             description=collection.get("description"),
             parent_id=collection.get("parent_id") or collection.get("parent"),
             position=collection.get("position"),
-            created_at=_isotime(collection.get("created_at")),
-            updated_at=_isotime(collection.get("updated_at")),
+            created_at=isotime(collection.get("created_at")),
+            updated_at=isotime(collection.get("updated_at")),
             server_version=collection.get("server_version"),
             is_shared=bool(collection.get("is_shared", False)),
             share_count=collection.get("share_count"),
@@ -139,8 +133,8 @@ async def get_collection(
             description=collection.get("description"),
             parent_id=collection.get("parent_id") or collection.get("parent"),
             position=collection.get("position"),
-            created_at=_isotime(collection.get("created_at")),
-            updated_at=_isotime(collection.get("updated_at")),
+            created_at=isotime(collection.get("created_at")),
+            updated_at=isotime(collection.get("updated_at")),
             server_version=collection.get("server_version"),
             is_shared=bool(collection.get("is_shared", False)),
             share_count=collection.get("share_count"),
@@ -175,8 +169,8 @@ async def update_collection(
             description=collection.get("description"),
             parent_id=collection.get("parent_id") or collection.get("parent"),
             position=collection.get("position"),
-            created_at=_isotime(collection.get("created_at")),
-            updated_at=_isotime(collection.get("updated_at")),
+            created_at=isotime(collection.get("created_at")),
+            updated_at=isotime(collection.get("updated_at")),
             server_version=collection.get("server_version"),
             is_shared=bool(collection.get("is_shared", False)),
             share_count=collection.get("share_count"),
@@ -218,7 +212,7 @@ async def list_collection_items(
             collection_id=item.get("collection_id") or item.get("collection"),
             summary_id=item.get("summary_id") or item.get("summary"),
             position=item.get("position"),
-            created_at=_isotime(item.get("created_at")),
+            created_at=isotime(item.get("created_at")),
         )
         for item in items
     ]
@@ -305,7 +299,7 @@ async def move_collection(
             parent_id=moved.get("parent_id") or moved.get("parent"),
             position=moved.get("position") or 0,
             server_version=moved.get("server_version"),
-            updated_at=_isotime(moved.get("updated_at")),
+            updated_at=isotime(moved.get("updated_at")),
         )
     )
 
@@ -325,8 +319,8 @@ async def get_collection_tree(
             description=col.get("description"),
             parent_id=col.get("parent_id") or col.get("parent"),
             position=col.get("position"),
-            created_at=_isotime(col.get("created_at")),
-            updated_at=_isotime(col.get("updated_at")),
+            created_at=isotime(col.get("created_at")),
+            updated_at=isotime(col.get("updated_at")),
             server_version=col.get("server_version"),
             is_shared=bool(col.get("is_shared", False)),
             share_count=col.get("share_count"),
@@ -367,8 +361,8 @@ async def get_collection_acl(collection_id: int, user=Depends(get_current_user))
                 role=entry.get("role", "owner"),
                 status=entry.get("status", "active"),
                 invited_by=invited_by_id,
-                created_at=_isotime(entry.get("created_at")) if entry.get("created_at") else None,
-                updated_at=_isotime(entry.get("updated_at")) if entry.get("updated_at") else None,
+                created_at=isotime(entry.get("created_at")) if entry.get("created_at") else None,
+                updated_at=isotime(entry.get("updated_at")) if entry.get("updated_at") else None,
             )
         )
     return success_response(CollectionAclResponse(acl=payload))

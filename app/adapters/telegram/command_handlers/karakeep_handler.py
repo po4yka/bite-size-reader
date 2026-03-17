@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 KARAKEEP_SYNC_COOLDOWN_SECONDS = 300
 
 
-class KarakeepHandlerImpl(HandlerDependenciesMixin):
+class KarakeepHandler(HandlerDependenciesMixin):
     """Implementation of Karakeep sync commands.
 
     Handles bidirectional sync between Bite-Size Reader and Karakeep

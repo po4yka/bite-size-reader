@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class URLCommandsHandlerImpl:
+class URLCommandsHandler:
     """Implementation of URL processing commands.
 
     Handles /summarize, /summarize_all, and /cancel commands which control

@@ -23,7 +23,7 @@ class _UserPrefs(TypedDict, total=False):
     verbosity: str
 
 
-class SettingsHandlerImpl:
+class SettingsHandler:
     """Handles user-facing settings commands."""
 
     def __init__(

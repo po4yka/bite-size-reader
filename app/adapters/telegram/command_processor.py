@@ -5,12 +5,12 @@ the decomposed command handler components. It maintains backward compatibility
 with existing code while delegating to specialized handlers.
 
 Handlers:
-- OnboardingHandlerImpl: /start, /help
-- AdminHandlerImpl: /dbinfo, /dbverify
-- URLCommandsHandlerImpl: /summarize, /summarize_all, /cancel
-- ContentHandlerImpl: /unread, /read
-- SearchHandlerImpl: /find*, /search
-- KarakeepHandlerImpl: /sync_karakeep
+- OnboardingHandler: /start, /help
+- AdminHandler: /dbinfo, /dbverify
+- URLCommandsHandler: /summarize, /summarize_all, /cancel
+- ContentHandler: /unread, /read
+- SearchHandler: /find*, /search
+- KarakeepHandler: /sync_karakeep
 """
 
 # ruff: noqa: E501
@@ -22,17 +22,17 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.telegram.command_handlers.admin_handler import AdminHandlerImpl
-from app.adapters.telegram.command_handlers.content_handler import ContentHandlerImpl
-from app.adapters.telegram.command_handlers.digest_handler import DigestHandlerImpl
+from app.adapters.telegram.command_handlers.admin_handler import AdminHandler
+from app.adapters.telegram.command_handlers.content_handler import ContentHandler
+from app.adapters.telegram.command_handlers.digest_handler import DigestHandler
 from app.adapters.telegram.command_handlers.execution_context import CommandExecutionContext
-from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandlerImpl
-from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandlerImpl
-from app.adapters.telegram.command_handlers.listen_handler import ListenHandlerImpl
-from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandlerImpl
-from app.adapters.telegram.command_handlers.search_handler import SearchHandlerImpl
-from app.adapters.telegram.command_handlers.settings_handler import SettingsHandlerImpl
-from app.adapters.telegram.command_handlers.url_commands_handler import URLCommandsHandlerImpl
+from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandler
+from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandler
+from app.adapters.telegram.command_handlers.listen_handler import ListenHandler
+from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandler
+from app.adapters.telegram.command_handlers.search_handler import SearchHandler
+from app.adapters.telegram.command_handlers.settings_handler import SettingsHandler
+from app.adapters.telegram.command_handlers.url_commands_handler import URLCommandsHandler
 from app.adapters.telegram.command_handlers.utils import maybe_load_json
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.application.ports import (
@@ -112,21 +112,21 @@ class CommandProcessor:
         self.hybrid_search = hybrid_search
 
         # Initialize handler components
-        self._onboarding = OnboardingHandlerImpl(response_formatter)
+        self._onboarding = OnboardingHandler(response_formatter)
 
-        self._admin = AdminHandlerImpl(
+        self._admin = AdminHandler(
             db=db,
             response_formatter=response_formatter,
             url_processor=url_processor,
             url_handler=url_handler,
         )
 
-        self._url_commands = URLCommandsHandlerImpl(
+        self._url_commands = URLCommandsHandler(
             response_formatter=response_formatter,
             processor_provider=self,  # Pass self so handler can access current processor values
         )
 
-        self._content = ContentHandlerImpl(
+        self._content = ContentHandler(
             response_formatter=response_formatter,
             summary_repo=self.summary_repo,
             llm_repo=self.llm_repo,
@@ -137,36 +137,36 @@ class CommandProcessor:
             event_bus=getattr(application_services, "event_bus", None),
         )
 
-        self._search = SearchHandlerImpl(
+        self._search = SearchHandler(
             response_formatter=response_formatter,
             searcher_provider=self,  # Pass self so handler can access current searcher values
             search_topics_use_case=getattr(application_services, "search_topics", None),
         )
 
-        self._karakeep = KarakeepHandlerImpl(
+        self._karakeep = KarakeepHandler(
             cfg=cfg,
             db=db,
             response_formatter=response_formatter,
         )
 
-        self._listen = ListenHandlerImpl(
+        self._listen = ListenHandler(
             cfg=cfg,
             db=db,
             response_formatter=response_formatter,
         )
 
-        self._digest = DigestHandlerImpl(
+        self._digest = DigestHandler(
             cfg=cfg,
             db=db,
             response_formatter=response_formatter,
         )
 
-        self._init_session = InitSessionHandlerImpl(
+        self._init_session = InitSessionHandler(
             cfg=cfg,
             response_formatter=response_formatter,
         )
 
-        self._settings = SettingsHandlerImpl(
+        self._settings = SettingsHandler(
             verbosity_resolver=verbosity_resolver,
             cfg=cfg,
         )
@@ -741,4 +741,4 @@ class CommandProcessor:
         Returns:
             Tuple of (limit, topic) where limit defaults to 5 and topic may be None.
         """
-        return ContentHandlerImpl.parse_unread_arguments(text)
+        return ContentHandler.parse_unread_arguments(text)

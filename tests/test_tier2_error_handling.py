@@ -254,10 +254,10 @@ class TestSearchHandlerAuditCancelledError:
     @pytest.mark.asyncio
     async def test_propagates_cancelled(self) -> None:
         from app.adapters.telegram.command_handlers.search_handler import (
-            SearchHandlerImpl,
+            SearchHandler,
         )
 
-        sh = SearchHandlerImpl(
+        sh = SearchHandler(
             response_formatter=MagicMock(),
             searcher_provider=SimpleNamespace(
                 topic_searcher=None,
@@ -298,13 +298,13 @@ class TestSearchHandlerAuditCancelledError:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         from app.adapters.telegram.command_handlers.search_handler import (
-            SearchHandlerImpl,
+            SearchHandler,
         )
 
         formatter = MagicMock()
         formatter.safe_reply = AsyncMock()
 
-        sh = SearchHandlerImpl(
+        sh = SearchHandler(
             response_formatter=formatter,
             searcher_provider=SimpleNamespace(
                 topic_searcher=None,

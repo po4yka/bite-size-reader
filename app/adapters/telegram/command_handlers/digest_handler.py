@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class DigestHandlerImpl(HandlerDependenciesMixin):
+class DigestHandler(HandlerDependenciesMixin):
     """Implementation of channel digest commands."""
 
     @asynccontextmanager

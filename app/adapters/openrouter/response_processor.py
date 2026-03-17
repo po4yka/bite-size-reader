@@ -253,7 +253,6 @@ class ResponseProcessor:
         cache_creation = 0
         cache_discount = None
 
-        # Extract cache token counts
         try:
             cache_read = int(usage.get("cache_read_input_tokens", 0) or 0)
         except (TypeError, ValueError):
@@ -264,7 +263,6 @@ class ResponseProcessor:
         except (TypeError, ValueError):
             cache_creation = 0
 
-        # Extract cache discount if available
         try:
             # Discount may be at top level or inside usage
             discount_val = response.get("cache_discount")
@@ -282,7 +280,6 @@ class ResponseProcessor:
             cache_discount=cache_discount,
         )
 
-        # Log cache metrics if stats are enabled
         if self._enable_stats and (cache_read > 0 or cache_creation > 0):
             logger.info(
                 "cache_metrics_extracted",

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AdminHandlerImpl:
+class AdminHandler:
     """Implementation of admin/maintenance commands (/dbinfo, /dbverify).
 
     These commands provide database inspection and verification capabilities

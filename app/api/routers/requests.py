@@ -68,14 +68,13 @@ async def submit_request(
     user=Depends(get_current_user),
     request_service: RequestService = Depends(_get_request_service),
 ):
-    request_service = _resolve_request_service(request_service)
-    """
-    Submit a new URL or forwarded message for processing.
+    """Submit a new URL or forwarded message for processing.
 
     Returns request_id and correlation_id for status polling.
     Checks for duplicates and returns existing summary if found.
     Processing happens asynchronously in the background.
     """
+    request_service = _resolve_request_service(request_service)
     # Handle URL request
     if isinstance(request_data, SubmitURLRequest):
         input_url = str(request_data.input_url)

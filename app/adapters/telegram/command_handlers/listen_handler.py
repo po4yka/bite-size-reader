@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ListenHandlerImpl(HandlerDependenciesMixin):
+class ListenHandler(HandlerDependenciesMixin):
     """Handle /listen command -- generate and send audio summary."""
 
     async def handle_listen(self, ctx: CommandExecutionContext) -> None:

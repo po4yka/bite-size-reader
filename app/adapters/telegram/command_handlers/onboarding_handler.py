@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class OnboardingHandlerImpl:
+class OnboardingHandler:
     """Implementation of onboarding commands (/start, /help).
 
     These are the simplest commands with minimal logic - they just

@@ -7,7 +7,7 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from app.adapters.external.firecrawl_parser import FirecrawlResult
+    from app.adapters.external.firecrawl.models import FirecrawlResult
 
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 

@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.scraper.factory import ContentScraperFactory
-from app.adapters.external.firecrawl_parser import FirecrawlClient
+from app.adapters.external.firecrawl.client import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.llm import LLMClientFactory
 from app.di.repositories import build_audit_log_repository

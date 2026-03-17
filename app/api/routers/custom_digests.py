@@ -12,20 +12,14 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from app.api.exceptions import ResourceNotFoundError, ValidationError
-from app.api.models.requests import CreateCustomDigestRequest
+from app.api.models.requests import CreateCustomDigestRequest  # noqa: TC001
 from app.api.models.responses import CustomDigestResponse, success_response
 from app.api.routers.auth import get_current_user
+from app.api.search_helpers import isotime
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter()
-
-
-def _isotime(dt: Any) -> str:
-    """Safely convert datetime to ISO string."""
-    if hasattr(dt, "isoformat"):
-        return dt.isoformat() + "Z"
-    return str(dt)
 
 
 def _digest_to_response(digest: Any) -> CustomDigestResponse:
@@ -35,7 +29,7 @@ def _digest_to_response(digest: Any) -> CustomDigestResponse:
         title=digest.title,
         content=digest.content,
         status=digest.status,
-        created_at=_isotime(digest.created_at),
+        created_at=isotime(digest.created_at),
     )
 
 

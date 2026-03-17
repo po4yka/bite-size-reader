@@ -7,9 +7,10 @@ from ipaddress import ip_address, ip_network
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import Response
 
+from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger, log_exception
 
 logger = get_logger(__name__)
@@ -98,7 +99,10 @@ def _is_url_safe(url: str) -> bool:
 
 
 @router.get("/image")
-async def proxy_image(url: str = Query(..., description="URL of the image to proxy")):
+async def proxy_image(
+    url: str = Query(..., description="URL of the image to proxy"),
+    _user: dict = Depends(get_current_user),
+):
     """
     Proxy an image from a remote URL.
 

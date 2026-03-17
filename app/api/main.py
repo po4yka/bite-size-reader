@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path as _Path
 
 import peewee
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -46,6 +46,7 @@ from app.api.routers import (
     tts,
     user,
 )
+from app.api.routers.auth import get_current_user
 from app.config import Config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
@@ -215,8 +216,8 @@ async def health_check(request: Request):
 
 
 @app.get("/metrics")
-async def metrics():
-    """Prometheus metrics endpoint.
+async def metrics(_: dict = Depends(get_current_user)):
+    """Prometheus metrics endpoint (owner-only).
 
     Returns metrics in Prometheus text format for scraping.
     """

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SearchHandlerImpl:
+class SearchHandler:
     """Implementation of search commands (/find*, /search).
 
     Handles multiple search modes:

@@ -28,6 +28,7 @@ from app.api.routers.auth.tokens import (
     create_refresh_token,
     validate_client_id,
 )
+from app.api.search_helpers import isotime
 from app.config import Config
 from app.core.logging_utils import get_logger
 
@@ -65,13 +66,6 @@ def _build_preferences(user_record: dict[str, Any]) -> PreferencesData:
         notification_settings=preferences.get("notification_settings"),
         app_settings=preferences.get("app_settings"),
     )
-
-
-def _isotime(dt: Any) -> str:
-    """Safely convert datetime to ISO string."""
-    if hasattr(dt, "isoformat"):
-        return dt.isoformat() + "Z"
-    return str(dt)
 
 
 def _ensure_allowed_user_id(user_id: int, *, provider: str, sub: str) -> None:
@@ -132,7 +126,7 @@ async def apple_login(login_data: AppleLoginRequest):
         username=username or "",
         client_id=login_data.client_id,
         is_owner=user.get("is_owner", False),
-        created_at=_isotime(user.get("created_at", "")),
+        created_at=isotime(user.get("created_at", "")),
     )
     preferences = _build_preferences(user)
     return success_response(
@@ -195,7 +189,7 @@ async def google_login(login_data: GoogleLoginRequest):
         username=username or "",
         client_id=login_data.client_id,
         is_owner=user.get("is_owner", False),
-        created_at=_isotime(user.get("created_at", "")),
+        created_at=isotime(user.get("created_at", "")),
     )
     preferences = _build_preferences(user)
     return success_response(

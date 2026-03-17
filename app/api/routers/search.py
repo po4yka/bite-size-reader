@@ -43,7 +43,6 @@ __all__ = [
     "SqliteRequestRepositoryAdapter",
     "SqliteSummaryRepositoryAdapter",
     "SqliteTopicSearchRepositoryAdapter",
-    "_isotime",
     "router",
 ]
 
@@ -318,7 +317,7 @@ async def get_related_summaries(
                     "summary_id": summary.get("id"),
                     "title": metadata.get("title", "Untitled"),
                     "tldr": json_payload.get("tldr", ""),
-                    "created_at": _isotime(summary.get("created_at")),
+                    "created_at": isotime(summary.get("created_at")),
                 }
             )
 
@@ -365,7 +364,7 @@ async def check_duplicate(
         "is_duplicate": True,
         "request_id": existing["id"],
         "summary_id": summary["id"] if summary else None,
-        "summarized_at": _isotime(existing.get("created_at")),
+        "summarized_at": isotime(existing.get("created_at")),
     }
     if include_summary and summary:
         json_payload = ensure_mapping(summary.get("json_payload"))
@@ -377,7 +376,3 @@ async def check_duplicate(
         }
 
     return success_response(response_data)
-
-
-def _isotime(dt_val) -> str:
-    return isotime(dt_val)

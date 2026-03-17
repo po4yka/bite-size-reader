@@ -384,7 +384,6 @@ class AdaptiveTimeoutService:
 
     async def _get_combined_domain_timeout(self, domain: str) -> TimeoutEstimate | None:
         """Get timeout based on combined crawl + LLM latency for domain."""
-        # Check cache first
         stats = await self._cache.get_combined(domain)
         if stats is None:
             try:
@@ -403,7 +402,6 @@ class AdaptiveTimeoutService:
 
     async def _get_domain_timeout(self, domain: str) -> TimeoutEstimate | None:
         """Get timeout based on domain-specific crawl latency."""
-        # Check cache first
         stats = await self._cache.get_domain(domain)
         if stats is None:
             try:
@@ -422,7 +420,6 @@ class AdaptiveTimeoutService:
 
     async def _get_model_timeout(self, model: str) -> TimeoutEstimate | None:
         """Get timeout based on model-specific LLM latency."""
-        # Check cache first
         stats = await self._cache.get_model(model)
         if stats is None:
             try:
@@ -441,7 +438,6 @@ class AdaptiveTimeoutService:
 
     async def _get_global_timeout(self) -> TimeoutEstimate | None:
         """Get timeout based on global latency stats."""
-        # Check cache first
         stats = await self._cache.get_global()
         if stats is None:
             try:

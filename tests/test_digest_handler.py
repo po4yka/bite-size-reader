@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import peewee
 import pytest
 
-from app.adapters.telegram.command_handlers.digest_handler import DigestHandlerImpl
+from app.adapters.telegram.command_handlers.digest_handler import DigestHandler
 from app.adapters.telegram.command_handlers.execution_context import (
     CommandExecutionContext,
 )
@@ -57,14 +57,14 @@ async def _run_operation_directly(operation: Any, *args: Any, **kwargs: Any) -> 
 
 def _make_handler(
     *, enabled: bool = True, max_channels: int = 10
-) -> tuple[DigestHandlerImpl, AsyncMock]:
+) -> tuple[DigestHandler, AsyncMock]:
     """Return (handler, safe_reply_mock)."""
     cfg = _make_config(enabled=enabled, max_channels=max_channels)
     formatter = MagicMock()
     formatter.safe_reply = AsyncMock()
     db_session = MagicMock()
     db_session._safe_db_transaction = AsyncMock(side_effect=_run_operation_directly)
-    handler = DigestHandlerImpl(cfg=cast("Any", cfg), db=db_session, response_formatter=formatter)
+    handler = DigestHandler(cfg=cast("Any", cfg), db=db_session, response_formatter=formatter)
     return handler, formatter.safe_reply
 
 

@@ -12,7 +12,8 @@ from app.application.services.topic_search_utils import clean_snippet, tokenize
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from app.adapters.external.firecrawl_parser import FirecrawlClient, FirecrawlSearchItem
+    from app.adapters.external.firecrawl.client import FirecrawlClient
+    from app.adapters.external.firecrawl.models import FirecrawlSearchItem
     from app.application.ports import TopicSearchRepositoryPort
 
 logger = logging.getLogger(__name__)

@@ -32,6 +32,7 @@ from app.api.models.responses import (
     success_response,
 )
 from app.api.routers.auth import get_current_user
+from app.api.search_helpers import isotime
 from app.application.services.topic_search_utils import ensure_mapping
 from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 from app.core.html_utils import clean_markdown_article_text, html_to_text
@@ -51,13 +52,6 @@ def _normalize_hallucination_risk(raw: str) -> Literal["low", "medium", "high", 
     if result not in {"low", "medium", "high", "unknown"}:
         return "unknown"
     return result  # type: ignore[return-value]
-
-
-def _isotime(dt: Any) -> str:
-    """Safely convert datetime to ISO string."""
-    if hasattr(dt, "isoformat"):
-        return dt.isoformat() + "Z"
-    return str(dt)
 
 
 def _get_summary_use_case() -> SummaryReadModelUseCase:
@@ -144,7 +138,7 @@ async def get_summaries(
                 is_read=summary_dict.get("is_read", False),
                 is_favorited=summary_dict.get("is_favorited", False),
                 lang=summary_dict.get("lang") or "auto",
-                created_at=_isotime(summary_dict.get("created_at")),
+                created_at=isotime(summary_dict.get("created_at")),
                 confidence=json_payload.get("confidence", 0.0),
                 hallucination_risk=_normalize_hallucination_risk(
                     json_payload.get("hallucination_risk", "unknown")
@@ -280,8 +274,8 @@ async def get_summary(
         "dedupe_hash": request_data.get("dedupe_hash"),
         "status": request_data.get("status", ""),
         "lang_detected": request_data.get("lang_detected"),
-        "created_at": _isotime(request_data.get("created_at")),
-        "updated_at": _isotime(request_data.get("updated_at") or request_data.get("created_at")),
+        "created_at": isotime(request_data.get("created_at")),
+        "updated_at": isotime(request_data.get("updated_at") or request_data.get("created_at")),
     }
 
     source_detail = {
@@ -413,7 +407,7 @@ async def get_summary_content(
                 source_url=source_url,
                 title=title,
                 domain=domain,
-                retrieved_at=_isotime(retrieved_dt),
+                retrieved_at=isotime(retrieved_dt),
                 size_bytes=size_bytes,
                 checksum_sha256=checksum,
             )
@@ -537,6 +531,6 @@ async def submit_feedback(
             rating=feedback.rating,
             issues=issues_value,
             comment=feedback.comment,
-            created_at=_isotime(feedback.created_at),
+            created_at=isotime(feedback.created_at),
         )
     )

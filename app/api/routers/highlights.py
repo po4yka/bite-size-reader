@@ -9,18 +9,12 @@ from app.api.exceptions import ResourceNotFoundError
 from app.api.models.requests import CreateHighlightRequest, UpdateHighlightRequest
 from app.api.models.responses import HighlightListResponse, HighlightResponse, success_response
 from app.api.routers.auth import get_current_user
+from app.api.search_helpers import isotime
 from app.core.logging_utils import get_logger
 from app.db.models import SummaryHighlight
 
 logger = get_logger(__name__)
 router = APIRouter()
-
-
-def _isotime(dt: object) -> str:
-    """Safely convert datetime to ISO string."""
-    if hasattr(dt, "isoformat"):
-        return dt.isoformat() + "Z"
-    return str(dt)
 
 
 def _verify_summary_ownership(summary_id: int, user_id: int) -> None:
@@ -47,8 +41,8 @@ def _highlight_to_response(h: SummaryHighlight) -> HighlightResponse:
         end_offset=h.end_offset,
         color=h.color,
         note=h.note,
-        created_at=_isotime(h.created_at),
-        updated_at=_isotime(h.updated_at),
+        created_at=isotime(h.created_at),
+        updated_at=isotime(h.updated_at),
     )
 
 
