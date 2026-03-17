@@ -65,8 +65,8 @@ def _get_summary_use_case() -> SummaryReadModelUseCase:
 
 def _resolve_use_case(use_case: Any) -> SummaryReadModelUseCase:
     """Resolve FastAPI Depends defaults when handlers are called directly in tests."""
-    if hasattr(use_case, "get_user_summaries"):
-        return cast("SummaryReadModelUseCase", use_case)
+    if isinstance(use_case, SummaryReadModelUseCase):
+        return use_case
     return _get_summary_use_case()
 
 
