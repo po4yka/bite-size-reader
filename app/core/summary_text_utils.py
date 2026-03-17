@@ -5,8 +5,6 @@ from __future__ import annotations
 
 def cap_text(text: str, limit: int) -> str:
     """Cap text to ``limit`` characters, trimming at a phrase boundary."""
-    if not isinstance(text, str):
-        text = str(text) if text is not None else ""
     if not isinstance(limit, int) or limit <= 0:
         msg = "Limit must be a positive integer"
         raise ValueError(msg)

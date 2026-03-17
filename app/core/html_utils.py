@@ -113,7 +113,7 @@ def html_to_text(html: str) -> str:
         return "\n".join(lines)
 
 
-def clean_markdown_article_text(markdown: str) -> str:
+def clean_markdown_article_text(markdown: str | None) -> str:
     """Best-effort cleaning to extract only article text from markdown.
 
     - Removes code blocks and images
@@ -121,8 +121,8 @@ def clean_markdown_article_text(markdown: str) -> str:
     - Drops common boilerplate/UI lines (share, login, embeds, etc.)
     - Collapses excessive whitespace
     """
-    if not isinstance(markdown, str):
-        markdown = str(markdown) if markdown is not None else ""
+    if not markdown:
+        return ""
 
     text = markdown
     # Remove fenced code blocks
@@ -198,7 +198,7 @@ def clean_markdown_article_text(markdown: str) -> str:
     return _collapse_blank_lines(cleaned)
 
 
-def normalize_text(text: str) -> str:
+def normalize_text(text: str | None) -> str:
     """Apply lightweight text normalization.
 
     Operations:
@@ -207,8 +207,8 @@ def normalize_text(text: str) -> str:
     - collapse repeated whitespace
     - strip control characters
     """
-    if not isinstance(text, str):
-        text = str(text) if text is not None else ""
+    if not text:
+        return ""
 
     # Normalize unicode quotes and dashes
     out = text
@@ -236,8 +236,6 @@ def split_sentences(text: str, lang: str = "en") -> list[str]:
 
     Uses a lightweight blank pipeline with a sentencizer to avoid heavy models.
     """
-    if not isinstance(text, str):
-        text = str(text) if text is not None else ""
     text = text.strip()
     if not text:
         return []
