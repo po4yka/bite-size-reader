@@ -110,10 +110,6 @@ class RequestStage(StrEnum):
     FAILED = "failed"  # Processing failed (check error fields)
 
 
-APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
-APP_BUILD: str | None = os.getenv("APP_BUILD") or None
-
-
 class MetaInfo(BaseModel):
     """Metadata for all API responses."""
 
@@ -121,8 +117,8 @@ class MetaInfo(BaseModel):
     timestamp: str = Field(
         default_factory=lambda: datetime.now(UTC).isoformat().replace("+00:00", "Z")
     )
-    version: str = APP_VERSION
-    build: str | None = APP_BUILD
+    version: str = Field(default_factory=lambda: os.getenv("APP_VERSION", "1.0.0"))
+    build: str | None = Field(default_factory=lambda: os.getenv("APP_BUILD") or None)
     pagination: PaginationInfo | None = None
     debug: dict[str, Any] | None = None
 
@@ -996,8 +992,8 @@ def build_meta(
     meta_kwargs: dict[str, Any] = {
         "correlation_id": corr,
         "pagination": pagination_model,
-        "version": version or APP_VERSION,
-        "build": build or APP_BUILD,
+        "version": version or os.getenv("APP_VERSION", "1.0.0"),
+        "build": build or os.getenv("APP_BUILD") or None,
     }
     if debug:
         meta_kwargs["debug"] = debug
