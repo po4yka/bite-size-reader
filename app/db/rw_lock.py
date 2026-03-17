@@ -93,7 +93,7 @@ class AsyncRWLock:
             while self._readers > 0:
                 await self._no_readers.wait()
 
-    async def release_write(self) -> None:
+    def release_write(self) -> None:
         """Release write lock.
 
         Allows waiting readers and writers to proceed.
@@ -136,4 +136,4 @@ class AsyncRWLock:
         try:
             yield
         finally:
-            await self.release_write()
+            self.release_write()

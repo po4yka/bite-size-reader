@@ -68,7 +68,7 @@ class DigestFacade:
 
     # --- Triggers ---
 
-    async def trigger_digest(self, user_id: int) -> TriggerDigestResponse:
+    def trigger_digest(self, user_id: int) -> TriggerDigestResponse:
         service = self._service()
         data = service.trigger_digest(user_id)
         service.enqueue_digest_trigger(

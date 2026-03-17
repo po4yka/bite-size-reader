@@ -146,12 +146,12 @@ def list_history(
 
 
 @router.post("/trigger")
-async def trigger_digest(
+def trigger_digest(
     current_user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Trigger an on-demand digest generation. Result delivered to Telegram chat."""
-    data = await digest_facade.trigger_digest(current_user["user_id"])
+    data = digest_facade.trigger_digest(current_user["user_id"])
     return success_response(data)
 
 
