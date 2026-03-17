@@ -82,7 +82,6 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
             self.log_info(f"Summarization attempt {attempt}/{input_data.max_retries}")
 
             try:
-                # Generate summary
                 summary_result = await self._generate_summary(
                     content=input_data.content,
                     metadata=input_data.metadata,
@@ -95,10 +94,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                     last_error = "LLM returned no result"
                     continue
 
-                # Calculate response hash to detect if LLM ignores feedback
                 response_hash = self._calculate_response_hash(summary_result)
-
-                # Check if this is a duplicate response (LLM ignored feedback)
                 if response_hash in response_hashes:
                     self.log_warning(
                         f"Attempt {attempt}: LLM returned identical response to previous attempt. "
@@ -107,11 +103,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                     corrections_applied.append(
                         f"Attempt {attempt}: Duplicate response detected - LLM ignored feedback"
                     )
-                    # Continue to validation anyway in case it was valid the first time
-
                 response_hashes.append(response_hash)
-
-                # If we have 3+ identical responses, abort early
                 if response_hashes.count(response_hash) >= 3:
                     error_msg = (
                         f"LLM repeatedly returned identical response ({response_hashes.count(response_hash)} times). "
@@ -125,13 +117,11 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                         feedback_ignored=True,
                     )
 
-                # Validate the summary
                 validation_result = await self.validator_agent.execute(
                     {"summary_json": summary_result}
                 )
 
                 if validation_result.success:
-                    # Success! Return the valid summary
                     self.log_info(f"Summarization successful after {attempt} attempt(s)")
 
                     return AgentResult.success_result(
@@ -144,7 +134,6 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                         attempts=attempt,
                         had_corrections=len(corrections_applied) > 0,
                     )
-                # Validation failed - record the error for feedback
                 error_msg = validation_result.error or "Unknown validation error"
                 self.log_warning(f"Validation failed (attempt {attempt}): {error_msg}")
                 corrections_applied.append(f"Attempt {attempt}: {error_msg}")
@@ -155,7 +144,6 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                 last_error = str(e)
                 corrections_applied.append(f"Attempt {attempt}: Exception - {e!s}")
 
-        # All attempts exhausted
         self.log_error(
             f"Summarization failed after {input_data.max_retries} attempts. "
             f"Last error: {last_error}"
@@ -190,10 +178,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
         Returns:
             Summary result dictionary or None if generation fails
         """
-        # Load system prompt for the language
         system_prompt = self._get_system_prompt(language)
-
-        # Build enhanced feedback for retry attempts
         feedback_instructions = None
         if previous_errors:
             feedback_instructions = self._build_correction_prompt(previous_errors)
@@ -212,17 +197,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
         )
 
     def _get_system_prompt(self, lang: str) -> str:
-        """Load and cache the system prompt for the given language.
-
-        Uses the unified PromptManager for prompt loading, caching, and
-        optional few-shot example injection.
-
-        Args:
-            lang: Language code ('en' or 'ru')
-
-        Returns:
-            System prompt text with optional examples
-        """
+        """Load the system prompt for the given language via PromptManager."""
         try:
             manager = get_prompt_manager()
             return manager.get_system_prompt(lang, include_examples=True, num_examples=2)
@@ -231,14 +206,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
             return "You are a precise assistant that returns only a strict JSON object matching the provided schema."
 
     def _build_correction_prompt(self, errors: list[str]) -> str:
-        """Build a prompt that incorporates previous validation errors.
-
-        Args:
-            errors: List of validation error messages
-
-        Returns:
-            Formatted prompt with corrections
-        """
+        """Build a correction prompt from previous validation errors."""
         if not errors:
             return ""
 
@@ -302,19 +270,10 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
         return prompt
 
     def _calculate_response_hash(self, response: dict[str, Any]) -> str:
-        """Calculate a hash of the response to detect duplicates.
-
-        Args:
-            response: The LLM response dictionary
-
-        Returns:
-            SHA256 hash of the normalized response
-        """
+        """Return a SHA256 hash of the normalized response for duplicate detection."""
         try:
-            # Normalize response by sorting keys for consistent hashing
             normalized = json.dumps(response, sort_keys=True, ensure_ascii=False)
             return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
         except Exception as e:
             self.log_warning(f"Failed to calculate response hash: {e}")
-            # Return a random hash on error to avoid false positives
             return hashlib.sha256(str(id(response)).encode()).hexdigest()

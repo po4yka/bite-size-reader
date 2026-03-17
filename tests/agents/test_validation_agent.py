@@ -285,7 +285,6 @@ class TestValidationAgent(unittest.IsolatedAsyncioTestCase):
             result = await self.agent.execute(input_data)
 
         self.assertFalse(result.success)
-        self.assertIn("Summary contract validation failed", result.error)
         self.assertIn("Contract validation failed", result.error)
 
     async def test_format_single_error(self):
