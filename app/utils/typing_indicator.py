@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from app.adapters.external.response_formatter import ResponseFormatter
+
 logger = logging.getLogger(__name__)
 
 
@@ -124,7 +126,7 @@ class TypingIndicator:
 
 @asynccontextmanager
 async def typing_indicator(
-    response_formatter: Any,
+    response_formatter: ResponseFormatter,
     message: Any,
     action: str = "typing",
     interval: float | None = None,
@@ -164,7 +166,7 @@ async def typing_indicator(
 
 
 async def send_typing_once(
-    response_formatter: Any,
+    response_formatter: ResponseFormatter,
     message: Any,
     action: str = "typing",
 ) -> bool:

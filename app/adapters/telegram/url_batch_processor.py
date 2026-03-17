@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 from app.adapters.external.formatting import BatchProgressFormatter
 from app.core.async_utils import raise_if_cancelled
@@ -124,7 +125,7 @@ class URLBatchProcessor:
     def __init__(
         self,
         *,
-        response_formatter: Any,
+        response_formatter: ResponseFormatter,
         request_repo: Any,
         user_repo: Any,
         summary_repo: Any,
@@ -313,7 +314,7 @@ class URLBatchProcessor:
                 await self._response_formatter.send_structured_summary_response(
                     state.request.message,
                     cached_summary.payload,
-                    chunk_llm_stub=None,
+                    llm=None,
                     summary_id=f"req:{cached_summary.request_id}",
                 )
                 await asyncio.sleep(0.3)

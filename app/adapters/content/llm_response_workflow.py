@@ -23,6 +23,7 @@ from .llm_response_workflow_storage import LLMWorkflowStorageMixin
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from app.adapters.external.response_formatter import ResponseFormatter
     from app.application.ports import (
         LLMRepositoryPort,
         RequestRepositoryPort,
@@ -140,7 +141,7 @@ class LLMResponseWorkflow(
         cfg: Any,
         db: DatabaseSessionManager,
         openrouter: Any,
-        response_formatter: Any,
+        response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict[str, Any]], None],
         sem: Callable[[], Any],
         db_write_queue: DbWriteQueue | None = None,

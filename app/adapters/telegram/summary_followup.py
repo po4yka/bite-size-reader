@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from app.adapters.external.response_formatter import ResponseFormatter
+
 
 class _FollowupSession(TypedDict):
     summary_id: str
@@ -38,7 +40,7 @@ class SummaryFollowupManager:
     def __init__(
         self,
         *,
-        response_formatter: Any,
+        response_formatter: ResponseFormatter,
         url_handler: Any | None,
         lang: str,
         load_summary_payload: Callable[..., Awaitable[dict[str, Any] | None]],

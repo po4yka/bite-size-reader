@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 from app.core.async_utils import raise_if_cancelled
 
@@ -16,7 +19,7 @@ class URLPostSummaryTaskService:
     def __init__(
         self,
         *,
-        response_formatter: Any,
+        response_formatter: ResponseFormatter,
         summary_repo: Any,
         article_generator: Any,
         insights_generator: Any,

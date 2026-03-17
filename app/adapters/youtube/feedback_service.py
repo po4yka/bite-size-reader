@@ -15,6 +15,7 @@ from app.utils.typing_indicator import typing_indicator
 
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.models import PlatformExtractionRequest
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class YouTubeFeedbackState:
 class YouTubeFeedbackService:
     """Own progress tracker, typing indicator, and notification flow."""
 
-    def __init__(self, *, response_formatter: Any) -> None:
+    def __init__(self, *, response_formatter: ResponseFormatter) -> None:
         self._response_formatter = response_formatter
 
     async def start(

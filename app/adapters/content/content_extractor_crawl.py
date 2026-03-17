@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import asyncio
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.external.firecrawl.models import FirecrawlResult
@@ -37,7 +38,7 @@ class ContentExtractorCrawlMixin:
     cfg: Any
     firecrawl: Any
     message_persistence: Any
-    response_formatter: Any
+    response_formatter: ResponseFormatter
 
     async def _extract_or_reuse_content_with_title(
         self,

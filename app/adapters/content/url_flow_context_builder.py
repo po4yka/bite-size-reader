@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 from app.adapters.content.url_flow_models import URLFlowContext, URLFlowRequest
 from app.core.lang import LANG_RU, choose_language
@@ -38,7 +41,7 @@ class URLFlowContextBuilder:
         cfg: Any,
         content_extractor: Any,
         content_chunker: Any,
-        response_formatter: Any,
+        response_formatter: ResponseFormatter,
     ) -> None:
         self._cfg = cfg
         self._content_extractor = content_extractor

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.validation import safe_message_id, safe_telegram_chat_id, safe_telegram_user_id
@@ -17,7 +20,7 @@ class PlatformRequestLifecycle:
     def __init__(
         self,
         *,
-        response_formatter: Any,
+        response_formatter: ResponseFormatter,
         message_persistence: Any,
         audit_func: Any,
         route_version: int,

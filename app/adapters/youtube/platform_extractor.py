@@ -18,6 +18,7 @@ if TYPE_CHECKING:
         PlatformExtractionRequest,
         PlatformExtractionResult,
     )
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class YouTubePlatformExtractor(PlatformExtractor):
         *,
         cfg: Any,
         db: Any,
-        response_formatter: Any,
+        response_formatter: ResponseFormatter,
         audit_func: Any,
         lifecycle: PlatformRequestLifecycle,
     ) -> None:

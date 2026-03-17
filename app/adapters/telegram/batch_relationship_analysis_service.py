@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from app.adapters.external.response_formatter import ResponseFormatter
     from app.config.integrations import BatchAnalysisConfig
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ class BatchRelationshipAnalysisService:
         batch_session_repo: Any | None,
         llm_client: Any | None,
         batch_config: BatchAnalysisConfig | None,
-        response_formatter: Any | None,
+        response_formatter: ResponseFormatter | None,
     ) -> None:
         self._summary_repo = summary_repo
         self._batch_session_repo = batch_session_repo

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
         PlatformExtractionRequest,
         PlatformExtractionResult,
     )
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 
 class TwitterPlatformExtractor(PlatformExtractor):
@@ -28,7 +29,7 @@ class TwitterPlatformExtractor(PlatformExtractor):
         cfg: Any,
         db: Any,
         firecrawl: Any,
-        response_formatter: Any,
+        response_formatter: ResponseFormatter,
         message_persistence: Any,
         firecrawl_sem: Any,
         schedule_crawl_persistence: Any,

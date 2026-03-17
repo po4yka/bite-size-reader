@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 from app.core.url_utils import extract_domain
 
@@ -68,7 +71,7 @@ class URLBatchPolicyService:
         urls: list[str],
         uid: int,
         correlation_id: str,
-        response_formatter: Any,
+        response_formatter: ResponseFormatter,
     ) -> list[str]:
         """Validate URL batch against size and URL validation policy."""
         if not urls:

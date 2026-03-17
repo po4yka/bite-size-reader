@@ -23,6 +23,7 @@ from app.di.repositories import build_request_repository, build_video_download_r
 
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.lifecycle import PlatformRequestLifecycle
+    from app.adapters.external.response_formatter import ResponseFormatter
     from app.application.ports import RequestRepositoryPort, VideoDownloadRepositoryPort
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ class YouTubeDownloadSessionService:
         *,
         cfg: Any,
         db: Any,
-        response_formatter: Any,
+        response_formatter: ResponseFormatter,
         audit_func: Any,
         lifecycle: PlatformRequestLifecycle,
         request_repo: RequestRepositoryPort | None = None,

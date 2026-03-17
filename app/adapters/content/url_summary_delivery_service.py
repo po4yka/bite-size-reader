@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Coroutine
 
+    from app.adapters.external.response_formatter import ResponseFormatter
+
 
 class URLSummaryDeliveryService:
     """Own final summary delivery and persistence for URL-processing flows."""
@@ -28,7 +30,7 @@ class URLSummaryDeliveryService:
         *,
         cfg: Any,
         db: Any,
-        response_formatter: Any,
+        response_formatter: ResponseFormatter,
         summary_repo: Any,
         audit_func: Any,
     ) -> None:
