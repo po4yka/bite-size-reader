@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from app.api.dependencies.database import get_user_repository
-from app.api.exceptions import ResourceNotFoundError
+from app.api.exceptions import AuthorizationError, ResourceNotFoundError
 from app.api.models.auth import RefreshTokenRequest, SessionInfo
 from app.api.models.responses import (
     AuthTokensResponse,
@@ -95,16 +95,23 @@ async def refresh_access_token(
 @router.post("/logout")
 async def logout(
     request: RefreshTokenRequest,
-    _: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     auth_repo: SqliteAuthRepositoryAdapter = Depends(get_auth_repository),
 ):
     """Logout by revoking the specific refresh token."""
     token = request.refresh_token
     try:
         token_hash = hashlib.sha256(token.encode()).hexdigest()
+        record = await auth_repo.async_get_refresh_token_by_hash(token_hash)
+        if record is None:
+            raise ResourceNotFoundError("RefreshToken", token_hash[:8])
+        if str(record.get("user_id")) != str(current_user.get("user_id")):
+            raise AuthorizationError("Token does not belong to the authenticated user")
         revoked = await auth_repo.async_revoke_refresh_token(token_hash)
         if revoked:
             logger.info("refresh_session_revoked")
+    except (ResourceNotFoundError, AuthorizationError):
+        raise
     except Exception as e:
         log_exception(logger, "logout_failed", e, level="warning")
 
