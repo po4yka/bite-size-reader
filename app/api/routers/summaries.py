@@ -312,10 +312,6 @@ async def get_summary(
             "content_type": metadata.get("content_type")
             or metadata.get("og:type")
             or metadata.get("type"),
-            "http_status": crawl_result.get("http_status"),
-            "image_url": metadata.get("image")
-            or metadata.get("og:image")
-            or metadata.get("ogImage"),
         }
 
     # Build processing info
@@ -326,10 +322,8 @@ async def get_summary(
             "model": latest_call.get("model"),
             "tokens_used": (latest_call.get("tokens_prompt") or 0)
             + (latest_call.get("tokens_completion") or 0),
-            "cost_usd": latest_call.get("cost_usd"),
             "latency_ms": sum(call.get("latency_ms") or 0 for call in llm_calls),
             "crawl_latency_ms": crawl_result.get("latency_ms") if crawl_result else None,
-            "llm_latency_ms": latest_call.get("latency_ms"),
         }
 
     # Build SummaryDetailSummary from json_payload
