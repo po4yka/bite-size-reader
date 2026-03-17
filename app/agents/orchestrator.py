@@ -464,17 +464,7 @@ class AgentOrchestrator:
         return list(results)
 
     async def _execute_with_retry(self, input_data: PipelineInput) -> dict[str, Any]:
-        """Execute pipeline with configurable retry strategy.
-
-        Args:
-            input_data: Pipeline parameters including retry config
-
-        Returns:
-            Pipeline result
-
-        Raises:
-            Exception: If all retry attempts fail
-        """
+        """Execute pipeline with configurable retry strategy; raises after all attempts fail."""
         retry_config = input_data.retry_config or RetryConfig()
         last_error = None
 
@@ -517,16 +507,7 @@ class AgentOrchestrator:
     def _calculate_retry_delay(
         self, attempt: int, strategy: RetryStrategy, config: RetryConfig
     ) -> float:
-        """Calculate delay in milliseconds for retry attempt.
-
-        Args:
-            attempt: Current attempt number (1-indexed)
-            strategy: Retry strategy to use
-            config: Retry configuration
-
-        Returns:
-            Delay in milliseconds
-        """
+        """Calculate delay in milliseconds for a retry attempt."""
         if strategy == RetryStrategy.NONE:
             return 0
 
