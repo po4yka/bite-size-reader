@@ -32,6 +32,7 @@ from app.adapters.content.llm_response_workflow import (
 from app.core.lang import LANG_AUTO, LANG_RU, choose_language, detect_language
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.di.repositories import build_request_repository, build_user_repository
+from app.domain.models.request import RequestStatus
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -310,7 +311,7 @@ class AttachmentProcessor:
 
         return await self.request_repo.async_create_request(
             type_=file_type,
-            status="pending",
+            status=RequestStatus.PENDING,
             correlation_id=correlation_id,
             chat_id=chat_id,
             user_id=user_id,

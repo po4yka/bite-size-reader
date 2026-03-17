@@ -21,7 +21,14 @@ class MessageInteractionRecorder:
         self._structured_output_enabled = structured_output_enabled
 
     async def log(self, context: PreparedRouteContext) -> int:
-        """Persist initial interaction state and return its identifier."""
+        """Persist initial interaction state and return its identifier.
+
+        Returns the new interaction row ID on success, or 0 if the insert
+        fails.  Callers should treat a 0 return as "interaction not recorded"
+        and skip any downstream interaction updates (the guard in update()
+        handles this automatically).  The failure is logged as a WARNING so
+        it remains visible without interrupting the main request flow.
+        """
         try:
             return await self.user_repo.async_insert_user_interaction(
                 user_id=context.uid,

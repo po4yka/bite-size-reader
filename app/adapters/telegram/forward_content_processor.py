@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import normalize_text
 from app.core.lang import choose_language, detect_language
+from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 from app.prompts.manager import get_prompt_manager
 
@@ -188,7 +189,7 @@ class ForwardContentProcessor:
 
         req_id = await self.message_persistence.request_repo.async_create_request(
             type_="forward",
-            status="pending",
+            status=RequestStatus.PENDING,
             correlation_id=correlation_id,
             chat_id=chat_id,
             user_id=user_id,
