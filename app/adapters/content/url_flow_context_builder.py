@@ -58,7 +58,7 @@ class URLFlowContextBuilder:
             request.url_text,
             request.correlation_id,
             request.interaction_id,
-            request.notify_silent,
+            request.effective_silent,
             request.progress_tracker,
         )
         req_id = extraction.request_id

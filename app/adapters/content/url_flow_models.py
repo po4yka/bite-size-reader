@@ -30,7 +30,7 @@ class URLFlowRequest:
     progress_tracker: TelegramProgressMessage | None = None
 
     @property
-    def notify_silent(self) -> bool:
+    def effective_silent(self) -> bool:
         return self.silent or self.batch_mode
 
 

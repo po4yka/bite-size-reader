@@ -167,7 +167,7 @@ class URLProcessor:
             request.url_text,
             correlation_id=request.correlation_id,
             interaction_id=request.interaction_id,
-            silent=request.notify_silent,
+            silent=request.effective_silent,
         )
         if cached_result is not None:
             return cached_result
@@ -216,7 +216,7 @@ class URLProcessor:
                         interaction_id=request.interaction_id,
                         url_hash=context.dedupe_hash,
                         url=request.url_text,
-                        silent=request.notify_silent,
+                        silent=request.effective_silent,
                         on_phase_change=request.on_phase_change,
                         images=context.images,
                         progress_tracker=request.progress_tracker,
