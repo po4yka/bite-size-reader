@@ -53,14 +53,7 @@ class URLFlowContextBuilder:
         if request.on_phase_change:
             await request.on_phase_change("extracting", None, None, None)
 
-        (
-            req_id,
-            content_text,
-            _content_source,
-            detected,
-            title,
-            images,
-        ) = await self._content_extractor.extract_and_process_content(
+        extraction = await self._content_extractor.extract_and_process_content(
             request.message,
             request.url_text,
             request.correlation_id,
@@ -68,6 +61,11 @@ class URLFlowContextBuilder:
             request.notify_silent,
             request.progress_tracker,
         )
+        req_id = extraction.request_id
+        content_text = extraction.content_text
+        detected = extraction.detected_lang
+        title = extraction.title
+        images = extraction.images
 
         chosen_lang = choose_language(self._cfg.runtime.preferred_lang, detected)
         needs_ru_translation = not request.silent and LANG_RU not in (detected, chosen_lang)

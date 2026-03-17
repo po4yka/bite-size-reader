@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.adapters.content.content_extractor import ContentExtractionResult
 from app.adapters.content.url_flow_context_builder import URLFlowContextBuilder
 from app.adapters.content.url_flow_models import URLFlowRequest
+
+if TYPE_CHECKING:
+    from app.adapters.external.response_formatter import ResponseFormatter
 
 
 def _make_builder(*, long_context_model: str | None = None) -> tuple[URLFlowContextBuilder, Any]:
@@ -20,7 +24,14 @@ def _make_builder(*, long_context_model: str | None = None) -> tuple[URLFlowCont
     )
     content_extractor = MagicMock()
     content_extractor.extract_and_process_content = AsyncMock(
-        return_value=(1, "Example content", "firecrawl", "en", "Example Title", ["img"])
+        return_value=ContentExtractionResult(
+            request_id=1,
+            content_text="Example content",
+            content_source="firecrawl",
+            detected_lang="en",
+            title="Example Title",
+            images=["img"],
+        )
     )
     content_chunker = MagicMock()
     content_chunker.should_chunk_content = MagicMock(return_value=(True, 1000, ["chunk-1"]))
@@ -33,7 +44,7 @@ def _make_builder(*, long_context_model: str | None = None) -> tuple[URLFlowCont
             cfg=cfg,
             content_extractor=content_extractor,
             content_chunker=content_chunker,
-            response_formatter=response_formatter,
+            response_formatter=cast("ResponseFormatter", response_formatter),
         ),
         response_formatter,
     )

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.content_extractor_crawl import ContentExtractorCrawlMixin
@@ -41,6 +42,18 @@ logger = logging.getLogger(__name__)
 
 # Route versioning constants
 URL_ROUTE_VERSION = 1
+
+
+@dataclass
+class ContentExtractionResult:
+    """Structured result from extract_and_process_content."""
+
+    request_id: int
+    content_text: str
+    content_source: str
+    detected_lang: str
+    title: str | None
+    images: list[str] = field(default_factory=list)
 
 
 class ContentExtractor(
@@ -248,8 +261,8 @@ class ContentExtractor(
         interaction_id: int | None = None,
         silent: bool = False,
         progress_tracker: TelegramProgressMessage | None = None,
-    ) -> tuple[int, str, str, str, str | None, list[str]]:
-        """Extract content from URL and return request/content metadata tuple."""
+    ) -> ContentExtractionResult:
+        """Extract content from URL and return structured extraction result."""
         norm = normalize_url(url_text)
         # Extract Telegram IDs at the Telegram boundary before passing to cross-platform lifecycle
         _chat_obj = getattr(message, "chat", None) if message is not None else None
@@ -284,13 +297,13 @@ class ContentExtractor(
             if platform_result.request_id is None:
                 msg = "Interactive platform extraction requires a request_id"
                 raise RuntimeError(msg)
-            return (
-                platform_result.request_id,
-                platform_result.content_text,
-                platform_result.content_source,
-                platform_result.detected_lang,
-                platform_result.title,
-                platform_result.images,
+            return ContentExtractionResult(
+                request_id=platform_result.request_id,
+                content_text=platform_result.content_text,
+                content_source=platform_result.content_source,
+                detected_lang=platform_result.detected_lang,
+                title=platform_result.title,
+                images=platform_result.images,
             )
 
         dedupe = url_hash_sha256(norm)
@@ -321,4 +334,11 @@ class ContentExtractor(
             logger.error(
                 "persist_lang_detected_error", extra={"error": str(e), "cid": correlation_id}
             )
-        return req_id, content_text, content_source, detected, title, images
+        return ContentExtractionResult(
+            request_id=req_id,
+            content_text=content_text,
+            content_source=content_source,
+            detected_lang=detected,
+            title=title,
+            images=images,
+        )
