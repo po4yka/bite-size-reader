@@ -101,6 +101,83 @@ class DigestAnalyzer:
                 }
         return None
 
+    @staticmethod
+    def _parse_and_validate_llm_response(
+        raw_text: str, correlation_id: str
+    ) -> dict[str, Any] | None:
+        """Parse and validate an LLM JSON response for post analysis.
+
+        Returns a dict with normalized fields, or None if parsing/validation fails.
+        """
+        parsed = extract_json(raw_text)
+
+        if parsed is None or not isinstance(parsed, dict):
+            logger.warning(
+                "digest_analysis_parse_failed",
+                extra={"cid": correlation_id, "raw": raw_text[:200]},
+            )
+            return None
+
+        real_topic = str(parsed.get("real_topic", "")).strip()
+        tldr = str(parsed.get("tldr", "")).strip()
+        if not real_topic or not tldr:
+            logger.warning(
+                "digest_analysis_missing_fields",
+                extra={"cid": correlation_id},
+            )
+            return None
+
+        key_insights = parsed.get("key_insights")
+        if not isinstance(key_insights, list):
+            key_insights = []
+
+        relevance_score = parsed.get("relevance_score", 0.5)
+        try:
+            relevance_score = max(0.0, min(1.0, float(relevance_score)))
+        except (TypeError, ValueError):
+            relevance_score = 0.5
+
+        content_type = str(parsed.get("content_type", "other")).strip().lower()
+        if content_type not in VALID_CONTENT_TYPES:
+            content_type = "other"
+
+        is_ad = bool(parsed.get("is_ad", False))
+
+        return {
+            "real_topic": real_topic,
+            "tldr": tldr,
+            "key_insights": key_insights,
+            "relevance_score": relevance_score,
+            "content_type": content_type,
+            "is_ad": is_ad,
+        }
+
+    @staticmethod
+    def _persist_analysis(post: dict[str, Any], fields: dict[str, Any]) -> None:
+        """Persist LLM analysis results to the DB for the given post."""
+        channel_post = (
+            ChannelPost.select()
+            .where(
+                ChannelPost.channel == post.get("_channel_id"),
+                ChannelPost.message_id == post["message_id"],
+            )
+            .first()
+        )
+        if channel_post:
+            ChannelPostAnalysis.get_or_create(
+                post=channel_post,
+                defaults={
+                    "real_topic": fields["real_topic"],
+                    "tldr": fields["tldr"],
+                    "key_insights": fields["key_insights"],
+                    "relevance_score": fields["relevance_score"],
+                    "content_type": fields["content_type"],
+                },
+            )
+            ChannelPost.update(analyzed_at=utc_now()).where(
+                ChannelPost.id == channel_post.id
+            ).execute()
+
     async def _analyze_single(
         self,
         post: dict[str, Any],
@@ -138,77 +215,14 @@ class DigestAnalyzer:
                 )
                 return None
 
-            # Parse JSON response
             raw_text = result.response_text or ""
-            parsed = extract_json(raw_text)
-
-            if parsed is None or not isinstance(parsed, dict):
-                logger.warning(
-                    "digest_analysis_parse_failed",
-                    extra={"cid": correlation_id, "raw": raw_text[:200]},
-                )
+            fields = self._parse_and_validate_llm_response(raw_text, correlation_id)
+            if fields is None:
                 return None
 
-            # Validate required fields
-            real_topic = str(parsed.get("real_topic", "")).strip()
-            tldr = str(parsed.get("tldr", "")).strip()
-            if not real_topic or not tldr:
-                logger.warning(
-                    "digest_analysis_missing_fields",
-                    extra={"cid": correlation_id},
-                )
-                return None
+            self._persist_analysis(post, fields)
 
-            key_insights = parsed.get("key_insights")
-            if not isinstance(key_insights, list):
-                key_insights = []
-
-            relevance_score = parsed.get("relevance_score", 0.5)
-            try:
-                relevance_score = max(0.0, min(1.0, float(relevance_score)))
-            except (TypeError, ValueError):
-                relevance_score = 0.5
-
-            content_type = str(parsed.get("content_type", "other")).strip().lower()
-            if content_type not in VALID_CONTENT_TYPES:
-                content_type = "other"
-
-            is_ad = bool(parsed.get("is_ad", False))
-
-            # Persist to DB
-            channel_post = (
-                ChannelPost.select()
-                .where(
-                    ChannelPost.channel == post.get("_channel_id"),
-                    ChannelPost.message_id == post["message_id"],
-                )
-                .first()
-            )
-
-            if channel_post:
-                ChannelPostAnalysis.get_or_create(
-                    post=channel_post,
-                    defaults={
-                        "real_topic": real_topic,
-                        "tldr": tldr,
-                        "key_insights": key_insights,
-                        "relevance_score": relevance_score,
-                        "content_type": content_type,
-                    },
-                )
-                ChannelPost.update(analyzed_at=utc_now()).where(
-                    ChannelPost.id == channel_post.id
-                ).execute()
-
-            return {
-                **post,
-                "real_topic": real_topic,
-                "tldr": tldr,
-                "key_insights": key_insights,
-                "relevance_score": relevance_score,
-                "content_type": content_type,
-                "is_ad": is_ad,
-            }
+            return {**post, **fields}
 
     @staticmethod
     def _load_prompt(lang: str) -> str:
