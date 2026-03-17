@@ -179,6 +179,47 @@ class FirecrawlClient:
         self._client = httpx.AsyncClient(timeout=self._timeout, limits=self._limits)
         self._circuit_breaker = circuit_breaker
 
+    @classmethod
+    def from_config(
+        cls,
+        cfg: Any,
+        *,
+        audit: Callable[[str, str, dict[str, Any]], None] | None = None,
+        debug_payloads: bool = False,
+        log_truncate_length: int = 1000,
+    ) -> FirecrawlClient:
+        """Construct a FirecrawlClient from a FirecrawlConfig object."""
+        return cls(
+            api_key=cfg.api_key,
+            timeout_sec=cfg.timeout_sec,
+            audit=audit,
+            debug_payloads=debug_payloads,
+            log_truncate_length=log_truncate_length,
+            max_connections=cfg.max_connections,
+            max_keepalive_connections=cfg.max_keepalive_connections,
+            keepalive_expiry=cfg.keepalive_expiry,
+            credit_warning_threshold=cfg.credit_warning_threshold,
+            credit_critical_threshold=cfg.credit_critical_threshold,
+            max_response_size_mb=cfg.max_response_size_mb,
+            max_age_seconds=cfg.max_age_seconds,
+            remove_base64_images=cfg.remove_base64_images,
+            block_ads=cfg.block_ads,
+            skip_tls_verification=cfg.skip_tls_verification,
+            include_markdown_format=cfg.include_markdown_format,
+            include_html_format=cfg.include_html_format,
+            include_links_format=cfg.include_links_format,
+            include_summary_format=cfg.include_summary_format,
+            include_images_format=cfg.include_images_format,
+            enable_screenshot_format=cfg.enable_screenshot_format,
+            screenshot_full_page=cfg.screenshot_full_page,
+            screenshot_quality=cfg.screenshot_quality,
+            screenshot_viewport_width=cfg.screenshot_viewport_width,
+            screenshot_viewport_height=cfg.screenshot_viewport_height,
+            json_prompt=cfg.json_prompt,
+            json_schema=cfg.json_schema,
+            wait_for_ms=cfg.wait_for_ms,
+        )
+
     @property
     def circuit_breaker(self) -> CircuitBreaker | None:
         """Return the circuit breaker instance if configured."""
