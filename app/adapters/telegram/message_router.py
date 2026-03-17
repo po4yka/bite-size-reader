@@ -95,6 +95,11 @@ class MessageRouter:
         )
 
     @property
+    def callback_handler(self) -> CallbackHandler | None:
+        """Public read-only accessor for the wired callback handler."""
+        return self._content_router.callback_handler
+
+    @property
     def _rate_limit_notified_until(self) -> dict[int, float]:
         return self._rate_limit_coordinator.rate_limit_notified_until
 

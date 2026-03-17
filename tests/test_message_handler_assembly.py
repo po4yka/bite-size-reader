@@ -22,7 +22,7 @@ class _ResponseFormatterStub:
 
 def test_message_handler_wires_callback_handler_during_construction(tmp_path) -> None:
     response_formatter = _ResponseFormatterStub()
-    url_processor = SimpleNamespace(summary_repo=None, _audit=None)
+    url_processor = SimpleNamespace(summary_repo=None, audit_func=None)
     forward_processor = SimpleNamespace(handle_forward_flow=AsyncMock())
     db = DatabaseSessionManager(str(tmp_path / "assembly.db"))
     db.migrate()
@@ -35,4 +35,4 @@ def test_message_handler_wires_callback_handler_during_construction(tmp_path) ->
         forward_processor=cast("Any", forward_processor),
     )
 
-    assert handler.message_router._content_router.callback_handler is handler.callback_handler
+    assert handler.message_router.callback_handler is handler.callback_handler
