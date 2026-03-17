@@ -76,13 +76,13 @@ class SummaryFollowupManager:
         uid: int,
         summary_id: str,
         correlation_id: str,
-    ) -> bool:
+    ) -> None:
         summary_data = await self._load_summary_payload(summary_id, correlation_id=correlation_id)
         if not summary_data:
             await self._response_formatter.safe_reply(
                 message, t("cb_summary_not_found", self._lang)
             )
-            return True
+            return
 
         await self.activate(uid, summary_id)
         await self._response_formatter.safe_reply(
@@ -93,7 +93,6 @@ class SummaryFollowupManager:
             "followup_session_started",
             extra={"uid": uid, "summary_id": summary_id, "cid": correlation_id},
         )
-        return True
 
     async def answer(
         self,

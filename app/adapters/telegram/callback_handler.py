@@ -168,12 +168,13 @@ class CallbackHandler:
         if not summary_id:
             return False
 
-        return await self._followup.handle_entry(
+        await self._followup.handle_entry(
             message=message,
             uid=uid,
             summary_id=summary_id,
             correlation_id=correlation_id,
         )
+        return True
 
     async def _activate_followup_session(self, uid: int, summary_id: str) -> None:
         await self._followup.activate(uid, summary_id)
