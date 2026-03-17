@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from app.domain.models.request import RequestStatus
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from datetime import datetime
@@ -113,7 +115,7 @@ class SummaryRepositoryPort(Protocol):
         json_payload: dict[str, Any],
         insights_json: dict[str, Any] | None = None,
         is_read: bool = False,
-        request_status: str = "ok",
+        request_status: RequestStatus = RequestStatus.COMPLETED,
     ) -> int:
         """Persist summary and update request status."""
 
@@ -162,7 +164,7 @@ class RequestRepositoryPort(Protocol):
         self,
         *,
         type_: str = "url",
-        status: str = "pending",
+        status: RequestStatus = RequestStatus.PENDING,
         correlation_id: str | None = None,
         chat_id: int | None = None,
         user_id: int | None = None,
@@ -182,7 +184,7 @@ class RequestRepositoryPort(Protocol):
         self,
         *,
         type_: str = "url",
-        status: str = "pending",
+        status: RequestStatus = RequestStatus.PENDING,
         correlation_id: str | None = None,
         chat_id: int | None = None,
         user_id: int | None = None,
