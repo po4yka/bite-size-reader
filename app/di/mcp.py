@@ -41,7 +41,7 @@ def set_mcp_user_scope(runtime: McpRuntime, user_id: int | None) -> None:
     runtime.scope.user_id = user_id
 
 
-async def get_mcp_chroma_service(runtime: McpRuntime) -> Any:
+async def ensure_mcp_chroma_service(runtime: McpRuntime) -> Any:
     """Initialize and cache the MCP Chroma search service with retry backoff."""
     state = runtime.chroma_state
     if state.service is not None:
@@ -107,7 +107,7 @@ async def get_mcp_chroma_service(runtime: McpRuntime) -> Any:
             return None
 
 
-async def get_mcp_local_vector_service(runtime: McpRuntime) -> Any:
+async def ensure_mcp_local_vector_service(runtime: McpRuntime) -> Any:
     """Initialize and cache the local embedding fallback used by MCP tools."""
     state = runtime.local_vector_state
     if state.service is not None:

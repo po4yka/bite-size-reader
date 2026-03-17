@@ -88,7 +88,7 @@ class McpServerContext:
 
     async def get_chroma_service(self) -> Any:
         """Return the runtime-owned Chroma search service."""
-        service = await mcp_di.get_mcp_chroma_service(self.ensure_runtime())
+        service = await mcp_di.ensure_mcp_chroma_service(self.ensure_runtime())
         if service is None:
             self.logger.warning("ChromaDB unavailable — semantic_search tool will be disabled")
         else:
@@ -97,7 +97,7 @@ class McpServerContext:
 
     async def get_local_vector_service(self) -> Any:
         """Return the runtime-owned local embedding fallback service."""
-        service = await mcp_di.get_mcp_local_vector_service(self.ensure_runtime())
+        service = await mcp_di.ensure_mcp_local_vector_service(self.ensure_runtime())
         if service is None:
             self.logger.warning("Local vector fallback unavailable")
         else:
