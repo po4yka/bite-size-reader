@@ -224,19 +224,6 @@ mcp = [
   "mcp>=1.26,<2",
 ]
 
-# Development dependencies
-dev = [
-  "hypothesis>=6.0.0",
-  "isort>=7.0.0",
-  "mypy>=1.19.1",
-  "pre-commit>=4.5.1",
-  "pytest>=9.0.2",
-  "pytest-asyncio>=1.3.0",
-  "pytest-benchmark>=5.0.0",
-  "pyyaml>=6.0.3",
-  "ruff>=0.14.14",
-]
-
 [dependency-groups]
 dev = [
     "hypothesis>=6.0.0",
