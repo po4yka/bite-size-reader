@@ -42,7 +42,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # Stage 2: Web - Build Carbon Web App
 # =============================================================================
-FROM node:20-alpine AS web-builder
+FROM node:25-alpine AS web-builder
 
 WORKDIR /app/web
 COPY web/package*.json ./
