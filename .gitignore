@@ -140,3 +140,4 @@ app/static/web/
 .desloppify/
 .desloppify/*
 scorecard.png
+.worktrees/
