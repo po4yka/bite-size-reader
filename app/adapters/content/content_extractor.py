@@ -23,6 +23,7 @@ from app.config import AppConfig
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.lang import detect_language
 from app.core.url_utils import normalize_url, url_hash_sha256
+from app.core.validation import safe_message_id, safe_telegram_chat_id, safe_telegram_user_id
 from app.db.session import DatabaseSessionManager
 from app.infrastructure.cache.redis_cache import RedisCache
 from app.infrastructure.persistence.message_persistence import MessagePersistence
@@ -250,6 +251,14 @@ class ContentExtractor(
     ) -> tuple[int, str, str, str, str | None, list[str]]:
         """Extract content from URL and return request/content metadata tuple."""
         norm = normalize_url(url_text)
+        # Extract Telegram IDs at the Telegram boundary before passing to cross-platform lifecycle
+        _chat_obj = getattr(message, "chat", None) if message is not None else None
+        _from_user = getattr(message, "from_user", None) if message is not None else None
+        _msg_id_raw = (
+            getattr(message, "id", getattr(message, "message_id", 0))
+            if message is not None
+            else None
+        )
         platform_result = await self._get_platform_router().extract(
             PlatformExtractionRequest(
                 message=message,
@@ -260,6 +269,15 @@ class ContentExtractor(
                 silent=silent,
                 progress_tracker=progress_tracker,
                 mode="interactive",
+                chat_id=safe_telegram_chat_id(
+                    getattr(_chat_obj, "id", None) if _chat_obj is not None else None,
+                    field_name="chat_id",
+                ),
+                user_id=safe_telegram_user_id(
+                    getattr(_from_user, "id", None) if _from_user is not None else None,
+                    field_name="user_id",
+                ),
+                message_id=safe_message_id(_msg_id_raw, field_name="message_id"),
             )
         )
         if platform_result is not None:

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
 
 from app.core.async_utils import raise_if_cancelled
-from app.core.validation import safe_message_id, safe_telegram_chat_id, safe_telegram_user_id
+from app.core.validation import safe_telegram_chat_id, safe_telegram_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -98,35 +98,16 @@ class PlatformRequestLifecycle:
         request: Any,
         dedupe_hash: str,
     ) -> int:
-        chat_obj = getattr(request.message, "chat", None) if request.message is not None else None
-        chat_id = safe_telegram_chat_id(
-            getattr(chat_obj, "id", None) if chat_obj is not None else None,
-            field_name="chat_id",
-        )
-
-        from_user_obj = (
-            getattr(request.message, "from_user", None) if request.message is not None else None
-        )
-        user_id = safe_telegram_user_id(
-            getattr(from_user_obj, "id", None) if from_user_obj is not None else None,
-            field_name="user_id",
-        )
-
-        msg_id_raw = None
-        if request.message is not None:
-            msg_id_raw = getattr(request.message, "id", getattr(request.message, "message_id", 0))
-        input_message_id = safe_message_id(msg_id_raw, field_name="message_id")
-
         req_id = await self._message_persistence.request_repo.async_create_request(
             type_="url",
             status="pending",
             correlation_id=request.correlation_id,
-            chat_id=chat_id,
-            user_id=user_id,
+            chat_id=request.chat_id,
+            user_id=request.user_id,
             input_url=request.url_text,
             normalized_url=request.normalized_url,
             dedupe_hash=dedupe_hash,
-            input_message_id=input_message_id,
+            input_message_id=request.message_id,
             content_text=request.url_text,
             route_version=self._route_version,
         )

@@ -24,6 +24,10 @@ class PlatformExtractionRequest:
     progress_tracker: TelegramProgressMessage | None = None
     request_id_override: int | None = None
     mode: PlatformExtractionMode = "interactive"
+    # Pre-normalized Telegram IDs extracted at the routing boundary
+    chat_id: int | None = None
+    user_id: int | None = None
+    message_id: int | None = None
 
 
 @dataclass(slots=True)
