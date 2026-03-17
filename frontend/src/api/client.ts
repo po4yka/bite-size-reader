@@ -9,6 +9,16 @@ const USER_MESSAGES: Record<number, string> = {
   429: "Too many requests. Please wait.",
 };
 
+interface ApiEnvelope<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+  meta?: unknown;
+}
+
 function getInitData(): string {
   return window.Telegram?.WebApp?.initData ?? "";
 }
@@ -27,14 +37,24 @@ export async function apiRequest<T>(
     },
   });
 
+  const body = await res.json().catch(() => null) as ApiEnvelope<T> | null;
+
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
+    const message = body?.error?.message ?? USER_MESSAGES[res.status] ?? `Request failed (${res.status})`;
     if (body?.error?.message) {
       console.warn(`API error ${res.status}:`, body.error.message);
     }
-    throw new Error(USER_MESSAGES[res.status] ?? `Request failed (${res.status})`);
+    const err = new Error(message) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
 
-  const json = await res.json();
-  return json.data;
+  if (body !== null && body.success === false) {
+    const message = body.error?.message ?? `Request failed`;
+    const err = new Error(message) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
+
+  return body?.data as T;
 }
