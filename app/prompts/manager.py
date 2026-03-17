@@ -68,14 +68,6 @@ class PromptManager:
         validate_on_load: bool = True,
         cache_size: int = 8,
     ):
-        """Initialize the prompt manager.
-
-        Args:
-            prompt_dir: Directory containing prompt files (defaults to module dir)
-            examples_dir: Directory containing example files (defaults to examples/)
-            validate_on_load: Whether to validate prompts on load
-            cache_size: Maximum number of prompts to cache
-        """
         self.prompt_dir = prompt_dir or _PROMPT_DIR
         self.examples_dir = examples_dir or _EXAMPLES_DIR
         self.validate_on_load = validate_on_load

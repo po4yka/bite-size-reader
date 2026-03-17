@@ -177,19 +177,12 @@ def decode_token(token: str, expected_type: str | None = None) -> dict:
     return payload
 
 
-def validate_client_id(client_id: str | None) -> bool:
-    """
-    Validate client_id against allowlist.
-
-    Args:
-        client_id: Client application ID to validate
-
-    Returns:
-        True if valid
+def validate_client_id(client_id: str | None) -> None:
+    """Validate client_id against allowlist.
 
     Raises:
-        ValidationError: If client_id is missing or invalid format
-        AuthorizationError: If client_id is not in allowlist
+        ValidationError: If client_id is missing or invalid format.
+        AuthorizationError: If client_id is not in allowlist.
     """
     if not client_id:
         raise ValidationError(
@@ -217,7 +210,7 @@ def validate_client_id(client_id: str | None) -> bool:
 
     # If allowlist is empty, allow all clients (backward compatible)
     if not allowed_client_ids:
-        return True
+        return
 
     # Otherwise, client must be in allowlist
     if client_id not in allowed_client_ids:
@@ -227,4 +220,4 @@ def validate_client_id(client_id: str | None) -> bool:
         )
         raise AuthorizationError("Client application not authorized. Please contact administrator.")
 
-    return True
+    return

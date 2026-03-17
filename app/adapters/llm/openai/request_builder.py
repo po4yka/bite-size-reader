@@ -43,13 +43,6 @@ class OpenAIRequestBuilder:
         organization: str | None = None,
         enable_structured_outputs: bool = True,
     ) -> None:
-        """Initialize the request builder.
-
-        Args:
-            api_key: OpenAI API key.
-            organization: Optional organization ID.
-            enable_structured_outputs: Whether to use structured output mode.
-        """
         self._api_key = api_key
         self._organization = organization
         self._enable_structured_outputs = enable_structured_outputs

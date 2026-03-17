@@ -35,7 +35,6 @@ class AsyncRWLock:
     """
 
     def __init__(self) -> None:
-        """Initialize the read-write lock."""
         # Number of active readers
         self._readers: int = 0
 

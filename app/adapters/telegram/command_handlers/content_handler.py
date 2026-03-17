@@ -42,16 +42,6 @@ class ContentHandlerImpl:
         mark_summary_as_read_use_case: Any | None = None,
         event_bus: Any | None = None,
     ) -> None:
-        """Initialize the content handler.
-
-        Args:
-            response_formatter: Response formatter for sending messages.
-            summary_repo: Repository for summary data.
-            llm_repo: Repository for LLM call data.
-            unread_summaries_use_case: Application use case for unread summaries.
-            mark_summary_as_read_use_case: Application use case for read transitions.
-            event_bus: Domain event bus for side effects.
-        """
         self._formatter = response_formatter
         self._summary_repo = summary_repo
         self._llm_repo = llm_repo

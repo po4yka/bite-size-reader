@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.core.json_utils import extract_json
-from app.db.models import ChannelPost, ChannelPostAnalysis, _utcnow
+from app.core.time_utils import utc_now
+from app.db.models import ChannelPost, ChannelPostAnalysis
 
 if TYPE_CHECKING:
     from app.adapters.llm.protocol import LLMClientProtocol
@@ -195,7 +196,7 @@ class DigestAnalyzer:
                         "content_type": content_type,
                     },
                 )
-                ChannelPost.update(analyzed_at=_utcnow()).where(
+                ChannelPost.update(analyzed_at=utc_now()).where(
                     ChannelPost.id == channel_post.id
                 ).execute()
 

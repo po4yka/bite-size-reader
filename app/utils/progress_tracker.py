@@ -77,16 +77,6 @@ class ProgressTracker:
         small_batch_threshold: int = 10,
         progress_threshold_percentage: float = 5.0,
     ):
-        """Initialize the progress tracker.
-
-        Args:
-            total: Total number of items to process
-            progress_formatter: Async callable to format and send progress updates
-            initial_message_id: Optional initial message ID for edits
-            update_interval: Minimum time in seconds between updates (default: 1.0)
-            small_batch_threshold: Batch size threshold for more frequent updates (default: 10)
-            progress_threshold_percentage: Percentage of progress before update (default: 5%)
-        """
         self.total = total
         self._completed = 0
         self._lock = asyncio.Lock()

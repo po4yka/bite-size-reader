@@ -36,14 +36,6 @@ class ErrorHandler:
         max_response_size_bytes: int = 50 * 1024 * 1024,
         payload_logger: PayloadLogger | None = None,
     ) -> None:
-        """Initialize ErrorHandler.
-
-        Args:
-            max_retries: Maximum number of retry attempts
-            backoff_base: Base delay for exponential backoff
-            max_response_size_bytes: Maximum allowed response size
-            payload_logger: Optional payload logger instance
-        """
         self._max_retries = max_retries
         self._backoff_base = backoff_base
         self._max_response_size_bytes = max_response_size_bytes

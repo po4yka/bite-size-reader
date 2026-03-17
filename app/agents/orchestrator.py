@@ -170,13 +170,6 @@ class AgentOrchestrator:
         summarization_agent: SummarizationAgent,
         validation_agent: ValidationAgent,
     ):
-        """Initialize the orchestrator.
-
-        Args:
-            extraction_agent: Agent for content extraction
-            summarization_agent: Agent for summarization
-            validation_agent: Agent for validation
-        """
         self.extraction_agent = extraction_agent
         self.summarization_agent = summarization_agent
         self.validation_agent = validation_agent
@@ -564,11 +557,6 @@ class SingleAgentOrchestrator:
     """
 
     def __init__(self, agent: Any):
-        """Initialize with a single agent.
-
-        Args:
-            agent: The agent to orchestrate
-        """
         self.agent = agent
         self.logger = logger
 

@@ -64,15 +64,14 @@ def _build_search_repositories() -> tuple[Any, Any, Any]:
     )
 
 
-def _build_search_filters(
-    *,
-    language: str | None,
-    tags: list[str] | None,
-    domains: list[str] | None,
-    start_date: str | None,
-    end_date: str | None,
-    is_read: bool | None,
-    is_favorited: bool | None,
+def _search_filter_params(
+    language: str | None = Query(None, min_length=2, max_length=10),
+    tags: list[str] | None = Query(None),
+    domains: list[str] | None = Query(None),
+    start_date: str | None = Query(None, description="ISO date (YYYY-MM-DD)"),
+    end_date: str | None = Query(None, description="ISO date (YYYY-MM-DD)"),
+    is_read: bool | None = Query(None),
+    is_favorited: bool | None = Query(None),
 ) -> SearchFilters:
     return SearchFilters(
         language=language,
@@ -91,14 +90,8 @@ async def search_summaries(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     mode: str = Query("auto", pattern="^(auto|keyword|semantic|hybrid)$"),
-    language: str | None = Query(None, min_length=2, max_length=10),
-    tags: list[str] | None = Query(None),
-    domains: list[str] | None = Query(None),
-    start_date: str | None = Query(None, description="ISO date (YYYY-MM-DD)"),
-    end_date: str | None = Query(None, description="ISO date (YYYY-MM-DD)"),
-    is_read: bool | None = Query(None),
-    is_favorited: bool | None = Query(None),
     min_similarity: float = Query(0.2, ge=0.0, le=1.0),
+    filters: SearchFilters = Depends(_search_filter_params),
     user=Depends(get_current_user),
 ):
     """
@@ -114,15 +107,6 @@ async def search_summaries(
         topic_search_repo, request_repo, summary_repo = _build_search_repositories()
         intent = infer_intent(q)
         resolved_mode = resolve_mode(mode, intent)
-        filters = _build_search_filters(
-            language=language,
-            tags=tags,
-            domains=domains,
-            start_date=start_date,
-            end_date=end_date,
-            is_read=is_read,
-            is_favorited=is_favorited,
-        )
         fetch_limit = min(300, max(limit * 4, limit + 25))
         fts_query = re.sub(r"#", " ", q).strip() or q
         fts_results, _ = await topic_search_repo.async_fts_search_paginated(
@@ -192,34 +176,19 @@ async def semantic_search_summaries(
     q: str = Query(..., min_length=2, max_length=200),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    language: str | None = Query(None, min_length=2, max_length=10),
-    tags: list[str] | None = Query(None),
-    domains: list[str] | None = Query(None),
-    start_date: str | None = Query(None, description="ISO date (YYYY-MM-DD)"),
-    end_date: str | None = Query(None, description="ISO date (YYYY-MM-DD)"),
-    is_read: bool | None = Query(None),
-    is_favorited: bool | None = Query(None),
     user_scope: str | None = Query(None, min_length=1, max_length=50),
     min_similarity: float = Query(0.2, ge=0.0, le=1.0),
+    filters: SearchFilters = Depends(_search_filter_params),
     user=Depends(get_current_user),
     chroma_service: Any = Depends(get_chroma_search_service),
 ):
     """Semantic search across summaries using Chroma embeddings."""
     try:
         _, request_repo, summary_repo = _build_search_repositories()
-        filters = _build_search_filters(
-            language=language,
-            tags=tags,
-            domains=domains,
-            start_date=start_date,
-            end_date=end_date,
-            is_read=is_read,
-            is_favorited=is_favorited,
-        )
         search_results = await chroma_service.search(
             q,
-            language=language,
-            tags=tags,
+            language=filters.language,
+            tags=filters.tags,
             user_scope=user_scope,
             user_id=user["user_id"],
             limit=limit,

@@ -37,13 +37,6 @@ class AnthropicRequestBuilder:
         enable_structured_outputs: bool = True,
         anthropic_version: str = "2023-06-01",
     ) -> None:
-        """Initialize the request builder.
-
-        Args:
-            api_key: Anthropic API key.
-            enable_structured_outputs: Whether to use structured output mode.
-            anthropic_version: Anthropic API version header.
-        """
         self._api_key = api_key
         self._enable_structured_outputs = enable_structured_outputs
         self._anthropic_version = anthropic_version

@@ -76,12 +76,6 @@ class SearchTopicsUseCase:
     """
 
     def __init__(self, topic_search_service: Any) -> None:
-        """Initialize the use case.
-
-        Args:
-            topic_search_service: Service for searching topics (TopicSearchService).
-
-        """
         self._search_service = topic_search_service
 
     async def execute(self, query: SearchTopicsQuery) -> list[TopicArticleDTO]:

@@ -50,7 +50,6 @@ class EventBus:
     """
 
     def __init__(self) -> None:
-        """Initialize the event bus."""
         # Map event type to list of handlers
         self._handlers: dict[type, list[EventHandler]] = defaultdict(list)
 

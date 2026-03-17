@@ -57,13 +57,6 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
         db: DatabaseSessionManager,
         correlation_id: str | None = None,
     ):
-        """Initialize the content extraction agent.
-
-        Args:
-            content_extractor: The content extractor component to use
-            db: DatabaseSessionManager instance for querying crawl results
-            correlation_id: Optional correlation ID for tracing
-        """
         super().__init__(name="ContentExtractionAgent", correlation_id=correlation_id)
         self.content_extractor = content_extractor
         self.db = db

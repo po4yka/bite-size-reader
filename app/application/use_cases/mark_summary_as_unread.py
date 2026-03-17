@@ -58,12 +58,6 @@ class MarkSummaryAsUnreadUseCase:
     """
 
     def __init__(self, summary_repository: SummaryRepositoryPort) -> None:
-        """Initialize the use case.
-
-        Args:
-            summary_repository: Repository for summary persistence.
-
-        """
         self._summary_repo = summary_repository
 
     async def execute(self, command: MarkSummaryAsUnreadCommand) -> SummaryMarkedAsUnread:

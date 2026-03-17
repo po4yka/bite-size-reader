@@ -47,14 +47,6 @@ class TypingIndicator:
         action: str = "typing",
         interval: float | None = None,
     ) -> None:
-        """Initialize the typing indicator.
-
-        Args:
-            send_chat_action_func: Function to send chat action (chat_id, action) -> bool
-            chat_id: The chat ID to send typing indicators to
-            action: The action type (default: "typing")
-            interval: Refresh interval in seconds (default: 4.0)
-        """
         self._send_chat_action = send_chat_action_func
         self._chat_id = chat_id
         self._action = action

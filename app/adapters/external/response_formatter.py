@@ -14,6 +14,11 @@ existing code while delegating to specialized components:
 
 All public methods are delegated to the appropriate component while maintaining
 the original API signatures for backward compatibility.
+
+TODO(migration): This facade has 190 importers and no removal milestone.
+  Migration plan: move callers subsystem by subsystem to import from the
+  concrete component directly (e.g. notification handlers -> NotificationFormatterImpl,
+  Telegram command handlers -> ResponseSenderImpl). Track progress in GitHub issue.
 """
 
 from __future__ import annotations
@@ -198,6 +203,8 @@ class ResponseFormatter:
     def _data_formatter(self) -> DataFormatter:
         return self._services.data_formatter
 
+    # ======== Sync configuration / mutation methods ========
+
     def set_telegram_client(self, telegram_client: Any) -> None:
         """Rebind Telegram transport dependencies for runtime wiring and tests."""
         self._response_sender.set_telegram_client(telegram_client)
@@ -217,6 +224,8 @@ class ResponseFormatter:
     def set_topic_manager(self, topic_manager: TopicManager | None) -> None:
         """Rebind forum-topic routing without mutating presenter internals."""
         self._summary_presenter.set_topic_manager(topic_manager)
+
+    # ======== Async public methods ========
 
     async def is_reader_mode(self, message: Any) -> bool:
         """Return True when the user prefers Reader (consolidated) UX."""
@@ -271,15 +280,6 @@ class ResponseFormatter:
         chat_id: int,
         action: str = "typing",
     ) -> bool:
-        """Send a chat action (typing indicator) to Telegram.
-
-        Args:
-            chat_id: The chat ID to send the action to
-            action: The action type (typing, upload_photo, upload_video, upload_document, etc.)
-
-        Returns:
-            True if the action was sent successfully, False otherwise
-        """
         return await self._response_sender.send_chat_action(chat_id, action)
 
     async def send_message_draft(
@@ -323,11 +323,9 @@ class ResponseFormatter:
     # =========================================================================
 
     async def send_help(self, message: Any) -> None:
-        """Send help message to user."""
         await self._notification_formatter.send_help(message)
 
     async def send_welcome(self, message: Any) -> None:
-        """Send welcome message to user."""
         await self._notification_formatter.send_welcome(message)
 
     async def send_url_accepted_notification(

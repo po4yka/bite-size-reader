@@ -100,25 +100,17 @@ class SqliteRequestRepositoryAdapter(SqliteBaseRepository):
         lang_detected: str | None = None,
         content_text: str | None = None,
         route_version: int = 1,
-        # Legacy positional support if needed, but kwargs preferred
-        uid: int | None = None,
-        cid: int | None = None,
-        url: str | None = None,
     ) -> int:
         """Create a new request record."""
-        # Handle legacy positional args mapped to kwargs
-        u_id = user_id or uid
-        c_id = chat_id or cid
-        i_url = input_url or url
 
         def _create() -> int:
             try:
                 request = Request.create(
-                    user_id=u_id,
-                    chat_id=c_id,
-                    input_url=i_url,
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    input_url=input_url,
                     normalized_url=normalized_url,
-                    lang_detected=lang_detected or lang_detected,
+                    lang_detected=lang_detected,
                     input_message_id=input_message_id,
                     fwd_from_chat_id=fwd_from_chat_id,
                     fwd_from_msg_id=fwd_from_msg_id,
@@ -137,9 +129,9 @@ class SqliteRequestRepositoryAdapter(SqliteBaseRepository):
                         {
                             Request.correlation_id: correlation_id,
                             Request.status: status,
-                            Request.chat_id: c_id,
-                            Request.user_id: u_id,
-                            Request.input_url: i_url,
+                            Request.chat_id: chat_id,
+                            Request.user_id: user_id,
+                            Request.input_url: input_url,
                             Request.normalized_url: normalized_url,
                             Request.input_message_id: input_message_id,
                             Request.fwd_from_chat_id: fwd_from_chat_id,

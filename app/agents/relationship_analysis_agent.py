@@ -72,12 +72,6 @@ class RelationshipAnalysisAgent(BaseAgent[RelationshipAnalysisInput, Relationshi
         llm_client: LLMClientProtocol | None = None,
         correlation_id: str | None = None,
     ):
-        """Initialize the relationship analysis agent.
-
-        Args:
-            llm_client: LLM client for ambiguous case analysis (optional)
-            correlation_id: Optional correlation ID for tracing
-        """
         super().__init__(name="RelationshipAnalysisAgent", correlation_id=correlation_id)
         self._llm = llm_client
 

@@ -6,7 +6,8 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from app.db.models import Channel, ChannelPost, ChannelSubscription, DigestDelivery, _utcnow
+from app.core.time_utils import utc_now
+from app.db.models import Channel, ChannelPost, ChannelSubscription, DigestDelivery
 
 if TYPE_CHECKING:
     from app.config import AppConfig
@@ -81,7 +82,7 @@ class ChannelReader:
                 update_fields: dict[str, object] = {
                     "fetch_error_count": Channel.fetch_error_count + 1,
                     "last_error": "fetch_failed",
-                    "updated_at": _utcnow(),
+                    "updated_at": utc_now(),
                 }
                 if disable:
                     update_fields["is_active"] = False
@@ -224,10 +225,10 @@ class ChannelReader:
     def _update_channel_fetch_time(channel: Channel) -> None:
         """Update channel last_fetched_at and reset error count."""
         Channel.update(
-            last_fetched_at=_utcnow(),
+            last_fetched_at=utc_now(),
             fetch_error_count=0,
             last_error=None,
-            updated_at=_utcnow(),
+            updated_at=utc_now(),
         ).where(Channel.id == channel.id).execute()
 
 
@@ -237,7 +238,7 @@ def _get_delivered_message_ids(user_id: int) -> set[int]:
     Only looks back 30 days to prevent unbounded growth (4x the max
     hours_lookback of 168h = 7d).
     """
-    cutoff = _utcnow() - timedelta(days=30)
+    cutoff = utc_now() - timedelta(days=30)
     delivered: set[int] = set()
     for dd in DigestDelivery.select(DigestDelivery.posts_json).where(
         DigestDelivery.user == user_id,

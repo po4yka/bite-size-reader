@@ -185,18 +185,6 @@ class KarakeepClient:
         endpoint_timeouts: dict[str, float] | None = None,
         correlation_id: str | None = None,
     ) -> None:
-        """Initialize Karakeep client.
-
-        Args:
-            api_url: Base URL for Karakeep API (e.g., http://localhost:3000/api/v1/)
-            api_key: API key for authentication
-            timeout: Default request timeout in seconds
-            max_retries: Maximum number of retry attempts for transient failures
-            retry_base_delay: Base delay between retries in seconds
-            retry_max_delay: Maximum delay between retries in seconds
-            endpoint_timeouts: Custom per-endpoint timeouts (overrides defaults)
-            correlation_id: Optional correlation ID for tracing
-        """
         self.api_url = api_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout

@@ -25,11 +25,6 @@ class SearchContextBuilder:
     """
 
     def __init__(self, max_chars: int = 2000):
-        """Initialize the context builder.
-
-        Args:
-            max_chars: Maximum characters for the context output (default 2000)
-        """
         if max_chars < 100:
             raise ValueError("max_chars must be at least 100")
         self.max_chars = max_chars

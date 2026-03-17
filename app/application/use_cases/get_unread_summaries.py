@@ -62,12 +62,6 @@ class GetUnreadSummariesUseCase:
     """
 
     def __init__(self, summary_repository: SummaryRepositoryPort) -> None:
-        """Initialize the use case.
-
-        Args:
-            summary_repository: Repository for summary queries.
-
-        """
         self._summary_repo = summary_repository
 
     async def execute(self, query: GetUnreadSummariesQuery) -> list[Summary]:

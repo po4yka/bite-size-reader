@@ -26,14 +26,6 @@ class PayloadLogger:
         log_truncate_length: int = 1000,
         logger: logging.Logger | None = None,
     ) -> None:
-        """Initialize PayloadLogger.
-
-        Args:
-            audit: Optional audit callback for structured event logging
-            debug_payloads: Whether to log full request/response payloads
-            log_truncate_length: Maximum length for log content truncation
-            logger: Optional logger instance (creates default if not provided)
-        """
         self._audit = audit
         self._debug_payloads = debug_payloads
         self._log_truncate_length = log_truncate_length

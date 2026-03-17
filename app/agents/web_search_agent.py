@@ -73,14 +73,6 @@ class WebSearchAgent(BaseAgent[WebSearchAgentInput, WebSearchAgentOutput]):
         cfg: WebSearchConfig,
         correlation_id: str | None = None,
     ):
-        """Initialize the WebSearchAgent.
-
-        Args:
-            llm_client: LLM client for gap analysis
-            search_service: TopicSearchService for web searches
-            cfg: WebSearchConfig with search settings
-            correlation_id: Optional correlation ID for tracing
-        """
         super().__init__(name="WebSearchAgent", correlation_id=correlation_id)
         self._llm = llm_client
         self._search = search_service

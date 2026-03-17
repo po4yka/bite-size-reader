@@ -11,11 +11,6 @@ class MessageValidatorImpl:
     """Implementation of message security validation."""
 
     def __init__(self, min_message_interval_ms: int = 100) -> None:
-        """Initialize the validator with configuration.
-
-        Args:
-            min_message_interval_ms: Minimum delay between messages in milliseconds.
-        """
         self._min_message_interval_ms = min_message_interval_ms
         self._last_message_time: float = 0.0
 

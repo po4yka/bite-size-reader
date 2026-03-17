@@ -138,16 +138,6 @@ class ProcessingClient:
         credentials: grpc.ChannelCredentials | None = None,
         options: list[tuple[str, Any]] | None = None,
     ):
-        """Initialize the ProcessingClient.
-
-        Args:
-            target: gRPC server address (e.g., "localhost:50051")
-            timeout: Maximum time to wait for processing (seconds)
-            max_retries: Maximum number of connection retries
-            retry_delay: Initial delay between retries (seconds)
-            credentials: Optional channel credentials for TLS
-            options: Additional gRPC channel options
-        """
         self.target = target
         self.timeout = timeout
         self.max_retries = max_retries
@@ -499,12 +489,6 @@ class SyncProcessingClient:
         target: str = "localhost:50051",
         **kwargs: Any,
     ):
-        """Initialize the synchronous client.
-
-        Args:
-            target: gRPC server address
-            **kwargs: Additional arguments passed to ProcessingClient
-        """
         self._async_client = ProcessingClient(target, **kwargs)
         self._loop: asyncio.AbstractEventLoop | None = None
 

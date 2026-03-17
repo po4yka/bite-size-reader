@@ -56,13 +56,6 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
         validator_agent: Any,  # Will be ValidationAgent
         correlation_id: str | None = None,
     ):
-        """Initialize the summarization agent.
-
-        Args:
-            pure_summary_service: The summary generation service
-            validator_agent: Validation agent for checking outputs
-            correlation_id: Optional correlation ID for tracing
-        """
         super().__init__(name="SummarizationAgent", correlation_id=correlation_id)
         self.pure_summary_service = pure_summary_service
         self.validator_agent = validator_agent

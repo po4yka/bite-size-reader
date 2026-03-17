@@ -13,9 +13,10 @@ import time
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from app.api.models.responses import success_response
+from app.api.routers.auth import get_current_user
 from app.config import load_config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC, format_iso_z
@@ -206,7 +207,7 @@ def _get_circuit_breaker_states() -> dict[str, Any]:
 
 
 @router.get("/health/detailed")
-async def detailed_health_check(request: Request):
+async def detailed_health_check(request: Request, _: dict = Depends(get_current_user)):
     """Comprehensive health check with component status.
 
     Returns detailed status of all system components:

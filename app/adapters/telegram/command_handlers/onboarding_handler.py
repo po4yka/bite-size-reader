@@ -28,11 +28,6 @@ class OnboardingHandlerImpl:
     """
 
     def __init__(self, response_formatter: ResponseFormatter) -> None:
-        """Initialize the onboarding handler.
-
-        Args:
-            response_formatter: The response formatter for sending messages.
-        """
         self._formatter = response_formatter
 
     @audit_command("command_start")

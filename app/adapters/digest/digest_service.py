@@ -7,7 +7,8 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
-from app.db.models import Channel, ChannelSubscription, DigestDelivery, _utcnow
+from app.core.time_utils import utc_now
+from app.db.models import Channel, ChannelSubscription, DigestDelivery
 
 if TYPE_CHECKING:
     from app.adapters.digest.analyzer import DigestAnalyzer
@@ -259,7 +260,7 @@ class DigestService:
         try:
             DigestDelivery.create(
                 user=user_id,
-                delivered_at=_utcnow(),
+                delivered_at=utc_now(),
                 post_count=result.post_count,
                 channel_count=result.channel_count,
                 digest_type=result.digest_type,

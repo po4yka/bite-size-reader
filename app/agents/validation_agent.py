@@ -39,11 +39,6 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
     """
 
     def __init__(self, correlation_id: str | None = None):
-        """Initialize the validation agent.
-
-        Args:
-            correlation_id: Optional correlation ID for tracing
-        """
         super().__init__(name="ValidationAgent", correlation_id=correlation_id)
 
     async def execute(self, input_data: ValidationInput) -> AgentResult[ValidationOutput]:

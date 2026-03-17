@@ -30,12 +30,6 @@ class ResultBuilder:
         options: FirecrawlOptionsBuilder,
         payload_logger: PayloadLogger | None = None,
     ) -> None:
-        """Initialize ResultBuilder.
-
-        Args:
-            options: FirecrawlOptionsBuilder for generating options snapshots
-            payload_logger: Optional payload logger for audit logging
-        """
         self._options = options
         self._payload_logger = payload_logger
         self._logger = logging.getLogger(__name__)

@@ -74,25 +74,6 @@ class OpenAIClient:
         circuit_breaker: CircuitBreaker | None = None,
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
     ) -> None:
-        """Initialize the OpenAI client.
-
-        Args:
-            api_key: OpenAI API key.
-            model: Default model to use.
-            fallback_models: List of fallback models if primary fails.
-            organization: Optional organization ID.
-            timeout_sec: Request timeout in seconds.
-            max_retries: Maximum retry attempts per model.
-            backoff_base: Base delay for exponential backoff.
-            debug_payloads: Whether to log request/response payloads.
-            enable_structured_outputs: Whether to use structured output mode.
-            max_connections: Maximum concurrent connections.
-            max_keepalive_connections: Maximum keepalive connections.
-            keepalive_expiry: Keepalive connection expiry in seconds.
-            max_response_size_mb: Maximum response size in MB.
-            circuit_breaker: Optional circuit breaker instance.
-            audit: Optional audit callback function.
-        """
         self._validate_api_key(api_key)
 
         self._api_key = api_key

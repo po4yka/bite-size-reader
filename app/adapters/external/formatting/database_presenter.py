@@ -19,12 +19,6 @@ class DatabasePresenterImpl:
         response_sender: ResponseSender,
         data_formatter: DataFormatter,
     ) -> None:
-        """Initialize the database presenter.
-
-        Args:
-            response_sender: Response sender for sending messages.
-            data_formatter: Data formatter for formatting values.
-        """
         self._response_sender = response_sender
         self._data_formatter = data_formatter
 

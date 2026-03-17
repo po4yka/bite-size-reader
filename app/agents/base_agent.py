@@ -54,12 +54,6 @@ class BaseAgent(ABC, Generic[TInput, TOutput]):
     """
 
     def __init__(self, name: str, correlation_id: str | None = None):
-        """Initialize the agent.
-
-        Args:
-            name: Human-readable name for this agent
-            correlation_id: Optional correlation ID for tracing
-        """
         self.name = name
         self.correlation_id = correlation_id or "unknown"
         self.logger = logger

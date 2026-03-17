@@ -91,21 +91,6 @@ class CommandProcessor:
         llm_repo: LLMRepositoryPort | None = None,
         application_services: Any | None = None,
     ) -> None:
-        """Initialize the CommandProcessor facade.
-
-        Args:
-            cfg: Application configuration.
-            response_formatter: Response formatter for sending messages.
-            db: Database session manager.
-            url_processor: URL processor for handling URL flows.
-            audit_func: Callback function for audit logging.
-            url_handler: URL handler for managing pending requests.
-            topic_searcher: Online topic search service.
-            local_searcher: Local database topic search service.
-            task_manager: Task manager for tracking active tasks.
-            container: DI container for application use cases.
-            hybrid_search: Hybrid semantic search service.
-        """
         self.cfg = cfg
         self.response_formatter = response_formatter
         self.db = db

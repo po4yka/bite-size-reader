@@ -263,8 +263,8 @@ class TopicSearchRepositoryPort(Protocol):
         self,
         query: str,
         *,
-        candidate_limit: int,
-    ) -> list[int]:
+        candidate_limit: int = 100,
+    ) -> list[int] | None:
         """Return request IDs matching the topic query."""
 
     async def async_search_documents(self, query: str, *, limit: int) -> list[Any]:

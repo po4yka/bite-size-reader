@@ -39,14 +39,6 @@ class AdminHandlerImpl:
         url_processor: URLProcessor,
         url_handler: URLHandler | None = None,
     ) -> None:
-        """Initialize the admin handler.
-
-        Args:
-            db: Database session manager for queries.
-            response_formatter: Response formatter for sending messages.
-            url_processor: URL processor for reprocessing failed requests.
-            url_handler: URL handler for Telegram URL flows.
-        """
         self._db = db
         self._formatter = response_formatter
         self._url_processor = url_processor

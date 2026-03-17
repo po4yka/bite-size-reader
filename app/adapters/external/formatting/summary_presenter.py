@@ -83,17 +83,6 @@ class SummaryPresenterImpl:
         topic_manager: TopicManager | None = None,
         lang: str = "en",
     ) -> None:
-        """Initialize the summary presenter.
-
-        Args:
-            response_sender: Response sender for sending messages.
-            text_processor: Text processor for text operations.
-            data_formatter: Data formatter for formatting values.
-            verbosity_resolver: Optional resolver for per-user verbosity.
-            progress_tracker: Optional tracker to clear when summary is ready.
-            topic_manager: Optional topic manager for forum topic routing.
-            lang: UI language code ("en" or "ru").
-        """
         self._response_sender = response_sender
         self._text_processor = text_processor
         self._data_formatter = data_formatter

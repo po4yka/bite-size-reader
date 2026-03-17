@@ -17,9 +17,10 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from app.core.async_utils import raise_if_cancelled
+from app.models.llm.llm_models import LLMCallResult
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable
+    from collections.abc import AsyncGenerator, Callable, Coroutine
 
     from app.utils.circuit_breaker import CircuitBreaker
 
@@ -76,21 +77,6 @@ class BaseLLMClient:
         debug_payloads: bool = False,
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
     ) -> None:
-        """Initialize the base LLM client.
-
-        Args:
-            base_url: Base URL for the API endpoint.
-            timeout_sec: Request timeout in seconds.
-            max_retries: Maximum number of retry attempts.
-            backoff_base: Base delay for exponential backoff.
-            max_connections: Maximum concurrent connections.
-            max_keepalive_connections: Maximum keepalive connections.
-            keepalive_expiry: Keepalive connection expiry in seconds.
-            max_response_size_mb: Maximum response size in MB.
-            circuit_breaker: Optional circuit breaker instance.
-            debug_payloads: Whether to log request/response payloads.
-            audit: Optional audit callback function.
-        """
         self._base_url = base_url
         self._timeout = httpx.Timeout(timeout_sec, connect=10.0, read=timeout_sec)
         self._max_retries = max_retries
@@ -297,6 +283,88 @@ class BaseLLMClient:
         else:
             log_level = logging.INFO if level == "info" else logging.ERROR
             logger.log(log_level, event, extra=details)
+
+    async def _run_with_retry(
+        self,
+        models_to_try: list[str],
+        attempt_fn: Callable[..., Coroutine[Any, Any, LLMCallResult]],
+        *,
+        primary_model: str,
+        exhausted_endpoint: str,
+        retryable_error_substrings: tuple[str, ...] = ("rate_limit",),
+    ) -> LLMCallResult:
+        """Execute *attempt_fn* across a model list with retry/backoff/circuit-breaker.
+
+        This is the shared retry orchestration loop used by all concrete LLM clients.
+        Callers supply a provider-specific coroutine factory (*attempt_fn*) that
+        accepts ``client``, ``model``, and ``attempt`` keyword arguments and returns
+        an :class:`LLMCallResult`.
+
+        Args:
+            models_to_try: Ordered list of model identifiers to attempt (primary first).
+            attempt_fn: Async callable with signature
+                ``(*, client: httpx.AsyncClient, model: str, attempt: int) -> LLMCallResult``.
+            primary_model: The primary model name, used in the exhausted error result.
+            exhausted_endpoint: Endpoint string recorded when all retries are exhausted.
+            retryable_error_substrings: Lower-cased substrings that mark a transient
+                error worth retrying (e.g. ``("rate_limit", "overloaded")``).
+
+        Returns:
+            :class:`LLMCallResult` from the first successful attempt, or an error
+            result when all models and retries are exhausted.
+        """
+        last_error: str | None = None
+        last_latency: int | None = None
+
+        async with self._request_context() as client:
+            for model in models_to_try:
+                for attempt in range(self._max_retries + 1):
+                    try:
+                        result = await attempt_fn(client=client, model=model, attempt=attempt)
+
+                        if result.status == "ok":
+                            if self._circuit_breaker:
+                                self._circuit_breaker.record_success()
+                            return result
+
+                        # Retry on transient errors
+                        error_text = (result.error_text or "").lower()
+                        if any(sub in error_text for sub in retryable_error_substrings):
+                            if attempt < self._max_retries:
+                                await self._sleep_backoff(attempt)
+                                continue
+
+                        last_error = result.error_text
+                        last_latency = result.latency_ms
+                        break  # Try next model
+
+                    except (TimeoutError, ConnectionError) as e:
+                        last_error = str(e)
+                        if attempt < self._max_retries:
+                            await self._sleep_backoff(attempt)
+                            continue
+                        break  # Try next model
+
+                    except Exception as e:
+                        raise_if_cancelled(e)
+                        last_error = f"Unexpected error: {e}"
+                        break  # Try next model
+
+        # All models exhausted
+        if self._circuit_breaker:
+            self._circuit_breaker.record_failure()
+
+        return LLMCallResult(
+            status="error",
+            model=primary_model,
+            response_text=None,
+            error_text=last_error or "All retries and fallbacks exhausted",
+            tokens_prompt=0,
+            tokens_completion=0,
+            cost_usd=None,
+            latency_ms=last_latency,
+            endpoint=exhausted_endpoint,
+        )
 
 
 async def asyncio_sleep_backoff(base: float, attempt: int) -> None:

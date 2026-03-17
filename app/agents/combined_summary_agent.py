@@ -43,12 +43,6 @@ class CombinedSummaryAgent(BaseAgent[CombinedSummaryInput, CombinedSummaryOutput
         stream: bool = False,
         on_stream_delta: Callable[[str], Awaitable[None] | None] | None = None,
     ):
-        """Initialize the combined summary agent.
-
-        Args:
-            llm_client: LLM client for summary synthesis
-            correlation_id: Optional correlation ID for tracing
-        """
         super().__init__(name="CombinedSummaryAgent", correlation_id=correlation_id)
         self._llm = llm_client
         self._stream = stream

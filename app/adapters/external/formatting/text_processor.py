@@ -24,12 +24,6 @@ class TextProcessorImpl:
         *,
         max_message_chars: int = 3500,
     ) -> None:
-        """Initialize the text processor.
-
-        Args:
-            response_sender: Response sender for sending messages.
-            max_message_chars: Maximum characters per message.
-        """
         self._response_sender = response_sender
         self._max_message_chars = max_message_chars
 

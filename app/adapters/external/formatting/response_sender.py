@@ -71,16 +71,6 @@ class ResponseSenderImpl:
         draft_min_delta_chars: int = 40,
         draft_max_chars: int = 3500,
     ) -> None:
-        """Initialize the response sender.
-
-        Args:
-            validator: Message validator for security checks.
-            max_message_chars: Maximum characters per message.
-            safe_reply_func: Optional callback for test compatibility.
-            reply_json_func: Optional callback for test compatibility.
-            telegram_client: Optional Telegram client for message operations.
-            admin_log_chat_id: Optional chat ID for admin-level debug logging.
-        """
         self._validator = validator
         self._max_message_chars = max_message_chars
         self._safe_reply_func = safe_reply_func

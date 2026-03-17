@@ -29,13 +29,6 @@ class DatabaseMaintenance:
         path: str,
         logger: logging.Logger | None = None,
     ) -> None:
-        """Initialize the maintenance handler.
-
-        Args:
-            database: The Peewee database instance
-            path: Path to the database file
-            logger: Optional logger instance
-        """
         self._database = database
         self._path = path
         self._logger = logger or logging.getLogger(__name__)
