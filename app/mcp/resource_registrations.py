@@ -1,3 +1,10 @@
+"""MCP resource registration adapters — thin wrappers required by the MCP framework.
+
+Each function is a single-line adapter: decorate the service call with @mcp.resource()
+and serialize the result to JSON for the wire protocol. No domain logic lives here;
+all business logic is in the injected service classes.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
