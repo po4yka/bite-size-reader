@@ -7,14 +7,8 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.external.formatting.summary.action_buttons import (
-    create_action_buttons,
-    create_inline_keyboard,
-)
-from app.adapters.external.formatting.summary.card_renderer import (
-    build_compact_card_html,
-    compact_tldr,
-)
+from app.adapters.external.formatting.summary.action_buttons import create_inline_keyboard
+from app.adapters.external.formatting.summary.card_renderer import build_compact_card_html
 from app.adapters.external.formatting.summary.crosspost_publisher import crosspost_to_topic
 from app.adapters.external.formatting.summary.related_reads_presenter import (
     send_related_reads as present_related_reads,
@@ -38,15 +32,6 @@ logger = logging.getLogger(__name__)
 
 class SummaryPresenterImpl:
     """Implementation of summary presentation."""
-
-    def _compact_tldr(self, text: str, *, max_sentences: int = 3, max_chars: int = 520) -> str:
-        """Return the first 2-3 sentences (best-effort) for the card TL;DR."""
-        return compact_tldr(
-            text,
-            text_processor=self._text_processor,
-            max_sentences=max_sentences,
-            max_chars=max_chars,
-        )
 
     def _build_compact_card_html(
         self, summary_shaped: dict[str, Any], llm: Any, chunks: int | None, *, reader: bool
@@ -84,13 +69,6 @@ class SummaryPresenterImpl:
     def set_topic_manager(self, topic_manager: TopicManager | None) -> None:
         """Update forum-topic routing without rebuilding the presenter."""
         self._topic_manager = topic_manager
-
-    def _create_action_buttons(self, summary_id: int | str) -> list[list[dict[str, str]]]:
-        """Create inline keyboard buttons for post-summary actions.
-
-        Returns a 2D list of button rows for InlineKeyboardMarkup.
-        """
-        return create_action_buttons(summary_id, lang=self._lang)
 
     def _create_inline_keyboard(
         self, summary_id: int | str, correlation_id: str | None = None
