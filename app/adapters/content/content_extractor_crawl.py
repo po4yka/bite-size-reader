@@ -27,6 +27,29 @@ from app.observability.failure_observability import (
 logger = logging.getLogger("app.adapters.content.content_extractor")
 
 
+def _select_content_text(
+    md: str | None,
+    html: str | None,
+) -> tuple[str, str]:
+    """Select raw content text from markdown or HTML. Returns (text, source)."""
+    if md and md.strip():
+        return clean_markdown_article_text(md), "markdown"
+    if html and html.strip():
+        return html_to_text(html), "html"
+    return "", "none"
+
+
+def _apply_normalization(content_text: str, cfg: Any) -> str:
+    """Apply normalize_text if enable_textacy is configured."""
+    try:
+        if getattr(cfg.runtime, "enable_textacy", False):
+            return normalize_text(content_text)
+    except (AttributeError, RuntimeError) as e:
+        raise_if_cancelled(e)
+        logger.debug("normalization_skipped", extra={"reason": str(e)})
+    return content_text
+
+
 class ContentExtractorCrawlMixin:
     """Firecrawl cache/processing and HTML salvage behavior."""
 
@@ -110,31 +133,18 @@ class ContentExtractorCrawlMixin:
         )
         images = self._extract_images(crawl_obj)
 
-        if md and md.strip():
-            content_text = clean_markdown_article_text(md)
-            content_source = "markdown"
-        elif html and html.strip():
-            content_text = html_to_text(html)
-            content_source = "html"
+        content_text, content_source = _select_content_text(md, html)
+        if content_source == "html":
             logger.info(
                 "html_fallback_used_existing",
                 extra={
                     "cid": correlation_id,
                     "reason": "markdown_empty_or_missing",
-                    "html_len": len(html),
+                    "html_len": len(html or ""),
                     "cleaned_text_len": len(content_text),
                 },
             )
-        else:
-            content_text = ""
-            content_source = "none"
-
-        try:
-            if getattr(self.cfg.runtime, "enable_textacy", False):
-                content_text = normalize_text(content_text)
-        except (AttributeError, RuntimeError) as e:
-            raise_if_cancelled(e)
-            logger.debug("normalization_skipped", extra={"reason": str(e)})
+        content_text = _apply_normalization(content_text, self.cfg)
 
         self._audit("INFO", "reuse_crawl_result", {"request_id": None, "cid": correlation_id})
 
@@ -558,27 +568,23 @@ class ContentExtractorCrawlMixin:
             silent=silent,
         )
 
-        if crawl.content_markdown and crawl.content_markdown.strip():
-            content_text = clean_markdown_article_text(crawl.content_markdown)
-            content_source = "markdown"
-        elif crawl.content_html and crawl.content_html.strip():
-            content_text = html_to_text(crawl.content_html)
-            content_source = "html"
+        content_text, content_source = _select_content_text(
+            crawl.content_markdown, crawl.content_html
+        )
+        if content_source == "html":
             logger.info(
                 "html_fallback_used",
                 extra={
                     "cid": correlation_id,
                     "reason": "markdown_empty_or_missing",
-                    "html_len": len(crawl.content_html),
+                    "html_len": len(crawl.content_html or ""),
                     "cleaned_text_len": len(content_text),
                 },
             )
             await self.response_formatter.send_html_fallback_notification(
                 message, len(content_text), silent=silent
             )
-        else:
-            content_text = ""
-            content_source = "none"
+        elif content_source == "none":
             logger.error(
                 "no_content_available",
                 extra={
@@ -587,12 +593,6 @@ class ContentExtractorCrawlMixin:
                     "html_len": len(crawl.content_html) if crawl.content_html else 0,
                 },
             )
-
-        try:
-            if getattr(self.cfg.runtime, "enable_textacy", False):
-                content_text = normalize_text(content_text)
-        except (AttributeError, RuntimeError) as e:
-            raise_if_cancelled(e)
-            logger.debug("normalization_skipped", extra={"reason": str(e)})
+        content_text = _apply_normalization(content_text, self.cfg)
 
         return content_text, content_source, title, images
