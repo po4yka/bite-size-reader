@@ -47,7 +47,14 @@ function syncTelegramViewport(webApp: TelegramWebApp): void {
   }
 }
 
-function initializeTelegramWebApp(): void {
+let _tgInitialized = false;
+let _tgHandleThemeChanged: (() => void) | null = null;
+let _tgHandleViewportChanged: (() => void) | null = null;
+
+export function initializeTelegramWebApp(): void {
+  if (_tgInitialized) return;
+  _tgInitialized = true;
+
   const webApp = window.Telegram?.WebApp;
   if (!webApp) return;
 
@@ -56,13 +63,33 @@ function initializeTelegramWebApp(): void {
   webApp.ready?.();
   webApp.expand?.();
 
-  const handleThemeChanged = () => syncTelegramWebAppVisuals(webApp);
-  const handleViewportChanged = () => syncTelegramViewport(webApp);
+  _tgHandleThemeChanged = () => {
+    syncTelegramWebAppVisuals(webApp);
+    (window as Window & { __tgColorScheme?: string }).__tgColorScheme = webApp.colorScheme;
+  };
+  _tgHandleViewportChanged = () => syncTelegramViewport(webApp);
 
-  webApp.onEvent?.("themeChanged", handleThemeChanged);
-  webApp.onEvent?.("viewportChanged", handleViewportChanged);
-  webApp.onEvent?.("safeAreaChanged", handleViewportChanged);
-  webApp.onEvent?.("contentSafeAreaChanged", handleViewportChanged);
+  webApp.onEvent?.("themeChanged", _tgHandleThemeChanged);
+  webApp.onEvent?.("viewportChanged", _tgHandleViewportChanged);
+  webApp.onEvent?.("safeAreaChanged", _tgHandleViewportChanged);
+  webApp.onEvent?.("contentSafeAreaChanged", _tgHandleViewportChanged);
+}
+
+export function cleanupTelegramWebApp(): void {
+  const webApp = window.Telegram?.WebApp;
+  if (!webApp) return;
+
+  if (_tgHandleThemeChanged) {
+    webApp.offEvent?.("themeChanged", _tgHandleThemeChanged);
+    _tgHandleThemeChanged = null;
+  }
+  if (_tgHandleViewportChanged) {
+    webApp.offEvent?.("viewportChanged", _tgHandleViewportChanged);
+    webApp.offEvent?.("safeAreaChanged", _tgHandleViewportChanged);
+    webApp.offEvent?.("contentSafeAreaChanged", _tgHandleViewportChanged);
+    _tgHandleViewportChanged = null;
+  }
+  _tgInitialized = false;
 }
 
 initializeTelegramWebApp();
