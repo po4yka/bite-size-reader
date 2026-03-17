@@ -304,9 +304,9 @@ class TopicSearchRepositoryPort(Protocol):
     """Port for topic search query operations."""
 
     async def async_fts_search_paginated(
-        self, query: str, *, limit: int = 20, offset: int = 0
+        self, query: str, *, limit: int = 20, offset: int = 0, user_id: int | None = None
     ) -> tuple[list[dict[str, Any]], int]:
-        """Execute paginated FTS query."""
+        """Execute paginated FTS query, scoped to user_id when provided."""
 
     async def async_search_request_ids(
         self,

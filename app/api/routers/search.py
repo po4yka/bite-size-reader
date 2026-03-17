@@ -112,6 +112,7 @@ async def search_summaries(
             fts_query,
             limit=fetch_limit,
             offset=0,
+            user_id=user["user_id"],
         )
         fts_by_request_id = build_fts_hits(fts_results)
         semantic_by_request_id = await build_semantic_hits(

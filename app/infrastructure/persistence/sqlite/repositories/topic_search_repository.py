@@ -94,9 +94,12 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
         )
 
     async def async_fts_search_paginated(
-        self, query: str, *, limit: int = 20, offset: int = 0
+        self, query: str, *, limit: int = 20, offset: int = 0, user_id: int | None = None
     ) -> tuple[list[dict[str, Any]], int]:
         """Perform FTS5 search with pagination.
+
+        When user_id is provided the results are scoped to that owner by joining
+        with the requests table, so authorization is enforced at the DB layer.
 
         Returns:
             Tuple of (results list, total count).
@@ -109,23 +112,44 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
                 return [], 0
 
             table_name = TopicSearchIndex._meta.table_name
-            count_sql = (
-                f"SELECT COUNT(*) FROM {table_name} "  # nosec B608
-                f"WHERE {table_name} MATCH ?"
-            )
-            search_sql = (
-                "SELECT request_id, title, snippet, source, published_at "
-                f"FROM {table_name} "  # nosec B608
-                f"WHERE {table_name} MATCH ? "
-                f"ORDER BY bm25({table_name}) ASC "
-                "LIMIT ? OFFSET ?"
-            )
 
-            count_cursor = self._session.database.execute_sql(count_sql, (fts_query,))
-            count_row = count_cursor.fetchone() if count_cursor else None
-            total = int(count_row[0]) if count_row and count_row[0] is not None else 0
+            if user_id is not None:
+                count_sql = (
+                    f"SELECT COUNT(*) FROM {table_name} AS t "  # nosec B608
+                    "JOIN requests AS r ON CAST(t.request_id AS INTEGER) = r.id "
+                    "WHERE t MATCH ? AND r.user_id = ?"
+                )
+                search_sql = (
+                    "SELECT t.request_id, t.title, t.snippet, t.source, t.published_at "
+                    f"FROM {table_name} AS t "  # nosec B608
+                    "JOIN requests AS r ON CAST(t.request_id AS INTEGER) = r.id "
+                    "WHERE t MATCH ? AND r.user_id = ? "
+                    f"ORDER BY bm25(t) ASC "
+                    "LIMIT ? OFFSET ?"
+                )
+                count_cursor = self._session.database.execute_sql(count_sql, (fts_query, user_id))
+                count_row = count_cursor.fetchone() if count_cursor else None
+                total = int(count_row[0]) if count_row and count_row[0] is not None else 0
+                cursor = self._session.database.execute_sql(
+                    search_sql, (fts_query, user_id, limit, offset)
+                )
+            else:
+                count_sql = (
+                    f"SELECT COUNT(*) FROM {table_name} "  # nosec B608
+                    f"WHERE {table_name} MATCH ?"
+                )
+                search_sql = (
+                    "SELECT request_id, title, snippet, source, published_at "
+                    f"FROM {table_name} "  # nosec B608
+                    f"WHERE {table_name} MATCH ? "
+                    f"ORDER BY bm25({table_name}) ASC "
+                    "LIMIT ? OFFSET ?"
+                )
+                count_cursor = self._session.database.execute_sql(count_sql, (fts_query,))
+                count_row = count_cursor.fetchone() if count_cursor else None
+                total = int(count_row[0]) if count_row and count_row[0] is not None else 0
+                cursor = self._session.database.execute_sql(search_sql, (fts_query, limit, offset))
 
-            cursor = self._session.database.execute_sql(search_sql, (fts_query, limit, offset))
             results = []
             for row in cursor:
                 results.append(

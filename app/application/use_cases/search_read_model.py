@@ -28,10 +28,10 @@ class SearchReadModelUseCase:
         self._summary_repo = summary_repository
 
     async def fts_search_paginated(
-        self, query: str, *, limit: int = 20, offset: int = 0
+        self, query: str, *, limit: int = 20, offset: int = 0, user_id: int | None = None
     ) -> tuple[list[dict[str, Any]], int]:
         return await self._topic_search_repo.async_fts_search_paginated(
-            query, limit=limit, offset=offset
+            query, limit=limit, offset=offset, user_id=user_id
         )
 
     async def get_requests_by_ids(
