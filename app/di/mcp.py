@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 from typing import TYPE_CHECKING, Any
@@ -15,6 +16,8 @@ if TYPE_CHECKING:
 
 CHROMA_RETRY_INTERVAL_SEC = 60.0
 LOCAL_VECTOR_RETRY_INTERVAL_SEC = 60.0
+
+logger = logging.getLogger(__name__)
 
 
 def build_mcp_runtime(
@@ -96,6 +99,11 @@ async def get_mcp_chroma_service(runtime: McpRuntime) -> Any:
             return state.service
         except Exception:
             state.last_failed_at = time.monotonic()
+            logger.warning(
+                "mcp_chroma_init_failed",
+                exc_info=True,
+                extra={"retry_in_sec": CHROMA_RETRY_INTERVAL_SEC},
+            )
             return None
 
 
@@ -136,6 +144,11 @@ async def get_mcp_local_vector_service(runtime: McpRuntime) -> Any:
             return state.service
         except Exception:
             state.last_failed_at = time.monotonic()
+            logger.warning(
+                "mcp_local_vector_init_failed",
+                exc_info=True,
+                extra={"retry_in_sec": LOCAL_VECTOR_RETRY_INTERVAL_SEC},
+            )
             return None
 
 
@@ -151,8 +164,8 @@ async def close_mcp_runtime(runtime: McpRuntime) -> None:
                 try:
                     await close()
                 except Exception:
-                    pass
+                    logger.debug("mcp_resource_close_failed", exc_info=True)
     try:
         runtime.database.close()
     except Exception:
-        pass
+        logger.debug("mcp_database_close_failed", exc_info=True)
