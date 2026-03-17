@@ -31,21 +31,155 @@ class TrendingCacheEntry:
     payload: dict[str, Any]
 
 
-# In-memory fallback cache
-_trending_cache: dict[tuple[int, int, int], TrendingCacheEntry] = {}
-_trending_cache_lock = asyncio.Lock()
+class _TrendingCacheManager:
+    """Encapsulates in-memory and Redis cache state for trending topics."""
 
-# Redis cache singleton (lazily initialized)
-_redis_cache: RedisCache | None = None
-_app_config: AppConfig | None = None
+    def __init__(self) -> None:
+        self._trending_cache: dict[tuple[int, int, int], TrendingCacheEntry] = {}
+        self._lock = asyncio.Lock()
+        self._redis_cache: RedisCache | None = None
+        self._app_config: AppConfig | None = None
+
+    def prune_expired(self, now: datetime) -> int:
+        """Remove expired fallback cache entries and return the number deleted."""
+        expired_keys = [
+            key for key, entry in self._trending_cache.items() if entry.expires_at <= now
+        ]
+        for key in expired_keys:
+            self._trending_cache.pop(key, None)
+        return len(expired_keys)
+
+    def get_redis_cache(self) -> tuple[RedisCache | None, AppConfig | None]:
+        """Get or initialize the Redis cache singleton."""
+        if self._redis_cache is not None:
+            return self._redis_cache, self._app_config
+
+        try:
+            from app.config import load_config
+            from app.infrastructure.cache.redis_cache import RedisCache
+
+            self._app_config = load_config(allow_stub_telegram=True)
+            if not self._app_config.redis.enabled:
+                return None, self._app_config
+
+            self._redis_cache = RedisCache(self._app_config)
+            return self._redis_cache, self._app_config
+        except Exception as exc:
+            logger.debug("trending_redis_cache_init_skipped", extra={"error": str(exc)})
+            return None, None
+
+    async def get_from_redis(self, user_id: int, days: int, limit: int) -> dict[str, Any] | None:
+        """Try to get trending payload from Redis cache."""
+        redis_cache, cfg = self.get_redis_cache()
+        if redis_cache is None or cfg is None:
+            return None
+
+        try:
+            cached = await redis_cache.get_json("trending", str(user_id), str(days), str(limit))
+            if isinstance(cached, dict):
+                logger.debug(
+                    "trending_redis_cache_hit",
+                    extra={"user_id": user_id, "days": days, "limit": limit},
+                )
+                return cached
+        except Exception as exc:
+            logger.warning(
+                "trending_redis_cache_get_failed",
+                extra={"user_id": user_id, "error": str(exc)},
+            )
+        return None
+
+    async def set_to_redis(
+        self, user_id: int, days: int, limit: int, payload: dict[str, Any]
+    ) -> bool:
+        """Store trending payload in Redis cache."""
+        redis_cache, cfg = self.get_redis_cache()
+        if redis_cache is None or cfg is None:
+            return False
+
+        try:
+            ttl = cfg.redis.trending_cache_ttl_seconds
+            success = await redis_cache.set_json(
+                value=payload,
+                ttl_seconds=ttl,
+                parts=("trending", str(user_id), str(days), str(limit)),
+            )
+            if success:
+                logger.debug(
+                    "trending_redis_cached",
+                    extra={"user_id": user_id, "days": days, "limit": limit, "ttl": ttl},
+                )
+            return success
+        except Exception as exc:
+            logger.warning(
+                "trending_redis_cache_set_failed",
+                extra={"user_id": user_id, "error": str(exc)},
+            )
+            return False
+
+    async def get_payload(self, user_id: int, *, limit: int, days: int) -> dict[str, Any]:
+        """Return trending topics with per-user/param caching."""
+        now = datetime.now(UTC)
+
+        redis_cached = await self.get_from_redis(user_id, days, limit)
+        if redis_cached is not None:
+            return redis_cached
+
+        cache_key = (user_id, limit, days)
+        async with self._lock:
+            self.prune_expired(now)
+            cached = self._trending_cache.get(cache_key)
+            if cached and cached.expires_at > now:
+                return cached.payload
+
+        previous_period_start = now - timedelta(days=days * 2)
+        max_scan = min(TRENDING_MAX_SCAN, max(limit * 40, 400))
+
+        records = await asyncio.to_thread(
+            _fetch_trending_records,
+            user_id,
+            previous_period_start=previous_period_start,
+            max_scan=max_scan,
+        )
+
+        payload = _build_trending_payload(records, now=now, days=days, limit=limit)
+
+        await self.set_to_redis(user_id, days, limit, payload)
+
+        async with self._lock:
+            self.prune_expired(now)
+            self._trending_cache[cache_key] = TrendingCacheEntry(
+                expires_at=now + timedelta(seconds=TRENDING_CACHE_TTL_SECONDS),
+                payload=payload,
+            )
+
+        return payload
+
+    def clear(self) -> None:
+        """Clear cached trending results (e.g., after summary writes)."""
+        self._trending_cache.clear()
+
+        redis_cache, cfg = self.get_redis_cache()
+        if redis_cache is not None and cfg is not None:
+            try:
+                asyncio.get_event_loop().create_task(self._clear_redis())
+            except RuntimeError as exc:
+                logger.debug("trending_redis_clear_deferred", extra={"error": str(exc)})
+
+    async def _clear_redis(self) -> None:
+        """Clear all trending entries from Redis cache."""
+        redis_cache, cfg = self.get_redis_cache()
+        if redis_cache is None or cfg is None:
+            return
+
+        try:
+            deleted = await redis_cache.clear()
+            logger.debug("trending_redis_cache_cleared", extra={"deleted_count": deleted})
+        except Exception as exc:
+            logger.warning("trending_redis_cache_clear_failed", extra={"error": str(exc)})
 
 
-def _prune_expired_in_memory_cache(now: datetime) -> int:
-    """Remove expired fallback cache entries and return the number deleted."""
-    expired_keys = [key for key, entry in _trending_cache.items() if entry.expires_at <= now]
-    for key in expired_keys:
-        _trending_cache.pop(key, None)
-    return len(expired_keys)
+_cache_manager = _TrendingCacheManager()
 
 
 def _normalize_tag(tag: Any) -> str | None:
@@ -148,125 +282,12 @@ def _build_trending_payload(
     }
 
 
-def _get_redis_cache() -> tuple[RedisCache | None, AppConfig | None]:
-    """Get or initialize the Redis cache singleton."""
-    global _redis_cache, _app_config
-
-    if _redis_cache is not None:
-        return _redis_cache, _app_config
-
-    try:
-        from app.config import load_config
-        from app.infrastructure.cache.redis_cache import RedisCache
-
-        _app_config = load_config(allow_stub_telegram=True)
-        if not _app_config.redis.enabled:
-            return None, _app_config
-
-        _redis_cache = RedisCache(_app_config)
-        return _redis_cache, _app_config
-    except Exception as exc:
-        logger.debug(
-            "trending_redis_cache_init_skipped",
-            extra={"error": str(exc)},
-        )
-        return None, None
-
-
-async def _get_from_redis(user_id: int, days: int, limit: int) -> dict[str, Any] | None:
-    """Try to get trending payload from Redis cache."""
-    redis_cache, cfg = _get_redis_cache()
-    if redis_cache is None or cfg is None:
-        return None
-
-    try:
-        cached = await redis_cache.get_json("trending", str(user_id), str(days), str(limit))
-        if isinstance(cached, dict):
-            logger.debug(
-                "trending_redis_cache_hit",
-                extra={"user_id": user_id, "days": days, "limit": limit},
-            )
-            return cached
-    except Exception as exc:
-        logger.warning(
-            "trending_redis_cache_get_failed",
-            extra={"user_id": user_id, "error": str(exc)},
-        )
-    return None
-
-
-async def _set_to_redis(user_id: int, days: int, limit: int, payload: dict[str, Any]) -> bool:
-    """Store trending payload in Redis cache."""
-    redis_cache, cfg = _get_redis_cache()
-    if redis_cache is None or cfg is None:
-        return False
-
-    try:
-        ttl = cfg.redis.trending_cache_ttl_seconds
-        success = await redis_cache.set_json(
-            value=payload,
-            ttl_seconds=ttl,
-            parts=("trending", str(user_id), str(days), str(limit)),
-        )
-        if success:
-            logger.debug(
-                "trending_redis_cached",
-                extra={"user_id": user_id, "days": days, "limit": limit, "ttl": ttl},
-            )
-        return success
-    except Exception as exc:
-        logger.warning(
-            "trending_redis_cache_set_failed",
-            extra={"user_id": user_id, "error": str(exc)},
-        )
-        return False
-
-
 async def get_trending_payload(user_id: int, *, limit: int, days: int) -> dict[str, Any]:
     """Return trending topics with per-user/param caching.
 
     Uses Redis cache if available, falls back to in-memory cache otherwise.
     """
-    now = datetime.now(UTC)
-
-    # Try Redis cache first
-    redis_cached = await _get_from_redis(user_id, days, limit)
-    if redis_cached is not None:
-        return redis_cached
-
-    # Fall back to in-memory cache
-    cache_key = (user_id, limit, days)
-    async with _trending_cache_lock:
-        _prune_expired_in_memory_cache(now)
-        cached = _trending_cache.get(cache_key)
-        if cached and cached.expires_at > now:
-            return cached.payload
-
-    # Cache miss - compute trending
-    previous_period_start = now - timedelta(days=days * 2)
-    max_scan = min(TRENDING_MAX_SCAN, max(limit * 40, 400))
-
-    records = await asyncio.to_thread(
-        _fetch_trending_records,
-        user_id,
-        previous_period_start=previous_period_start,
-        max_scan=max_scan,
-    )
-
-    payload = _build_trending_payload(records, now=now, days=days, limit=limit)
-
-    # Cache in Redis (non-blocking, failures are logged but ignored)
-    await _set_to_redis(user_id, days, limit, payload)
-
-    # Also cache in memory as immediate fallback
-    async with _trending_cache_lock:
-        _prune_expired_in_memory_cache(now)
-        _trending_cache[cache_key] = TrendingCacheEntry(
-            expires_at=now + timedelta(seconds=TRENDING_CACHE_TTL_SECONDS),
-            payload=payload,
-        )
-
-    return payload
+    return await _cache_manager.get_payload(user_id, limit=limit, days=days)
 
 
 def clear_trending_cache() -> None:
@@ -274,33 +295,4 @@ def clear_trending_cache() -> None:
 
     Clears both in-memory and Redis caches.
     """
-    _trending_cache.clear()
-
-    # Clear Redis cache asynchronously if available
-    redis_cache, cfg = _get_redis_cache()
-    if redis_cache is not None and cfg is not None:
-        try:
-            # Schedule async clear without blocking
-            asyncio.get_event_loop().create_task(_clear_redis_trending_cache())
-        except RuntimeError as exc:
-            # No event loop running, skip Redis clear
-            logger.debug("trending_redis_clear_deferred", extra={"error": str(exc)})
-
-
-async def _clear_redis_trending_cache() -> None:
-    """Clear all trending entries from Redis cache."""
-    redis_cache, cfg = _get_redis_cache()
-    if redis_cache is None or cfg is None:
-        return
-
-    try:
-        deleted = await redis_cache.clear()
-        logger.debug(
-            "trending_redis_cache_cleared",
-            extra={"deleted_count": deleted},
-        )
-    except Exception as exc:
-        logger.warning(
-            "trending_redis_cache_clear_failed",
-            extra={"error": str(exc)},
-        )
+    _cache_manager.clear()
