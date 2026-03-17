@@ -19,19 +19,24 @@ logger = logging.getLogger(__name__)
 
 
 async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> dict:
+    from app.application.services.topic_search import LocalTopicSearchService, TopicArticle
     from app.db.session import DatabaseSessionManager
+    from app.infrastructure.embedding.embedding_factory import create_embedding_service
+    from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+        SqliteTopicSearchRepositoryAdapter,
+    )
     from app.infrastructure.vector.chroma_store import ChromaVectorStore
     from app.services.chroma_vector_search_service import ChromaVectorSearchService
-    from app.services.embedding_factory import create_embedding_service
     from app.services.hybrid_search_service import HybridSearchService
-    from app.services.topic_search import LocalTopicSearchService, TopicArticle
 
     cfg = load_config(allow_stub_telegram=True)
     db = DatabaseSessionManager(path=db_path)
 
     # Initialize services
     embedding_service = create_embedding_service(cfg.embedding)
-    fts_service = LocalTopicSearchService(db=db, max_results=max_results)
+    fts_service = LocalTopicSearchService(
+        repository=SqliteTopicSearchRepositoryAdapter(db), max_results=max_results
+    )
     chroma_cfg = cfg.vector_store
     vector_store = ChromaVectorStore(
         host=chroma_cfg.host,

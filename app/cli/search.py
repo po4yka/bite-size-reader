@@ -70,11 +70,16 @@ async def search_fts(db_path: str, query: str, max_results: int = 10) -> list:
     Returns:
         List of search results
     """
+    from app.application.services.topic_search import LocalTopicSearchService
     from app.db.session import DatabaseSessionManager
-    from app.services.topic_search import LocalTopicSearchService
+    from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+        SqliteTopicSearchRepositoryAdapter,
+    )
 
     db = DatabaseSessionManager(path=db_path)
-    service = LocalTopicSearchService(db=db, max_results=max_results)
+    service = LocalTopicSearchService(
+        repository=SqliteTopicSearchRepositoryAdapter(db), max_results=max_results
+    )
 
     return await service.find_articles(query)
 
@@ -91,9 +96,9 @@ async def search_vector(db_path: str, query: str, max_results: int = 10, filters
     Returns:
         List of search results
     """
+    from app.application.services.topic_search import TopicArticle
     from app.db.session import DatabaseSessionManager
-    from app.services.embedding_factory import create_embedding_service
-    from app.services.topic_search import TopicArticle
+    from app.infrastructure.embedding.embedding_factory import create_embedding_service
     from app.services.vector_search_service import VectorSearchService
 
     db = DatabaseSessionManager(path=db_path)
@@ -141,18 +146,23 @@ async def search_hybrid(
     Returns:
         List of search results
     """
+    from app.application.services.topic_search import LocalTopicSearchService
     from app.db.session import DatabaseSessionManager
-    from app.services.embedding_factory import create_embedding_service
+    from app.infrastructure.embedding.embedding_factory import create_embedding_service
+    from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+        SqliteTopicSearchRepositoryAdapter,
+    )
     from app.services.hybrid_search_service import HybridSearchService
     from app.services.query_expansion_service import QueryExpansionService
     from app.services.reranking_service import RerankingService
-    from app.services.topic_search import LocalTopicSearchService
     from app.services.vector_search_service import VectorSearchService
 
     db = DatabaseSessionManager(path=db_path)
 
     # Initialize FTS service
-    fts_service = LocalTopicSearchService(db=db, max_results=max_results)
+    fts_service = LocalTopicSearchService(
+        repository=SqliteTopicSearchRepositoryAdapter(db), max_results=max_results
+    )
 
     # Initialize vector service
     embedding_service = create_embedding_service()
