@@ -4,4 +4,6 @@ Backward-compat re-export — real implementation lives in
 app.infrastructure.embedding.gemini_embedding_service.
 """
 
-from app.infrastructure.embedding.gemini_embedding_service import *  # noqa: F403
+from app.infrastructure.embedding.gemini_embedding_service import GeminiEmbeddingService
+
+__all__ = ["GeminiEmbeddingService"]
