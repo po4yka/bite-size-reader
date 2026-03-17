@@ -64,10 +64,6 @@ class CLIMessage:
 
     async def reply_text(self, text: str, *, parse_mode: str | None = None) -> None:
         """Print reply text to stdout."""
-        if parse_mode:
-            pass
-        else:
-            pass
         sys.stdout.flush()
 
     async def reply_document(self, file_obj: Any, caption: str | None = None) -> None:
@@ -85,11 +81,6 @@ class CLIMessage:
         if self._json_output_path:
             self._json_output_path.parent.mkdir(parents=True, exist_ok=True)
             self._json_output_path.write_text(content, encoding="utf-8")
-        else:
-            pass
-
-        if caption:
-            pass
         sys.stdout.flush()
 
     def to_dict(self) -> dict[str, Any]:
