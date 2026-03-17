@@ -1,6 +1,7 @@
 import { apiRequest } from "./client";
 import type { Collection, CollectionItem, PaginationInfo } from "../types/api";
 import { fetchSummary } from "./summaries";
+import { mapPagination, toDomain } from "./helpers";
 
 interface CollectionListResponse {
   collections: Collection[];
@@ -106,15 +107,6 @@ export interface CollectionMoveResult {
   updated_at: string;
 }
 
-function mapPagination(pagination: BackendPaginationInfo): PaginationInfo {
-  return {
-    total: pagination.total,
-    limit: pagination.limit,
-    offset: pagination.offset,
-    has_more: Boolean(pagination.hasMore ?? pagination.has_more),
-  };
-}
-
 function mapCollection(collection: BackendCollection): Collection {
   const children = collection.children ?? [];
   return {
@@ -138,14 +130,6 @@ function mapAclEntry(entry: BackendCollectionAclEntry): CollectionAclEntry {
     created_at: entry.createdAt ?? entry.created_at ?? null,
     updated_at: entry.updatedAt ?? entry.updated_at ?? null,
   };
-}
-
-function toDomain(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return "";
-  }
 }
 
 export function fetchCollections(parentId?: number): Promise<CollectionListResponse> {

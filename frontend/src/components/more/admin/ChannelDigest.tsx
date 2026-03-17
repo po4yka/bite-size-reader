@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { triggerChannelDigest } from "../../../api/admin";
+import { triggerChannelDigest } from "../../../api/digest";
 import { useToast } from "../../../hooks/useToast";
 
 export default function ChannelDigest() {
