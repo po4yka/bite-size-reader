@@ -16,3 +16,19 @@ app/api/services/sync_service.py
 app/api/routers/user.py
 app/api/routers/summaries.py
 app/api/routers/search.py
+# Core utilities
+app/core/url_utils.py
+app/core/json_utils.py
+app/core/lang.py
+app/core/time_utils.py
+app/core/summary_contract.py
+app/core/content_cleaner.py
+app/core/validation.py
+# Application use cases
+app/application/use_cases/get_unread_summaries.py
+app/application/use_cases/mark_summary_as_read.py
+app/application/use_cases/mark_summary_as_unread.py
+app/application/use_cases/summary_read_model.py
+# SQLite repositories
+app/infrastructure/persistence/sqlite/repositories/summary_repository.py
+app/infrastructure/persistence/sqlite/repositories/request_repository.py
