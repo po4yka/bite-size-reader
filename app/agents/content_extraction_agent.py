@@ -8,16 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.agents.base_agent import AgentResult, BaseAgent
 from app.core.url_utils import compute_dedupe_hash, normalize_url
-from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
-    SqliteCrawlResultRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
 
 if TYPE_CHECKING:
     from app.adapters.content.content_extractor import ContentExtractor
-    from app.db.session import DatabaseSessionManager
+    from app.application.ports import CrawlResultRepositoryPort, RequestRepositoryPort
 
 
 class ExtractionInput(BaseModel):
@@ -54,14 +48,14 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
     def __init__(
         self,
         content_extractor: ContentExtractor,
-        db: DatabaseSessionManager,
+        request_repo: RequestRepositoryPort,
+        crawl_result_repo: CrawlResultRepositoryPort,
         correlation_id: str | None = None,
     ):
         super().__init__(name="ContentExtractionAgent", correlation_id=correlation_id)
         self.content_extractor = content_extractor
-        self.db = db
-        self.request_repo = SqliteRequestRepositoryAdapter(db)
-        self.crawl_result_repo = SqliteCrawlResultRepositoryAdapter(db)
+        self.request_repo = request_repo
+        self.crawl_result_repo = crawl_result_repo
 
     async def execute(self, input_data: ExtractionInput) -> AgentResult[ExtractionOutput]:
         """Extract content from the given URL."""

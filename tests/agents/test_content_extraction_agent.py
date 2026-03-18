@@ -16,24 +16,19 @@ class TestContentExtractionAgent(unittest.IsolatedAsyncioTestCase):
         self.normalized_url = "https://example.com/article"
 
         self.mock_content_extractor = MagicMock()
-        self.mock_db = MagicMock()
-        self.mock_db._safe_db_operation = AsyncMock()
-
-        self.agent = ContentExtractionAgent(
-            content_extractor=self.mock_content_extractor,
-            db=self.mock_db,
-            correlation_id=self.correlation_id,
-        )
-
-        # Override internally-created repositories with mocks to avoid database proxy issues
         self.mock_request_repo = MagicMock()
         self.mock_crawl_result_repo = MagicMock()
-        self.agent.request_repo = self.mock_request_repo
-        self.agent.crawl_result_repo = self.mock_crawl_result_repo
 
         # Default async methods on repos
         self.mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
         self.mock_crawl_result_repo.async_get_crawl_result_by_request = AsyncMock(return_value=None)
+
+        self.agent = ContentExtractionAgent(
+            content_extractor=self.mock_content_extractor,
+            request_repo=self.mock_request_repo,
+            crawl_result_repo=self.mock_crawl_result_repo,
+            correlation_id=self.correlation_id,
+        )
 
         # Sample extracted content
         self.sample_content = "This is extracted content. " * 50
