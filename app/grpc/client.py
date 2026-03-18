@@ -15,8 +15,13 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
 
-import grpc
-from grpc import StatusCode
+try:
+    import grpc
+    from grpc import StatusCode
+except ImportError as exc:
+    raise RuntimeError(
+        "grpcio is required for the gRPC client; install with: pip install bite-size-reader[grpc]"
+    ) from exc
 
 from app.protos import (
     processing_pb2 as _processing_pb2,

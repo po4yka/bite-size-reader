@@ -6,7 +6,13 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-import grpc
+try:
+    import grpc
+except ImportError as exc:
+    raise RuntimeError(
+        "grpcio is required for the gRPC service layer; "
+        "install with: pip install bite-size-reader[grpc]"
+    ) from exc
 
 from app.api.background_processor import process_url_request
 from app.core.logging_utils import log_exception

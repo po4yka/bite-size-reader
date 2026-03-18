@@ -6,7 +6,13 @@ import asyncio
 from concurrent import futures
 from typing import TYPE_CHECKING
 
-import grpc
+try:
+    import grpc
+except ImportError as exc:
+    raise RuntimeError(
+        "grpcio is required for the gRPC service layer; "
+        "install with: pip install bite-size-reader[grpc]"
+    ) from exc
 
 from app.api.dependencies import search_resources
 from app.core.logging_utils import get_logger
