@@ -6,10 +6,11 @@ import hashlib
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.content.llm_response_workflow_attempts import summary_has_content
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from app.adapters.content.llm_response_workflow import LLMResponseWorkflow
     from app.infrastructure.cache.redis_cache import RedisCache
 
 logger = logging.getLogger(__name__)
@@ -24,13 +25,11 @@ class LLMSummaryCache:
         cache: RedisCache,
         cfg: Any,
         prompt_version: str,
-        workflow: LLMResponseWorkflow,
         insights_has_content: Callable[[dict[str, Any]], bool],
     ) -> None:
         self._cache = cache
         self._cfg = cfg
         self._prompt_version = prompt_version
-        self._workflow = workflow
         self._insights_has_content = insights_has_content
 
     async def get_cached_summary(
@@ -51,9 +50,7 @@ class LLMSummaryCache:
         if not isinstance(cached, dict):
             return None
 
-        if not self._workflow._summary_has_content(
-            cached, required_fields=("tldr", "summary_250", "summary_1000")
-        ):
+        if not summary_has_content(cached, required_fields=("tldr", "summary_250", "summary_1000")):
             logger.debug(
                 "llm_cache_missing_fields",
                 extra={"cid": correlation_id, "lang": lang_key, "model": model_name},

@@ -90,7 +90,6 @@ class SummarizationRuntime:
             cache=self.cache,
             cfg=cfg,
             prompt_version=self.prompt_version,
-            workflow=self.workflow,
             insights_has_content=insights_has_content,
         )
         self.insights_generator = LLMInsightsGenerator(

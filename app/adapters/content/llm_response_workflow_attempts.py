@@ -21,6 +21,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger("app.adapters.content.llm_response_workflow")
 
 
+def summary_has_content(summary: dict[str, Any], required_fields: Sequence[str]) -> bool:
+    """Return True if any required field contains non-empty text."""
+    for field in required_fields:
+        value = summary.get(field)
+        if isinstance(value, str) and value.strip():
+            return True
+    return False
+
+
 class LLMWorkflowAttemptsMixin:
     """Per-attempt processing, summary finalization, and persistence."""
 
@@ -86,7 +95,7 @@ class LLMWorkflowAttemptsMixin:
 
         finalize_summary_texts(shaped)
 
-        if not self._summary_has_content(shaped, ctx.required_summary_fields):
+        if not summary_has_content(shaped, ctx.required_summary_fields):
             logger.warning(
                 "summary_fields_empty",
                 extra={
@@ -100,7 +109,7 @@ class LLMWorkflowAttemptsMixin:
             try:
                 repair_hint = SimpleNamespace(errors=["missing_summary_fields"])
                 repaired = await self._attempt_json_repair(ctx, parse_result=repair_hint)
-                if repaired and self._summary_has_content(repaired, ctx.required_summary_fields):
+                if repaired and summary_has_content(repaired, ctx.required_summary_fields):
                     return await self.finalize_success(ctx, repaired)
             except Exception as exc:
                 logger.warning(
@@ -229,13 +238,6 @@ class LLMWorkflowAttemptsMixin:
                 extra={"error": str(exc), "cid": correlation_id},
             )
             raise
-
-    def _summary_has_content(self, summary: dict[str, Any], required_fields: Sequence[str]) -> bool:
-        for field in required_fields:
-            value = summary.get(field)
-            if isinstance(value, str) and value.strip():
-                return True
-        return False
 
     def _set_failure_context(self, llm: Any, reason: str) -> None:
         """Attach a human-readable failure reason to an LLM attempt."""
