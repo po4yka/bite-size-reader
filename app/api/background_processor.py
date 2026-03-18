@@ -96,6 +96,7 @@ class BackgroundProcessor:
             max_delay_ms=cfg.background.retry_max_delay_ms,
             jitter_ratio=cfg.background.retry_jitter_ratio,
         )
+        self._processing_tasks: set[asyncio.Task[None]] = set()
 
     async def execute_request(
         self,
@@ -728,10 +729,7 @@ async def process_url_request(
     task = asyncio.create_task(
         processor.execute_request(request_id, correlation_id=correlation_id, db_path=db_path)
     )
-    # Background processing tasks - store reference if needed or use fire-and-forget safely
-    if not hasattr(processor, "_processing_tasks"):
-        processor._processing_tasks = set()  # type: ignore[attr-defined]
-    tasks = processor._processing_tasks  # type: ignore[attr-defined]
+    tasks = processor._processing_tasks
     tasks.add(task)
 
     def _on_task_done(t: asyncio.Task) -> None:
