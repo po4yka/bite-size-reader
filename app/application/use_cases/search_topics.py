@@ -1,8 +1,4 @@
-"""Use case for searching topics and finding related articles.
-
-This use case wraps the existing TopicSearchService and provides a clean
-application layer interface following the hexagonal architecture pattern.
-"""
+"""Use case for searching topics and finding related articles."""
 
 import logging
 from dataclasses import dataclass
@@ -24,10 +20,7 @@ class TopicArticleDTO:
 
 @dataclass
 class SearchTopicsQuery:
-    """Query for searching topics.
-
-    This is a query object (CQRS pattern) for search operations.
-    """
+    """Query for searching topics."""
 
     topic: str
     user_id: int
@@ -35,7 +28,6 @@ class SearchTopicsQuery:
     correlation_id: str | None = None
 
     def __post_init__(self) -> None:
-        """Validate query parameters."""
         if not self.topic or not self.topic.strip():
             msg = "topic must not be empty"
             raise ValueError(msg)
@@ -51,29 +43,7 @@ class SearchTopicsQuery:
 
 
 class SearchTopicsUseCase:
-    """Use case for searching topics and discovering articles.
-
-    This use case orchestrates the topic search workflow, including:
-    - Validating search parameters
-    - Delegating to search service
-    - Transforming results to DTOs
-    - Logging and audit trail
-
-    Example:
-        ```python
-        topic_search_service = TopicSearchService(firecrawl_client, max_results=5)
-        use_case = SearchTopicsUseCase(topic_search_service)
-
-        query = SearchTopicsQuery(
-            topic="machine learning",
-            user_id=123,
-            max_results=5,
-            correlation_id="abc-123",
-        )
-        articles = await use_case.execute(query)
-        ```
-
-    """
+    """Use case for searching topics and discovering articles."""
 
     def __init__(self, topic_search_service: Any) -> None:
         self._search_service = topic_search_service
@@ -103,13 +73,11 @@ class SearchTopicsUseCase:
         )
 
         try:
-            # Delegate to search service
             articles = await self._search_service.find_articles(
                 topic=query.topic,
                 correlation_id=query.correlation_id,
             )
 
-            # Convert to DTOs
             result = [
                 TopicArticleDTO(
                     title=article.title,
@@ -134,7 +102,6 @@ class SearchTopicsUseCase:
             return result
 
         except ValueError as e:
-            # Validation error from search service
             logger.warning(
                 "search_topics_validation_error",
                 extra={
@@ -146,7 +113,6 @@ class SearchTopicsUseCase:
             raise
 
         except Exception as e:
-            # Search service error
             logger.exception(
                 "search_topics_failed",
                 extra={

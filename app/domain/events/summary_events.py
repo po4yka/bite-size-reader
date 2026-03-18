@@ -33,7 +33,6 @@ class SummaryCreated(DomainEvent):
     has_insights: bool
 
     def __post_init__(self) -> None:
-        """Validate event data."""
         super().__post_init__()
         if self.summary_id <= 0:
             msg = "summary_id must be positive"
@@ -50,7 +49,6 @@ class SummaryMarkedAsRead(DomainEvent):
     summary_id: int
 
     def __post_init__(self) -> None:
-        """Validate event data."""
         super().__post_init__()
         if self.summary_id <= 0:
             msg = "summary_id must be positive"
@@ -64,7 +62,6 @@ class SummaryMarkedAsUnread(DomainEvent):
     summary_id: int
 
     def __post_init__(self) -> None:
-        """Validate event data."""
         super().__post_init__()
         if self.summary_id <= 0:
             msg = "summary_id must be positive"
@@ -79,7 +76,6 @@ class SummaryInsightsAdded(DomainEvent):
     insights: dict[str, Any]
 
     def __post_init__(self) -> None:
-        """Validate event data."""
         super().__post_init__()
         if self.summary_id <= 0:
             msg = "summary_id must be positive"

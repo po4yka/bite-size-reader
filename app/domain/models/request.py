@@ -121,84 +121,39 @@ class Request:
         self.status = RequestStatus.CANCELLED
 
     def is_completed(self) -> bool:
-        """Check if request completed successfully.
-
-        Returns:
-            True if status is COMPLETED.
-
-        """
+        """Return True if status is COMPLETED."""
         return self.status == RequestStatus.COMPLETED
 
     def is_pending(self) -> bool:
-        """Check if request is pending processing.
-
-        Returns:
-            True if status is PENDING.
-
-        """
+        """Return True if status is PENDING."""
         return self.status == RequestStatus.PENDING
 
     def is_processing(self) -> bool:
-        """Check if request is currently being processed.
-
-        Returns:
-            True if status is CRAWLING or SUMMARIZING.
-
-        """
+        """Return True if status is CRAWLING or SUMMARIZING."""
         return self.status in (RequestStatus.CRAWLING, RequestStatus.SUMMARIZING)
 
     def is_failed(self) -> bool:
-        """Check if request failed.
-
-        Returns:
-            True if status is ERROR.
-
-        """
+        """Return True if status is ERROR."""
         return self.status == RequestStatus.ERROR
 
     def is_url_request(self) -> bool:
-        """Check if this is a URL processing request.
-
-        Returns:
-            True if request type is URL.
-
-        """
+        """Return True if request type is URL."""
         return self.request_type == RequestType.URL
 
     def is_forward_request(self) -> bool:
-        """Check if this is a forwarded message request.
-
-        Returns:
-            True if request type is FORWARD.
-
-        """
+        """Return True if request type is FORWARD."""
         return self.request_type == RequestType.FORWARD
 
     def has_url(self) -> bool:
-        """Check if request has a URL.
-
-        Returns:
-            True if input_url or normalized_url is set.
-
-        """
+        """Return True if input_url or normalized_url is set."""
         return bool(self.input_url or self.normalized_url)
 
     def get_url(self) -> str | None:
-        """Get the URL for this request.
-
-        Returns:
-            Normalized URL if available, otherwise input URL.
-
-        """
+        """Return normalized URL if available, otherwise input URL."""
         return self.normalized_url or self.input_url
 
     def has_forward_info(self) -> bool:
-        """Check if request has forward information.
-
-        Returns:
-            True if both forward chat ID and message ID are set.
-
-        """
+        """Return True if both forward chat ID and message ID are set."""
         return bool(self.fwd_from_chat_id and self.fwd_from_msg_id)
 
     def set_language(self, language: str) -> None:

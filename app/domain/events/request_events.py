@@ -20,7 +20,6 @@ class RequestCreated(DomainEvent):
     request_type: str
 
     def __post_init__(self) -> None:
-        """Validate event data."""
         super().__post_init__()
         if self.request_id <= 0:
             msg = "request_id must be positive"
@@ -39,7 +38,6 @@ class RequestStatusChanged(DomainEvent):
     new_status: RequestStatus
 
     def __post_init__(self) -> None:
-        """Validate event data."""
         super().__post_init__()
         if self.request_id <= 0:
             msg = "request_id must be positive"
@@ -57,7 +55,6 @@ class RequestCompleted(DomainEvent):
     summary_id: int | None = None
 
     def __post_init__(self) -> None:
-        """Validate event data."""
         super().__post_init__()
         if self.request_id <= 0:
             msg = "request_id must be positive"
@@ -73,7 +70,6 @@ class RequestFailed(DomainEvent):
     error_details: dict | None = None
 
     def __post_init__(self) -> None:
-        """Validate event data."""
         super().__post_init__()
         if self.request_id <= 0:
             msg = "request_id must be positive"
@@ -91,7 +87,6 @@ class RequestCancelled(DomainEvent):
     cancelled_by_user_id: int
 
     def __post_init__(self) -> None:
-        """Validate event data."""
         super().__post_init__()
         if self.request_id <= 0:
             msg = "request_id must be positive"

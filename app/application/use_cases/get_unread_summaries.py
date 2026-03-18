@@ -1,8 +1,4 @@
-"""Use case for retrieving unread summaries.
-
-This is a query use case following the CQRS pattern - it only reads data
-and does not modify state.
-"""
+"""Use case for retrieving unread summaries."""
 
 import logging
 from dataclasses import dataclass
@@ -15,10 +11,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class GetUnreadSummariesQuery:
-    """Query for retrieving unread summaries.
-
-    This is a query object (CQRS pattern) for read operations.
-    """
+    """Query for retrieving unread summaries."""
 
     user_id: int
     chat_id: int
@@ -26,7 +19,6 @@ class GetUnreadSummariesQuery:
     topic: str | None = None
 
     def __post_init__(self) -> None:
-        """Validate query parameters."""
         if self.user_id <= 0:
             msg = "user_id must be positive"
             raise ValueError(msg)
@@ -45,21 +37,7 @@ class GetUnreadSummariesQuery:
 
 
 class GetUnreadSummariesUseCase:
-    """Use case for retrieving unread summaries for a user.
-
-    This is a read-only query use case that demonstrates the CQRS pattern
-    where queries are separated from commands.
-
-    Example:
-        ```python
-        repository = your_summary_repository_adapter
-        use_case = GetUnreadSummariesUseCase(repository)
-
-        query = GetUnreadSummariesQuery(user_id=123, chat_id=456, limit=10)
-        summaries = await use_case.execute(query)
-        ```
-
-    """
+    """Use case for retrieving unread summaries for a user."""
 
     def __init__(self, summary_repository: SummaryRepositoryPort) -> None:
         self._summary_repo = summary_repository
@@ -84,7 +62,6 @@ class GetUnreadSummariesUseCase:
             },
         )
 
-        # Query repository
         db_summaries = await self._summary_repo.async_get_unread_summaries(
             user_id=query.user_id,
             chat_id=query.chat_id,
@@ -92,7 +69,6 @@ class GetUnreadSummariesUseCase:
             topic=query.topic,
         )
 
-        # Convert to domain models
         summaries = [self._summary_repo.to_domain_model(db_summary) for db_summary in db_summaries]
 
         logger.info(
