@@ -308,7 +308,6 @@ app/
   di/            -- Dependency injection
   domain/        -- Domain models and services (DDD patterns)
   grpc/          -- gRPC service definitions (aspirational; not wired into production)
-  handlers/      -- Request handlers
   infrastructure/ -- Persistence layer, event bus, vector store
     cache/       -- Cache layer (Redis)
     messaging/   -- Messaging infrastructure
@@ -317,7 +316,6 @@ app/
   observability/ -- Metrics, tracing, telemetry
   prompts/       -- LLM prompt templates (en/ru, including web search analysis)
   security/      -- Security utilities
-  services/      -- Topic search, embedding (local/Gemini), hybrid search services
   types/         -- Type definitions
   utils/         -- Validation and helper utilities
 bot.py           -- Entrypoint wiring config, DB, and Telegram bot
