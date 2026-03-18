@@ -82,6 +82,33 @@ def _extract_request_fields(
     )
 
 
+def _build_summary_compact(summary_dict: dict[str, Any]) -> SummaryCompact:
+    """Build a SummaryCompact response model from a joined summary dict."""
+    request_id, input_url, normalized_url = _extract_request_fields(summary_dict)
+    json_payload = ensure_mapping(summary_dict.get("json_payload"))
+    metadata = ensure_mapping(json_payload.get("metadata"))
+    return SummaryCompact(
+        id=summary_dict.get("id"),
+        request_id=request_id,
+        title=metadata.get("title", "Untitled"),
+        domain=metadata.get("domain", ""),
+        url=input_url or normalized_url or "",
+        tldr=json_payload.get("tldr", ""),
+        summary_250=json_payload.get("summary_250", ""),
+        reading_time_min=json_payload.get("estimated_reading_time_min", 0),
+        topic_tags=json_payload.get("topic_tags", []),
+        is_read=summary_dict.get("is_read", False),
+        is_favorited=summary_dict.get("is_favorited", False),
+        lang=summary_dict.get("lang") or "auto",
+        created_at=isotime(summary_dict.get("created_at")),
+        confidence=json_payload.get("confidence", 0.0),
+        hallucination_risk=_normalize_hallucination_risk(
+            json_payload.get("hallucination_risk", "unknown")
+        ),
+        image_url=metadata.get("image") or metadata.get("og:image") or metadata.get("ogImage"),
+    )
+
+
 def _resolve_content(
     crawl_result: dict[str, Any],
     request_data: dict[str, Any],
@@ -172,37 +199,7 @@ async def get_summaries(
     )
 
     # Build response from dictionary data
-    summary_list: list[SummaryCompact] = []
-    for summary_dict in summaries:
-        request_id, input_url, normalized_url = _extract_request_fields(summary_dict)
-
-        json_payload = ensure_mapping(summary_dict.get("json_payload"))
-        metadata = ensure_mapping(json_payload.get("metadata"))
-
-        summary_list.append(
-            SummaryCompact(
-                id=summary_dict.get("id"),
-                request_id=request_id,
-                title=metadata.get("title", "Untitled"),
-                domain=metadata.get("domain", ""),
-                url=input_url or normalized_url or "",
-                tldr=json_payload.get("tldr", ""),
-                summary_250=json_payload.get("summary_250", ""),
-                reading_time_min=json_payload.get("estimated_reading_time_min", 0),
-                topic_tags=json_payload.get("topic_tags", []),
-                is_read=summary_dict.get("is_read", False),
-                is_favorited=summary_dict.get("is_favorited", False),
-                lang=summary_dict.get("lang") or "auto",
-                created_at=isotime(summary_dict.get("created_at")),
-                confidence=json_payload.get("confidence", 0.0),
-                hallucination_risk=_normalize_hallucination_risk(
-                    json_payload.get("hallucination_risk", "unknown")
-                ),
-                image_url=metadata.get("image")
-                or metadata.get("og:image")
-                or metadata.get("ogImage"),
-            )
-        )
+    summary_list = [_build_summary_compact(s) for s in summaries]
 
     pagination = PaginationInfo(
         total=total,
@@ -278,37 +275,7 @@ async def get_recommendations(
     scored = sorted(unread_summaries, key=_score, reverse=True)
     top = scored[:limit]
 
-    summary_list: list[SummaryCompact] = []
-    for summary_dict in top:
-        request_id, input_url, normalized_url = _extract_request_fields(summary_dict)
-
-        json_payload = ensure_mapping(summary_dict.get("json_payload"))
-        metadata = ensure_mapping(json_payload.get("metadata"))
-
-        summary_list.append(
-            SummaryCompact(
-                id=summary_dict.get("id"),
-                request_id=request_id,
-                title=metadata.get("title", "Untitled"),
-                domain=metadata.get("domain", ""),
-                url=input_url or normalized_url or "",
-                tldr=json_payload.get("tldr", ""),
-                summary_250=json_payload.get("summary_250", ""),
-                reading_time_min=json_payload.get("estimated_reading_time_min", 0),
-                topic_tags=json_payload.get("topic_tags", []),
-                is_read=summary_dict.get("is_read", False),
-                is_favorited=summary_dict.get("is_favorited", False),
-                lang=summary_dict.get("lang") or "auto",
-                created_at=isotime(summary_dict.get("created_at")),
-                confidence=json_payload.get("confidence", 0.0),
-                hallucination_risk=_normalize_hallucination_risk(
-                    json_payload.get("hallucination_risk", "unknown")
-                ),
-                image_url=metadata.get("image")
-                or metadata.get("og:image")
-                or metadata.get("ogImage"),
-            )
-        )
+    summary_list = [_build_summary_compact(s) for s in top]
 
     return success_response(
         {
