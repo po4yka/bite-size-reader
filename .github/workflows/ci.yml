@@ -722,7 +722,7 @@ jobs:
   pr-summary:
     name: PR Summary
     if: github.event_name == 'pull_request'
-    needs: [prepare-environment, web-static-check, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, secrets]
+    needs: [prepare-environment, web-static-check, lint-and-format, type-check, test, integration-tests, bandit-scan, pip-audit-scan, safety-scan, secrets]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
