@@ -157,3 +157,23 @@ class SummaryReadModelUseCase:
         if not summary:
             return None
         return await self._summary_repo.async_toggle_favorite(summary_id)
+
+    async def submit_feedback(
+        self,
+        user_id: int,
+        summary_id: int,
+        rating: int | None,
+        issues: list[str] | None,
+        comment: str | None,
+    ) -> dict[str, Any] | None:
+        """Submit or update feedback for a summary. Returns the feedback record dict, or None if not found."""
+        context = await self.get_summary_context_for_user(user_id=user_id, summary_id=summary_id)
+        if not context:
+            return None
+        return await self._summary_repo.async_upsert_feedback(
+            user_id=user_id,
+            summary_id=summary_id,
+            rating=rating,
+            issues=issues,
+            comment=comment,
+        )

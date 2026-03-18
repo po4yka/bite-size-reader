@@ -163,6 +163,16 @@ class SummaryRepositoryPort(Protocol):
     async def async_get_max_server_version(self, user_id: int) -> int | None:
         """Return the maximum server_version for summaries owned by *user_id*."""
 
+    async def async_upsert_feedback(
+        self,
+        user_id: int,
+        summary_id: int,
+        rating: int | None,
+        issues: list[str] | None,
+        comment: str | None,
+    ) -> dict[str, Any]:
+        """Create or update feedback for a summary. Returns the feedback record dict."""
+
 
 @runtime_checkable
 class RequestRepositoryPort(Protocol):

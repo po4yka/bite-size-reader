@@ -5,7 +5,9 @@ This adapter translates between domain Summary models and database records.
 
 from __future__ import annotations
 
+import json
 import re
+import uuid
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
@@ -15,7 +17,7 @@ import peewee
 from app.application.services.topic_search_utils import ensure_mapping, tokenize
 from app.core.time_utils import UTC
 from app.db.json_utils import prepare_json_payload
-from app.db.models import CrawlResult, Request, Summary, model_to_dict
+from app.db.models import CrawlResult, Request, Summary, SummaryFeedback, model_to_dict
 from app.domain.models.request import RequestStatus
 from app.domain.models.summary import Summary as DomainSummary
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
@@ -510,6 +512,48 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
             return new_val
 
         return await self._execute(_toggle, operation_name="toggle_favorite")
+
+    async def async_upsert_feedback(
+        self,
+        user_id: int,
+        summary_id: int,
+        rating: int | None,
+        issues: list[str] | None,
+        comment: str | None,
+    ) -> dict[str, Any]:
+        """Create or update feedback for a summary. Returns the feedback record dict."""
+
+        def _upsert() -> dict[str, Any]:
+            feedback, _created = SummaryFeedback.get_or_create(
+                user=user_id,
+                summary=summary_id,
+                defaults={
+                    "id": uuid.uuid4(),
+                    "rating": rating,
+                    "issues": json.dumps(issues) if issues is not None else None,
+                    "comment": comment,
+                },
+            )
+            if not _created:
+                if rating is not None:
+                    feedback.rating = rating
+                if issues is not None:
+                    feedback.issues = json.dumps(issues)
+                if comment is not None:
+                    feedback.comment = comment
+                feedback.save()
+            issues_value: list[str] | None = None
+            if feedback.issues:
+                issues_value = json.loads(feedback.issues)
+            return {
+                "id": str(feedback.id),
+                "rating": feedback.rating,
+                "issues": issues_value,
+                "comment": feedback.comment,
+                "created_at": feedback.created_at,
+            }
+
+        return await self._execute(_upsert, operation_name="upsert_feedback")
 
     # Private Helpers
 

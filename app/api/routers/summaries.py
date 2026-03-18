@@ -640,50 +640,22 @@ async def submit_feedback(
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Submit or update feedback for a summary."""
-    import json
-    import uuid
-
-    from app.db.models import SummaryFeedback
-
-    # Verify summary belongs to user
-    context = await use_case.get_summary_context_for_user(
+    feedback = await use_case.submit_feedback(
         user_id=user["user_id"],
         summary_id=summary_id,
+        rating=body.rating,
+        issues=body.issues,
+        comment=body.comment,
     )
-    if not context:
+    if not feedback:
         raise ResourceNotFoundError("Summary", summary_id)
-
-    # Upsert feedback (one per user per summary)
-    feedback, created = SummaryFeedback.get_or_create(
-        user=user["user_id"],
-        summary=summary_id,
-        defaults={
-            "id": uuid.uuid4(),
-            "rating": body.rating,
-            "issues": json.dumps(body.issues) if body.issues is not None else None,
-            "comment": body.comment,
-        },
-    )
-
-    if not created:
-        if body.rating is not None:
-            feedback.rating = body.rating
-        if body.issues is not None:
-            feedback.issues = json.dumps(body.issues)
-        if body.comment is not None:
-            feedback.comment = body.comment
-        feedback.save()
-
-    issues_value: list[str] | None = None
-    if feedback.issues:
-        issues_value = json.loads(feedback.issues)
 
     return success_response(
         FeedbackResponse(
-            id=str(feedback.id),
-            rating=feedback.rating,
-            issues=issues_value,
-            comment=feedback.comment,
-            created_at=isotime(feedback.created_at),
+            id=str(feedback["id"]),
+            rating=feedback["rating"],
+            issues=feedback["issues"],
+            comment=feedback["comment"],
+            created_at=isotime(feedback["created_at"]),
         )
     )
