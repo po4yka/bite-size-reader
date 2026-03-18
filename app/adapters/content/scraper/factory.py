@@ -151,7 +151,7 @@ def _build_firecrawl(
     if not getattr(scraper_cfg, "firecrawl_self_hosted_enabled", False):
         return None
     try:
-        from app.adapters.external.firecrawl.client import FirecrawlClient
+        from app.adapters.external.firecrawl.client import FirecrawlClient, FirecrawlClientConfig
 
         from .firecrawl_provider import FirecrawlProvider
 
@@ -165,12 +165,10 @@ def _build_firecrawl(
             profile,
         )
 
-        client = FirecrawlClient(
-            api_key=scraper_cfg.firecrawl_self_hosted_api_key,
+        client_cfg = FirecrawlClientConfig(
             timeout_sec=profiled_timeout,
             max_retries=profiled_retries,
             backoff_base=cfg.firecrawl.retry_initial_delay,
-            audit=audit,
             debug_payloads=cfg.runtime.debug_payloads,
             max_connections=getattr(scraper_cfg, "firecrawl_max_connections", 10),
             max_keepalive_connections=getattr(
@@ -193,8 +191,13 @@ def _build_firecrawl(
             screenshot_viewport_width=cfg.firecrawl.screenshot_viewport_width,
             screenshot_viewport_height=cfg.firecrawl.screenshot_viewport_height,
             json_prompt=cfg.firecrawl.json_prompt,
-            json_schema=cfg.firecrawl.json_schema,
+            json_schema=cfg.firecrawl.json_schema or {},
             wait_for_ms=getattr(scraper_cfg, "firecrawl_wait_for_ms", 3000),
+        )
+        client = FirecrawlClient(
+            scraper_cfg.firecrawl_self_hosted_api_key,
+            client_cfg,
+            audit=audit,
             base_url=scraper_cfg.firecrawl_self_hosted_url,
         )
         return FirecrawlProvider(

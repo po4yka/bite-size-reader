@@ -67,7 +67,7 @@ class LLMWorkflowStorageMixin:
             return
 
         try:
-            await self.llm_repo.async_insert_llm_call(**payload)
+            await self.llm_repo.async_insert_llm_call(payload)
         except Exception as exc:
             logger.exception(
                 "persist_llm_error",

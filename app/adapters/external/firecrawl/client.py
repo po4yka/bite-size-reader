@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import time
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -63,59 +64,73 @@ if TYPE_CHECKING:
     from app.utils.circuit_breaker import CircuitBreaker
 
 
+@dataclass
+class FirecrawlClientConfig:
+    """Grouped configuration for FirecrawlClient connection, format, and content options."""
+
+    # HTTP connection pool
+    timeout_sec: int = 90
+    max_retries: int = 3
+    backoff_base: float = 0.5
+    max_connections: int = 10
+    max_keepalive_connections: int = 5
+    keepalive_expiry: float = 30.0
+    max_response_size_mb: int = 50
+    credit_warning_threshold: int = 1000
+    credit_critical_threshold: int = 100
+    # Content/scrape options
+    max_age_seconds: int = 172_800
+    remove_base64_images: bool = True
+    block_ads: bool = True
+    skip_tls_verification: bool = True
+    wait_for_ms: int | None = None
+    json_prompt: str | None = None
+    json_schema: dict[str, Any] = field(default_factory=dict)
+    # Format flags
+    include_markdown_format: bool = True
+    include_html_format: bool = True
+    include_links_format: bool = False
+    include_summary_format: bool = False
+    include_images_format: bool = False
+    # Screenshot options
+    enable_screenshot_format: bool = False
+    screenshot_full_page: bool = True
+    screenshot_quality: int = 80
+    screenshot_viewport_width: int | None = None
+    screenshot_viewport_height: int | None = None
+    # Debug/logging
+    debug_payloads: bool = False
+    log_truncate_length: int = 1000
+
+
 class FirecrawlClient:
     """Firecrawl v2 async client (scrape, search, crawl, batch, extract)."""
 
     def __init__(
         self,
         api_key: str,
-        timeout_sec: int = 90,
-        max_retries: int = 3,
-        backoff_base: float = 0.5,
+        config: FirecrawlClientConfig | None = None,
+        *,
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
-        debug_payloads: bool = False,
-        log_truncate_length: int = 1000,
-        max_connections: int = 10,
-        max_keepalive_connections: int = 5,
-        keepalive_expiry: float = 30.0,
-        credit_warning_threshold: int = 1000,
-        credit_critical_threshold: int = 100,
-        max_response_size_mb: int = 50,
-        max_age_seconds: int = 172_800,
-        remove_base64_images: bool = True,
-        block_ads: bool = True,
-        skip_tls_verification: bool = True,
-        include_markdown_format: bool = True,
-        include_html_format: bool = True,
-        include_links_format: bool = False,
-        include_summary_format: bool = False,
-        include_images_format: bool = False,
-        enable_screenshot_format: bool = False,
-        screenshot_full_page: bool = True,
-        screenshot_quality: int = 80,
-        screenshot_viewport_width: int | None = None,
-        screenshot_viewport_height: int | None = None,
-        json_prompt: str | None = None,
-        json_schema: dict[str, Any] | None = None,
         circuit_breaker: CircuitBreaker | None = None,
-        wait_for_ms: int | None = None,
         base_url: str | None = None,
     ) -> None:
+        cfg = config or FirecrawlClientConfig()
         validate_init(
             api_key=api_key,
-            timeout_sec=timeout_sec,
-            max_retries=max_retries,
-            backoff_base=backoff_base,
-            max_connections=max_connections,
-            max_keepalive_connections=max_keepalive_connections,
-            keepalive_expiry=keepalive_expiry,
-            credit_warning_threshold=credit_warning_threshold,
-            credit_critical_threshold=credit_critical_threshold,
-            max_response_size_mb=max_response_size_mb,
+            timeout_sec=cfg.timeout_sec,
+            max_retries=cfg.max_retries,
+            backoff_base=cfg.backoff_base,
+            max_connections=cfg.max_connections,
+            max_keepalive_connections=cfg.max_keepalive_connections,
+            keepalive_expiry=cfg.keepalive_expiry,
+            credit_warning_threshold=cfg.credit_warning_threshold,
+            credit_critical_threshold=cfg.credit_critical_threshold,
+            max_response_size_mb=cfg.max_response_size_mb,
         )
 
         self._api_key = api_key
-        self._timeout = int(timeout_sec)
+        self._timeout = int(cfg.timeout_sec)
         if base_url:
             urls = build_urls(base_url)
             self._base_url = urls["scrape"]
@@ -129,40 +144,40 @@ class FirecrawlClient:
             self._crawl_url = FIRECRAWL_CRAWL_URL
             self._batch_scrape_url = FIRECRAWL_BATCH_SCRAPE_URL
             self._extract_url = FIRECRAWL_EXTRACT_URL
-        self._max_retries = max(0, int(max_retries))
-        self._backoff_base = float(backoff_base)
+        self._max_retries = max(0, int(cfg.max_retries))
+        self._backoff_base = float(cfg.backoff_base)
         self._logger = logging.getLogger(__name__)
-        self._max_response_size_bytes = int(max_response_size_mb) * 1024 * 1024
+        self._max_response_size_bytes = int(cfg.max_response_size_mb) * 1024 * 1024
 
         self._options = FirecrawlOptionsBuilder(
-            max_age_seconds=max_age_seconds,
-            remove_base64_images=remove_base64_images,
-            block_ads=block_ads,
-            skip_tls_verification=skip_tls_verification,
-            include_markdown_format=include_markdown_format,
-            include_html_format=include_html_format,
-            include_links_format=include_links_format,
-            include_summary_format=include_summary_format,
-            include_images_format=include_images_format,
-            enable_screenshot_format=enable_screenshot_format,
-            screenshot_full_page=screenshot_full_page,
-            screenshot_quality=screenshot_quality,
-            screenshot_viewport_width=screenshot_viewport_width,
-            screenshot_viewport_height=screenshot_viewport_height,
-            json_prompt=json_prompt,
-            json_schema=json_schema,
-            wait_for_ms=wait_for_ms,
+            max_age_seconds=cfg.max_age_seconds,
+            remove_base64_images=cfg.remove_base64_images,
+            block_ads=cfg.block_ads,
+            skip_tls_verification=cfg.skip_tls_verification,
+            include_markdown_format=cfg.include_markdown_format,
+            include_html_format=cfg.include_html_format,
+            include_links_format=cfg.include_links_format,
+            include_summary_format=cfg.include_summary_format,
+            include_images_format=cfg.include_images_format,
+            enable_screenshot_format=cfg.enable_screenshot_format,
+            screenshot_full_page=cfg.screenshot_full_page,
+            screenshot_quality=cfg.screenshot_quality,
+            screenshot_viewport_width=cfg.screenshot_viewport_width,
+            screenshot_viewport_height=cfg.screenshot_viewport_height,
+            json_prompt=cfg.json_prompt,
+            json_schema=cfg.json_schema or None,
+            wait_for_ms=cfg.wait_for_ms,
         )
 
         self._payload_logger = PayloadLogger(
             audit=audit,
-            debug_payloads=debug_payloads,
-            log_truncate_length=log_truncate_length,
+            debug_payloads=cfg.debug_payloads,
+            log_truncate_length=cfg.log_truncate_length,
         )
 
         self._error_handler = ErrorHandler(
-            max_retries=max_retries,
-            backoff_base=backoff_base,
+            max_retries=cfg.max_retries,
+            backoff_base=cfg.backoff_base,
             max_response_size_bytes=self._max_response_size_bytes,
             payload_logger=self._payload_logger,
         )
@@ -173,9 +188,9 @@ class FirecrawlClient:
         )
 
         self._limits = httpx.Limits(
-            max_connections=int(max_connections),
-            max_keepalive_connections=int(max_keepalive_connections),
-            keepalive_expiry=float(keepalive_expiry),
+            max_connections=int(cfg.max_connections),
+            max_keepalive_connections=int(cfg.max_keepalive_connections),
+            keepalive_expiry=float(cfg.keepalive_expiry),
         )
         self._client = httpx.AsyncClient(timeout=self._timeout, limits=self._limits)
         self._circuit_breaker = circuit_breaker
@@ -190,12 +205,8 @@ class FirecrawlClient:
         log_truncate_length: int = 1000,
     ) -> FirecrawlClient:
         """Construct a FirecrawlClient from a FirecrawlConfig object."""
-        return cls(
-            api_key=cfg.api_key,
+        client_cfg = FirecrawlClientConfig(
             timeout_sec=cfg.timeout_sec,
-            audit=audit,
-            debug_payloads=debug_payloads,
-            log_truncate_length=log_truncate_length,
             max_connections=cfg.max_connections,
             max_keepalive_connections=cfg.max_keepalive_connections,
             keepalive_expiry=cfg.keepalive_expiry,
@@ -217,9 +228,12 @@ class FirecrawlClient:
             screenshot_viewport_width=cfg.screenshot_viewport_width,
             screenshot_viewport_height=cfg.screenshot_viewport_height,
             json_prompt=cfg.json_prompt,
-            json_schema=cfg.json_schema,
+            json_schema=cfg.json_schema or {},
             wait_for_ms=cfg.wait_for_ms,
+            debug_payloads=debug_payloads,
+            log_truncate_length=log_truncate_length,
         )
+        return cls(cfg.api_key, client_cfg, audit=audit)
 
     @property
     def circuit_breaker(self) -> CircuitBreaker | None:

@@ -6,7 +6,7 @@ concrete SQLite adapters or adapter-local compatibility protocols.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, runtime_checkable
 
 from app.domain.models.request import RequestStatus
 
@@ -15,6 +15,28 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from app.domain.models.summary import Summary as DomainSummary
+
+
+class LLMCallRecord(TypedDict, total=False):
+    """Typed record for persisting an LLM call."""
+
+    request_id: int | None
+    provider: str | None
+    model: str | None
+    endpoint: str | None
+    request_headers_json: Any
+    request_messages_json: Any
+    response_text: str | None
+    response_json: Any
+    tokens_prompt: int | None
+    tokens_completion: int | None
+    cost_usd: float | None
+    latency_ms: int | None
+    status: str | None
+    error_text: str | None
+    structured_output_used: bool | None
+    structured_output_mode: str | None
+    error_context_json: Any
 
 
 @runtime_checkable
@@ -273,27 +295,7 @@ class LLMRepositoryPort(Protocol):
     async def async_count_llm_calls_by_request(self, request_id: int) -> int:
         """Return the number of LLM calls by request ID."""
 
-    async def async_insert_llm_call(
-        self,
-        *,
-        request_id: int | None = None,
-        provider: str | None = None,
-        model: str | None = None,
-        endpoint: str | None = None,
-        request_headers_json: Any = None,
-        request_messages_json: Any = None,
-        response_text: str | None = None,
-        response_json: Any = None,
-        tokens_prompt: int | None = None,
-        tokens_completion: int | None = None,
-        cost_usd: float | None = None,
-        latency_ms: int | None = None,
-        status: str | None = None,
-        error_text: str | None = None,
-        structured_output_used: bool | None = None,
-        structured_output_mode: str | None = None,
-        error_context_json: Any = None,
-    ) -> int:
+    async def async_insert_llm_call(self, record: LLMCallRecord) -> int:
         """Persist an LLM call."""
 
     async def async_insert_llm_calls_batch(self, calls: list[dict[str, Any]]) -> list[int]:

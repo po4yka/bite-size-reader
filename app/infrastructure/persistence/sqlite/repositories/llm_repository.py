@@ -5,16 +5,19 @@ This adapter handles logging and retrieval of LLM call data.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import peewee
+
+if TYPE_CHECKING:
+    from app.application.ports import LLMCallRecord
 
 from app.db.json_utils import prepare_json_payload
 from app.db.models import LLMCall, model_to_dict
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
 
-def _build_llm_call_payload(call_data: dict[str, Any]) -> dict[str, Any]:
+def _build_llm_call_payload(call_data: dict[str, Any] | Any) -> dict[str, Any]:
     """Normalize LLM call payloads for single and batched inserts."""
     provider = call_data.get("provider")
     response_text = call_data.get("response_text")
@@ -57,11 +60,11 @@ def _build_llm_call_payload(call_data: dict[str, Any]) -> dict[str, Any]:
 class SqliteLLMRepositoryAdapter(SqliteBaseRepository):
     """Adapter for LLM call logging operations."""
 
-    async def async_insert_llm_call(self, **kwargs: Any) -> int:
+    async def async_insert_llm_call(self, record: LLMCallRecord) -> int:
         """Insert an LLM call log record."""
 
         def _insert() -> int:
-            call = LLMCall.create(**_build_llm_call_payload(kwargs))
+            call = LLMCall.create(**_build_llm_call_payload(record))
             return call.id
 
         return await self._execute(_insert, operation_name="insert_llm_call")

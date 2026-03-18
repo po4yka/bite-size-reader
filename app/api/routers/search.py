@@ -36,15 +36,6 @@ from app.infrastructure.cache.trending_cache import get_trending_payload
 
 logger = get_logger(__name__)
 router = APIRouter()
-SqliteTopicSearchRepositoryAdapter = get_topic_search_repository
-SqliteRequestRepositoryAdapter = get_request_repository
-SqliteSummaryRepositoryAdapter = get_summary_repository
-__all__ = [
-    "SqliteRequestRepositoryAdapter",
-    "SqliteSummaryRepositoryAdapter",
-    "SqliteTopicSearchRepositoryAdapter",
-    "router",
-]
 
 
 def _instantiate_repository(factory: Any) -> Any:
@@ -57,9 +48,9 @@ def _instantiate_repository(factory: Any) -> Any:
 
 def _build_search_repositories() -> tuple[Any, Any, Any]:
     return (
-        _instantiate_repository(SqliteTopicSearchRepositoryAdapter),
-        _instantiate_repository(SqliteRequestRepositoryAdapter),
-        _instantiate_repository(SqliteSummaryRepositoryAdapter),
+        _instantiate_repository(get_topic_search_repository),
+        _instantiate_repository(get_request_repository),
+        _instantiate_repository(get_summary_repository),
     )
 
 
