@@ -90,30 +90,30 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configuration
-ALLOWED_ORIGINS = Config.get("ALLOWED_ORIGINS", "").split(",")
-# Clean up empty strings and whitespace
-ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS if origin.strip()]
 
-# Default to localhost only if not configured (development mode)
-if not ALLOWED_ORIGINS:
-    logger.warning(
-        "ALLOWED_ORIGINS not configured - defaulting to localhost only. "
-        "Set ALLOWED_ORIGINS environment variable for production."
-    )
-    ALLOWED_ORIGINS = [
-        "http://localhost:3000",
-        "http://localhost:8080",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:8080",
-    ]
-else:
-    logger.info(f"CORS allowed origins: {ALLOWED_ORIGINS}")
+def _resolve_allowed_origins() -> list[str]:
+    """Read ALLOWED_ORIGINS at call time rather than import time."""
+    raw = Config.get("ALLOWED_ORIGINS", "").split(",")
+    origins = [o.strip() for o in raw if o.strip()]
+    if not origins:
+        logger.warning(
+            "ALLOWED_ORIGINS not configured - defaulting to localhost only. "
+            "Set ALLOWED_ORIGINS environment variable for production."
+        )
+        return [
+            "http://localhost:3000",
+            "http://localhost:8080",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8080",
+        ]
+    logger.info(f"CORS allowed origins: {origins}")
+    return origins
+
 
 # CORS middleware with specific origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,  # Only specific origins
+    allow_origins=_resolve_allowed_origins(),
     allow_credentials=True,
     allow_methods=[
         "GET",
