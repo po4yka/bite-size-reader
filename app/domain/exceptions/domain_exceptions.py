@@ -9,13 +9,6 @@ class DomainException(Exception):
     """Base exception for all domain errors."""
 
     def __init__(self, message: str, details: dict | None = None) -> None:
-        """Initialize domain exception.
-
-        Args:
-            message: Human-readable error message.
-            details: Optional dictionary with additional error context.
-
-        """
         super().__init__(message)
         self.message = message
         self.details = details or {}

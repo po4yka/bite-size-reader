@@ -8,6 +8,7 @@ from typing import Any
 from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.twitter.article_quality import is_low_quality_article_content
 from app.core.async_utils import raise_if_cancelled
+from app.core.call_status import CallStatus
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.observability.failure_observability import (
     REASON_FIRECRAWL_ERROR,
@@ -78,7 +79,7 @@ class TwitterFirecrawlExtractor:
                 )
 
             has_content = bool(
-                crawl.status == "ok"
+                crawl.status == CallStatus.OK
                 and not quality_issue
                 and (
                     (crawl.content_markdown and crawl.content_markdown.strip())

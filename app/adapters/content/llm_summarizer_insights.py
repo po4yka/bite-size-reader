@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
+from app.core.call_status import CallStatus
 from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
 
@@ -209,7 +210,7 @@ class LLMInsightsGenerator:
 
                     await self._workflow.persist_llm_call(llm, req_id, correlation_id)
 
-                    if llm.status != "ok":
+                    if llm.status != CallStatus.OK:
                         structured_error = (llm.error_text or "") == "structured_output_parse_error"
                         logger.warning(
                             "insights_llm_error",

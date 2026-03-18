@@ -37,12 +37,6 @@ class UserRateLimiter:
     """
 
     def __init__(self, config: RateLimitConfig | None = None) -> None:
-        """Initialize rate limiter with configuration.
-
-        Args:
-            config: Rate limit configuration. Uses defaults if None.
-
-        """
         self._config = config or RateLimitConfig()
         self._user_requests: dict[int, deque[float]] = defaultdict(deque)
         self._user_concurrent: dict[int, int] = defaultdict(int)

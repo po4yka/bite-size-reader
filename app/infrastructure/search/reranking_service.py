@@ -76,22 +76,16 @@ class RerankingService:
         if not query or not results:
             return results
 
-        # Determine how many to re-rank
         num_to_rerank = len(results) if self._top_k is None else min(self._top_k, len(results))
 
         if num_to_rerank == 0:
             return results
 
-        # Prepare query-document pairs for scoring
         pairs = []
         for result in results[:num_to_rerank]:
-            # Combine title and snippet for better scoring
             title = result.get(title_field, "")
             text = result.get(text_field, "")
-
-            # Create document text (title gets more weight by being first)
             doc_text = f"{title}. {text}".strip() if title else text
-
             pairs.append([query, doc_text])
 
         try:
@@ -101,7 +95,6 @@ class RerankingService:
                 "reranking_failed",
                 extra={"query": query[:100], "num_results": num_to_rerank},
             )
-            # Return original results if re-ranking fails
             return results
 
         reranked = []
@@ -112,7 +105,6 @@ class RerankingService:
 
         reranked.sort(key=lambda x: x[score_field], reverse=True)
 
-        # Append any results that weren't re-ranked
         if num_to_rerank < len(results):
             reranked.extend(results[num_to_rerank:])
 

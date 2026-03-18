@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.adapters.content.search_context_builder import SearchContextBuilder
 from app.agents.base_agent import AgentResult, BaseAgent
+from app.core.call_status import CallStatus
 from app.core.json_utils import extract_json
 from app.core.logging_utils import get_logger
 
@@ -210,7 +211,7 @@ class WebSearchAgent(BaseAgent[WebSearchAgentInput, WebSearchAgentOutput]):
             request_id=None,  # No DB persistence for analysis
         )
 
-        if result.status != "ok":
+        if result.status != CallStatus.OK:
             raise ValueError(f"LLM analysis failed: {result.error_text}")
 
         # Parse response

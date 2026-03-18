@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from app.core.async_utils import raise_if_cancelled
+from app.core.call_status import CallStatus
 from app.core.ui_strings import t
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.adapters.external.formatting.protocols import DataFormatter, ResponseSender
@@ -156,6 +160,7 @@ class NotificationFormatterImpl:
 
             await self._dispatch(message, debug_text, user_text, correlation_id=correlation_id)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_firecrawl_start_notification(
@@ -186,6 +191,7 @@ class NotificationFormatterImpl:
 
             await self._dispatch(message, debug_text, user_text)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_firecrawl_success_notification(
@@ -244,6 +250,7 @@ class NotificationFormatterImpl:
 
             await self._dispatch(message, debug_text, user_text, correlation_id=correlation_id)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_content_reuse_notification(
@@ -296,6 +303,7 @@ class NotificationFormatterImpl:
 
             await self._dispatch(message, debug_text, user_text, correlation_id=correlation_id)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_cached_summary_notification(self, message: Any, *, silent: bool = False) -> None:
@@ -310,6 +318,7 @@ class NotificationFormatterImpl:
             else:
                 await self._response_sender.safe_reply(message, text)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_html_fallback_notification(
@@ -336,6 +345,7 @@ class NotificationFormatterImpl:
 
             await self._dispatch(message, debug_text, user_text)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_language_detection_notification(
@@ -363,6 +373,7 @@ class NotificationFormatterImpl:
                     if domain and len(domain) <= 40:
                         url_line = f"Source: {domain}\n"
                 except Exception as exc:
+                    logger.debug("notification_send_failed", extra={"error": str(exc)})
                     raise_if_cancelled(exc)
 
             debug_text = (
@@ -384,6 +395,7 @@ class NotificationFormatterImpl:
 
             await self._dispatch(message, debug_text, user_text)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_content_analysis_notification(
@@ -435,6 +447,7 @@ class NotificationFormatterImpl:
 
             await self._dispatch(message, debug_text, user_text)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_llm_start_notification(
@@ -468,6 +481,7 @@ class NotificationFormatterImpl:
                     else:
                         url_line = f"{url[:47]}...\n"
                 except Exception as exc:
+                    logger.debug("notification_send_failed", extra={"error": str(exc)})
                     raise_if_cancelled(exc)
                     url_line = f"{url}\n" if len(url) <= 50 else f"{url[:47]}...\n"
 
@@ -492,6 +506,7 @@ class NotificationFormatterImpl:
 
             await self._dispatch(message, debug_text, user_text)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_llm_completion_notification(
@@ -504,7 +519,7 @@ class NotificationFormatterImpl:
             model_name = llm.model or "unknown"
             latency_sec = (llm.latency_ms or 0) / 1000.0
 
-            if llm.status == "ok":
+            if llm.status == CallStatus.OK:
                 prompt_tokens = llm.tokens_prompt or 0
                 completion_tokens = llm.tokens_completion or 0
                 tokens_used = prompt_tokens + completion_tokens
@@ -567,6 +582,7 @@ class NotificationFormatterImpl:
                 await self._response_sender.safe_reply(message, error_text)
                 await self._admin_log(error_text, correlation_id=correlation_id)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_forward_accepted_notification(self, message: Any, title: str) -> None:
@@ -590,6 +606,7 @@ class NotificationFormatterImpl:
             else:
                 await self._response_sender.safe_reply(message, user_text)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_forward_language_notification(self, message: Any, detected: str | None) -> None:
@@ -616,13 +633,14 @@ class NotificationFormatterImpl:
             else:
                 await self._response_sender.safe_reply(message, user_text)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_forward_completion_notification(self, message: Any, llm: Any) -> None:
         """Send forward completion notification."""
         try:
             reader = await self._is_reader_mode(message)
-            status_emoji = "OK" if llm.status == "ok" else "Error"
+            status_emoji = "OK" if llm.status == CallStatus.OK else "Error"
             latency_sec = (llm.latency_ms or 0) / 1000.0
             structured_info = ""
             if hasattr(llm, "structured_output_used") and llm.structured_output_used:
@@ -640,7 +658,7 @@ class NotificationFormatterImpl:
 
             user_text = (
                 t("ai_analysis_done", self._lang).format(secs=f"{latency_sec:.0f}")
-                if reader and llm.status == "ok"
+                if reader and llm.status == CallStatus.OK
                 else (t("analysis_failed", self._lang) if reader else debug_text)
             )
 
@@ -649,6 +667,7 @@ class NotificationFormatterImpl:
             else:
                 await self._response_sender.safe_reply(message, user_text)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_youtube_download_notification(
@@ -667,6 +686,7 @@ class NotificationFormatterImpl:
                 f"URL: {url[:60]}{'...' if len(url) > 60 else ''}",
             )
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_youtube_download_complete_notification(
@@ -692,6 +712,7 @@ class NotificationFormatterImpl:
                 "Generating summary from transcript...",
             )
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def send_error_notification(
@@ -717,6 +738,7 @@ class NotificationFormatterImpl:
             if should_admin_log:
                 await self._admin_log(error_text, correlation_id=correlation_id)
         except Exception as exc:
+            logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
     async def _emit_html_error(self, message: Any, error_text: str) -> None:

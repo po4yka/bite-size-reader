@@ -268,7 +268,7 @@ class ContentExtractorCrawlMixin:
             has_markdown = False
             has_html = False
 
-        if crawl.status != "ok" or not (has_markdown or has_html):
+        if crawl.status != CallStatus.OK or not (has_markdown or has_html):
             return await self._recover_or_raise_crawl_failure(
                 message,
                 req_id=req_id,
@@ -424,7 +424,7 @@ class ContentExtractorCrawlMixin:
 
     async def _write_firecrawl_cache(self, dedupe_hash: str, crawl: FirecrawlResult) -> None:
         """Persist Firecrawl response into Redis cache."""
-        if not self._cache.enabled or crawl.status != "ok":
+        if not self._cache.enabled or crawl.status != CallStatus.OK:
             return
 
         has_markdown = bool(crawl.content_markdown and crawl.content_markdown.strip())

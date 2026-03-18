@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app.core.call_status import CallStatus
 from app.core.content_cleaner import clean_content_for_llm
 from app.core.json_utils import dumps as json_dumps, extract_json
 from app.core.lang import LANG_RU
@@ -108,7 +109,7 @@ class PureSummaryService:
             )
             raise ValueError(f"LLM call failed: {exc}") from exc
 
-        if llm_result.status != "ok":
+        if llm_result.status != CallStatus.OK:
             error_msg = llm_result.error_text or "Unknown LLM error"
             logger.error(
                 "summarize_pure_llm_error",
@@ -200,7 +201,7 @@ class PureSummaryService:
                     request_id=None,
                 )
 
-            if llm_result.status != "ok":
+            if llm_result.status != CallStatus.OK:
                 logger.warning(
                     "two_pass_enrichment_failed",
                     extra={"cid": correlation_id, "error": llm_result.error_text},

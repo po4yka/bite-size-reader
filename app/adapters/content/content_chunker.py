@@ -8,6 +8,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.core.async_utils import raise_if_cancelled
+from app.core.call_status import CallStatus
 from app.core.html_utils import chunk_sentences, split_sentences
 from app.core.lang import LANG_RU
 from app.core.summary_aggregate import aggregate_chunk_summaries
@@ -162,7 +163,7 @@ class ContentChunker:
                     request_id=req_id,
                     response_format=response_format_cf,
                 )
-            if resp.status != "ok":
+            if resp.status != CallStatus.OK:
                 logger.warning(
                     "chunk_summary_llm_error",
                     extra={
@@ -252,7 +253,7 @@ class ContentChunker:
                 response_format=response_format_cf,
             )
 
-        if resp.status != "ok":
+        if resp.status != CallStatus.OK:
             logger.warning(
                 "synthesis_llm_error",
                 extra={

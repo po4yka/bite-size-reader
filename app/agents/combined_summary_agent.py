@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.agents.base_agent import AgentResult, BaseAgent
+from app.core.call_status import CallStatus
 from app.core.json_utils import extract_json
 from app.core.logging_utils import get_logger
 from app.models.batch_analysis import (
@@ -109,7 +110,7 @@ class CombinedSummaryAgent(BaseAgent[CombinedSummaryInput, CombinedSummaryOutput
             on_stream_delta=self._on_stream_delta,
         )
 
-        if result.status != "ok":
+        if result.status != CallStatus.OK:
             self.log_warning(f"LLM combined summary failed: {result.error_text}")
             return None
 

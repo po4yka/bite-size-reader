@@ -21,6 +21,7 @@ from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.content.scraper.protocol import ContentScraperProtocol
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.config import AppConfig
+from app.core.call_status import CallStatus
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.lang import detect_language
 from app.core.url_utils import normalize_url, url_hash_sha256
@@ -200,7 +201,7 @@ class ContentExtractor(
         has_markdown = bool(crawl.content_markdown and crawl.content_markdown.strip())
         has_html = bool(crawl.content_html and crawl.content_html.strip())
 
-        if crawl.status != "ok" or not (has_markdown or has_html):
+        if crawl.status != CallStatus.OK or not (has_markdown or has_html):
             error_msg = crawl.error_text or "Content extraction failed"
             if request_id is not None:
                 await persist_request_failure(

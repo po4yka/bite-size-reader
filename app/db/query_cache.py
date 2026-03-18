@@ -28,11 +28,6 @@ class QueryCache:
     """
 
     def __init__(self, max_size: int = 128):
-        """Initialize query cache.
-
-        Args:
-            max_size: Maximum number of cached results per query type
-        """
         self.max_size = max_size
         self.stats = {
             "hits": 0,

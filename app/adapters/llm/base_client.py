@@ -323,7 +323,7 @@ class BaseLLMClient:
                     try:
                         result = await attempt_fn(client=client, model=model, attempt=attempt)
 
-                        if result.status == "ok":
+                        if result.status == CallStatus.OK:
                             if self._circuit_breaker:
                                 self._circuit_breaker.record_success()
                             return result

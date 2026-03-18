@@ -31,12 +31,6 @@ class SchedulerService:
         *,
         deps: SchedulerDependencies | None = None,
     ) -> None:
-        """Initialize scheduler service.
-
-        Args:
-            cfg: Application configuration
-            db: DatabaseSessionManager instance
-        """
         self.cfg = cfg
         self.db = db
         self._deps = deps or build_scheduler_dependencies(cfg, db)

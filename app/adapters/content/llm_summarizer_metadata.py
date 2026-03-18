@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
+from app.core.call_status import CallStatus
 from app.core.json_utils import extract_json
 from app.core.url_utils import extract_domain
 
@@ -400,7 +401,7 @@ class LLMSummaryMetadataHelper:
 
         await self._workflow.persist_llm_call(llm, req_id, correlation_id)
 
-        if llm.status != "ok":
+        if llm.status != CallStatus.OK:
             logger.warning(
                 "metadata_completion_failed",
                 extra={"cid": correlation_id, "status": llm.status, "error": llm.error_text},

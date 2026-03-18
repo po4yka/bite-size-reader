@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app.core.call_status import CallStatus
 from app.core.json_utils import extract_json
 from app.core.time_utils import utc_now
 from app.db.models import ChannelPost, ChannelPostAnalysis
@@ -208,7 +209,7 @@ class DigestAnalyzer:
                 max_tokens=500,
             )
 
-            if result.status != "ok" or result.error_text:
+            if result.status != CallStatus.OK or result.error_text:
                 logger.warning(
                     "digest_llm_error",
                     extra={"cid": correlation_id, "error": result.error_text},

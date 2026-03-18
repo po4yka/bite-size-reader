@@ -69,7 +69,6 @@ def profile_query(
                 elapsed_ms = (time.perf_counter() - start) * 1000
                 _record_query(op_name, elapsed_ms, threshold_ms, func.__name__)
 
-        # Return appropriate wrapper based on function type
         import asyncio
 
         if asyncio.iscoroutinefunction(func):
@@ -109,7 +108,6 @@ def _record_query(
     func_name: str,
 ) -> None:
     """Record query execution and log if slow."""
-    # Record metrics if prometheus is available
     record_db_query: Callable[[str, float], None] | None = None
     metrics_available = True
     try:
@@ -122,7 +120,6 @@ def _record_query(
     if metrics_available and record_db_query is not None:
         record_db_query(operation, elapsed_ms / 1000)
 
-    # Log slow queries
     if elapsed_ms >= threshold_ms:
         logger.warning(
             "slow_query_detected",

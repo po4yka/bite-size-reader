@@ -13,6 +13,7 @@ by request_service.py once the digest domain stabilizes.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from app.api.services.digest_api_service import DigestAPIService
@@ -129,6 +130,7 @@ class DigestFacade:
         return self._service().bulk_assign_category(user_id, subscription_ids, category_id)
 
 
+@lru_cache(maxsize=1)
 def get_digest_facade() -> DigestFacade:
     """FastAPI dependency provider for DigestFacade."""
     return DigestFacade()

@@ -54,7 +54,6 @@ class SummaryValidator:
             ValidationError: If content quality is insufficient.
 
         """
-        # Check that at least one summary field has content
         tldr = content.get("tldr", "")
         summary_250 = content.get("summary_250", "")
         summary_1000 = content.get("summary_1000", "")
@@ -70,7 +69,6 @@ class SummaryValidator:
                 details={"fields_checked": ["tldr", "summary_250", "summary_1000"]},
             )
 
-        # Check that key_ideas is a non-empty list
         key_ideas = content.get("key_ideas", [])
         if not isinstance(key_ideas, list) or not key_ideas:
             msg = "Summary must have at least one key idea"
@@ -97,7 +95,6 @@ class SummaryValidator:
                 details={"language": language},
             )
 
-        # Check that it's not just whitespace
         if not language.strip():
             msg = "Language cannot be empty or whitespace"
             raise ValidationError(
@@ -105,7 +102,6 @@ class SummaryValidator:
                 details={"language": language},
             )
 
-        # Check reasonable length (ISO codes are 2-3 characters, but allow up to 10 for variants)
         if len(language.strip()) > 10:
             msg = "Language code is too long"
             raise ValidationError(
@@ -124,16 +120,10 @@ class SummaryValidator:
             ValidationError: If summary is invalid.
 
         """
-        # Validate language
         SummaryValidator.validate_language(summary.language)
-
-        # Validate content structure
         SummaryValidator.validate_content_structure(summary.content)
-
-        # Validate content quality
         SummaryValidator.validate_content_quality(summary.content)
 
-        # Validate request_id
         if summary.request_id <= 0:
             msg = "Summary must have a valid request_id"
             raise ValidationError(

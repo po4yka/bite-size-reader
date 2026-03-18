@@ -8,6 +8,7 @@ import logging
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
+from app.core.call_status import CallStatus
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.domain.models.request import RequestStatus
 from app.utils.json_validation import finalize_summary_texts
@@ -36,7 +37,7 @@ class LLMWorkflowAttemptsMixin:
 
     async def _process_attempt(self, ctx: AttemptContext) -> dict[str, Any] | None:
         """Process a single LLM attempt using a typed context bundle."""
-        if ctx.llm.status != "ok":
+        if ctx.llm.status != CallStatus.OK:
             salvage = None
             if (ctx.llm.error_text or "") == "structured_output_parse_error":
                 salvage = self._attempt_salvage_parsing(ctx.llm, ctx.correlation_id)

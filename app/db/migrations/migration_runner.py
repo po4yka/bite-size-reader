@@ -60,11 +60,6 @@ class MigrationRunner:
     """Manages database schema migrations with version tracking."""
 
     def __init__(self, db: DatabaseSessionManager | Any):
-        """Initialize migration runner.
-
-        Args:
-            db: DatabaseSessionManager or Database instance to run migrations against
-        """
         self.db = db
         self._ensure_migration_table()
 

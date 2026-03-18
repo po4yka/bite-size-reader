@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.core.call_status import CallStatus
 from app.mcp.helpers import format_summary_compact, isotime, paginated_payload
 
 logger = logging.getLogger("bsr.mcp")
@@ -238,7 +239,7 @@ class CatalogReadService:
             success_calls = (
                 LLMCall.select(LLMCall.id)
                 .join(Request)
-                .where(*llm_scope_filters, LLMCall.status == "ok")
+                .where(*llm_scope_filters, LLMCall.status == CallStatus.OK)
                 .count()
             )
             error_calls = (
@@ -256,7 +257,7 @@ class CatalogReadService:
                     fn.AVG(LLMCall.latency_ms).alias("avg_latency_ms"),
                 )
                 .join(Request)
-                .where(*llm_scope_filters, LLMCall.status == "ok")
+                .where(*llm_scope_filters, LLMCall.status == CallStatus.OK)
                 .dicts()
                 .first()
             ) or {}
@@ -265,7 +266,11 @@ class CatalogReadService:
             for row in (
                 LLMCall.select(LLMCall.model)
                 .join(Request)
-                .where(*llm_scope_filters, LLMCall.status == "ok", LLMCall.model.is_null(False))
+                .where(
+                    *llm_scope_filters,
+                    LLMCall.status == CallStatus.OK,
+                    LLMCall.model.is_null(False),
+                )
                 .dicts()
             ):
                 model = row.get("model") or "unknown"

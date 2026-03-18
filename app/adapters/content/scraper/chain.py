@@ -63,7 +63,7 @@ class ContentScraperChain:
                 )
                 continue
 
-            has_content = result.status == "ok" and (
+            has_content = result.status == CallStatus.OK and (
                 bool(result.content_markdown and result.content_markdown.strip())
                 or bool(result.content_html and result.content_html.strip())
             )

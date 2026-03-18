@@ -30,12 +30,6 @@ class SecureFileValidator:
     MAX_LINES = 10000  # Maximum lines in file
 
     def __init__(self, max_file_size: int | None = None) -> None:
-        """Initialize file validator.
-
-        Args:
-            max_file_size: Maximum allowed file size in bytes. Uses default if None.
-
-        """
         self._max_file_size = max_file_size or self.MAX_FILE_SIZE_BYTES
         self._allowed_dirs = self._get_allowed_directories()
 

@@ -20,11 +20,6 @@ class BatchOperations:
     """Provides batch insert/update operations for database efficiency."""
 
     def __init__(self, database: peewee.Database):
-        """Initialize batch operations.
-
-        Args:
-            database: Peewee database instance
-        """
         self.database = database
 
     def insert_llm_calls_batch(
@@ -57,7 +52,6 @@ class BatchOperations:
         call_ids = []
         with self.database.atomic():
             for call_data in calls:
-                # Prepare JSON payloads
                 request_id = call_data.get("request_id")
                 provider = call_data.get("provider")
                 model = call_data.get("model")
@@ -69,7 +63,6 @@ class BatchOperations:
                 cost_usd = call_data.get("cost_usd")
                 latency_ms = call_data.get("latency_ms")
 
-                # Create LLM call
                 call = LLMCall.create(
                     request=request_id,
                     provider=provider,

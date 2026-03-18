@@ -35,12 +35,6 @@ class DatabaseHealthCheck:
     """Performs comprehensive database health checks."""
 
     def __init__(self, database: peewee.Database, db_path: str):
-        """Initialize health check system.
-
-        Args:
-            database: Peewee database instance
-            db_path: Path to SQLite database file
-        """
         self.database = database
         self.db_path = db_path
 
@@ -54,7 +48,6 @@ class DatabaseHealthCheck:
         checks: dict[str, dict[str, Any]] = {}
         errors: list[str] = []
 
-        # Run individual checks
         checks["connectivity"] = self._check_connectivity()
         checks["foreign_keys"] = self._check_foreign_keys()
         checks["indexes"] = self._check_indexes()
@@ -63,18 +56,15 @@ class DatabaseHealthCheck:
         checks["data_integrity"] = self._check_data_integrity()
         checks["wal_mode"] = self._check_wal_mode()
 
-        # Collect errors
         for check_name, check_result in checks.items():
             if not check_result.get("healthy", True):
                 error_msg = check_result.get("error", f"{check_name} check failed")
                 errors.append(error_msg)
 
-        # Calculate overall score
         healthy_checks = sum(1 for check in checks.values() if check.get("healthy", False))
         total_checks = len(checks)
         overall_score = healthy_checks / total_checks if total_checks > 0 else 0.0
 
-        # Determine overall status
         if overall_score >= 0.9:
             status = "healthy"
             healthy = True

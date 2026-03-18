@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.backoff import sleep_backoff
+from app.core.call_status import CallStatus
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Sequence
@@ -123,7 +124,7 @@ class LLMWorkflowExecutionMixin:
             if (
                 notifications
                 and notifications.completion
-                and (llm.status == "ok" or is_last_attempt)
+                and (llm.status == CallStatus.OK or is_last_attempt)
             ):
                 await notifications.completion(llm, attempt)
 
