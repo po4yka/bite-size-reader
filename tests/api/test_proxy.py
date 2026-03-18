@@ -1,9 +1,9 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException
 from httpx import RequestError, Response
 
+from app.api.exceptions import ExternalAPIError, ResourceNotFoundError, ValidationError
 from app.api.routers.proxy import proxy_image
 
 
@@ -37,9 +37,8 @@ async def test_proxy_image_success():
 @pytest.mark.asyncio
 async def test_proxy_image_invalid_scheme():
     """Test rejection of non-http/https URLs."""
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ValidationError):
         await proxy_image("ftp://example.com/image.jpg")
-    assert exc.value.status_code == 400
 
 
 @pytest.mark.asyncio
@@ -54,9 +53,8 @@ async def test_proxy_image_not_found():
         mock_client_cls.return_value.__aenter__.return_value = mock_client
         mock_client.send.return_value = mock_response
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ResourceNotFoundError):
             await proxy_image("https://example.com/missing.jpg")
-        assert exc.value.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -72,9 +70,8 @@ async def test_proxy_image_not_an_image():
         mock_client_cls.return_value.__aenter__.return_value = mock_client
         mock_client.send.return_value = mock_response
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValidationError):
             await proxy_image("https://example.com/page.html")
-        assert exc.value.status_code == 400
 
 
 @pytest.mark.asyncio
@@ -85,9 +82,8 @@ async def test_proxy_image_request_error():
         mock_client_cls.return_value.__aenter__.return_value = mock_client
         mock_client.send.side_effect = RequestError("Connection failed")
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ExternalAPIError):
             await proxy_image("https://example.com/image.jpg")
-        assert exc.value.status_code == 502
 
 
 @pytest.mark.asyncio
@@ -106,9 +102,8 @@ async def test_proxy_image_rejects_declared_too_large_content():
         mock_client_cls.return_value.__aenter__.return_value = mock_client
         mock_client.send.return_value = mock_response
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValidationError):
             await proxy_image("https://example.com/huge.jpg")
-        assert exc.value.status_code == 413
 
 
 @pytest.mark.asyncio
@@ -126,6 +121,5 @@ async def test_proxy_image_rejects_stream_too_large_content():
         mock_client_cls.return_value.__aenter__.return_value = mock_client
         mock_client.send.return_value = mock_response
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValidationError):
             await proxy_image("https://example.com/huge-stream.jpg")
-        assert exc.value.status_code == 413

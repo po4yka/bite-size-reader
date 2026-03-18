@@ -33,8 +33,12 @@ async def test_toggle_favorite(db, user_factory):
 
     assert not summary.is_favorited
 
+    use_case = summaries._get_summary_use_case()
+
     # Toggle ON
-    response = await summaries.toggle_favorite(summary_id=summary.id, user=user_context)
+    response = await summaries.toggle_favorite(
+        summary_id=summary.id, user=user_context, use_case=use_case
+    )
     assert response["success"] is True
     assert response["data"]["isFavorited"] is True
 
@@ -42,7 +46,9 @@ async def test_toggle_favorite(db, user_factory):
     assert summary.is_favorited is True
 
     # Toggle OFF
-    response = await summaries.toggle_favorite(summary_id=summary.id, user=user_context)
+    response = await summaries.toggle_favorite(
+        summary_id=summary.id, user=user_context, use_case=use_case
+    )
     assert response["data"]["isFavorited"] is False
 
     summary = Summary.get_by_id(summary.id)
@@ -62,6 +68,8 @@ async def test_get_summaries_filter(db, user_factory, summary_factory):
     # S2: Not Favorited
     s2 = summary_factory(user=user)
 
+    use_case = summaries._get_summary_use_case()
+
     # All
     resp = await summaries.get_summaries(
         user=user_context,
@@ -73,6 +81,7 @@ async def test_get_summaries_filter(db, user_factory, summary_factory):
         lang=None,
         start_date=None,
         end_date=None,
+        use_case=use_case,
     )
     data = resp["data"]["summaries"]
     ids = [s["id"] for s in data]
@@ -90,6 +99,7 @@ async def test_get_summaries_filter(db, user_factory, summary_factory):
         lang=None,
         start_date=None,
         end_date=None,
+        use_case=use_case,
     )
     data = resp["data"]["summaries"]
     assert len(data) == 1
@@ -106,6 +116,7 @@ async def test_get_summaries_filter(db, user_factory, summary_factory):
         lang=None,
         start_date=None,
         end_date=None,
+        use_case=use_case,
     )
     data = resp["data"]["summaries"]
     ids = [s["id"] for s in data]

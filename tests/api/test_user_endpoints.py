@@ -43,6 +43,8 @@ import typing
 enum.StrEnum = StrEnum  # type: ignore[misc,assignment]
 typing.NotRequired = NotRequired  # type: ignore[assignment]
 
+import app.di.database as _di_database
+from app.api.dependencies.database import clear_session_manager
 from app.db.models import Request, Summary, User, database_proxy
 from app.db.session import DatabaseSessionManager
 
@@ -57,17 +59,18 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def user_db(tmp_path):
     """Create an isolated test database with proper database_proxy handling."""
-    # Save the original database proxy state
     old_proxy_obj = database_proxy.obj
+
+    clear_session_manager()
 
     db = DatabaseSessionManager(str(tmp_path / "test-user.db"))
     db.migrate()
-    # Initialize the global database proxy so models use this database
     database_proxy.initialize(db._database)
+    _di_database._cached_runtime_db = db
 
     yield db
 
-    # Close the database and restore original proxy
+    clear_session_manager()
     db._database.close()
     database_proxy.initialize(old_proxy_obj)
 
