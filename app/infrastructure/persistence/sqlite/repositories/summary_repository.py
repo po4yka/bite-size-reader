@@ -6,6 +6,7 @@ This adapter translates between domain Summary models and database records.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import uuid
 from collections.abc import Mapping
@@ -63,6 +64,9 @@ def _upsert_summary_record(
 
         summary = Summary.get_or_none(Summary.request == request_id)
         return summary.version if summary else 1
+
+
+logger = logging.getLogger(__name__)
 
 
 class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
@@ -594,6 +598,7 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
             cursor = self._session.database.execute_sql(sql, (fts_query, candidate_limit))
             rows = list(cursor)
         except Exception:
+            logger.warning("fts_query_failed", extra={"query": fts_query}, exc_info=True)
             return None
 
         request_ids: list[int] = []
