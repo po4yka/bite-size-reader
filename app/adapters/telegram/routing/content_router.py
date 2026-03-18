@@ -362,6 +362,9 @@ class MessageContentRouter:
         fwd_msg_id = getattr(message, "forward_from_message_id", None)
         fwd_from_user = getattr(message, "forward_from", None)
         fwd_sender_name = getattr(message, "forward_sender_name", None)
+        fwd_text = (
+            getattr(message, "text", None) or getattr(message, "caption", None) or ""
+        ).strip()
 
         if fwd_chat is not None and fwd_msg_id is not None:
             await self.forward_processor.handle_forward_flow(
@@ -372,9 +375,6 @@ class MessageContentRouter:
             return
 
         if fwd_from_user is not None or fwd_sender_name:
-            fwd_text = (
-                getattr(message, "text", None) or getattr(message, "caption", None) or ""
-            ).strip()
             if fwd_text:
                 await self.forward_processor.handle_forward_flow(
                     message,
@@ -392,9 +392,6 @@ class MessageContentRouter:
             await self._reply_forward_no_text(context, interaction_id, start_time)
             return
 
-        fwd_text = (
-            getattr(message, "text", None) or getattr(message, "caption", None) or ""
-        ).strip()
         if fwd_text:
             await self.forward_processor.handle_forward_flow(
                 message,
