@@ -37,11 +37,12 @@ class DigestFacade:
         config_factory: Callable[[], ChannelDigestConfig] | None = None,
         service_factory: Callable[[ChannelDigestConfig], DigestAPIService] | None = None,
     ) -> None:
-        self._config_factory = config_factory or ChannelDigestConfig
-        self._service_factory = service_factory or DigestAPIService
+        cfg_factory = config_factory or ChannelDigestConfig
+        svc_factory = service_factory or DigestAPIService
+        self._svc = svc_factory(cfg_factory())
 
     def _service(self) -> DigestAPIService:
-        return self._service_factory(self._config_factory())
+        return self._svc
 
     # --- Channels ---
 
