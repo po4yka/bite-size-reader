@@ -36,8 +36,14 @@ class UserRateLimiter:
     - Audit logging
     """
 
-    def __init__(self, config: RateLimitConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: RateLimitConfig | None = None,
+        *,
+        clock: Any = None,
+    ) -> None:
         self._config = config or RateLimitConfig()
+        self._clock: Any = clock or time.time
         self._user_requests: dict[int, deque[float]] = defaultdict(deque)
         self._user_concurrent: dict[int, int] = defaultdict(int)
         self._user_cooldowns: dict[int, float] = {}
@@ -58,7 +64,7 @@ class UserRateLimiter:
 
         """
         async with self._lock:
-            now = time.time()
+            now = self._clock()
 
             if user_id in self._user_cooldowns:
                 cooldown_until = self._user_cooldowns[user_id]
@@ -214,7 +220,7 @@ class UserRateLimiter:
 
         """
         async with self._lock:
-            now = time.time()
+            now = self._clock()
             user_queue = self._user_requests[user_id]
 
             cutoff_time = now - self._config.window_seconds
@@ -261,7 +267,7 @@ class UserRateLimiter:
 
         """
         async with self._lock:
-            now = time.time()
+            now = self._clock()
             cutoff_time = now - self._config.window_seconds
             cleaned_users = 0
 
@@ -295,10 +301,18 @@ class UserRateLimiter:
 class RedisUserRateLimiter:
     """Redis-backed per-user rate limiter with concurrency control."""
 
-    def __init__(self, redis_client: aioredis.Redis, config: RateLimitConfig, prefix: str) -> None:
+    def __init__(
+        self,
+        redis_client: aioredis.Redis,
+        config: RateLimitConfig,
+        prefix: str,
+        *,
+        clock: Any = None,
+    ) -> None:
         self._redis = redis_client
         self._config = config
         self._prefix = prefix
+        self._clock: Any = clock or time.time
         self.last_remaining: int = 0
 
     def _window_key(self, user_id: int | str, window_start: int) -> str:
@@ -325,7 +339,7 @@ class RedisUserRateLimiter:
             requests in the current window (or the retry-after value on rejection).
 
         """
-        now = time.time()
+        now = self._clock()
         window_start = int(now // self._config.window_seconds) * self._config.window_seconds
         key = self._window_key(user_id, window_start)
         ttl = max(

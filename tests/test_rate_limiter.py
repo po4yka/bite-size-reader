@@ -1,6 +1,5 @@
 """Tests for rate limiter security module."""
 
-import asyncio
 import time
 import unittest
 
@@ -31,12 +30,15 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
         assert "Rate limit exceeded" in msg
 
     async def test_sliding_window(self):
-        """Test sliding window behavior."""
-        limiter = UserRateLimiter(RateLimitConfig(max_requests=2, window_seconds=1))
+        """Test sliding window behavior using injected clock."""
+        _now = [0.0]
+        limiter = UserRateLimiter(
+            RateLimitConfig(max_requests=2, window_seconds=1), clock=lambda: _now[0]
+        )
 
         user_id = 12345
 
-        # Make 2 requests
+        # Make 2 requests at t=0
         await limiter.check_and_record(user_id)
         await limiter.check_and_record(user_id)
 
@@ -44,8 +46,8 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
         allowed, _ = await limiter.check_and_record(user_id)
         assert not allowed
 
-        # Wait for window to expire
-        await asyncio.sleep(1.1)
+        # Advance clock past window + cooldown (both 1s)
+        _now[0] = 2.0
 
         # Should work again
         allowed, _ = await limiter.check_and_record(user_id)
@@ -53,7 +55,10 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
 
     async def test_default_cooldown_allows_after_window(self):
         """Ensure default cooldown duration matches the sliding window length."""
-        limiter = UserRateLimiter(RateLimitConfig(max_requests=2, window_seconds=1))
+        _now = [0.0]
+        limiter = UserRateLimiter(
+            RateLimitConfig(max_requests=2, window_seconds=1), clock=lambda: _now[0]
+        )
 
         user_id = 54321
 
@@ -66,8 +71,8 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
         assert message is not None
         assert "Cooldown active for 1 seconds" in message
 
-        # Wait just longer than the configured window/cooldown length
-        await asyncio.sleep(1.05)
+        # Advance clock past window/cooldown
+        _now[0] = 2.0
 
         allowed, message = await limiter.check_and_record(user_id)
         assert allowed
@@ -142,7 +147,7 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
         await limiter.check_and_record(user_id)
         await limiter.acquire_concurrent_slot(user_id)
 
-        status = await limiter.get_user_status(user_id)
+        status = await limiter.compute_user_status(user_id)
 
         assert status["user_id"] == user_id
         assert status["requests_in_window"] == 2
@@ -171,30 +176,35 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
         assert allowed
 
     async def test_cleanup_expired(self):
-        """Test cleanup of expired entries."""
-        limiter = UserRateLimiter(RateLimitConfig(max_requests=5, window_seconds=1))
+        """Test cleanup of expired entries using injected clock."""
+        _now = [0.0]
+        limiter = UserRateLimiter(
+            RateLimitConfig(max_requests=5, window_seconds=1), clock=lambda: _now[0]
+        )
 
-        # Create requests for multiple users
+        # Create requests for multiple users at t=0
         await limiter.check_and_record(111)
         await limiter.check_and_record(222)
         await limiter.check_and_record(333)
 
-        # Wait for window to expire
-        await asyncio.sleep(1.1)
+        # Advance clock past window
+        _now[0] = 2.0
 
         # Cleanup should remove all users
         cleaned = await limiter.cleanup_expired()
         assert cleaned == 3
 
     async def test_cooldown_after_limit(self):
-        """Test that cooldown is applied after exceeding limit."""
+        """Test that cooldown is applied after exceeding limit (using injected clock)."""
+        _now = [0.0]
         limiter = UserRateLimiter(
-            RateLimitConfig(max_requests=2, window_seconds=1, cooldown_multiplier=2.0)
+            RateLimitConfig(max_requests=2, window_seconds=1, cooldown_multiplier=2.0),
+            clock=lambda: _now[0],
         )
 
         user_id = 12345
 
-        # Exhaust limit
+        # Exhaust limit at t=0
         await limiter.check_and_record(user_id)
         await limiter.check_and_record(user_id)
 
@@ -203,8 +213,8 @@ class TestRateLimiter(unittest.IsolatedAsyncioTestCase):
         assert not allowed
         assert "Cooldown active" in msg
 
-        # Wait for window but not cooldown
-        await asyncio.sleep(1.1)
+        # Advance past window (1s) but not cooldown (2s)
+        _now[0] = 1.5
 
         # Should still be in cooldown (2x window = 2 seconds)
         allowed, msg = await limiter.check_and_record(user_id)
