@@ -78,14 +78,7 @@ class RelationshipAnalysisAgent(BaseAgent[RelationshipAnalysisInput, Relationshi
     async def execute(
         self, input_data: RelationshipAnalysisInput
     ) -> AgentResult[RelationshipAnalysisOutput]:
-        """Analyze relationships between articles.
-
-        Args:
-            input_data: Articles and analysis parameters
-
-        Returns:
-            AgentResult with relationship detection output
-        """
+        """Analyze relationships between articles."""
         self.correlation_id = input_data.correlation_id
         articles = input_data.articles
 

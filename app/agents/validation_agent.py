@@ -42,14 +42,7 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
         super().__init__(name="ValidationAgent", correlation_id=correlation_id)
 
     async def execute(self, input_data: ValidationInput) -> AgentResult[ValidationOutput]:
-        """Validate summary JSON against strict contract.
-
-        Args:
-            input_data: Summary JSON to validate
-
-        Returns:
-            AgentResult with validated summary or detailed errors
-        """
+        """Validate summary JSON against strict contract."""
         summary = input_data.summary_json
         self.log_info("Starting summary validation")
 

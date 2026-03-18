@@ -181,23 +181,10 @@ class AgentOrchestrator:
         )
 
     async def execute_pipeline(self, input_data: PipelineInput) -> dict[str, Any]:
-        """Execute the complete multi-agent summarization pipeline.
-
-        Args:
-            input_data: Pipeline parameters including URL and options
-
-        Returns:
-            Result dictionary with summary or error information
-
-        Raises:
-            Exception: If pipeline execution fails
-        """
+        """Execute the complete multi-agent summarization pipeline."""
         correlation_id = input_data.correlation_id
 
         self._log("info", f"Starting pipeline for URL: {input_data.url}", correlation_id)
-
-        # Phase 1: Content Extraction
-        self._log("info", "Phase 1: Content Extraction", correlation_id)
 
         extraction_result = await self.extraction_agent.execute(
             ExtractionInput(
@@ -217,9 +204,6 @@ class AgentOrchestrator:
             f"Extraction successful - {len(extracted_output.content_markdown)} chars",
             correlation_id,
         )
-
-        # Phase 2: Summarization with Validation Feedback Loop
-        self._log("info", "Phase 2: Summarization with Feedback Loop", correlation_id)
 
         summarization_result = await self.summarization_agent.execute(
             SummarizationInput(
@@ -244,7 +228,6 @@ class AgentOrchestrator:
             correlation_id,
         )
 
-        # Build final output
         pipeline_output = PipelineOutput(
             summary_json=summary_output.summary_json,
             normalized_url=extracted_output.normalized_url,
@@ -268,19 +251,9 @@ class AgentOrchestrator:
     async def execute_pipeline_streaming(
         self, input_data: PipelineInput
     ) -> AsyncIterator[PipelineProgress | dict[str, Any]]:
-        """Execute pipeline with streaming progress updates.
-
-        Yields progress updates during execution, then final result.
-
-        Args:
-            input_data: Pipeline parameters
-
-        Yields:
-            PipelineProgress objects during execution, final result dict at end
-        """
+        """Execute pipeline with streaming progress updates, yielding final result at end."""
         correlation_id = input_data.correlation_id
 
-        # Initialize state if persistence enabled
         state: PipelineState | None = None
         if input_data.enable_state_persistence and input_data.state_dir:
             state = PipelineState.load(correlation_id, input_data.state_dir)
@@ -293,7 +266,6 @@ class AgentOrchestrator:
                     message=f"Resuming from {state.stage.value} stage",
                 )
 
-        # Phase 1: Extraction
         if not state or state.stage == PipelineStage.EXTRACTION:
             yield PipelineProgress(
                 correlation_id=correlation_id,
@@ -326,7 +298,6 @@ class AgentOrchestrator:
                 metadata={"content_length": len(extraction_result.output.content_markdown)},
             )
 
-            # Save state if enabled
             if input_data.enable_state_persistence and input_data.state_dir:
                 state = PipelineState(
                     correlation_id=correlation_id,
@@ -340,7 +311,6 @@ class AgentOrchestrator:
                 )
                 state.save(input_data.state_dir)
 
-        # Phase 2: Summarization
         yield PipelineProgress(
             correlation_id=correlation_id,
             stage=PipelineStage.SUMMARIZATION,
@@ -383,7 +353,6 @@ class AgentOrchestrator:
             validation_warnings=summarization_result.output.corrections_applied,
         )
 
-        # Clean up state file if persistence enabled
         if input_data.enable_state_persistence and input_data.state_dir:
             state_file = input_data.state_dir / f"{correlation_id}.json"
             if state_file.exists():
@@ -395,14 +364,7 @@ class AgentOrchestrator:
     async def execute_batch_pipeline(
         self, input_data: BatchPipelineInput
     ) -> list[BatchPipelineOutput]:
-        """Execute pipeline for multiple URLs in parallel.
-
-        Args:
-            input_data: Batch parameters including URLs and concurrency limit
-
-        Returns:
-            List of results for each URL
-        """
+        """Execute pipeline for multiple URLs in parallel with concurrency limiting."""
         semaphore = asyncio.Semaphore(input_data.max_concurrent)
 
         async def process_url(url: str, index: int) -> BatchPipelineOutput:

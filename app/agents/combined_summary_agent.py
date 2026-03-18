@@ -49,14 +49,7 @@ class CombinedSummaryAgent(BaseAgent[CombinedSummaryInput, CombinedSummaryOutput
         self._on_stream_delta = on_stream_delta
 
     async def execute(self, input_data: CombinedSummaryInput) -> AgentResult[CombinedSummaryOutput]:
-        """Generate combined summary for related articles.
-
-        Args:
-            input_data: Articles, relationship info, and full summaries
-
-        Returns:
-            AgentResult with combined summary output
-        """
+        """Generate combined summary for related articles."""
         self.correlation_id = input_data.correlation_id
         articles = input_data.articles
         relationship = input_data.relationship
