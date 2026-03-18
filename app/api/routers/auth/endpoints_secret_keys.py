@@ -162,7 +162,7 @@ async def create_secret_key(
     validate_client_id(payload.client_id)
     ensure_user_allowed(payload.user_id)
 
-    target_user = await AuthService.get_target_user(payload.user_id, payload.username)
+    target_user = await AuthService.get_or_create_target_user(payload.user_id, payload.username)
     target_user_id = target_user.get("telegram_user_id", payload.user_id)
 
     await revoke_active_secrets(target_user_id, payload.client_id)
