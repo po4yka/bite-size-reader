@@ -114,9 +114,7 @@ def verify_telegram_auth(
         )
         raise AuthenticationError("Invalid authentication hash. Please try logging in again.")
 
-    # Verify user is in whitelist
-    allowed_ids = Config.get_allowed_user_ids()
-    if user_id not in allowed_ids:
+    if not Config.is_user_allowed(user_id, fail_open_when_empty=False):
         logger.warning(
             f"User {user_id} not in whitelist",
             extra={"user_id": user_id, "username": username},

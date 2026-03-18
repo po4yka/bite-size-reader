@@ -366,6 +366,19 @@ class ConfigHelper:
         return _parse_allowed_user_ids(value)
 
     @staticmethod
+    def is_user_allowed(user_id: int, *, fail_open_when_empty: bool = False) -> bool:
+        """Check if user_id is in the ALLOWED_USER_IDS whitelist.
+
+        When the whitelist is empty, behavior is governed by fail_open_when_empty:
+        - True: allow all users (permissive — suitable for optional whitelist paths)
+        - False: deny all users (strict — suitable for high-security auth paths)
+        """
+        allowed_ids = Config.get_allowed_user_ids()
+        if not allowed_ids:
+            return fail_open_when_empty
+        return user_id in allowed_ids
+
+    @staticmethod
     def get_allowed_client_ids() -> tuple[str, ...]:
         """
         Get list of allowed client application IDs.

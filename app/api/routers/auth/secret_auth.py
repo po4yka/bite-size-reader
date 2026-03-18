@@ -73,8 +73,7 @@ def ensure_secret_login_enabled() -> None:
 
 def ensure_user_allowed(user_id: int) -> None:
     """Raise AuthorizationError if user is not in the allowed list."""
-    allowed_ids = Config.get_allowed_user_ids()
-    if user_id not in allowed_ids:
+    if not Config.is_user_allowed(user_id, fail_open_when_empty=False):
         logger.warning(
             "User not authorized for secret login",
             extra={"user_id": user_id},

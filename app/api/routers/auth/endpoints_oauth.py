@@ -69,8 +69,7 @@ def _build_preferences(user_record: dict[str, Any]) -> PreferencesData:
 
 
 def _ensure_allowed_user_id(user_id: int, *, provider: str, sub: str) -> None:
-    allowed_ids = Config.get_allowed_user_ids()
-    if allowed_ids and user_id not in allowed_ids:
+    if not Config.is_user_allowed(user_id, fail_open_when_empty=True):
         logger.warning(
             "oauth_user_not_authorized",
             extra={"user_id": user_id, "provider": provider, "sub": sub},
