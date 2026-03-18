@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from app.adapters.content.llm_response_workflow import AttemptContext
+
+from app.core.call_status import CallStatus
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.domain.models.request import RequestStatus
@@ -65,17 +68,18 @@ class LLMWorkflowRepairMixin:
 
     async def _attempt_json_repair(
         self,
-        message: Any,
-        llm: Any,
-        req_id: int,
-        correlation_id: str | None,
-        interaction_config: Any,
-        repair_context: Any,
-        request_config: Any,
-        notifications: Any | None,
+        ctx: AttemptContext,
         *,
         parse_result: Any,
     ) -> dict[str, Any] | None:
+        llm = ctx.llm
+        req_id = ctx.req_id
+        correlation_id = ctx.correlation_id
+        interaction_config = ctx.interaction_config
+        repair_context = ctx.repair_context
+        request_config = ctx.request_config
+        notifications = ctx.notifications
+
         try:
             logger.info(
                 "json_repair_attempt_enhanced",
@@ -149,7 +153,7 @@ class LLMWorkflowRepairMixin:
             finally:
                 await sem_cm.__aexit__(None, None, None)
 
-            if repair.status == "ok":
+            if repair.status == CallStatus.OK:
                 from app.adapters.content import llm_response_workflow as workflow_module
 
                 repair_result = workflow_module.parse_summary_response(
@@ -175,7 +179,7 @@ class LLMWorkflowRepairMixin:
                 extra={"cid": correlation_id, "error": str(exc)},
             )
             await self._handle_repair_failure(
-                message,
+                ctx.message,
                 req_id,
                 correlation_id,
                 interaction_config,

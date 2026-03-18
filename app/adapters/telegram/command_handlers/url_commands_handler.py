@@ -51,17 +51,14 @@ class URLCommandsHandler:
 
     @property
     def _url_processor(self) -> URLProcessor:
-        """Get the current URL processor from the provider."""
         return self._processor_provider.url_processor
 
     @property
     def _url_handler(self) -> URLHandler | None:
-        """Get the current URL handler from the provider."""
         return getattr(self._processor_provider, "url_handler", None)
 
     @property
     def _task_manager(self) -> UserTaskManager | None:
-        """Get the current task manager from the provider."""
         return getattr(self._processor_provider, "_task_manager", None)
 
     @audit_command("command_summarize", include_text=True)

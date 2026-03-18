@@ -486,11 +486,7 @@ class RequestBuilder:
         if provider == "google" and estimated_tokens < self._cache_large_content_threshold:
             return False
 
-        # Cache large assistant/user messages (e.g., RAG chunks)
-        if estimated_tokens >= self._cache_large_content_threshold:
-            return True
-
-        return False
+        return estimated_tokens >= self._cache_large_content_threshold
 
     def _add_cache_control(self, msg: dict[str, Any]) -> dict[str, Any]:
         """Convert message to multipart format with cache_control.

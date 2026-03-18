@@ -113,7 +113,7 @@ class ChatStreamingHandler:
             )
         return False
 
-    async def finalize_stream_success(
+    def finalize_stream_success(
         self,
         *,
         attempt: int,

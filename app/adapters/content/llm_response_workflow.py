@@ -75,8 +75,8 @@ class AttemptContext(BaseModel):
     correlation_id: str | None
     interaction_config: Any
     persistence: Any
-    repair_context: Any
-    request_config: Any
+    repair_context: Any | None = None
+    request_config: Any | None = None
     notifications: Any | None = None
     ensure_summary: Any | None = None
     on_success: Any | None = None

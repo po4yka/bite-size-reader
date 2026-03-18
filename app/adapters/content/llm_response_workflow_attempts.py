@@ -77,17 +77,7 @@ class LLMWorkflowAttemptsMixin:
         shaped = parse_result.shaped if parse_result else None
 
         if shaped is None:
-            shaped = await self._attempt_json_repair(
-                ctx.message,
-                ctx.llm,
-                ctx.req_id,
-                ctx.correlation_id,
-                ctx.interaction_config,
-                ctx.repair_context,
-                ctx.request_config,
-                ctx.notifications,
-                parse_result=parse_result,
-            )
+            shaped = await self._attempt_json_repair(ctx, parse_result=parse_result)
 
         if shaped is None:
             self._set_failure_context(ctx.llm, "summary_parse_failed")
@@ -108,17 +98,7 @@ class LLMWorkflowAttemptsMixin:
 
             try:
                 repair_hint = SimpleNamespace(errors=["missing_summary_fields"])
-                repaired = await self._attempt_json_repair(
-                    ctx.message,
-                    ctx.llm,
-                    ctx.req_id,
-                    ctx.correlation_id,
-                    ctx.interaction_config,
-                    ctx.repair_context,
-                    ctx.request_config,
-                    ctx.notifications,
-                    parse_result=repair_hint,
-                )
+                repaired = await self._attempt_json_repair(ctx, parse_result=repair_hint)
                 if repaired and self._summary_has_content(repaired, ctx.required_summary_fields):
                     return await self.finalize_success(ctx, repaired)
             except Exception as exc:

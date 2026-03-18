@@ -94,7 +94,6 @@ class RerankingService:
 
             pairs.append([query, doc_text])
 
-        # Score all pairs
         try:
             scores = await self._score_pairs(pairs)
         except (RuntimeError, ValueError, OSError):
@@ -105,14 +104,12 @@ class RerankingService:
             # Return original results if re-ranking fails
             return results
 
-        # Add scores to results
         reranked = []
         for i, result in enumerate(results[:num_to_rerank]):
             result_copy = result.copy()
             result_copy[score_field] = float(scores[i])
             reranked.append(result_copy)
 
-        # Sort by re-ranking score (highest first)
         reranked.sort(key=lambda x: x[score_field], reverse=True)
 
         # Append any results that weren't re-ranked
@@ -146,7 +143,6 @@ class RerankingService:
 
     @property
     def model_name(self) -> str:
-        """Get the model name."""
         return self._model_name
 
 

@@ -326,7 +326,7 @@ class ChatTransport:
                     process_event_payload=process_event_payload,
                 )
 
-            return await self._streaming_handler.finalize_stream_success(
+            return self._streaming_handler.finalize_stream_success(
                 attempt=attempt,
                 request_id=request_id,
                 model=model,

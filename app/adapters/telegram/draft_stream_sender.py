@@ -166,20 +166,15 @@ class DraftStreamSender:
         return normalized
 
     def _is_throttled(self, state: DraftStreamState, text: str) -> bool:
+        if state.last_sent_monotonic <= 0:
+            return False
         now = time.monotonic()
         elapsed_ms = (now - state.last_sent_monotonic) * 1000.0
         chars_delta = abs(len(text) - len(state.last_text))
-
-        if state.last_sent_monotonic <= 0:
-            return False
-        if text == state.last_text:
-            return True
-        if (
+        return text == state.last_text or (
             elapsed_ms < self._settings.min_interval_ms
             and chars_delta < self._settings.min_delta_chars
-        ):
-            return True
-        return False
+        )
 
     async def _send_custom_request(self, params: dict[str, Any]) -> None:
         client = getattr(self._telegram_client, "client", None)

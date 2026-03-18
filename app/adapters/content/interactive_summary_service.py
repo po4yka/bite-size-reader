@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.llm_response_workflow import (
+    AttemptContext,
     LLMInteractionConfig,
     LLMSummaryPersistenceSettings,
     LLMWorkflowNotifications,
@@ -354,17 +355,18 @@ class InteractiveSummaryService:
     ) -> tuple[dict[str, Any], Any]:
         """Finalize response flow when Redis contains a cached summary."""
         llm_stub = self._runtime.cache_helper.build_cache_stub(plan.base_model)
-        shaped = await self._runtime.workflow.finalize_success(
-            cached_summary,
-            llm_stub,
-            request.req_id,
-            request.correlation_id,
-            plan.interaction_config,
-            plan.persistence,
-            callbacks.ensure_summary,
-            callbacks.on_success,
-            request.defer_persistence,
+        ctx = AttemptContext(
+            message=request.message,
+            llm=llm_stub,
+            req_id=request.req_id,
+            correlation_id=request.correlation_id,
+            interaction_config=plan.interaction_config,
+            persistence=plan.persistence,
+            ensure_summary=callbacks.ensure_summary,
+            on_success=callbacks.on_success,
+            defer_persistence=request.defer_persistence,
         )
+        shaped = await self._runtime.workflow.finalize_success(ctx, cached_summary)
         if not request.silent:
             await self._runtime.response_formatter.send_cached_summary_notification(
                 request.message,
