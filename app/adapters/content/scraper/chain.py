@@ -31,6 +31,11 @@ class ContentScraperChain:
         self._audit = audit
 
     @property
+    def providers(self) -> list[ContentScraperProtocol]:
+        """Read-only view of the provider list."""
+        return list(self._providers)
+
+    @property
     def provider_name(self) -> str:
         return "chain"
 

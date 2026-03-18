@@ -350,12 +350,12 @@ class TestContentScraperFactory:
 
             chain = ContentScraperFactory.create_from_config(cfg)
 
-        assert len(chain._providers) == 5
-        assert chain._providers[0].provider_name == "scrapling"
-        assert chain._providers[1].provider_name == "defuddle"
-        assert chain._providers[2].provider_name == "playwright"
-        assert chain._providers[3].provider_name == "crawlee"
-        assert chain._providers[4].provider_name == "direct_html"
+        assert len(chain.providers) == 5
+        assert chain.providers[0].provider_name == "scrapling"
+        assert chain.providers[1].provider_name == "defuddle"
+        assert chain.providers[2].provider_name == "playwright"
+        assert chain.providers[3].provider_name == "crawlee"
+        assert chain.providers[4].provider_name == "direct_html"
 
     def test_scrapling_disabled_skipped(self):
         """When scrapling_enabled=False, the scrapling provider is skipped."""
@@ -375,7 +375,7 @@ class TestContentScraperFactory:
 
             chain = ContentScraperFactory.create_from_config(cfg)
 
-        names = [p.provider_name for p in chain._providers]
+        names = [p.provider_name for p in chain.providers]
         assert "scrapling" not in names
         assert "playwright" in names
         assert "crawlee" in names
@@ -399,7 +399,7 @@ class TestContentScraperFactory:
 
             chain = ContentScraperFactory.create_from_config(cfg)
 
-        names = [p.provider_name for p in chain._providers]
+        names = [p.provider_name for p in chain.providers]
         assert "playwright" not in names
         assert "crawlee" in names
         assert "direct_html" in names
@@ -422,7 +422,7 @@ class TestContentScraperFactory:
 
             chain = ContentScraperFactory.create_from_config(cfg)
 
-        names = [p.provider_name for p in chain._providers]
+        names = [p.provider_name for p in chain.providers]
         assert "crawlee" not in names
         assert "direct_html" in names
 
@@ -451,11 +451,11 @@ class TestContentScraperFactory:
 
             chain = ContentScraperFactory.create_from_config(cfg)
 
-        names = [p.provider_name for p in chain._providers]
+        names = [p.provider_name for p in chain.providers]
         assert "firecrawl_self_hosted" in names
         assert "playwright" in names
         assert "crawlee" in names
-        assert len(chain._providers) == 5
+        assert len(chain.providers) == 5
 
     def test_empty_provider_order_falls_back_to_direct_html(self):
         """When provider_order is empty, the factory falls back to direct_html."""
@@ -464,8 +464,8 @@ class TestContentScraperFactory:
 
         chain = ContentScraperFactory.create_from_config(cfg)
 
-        assert len(chain._providers) >= 1
-        names = [p.provider_name for p in chain._providers]
+        assert len(chain.providers) >= 1
+        names = [p.provider_name for p in chain.providers]
         assert "direct_html" in names
 
     def test_browser_disabled_skips_playwright_and_crawlee(self):
@@ -487,7 +487,7 @@ class TestContentScraperFactory:
             mock_direct.return_value = _MockProvider(name="direct_html")
             chain = ContentScraperFactory.create_from_config(cfg)
 
-        names = [p.provider_name for p in chain._providers]
+        names = [p.provider_name for p in chain.providers]
         assert "playwright" not in names
         assert "crawlee" not in names
         assert "scrapling" in names
@@ -508,8 +508,8 @@ class TestContentScraperFactory:
 
             chain = ContentScraperFactory.create_from_config(cfg)
 
-        assert len(chain._providers) == 1
-        assert chain._providers[0].provider_name == "direct_html"
+        assert len(chain.providers) == 1
+        assert chain.providers[0].provider_name == "direct_html"
         mock_scrapling.assert_not_called()
 
     def test_force_provider_unavailable_raises_runtime_error(self):
@@ -524,8 +524,8 @@ class TestContentScraperFactory:
         cfg = make_test_app_config(scraper=scraper_cfg)
 
         chain = ContentScraperFactory.create_from_config(cfg)
-        assert len(chain._providers) == 1
-        assert chain._providers[0].provider_name == "scraper_disabled"
+        assert len(chain.providers) == 1
+        assert chain.providers[0].provider_name == "scraper_disabled"
 
     def test_audit_callback_forwarded_to_chain(self):
         """The audit callback is passed through to the created chain."""
@@ -566,7 +566,7 @@ class TestContentScraperFactory:
             ),
         ):
             chain = ContentScraperFactory.create_from_config(cfg)
-        names = [p.provider_name for p in chain._providers]
+        names = [p.provider_name for p in chain.providers]
         assert "defuddle" in names
         assert names.index("defuddle") > names.index("scrapling")
 
@@ -597,7 +597,7 @@ class TestContentScraperFactory:
             ),
         ):
             chain = ContentScraperFactory.create_from_config(cfg)
-        names = [p.provider_name for p in chain._providers]
+        names = [p.provider_name for p in chain.providers]
         assert "defuddle" not in names
 
 
