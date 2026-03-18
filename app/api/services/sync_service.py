@@ -413,7 +413,7 @@ class SyncService:
         from app.db.models import SummaryHighlight, model_to_dict
 
         rows = SummaryHighlight.select().where(SummaryHighlight.user == user_id)
-        return [model_to_dict(row) for row in rows if model_to_dict(row) is not None]
+        return [d for row in rows if (d := model_to_dict(row)) is not None]
 
     async def _collect_records(self, user_id: int) -> list[SyncEntityEnvelope]:
         """Collect all sync records for a user using repository adapters."""
