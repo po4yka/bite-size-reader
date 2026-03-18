@@ -439,3 +439,10 @@ def get_system_prompt(lang: str = "en", *, include_examples: bool = True) -> str
     """
     manager = get_prompt_manager()
     return manager.get_system_prompt(lang, include_examples=include_examples)
+
+
+def reset_prompt_manager() -> None:
+    """Reset module-level caches. Intended for test teardown only."""
+    global _default_manager
+    _default_manager = None
+    get_system_prompt.cache_clear()

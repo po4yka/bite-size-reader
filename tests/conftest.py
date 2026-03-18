@@ -65,6 +65,7 @@ from app.config import (
     clear_config_cache,
 )
 from app.config.integrations import BatchAnalysisConfig
+from app.prompts.manager import reset_prompt_manager
 
 # Provide sane defaults for integration/API tests that expect these env vars.
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-32-characters-long-123456")
@@ -81,8 +82,10 @@ os.environ.setdefault("OPENROUTER_API_KEY", "test_openrouter_key")
 def manage_config_cache():
     """Clear cached config between tests that mutate environment variables."""
     clear_config_cache()
+    reset_prompt_manager()
     yield
     clear_config_cache()
+    reset_prompt_manager()
 
 
 @pytest.fixture(autouse=True)
