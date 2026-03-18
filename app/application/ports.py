@@ -14,8 +14,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from datetime import datetime
 
-    from app.domain.models.summary import Summary as DomainSummary
-
 
 class LLMCallRecord(TypedDict, total=False):
     """Typed record for persisting an LLM call."""
@@ -164,9 +162,6 @@ class SummaryRepositoryPort(Protocol):
 
     async def async_get_max_server_version(self, user_id: int) -> int | None:
         """Return the maximum server_version for summaries owned by *user_id*."""
-
-    def to_domain_model(self, db_summary: dict[str, Any]) -> DomainSummary:
-        """Convert persistence dictionary into a domain model."""
 
 
 @runtime_checkable

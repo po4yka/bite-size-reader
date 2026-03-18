@@ -5,7 +5,7 @@ content summary with its metadata and insights.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 # Canonical list of fields that every valid summary must contain.
@@ -125,3 +125,27 @@ class Summary:
             f"lang={self.language}, version={self.version}, "
             f"is_read={self.is_read}, has_insights={self.has_insights()})"
         )
+
+
+def summary_from_dict(db_summary: dict[str, Any]) -> Summary:
+    """Convert a persistence dictionary into a Summary domain model."""
+    created_at_raw = db_summary.get("created_at")
+    created_at_value = datetime.now(UTC)
+    if isinstance(created_at_raw, datetime):
+        created_at_value = created_at_raw
+    elif isinstance(created_at_raw, str):
+        try:
+            created_at_value = datetime.fromisoformat(created_at_raw)
+        except ValueError:
+            created_at_value = datetime.now(UTC)
+
+    return Summary(
+        id=db_summary.get("id"),
+        request_id=db_summary.get("request_id") or db_summary.get("request"),
+        content=db_summary.get("json_payload"),
+        language=db_summary.get("lang"),
+        version=db_summary.get("version", 1),
+        is_read=db_summary.get("is_read", False),
+        insights=db_summary.get("insights_json"),
+        created_at=created_at_value,
+    )

@@ -11,6 +11,7 @@ from app.domain.events.summary_events import SummaryMarkedAsUnread
 from app.domain.exceptions.domain_exceptions import (
     InvalidStateTransitionError,
 )
+from app.domain.models.summary import summary_from_dict
 from app.domain.services.summary_validator import SummaryValidator
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ class MarkSummaryAsUnreadUseCase:
         )
 
         summary_data = await fetch_summary_or_raise(self._summary_repo, command.summary_id)
-        summary = self._summary_repo.to_domain_model(summary_data)
+        summary = summary_from_dict(summary_data)
 
         can_mark, reason = SummaryValidator.can_mark_as_unread(summary)
         if not can_mark:

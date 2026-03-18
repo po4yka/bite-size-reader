@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 
 from app.application.ports import SummaryRepositoryPort
-from app.domain.models.summary import Summary
+from app.domain.models.summary import Summary, summary_from_dict
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class GetUnreadSummariesUseCase:
             topic=query.topic,
         )
 
-        summaries = [self._summary_repo.to_domain_model(db_summary) for db_summary in db_summaries]
+        summaries = [summary_from_dict(db_summary) for db_summary in db_summaries]
 
         logger.info(
             "get_unread_summaries_completed",
