@@ -15,11 +15,6 @@ from app.adapters.content.llm_summarizer_metadata import LLMSummaryMetadataHelpe
 from app.adapters.content.llm_summarizer_semantic import LLMSemanticHelper
 from app.adapters.content.llm_summarizer_text import coerce_string_list, truncate_content_text
 from app.adapters.content.search_context_enricher import SearchContextEnricher
-from app.di.repositories import (
-    build_crawl_result_repository,
-    build_request_repository,
-    build_summary_repository,
-)
 from app.infrastructure.cache.redis_cache import RedisCache
 
 if TYPE_CHECKING:
@@ -65,9 +60,19 @@ class SummarizationRuntime:
         self.topic_search = topic_search
         self.db_write_queue = db_write_queue
 
-        self.summary_repo = summary_repo or build_summary_repository(db)
-        self.request_repo = request_repo or build_request_repository(db)
-        self.crawl_result_repo = crawl_result_repo or build_crawl_result_repository(db)
+        if summary_repo is None or request_repo is None or crawl_result_repo is None:
+            from app.di.repositories import (
+                build_crawl_result_repository,
+                build_request_repository,
+                build_summary_repository,
+            )
+
+            summary_repo = summary_repo or build_summary_repository(db)
+            request_repo = request_repo or build_request_repository(db)
+            crawl_result_repo = crawl_result_repo or build_crawl_result_repository(db)
+        self.summary_repo = summary_repo
+        self.request_repo = request_repo
+        self.crawl_result_repo = crawl_result_repo
 
         self.workflow = LLMResponseWorkflow(
             cfg=cfg,

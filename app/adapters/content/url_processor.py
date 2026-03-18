@@ -26,7 +26,6 @@ from app.adapters.content.url_flow_models import (
 from app.adapters.content.url_post_summary_task_service import URLPostSummaryTaskService
 from app.adapters.content.url_summary_delivery_service import URLSummaryDeliveryService
 from app.core.async_utils import raise_if_cancelled
-from app.di.repositories import build_summary_repository
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 
 if TYPE_CHECKING:
@@ -75,7 +74,11 @@ class URLProcessor:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._db_write_queue = db_write_queue
-        self.summary_repo = summary_repo or build_summary_repository(db)
+        if summary_repo is None:
+            from app.di.repositories import build_summary_repository
+
+            summary_repo = build_summary_repository(db)
+        self.summary_repo = summary_repo
 
         self.content_extractor = ContentExtractor(
             cfg=cfg,
