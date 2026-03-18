@@ -53,12 +53,14 @@ class MessageRouteContextBuilder:
 
         message_key = (uid, chat_id or 0, message_id) if message_id is not None else None
         text_signature = text.strip() if isinstance(text, str) else ""
-        if message_key and self._is_duplicate_message(message_key, text_signature):
-            logger.info(
-                "duplicate_message_skipped",
-                extra={"uid": uid, "chat_id": chat_id, "message_id": message_id},
-            )
-            return None
+        if message_key:
+            if self._check_duplicate(message_key, text_signature):
+                logger.info(
+                    "duplicate_message_skipped",
+                    extra={"uid": uid, "chat_id": chat_id, "message_id": message_id},
+                )
+                return None
+            self._record_message(message_key, text_signature)
 
         has_forward, forward_from_chat_id, forward_from_chat_title, forward_from_message_id = (
             self._extract_forward_details(telegram_message)
@@ -214,19 +216,25 @@ class MessageRouteContextBuilder:
             return "text", None, None
         return "unknown", None, None
 
-    def _is_duplicate_message(
+    def _check_duplicate(
         self,
         message_key: tuple[int, int, int],
         text_signature: str,
     ) -> bool:
         now = time.time()
         last_seen = self._recent_message_ids.get(message_key)
-        if (
+        return (
             last_seen is not None
             and now - last_seen[0] < self._recent_message_ttl
             and last_seen[1] == text_signature
-        ):
-            return True
+        )
+
+    def _record_message(
+        self,
+        message_key: tuple[int, int, int],
+        text_signature: str,
+    ) -> None:
+        now = time.time()
         self._recent_message_ids[message_key] = (now, text_signature)
         if len(self._recent_message_ids) > 2000:
             cutoff = now - self._recent_message_ttl
@@ -235,4 +243,3 @@ class MessageRouteContextBuilder:
             ]
             for key in expired_keys:
                 del self._recent_message_ids[key]
-        return False
