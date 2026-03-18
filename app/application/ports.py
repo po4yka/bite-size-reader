@@ -275,6 +275,11 @@ class RequestRepositoryPort(Protocol):
     async def async_get_max_server_version(self, user_id: int) -> int | None:
         """Return the maximum server_version for requests owned by *user_id*."""
 
+    async def async_update_bot_reply_message_id(
+        self, request_id: int, bot_reply_message_id: int
+    ) -> None:
+        """Persist the Telegram message-id of the bot's reply for a request."""
+
 
 @runtime_checkable
 class CrawlResultRepositoryPort(Protocol):

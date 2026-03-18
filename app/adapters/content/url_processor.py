@@ -138,6 +138,7 @@ class URLProcessor:
             response_formatter=response_formatter,
             summary_repo=self.summary_repo,
             audit_func=audit_func,
+            request_repo=self.message_persistence.request_repo,
         )
         self.post_summary_tasks = URLPostSummaryTaskService(
             response_formatter=response_formatter,

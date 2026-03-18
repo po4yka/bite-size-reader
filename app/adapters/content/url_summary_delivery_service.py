@@ -33,12 +33,14 @@ class URLSummaryDeliveryService:
         response_formatter: ResponseFormatter,
         summary_repo: Any,
         audit_func: Any,
+        request_repo: Any = None,
     ) -> None:
         self._cfg = cfg
         self._db = db
         self._response_formatter = response_formatter
         self._summary_repo = summary_repo
         self._audit = audit_func
+        self._request_repo = request_repo
         self._tracked_tasks: set[asyncio.Task[Any]] = set()
 
     async def aclose(self, timeout: float = 5.0) -> None:
@@ -255,15 +257,10 @@ class URLSummaryDeliveryService:
         bot_reply_msg_id: int,
         correlation_id: str | None,
     ) -> None:
-        from app.db.models import Request as RequestModel
-
-        def _update_bot_reply_id() -> None:
-            RequestModel.update(bot_reply_message_id=bot_reply_msg_id).where(
-                RequestModel.id == req_id
-            ).execute()
-
+        if self._request_repo is None:
+            return
         try:
-            await asyncio.to_thread(_update_bot_reply_id)
+            await self._request_repo.async_update_bot_reply_message_id(req_id, bot_reply_msg_id)
         except Exception as exc:
             logger.warning(
                 "bot_reply_msg_id_persist_failed",

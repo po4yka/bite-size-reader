@@ -464,6 +464,18 @@ class SqliteRequestRepositoryAdapter(SqliteBaseRepository):
 
         return result
 
+    async def async_update_bot_reply_message_id(
+        self, request_id: int, bot_reply_message_id: int
+    ) -> None:
+        """Persist the Telegram message-id of the bot's reply."""
+
+        def _update() -> None:
+            Request.update(bot_reply_message_id=bot_reply_message_id).where(
+                Request.id == request_id
+            ).execute()
+
+        await self._execute(_update, operation_name="update_bot_reply_message_id")
+
     async def async_get_max_server_version(self, user_id: int) -> int | None:
         """Return the maximum server_version across requests owned by *user_id*."""
 
