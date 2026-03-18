@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Protocol
 
-from app.application.services.topic_search import TopicArticle
+from app.application.dto.topic_search import TopicArticle
 
 if TYPE_CHECKING:
     from app.application.services.topic_search import LocalTopicSearchService

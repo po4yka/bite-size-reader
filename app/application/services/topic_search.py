@@ -5,8 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict
-
+from app.application.dto.topic_search import TopicArticle
 from app.application.services.topic_search_utils import clean_snippet, tokenize
 
 if TYPE_CHECKING:
@@ -18,17 +17,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
-class TopicArticle(BaseModel):
-    """Lightweight representation of a discovered article."""
-
-    model_config = ConfigDict(frozen=True)
-
-    title: str
-    url: str
-    snippet: str | None = None
-    source: str | None = None
-    published_at: str | None = None
+__all__ = ["LocalTopicSearchService", "TopicArticle", "TopicSearchService"]
 
 
 class TopicSearchService:
