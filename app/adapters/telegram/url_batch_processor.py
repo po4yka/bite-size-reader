@@ -111,8 +111,10 @@ class URLBatchProcessor:
         self._audit = audit_func
         self._relationship_analysis_service = relationship_analysis_service
 
-    async def process(self, batch_request: BatchProcessRequest) -> BatchProcessingResult | None:
-        """Run a batch URL-processing request."""
+    async def execute_batch(
+        self, batch_request: BatchProcessRequest
+    ) -> BatchProcessingResult | None:
+        """Execute a batch URL-processing request."""
         if not batch_request.urls:
             return None
 

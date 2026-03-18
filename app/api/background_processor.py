@@ -97,14 +97,14 @@ class BackgroundProcessor:
             jitter_ratio=cfg.background.retry_jitter_ratio,
         )
 
-    async def process(
+    async def execute_request(
         self,
         request_id: int,
         *,
         correlation_id: str | None = None,
         db_path: str | None = None,
     ) -> None:
-        """Process a request by id."""
+        """Execute processing for a request by id."""
         started_at = time.perf_counter()
         processor_db, processor = self._maybe_override_db(db_path)
         request: dict[str, Any] | None = None
@@ -726,7 +726,7 @@ async def process_url_request(
 ) -> None:
     processor = await _get_default_processor()
     task = asyncio.create_task(
-        processor.process(request_id, correlation_id=correlation_id, db_path=db_path)
+        processor.execute_request(request_id, correlation_id=correlation_id, db_path=db_path)
     )
     # Background processing tasks - store reference if needed or use fire-and-forget safely
     if not hasattr(processor, "_processing_tasks"):

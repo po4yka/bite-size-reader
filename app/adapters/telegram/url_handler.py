@@ -140,7 +140,7 @@ class URLHandler:
     ) -> BatchProcessingResult | None:
         """Process a URL batch through the dedicated batch processor."""
         max_concurrent = max(2, min(self._batch_policy.max_concurrent, len(urls)))
-        return await self._batch_processor.process(
+        return await self._batch_processor.execute_batch(
             BatchProcessRequest(
                 message=message,
                 urls=urls,
