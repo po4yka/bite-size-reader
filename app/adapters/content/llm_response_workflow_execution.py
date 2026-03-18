@@ -25,7 +25,7 @@ class LLMWorkflowExecutionMixin:
     _background_tasks: set[asyncio.Task[Any]]
     _handle_all_attempts_failed: Callable[..., Any]
     _persist_llm_call: Callable[..., Any]
-    _process_attempt: Callable[..., Any]
+    _evaluate_attempt_outcome: Callable[..., Any]
     _sem: Callable[..., Any]
     _set_failure_context: Callable[..., None]
     cfg: Any
@@ -147,7 +147,7 @@ class LLMWorkflowExecutionMixin:
                     failed_attempts=failed_attempts,
                     defer_persistence=defer_persistence,
                 )
-                summary = await self._process_attempt(attempt_ctx)
+                summary = await self._evaluate_attempt_outcome(attempt_ctx)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.exception(
                     "summary_attempt_processing_failed",

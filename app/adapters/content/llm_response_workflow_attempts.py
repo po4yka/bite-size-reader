@@ -44,8 +44,8 @@ class LLMWorkflowAttemptsMixin:
     summary_repo: Any
     user_repo: Any
 
-    async def _process_attempt(self, ctx: AttemptContext) -> dict[str, Any] | None:
-        """Process a single LLM attempt using a typed context bundle."""
+    async def _evaluate_attempt_outcome(self, ctx: AttemptContext) -> dict[str, Any] | None:
+        """Inspect the LLM result and route to salvage, error, or finalize path."""
         if ctx.llm.status != CallStatus.OK:
             salvage = None
             if (ctx.llm.error_text or "") == "structured_output_parse_error":
