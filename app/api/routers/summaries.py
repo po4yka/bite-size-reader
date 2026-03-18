@@ -82,6 +82,56 @@ def _extract_request_fields(
     )
 
 
+def _resolve_content(
+    crawl_result: dict[str, Any],
+    request_data: dict[str, Any],
+    output_format: str,
+) -> tuple[str, str, str]:
+    """Resolve article content for the requested output format.
+
+    Returns (content_value, content_mime, resolved_format).
+    Raises ResourceNotFoundError (ValueError) if no content is available.
+    """
+    if crawl_result.get("content_markdown"):
+        content_source: str = crawl_result["content_markdown"]
+        source_format = "markdown"
+        content_type = "text/markdown"
+    elif crawl_result.get("content_html"):
+        content_source = crawl_result["content_html"]
+        source_format = "html"
+        content_type = "text/html"
+    elif request_data.get("content_text"):
+        content_source = request_data["content_text"]
+        source_format = "text"
+        content_type = "text/plain"
+    else:
+        raise ValueError("no_content")
+
+    resolved_format = output_format or "markdown"
+    content_value = content_source
+    content_mime = content_type
+
+    if resolved_format == "text":
+        if source_format == "markdown":
+            content_value = clean_markdown_article_text(content_source)
+        elif source_format == "html":
+            content_value = html_to_text(content_source)
+        content_mime = "text/plain"
+    elif source_format == "markdown":
+        content_value = content_source
+        content_mime = "text/markdown"
+    elif source_format == "html":
+        content_value = html_to_text(content_source)
+        content_mime = "text/plain"
+        resolved_format = "text"
+    else:
+        content_value = content_source
+        content_mime = "text/plain"
+        resolved_format = "text"
+
+    return content_value, content_mime, resolved_format
+
+
 @router.get("")
 async def get_summaries(
     limit: int = Query(20, ge=1, le=100),
@@ -423,49 +473,12 @@ async def get_summary_content(
     title = metadata.get("title") or summary_metadata.get("title")
     domain = metadata.get("domain") or summary_metadata.get("domain")
 
-    content_source = None
-    source_format = None
-    content_type = None
-
-    if crawl_result.get("content_markdown"):
-        content_source = crawl_result.get("content_markdown")
-        source_format = "markdown"
-        content_type = "text/markdown"
-    elif crawl_result.get("content_html"):
-        content_source = crawl_result.get("content_html")
-        source_format = "html"
-        content_type = "text/html"
-    elif request_data.get("content_text"):
-        content_source = request_data.get("content_text")
-        source_format = "text"
-        content_type = "text/plain"
-
-    if not content_source:
-        raise ResourceNotFoundError("Content", summary_id)
-
-    output_format = format or "markdown"
-    content_value = content_source
-    content_mime = content_type
-
-    if output_format == "text":
-        if source_format == "markdown":
-            content_value = clean_markdown_article_text(content_source)
-        elif source_format == "html":
-            content_value = html_to_text(content_source)
-        content_mime = "text/plain"
-    # Requested markdown
-    elif source_format == "markdown":
-        content_value = content_source
-        content_mime = "text/markdown"
-    elif source_format == "html":
-        # Best-effort fallback to text when markdown unavailable
-        content_value = html_to_text(content_source)
-        content_mime = "text/plain"
-        output_format = "text"
-    else:
-        content_value = content_source
-        content_mime = "text/plain"
-        output_format = "text"
+    try:
+        content_value, content_mime, output_format = _resolve_content(
+            crawl_result, request_data, format
+        )
+    except ValueError as exc:
+        raise ResourceNotFoundError("Content", summary_id) from exc
 
     checksum = sha256(content_value.encode("utf-8")).hexdigest() if content_value else None
     size_bytes = len(content_value.encode("utf-8")) if content_value else None
