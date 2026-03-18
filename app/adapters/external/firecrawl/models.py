@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.adapters.external.firecrawl.constants import FIRECRAWL_SCRAPE_ENDPOINT
+from app.core.call_status import CallStatus  # noqa: TC001
 
 
 class FirecrawlResult(BaseModel):
@@ -12,7 +13,7 @@ class FirecrawlResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    status: str = Field(description="High-level status of the crawl attempt.")
+    status: CallStatus = Field(description="High-level status of the crawl attempt.")
     http_status: int | None = Field(
         default=None, description="HTTP status code returned by Firecrawl."
     )
@@ -81,7 +82,7 @@ class FirecrawlSearchItem(BaseModel):
 class FirecrawlSearchResult(BaseModel):
     """Result container for Firecrawl search queries."""
 
-    status: str
+    status: CallStatus
     http_status: int | None = None
     results: list[FirecrawlSearchItem] = Field(default_factory=list)
     total_results: int | None = None

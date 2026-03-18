@@ -7,6 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.core.backoff import sleep_backoff as _sleep_backoff
+from app.core.call_status import CallStatus
 from app.models.llm.llm_models import LLMCallResult
 from app.utils.retry_utils import is_retryable_status_code
 
@@ -117,7 +118,7 @@ class ErrorHandler:
     ) -> LLMCallResult:
         """Build error result consistently."""
         return LLMCallResult(
-            status="error",
+            status=CallStatus.ERROR,
             model=model,
             response_text=text,
             response_json=data,

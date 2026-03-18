@@ -9,6 +9,8 @@ from functools import partial
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 from urllib.parse import urlparse
 
+from app.core.call_status import CallStatus
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -422,7 +424,7 @@ class BatchRelationshipAnalysisService:
             await self._batch_session_repo.async_update_batch_session_status(
                 session_id,
                 "completed",
-                analysis_status="error",
+                analysis_status=CallStatus.ERROR,
             )
             return None
         return analysis_result.output

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from app.adapters.elevenlabs.exceptions import ElevenLabsError
 from app.adapters.elevenlabs.tts_client import ElevenLabsTTSClient
+from app.core.call_status import CallStatus
 from app.db.models import AudioGeneration, Summary
 
 if TYPE_CHECKING:
@@ -74,7 +75,7 @@ class TTSService:
         )
         if summary is None:
             return AudioGenerationResult(
-                summary_id=summary_id, status="error", error="Summary not found"
+                summary_id=summary_id, status=CallStatus.ERROR, error="Summary not found"
             )
 
         payload = summary.json_payload or {}
@@ -89,7 +90,7 @@ class TTSService:
 
         if not text:
             return AudioGenerationResult(
-                summary_id=summary_id, status="error", error="No summary text available"
+                summary_id=summary_id, status=CallStatus.ERROR, error="No summary text available"
             )
 
         # Create or update DB record
@@ -134,7 +135,7 @@ class TTSService:
                 extra={"summary_id": summary_id, "error": error_msg, "latency_ms": latency},
             )
             return AudioGenerationResult(
-                summary_id=summary_id, status="error", error=error_msg, latency_ms=latency
+                summary_id=summary_id, status=CallStatus.ERROR, error=error_msg, latency_ms=latency
             )
 
         latency_ms = int((time.monotonic() - start) * 1000)

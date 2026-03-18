@@ -21,6 +21,7 @@ from app.adapters.llm.anthropic.request_builder import (
 )
 from app.adapters.llm.base_client import BaseLLMClient
 from app.core.async_utils import raise_if_cancelled
+from app.core.call_status import CallStatus
 from app.core.http_utils import ResponseSizeError, validate_response_size
 from app.models.llm.llm_models import LLMCallResult
 
@@ -202,7 +203,7 @@ class AnthropicClient:
                 extra={"request_id": request_id},
             )
             return LLMCallResult(
-                status="error",
+                status=CallStatus.ERROR,
                 model=None,
                 response_text=None,
                 error_text="Service temporarily unavailable (circuit breaker open)",
@@ -291,7 +292,7 @@ class AnthropicClient:
             raise_if_cancelled(e)
             latency = int((time.perf_counter() - started) * 1000)
             return LLMCallResult(
-                status="error",
+                status=CallStatus.ERROR,
                 model=model,
                 response_text=None,
                 error_text=f"Request failed: {e}",
@@ -308,7 +309,7 @@ class AnthropicClient:
             validate_response_size(resp, self._max_response_size_bytes, "Anthropic")
         except ResponseSizeError as e:
             return LLMCallResult(
-                status="error",
+                status=CallStatus.ERROR,
                 model=model,
                 response_text=None,
                 error_text=f"Response too large: {e}",
@@ -324,7 +325,7 @@ class AnthropicClient:
         except Exception as e:
             raise_if_cancelled(e)
             return LLMCallResult(
-                status="error",
+                status=CallStatus.ERROR,
                 model=model,
                 response_text=None,
                 error_text=f"Failed to parse JSON response: {e}",
@@ -344,7 +345,7 @@ class AnthropicClient:
         if resp.status_code != 200:
             error_msg = self._extract_error_message(data)
             return LLMCallResult(
-                status="error",
+                status=CallStatus.ERROR,
                 model=model,
                 response_text=None,
                 response_json=data,
@@ -415,7 +416,7 @@ class AnthropicClient:
         sanitized_messages = self._request_builder.sanitize_messages(messages)
 
         return LLMCallResult(
-            status="ok",
+            status=CallStatus.OK,
             model=model_reported,
             response_text=text_content,
             response_json=data,

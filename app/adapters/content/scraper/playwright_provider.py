@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
+from app.core.call_status import CallStatus
 from app.core.html_utils import html_to_text
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ class PlaywrightProvider:
                 extra={"url": url, "timeout_sec": round(timeout_sec, 2), "request_id": request_id},
             )
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text=f"Playwright timeout after {round(timeout_sec, 2)}s",
                 latency_ms=latency,
                 source_url=url,
@@ -92,7 +93,7 @@ class PlaywrightProvider:
                 },
             )
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text=f"Playwright error: {exc}",
                 latency_ms=latency,
                 source_url=url,
@@ -102,7 +103,7 @@ class PlaywrightProvider:
         latency = int((time.perf_counter() - started) * 1000)
         if not html:
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text="Playwright: no usable content",
                 latency_ms=latency,
                 source_url=url,
@@ -112,7 +113,7 @@ class PlaywrightProvider:
         content_text = html_to_text(html)
         if len(content_text) < self._min_text_length:
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text=f"Playwright: content too short ({len(content_text)} chars)",
                 content_html=html,
                 latency_ms=latency,
@@ -121,7 +122,7 @@ class PlaywrightProvider:
             )
 
         return FirecrawlResult(
-            status="ok",
+            status=CallStatus.OK,
             http_status=200,
             content_markdown=None,
             content_html=html,

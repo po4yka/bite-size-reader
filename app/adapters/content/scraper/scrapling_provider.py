@@ -9,6 +9,7 @@ from typing import Any
 
 from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
+from app.core.call_status import CallStatus
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class ScraplingProvider:
                 extra={"url": url, "timeout_sec": round(timeout_sec, 2)},
             )
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text=f"Scrapling timeout after {round(timeout_sec, 2)}s",
                 latency_ms=latency,
                 source_url=url,
@@ -75,7 +76,7 @@ class ScraplingProvider:
                 extra={"url": url, "error": str(exc), "error_type": type(exc).__name__},
             )
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text=f"Scrapling error: {exc}",
                 latency_ms=latency,
                 source_url=url,
@@ -94,7 +95,7 @@ class ScraplingProvider:
                 },
             )
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text="Scrapling: insufficient content extracted",
                 content_html=content_html,
                 latency_ms=latency,
@@ -103,7 +104,7 @@ class ScraplingProvider:
             )
 
         return FirecrawlResult(
-            status="ok",
+            status=CallStatus.OK,
             http_status=200,
             content_markdown=content_text,
             content_html=content_html,

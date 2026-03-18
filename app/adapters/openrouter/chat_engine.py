@@ -10,6 +10,7 @@ from app.adapters.openrouter.chat_response_handler import ChatResponseHandler
 from app.adapters.openrouter.chat_streaming import ChatStreamingHandler
 from app.adapters.openrouter.chat_transport import ChatTransport
 from app.core.async_utils import raise_if_cancelled
+from app.core.call_status import CallStatus
 from app.models.llm.llm_models import LLMCallResult
 
 logger = logging.getLogger(__name__)
@@ -162,7 +163,7 @@ class OpenRouterChatEngine:
             },
         )
         return LLMCallResult(
-            status="error",
+            status=CallStatus.ERROR,
             model=None,
             response_text=None,
             error_text="Service temporarily unavailable (circuit breaker open)",

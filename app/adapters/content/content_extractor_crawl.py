@@ -9,6 +9,8 @@ import re
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
+from app.core.call_status import CallStatus
+
 if TYPE_CHECKING:
     import asyncio
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -17,6 +19,7 @@ from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import clean_markdown_article_text, html_to_text, normalize_text
+from app.domain.models.request import RequestStatus
 from app.observability.failure_observability import (
     REASON_DIRECT_FETCH_FAILED,
     REASON_FIRECRAWL_ERROR,
@@ -125,7 +128,7 @@ class ContentExtractorCrawlMixin:
             title = metadata.get("title") or metadata.get("og:title")
 
         crawl_obj = FirecrawlResult(
-            status="ok",
+            status=CallStatus.OK,
             content_markdown=md,
             content_html=html,
             metadata_json=metadata,
@@ -322,7 +325,7 @@ class ContentExtractorCrawlMixin:
                 f"top_word={metrics['top_word']}, top_ratio={metrics['top_ratio']:.2f}"
             )
         metric_parts.append(f"overlay_ratio={metrics['overlay_ratio']:.2f}")
-        crawl.status = "error"
+        crawl.status = CallStatus.ERROR
         crawl.error_text = f"insufficient_useful_content:{reason_label} ({', '.join(metric_parts)})"
 
         if self._audit:
@@ -450,7 +453,9 @@ class ContentExtractorCrawlMixin:
         silent: bool = False,
     ) -> None:
         """Handle Firecrawl extraction errors."""
-        await self.message_persistence.request_repo.async_update_request_status(req_id, "error")
+        await self.message_persistence.request_repo.async_update_request_status(
+            req_id, RequestStatus.ERROR
+        )
         details = (
             f"🔗 URL: {crawl.source_url or 'unknown'}\n"
             f"🧭 Stage: Firecrawl scrape ({crawl.endpoint or '/v2/scrape'})\n"

@@ -9,6 +9,7 @@ import time
 import httpx
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
+from app.core.call_status import CallStatus
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class DefuddleProvider:
                 extra={"url": url, "timeout_sec": self._timeout_sec, "request_id": request_id},
             )
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text=f"Defuddle timeout after {self._timeout_sec}s",
                 latency_ms=latency,
                 source_url=url,
@@ -79,7 +80,7 @@ class DefuddleProvider:
                 },
             )
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text=f"Defuddle HTTP {exc.response.status_code}",
                 http_status=exc.response.status_code,
                 latency_ms=latency,
@@ -98,7 +99,7 @@ class DefuddleProvider:
                 },
             )
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text=f"Defuddle fetch failed: {exc}",
                 latency_ms=latency,
                 source_url=url,
@@ -109,7 +110,7 @@ class DefuddleProvider:
 
         if not raw_body or not raw_body.strip():
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text="Defuddle: empty response",
                 latency_ms=latency,
                 source_url=url,
@@ -129,7 +130,7 @@ class DefuddleProvider:
                 },
             )
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text=(
                     f"Defuddle: content too short "
                     f"({len(markdown.strip()) if markdown else 0} chars)"
@@ -140,7 +141,7 @@ class DefuddleProvider:
             )
 
         return FirecrawlResult(
-            status="ok",
+            status=CallStatus.OK,
             http_status=200,
             content_markdown=markdown.strip(),
             metadata_json=metadata or None,

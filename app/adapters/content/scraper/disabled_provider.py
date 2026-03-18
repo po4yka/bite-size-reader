@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
+from app.core.call_status import CallStatus
 
 
 class DisabledScraperProvider:
@@ -22,7 +23,7 @@ class DisabledScraperProvider:
     ) -> FirecrawlResult:
         del mobile, request_id
         return FirecrawlResult(
-            status="error",
+            status=CallStatus.ERROR,
             error_text=self._reason,
             source_url=url,
             endpoint="scraper_disabled",

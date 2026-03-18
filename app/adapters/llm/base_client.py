@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from app.core.async_utils import raise_if_cancelled
+from app.core.call_status import CallStatus
 from app.models.llm.llm_models import LLMCallResult
 
 if TYPE_CHECKING:
@@ -355,7 +356,7 @@ class BaseLLMClient:
             self._circuit_breaker.record_failure()
 
         return LLMCallResult(
-            status="error",
+            status=CallStatus.ERROR,
             model=primary_model,
             response_text=None,
             error_text=last_error or "All retries and fallbacks exhausted",

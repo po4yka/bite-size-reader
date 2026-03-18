@@ -21,6 +21,7 @@ from app.adapters.llm.openai.request_builder import (
     calculate_cost,
 )
 from app.core.async_utils import raise_if_cancelled
+from app.core.call_status import CallStatus
 from app.core.http_utils import ResponseSizeError, validate_response_size
 from app.models.llm.llm_models import LLMCallResult
 
@@ -203,7 +204,7 @@ class OpenAIClient:
                 extra={"request_id": request_id},
             )
             return LLMCallResult(
-                status="error",
+                status=CallStatus.ERROR,
                 model=None,
                 response_text=None,
                 error_text="Service temporarily unavailable (circuit breaker open)",
@@ -289,7 +290,7 @@ class OpenAIClient:
             raise_if_cancelled(e)
             latency = int((time.perf_counter() - started) * 1000)
             return LLMCallResult(
-                status="error",
+                status=CallStatus.ERROR,
                 model=model,
                 response_text=None,
                 error_text=f"Request failed: {e}",
@@ -306,7 +307,7 @@ class OpenAIClient:
             validate_response_size(resp, self._max_response_size_bytes, "OpenAI")
         except ResponseSizeError as e:
             return LLMCallResult(
-                status="error",
+                status=CallStatus.ERROR,
                 model=model,
                 response_text=None,
                 error_text=f"Response too large: {e}",
@@ -322,7 +323,7 @@ class OpenAIClient:
         except Exception as e:
             raise_if_cancelled(e)
             return LLMCallResult(
-                status="error",
+                status=CallStatus.ERROR,
                 model=model,
                 response_text=None,
                 error_text=f"Failed to parse JSON response: {e}",
@@ -341,7 +342,7 @@ class OpenAIClient:
         if resp.status_code != 200:
             error_msg = self._extract_error_message(data)
             return LLMCallResult(
-                status="error",
+                status=CallStatus.ERROR,
                 model=model,
                 response_text=None,
                 response_json=data,
@@ -377,7 +378,7 @@ class OpenAIClient:
         choices = data.get("choices", [])
         if not choices:
             return LLMCallResult(
-                status="error",
+                status=CallStatus.ERROR,
                 model=model,
                 response_text=None,
                 response_json=data,
@@ -411,7 +412,7 @@ class OpenAIClient:
         sanitized_messages = self._request_builder.sanitize_messages(messages)
 
         return LLMCallResult(
-            status="ok",
+            status=CallStatus.OK,
             model=model_reported,
             response_text=content,
             response_json=data,

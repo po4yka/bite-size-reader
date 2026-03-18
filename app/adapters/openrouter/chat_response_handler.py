@@ -11,6 +11,7 @@ from app.adapters.openrouter.chat_models import (
     StructuredOutputState,
     TruncationRecovery,
 )
+from app.core.call_status import CallStatus
 from app.models.llm.llm_models import LLMCallResult
 
 logger = logging.getLogger(__name__)
@@ -142,7 +143,7 @@ class ChatResponseHandler:
         )
         redacted_headers = self._client.request_builder.get_redacted_headers(payload.headers)
         llm_result = LLMCallResult(
-            status="ok",
+            status=CallStatus.OK,
             model=model_reported,
             response_text=text,
             response_json=data,

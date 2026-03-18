@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
+from app.core.call_status import CallStatus
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -497,7 +499,7 @@ class URLBatchProcessor:
             await self._update_request_error(
                 state,
                 url=url,
-                status="error",
+                status=CallStatus.ERROR,
                 error_type=error_type,
                 error_message=last_error,
                 processing_time_ms=processing_time_ms,

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
+from app.core.call_status import CallStatus
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -85,7 +87,7 @@ class URLProcessingFlowResult:
 def create_chunk_llm_stub(cfg: Any) -> Any:
     """Create a lightweight LLM result stub for cached/chunked responses."""
     return SimpleNamespace(
-        status="ok",
+        status=CallStatus.OK,
         latency_ms=None,
         model=cfg.openrouter.model,
         cost_usd=None,

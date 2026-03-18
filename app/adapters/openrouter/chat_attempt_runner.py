@@ -9,6 +9,7 @@ from app.adapters.openrouter.chat_models import (
     StructuredOutputState,
 )
 from app.core.async_utils import raise_if_cancelled
+from app.core.call_status import CallStatus
 from app.models.llm.llm_models import ChatRequest, LLMCallResult
 
 if TYPE_CHECKING:
@@ -172,7 +173,7 @@ class ChatAttemptRunner:
             {"Authorization": "REDACTED", "Content-Type": "application/json"}
         )
         return LLMCallResult(
-            status="error",
+            status=CallStatus.ERROR,
             model=last_model_reported,
             response_text=last_response_text,
             response_json=last_data,

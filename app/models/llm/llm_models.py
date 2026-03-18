@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
+
+from app.core.call_status import CallStatus  # noqa: TC001
 
 
 class LLMCallResult(BaseModel):
@@ -12,7 +14,7 @@ class LLMCallResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    status: Literal["ok", "error"] = Field(description="High-level result status.")
+    status: CallStatus = Field(description="High-level result status.")
     model: str | None = Field(default=None, description="Model that produced the response.")
     response_text: str | None = Field(
         default=None, description="Primary text response returned by the provider."

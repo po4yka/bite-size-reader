@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.external.firecrawl.constants import FIRECRAWL_SCRAPE_ENDPOINT
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.adapters.external.firecrawl.response_processor import ResponseProcessor
+from app.core.call_status import CallStatus
 from app.core.logging_utils import truncate_log_content
 
 if TYPE_CHECKING:
@@ -56,7 +57,7 @@ class ResultBuilder:
             cur_pdf: Whether PDF parsing was enabled
 
         Returns:
-            FirecrawlResult with status="ok"
+            FirecrawlResult with status=CallStatus.OK
         """
         correlation_id = data.get("cid")
         response_success = self._response_processor.coerce_success(data.get("success"))
@@ -115,7 +116,7 @@ class ResultBuilder:
         )
 
         return FirecrawlResult(
-            status="ok",
+            status=CallStatus.OK,
             http_status=data.get("status_code"),
             content_markdown=content_markdown,
             content_html=content_html,
@@ -165,7 +166,7 @@ class ResultBuilder:
             cur_pdf: Whether PDF parsing was enabled
 
         Returns:
-            FirecrawlResult with status="error"
+            FirecrawlResult with status=CallStatus.ERROR
         """
         if self._payload_logger:
             self._payload_logger.log_error(
@@ -209,7 +210,7 @@ class ResultBuilder:
         )
 
         return FirecrawlResult(
-            status="error",
+            status=CallStatus.ERROR,
             http_status=data.get("status_code"),
             content_markdown=error_content_markdown,
             content_html=error_content_html,
@@ -246,10 +247,10 @@ class ResultBuilder:
             options_snapshot: Options used for the request
 
         Returns:
-            FirecrawlResult with status="error"
+            FirecrawlResult with status=CallStatus.ERROR
         """
         return FirecrawlResult(
-            status="error",
+            status=CallStatus.ERROR,
             http_status=http_status,
             content_markdown=None,
             content_html=None,
@@ -292,7 +293,7 @@ class ResultBuilder:
             error_message: Mapped error message
 
         Returns:
-            FirecrawlResult with status="error"
+            FirecrawlResult with status=CallStatus.ERROR
         """
         if self._payload_logger:
             self._payload_logger.log_error(
@@ -328,7 +329,7 @@ class ResultBuilder:
         response_error_message = data.get("error") or error_message
 
         return FirecrawlResult(
-            status="error",
+            status=CallStatus.ERROR,
             http_status=http_status,
             content_markdown=data.get("markdown"),
             content_html=data.get("html"),
@@ -368,7 +369,7 @@ class ResultBuilder:
             pdf_hint: Whether URL hints at PDF content
 
         Returns:
-            FirecrawlResult with status="error"
+            FirecrawlResult with status=CallStatus.ERROR
         """
         last_markdown = None
         last_html = None
@@ -403,7 +404,7 @@ class ResultBuilder:
         )
 
         return FirecrawlResult(
-            status="error",
+            status=CallStatus.ERROR,
             http_status=None,
             content_markdown=None,
             content_html=None,

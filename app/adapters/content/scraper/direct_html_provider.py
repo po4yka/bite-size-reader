@@ -9,6 +9,7 @@ import time
 import httpx
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
+from app.core.call_status import CallStatus
 from app.core.html_utils import html_to_text
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ class DirectHTMLProvider:
                 extra={"url": url, "error": str(exc), "error_type": type(exc).__name__},
             )
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text=f"Direct HTML fetch failed: {exc}",
                 latency_ms=latency,
                 source_url=url,
@@ -72,7 +73,7 @@ class DirectHTMLProvider:
 
         if not html:
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text="Direct HTML: no usable content",
                 latency_ms=latency,
                 source_url=url,
@@ -82,7 +83,7 @@ class DirectHTMLProvider:
         content_text = html_to_text(html)
         if len(content_text) < self._min_text_length:
             return FirecrawlResult(
-                status="error",
+                status=CallStatus.ERROR,
                 error_text=f"Direct HTML: content too short ({len(content_text)} chars)",
                 content_html=html,
                 latency_ms=latency,
@@ -91,7 +92,7 @@ class DirectHTMLProvider:
             )
 
         return FirecrawlResult(
-            status="ok",
+            status=CallStatus.OK,
             http_status=200,
             content_markdown=None,
             content_html=html,

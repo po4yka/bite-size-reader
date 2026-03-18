@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
+from app.core.call_status import CallStatus
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -119,7 +120,7 @@ class ContentScraperChain:
             return last_result
 
         return FirecrawlResult(
-            status="error",
+            status=CallStatus.ERROR,
             error_text=f"All providers failed: {'; '.join(errors)}",
             source_url=url,
             endpoint="chain",

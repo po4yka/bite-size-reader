@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.external.firecrawl.models import FirecrawlSearchResult
 from app.core.backoff import sleep_backoff as _sleep_backoff
+from app.core.call_status import CallStatus
 from app.utils.retry_utils import is_retryable_status_code
 
 if TYPE_CHECKING:
@@ -195,7 +196,7 @@ class ErrorHandler:
             self._payload_logger.log_search_size_error(error_text, query)
 
         return FirecrawlSearchResult(
-            status="error",
+            status=CallStatus.ERROR,
             results=[],
             latency_ms=latency,
             error_text=f"Response too large: {error_text}",
@@ -230,7 +231,7 @@ class ErrorHandler:
             self._payload_logger.log_search_http_error(error_text, query)
 
         return FirecrawlSearchResult(
-            status="error",
+            status=CallStatus.ERROR,
             results=[],
             latency_ms=latency,
             error_text=error_text,
@@ -264,7 +265,7 @@ class ErrorHandler:
             self._payload_logger.log_search_invalid_json(resp.status_code, error_text)
 
         return FirecrawlSearchResult(
-            status="error",
+            status=CallStatus.ERROR,
             results=[],
             latency_ms=latency,
             error_text=error_text,
