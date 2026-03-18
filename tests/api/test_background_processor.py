@@ -179,7 +179,7 @@ async def test_lock_skip_when_redis_key_held(monkeypatch):
     processor.summary_repo = MagicMock()
     processor.summary_repo.async_get_summary_by_request = AsyncMock(return_value=None)
 
-    await processor.process(1, correlation_id="cid-lock")
+    await processor.execute_request(1, correlation_id="cid-lock")
     assert db.summaries == {}
 
 
@@ -221,7 +221,7 @@ async def test_local_lock_fallback_and_success(monkeypatch):
 
     processor.summary_repo.async_upsert_summary = AsyncMock(side_effect=fake_upsert)
 
-    await processor.process(2, correlation_id="cid-local")
+    await processor.execute_request(2, correlation_id="cid-local")
     assert db.summaries.get(2) is not None
     # Check that status update was called
     assert processor.request_repo.async_update_request_status_with_correlation.called
@@ -267,7 +267,7 @@ async def test_retries_and_error_status(monkeypatch):
     processor.summary_repo = MagicMock()
     processor.summary_repo.async_get_summary_by_request = AsyncMock(return_value=None)
 
-    await processor.process(3, correlation_id="cid-error")
+    await processor.execute_request(3, correlation_id="cid-error")
     # No summary written and status marked error
     assert db.summaries.get(3) is None
     assert status_updates[-1] == "error"
@@ -362,7 +362,7 @@ async def test_url_processing_auto_language_uses_detected_content():
     processor.summary_repo.async_get_summary_by_request = AsyncMock(return_value=None)
     processor.summary_repo.async_upsert_summary = AsyncMock()
 
-    await processor.process(4, correlation_id="cid-auto")
+    await processor.execute_request(4, correlation_id="cid-auto")
     assert summarizer.last_chosen_lang == "ru"
 
 
@@ -399,7 +399,7 @@ async def test_url_processing_prefers_extractor_detected_lang_metadata():
     processor.summary_repo.async_get_summary_by_request = AsyncMock(return_value=None)
     processor.summary_repo.async_upsert_summary = AsyncMock()
 
-    await processor.process(5, correlation_id="cid-youtube-lang")
+    await processor.execute_request(5, correlation_id="cid-youtube-lang")
     assert summarizer.last_chosen_lang == "ru"
 
 

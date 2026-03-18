@@ -9,12 +9,14 @@ Provides detailed health information about:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
+from app.api.dependencies.database import get_session_manager
 from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
 from app.config import load_config
@@ -77,9 +79,12 @@ async def _get_cached_database_details(request: Request | None = None) -> dict[s
         ):
             return dict(_database_details_cache)
 
-        details = await asyncio.to_thread(
-            _compute_database_details, resolve_api_runtime(request).db
-        )
+        _db: Any = None
+        with contextlib.suppress(RuntimeError):
+            _db = resolve_api_runtime(request).db
+        if _db is None:
+            _db = get_session_manager()
+        details = await asyncio.to_thread(_compute_database_details, _db)
         _database_details_cache = details
         _database_details_cached_at = now
         return dict(details)
@@ -93,7 +98,11 @@ async def _check_database(
     """Check database connectivity and health."""
     start = time.perf_counter()
     try:
-        db = resolve_api_runtime(request).db
+        db: Any = None
+        with contextlib.suppress(RuntimeError):
+            db = resolve_api_runtime(request).db
+        if db is None:
+            db = get_session_manager()
         db_conn = db.database
         cursor = db_conn.execute_sql("SELECT 1")
         cursor.fetchone()

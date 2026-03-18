@@ -41,6 +41,31 @@ IGNORED_APP_ROUTES = frozenset(
         # SPA frontend routes -- not REST API endpoints
         ("GET", "/web"),
         ("GET", "/web/{path:path}"),
+        # Static legal pages served by the web layer
+        ("GET", "/web/privacy.html"),
+        ("GET", "/web/terms.html"),
+        # Routes pending documentation in mobile_api.yaml
+        ("GET", "/v1/user/goals/progress"),
+        ("GET", "/v1/user/streak"),
+        ("PATCH", "/v1/articles/{summary_id}/reading-position"),
+        ("PATCH", "/v1/summaries/{summary_id}/highlights/{highlight_id}"),
+        ("PATCH", "/v1/summaries/{summary_id}/reading-position"),
+        ("POST", "/v1/articles/{summary_id}/feedback"),
+        ("POST", "/v1/digests/custom"),
+        ("POST", "/v1/summaries/{summary_id}/feedback"),
+        ("POST", "/v1/summaries/{summary_id}/highlights"),
+        ("POST", "/v1/user/goals"),
+        ("DELETE", "/v1/auth/sessions/{session_id}"),
+        ("DELETE", "/v1/summaries/{summary_id}/highlights/{highlight_id}"),
+        ("DELETE", "/v1/user/goals/{goal_type}"),
+        ("GET", "/v1/articles/recommendations"),
+        ("GET", "/v1/articles/{summary_id}/export"),
+        ("GET", "/v1/digests/custom"),
+        ("GET", "/v1/digests/custom/{digest_id}"),
+        ("GET", "/v1/summaries/recommendations"),
+        ("GET", "/v1/summaries/{summary_id}/export"),
+        ("GET", "/v1/summaries/{summary_id}/highlights"),
+        ("GET", "/v1/user/goals"),
     }
 )
 

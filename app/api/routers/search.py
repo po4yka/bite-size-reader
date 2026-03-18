@@ -10,9 +10,6 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies.database import (
-    get_request_repository,
-    get_summary_repository,
-    get_topic_search_repository,
     resolve_repository_session,
 )
 from app.api.dependencies.search_resources import get_chroma_search_service
@@ -33,6 +30,15 @@ from app.application.services.topic_search_utils import ensure_mapping
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.infrastructure.cache.trending_cache import get_trending_payload
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    SqliteTopicSearchRepositoryAdapter,
+)
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -47,10 +53,11 @@ def _instantiate_repository(factory: Any) -> Any:
 
 
 def _build_search_repositories() -> tuple[Any, Any, Any]:
+    session = resolve_repository_session()
     return (
-        _instantiate_repository(get_topic_search_repository),
-        _instantiate_repository(get_request_repository),
-        _instantiate_repository(get_summary_repository),
+        SqliteTopicSearchRepositoryAdapter(session),
+        SqliteRequestRepositoryAdapter(session),
+        SqliteSummaryRepositoryAdapter(session),
     )
 
 

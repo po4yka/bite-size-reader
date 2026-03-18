@@ -2,10 +2,12 @@ import time
 
 import pytest
 
+import app.di.database as _di_database
+from app.api.dependencies.database import clear_session_manager
 from app.api.exceptions import ValidationError
 from app.api.models.auth import TelegramLinkCompleteRequest
 from app.api.routers.auth import endpoints as auth_endpoints, secret_auth
-from app.db.models import User
+from app.db.models import User, database_proxy
 from app.db.session import DatabaseSessionManager
 
 
@@ -21,8 +23,11 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _init_db(tmp_path) -> DatabaseSessionManager:
+    clear_session_manager()
     db = DatabaseSessionManager(str(tmp_path / "linking.db"))
     db.migrate()
+    database_proxy.initialize(db._database)
+    _di_database._cached_runtime_db = db
     return db
 
 

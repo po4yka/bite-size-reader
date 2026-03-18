@@ -2,6 +2,7 @@
 Request submission and status endpoints.
 """
 
+import contextlib
 from datetime import datetime
 from typing import Any
 
@@ -37,7 +38,25 @@ router = APIRouter()
 
 def _get_request_service(request: Request) -> RequestService:
     """Resolve the shared request workflow service from API runtime."""
-    return resolve_api_runtime(request).request_service
+    with contextlib.suppress(RuntimeError):
+        return resolve_api_runtime(request).request_service
+    # Fallback for tests: build service from DI components
+    from app.api.dependencies.database import (
+        get_crawl_result_repository,
+        get_llm_repository,
+        get_request_repository,
+        get_session_manager,
+        get_summary_repository,
+    )
+
+    db = get_session_manager()
+    return RequestService(
+        db=db,
+        request_repository=get_request_repository(),
+        summary_repository=get_summary_repository(),
+        crawl_result_repository=get_crawl_result_repository(),
+        llm_repository=get_llm_repository(),
+    )
 
 
 @router.post("")

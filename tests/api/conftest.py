@@ -94,6 +94,14 @@ def client(db):
     # This fixes OperationalError: no such table when app re-initializes DB
     database_proxy.initialize(db._database)
 
+    # Clear in-memory rate limit state accumulated from previous tests
+    try:
+        from app.api import middleware as _mw
+
+        _mw._local_rate_limits.clear()
+    except Exception:
+        pass
+
     return TestClient(app)
 
 

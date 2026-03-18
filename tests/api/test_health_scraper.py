@@ -2,9 +2,23 @@ from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
+from app.api.routers.auth.tokens import create_access_token
+from app.db.models import User
+
+
+def _auth_headers() -> dict[str, str]:
+    # Use an ID from the default test ALLOWED_USER_IDS set in tests/conftest.py
+    user = User.get_or_none(User.telegram_user_id == 123456789)
+    if user is None:
+        user = User.create(telegram_user_id=123456789, username="health_test_user")
+    token = create_access_token(
+        user_id=user.telegram_user_id, username=user.username, client_id="test"
+    )
+    return {"Authorization": f"Bearer {token}"}
+
 
 def test_health_detailed_includes_scraper_component(client: TestClient) -> None:
-    response = client.get("/health/detailed")
+    response = client.get("/health/detailed", headers=_auth_headers())
     assert response.status_code == 200
 
     payload = response.json()["data"]
@@ -62,8 +76,9 @@ def test_health_detailed_reuses_cached_database_details(client: TestClient, monk
         AsyncMock(return_value={"status": "healthy", "latency_ms": 0}),
     )
 
-    response_one = client.get("/health/detailed")
-    response_two = client.get("/health/detailed")
+    headers = _auth_headers()
+    response_one = client.get("/health/detailed", headers=headers)
+    response_two = client.get("/health/detailed", headers=headers)
 
     assert response_one.status_code == 200
     assert response_two.status_code == 200

@@ -1,5 +1,7 @@
 import pytest
 
+import app.di.database as _di_database
+from app.api.dependencies.database import clear_session_manager
 from app.api.exceptions import AuthenticationError, AuthorizationError
 from app.api.models.auth import (
     SecretKeyCreateRequest,
@@ -8,7 +10,7 @@ from app.api.models.auth import (
     SecretLoginRequest,
 )
 from app.api.routers.auth import endpoints as auth_endpoints, secret_auth
-from app.db.models import ClientSecret, User
+from app.db.models import ClientSecret, User, database_proxy
 from app.db.session import DatabaseSessionManager
 
 
@@ -30,8 +32,11 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _init_db(tmp_path) -> DatabaseSessionManager:
+    clear_session_manager()
     db = DatabaseSessionManager(str(tmp_path / "secret-login.db"))
     db.migrate()
+    database_proxy.initialize(db._database)
+    _di_database._cached_runtime_db = db
     return db
 
 

@@ -105,7 +105,9 @@ async def logout(
         record = await auth_repo.async_get_refresh_token_by_hash(token_hash)
         if record is None:
             raise ResourceNotFoundError("RefreshToken", token_hash[:8])
-        if str(record.get("user_id")) != str(current_user.get("user_id")):
+        # model_to_dict() returns "user" for ForeignKeyField; cache may return "user_id"
+        record_user_id = record.get("user_id") or record.get("user")
+        if str(record_user_id) != str(current_user.get("user_id")):
             raise AuthorizationError("Token does not belong to the authenticated user")
         revoked = await auth_repo.async_revoke_refresh_token(token_hash)
         if revoked:

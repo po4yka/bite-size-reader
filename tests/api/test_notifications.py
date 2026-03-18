@@ -16,7 +16,7 @@ async def test_register_new_device(client, user_factory):
 
     response = client.post("/v1/notifications/device", json=payload, headers=headers)
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json()["data"]["status"] == "ok"
 
     # Check DB
     assert UserDevice.select().where(UserDevice.token == "fcm_token_123").exists()
