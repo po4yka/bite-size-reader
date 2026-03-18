@@ -9,12 +9,6 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from peewee import OperationalError
 
 from app.api.background_processor import process_url_request
-from app.api.dependencies.database import (
-    get_crawl_result_repository,
-    get_llm_repository,
-    get_request_repository,
-    get_summary_repository,
-)
 from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError, ValidationError
 from app.api.models.requests import SubmitForwardRequest, SubmitURLRequest
 from app.api.models.responses import (
@@ -43,16 +37,7 @@ router = APIRouter()
 
 def _get_request_service(request: Request) -> RequestService:
     """Resolve the shared request workflow service from API runtime."""
-    try:
-        return resolve_api_runtime(request).request_service
-    except RuntimeError:
-        return RequestService(
-            db=None,
-            request_repository=get_request_repository(),
-            summary_repository=get_summary_repository(),
-            crawl_result_repository=get_crawl_result_repository(),
-            llm_repository=get_llm_repository(),
-        )
+    return resolve_api_runtime(request).request_service
 
 
 @router.post("")
