@@ -5,6 +5,7 @@ import os
 import threading
 import weakref
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, cast
 
@@ -45,6 +46,34 @@ if not HTTP2_AVAILABLE:
     )
 
 
+@dataclass
+class OpenRouterClientConfig:
+    """Grouped configuration for OpenRouterClient HTTP, structured output, and prompt caching options."""
+
+    # HTTP/retry settings
+    timeout_sec: int = 60
+    max_retries: int = 3
+    backoff_base: float = 0.5
+    max_connections: int = 20
+    max_keepalive_connections: int = 10
+    keepalive_expiry: float = 30.0
+    max_response_size_mb: int = 10
+    # Structured output settings
+    enable_structured_outputs: bool = True
+    structured_output_mode: str = "json_schema"
+    require_parameters: bool = True
+    auto_fallback_structured: bool = True
+    # Prompt caching settings
+    enable_prompt_caching: bool = True
+    prompt_cache_ttl: str = "ephemeral"
+    cache_system_prompt: bool = True
+    cache_large_content_threshold: int = 4096
+    # Debug/logging
+    debug_payloads: bool = False
+    enable_stats: bool = False
+    log_truncate_length: int = 1000
+
+
 class OpenRouterClient:
     """Enhanced OpenRouter Chat Completions client with structured output support.
 
@@ -75,64 +104,43 @@ class OpenRouterClient:
     def __init__(
         self,
         api_key: str,
+        config: OpenRouterClientConfig | None = None,
         *,
         model: str,
         fallback_models: list[str] | tuple[str, ...] | None = None,
         http_referer: str | None = None,
         x_title: str | None = None,
-        timeout_sec: int = 60,
-        max_retries: int = 3,
-        backoff_base: float = 0.5,
-        audit: Callable[[str, str, dict[str, Any]], None] | None = None,
-        debug_payloads: bool = False,
         provider_order: list[str] | tuple[str, ...] | None = None,
-        enable_stats: bool = False,
-        log_truncate_length: int = 1000,
-        # Structured output settings
-        enable_structured_outputs: bool = True,
-        structured_output_mode: str = "json_schema",
-        require_parameters: bool = True,
-        auto_fallback_structured: bool = True,
-        # Performance settings
-        max_connections: int = 20,
-        max_keepalive_connections: int = 10,
-        keepalive_expiry: float = 30.0,
-        # Response size limits
-        max_response_size_mb: int = 10,
-        # Circuit breaker for fault tolerance
+        audit: Callable[[str, str, dict[str, Any]], None] | None = None,
         circuit_breaker: CircuitBreaker | None = None,
-        # Prompt caching settings
-        enable_prompt_caching: bool = True,
-        prompt_cache_ttl: str = "ephemeral",
-        cache_system_prompt: bool = True,
-        cache_large_content_threshold: int = 4096,
     ) -> None:
+        cfg = config or OpenRouterClientConfig()
         self._validate_init_params(
             api_key,
             model,
             fallback_models,
             http_referer,
             x_title,
-            timeout_sec,
-            max_retries,
-            backoff_base,
-            structured_output_mode,
-            max_response_size_mb,
+            cfg.timeout_sec,
+            cfg.max_retries,
+            cfg.backoff_base,
+            cfg.structured_output_mode,
+            cfg.max_response_size_mb,
         )
         self._set_core_configuration(
             api_key=api_key,
             model=model,
             fallback_models=fallback_models,
-            timeout_sec=timeout_sec,
-            enable_structured_outputs=enable_structured_outputs,
-            max_response_size_mb=max_response_size_mb,
-            max_connections=max_connections,
-            max_keepalive_connections=max_keepalive_connections,
-            keepalive_expiry=keepalive_expiry,
-            enable_prompt_caching=enable_prompt_caching,
-            prompt_cache_ttl=prompt_cache_ttl,
-            cache_system_prompt=cache_system_prompt,
-            cache_large_content_threshold=cache_large_content_threshold,
+            timeout_sec=cfg.timeout_sec,
+            enable_structured_outputs=cfg.enable_structured_outputs,
+            max_response_size_mb=cfg.max_response_size_mb,
+            max_connections=cfg.max_connections,
+            max_keepalive_connections=cfg.max_keepalive_connections,
+            keepalive_expiry=cfg.keepalive_expiry,
+            enable_prompt_caching=cfg.enable_prompt_caching,
+            prompt_cache_ttl=cfg.prompt_cache_ttl,
+            cache_system_prompt=cfg.cache_system_prompt,
+            cache_large_content_threshold=cfg.cache_large_content_threshold,
         )
         self._set_pricing_overrides()
         self._initialize_components(
@@ -140,23 +148,25 @@ class OpenRouterClient:
             http_referer=http_referer,
             x_title=x_title,
             provider_order=provider_order,
-            enable_structured_outputs=enable_structured_outputs,
-            structured_output_mode=structured_output_mode,
-            require_parameters=require_parameters,
-            enable_prompt_caching=enable_prompt_caching,
-            prompt_cache_ttl=prompt_cache_ttl,
-            cache_system_prompt=cache_system_prompt,
-            cache_large_content_threshold=cache_large_content_threshold,
-            enable_stats=enable_stats,
-            timeout_sec=timeout_sec,
-            max_retries=max_retries,
-            backoff_base=backoff_base,
+            enable_structured_outputs=cfg.enable_structured_outputs,
+            structured_output_mode=cfg.structured_output_mode,
+            require_parameters=cfg.require_parameters,
+            enable_prompt_caching=cfg.enable_prompt_caching,
+            prompt_cache_ttl=cfg.prompt_cache_ttl,
+            cache_system_prompt=cfg.cache_system_prompt,
+            cache_large_content_threshold=cfg.cache_large_content_threshold,
+            enable_stats=cfg.enable_stats,
+            timeout_sec=cfg.timeout_sec,
+            max_retries=cfg.max_retries,
+            backoff_base=cfg.backoff_base,
             audit=audit,
-            auto_fallback_structured=auto_fallback_structured,
-            debug_payloads=debug_payloads,
-            log_truncate_length=log_truncate_length,
+            auto_fallback_structured=cfg.auto_fallback_structured,
+            debug_payloads=cfg.debug_payloads,
+            log_truncate_length=cfg.log_truncate_length,
         )
-        self._client_key = f"{self._base_url}:{hash((api_key, timeout_sec, max_connections))}"
+        self._client_key = (
+            f"{self._base_url}:{hash((api_key, cfg.timeout_sec, cfg.max_connections))}"
+        )
         self._client: httpx.AsyncClient | None = None
         self._circuit_breaker = circuit_breaker
         self._cleanup_registry.add(self)
@@ -172,23 +182,26 @@ class OpenRouterClient:
         """Construct from AppConfig, extracting all relevant settings."""
         or_cfg = config.openrouter
         rt_cfg = config.runtime
-        return cls(
-            api_key=or_cfg.api_key,
-            model=or_cfg.model,
-            fallback_models=list(or_cfg.fallback_models),
-            http_referer=or_cfg.http_referer,
-            x_title=or_cfg.x_title,
+        client_cfg = OpenRouterClientConfig(
             timeout_sec=rt_cfg.request_timeout_sec,
-            audit=audit,
             debug_payloads=rt_cfg.debug_payloads,
-            provider_order=list(or_cfg.provider_order),
-            enable_stats=or_cfg.enable_stats,
             log_truncate_length=rt_cfg.log_truncate_length,
+            enable_stats=or_cfg.enable_stats,
             enable_structured_outputs=or_cfg.enable_structured_outputs,
             structured_output_mode=or_cfg.structured_output_mode,
             require_parameters=or_cfg.require_parameters,
             auto_fallback_structured=or_cfg.auto_fallback_structured,
             max_response_size_mb=or_cfg.max_response_size_mb,
+        )
+        return cls(
+            or_cfg.api_key,
+            client_cfg,
+            model=or_cfg.model,
+            fallback_models=list(or_cfg.fallback_models),
+            http_referer=or_cfg.http_referer,
+            x_title=or_cfg.x_title,
+            provider_order=list(or_cfg.provider_order),
+            audit=audit,
             circuit_breaker=circuit_breaker,
         )
 
