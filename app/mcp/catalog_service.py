@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.core.call_status import CallStatus
-from app.mcp.helpers import format_summary_compact, isotime, paginated_payload
+from app.mcp.helpers import McpErrorResult, format_summary_compact, isotime, paginated_payload
 
 logger = logging.getLogger("bsr.mcp")
 
@@ -16,7 +16,7 @@ class CatalogReadService:
     def __init__(self, context: McpServerContext) -> None:
         self.context = context
 
-    def list_collections(self, limit: int = 20, offset: int = 0) -> dict[str, Any]:
+    def list_collections(self, limit: int = 20, offset: int = 0) -> dict[str, Any] | McpErrorResult:
         from app.db.models import Collection, CollectionItem
 
         limit = max(1, min(50, limit))

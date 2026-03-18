@@ -4,6 +4,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.mcp.helpers import (
+    McpErrorResult,
     ensure_mapping,
     format_summary_compact,
     format_summary_detail,
@@ -21,7 +22,7 @@ class ArticleReadService:
     def __init__(self, context: McpServerContext) -> None:
         self.context = context
 
-    def search_articles(self, query: str, limit: int = 10) -> dict[str, Any]:
+    def search_articles(self, query: str, limit: int = 10) -> dict[str, Any] | McpErrorResult:
         """Search stored article summaries by keyword, topic, or entity."""
         from app.db.models import Request, Summary, TopicSearchIndex
 
@@ -126,7 +127,7 @@ class ArticleReadService:
 
         return {"results": results, "total": len(results), "query": query}
 
-    def get_article(self, summary_id: int) -> dict[str, Any]:
+    def get_article(self, summary_id: int) -> dict[str, Any] | McpErrorResult:
         from app.db.models import Request, Summary
 
         try:

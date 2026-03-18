@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, TypedDict
 
 logger = logging.getLogger("bsr.mcp")
+
+
+class McpErrorResult(TypedDict):
+    """Standard error envelope returned by MCP service methods on failure."""
+
+    error: str
 
 
 def ensure_mapping(value: Any) -> dict[str, Any]:

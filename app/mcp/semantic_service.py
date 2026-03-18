@@ -8,6 +8,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.mcp.helpers import (
+    McpErrorResult,
     clamp_limit,
     clamp_similarity,
     ensure_mapping,
@@ -433,12 +434,14 @@ class SemanticSearchService:
 
         if allow_keyword_fallback:
             keyword_payload = self.article_service.search_articles(query=query, limit=limit)
+            if "error" in keyword_payload:
+                keyword_payload = {}
             keyword_results = keyword_payload.get("results")
             if not isinstance(keyword_results, list):
                 keyword_results = []
             return {
                 "results": keyword_results[:limit],
-                "has_more": bool(keyword_payload.get("total", 0) > limit),
+                "has_more": bool(int(keyword_payload.get("total") or 0) > limit),
                 "search_type": "keyword_fallback",
                 "search_backend": "fts",
             }
@@ -639,7 +642,7 @@ class SemanticSearchService:
             logger.exception("find_similar_articles failed")
             return {"error": str(exc), "summary_id": summary_id}
 
-    async def chroma_health(self) -> dict[str, Any]:
+    async def chroma_health(self) -> dict[str, Any] | McpErrorResult:
         try:
             chroma = await self.context.init_chroma_service()
             local = await self.context.init_local_vector_service()
