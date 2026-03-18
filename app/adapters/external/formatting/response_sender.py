@@ -689,39 +689,26 @@ class ResponseSenderImpl:
         Returns:
             True if the action was sent successfully, False otherwise
         """
-        try:
-            if not isinstance(chat_id, int) or chat_id == 0:
-                logger.debug("send_chat_action_invalid_chat_id", extra={"chat_id": chat_id})
-                return False
+        if not isinstance(chat_id, int) or chat_id == 0:
+            logger.debug("send_chat_action_invalid_chat_id", extra={"chat_id": chat_id})
+            return False
 
-            if self._telegram_client and hasattr(self._telegram_client, "client"):
-                client = self._telegram_client.client
-                if client and hasattr(client, "send_chat_action"):
-                    try:
-                        await client.send_chat_action(chat_id=chat_id, action=action)
-                        logger.debug(
-                            "chat_action_sent",
-                            extra={"chat_id": chat_id, "action": action},
-                        )
-                        return True
-                    except Exception as e:
-                        raise_if_cancelled(e)
-                        # Don't log as error - typing indicators are non-critical
-                        logger.debug(
-                            "chat_action_send_failed",
-                            extra={"chat_id": chat_id, "action": action, "error": str(e)},
-                        )
-                        return False
-                else:
-                    logger.debug("chat_action_no_client_method", extra={"chat_id": chat_id})
-                    return False
-            else:
-                logger.debug("chat_action_no_telegram_client", extra={"chat_id": chat_id})
-                return False
+        client = None
+        if self._telegram_client and hasattr(self._telegram_client, "client"):
+            client = self._telegram_client.client
+        if client is None or not hasattr(client, "send_chat_action"):
+            logger.debug("chat_action_no_telegram_client", extra={"chat_id": chat_id})
+            return False
+
+        try:
+            await client.send_chat_action(chat_id=chat_id, action=action)
+            logger.debug("chat_action_sent", extra={"chat_id": chat_id, "action": action})
+            return True
         except Exception as e:
             raise_if_cancelled(e)
+            # Don't log as error - typing indicators are non-critical
             logger.debug(
-                "chat_action_exception",
+                "chat_action_send_failed",
                 extra={"chat_id": chat_id, "action": action, "error": str(e)},
             )
             return False
