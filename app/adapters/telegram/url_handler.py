@@ -402,7 +402,7 @@ class URLHandler:
         url_hash: str | None = None,
         source_lang: str | None = None,
     ) -> str | None:
-        return await self.url_processor.post_summary_tasks.translate_summary_to_ru(
+        return await self.url_processor.translate_summary_to_ru(
             summary,
             req_id=req_id,
             correlation_id=correlation_id,
@@ -411,7 +411,7 @@ class URLHandler:
         )
 
     async def clear_extraction_cache(self) -> int:
-        return await self.url_processor.content_extractor.clear_cache()
+        return await self.url_processor.clear_extraction_cache()
 
     async def _resolve_progress_tracker(self, message: Any) -> Any | None:
         if not self.verbosity_resolver:

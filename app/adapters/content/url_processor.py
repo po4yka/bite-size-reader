@@ -153,6 +153,28 @@ class URLProcessor:
         """Public accessor for the audit callable."""
         return self._audit
 
+    async def translate_summary_to_ru(
+        self,
+        summary: dict[str, Any],
+        *,
+        req_id: int,
+        correlation_id: str | None = None,
+        url_hash: str | None = None,
+        source_lang: str | None = None,
+    ) -> str | None:
+        """Delegate to post_summary_tasks.translate_summary_to_ru."""
+        return await self.post_summary_tasks.translate_summary_to_ru(
+            summary,
+            req_id=req_id,
+            correlation_id=correlation_id,
+            url_hash=url_hash,
+            source_lang=source_lang,
+        )
+
+    async def clear_extraction_cache(self) -> int:
+        """Delegate to content_extractor.clear_cache."""
+        return await self.content_extractor.clear_cache()
+
     async def aclose(self, timeout: float = 5.0) -> None:
         """Drain runtime and follow-up tasks before shutdown."""
         await self.summarization_runtime.aclose(timeout=timeout)
