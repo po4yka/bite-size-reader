@@ -31,34 +31,38 @@ router = APIRouter()
 
 
 @router.get("/channels")
-def list_channels(
+async def list_channels(
     user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """List user's channel subscriptions and slot usage."""
-    data = digest_facade.list_channels(user["user_id"])
+    data = await asyncio.to_thread(digest_facade.list_channels, user["user_id"])
     return success_response(data)
 
 
 @router.post("/channels/subscribe")
-def subscribe_channel(
+async def subscribe_channel(
     body: SubscribeRequest,
     user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Subscribe to a Telegram channel."""
-    data = digest_facade.subscribe_channel(user["user_id"], body.channel_username)
+    data = await asyncio.to_thread(
+        digest_facade.subscribe_channel, user["user_id"], body.channel_username
+    )
     return success_response(data)
 
 
 @router.post("/channels/unsubscribe")
-def unsubscribe_channel(
+async def unsubscribe_channel(
     body: SubscribeRequest,
     user: dict[str, Any] = Depends(get_webapp_user),
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Unsubscribe from a Telegram channel."""
-    data = digest_facade.unsubscribe_channel(user["user_id"], body.channel_username)
+    data = await asyncio.to_thread(
+        digest_facade.unsubscribe_channel, user["user_id"], body.channel_username
+    )
     return success_response(data)
 
 

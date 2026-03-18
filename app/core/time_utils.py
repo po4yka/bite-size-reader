@@ -13,6 +13,22 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def coerce_datetime(raw: object) -> datetime:
+    """Coerce a raw value to a timezone-aware UTC datetime.
+
+    Accepts datetime objects (returned as-is) or ISO8601 strings.
+    Falls back to utc_now() on parse failure or unknown type.
+    """
+    if isinstance(raw, datetime):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return datetime.fromisoformat(raw)
+        except ValueError:
+            pass
+    return datetime.now(UTC)
+
+
 def format_iso_z(value: datetime) -> str:
     """Format a datetime as UTC ISO8601 with a trailing Z suffix."""
     if value.tzinfo is None:

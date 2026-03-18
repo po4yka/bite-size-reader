@@ -22,7 +22,6 @@ from app.adapters.llm.anthropic.request_builder import (
 from app.adapters.llm.base_client import BaseLLMClient
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
-from app.core.http_utils import ResponseSizeError, validate_response_size
 from app.models.llm.llm_models import LLMCallResult
 
 if TYPE_CHECKING:
@@ -132,6 +131,8 @@ class AnthropicClient:
     _get_pool_lock = BaseLLMClient.__dict__["_get_pool_lock"]
     _get_pool = BaseLLMClient.__dict__["_get_pool"]
     _run_with_retry = BaseLLMClient.__dict__["_run_with_retry"]
+    _extract_error_message = BaseLLMClient.__dict__["_extract_error_message"]
+    _parse_http_response = BaseLLMClient.__dict__["_parse_http_response"]
 
     async def __aenter__(self) -> AnthropicClient:
         """Async context manager entry."""
@@ -304,73 +305,12 @@ class AnthropicClient:
 
         latency = int((time.perf_counter() - started) * 1000)
 
-        # Validate response size
-        try:
-            validate_response_size(resp, self._max_response_size_bytes, "Anthropic")
-        except ResponseSizeError as e:
-            return LLMCallResult(
-                status=CallStatus.ERROR,
-                model=model,
-                response_text=None,
-                error_text=f"Response too large: {e}",
-                tokens_prompt=0,
-                tokens_completion=0,
-                cost_usd=None,
-                latency_ms=latency,
-            )
-
-        # Parse response
-        try:
-            data = resp.json()
-        except Exception as e:
-            raise_if_cancelled(e)
-            return LLMCallResult(
-                status=CallStatus.ERROR,
-                model=model,
-                response_text=None,
-                error_text=f"Failed to parse JSON response: {e}",
-                tokens_prompt=0,
-                tokens_completion=0,
-                cost_usd=None,
-                latency_ms=latency,
-            )
-
-        if self._debug_payloads:
-            logger.debug(
-                "anthropic_response",
-                extra={"status": resp.status_code, "latency_ms": latency},
-            )
-
-        # Handle error responses
-        if resp.status_code != 200:
-            error_msg = self._extract_error_message(data)
-            return LLMCallResult(
-                status=CallStatus.ERROR,
-                model=model,
-                response_text=None,
-                response_json=data,
-                error_text=error_msg,
-                tokens_prompt=0,
-                tokens_completion=0,
-                cost_usd=None,
-                latency_ms=latency,
-                error_context={"status_code": resp.status_code, "api_error": error_msg},
-            )
+        data, err = self._parse_http_response(resp, model, latency, "Anthropic")
+        if err is not None:
+            return err
 
         # Extract successful response
         return self._parse_success_response(data, model, latency, headers, messages, use_structured)
-
-    def _extract_error_message(self, data: dict[str, Any]) -> str:
-        """Extract error message from API response.
-
-        Anthropic error format: {"type": "error", "error": {"type": "...", "message": "..."}}
-        """
-        error = data.get("error", {})
-        if isinstance(error, dict):
-            return error.get("message", "Unknown API error")
-        if isinstance(error, str):
-            return error
-        return data.get("message", "Unknown API error")
 
     def _parse_success_response(
         self,

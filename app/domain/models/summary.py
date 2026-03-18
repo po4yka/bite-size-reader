@@ -5,8 +5,10 @@ content summary with its metadata and insights.
 """
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
+
+from app.core.time_utils import coerce_datetime
 
 # Canonical list of fields that every valid summary must contain.
 # Import this constant instead of hardcoding the field names elsewhere.
@@ -129,16 +131,6 @@ class Summary:
 
 def summary_from_dict(db_summary: dict[str, Any]) -> Summary:
     """Convert a persistence dictionary into a Summary domain model."""
-    created_at_raw = db_summary.get("created_at")
-    created_at_value = datetime.now(UTC)
-    if isinstance(created_at_raw, datetime):
-        created_at_value = created_at_raw
-    elif isinstance(created_at_raw, str):
-        try:
-            created_at_value = datetime.fromisoformat(created_at_raw)
-        except ValueError:
-            created_at_value = datetime.now(UTC)
-
     return Summary(
         id=db_summary.get("id"),
         request_id=db_summary.get("request_id") or db_summary.get("request"),
@@ -147,5 +139,5 @@ def summary_from_dict(db_summary: dict[str, Any]) -> Summary:
         version=db_summary.get("version", 1),
         is_read=db_summary.get("is_read", False),
         insights=db_summary.get("insights_json"),
-        created_at=created_at_value,
+        created_at=coerce_datetime(db_summary.get("created_at")),
     )

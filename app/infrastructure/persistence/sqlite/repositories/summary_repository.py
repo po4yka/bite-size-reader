@@ -16,7 +16,7 @@ from typing import Any
 import peewee
 
 from app.application.services.topic_search_utils import ensure_mapping, tokenize
-from app.core.time_utils import UTC
+from app.core.time_utils import UTC, coerce_datetime
 from app.db.json_utils import prepare_json_payload
 from app.db.models import CrawlResult, Request, Summary, SummaryFeedback, model_to_dict
 from app.domain.models.request import RequestStatus
@@ -753,16 +753,6 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
 
     def to_domain_model(self, db_summary: dict[str, Any]) -> DomainSummary:
         """Convert database record to domain model."""
-        created_at_raw = db_summary.get("created_at")
-        created_at_value = datetime.now(UTC)
-        if isinstance(created_at_raw, datetime):
-            created_at_value = created_at_raw
-        elif isinstance(created_at_raw, str):
-            try:
-                created_at_value = datetime.fromisoformat(created_at_raw)
-            except ValueError:
-                created_at_value = datetime.now(UTC)
-
         return DomainSummary(
             id=db_summary.get("id"),
             request_id=db_summary.get("request_id") or db_summary.get("request"),
@@ -771,7 +761,7 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
             version=db_summary.get("version", 1),
             is_read=db_summary.get("is_read", False),
             insights=db_summary.get("insights_json"),
-            created_at=created_at_value,
+            created_at=coerce_datetime(db_summary.get("created_at")),
         )
 
     def from_domain_model(self, summary: DomainSummary) -> dict[str, Any]:

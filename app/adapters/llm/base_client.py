@@ -18,6 +18,7 @@ import httpx
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
+from app.core.http_utils import ResponseSizeError, validate_response_size
 from app.models.llm.llm_models import LLMCallResult
 
 if TYPE_CHECKING:
@@ -284,6 +285,79 @@ class BaseLLMClient:
         else:
             log_level = logging.INFO if level == "info" else logging.ERROR
             logger.log(log_level, event, extra=details)
+
+    def _extract_error_message(self, data: dict[str, Any]) -> str:
+        """Extract error message from API error response."""
+        error = data.get("error", {})
+        if isinstance(error, dict):
+            return error.get("message", "Unknown API error")
+        if isinstance(error, str):
+            return error
+        return data.get("message", "Unknown API error")
+
+    def _parse_http_response(
+        self,
+        resp: httpx.Response,
+        model: str,
+        latency: int,
+        provider_name: str,
+    ) -> tuple[dict[str, Any] | None, LLMCallResult | None]:
+        """Validate and parse an HTTP response, returning (data, None) on success.
+
+        Returns (None, error_result) when the response is too large, unparseable, or
+        carries a non-200 status code.
+        """
+        try:
+            validate_response_size(resp, self._max_response_size_bytes, provider_name)
+        except ResponseSizeError as e:
+            return None, LLMCallResult(
+                status=CallStatus.ERROR,
+                model=model,
+                response_text=None,
+                error_text=f"Response too large: {e}",
+                tokens_prompt=0,
+                tokens_completion=0,
+                cost_usd=None,
+                latency_ms=latency,
+            )
+
+        try:
+            data = resp.json()
+        except Exception as e:
+            raise_if_cancelled(e)
+            return None, LLMCallResult(
+                status=CallStatus.ERROR,
+                model=model,
+                response_text=None,
+                error_text=f"Failed to parse JSON response: {e}",
+                tokens_prompt=0,
+                tokens_completion=0,
+                cost_usd=None,
+                latency_ms=latency,
+            )
+
+        if self._debug_payloads:
+            logger.debug(
+                f"{provider_name.lower()}_response",
+                extra={"status": resp.status_code, "latency_ms": latency},
+            )
+
+        if resp.status_code != 200:
+            error_msg = self._extract_error_message(data)
+            return None, LLMCallResult(
+                status=CallStatus.ERROR,
+                model=model,
+                response_text=None,
+                response_json=data,
+                error_text=error_msg,
+                tokens_prompt=0,
+                tokens_completion=0,
+                cost_usd=None,
+                latency_ms=latency,
+                error_context={"status_code": resp.status_code, "api_error": error_msg},
+            )
+
+        return data, None
 
     async def _run_with_retry(
         self,
