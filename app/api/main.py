@@ -49,7 +49,7 @@ from app.api.routers import (
 )
 from app.api.routers.auth import get_current_user
 from app.config import Config
-from app.core.logging_utils import get_logger
+from app.core.logging_utils import get_logger, setup_json_logging
 from app.core.time_utils import UTC
 from app.di.api import (
     build_api_runtime,
@@ -67,6 +67,7 @@ async def lifespan(app: FastAPI):
     runtime = None
     try:
         runtime = await build_api_runtime()
+        setup_json_logging(runtime.cfg.runtime.log_level)
         app.state.runtime = runtime
         set_current_api_runtime(runtime)
         logger.info("database_initialized", extra={"db_path": runtime.db.path})
