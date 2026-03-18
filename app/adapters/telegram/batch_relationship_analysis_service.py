@@ -97,6 +97,7 @@ class BatchRelationshipAnalysisService:
             preview_buffer,
         )
 
+        session_id: int | None = None
         try:
             await self._draft_stage_update(
                 sender,
@@ -204,6 +205,10 @@ class BatchRelationshipAnalysisService:
                 "batch_relationship_analysis_error",
                 extra={"error": str(exc), "cid": correlation_id},
             )
+            if session_id is not None:
+                await self._batch_session_repo.async_update_batch_session_status(
+                    session_id, "failed"
+                )
         finally:
             if draft_enabled:
                 self._clear_message_draft(sender, message)

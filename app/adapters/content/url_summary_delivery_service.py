@@ -180,6 +180,7 @@ class URLSummaryDeliveryService:
                 "summary_persistence_failed",
                 extra={"cid": correlation_id, "error": str(exc)},
             )
+            raise
 
     def schedule_task(
         self,

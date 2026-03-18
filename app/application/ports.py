@@ -121,7 +121,7 @@ class SummaryRepositoryPort(Protocol):
 
     async def async_update_summary_insights(
         self,
-        summary_id: int,
+        request_id: int,
         insights_json: dict[str, Any],
     ) -> None:
         """Persist summary insights JSON."""

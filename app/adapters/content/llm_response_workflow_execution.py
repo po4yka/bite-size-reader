@@ -97,6 +97,8 @@ class LLMWorkflowExecutionMixin:
             msg = "requests must include at least one attempt"
             raise ValueError(msg)
 
+        from app.adapters.content.llm_response_workflow import AttemptContext
+
         failed_attempts: list[tuple[Any, Any]] = []
         total_attempts = len(requests)
 
@@ -127,8 +129,6 @@ class LLMWorkflowExecutionMixin:
 
             summary = None
             try:
-                from app.adapters.content.llm_response_workflow import AttemptContext
-
                 attempt_ctx = AttemptContext(
                     message=message,
                     llm=llm,
