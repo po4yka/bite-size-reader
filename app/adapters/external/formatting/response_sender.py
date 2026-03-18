@@ -98,30 +98,12 @@ class ResponseSenderImpl:
         message_thread_id: int | None = None,
     ) -> None:
         """Safely reply to a message with comprehensive security checks."""
-        # Input validation
-        if not text or not text.strip():
-            logger.warning("safe_reply_empty_text", extra={"parse_mode": parse_mode is not None})
+        prepared = self._validate_and_truncate(
+            text, substitute_on_unsafe=True, context_log_key="safe_reply"
+        )
+        if prepared is None:
             return
-
-        # Security content check
-        is_safe, error_msg = self._validator.validate_content(text)
-        if not is_safe:
-            logger.warning(
-                "safe_reply_unsafe_content_blocked",
-                extra={"error": error_msg, "text_length": len(text), "text_preview": text[:100]},
-            )
-            # Send safe error message instead
-            safe_text = "❌ Message blocked for security reasons."
-            text = safe_text
-
-        # Length check
-        if len(text) > self._max_message_chars:
-            logger.warning(
-                "safe_reply_message_too_long",
-                extra={"length": len(text), "max": self._max_message_chars},
-            )
-            # Truncate if too long
-            text = text[: self._max_message_chars - 10] + "..."
+        text = prepared
 
         # Rate limiting check
         if not await self._validator.check_rate_limit():
@@ -179,30 +161,49 @@ class ResponseSenderImpl:
                 extra={"error": str(e), "text_length": len(text)},
             )
 
-    def _prepare_text_for_reply_with_id(self, text: str, parse_mode: str | None) -> str | None:
-        """Validate and normalize text used by safe_reply_with_id."""
+    def _validate_and_truncate(
+        self,
+        text: str,
+        *,
+        substitute_on_unsafe: bool,
+        context_log_key: str,
+    ) -> str | None:
+        """Validate text for safety and truncate if over the length limit.
+
+        Returns the (possibly modified) text, or None if text is empty/blocked.
+        When substitute_on_unsafe=True, unsafe content is replaced with a safe
+        placeholder instead of returning None.
+        """
         if not text or not text.strip():
-            logger.warning(
-                "safe_reply_with_id_empty_text",
-                extra={"parse_mode": parse_mode is not None},
-            )
+            logger.warning(f"{context_log_key}_empty_text")
             return None
 
         is_safe, error_msg = self._validator.validate_content(text)
         if not is_safe:
             logger.warning(
-                "safe_reply_with_id_unsafe_content_blocked",
+                f"{context_log_key}_unsafe_content_blocked",
                 extra={"error": error_msg, "text_length": len(text), "text_preview": text[:100]},
             )
-            text = "❌ Message blocked for security reasons."
+            if substitute_on_unsafe:
+                text = "❌ Message blocked for security reasons."
+            else:
+                return None
 
         if len(text) > self._max_message_chars:
             logger.warning(
-                "safe_reply_with_id_message_too_long",
+                f"{context_log_key}_message_too_long",
                 extra={"length": len(text), "max": self._max_message_chars},
             )
             text = text[: self._max_message_chars - 10] + "..."
         return text
+
+    def _prepare_text_for_reply_with_id(self, text: str, parse_mode: str | None) -> str | None:
+        """Validate and normalize text used by safe_reply_with_id."""
+        return self._validate_and_truncate(
+            text,
+            substitute_on_unsafe=True,
+            context_log_key="safe_reply_with_id",
+        )
 
     @staticmethod
     def _build_message_kwargs(
@@ -547,38 +548,11 @@ class ResponseSenderImpl:
 
     def _prepare_text_for_edit(self, chat_id: int, message_id: int, text: str) -> str | None:
         """Validate and normalize edit text before calling Telegram APIs."""
-        if not text or not text.strip():
-            logger.warning(
-                "edit_message_empty_text",
-                extra={"chat_id": chat_id, "message_id": message_id},
-            )
-            return None
-
-        is_safe, error_msg = self._validator.validate_content(text)
-        if not is_safe:
-            logger.warning(
-                "edit_message_unsafe_content_blocked",
-                extra={
-                    "error": error_msg,
-                    "chat_id": chat_id,
-                    "message_id": message_id,
-                    "text_preview": text[:100],
-                },
-            )
-            return None
-
-        if len(text) > self._max_message_chars:
-            logger.warning(
-                "edit_message_too_long_truncating",
-                extra={
-                    "length": len(text),
-                    "max": self._max_message_chars,
-                    "chat_id": chat_id,
-                    "message_id": message_id,
-                },
-            )
-            text = text[: self._max_message_chars - 10] + "..."
-        return text
+        return self._validate_and_truncate(
+            text,
+            substitute_on_unsafe=False,
+            context_log_key="edit_message",
+        )
 
     def _log_edit_attempt(self, chat_id: int, message_id: int) -> None:
         """Log edit attempt diagnostics once per request."""
