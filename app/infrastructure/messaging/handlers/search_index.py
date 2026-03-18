@@ -10,7 +10,7 @@ from app.infrastructure.persistence.sqlite.repositories.topic_search_repository 
 )
 
 if TYPE_CHECKING:
-    from app.domain.events.summary_events import SummaryCreated, SummaryMarkedAsRead
+    from app.domain.events.summary_events import SummaryCreated
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,3 @@ class SearchIndexEventHandler:
                     "error": str(exc),
                 },
             )
-
-    async def on_summary_marked_as_read(self, event: SummaryMarkedAsRead) -> None:
-        logger.debug("summary_marked_as_read_event", extra={"summary_id": event.summary_id})

@@ -111,10 +111,10 @@ class TwitterExtractionCoordinator:
         content_text = ""
         content_source = "none"
 
-        run_firecrawl_tier = self._tier_policy.should_use_firecrawl_tier()
-        run_playwright_tier = self._tier_policy.should_use_playwright_tier()
+        use_firecrawl_tier = self._tier_policy.should_use_firecrawl_tier()
+        use_playwright_tier = self._tier_policy.should_use_playwright_tier()
         firecrawl_ok = False
-        if run_firecrawl_tier:
+        if use_firecrawl_tier:
             firecrawl_ok, content_text, content_source = await self._firecrawl_extractor.extract(
                 url_text=extraction_url,
                 req_id=req_id,
@@ -130,7 +130,7 @@ class TwitterExtractionCoordinator:
                 "forced_skip" if self._tier_policy.force_tier() == "playwright" else "disabled"
             )
 
-        should_try_playwright = run_playwright_tier and (
+        should_try_playwright = use_playwright_tier and (
             self._tier_policy.force_tier() == "playwright" or not firecrawl_ok
         )
         if should_try_playwright:
@@ -162,7 +162,7 @@ class TwitterExtractionCoordinator:
                 )
                 if self._tier_policy.force_tier() == "playwright":
                     raise
-        elif not run_playwright_tier:
+        elif not use_playwright_tier:
             metadata["tier_outcomes"]["playwright"] = (
                 "forced_skip" if self._tier_policy.force_tier() == "firecrawl" else "disabled"
             )

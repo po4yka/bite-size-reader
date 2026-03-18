@@ -65,7 +65,6 @@ def wire_event_handlers(
         )
         event_bus.subscribe(SummaryCreated, push_handler.on_summary_created)
 
-    event_bus.subscribe(SummaryMarkedAsRead, search_index_handler.on_summary_marked_as_read)
     event_bus.subscribe(SummaryMarkedAsRead, analytics_handler.on_summary_marked_as_read)
     event_bus.subscribe(SummaryMarkedAsRead, cache_handler.on_summary_marked_as_read)
 
