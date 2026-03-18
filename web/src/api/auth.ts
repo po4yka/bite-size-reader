@@ -79,7 +79,6 @@ export async function listSessions(): Promise<AuthSession[]> {
   return result.sessions;
 }
 
-// TODO: backend endpoint DELETE /v1/auth/sessions/{session_id} is not yet implemented
 export async function deleteSession(sessionId: string): Promise<void> {
   await apiRequest<Record<string, never>>(`/v1/auth/sessions/${sessionId}`, {
     method: "DELETE",

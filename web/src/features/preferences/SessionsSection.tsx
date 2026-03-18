@@ -4,7 +4,6 @@ import {
   DataTableSkeleton,
   Tag,
   Tile,
-  Tooltip,
   Table,
   TableBody,
   TableCell,
@@ -30,9 +29,15 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleString();
 }
 
-function SessionRow({ session, isDeletePending }: { session: AuthSession; isDeletePending: boolean }) {
-  // TODO: DELETE /v1/auth/sessions/{session_id} backend endpoint is not yet implemented.
-  // Revoke button is rendered but always disabled until backend support is added.
+function SessionRow({
+  session,
+  isDeletePending,
+  onDelete,
+}: {
+  session: AuthSession;
+  isDeletePending: boolean;
+  onDelete: (id: string) => void;
+}) {
   return (
     <TableRow key={session.id}>
       <TableCell>{session.clientId}</TableCell>
@@ -43,15 +48,14 @@ function SessionRow({ session, isDeletePending }: { session: AuthSession; isDele
         {session.isCurrent ? <Tag type="green">Current</Tag> : null}
       </TableCell>
       <TableCell>
-        <Tooltip label="Coming soon — backend endpoint pending" align="left">
-          <Button
-            kind="ghost"
-            size="sm"
-            disabled={session.isCurrent || isDeletePending || true}
-          >
-            Revoke
-          </Button>
-        </Tooltip>
+        <Button
+          kind="ghost"
+          size="sm"
+          disabled={session.isCurrent || isDeletePending}
+          onClick={() => onDelete(session.id)}
+        >
+          Revoke
+        </Button>
       </TableCell>
     </TableRow>
   );
@@ -96,6 +100,7 @@ export default function SessionsSection() {
                       key={session.id}
                       session={session}
                       isDeletePending={deleteSession.isPending}
+                      onDelete={(id) => deleteSession.mutate(id)}
                     />
                   ))}
                 </TableBody>
