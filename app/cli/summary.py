@@ -64,7 +64,7 @@ class CLIMessage:
 
     async def reply_text(self, text: str, *, parse_mode: str | None = None) -> None:
         """Print reply text to stdout."""
-        sys.stdout.flush()
+        print(text, flush=True)
 
     async def reply_document(self, file_obj: Any, caption: str | None = None) -> None:
         """Print JSON attachment content or persist to file when requested."""

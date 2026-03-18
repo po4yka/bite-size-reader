@@ -11,10 +11,12 @@ from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
 from app.api.services.auth_service import AuthService
 from app.api.services.system_maintenance_service import SystemMaintenanceService
+from app.core.logging_utils import get_logger
 from app.di.api import resolve_api_runtime
 from app.di.shared import build_async_audit_sink
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 def get_system_maintenance_service() -> SystemMaintenanceService:

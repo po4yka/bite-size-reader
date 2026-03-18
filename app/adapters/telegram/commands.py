@@ -150,27 +150,15 @@ class CommandRegistry:
         self._commands.append((None, ConditionalCommand(condition, handler)))
 
     async def route_message(self, context: CommandContext) -> bool:
-        """Route a message through registered command handlers.
-
-        Args:
-            context: The command context containing message information.
-
-        Returns:
-            True if a command handled the message, False otherwise.
-
-        """
+        """Route context through registered handlers; return True if one handled it."""
         text = context.text
 
         for prefixes, command in self._commands:
-            # Check if this command matches the message
             should_execute = False
 
             if prefixes is None:
-                # No prefix means this is a conditional or fallback handler
-                # The command itself will decide if it should execute
                 should_execute = True
             else:
-                # Check if text starts with any of the registered prefixes
                 for prefix in prefixes:
                     if text.startswith(prefix):
                         should_execute = True
@@ -178,10 +166,8 @@ class CommandRegistry:
 
             if should_execute:
                 try:
-                    # Execute command and check if routing should continue
                     should_continue = await command.execute(context)
                     if not should_continue:
-                        # Command handled the message, stop routing
                         return True
                 except Exception as exc:
                     logger.exception(
@@ -192,7 +178,6 @@ class CommandRegistry:
                             "prefixes": prefixes,
                         },
                     )
-                    # Continue to next handler on error
                     continue
 
         # No command handled the message

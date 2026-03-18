@@ -64,26 +64,13 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
         self.crawl_result_repo = SqliteCrawlResultRepositoryAdapter(db)
 
     async def execute(self, input_data: ExtractionInput) -> AgentResult[ExtractionOutput]:
-        """Extract content from the given URL.
-
-        Args:
-            input_data: Extraction parameters including URL
-
-        Returns:
-            AgentResult with extracted content or error
-        """
+        """Extract content from the given URL."""
         self.correlation_id = input_data.correlation_id
-        self.log_info(f"Starting content extraction for URL: {input_data.url}")
+        self.log_info("content_extraction_started", url=input_data.url)
 
         try:
             normalized_url = normalize_url(input_data.url)
-            self.log_info(f"Normalized URL: {normalized_url}")
 
-            # Note: The ContentExtractor.extract() method handles:
-            # - Firecrawl API calls
-            # - Database persistence
-            # - Retry logic
-            # - Error handling
             result = await self._extract_with_validation(
                 url=normalized_url,
                 correlation_id=input_data.correlation_id,
@@ -107,7 +94,10 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
                 crawl_result_id=result.get("id"),
             )
 
-            self.log_info(f"Content extraction successful - {len(output.content_markdown)} chars")
+            self.log_info(
+                "content_extraction_completed",
+                chars=len(output.content_markdown),
+            )
 
             return AgentResult.success_result(
                 output,
@@ -126,25 +116,7 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
     async def _extract_with_validation(
         self, url: str, correlation_id: str
     ) -> dict[str, Any] | None:
-        """Extract content with basic validation.
-
-        This method first checks the database for existing crawl results.
-        If not found, performs a fresh extraction using the message-independent
-        extract_content_pure() method.
-
-        For agent-based workflows:
-        1. Check if content already exists for this URL (via dedupe hash)
-        2. Return existing crawl result if available
-        3. Otherwise, perform fresh extraction using extract_content_pure()
-
-        Args:
-            url: URL to extract from
-            correlation_id: Correlation ID for tracing
-
-        Returns:
-            Extraction result dictionary or None if extraction fails
-        """
-        # Compute dedupe hash to check for existing crawl
+        """Return crawl result dict for url, using cached result if available."""
         dedupe_hash = compute_dedupe_hash(url)
 
         existing_req = await self.request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
@@ -155,7 +127,6 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
             crawl_result = await self.crawl_result_repo.async_get_crawl_result_by_request(req_id)
 
             if crawl_result:
-                self.log_info(f"Found existing crawl result (ID: {crawl_result.get('id')})")
                 return {
                     "content_markdown": crawl_result.get("content_markdown", ""),
                     "content_html": crawl_result.get("content_html"),
@@ -163,22 +134,14 @@ class ContentExtractionAgent(BaseAgent[ExtractionInput, ExtractionOutput]):
                     "id": crawl_result.get("id"),
                 }
 
-        # No existing crawl - perform fresh extraction
-        self.log_info("No existing crawl found, performing fresh extraction")
-
         try:
-            # Call the message-independent extraction method
             (
                 content_text,
-                content_source,
+                _content_source,
                 metadata,
             ) = await self.content_extractor.extract_content_pure(
                 url=url,
                 correlation_id=correlation_id,
-            )
-
-            self.log_info(
-                f"Fresh extraction successful - {len(content_text)} chars, source={content_source}"
             )
 
             # Return in expected format

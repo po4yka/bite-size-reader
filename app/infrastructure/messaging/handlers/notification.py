@@ -60,8 +60,22 @@ class NotificationEventHandler:
             extra={"request_id": event.request_id, "error_message": event.error_message},
         )
 
-        if self._telegram:
-            logger.debug(
-                "failure_notification_would_be_sent",
-                extra={"request_id": event.request_id, "channel": "telegram"},
-            )
+        if self._notification_service:
+            try:
+                await self._notification_service.send(
+                    "request_failed",
+                    {
+                        "request_id": event.request_id,
+                        "error_message": event.error_message,
+                        "timestamp": event.occurred_at.isoformat(),
+                    },
+                )
+            except Exception as exc:
+                logger.warning(
+                    "notification_send_failed",
+                    extra={
+                        "request_id": event.request_id,
+                        "channel": "notification_service",
+                        "error": str(exc),
+                    },
+                )
