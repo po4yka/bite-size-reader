@@ -10,7 +10,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.command_handlers.decorators import audit_command
-from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import extract_all_urls
 from app.db.user_interactions import async_safe_update_user_interaction
 
@@ -57,6 +56,12 @@ class URLCommandsHandler:
     def _url_handler(self) -> URLHandler | None:
         return getattr(self._processor_provider, "url_handler", None)
 
+    def _require_url_handler(self) -> URLHandler:
+        handler = self._url_handler
+        if handler is None:
+            raise RuntimeError("url_handler is not wired into processor_provider")
+        return handler
+
     @property
     def _task_manager(self) -> UserTaskManager | None:
         return getattr(self._processor_provider, "_task_manager", None)
@@ -84,74 +89,42 @@ class URLCommandsHandler:
 
         if len(urls) > 1:
             # Multiple URLs - process directly in parallel (no confirmation prompt)
-            if self._url_handler is not None:
-                valid_urls = await self._url_handler.apply_url_security_checks(
-                    ctx.message, urls, ctx.uid, ctx.correlation_id
-                )
-                if valid_urls:
-                    progress_id: int | None = None
+            url_handler = self._require_url_handler()
+            valid_urls = await url_handler.apply_url_security_checks(
+                ctx.message, urls, ctx.uid, ctx.correlation_id
+            )
+            if valid_urls:
+                progress_id: int | None = None
+                draft_enabled = False
+                try:
+                    enabled = self._formatter.is_draft_streaming_enabled()
+                    draft_enabled = enabled if isinstance(enabled, bool) else False
+                except Exception:
                     draft_enabled = False
-                    try:
-                        enabled = self._formatter.is_draft_streaming_enabled()
-                        draft_enabled = enabled if isinstance(enabled, bool) else False
-                    except Exception:
-                        draft_enabled = False
-                    if not draft_enabled:
-                        progress_id = await self._formatter.safe_reply_with_id(
-                            ctx.message, f"Processing {len(valid_urls)} links in parallel..."
-                        )
-                    await self._url_handler.process_url_batch(
-                        ctx.message,
-                        valid_urls,
-                        ctx.uid,
-                        ctx.correlation_id,
-                        interaction_id=ctx.interaction_id,
-                        start_time=ctx.start_time,
-                        initial_message_id=progress_id,
+                if not draft_enabled:
+                    progress_id = await self._formatter.safe_reply_with_id(
+                        ctx.message, f"Processing {len(valid_urls)} links in parallel..."
                     )
-            else:
-                # Fallback: process sequentially
-                for u in urls:
-                    per_link_cid = generate_correlation_id()
-                    if self._url_handler is not None:
-                        await self._url_handler.handle_single_url(
-                            message=ctx.message,
-                            url=u,
-                            correlation_id=per_link_cid,
-                            interaction_id=ctx.interaction_id,
-                        )
-                    else:
-                        from app.adapters.content.url_flow_models import URLFlowRequest
-
-                        await self._url_processor.handle_url_flow(
-                            URLFlowRequest(
-                                message=ctx.message, url_text=u, correlation_id=per_link_cid
-                            )
-                        )
-
+                await url_handler.process_url_batch(
+                    ctx.message,
+                    valid_urls,
+                    ctx.uid,
+                    ctx.correlation_id,
+                    interaction_id=ctx.interaction_id,
+                    start_time=ctx.start_time,
+                    initial_message_id=progress_id,
+                )
             logger.debug("multi_url_processed", extra={"uid": ctx.uid, "count": len(urls)})
             return None, False
 
         if len(urls) == 1:
             # Single URL - process directly
-            if self._url_handler is not None:
-                await self._url_handler.handle_single_url(
-                    message=ctx.message,
-                    url=urls[0],
-                    correlation_id=ctx.correlation_id,
-                    interaction_id=ctx.interaction_id,
-                )
-            else:
-                from app.adapters.content.url_flow_models import URLFlowRequest
-
-                await self._url_processor.handle_url_flow(
-                    URLFlowRequest(
-                        message=ctx.message,
-                        url_text=urls[0],
-                        correlation_id=ctx.correlation_id,
-                        interaction_id=ctx.interaction_id,
-                    )
-                )
+            await self._require_url_handler().handle_single_url(
+                message=ctx.message,
+                url=urls[0],
+                correlation_id=ctx.correlation_id,
+                interaction_id=ctx.interaction_id,
+            )
             return None, False
 
         # No URL - prompt user
@@ -212,37 +185,15 @@ class URLCommandsHandler:
                 ctx.message, f"🚀 Preparing to process {len(urls)} links..."
             )
 
-        # Use unified batch processor if url_handler is available, otherwise sequential
-        if self._url_handler is not None:
-            await self._url_handler.process_url_batch(
-                ctx.message,
-                urls,
-                ctx.uid,
-                ctx.correlation_id,
-                interaction_id=ctx.interaction_id,
-                start_time=ctx.start_time,
-                initial_message_id=progress_message_id,
-            )
-        else:
-            # Fallback to sequential if handler not available
-            for u in urls:
-                per_link_cid = generate_correlation_id()
-                logger.debug(
-                    "processing_link_seq", extra={"uid": ctx.uid, "url": u, "cid": per_link_cid}
-                )
-                if self._url_handler is not None:
-                    await self._url_handler.handle_single_url(
-                        message=ctx.message,
-                        url=u,
-                        correlation_id=per_link_cid,
-                        interaction_id=ctx.interaction_id,
-                    )
-                else:
-                    from app.adapters.content.url_flow_models import URLFlowRequest
-
-                    await self._url_processor.handle_url_flow(
-                        URLFlowRequest(message=ctx.message, url_text=u, correlation_id=per_link_cid)
-                    )
+        await self._require_url_handler().process_url_batch(
+            ctx.message,
+            urls,
+            ctx.uid,
+            ctx.correlation_id,
+            interaction_id=ctx.interaction_id,
+            start_time=ctx.start_time,
+            initial_message_id=progress_message_id,
+        )
 
     @audit_command("command_cancel")
     async def handle_cancel(self, ctx: CommandExecutionContext) -> None:
