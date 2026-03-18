@@ -126,8 +126,7 @@ app/
 +-- db/                 # Database schema and models
 +-- di/                 # Dependency injection
 +-- domain/             # Domain models and services (DDD patterns)
-+-- grpc/               # gRPC service definitions
-+-- handlers/           # Request handlers
++-- grpc/               # gRPC service definitions (aspirational; not wired into bot.py or DI)
 +-- infrastructure/     # Persistence, event bus, vector store
 |   +-- cache/          # Cache layer (Redis)
 |   +-- clients/        # HTTP client wrappers
@@ -139,7 +138,6 @@ app/
 +-- observability/      # Metrics, tracing, telemetry
 +-- prompts/            # LLM system prompts (en/ru)
 +-- security/           # Security utilities
-+-- services/           # DEPRECATED backward-compat re-exports (migrate to app/application/services/ or app/infrastructure/)
 +-- types/              # Type definitions
 +-- utils/              # Helper utilities (progress, formatting, validation)
 web/                    # Carbon web interface (React + TypeScript + Vite)
