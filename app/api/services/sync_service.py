@@ -231,11 +231,23 @@ class SyncService:
             last_issued_since=0,
         )
 
+    def _deleted_at(self, record: dict[str, Any]) -> str | None:
+        """Return ISO-8601 deleted_at string, or None if not set."""
+        raw = record.get("deleted_at")
+        return self._coerce_iso(raw) if raw else None
+
+    @staticmethod
+    def _resolve_request_id(record: dict[str, Any]) -> int | None:
+        """Extract request_id from a record where 'request' may be int or dict."""
+        request_val = record.get("request")
+        if isinstance(request_val, int):
+            return request_val
+        if isinstance(request_val, dict):
+            return request_val.get("id")
+        return None
+
     def _serialize_request(self, request: dict[str, Any]) -> SyncEntityEnvelope:
         """Serialize a request dict to SyncEntityEnvelope."""
-        deleted_at = (
-            self._coerce_iso(request.get("deleted_at")) if request.get("deleted_at") else None
-        )
         payload = None
         if not request.get("is_deleted"):
             payload = {
@@ -252,103 +264,72 @@ class SyncService:
             id=request.get("id"),
             server_version=int(request.get("server_version") or 0),
             updated_at=self._coerce_iso(request.get("updated_at")),
-            deleted_at=deleted_at,
+            deleted_at=self._deleted_at(request),
             request=payload,
         )
 
     def _serialize_summary(self, summary: dict[str, Any]) -> SyncEntityEnvelope:
         """Serialize a summary dict to SyncEntityEnvelope."""
-        deleted_at = (
-            self._coerce_iso(summary.get("deleted_at")) if summary.get("deleted_at") else None
-        )
         payload = None
         if not summary.get("is_deleted"):
-            # Handle request as either dict or int (already flattened)
-            request_val = summary.get("request")
-            request_id = (
-                request_val
-                if isinstance(request_val, int)
-                else (request_val.get("id") if isinstance(request_val, dict) else None)
-            )
             payload = {
                 "id": summary.get("id"),
-                "request_id": request_id,
+                "request_id": self._resolve_request_id(summary),
                 "lang": summary.get("lang"),
                 "is_read": summary.get("is_read"),
                 "json_payload": summary.get("json_payload"),
                 "created_at": self._coerce_iso(summary.get("created_at")),
             }
-
         return SyncEntityEnvelope(
             entity_type="summary",
             id=summary.get("id"),
             server_version=int(summary.get("server_version") or 0),
             updated_at=self._coerce_iso(summary.get("updated_at")),
-            deleted_at=deleted_at,
+            deleted_at=self._deleted_at(summary),
             summary=payload,
         )
 
     def _serialize_crawl_result(self, crawl: dict[str, Any]) -> SyncEntityEnvelope:
         """Serialize a crawl result dict to SyncEntityEnvelope."""
-        deleted_at = self._coerce_iso(crawl.get("deleted_at")) if crawl.get("deleted_at") else None
         payload = None
         if not crawl.get("is_deleted"):
-            # Handle request as either dict or int (already flattened)
-            request_val = crawl.get("request")
-            request_id = (
-                request_val
-                if isinstance(request_val, int)
-                else (request_val.get("id") if isinstance(request_val, dict) else None)
-            )
             payload = {
-                "request_id": request_id,
+                "request_id": self._resolve_request_id(crawl),
                 "source_url": crawl.get("source_url"),
                 "endpoint": crawl.get("endpoint"),
                 "http_status": crawl.get("http_status"),
                 "metadata": crawl.get("metadata_json"),
                 "latency_ms": crawl.get("latency_ms"),
             }
-
         return SyncEntityEnvelope(
             entity_type="crawl_result",
             id=crawl.get("id"),
             server_version=int(crawl.get("server_version") or 0),
             updated_at=self._coerce_iso(crawl.get("updated_at")),
-            deleted_at=deleted_at,
+            deleted_at=self._deleted_at(crawl),
             crawl_result=payload,
         )
 
     def _serialize_llm_call(self, call: dict[str, Any]) -> SyncEntityEnvelope:
         """Serialize an LLM call dict to SyncEntityEnvelope."""
-        deleted_at = self._coerce_iso(call.get("deleted_at")) if call.get("deleted_at") else None
-        created_at = self._coerce_iso(call.get("created_at"))
-        updated_at = self._coerce_iso(call.get("updated_at"))
         payload = None
         if not call.get("is_deleted"):
-            # Handle request as either dict or int (already flattened)
-            request_val = call.get("request")
-            request_id = (
-                request_val
-                if isinstance(request_val, int)
-                else (request_val.get("id") if isinstance(request_val, dict) else None)
-            )
             payload = {
-                "request_id": request_id,
+                "request_id": self._resolve_request_id(call),
                 "provider": call.get("provider"),
                 "model": call.get("model"),
                 "status": call.get("status"),
                 "tokens_prompt": call.get("tokens_prompt"),
                 "tokens_completion": call.get("tokens_completion"),
                 "cost_usd": call.get("cost_usd"),
-                "created_at": created_at,
+                "created_at": self._coerce_iso(call.get("created_at")),
             }
-
         return SyncEntityEnvelope(
             entity_type="llm_call",
             id=call.get("id"),
             server_version=int(call.get("server_version") or 0),
-            updated_at=updated_at,
-            deleted_at=deleted_at,
+            updated_at=self._coerce_iso(call.get("updated_at")),
+            deleted_at=self._deleted_at(call),
             llm_call=payload,
         )
 
