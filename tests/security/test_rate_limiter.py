@@ -140,7 +140,7 @@ class TestUserRateLimiter(unittest.IsolatedAsyncioTestCase):
         allowed, _ = await limiter.check_and_record(user_id, cost=1)
         assert not allowed
 
-    async def test_get_user_status(self):
+    async def test_compute_user_status(self):
         """Test getting user status."""
         limiter = UserRateLimiter(
             RateLimitConfig(max_requests=5, window_seconds=10, max_concurrent=3)
@@ -153,7 +153,7 @@ class TestUserRateLimiter(unittest.IsolatedAsyncioTestCase):
         await limiter.check_and_record(user_id)
         await limiter.acquire_concurrent_slot(user_id)
 
-        status = await limiter.get_user_status(user_id)
+        status = await limiter.compute_user_status(user_id)
 
         assert status["user_id"] == user_id
         assert status["requests_in_window"] == 2
@@ -252,7 +252,7 @@ class TestUserRateLimiter(unittest.IsolatedAsyncioTestCase):
         assert "Maximum: 1" in _msg
 
     async def test_status_with_cooldown_remaining(self):
-        """Test get_user_status with active cooldown (line 229)."""
+        """Test compute_user_status with active cooldown (line 229)."""
         limiter = UserRateLimiter(RateLimitConfig(max_requests=1, window_seconds=2))
         user_id = 12345
 
@@ -262,7 +262,7 @@ class TestUserRateLimiter(unittest.IsolatedAsyncioTestCase):
         assert not allowed
 
         # Check status immediately with cooldown active
-        status = await limiter.get_user_status(user_id)
+        status = await limiter.compute_user_status(user_id)
         # Cooldown should be active (window_seconds * cooldown_multiplier = 2 * 1.0 = 2)
         assert status["cooldown_remaining"] >= 0
         assert status["is_limited"]
@@ -279,7 +279,7 @@ class TestUserRateLimiter(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(1.1)
 
         # Get status should clean up expired requests (line 225)
-        status = await limiter.get_user_status(user_id)
+        status = await limiter.compute_user_status(user_id)
         assert status["requests_in_window"] == 0
 
     async def test_reset_user_with_only_requests(self):
@@ -293,7 +293,7 @@ class TestUserRateLimiter(unittest.IsolatedAsyncioTestCase):
         await limiter.reset_user(user_id)
 
         # Verify cleaned
-        status = await limiter.get_user_status(user_id)
+        status = await limiter.compute_user_status(user_id)
         assert status["requests_in_window"] == 0
 
     async def test_reset_user_with_only_concurrent(self):
@@ -307,7 +307,7 @@ class TestUserRateLimiter(unittest.IsolatedAsyncioTestCase):
         await limiter.reset_user(user_id)
 
         # Verify cleaned
-        status = await limiter.get_user_status(user_id)
+        status = await limiter.compute_user_status(user_id)
         assert status["concurrent_operations"] == 0
 
     async def test_reset_user_with_only_cooldown(self):
@@ -327,7 +327,7 @@ class TestUserRateLimiter(unittest.IsolatedAsyncioTestCase):
         await limiter.reset_user(user_id)
 
         # Verify cooldown cleared
-        status = await limiter.get_user_status(user_id)
+        status = await limiter.compute_user_status(user_id)
         assert status["cooldown_remaining"] == 0
 
     async def test_cleanup_removes_only_expired_cooldowns(self):
@@ -353,8 +353,8 @@ class TestUserRateLimiter(unittest.IsolatedAsyncioTestCase):
         await limiter.cleanup_expired()
 
         # After cleanup, check statuses
-        status1 = await limiter.get_user_status(user1)
-        status2 = await limiter.get_user_status(user2)
+        status1 = await limiter.compute_user_status(user1)
+        status2 = await limiter.compute_user_status(user2)
 
         assert status1["cooldown_remaining"] == 0
         # User2's cooldown should still be active (just triggered)

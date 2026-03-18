@@ -200,7 +200,7 @@ class UserRateLimiter:
                     extra={"user_id": user_id, "remaining": self._user_concurrent.get(user_id, 0)},
                 )
 
-    async def get_user_status(self, user_id: int) -> dict[str, Any]:
+    async def compute_user_status(self, user_id: int) -> dict[str, Any]:
         """Get current rate limit status for a user.
 
         Also prunes expired entries from the user request window as a side
