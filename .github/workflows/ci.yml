@@ -50,7 +50,7 @@ jobs:
         run: uv lock --check
 
       - name: Compile locked requirements (runtime - core only)
-        run: uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
+        run: uv export --no-dev --format requirements-txt -p 3.13 -o requirements.txt
 
       - name: Compile locked requirements (all extras for tests)
         run: |
