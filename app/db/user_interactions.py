@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from app.core.logging_utils import log_exception
+from app.core.logging_utils import get_logger, log_exception
 
 if TYPE_CHECKING:
+    import logging
+
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.persistence.sqlite.repositories.user_repository import (
         SqliteUserRepositoryAdapter,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 _update_tasks: set[asyncio.Task] = set()

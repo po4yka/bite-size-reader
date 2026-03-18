@@ -9,9 +9,9 @@ circular import.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
     SqliteCrawlResultRepositoryAdapter,
 )
@@ -25,7 +25,7 @@ from app.infrastructure.persistence.sqlite.repositories.user_repository import (
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MessagePersistence:

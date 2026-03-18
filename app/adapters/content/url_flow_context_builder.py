@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -13,7 +14,7 @@ from app.core.lang import LANG_RU, choose_language
 from app.core.url_utils import compute_dedupe_hash
 from app.prompts.manager import get_prompt_manager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def get_url_system_prompt(lang: str) -> str:

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 # Flag used at runtime to decide whether Telegram client is available
 PYROGRAM_AVAILABLE: bool = True
@@ -30,7 +31,7 @@ else:
         Message = object
         PYROGRAM_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TelegramClient:

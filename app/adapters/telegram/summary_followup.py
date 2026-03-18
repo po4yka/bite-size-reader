@@ -5,14 +5,14 @@ from __future__ import annotations
 import asyncio
 import html
 import json
-import logging
 import re
 import time
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

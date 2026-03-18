@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.karakeep.models import KarakeepBookmark
 from app.adapters.karakeep.sync.constants import TAG_BSR_READ
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.adapters.karakeep.sync.protocols import KarakeepClientProtocol
     from app.adapters.karakeep.sync.retry import RetryExecutor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def extract_summary_url(summary_data: dict[str, Any]) -> str | None:

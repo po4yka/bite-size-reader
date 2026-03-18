@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import Any
 
 import httpx
+
+from app.core.logging_utils import get_logger
 
 # Provider patterns for detecting which provider a model belongs to
 PROVIDER_PATTERNS: dict[str, list[str]] = {
@@ -29,7 +30,7 @@ EXPLICIT_CACHING_PROVIDERS: frozenset[str] = frozenset({"anthropic", "google"})
 
 # Providers with automatic/implicit caching (no configuration needed)
 # These handle caching server-side without explicit cache_control
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger(__name__)
 
 AUTOMATIC_CACHING_PROVIDERS: frozenset[str] = frozenset(
     {
@@ -152,7 +153,7 @@ class ModelCapabilities:
         self._x_title = x_title
         self._timeout = timeout
         self._capabilities_ttl_sec = capabilities_ttl_sec
-        self._logger = logging.getLogger(__name__)
+        self._logger = get_logger(__name__)
 
         # Cache capabilities: which models support structured outputs
         self._structured_supported_models: set[str] | None = None

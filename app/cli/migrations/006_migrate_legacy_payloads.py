@@ -18,17 +18,18 @@ Both operations are idempotent -- rows that have already been migrated
 from __future__ import annotations
 
 import json
-import logging
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import peewee
 from peewee import fn
 
+from app.core.logging_utils import get_logger
+
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _prepare_json_payload(value: Any, *, default: Any | None = None) -> Any | None:

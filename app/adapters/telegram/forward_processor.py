@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from collections.abc import Callable, Coroutine, Mapping
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.summarization_runtime import SummarizationRuntime
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
 from app.adapters.telegram.forward_summarizer import ForwardSummarizer
+from app.core.logging_utils import get_logger
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.di.repositories import (
     build_request_repository,
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Background tasks (article generation, insights) are killed after this timeout
 # to prevent hung LLM calls from accumulating indefinitely.

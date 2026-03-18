@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 from typing import TYPE_CHECKING
 
 import httpx
+
+from app.core.logging_utils import get_logger
 
 from .exceptions import (
     ElevenLabsAPIError,
@@ -18,7 +19,7 @@ from .exceptions import (
 if TYPE_CHECKING:
     from app.config.tts import ElevenLabsConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _BASE_URL = "https://api.elevenlabs.io/v1"
 _MAX_RETRIES = 2

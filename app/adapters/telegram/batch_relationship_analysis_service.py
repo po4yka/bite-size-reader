@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-import logging
 import time
 from functools import partial
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 from urllib.parse import urlparse
 
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -23,7 +23,7 @@ from app.adapters.telegram.batch_sender_utils import (
     send_message_draft_safe as _send_message_draft_safe,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class _SummaryPayload(TypedDict, total=False):

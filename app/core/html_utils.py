@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import logging
 import re
 from functools import lru_cache
 from html import unescape
 from html.parser import HTMLParser
 from threading import Lock
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 try:
     import trafilatura

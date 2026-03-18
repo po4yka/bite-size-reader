@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
 from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
 from app.core.json_utils import extract_json
+from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_domain
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _METADATA_FIELDS: tuple[str, ...] = (
     "title",

@@ -1,10 +1,11 @@
 """Use case for searching topics and finding related articles."""
 
-import logging
 from dataclasses import dataclass
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass

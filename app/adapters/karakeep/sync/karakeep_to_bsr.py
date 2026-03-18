@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -11,6 +10,7 @@ from app.adapters.karakeep.client import KarakeepClientError
 from app.adapters.karakeep.models import SyncResult
 from app.adapters.karakeep.sync.errors import record_error
 from app.adapters.karakeep.sync.hashing import _check_hash_in_set, _url_hash
+from app.core.logging_utils import get_logger
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.utils.retry_utils import is_transient_error
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from app.adapters.karakeep.sync.cache import KarakeepBookmarkCache
     from app.adapters.karakeep.sync.protocols import KarakeepClientProtocol, KarakeepSyncRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class KarakeepToBsrSyncer:

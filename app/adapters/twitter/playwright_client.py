@@ -7,12 +7,13 @@ Lazy-imports playwright to fail gracefully when not installed.
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote, urlparse
 
 import httpx
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -23,7 +24,7 @@ from app.adapters.twitter.graphql_parser import (
     extract_tweets_from_graphql,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "

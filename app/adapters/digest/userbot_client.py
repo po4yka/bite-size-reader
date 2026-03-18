@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 
 if TYPE_CHECKING:
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
     from app.config import AppConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UserbotClient:

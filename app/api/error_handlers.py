@@ -3,8 +3,6 @@
 Provides consistent error responses across all endpoints with correlation ID tracking.
 """
 
-import logging
-
 from fastapi import Request, status
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError as PydanticValidationError
@@ -12,8 +10,9 @@ from pydantic import ValidationError as PydanticValidationError
 from app.api.exceptions import APIException, ErrorCode, ErrorType
 from app.api.models.responses import error_response, make_error
 from app.config import load_config
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def api_exception_handler(request: Request, exc: Exception) -> Response:

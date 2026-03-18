@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.callback_action_registry import CallbackActionRegistry
 from app.adapters.telegram.callback_actions import CallbackActionService
 from app.adapters.telegram.summary_followup import SummaryFollowupManager
-from app.core.logging_utils import generate_correlation_id
+from app.core.logging_utils import generate_correlation_id, get_logger
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -17,7 +16,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.search.hybrid_search_service import HybridSearchService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CallbackHandler:

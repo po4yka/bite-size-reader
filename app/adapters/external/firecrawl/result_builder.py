@@ -9,14 +9,13 @@ This module provides builders for:
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.external.firecrawl.constants import FIRECRAWL_SCRAPE_ENDPOINT
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.adapters.external.firecrawl.response_processor import ResponseProcessor
 from app.core.call_status import CallStatus
-from app.core.logging_utils import truncate_log_content
+from app.core.logging_utils import get_logger, truncate_log_content
 
 if TYPE_CHECKING:
     from app.adapters.external.firecrawl.options import FirecrawlOptionsBuilder
@@ -33,7 +32,7 @@ class ResultBuilder:
     ) -> None:
         self._options = options
         self._payload_logger = payload_logger
-        self._logger = logging.getLogger(__name__)
+        self._logger = get_logger(__name__)
         self._response_processor = ResponseProcessor()
 
     def build_success_result(

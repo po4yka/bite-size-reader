@@ -7,15 +7,16 @@ Supports two modes:
 
 from __future__ import annotations
 
-import logging
 import time
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
+
 if TYPE_CHECKING:
     from app.application.ports import UserRepositoryPort
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CACHE_TTL_SEC = 300  # 5 minutes
 

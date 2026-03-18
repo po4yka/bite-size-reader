@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
+
 if TYPE_CHECKING:
     import redis.asyncio as aioredis
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

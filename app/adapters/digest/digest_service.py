@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.core.time_utils import utc_now
 from app.db.models import Channel, ChannelSubscription, DigestDelivery
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from app.adapters.digest.formatter import DigestFormatter
     from app.config import AppConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

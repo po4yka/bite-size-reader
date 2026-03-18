@@ -31,14 +31,14 @@ from typing import TYPE_CHECKING, Any
 
 import peewee
 
-from app.core.logging_utils import log_exception
+from app.core.logging_utils import get_logger, log_exception
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MigrationHistory(peewee.Model):

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import contextlib
-import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.di.repositories import build_user_repository
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AccessController:

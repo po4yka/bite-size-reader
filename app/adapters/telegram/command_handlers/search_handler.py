@@ -6,11 +6,11 @@ local database search, and hybrid semantic search.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any, Protocol
 
 from app.adapters.telegram.command_handlers.decorators import audit_command
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ class SearcherProvider(Protocol):
     hybrid_search: HybridSearchService | None
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SearchHandler:

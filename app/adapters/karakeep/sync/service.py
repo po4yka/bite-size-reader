@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, cast
@@ -18,7 +17,7 @@ from app.adapters.karakeep.sync.metadata import BookmarkMetadataApplier
 from app.adapters.karakeep.sync.preview import SyncPreviewer
 from app.adapters.karakeep.sync.retry import RetryExecutor
 from app.adapters.karakeep.sync.status_updates import StatusUpdateSynchronizer
-from app.core.logging_utils import generate_correlation_id
+from app.core.logging_utils import generate_correlation_id, get_logger
 from app.core.url_utils import dns_cache_scope
 from app.utils.retry_utils import is_transient_error
 
@@ -32,7 +31,7 @@ if TYPE_CHECKING:
         KarakeepSyncRepository,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class KarakeepSyncService:

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.infrastructure.embedding.embedding_service import prepare_text_for_embedding
 
 if TYPE_CHECKING:
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     )
     from app.infrastructure.embedding.embedding_protocol import EmbeddingServiceProtocol
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SummaryEmbeddingGenerator:

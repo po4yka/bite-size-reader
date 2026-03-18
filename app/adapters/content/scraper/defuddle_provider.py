@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 
 import httpx
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT_SEC = 20
 _DEFAULT_API_BASE_URL = "https://defuddle.md"

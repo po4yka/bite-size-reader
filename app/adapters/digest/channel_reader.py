@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.core.time_utils import utc_now
 from app.db.models import Channel, ChannelPost, ChannelSubscription, DigestDelivery
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from .userbot_client import UserbotClient
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChannelReader:

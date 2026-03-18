@@ -7,11 +7,13 @@ import logging
 import sys
 from pathlib import Path
 
+from app.core.logging_utils import get_logger
+
 logging.basicConfig(
     level=logging.WARNING,  # Suppress info logs for cleaner output
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def print_results(results: list, mode: str, query: str) -> None:

@@ -6,9 +6,9 @@ This adapter handles RefreshToken and ClientSecret operations.
 from __future__ import annotations
 
 import datetime as dt
-import logging
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import ClientSecret, RefreshToken, User, model_to_dict
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
@@ -16,7 +16,7 @@ from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 if TYPE_CHECKING:
     from app.infrastructure.cache.auth_token_cache import AuthTokenCache
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _utcnow_naive() -> dt.datetime:

@@ -19,14 +19,14 @@ import logging
 import sys
 from pathlib import Path
 
-from app.core.logging_utils import log_exception
+from app.core.logging_utils import get_logger, log_exception
 from app.db.session import DatabaseSessionManager
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def create_indexes(db: DatabaseSessionManager) -> None:

@@ -6,7 +6,6 @@ This adapter translates between domain Summary models and database records.
 from __future__ import annotations
 
 import json
-import logging
 import re
 import uuid
 from collections.abc import Mapping
@@ -16,6 +15,7 @@ from typing import Any
 import peewee
 
 from app.application.services.topic_search_utils import ensure_mapping, tokenize
+from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC, coerce_datetime
 from app.db.json_utils import prepare_json_payload
 from app.db.models import CrawlResult, Request, Summary, SummaryFeedback, model_to_dict
@@ -66,7 +66,7 @@ def _upsert_summary_record(
         return summary.version if summary else 1
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):

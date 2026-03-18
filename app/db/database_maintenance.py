@@ -6,13 +6,16 @@ like ANALYZE and VACUUM to optimize SQLite performance.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import peewee
 
+from app.core.logging_utils import get_logger
+
 if TYPE_CHECKING:
+    import logging
+
     from playhouse.sqlite_ext import SqliteExtDatabase
 
 
@@ -31,7 +34,7 @@ class DatabaseMaintenance:
     ) -> None:
         self._database = database
         self._path = path
-        self._logger = logger or logging.getLogger(__name__)
+        self._logger = logger or get_logger(__name__)
 
     def run_maintenance(self) -> dict[str, Any]:
         """Run all maintenance operations.

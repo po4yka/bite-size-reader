@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from app.adapters.content.scraper.chain import ContentScraperChain
 from app.adapters.content.scraper.diagnostics import build_scraper_diagnostics
 from app.config.scraper import profile_retry_budget, profile_timeout_multiplier
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from app.adapters.content.scraper.protocol import ContentScraperProtocol
     from app.config import AppConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _BROWSER_PROVIDERS = {"playwright", "crawlee"}
 

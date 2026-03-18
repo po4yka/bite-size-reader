@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from sentence_transformers import CrossEncoder
 
     from app.adapters.llm.protocol import LLMClientProtocol
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RerankingService:

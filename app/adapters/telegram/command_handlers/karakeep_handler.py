@@ -6,11 +6,11 @@ including status checks and sync operations with rate limiting.
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import TYPE_CHECKING, ClassVar
 
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
+from app.core.logging_utils import get_logger
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.di.repositories import build_karakeep_sync_repository
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
         CommandExecutionContext,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Rate limiting for Karakeep sync (5 minutes cooldown)
 KARAKEEP_SYNC_COOLDOWN_SECONDS = 300

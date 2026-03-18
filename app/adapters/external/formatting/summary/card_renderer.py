@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import html
-import logging
 import re
 from typing import Any
 
+from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def truncate_plain_text(text: str, max_len: int) -> str:

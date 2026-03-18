@@ -6,8 +6,9 @@ provider (openrouter, openai, anthropic).
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
     from app.config import AppConfig
     from app.utils.circuit_breaker import CircuitBreaker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Valid provider names
 VALID_PROVIDERS = frozenset({"openrouter", "openai", "anthropic"})

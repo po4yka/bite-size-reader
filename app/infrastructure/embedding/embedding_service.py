@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.infrastructure.embedding.embedding_protocol import EmbeddingSerializationMixin
 
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Language-specific model configuration

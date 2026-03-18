@@ -8,14 +8,15 @@ it is never cancelled by URL-processing timeouts -- writes always complete.
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Sentinel used to signal the worker to shut down.
 _SENTINEL = None

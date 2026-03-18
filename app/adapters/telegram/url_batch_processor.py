@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import logging
 import time
 from dataclasses import dataclass, field
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
@@ -31,7 +31,7 @@ from app.domain.models.request import RequestStatus
 from app.models.batch_processing import URLBatchStatus, URLStatus
 from app.utils.progress_tracker import ProgressTracker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _await_if_needed(value: Any) -> Any:

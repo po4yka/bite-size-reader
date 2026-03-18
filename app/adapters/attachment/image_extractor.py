@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import base64
 import io
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image
 from PIL.Image import Resampling
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 SUPPORTED_FORMATS = {"JPEG", "PNG", "WEBP", "GIF"}
 # Map Pillow format names to MIME types

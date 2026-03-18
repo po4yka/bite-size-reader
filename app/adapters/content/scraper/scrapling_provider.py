@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from typing import Any
 
 from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ScraplingProvider:

@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -24,6 +23,7 @@ from app.config import AppConfig
 from app.core.call_status import CallStatus
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.lang import detect_language
+from app.core.logging_utils import get_logger
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.core.validation import safe_message_id, safe_telegram_chat_id, safe_telegram_user_id
 from app.db.session import DatabaseSessionManager
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.core.telegram_progress_message import TelegramProgressMessage
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Route versioning constants
 URL_ROUTE_VERSION = 1

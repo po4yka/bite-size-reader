@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+from app.core.logging_utils import get_logger
 from app.domain.events.request_events import RequestCompleted, RequestFailed
 from app.domain.events.summary_events import SummaryCreated, SummaryMarkedAsRead
 from app.infrastructure.messaging.handlers.analytics import AnalyticsEventHandler
@@ -18,7 +18,7 @@ from app.infrastructure.messaging.handlers.push_notification import PushNotifica
 from app.infrastructure.messaging.handlers.search_index import SearchIndexEventHandler
 from app.infrastructure.messaging.handlers.webhook import WebhookEventHandler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def wire_event_handlers(

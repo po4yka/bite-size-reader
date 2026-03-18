@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -16,6 +15,7 @@ from app.adapters.content.llm_response_workflow import (
 from app.adapters.external.formatting.single_url_progress_formatter import (
     SingleURLProgressFormatter,
 )
+from app.core.logging_utils import get_logger
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.domain.models.request import RequestStatus
 from app.utils.progress_message_updater import ProgressMessageUpdater
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from .summarization_runtime import SummarizationRuntime
     from .summary_request_factory import SummaryExecutionPlan, SummaryRequestFactory
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(slots=True)

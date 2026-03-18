@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any, cast
 
 from app.core.backoff import sleep_backoff
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Callable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _TRANSCRIPT_MAX_RETRIES = 3
 

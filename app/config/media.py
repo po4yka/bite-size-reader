@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from app.core.logging_utils import get_logger
+
 from ._validators import validate_model_name
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger(__name__)
 
 
 class YouTubeConfig(BaseModel):

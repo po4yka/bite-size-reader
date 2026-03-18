@@ -5,7 +5,6 @@ This adapter handles FTS index maintenance and search operations.
 
 from __future__ import annotations
 
-import logging
 import operator
 import re
 from functools import reduce
@@ -23,13 +22,14 @@ from app.application.services.topic_search_utils import (
     normalize_text,
     tokenize,
 )
+from app.core.logging_utils import get_logger
 from app.db.models import Request, Summary, TopicSearchIndex, model_to_dict
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TopicSearchIndexRebuiltError(RuntimeError):
@@ -297,9 +297,8 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
             rows = list(cursor)
         except Exception as exc:
             # Log FTS query failures for debugging - may indicate index corruption
-            import logging
 
-            logging.getLogger(__name__).debug(
+            get_logger(__name__).debug(
                 "topic_search_fts_query_failed",
                 extra={
                     "fts_query": fts_query,
@@ -350,9 +349,8 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
             rows = list(cursor)
         except Exception as exc:
             # Log FTS search failures for debugging - may indicate index corruption
-            import logging
 
-            logging.getLogger(__name__).debug(
+            get_logger(__name__).debug(
                 "topic_search_documents_fts_failed",
                 extra={
                     "fts_query": fts_query,
@@ -537,14 +535,13 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
 
     def _reset_topic_search_index(self) -> None:
         """Drop and rebuild the topic search index to recover from corruption."""
-        import logging
 
         try:
             self._session.database.execute_sql("DROP TABLE IF EXISTS topic_search_index")
             TopicSearchIndex.create_table()
             self._rebuild_topic_search_index()
         except Exception as exc:
-            logging.getLogger(__name__).warning(
+            get_logger(__name__).warning(
                 "topic_search_index_reset_failed",
                 extra={
                     "error": str(exc),

@@ -79,7 +79,7 @@ def setup_json_logging(
     try:
         loguru_logger.remove()
     except Exception as exc:  # pragma: no cover
-        logging.getLogger(__name__).debug("loguru_handler_remove_failed: %s", exc)
+        get_logger(__name__).debug("loguru_handler_remove_failed: %s", exc)
 
     # Add console sink -- custom function builds JSON via orjson
     loguru_logger.add(

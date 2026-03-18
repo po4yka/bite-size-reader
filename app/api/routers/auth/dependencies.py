@@ -4,14 +4,15 @@ FastAPI authentication dependencies.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 try:
     from fastapi import Depends, Request  # noqa: TC002 - used at runtime by FastAPI DI
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 except Exception:  # pragma: no cover - fallback for environments without compatible FastAPI
-    logging.getLogger(__name__).debug("fastapi_security_import_failed", exc_info=True)
+    get_logger(__name__).debug("fastapi_security_import_failed", exc_info=True)
 
     class HTTPAuthorizationCredentials:  # type: ignore[no-redef]
         ...
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
         SqliteAuthRepositoryAdapter,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # HTTPBearer security scheme for JWT authentication
 # auto_error=False so missing Bearer token doesn't 403 before we check WebApp auth

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 import os
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -43,7 +44,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
 

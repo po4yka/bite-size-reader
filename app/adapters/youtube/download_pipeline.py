@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from datetime import datetime
 from pathlib import Path
@@ -25,13 +24,14 @@ from app.adapters.youtube.youtube_downloader_parts import (
 )
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
+from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_youtube_video_id
 
 if TYPE_CHECKING:
     from app.adapters.youtube.feedback_service import YouTubeFeedbackService
     from app.adapters.youtube.session_service import YouTubeDownloadSessionService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _KNOWN_LANG_CODES = _vtt.KNOWN_LANG_CODES
 

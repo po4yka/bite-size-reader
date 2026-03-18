@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 ELIGIBLE_SUFFIXES = {".mp4", ".info.json", ".vtt", ".jpg", ".png", ".webp"}
 

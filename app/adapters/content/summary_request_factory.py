@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -16,6 +15,7 @@ from app.adapters.content.llm_response_workflow import (
 from app.adapters.content.llm_summarizer_text import truncate_content_text
 from app.core.content_cleaner import clean_content_for_llm
 from app.core.lang import LANG_RU
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from app.adapters.content.summarization_models import InteractiveSummaryRequest
     from app.adapters.content.summarization_runtime import SummarizationRuntime
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def detect_content_type_hint(content: str) -> str:

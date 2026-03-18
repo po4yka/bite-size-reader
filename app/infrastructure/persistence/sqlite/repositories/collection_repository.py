@@ -7,12 +7,12 @@ and CollectionInvite operations.
 from __future__ import annotations
 
 import datetime as dt
-import logging
 import uuid
 from typing import Any
 
 from peewee import IntegrityError
 
+from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import (
     Collection,
@@ -24,7 +24,7 @@ from app.db.models import (
 )
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _now() -> dt.datetime:

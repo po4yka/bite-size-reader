@@ -7,7 +7,6 @@ high-level sync actions (create/update/tag) based on error semantics.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.karakeep.sync.constants import (
@@ -16,12 +15,13 @@ from app.adapters.karakeep.sync.constants import (
     DEFAULT_MAX_DELAY_SECONDS,
     DEFAULT_MAX_RETRIES,
 )
+from app.core.logging_utils import get_logger
 from app.utils.retry_utils import is_transient_error
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RetryExecutor:

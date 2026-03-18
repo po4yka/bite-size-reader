@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass
 from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.json_utils import extract_json
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

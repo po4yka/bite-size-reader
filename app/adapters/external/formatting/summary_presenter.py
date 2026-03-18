@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import html
-import logging
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -14,6 +13,7 @@ from app.adapters.external.formatting.summary.related_reads_presenter import (
     send_related_reads as present_related_reads,
 )
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from app.core.telegram_progress_message import TelegramProgressMessage
     from app.core.verbosity import VerbosityResolver
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SummaryPresenterImpl:

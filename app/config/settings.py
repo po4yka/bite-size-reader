@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import logging
 import os
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from typing import Self
@@ -40,7 +41,7 @@ from .telegram import TelegramConfig, TelegramLimitsConfig
 from .tts import ElevenLabsConfig
 from .twitter import TwitterConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 _CONFIG_CACHE_LOCK = threading.Lock()
 _CONFIG_CACHE: dict[bool, AppConfig] = {}
 

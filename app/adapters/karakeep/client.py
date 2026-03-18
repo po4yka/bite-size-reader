@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import random
 from types import MappingProxyType
 from typing import TYPE_CHECKING, TypeVar
@@ -17,12 +16,13 @@ from app.adapters.karakeep.models import (
     KarakeepBookmarkList,
     KarakeepTag,
 )
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from typing import Self
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 

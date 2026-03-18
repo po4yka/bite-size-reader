@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -10,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from peewee import OperationalError
 
 from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError
+from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.models import LLMCall, Request as RequestModel
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     )
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RequestService:

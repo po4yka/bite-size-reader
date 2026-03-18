@@ -33,7 +33,6 @@ Progress gate: importer count must not grow beyond 46 (baseline 2026-03-18).
 
 from __future__ import annotations
 
-import logging
 import warnings
 from typing import TYPE_CHECKING, Any, cast
 
@@ -45,6 +44,7 @@ from app.adapters.external.formatting.response_sender import ResponseSenderImpl
 from app.adapters.external.formatting.services import FormattingServices
 from app.adapters.external.formatting.summary_presenter import SummaryPresenterImpl
 from app.adapters.external.formatting.text_processor import TextProcessorImpl
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     from app.core.telegram_progress_message import TelegramProgressMessage
     from app.core.verbosity import VerbosityResolver
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ResponseFormatter:

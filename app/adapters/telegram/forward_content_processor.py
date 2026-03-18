@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import normalize_text
 from app.core.lang import choose_language, detect_language
+from app.core.logging_utils import get_logger
 from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 from app.prompts.manager import get_prompt_manager
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _coerce_int(value: Any) -> int | None:

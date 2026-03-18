@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import tempfile
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class FileValidationError(Exception):

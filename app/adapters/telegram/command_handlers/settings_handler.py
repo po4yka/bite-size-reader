@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, TypedDict, cast
 
 from app.adapters.telegram.command_handlers.decorators import combined_handler
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.config import AppConfig
     from app.core.verbosity import VerbosityResolver
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DIGEST_WEB_PATH = "/web/digest"
 

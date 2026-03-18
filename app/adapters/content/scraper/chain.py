@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.adapters.content.scraper.protocol import ContentScraperProtocol
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ContentScraperChain:

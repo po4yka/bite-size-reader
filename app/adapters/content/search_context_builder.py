@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.application.services.topic_search import TopicArticle
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SearchContextBuilder:

@@ -20,9 +20,10 @@ from __future__ import annotations
 import logging
 import sys
 
+from app.core.logging_utils import get_logger
 from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def main() -> int:

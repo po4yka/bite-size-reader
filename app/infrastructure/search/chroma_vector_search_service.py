@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 from chromadb.errors import ChromaError
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.lang import detect_language
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from app.infrastructure.embedding.embedding_protocol import EmbeddingServiceProtocol
     from app.infrastructure.vector.chroma_store import ChromaVectorStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChromaVectorSearchResult(BaseModel):

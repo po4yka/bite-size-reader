@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import contextvars
 import hashlib
-import logging
 import re
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
+from app.core.logging_utils import get_logger
+
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Per-task DNS resolution cache (opt-in via dns_cache_scope()).
 # When active, caches socket.getaddrinfo() results so repeated

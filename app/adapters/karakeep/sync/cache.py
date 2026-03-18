@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from app.adapters.karakeep.sync.constants import BOOKMARK_PAGE_SIZE
+from app.core.logging_utils import get_logger
 from app.core.url_utils import normalize_url
 
 if TYPE_CHECKING:
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from app.adapters.karakeep.models import KarakeepBookmark
     from app.adapters.karakeep.sync.protocols import KarakeepClientProtocol
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class KarakeepBookmarkCache:

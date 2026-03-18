@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import datetime as dt
-import logging
 from dataclasses import dataclass
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass(slots=True)

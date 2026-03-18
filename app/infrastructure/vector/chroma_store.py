@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 import chromadb
 from chromadb.errors import ChromaError
 
+from app.core.logging_utils import get_logger
 from app.infrastructure.vector.chroma_schemas import ChromaMetadata, ChromaQueryFilters
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChromaVectorStore:

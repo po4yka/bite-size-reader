@@ -10,18 +10,17 @@ The field is nullable and defaults to None, so existing users won't be affected.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 import peewee
 from playhouse.migrate import SqliteMigrator, migrate
 
-from app.core.logging_utils import log_exception
+from app.core.logging_utils import get_logger, log_exception
 
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def upgrade(db: DatabaseSessionManager) -> None:

@@ -10,12 +10,13 @@ from typing import cast
 
 from app.config import load_config
 from app.core.embedding_space import resolve_embedding_space_identifier
+from app.core.logging_utils import get_logger
 
 logging.basicConfig(
     level=logging.WARNING,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> dict:

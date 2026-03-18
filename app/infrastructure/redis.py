@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import logging
 import time
 from typing import TYPE_CHECKING
 
 import redis.asyncio as aioredis
 
+from app.core.logging_utils import get_logger
+
 if TYPE_CHECKING:
     from app.config import AppConfig, RedisConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class _RedisConnectionManager:

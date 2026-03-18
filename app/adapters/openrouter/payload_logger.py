@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from app.core.logging_utils import truncate_log_content
+from app.core.logging_utils import get_logger, truncate_log_content
 
 
 class PayloadLogger:
@@ -18,7 +17,7 @@ class PayloadLogger:
     ) -> None:
         self._debug_payloads = debug_payloads
         self._log_truncate_length = log_truncate_length
-        self._logger = logging.getLogger(__name__)
+        self._logger = get_logger(__name__)
 
     def log_request_payload(
         self,

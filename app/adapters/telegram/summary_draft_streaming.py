@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.summary_section_stream_assembler import SummarySectionStreamAssembler
+from app.core.logging_utils import get_logger
 from app.observability.metrics import record_draft_stream_event
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

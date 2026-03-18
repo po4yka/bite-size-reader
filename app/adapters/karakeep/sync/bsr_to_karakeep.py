@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -17,6 +16,7 @@ from app.adapters.karakeep.sync.metadata import (
     extract_summary_url,
 )
 from app.adapters.karakeep.sync.work_items import _SyncWorkItem
+from app.core.logging_utils import get_logger
 from app.core.url_utils import normalize_url
 from app.utils.retry_utils import is_transient_error
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from app.adapters.karakeep.sync.protocols import KarakeepClientProtocol, KarakeepSyncRepository
     from app.adapters.karakeep.sync.retry import RetryExecutor
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class BsrToKarakeepSyncer:

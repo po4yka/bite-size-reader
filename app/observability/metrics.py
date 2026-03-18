@@ -19,7 +19,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+from app.core.logging_utils import get_logger
 
 # Try to import prometheus_client, but make it optional
 try:
@@ -37,7 +37,7 @@ except ImportError:
     PROMETHEUS_AVAILABLE = False
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create a custom registry to avoid conflicts with default registry
 if PROMETHEUS_AVAILABLE:

@@ -9,6 +9,7 @@ from app.adapters.content.scraper.factory import ContentScraperFactory
 from app.adapters.external.firecrawl.client import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.llm import LLMClientFactory
+from app.core.logging_utils import get_logger
 from app.di.repositories import build_audit_log_repository
 from app.di.types import CoreDependencies
 
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LazySemaphoreFactory:

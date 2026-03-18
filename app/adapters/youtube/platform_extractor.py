@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.platform_extraction.protocol import PlatformExtractor
@@ -10,6 +9,7 @@ from app.adapters.youtube.download_pipeline import YouTubeDownloadPipeline
 from app.adapters.youtube.feedback_service import YouTubeFeedbackService
 from app.adapters.youtube.session_service import YouTubeDownloadSessionService
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_youtube_video_id, is_youtube_url
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     )
     from app.adapters.external.response_formatter import ResponseFormatter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class YouTubePlatformExtractor(PlatformExtractor):

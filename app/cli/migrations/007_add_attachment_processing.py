@@ -7,13 +7,14 @@ extraction details, and processing status.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def upgrade(db: DatabaseSessionManager) -> None:

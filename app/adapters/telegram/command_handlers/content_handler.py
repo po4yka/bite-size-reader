@@ -6,13 +6,13 @@ including listing unread articles and marking them as read.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.command_handlers.decorators import audit_command
 from app.adapters.telegram.command_handlers.utils import maybe_load_json
 from app.application.services.topic_search_utils import ensure_mapping
+from app.core.logging_utils import get_logger
 from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     )
     from app.application.ports import LLMRepositoryPort, SummaryRepositoryPort
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ContentHandler:

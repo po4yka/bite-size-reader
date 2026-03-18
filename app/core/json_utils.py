@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import importlib
-import logging
 import re
 from typing import Any
+
+from app.core.logging_utils import get_logger
 
 try:
     import orjson
@@ -15,7 +16,7 @@ except Exception:  # pragma: no cover
     orjson = None
     _HAS_ORJSON = False
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger(__name__)
 
 
 def loads(data: str | bytes) -> Any:

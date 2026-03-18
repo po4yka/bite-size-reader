@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -10,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.external.formatting.single_url_progress_formatter import (
     SingleURLProgressFormatter,
 )
+from app.core.logging_utils import get_logger
 from app.utils.progress_message_updater import ProgressMessageUpdater
 from app.utils.typing_indicator import typing_indicator
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.models import PlatformExtractionRequest
     from app.adapters.external.response_formatter import ResponseFormatter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(slots=True)

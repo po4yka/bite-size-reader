@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class ApiLimitsConfig(BaseModel):

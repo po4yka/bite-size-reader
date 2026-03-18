@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import logging
 import re
 from typing import Any
 
+from app.core.logging_utils import get_logger
 from app.core.summary_contract_impl.common import SummaryJSON, clean_string_list, is_numeric
 from app.core.summary_contract_impl.entities import normalize_entities_field
 from app.core.summary_contract_impl.text_shaping import (
@@ -16,7 +16,7 @@ from app.core.summary_contract_impl.text_shaping import (
 )
 from app.core.summary_text_utils import cap_text as _cap_text, hash_tagify as _hash_tagify
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def validate_summary_payload_input(payload: SummaryJSON) -> None:

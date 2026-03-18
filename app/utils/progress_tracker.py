@@ -5,12 +5,13 @@ of batch operations and sending updates to Telegram in a thread-safe manner.
 """
 
 import asyncio
-import logging
 import time
 from collections.abc import Callable
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 ProgressFormatter = Callable[[int, int, int | None], Any]

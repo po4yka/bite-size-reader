@@ -4,14 +4,14 @@ This event bus allows decoupling between event publishers and subscribers.
 It follows the Observer pattern and enables loose coupling for side effects.
 """
 
-import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
+from app.core.logging_utils import get_logger
 from app.domain.events.summary_events import DomainEvent
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Type variable for domain events
 TEvent = TypeVar("TEvent", bound=DomainEvent)

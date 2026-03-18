@@ -5,11 +5,12 @@ Pure functions with no I/O -- suitable for unit testing with canned fixtures.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-LOGGER = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+LOGGER = get_logger(__name__)
 
 
 @dataclass

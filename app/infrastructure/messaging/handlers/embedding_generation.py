@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.domain.events.summary_events import SummaryCreated
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
         SqliteSummaryRepositoryAdapter,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EmbeddingGenerationEventHandler:

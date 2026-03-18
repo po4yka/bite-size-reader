@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 from pathlib import Path
 from typing import Any
@@ -18,6 +17,7 @@ from app.adapters.twitter.text_formatter import (
     parse_article_header,
 )
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_twitter_article_id, is_twitter_article_url
 from app.observability.failure_observability import (
     REASON_PLAYWRIGHT_EMPTY_CONTENT,
@@ -26,7 +26,7 @@ from app.observability.failure_observability import (
 )
 from app.observability.metrics import record_twitter_article_extraction
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 _TCO_URL_RE = re.compile(r"https?://t\.co/[A-Za-z0-9]+", re.IGNORECASE)
 _MAX_TCO_EXPANSIONS = 20
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -11,13 +10,14 @@ from app.adapters.openrouter.chat_models import (
     StreamingState,
 )
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 from app.observability.metrics import record_draft_stream_event, record_stream_latency_ms
 
 if TYPE_CHECKING:
     from app.adapters.openrouter.chat_response_handler import ChatResponseHandler
     from app.models.llm.llm_models import ChatRequest
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChatStreamingHandler:

@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import json
-import logging
 import time
 from dataclasses import dataclass
 from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 from app.observability.metrics import record_draft_stream_event
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)

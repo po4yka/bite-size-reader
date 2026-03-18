@@ -6,11 +6,10 @@ and verification, including automated reprocessing of failed requests.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.command_handlers.decorators import audit_command
-from app.core.logging_utils import generate_correlation_id
+from app.core.logging_utils import generate_correlation_id, get_logger
 from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
@@ -22,7 +21,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.url_handler import URLHandler
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AdminHandler:

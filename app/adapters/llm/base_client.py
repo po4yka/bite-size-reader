@@ -19,6 +19,7 @@ import httpx
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
 from app.core.http_utils import ResponseSizeError, validate_response_size
+from app.core.logging_utils import get_logger
 from app.models.llm.llm_models import LLMCallResult
 
 if TYPE_CHECKING:
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 
     from app.utils.circuit_breaker import CircuitBreaker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Check for HTTP/2 support
 HTTP2_AVAILABLE = find_spec("h2") is not None

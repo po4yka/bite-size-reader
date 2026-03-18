@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.batch_relationship_analysis_service import (
@@ -17,6 +16,7 @@ from app.adapters.telegram.url_batch_processor import (
 )
 from app.adapters.telegram.url_state_store import URLAwaitingStateStore
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_all_urls, normalize_url
 from app.core.verbosity import VerbosityLevel
 from app.di.repositories import build_request_repository, build_user_repository
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from app.core.verbosity import VerbosityResolver
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class URLHandler:

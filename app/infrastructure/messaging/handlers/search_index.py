@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
     SqliteTopicSearchRepositoryAdapter,
 )
@@ -12,7 +12,7 @@ from app.infrastructure.persistence.sqlite.repositories.topic_search_repository 
 if TYPE_CHECKING:
     from app.domain.events.summary_events import SummaryCreated
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SearchIndexEventHandler:

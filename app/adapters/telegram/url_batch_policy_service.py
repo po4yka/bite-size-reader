@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
 
 from app.core.url_utils import extract_domain
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class URLBatchPolicyService:

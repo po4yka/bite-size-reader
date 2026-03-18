@@ -6,7 +6,6 @@ This module provides a direct Anthropic API client that implements the LLMClient
 from __future__ import annotations
 
 import asyncio
-import logging
 import threading
 import time
 import weakref
@@ -22,6 +21,7 @@ from app.adapters.llm.anthropic.request_builder import (
 from app.adapters.llm.base_client import BaseLLMClient
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 from app.models.llm.llm_models import LLMCallResult
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
     from app.utils.circuit_breaker import CircuitBreaker
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 HTTP2_AVAILABLE = find_spec("h2") is not None
 

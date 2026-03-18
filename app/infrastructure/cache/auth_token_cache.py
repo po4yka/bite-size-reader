@@ -5,15 +5,16 @@ Provides O(1) lookup for refresh token validation instead of DB queries.
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.config import AppConfig
     from app.infrastructure.cache.redis_cache import RedisCache
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AuthTokenCache:

@@ -4,7 +4,6 @@ import asyncio
 import contextlib
 import io
 import json
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +13,7 @@ from app.adapters.telegram import telegram_client as telegram_client_module
 from app.adapters.telegram.component_wiring import TelegramComponentWiring
 from app.adapters.telegram.lifecycle_manager import TelegramLifecycleManager
 from app.core.async_utils import raise_if_cancelled
-from app.core.logging_utils import generate_correlation_id, setup_json_logging
+from app.core.logging_utils import generate_correlation_id, get_logger, setup_json_logging
 from app.core.time_utils import UTC, format_iso_z
 from app.di.repositories import build_audit_log_repository
 from app.di.telegram import build_telegram_runtime
@@ -34,7 +33,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ...

@@ -16,12 +16,13 @@ Integrates with Prometheus metrics if available.
 from __future__ import annotations
 
 import functools
-import logging
 import time
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 

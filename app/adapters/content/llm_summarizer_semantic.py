@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 from collections import Counter
 from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 from app.core.summary_contract import cap_text, extract_keywords_tfidf, normalize_whitespace
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Simple stop words for keyword extraction
 _SIMPLE_KEYWORD_STOP_WORDS = {

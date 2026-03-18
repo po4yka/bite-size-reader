@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from app.adapters.external.formatting.protocols import DataFormatter, ResponseSender

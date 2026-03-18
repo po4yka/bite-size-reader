@@ -6,10 +6,10 @@ User replies to a summary message with /listen to trigger generation.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
+from app.core.logging_utils import get_logger
 from app.db.models import Request, Summary
 from app.db.user_interactions import async_safe_update_user_interaction
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
         CommandExecutionContext,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ListenHandler(HandlerDependenciesMixin):

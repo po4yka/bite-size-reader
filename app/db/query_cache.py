@@ -6,12 +6,13 @@ cache invalidation on writes.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from functools import lru_cache, wraps
 from typing import Any, TypeVar
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 # Type variables for generic cache decorator
 F = TypeVar("F", bound=Callable[..., Any])

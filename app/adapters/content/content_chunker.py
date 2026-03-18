@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
 from app.core.html_utils import chunk_sentences, split_sentences
 from app.core.lang import LANG_RU
+from app.core.logging_utils import get_logger
 from app.core.summary_aggregate import aggregate_chunk_summaries
 from app.core.summary_contract import validate_and_shape_summary
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def build_chunk_synthesis_user_content(aggregated: dict[str, Any], chosen_lang: str) -> str:

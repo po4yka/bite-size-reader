@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
+from app.core.logging_utils import get_logger
 from app.utils.json_validation import parse_summary_response  # noqa: F401
 
 from .llm_response_workflow_attempts import LLMWorkflowAttemptsMixin
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ConcurrencyTimeoutError(TimeoutError):

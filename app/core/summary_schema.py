@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-import logging
 from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.core.logging_utils import get_logger
 from app.core.summary_contract_impl.field_names import FIELD_NAME_MAPPING
 from app.core.summary_text_utils import (
     cap_text,
     hash_tagify as _hash_tagify,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import html
-import logging
 import re
 import unicodedata
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from app.adapters.external.formatting.protocols import ResponseSender

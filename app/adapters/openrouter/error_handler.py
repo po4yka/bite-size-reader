@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.core.backoff import sleep_backoff as _sleep_backoff
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 from app.models.llm.llm_models import LLMCallResult
 from app.utils.retry_utils import is_retryable_status_code
 
@@ -29,7 +29,7 @@ class ErrorHandler:
         self._backoff_base = backoff_base
         self._audit = audit
         self._auto_fallback_structured = auto_fallback_structured
-        self._logger = logging.getLogger(__name__)
+        self._logger = get_logger(__name__)
 
     async def sleep_backoff(self, attempt: int) -> None:
         """Sleep with exponential backoff and jitter."""

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -12,11 +11,12 @@ from app.adapters.openrouter.model_capabilities import (
     supports_automatic_caching,
     supports_explicit_caching,
 )
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.models.llm.llm_models import ChatRequest
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class RequestBuilder:

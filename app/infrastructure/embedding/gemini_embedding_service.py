@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 
+from app.core.logging_utils import get_logger
 from app.infrastructure.embedding.embedding_protocol import EmbeddingSerializationMixin
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Task type mapping: caller-friendly names -> Gemini API enum values
 _TASK_TYPE_MAP: dict[str | None, str] = {

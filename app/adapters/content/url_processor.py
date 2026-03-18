@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.cached_summary_responder import CachedSummaryResponder
@@ -26,6 +25,7 @@ from app.adapters.content.url_flow_models import (
 from app.adapters.content.url_post_summary_task_service import URLPostSummaryTaskService
 from app.adapters.content.url_summary_delivery_service import URLSummaryDeliveryService
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 __all__ = [
     "URLFlowContext",

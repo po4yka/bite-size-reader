@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import html
-import logging
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
+from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
 
 if TYPE_CHECKING:
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.search.hybrid_search_service import HybridSearchService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class _Insights(TypedDict, total=False):

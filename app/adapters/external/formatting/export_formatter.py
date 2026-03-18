@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import html
-import logging
 import os
 import tempfile
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExportFormatter:

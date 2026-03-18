@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from app.adapters.openrouter.chat_models import (
@@ -12,9 +11,10 @@ from app.adapters.openrouter.chat_models import (
     TruncationRecovery,
 )
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 from app.models.llm.llm_models import LLMCallResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChatResponseHandler:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import os
 import threading
 import weakref
@@ -8,6 +7,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, cast
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     import asyncio
@@ -35,7 +36,7 @@ from app.adapters.openrouter.request_builder import RequestBuilder
 from app.adapters.openrouter.response_processor import ResponseProcessor
 from app.core.async_utils import raise_if_cancelled
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 HTTP2_AVAILABLE = find_spec("h2") is not None

@@ -6,7 +6,6 @@ import argparse
 import asyncio
 import contextlib
 import json
-import logging
 import os
 import sys
 import time
@@ -15,12 +14,12 @@ from pathlib import Path
 from typing import Any
 
 from app.config import AppConfig, load_config
-from app.core.logging_utils import generate_correlation_id, setup_json_logging
+from app.core.logging_utils import generate_correlation_id, get_logger, setup_json_logging
 from app.di.database import build_runtime_database
 from app.di.shared import close_runtime_resources
 from app.di.telegram import build_summary_cli_runtime
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 __all__ = ["main", "run_summary_cli"]
 

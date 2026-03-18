@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import time
 from typing import TYPE_CHECKING, Any
 
 from app.config import load_config
 from app.core.embedding_space import resolve_embedding_space_identifier
+from app.core.logging_utils import get_logger
 from app.di.database import init_read_only_database_proxy
 from app.di.types import McpRuntime, McpScope, McpServiceState
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 CHROMA_RETRY_INTERVAL_SEC = 60.0
 LOCAL_VECTOR_RETRY_INTERVAL_SEC = 60.0
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def build_mcp_runtime(

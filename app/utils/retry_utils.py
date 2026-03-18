@@ -4,13 +4,13 @@ This module provides utilities for retrying operations that may fail due to
 transient errors like network issues, rate limits, or temporary API outages.
 """
 
-import logging
 from collections.abc import Callable
 from typing import Any, TypeVar
 
 from app.core.backoff import sleep_backoff
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 T = TypeVar("T")
 

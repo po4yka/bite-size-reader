@@ -8,14 +8,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import random
 import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 # Prompt directory layout
 _PROMPT_DIR = Path(__file__).parent

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import time
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 try:
     import grpc
@@ -40,7 +41,7 @@ if TYPE_CHECKING:
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Set to store background tasks to prevent garbage collection
 _background_tasks: set[asyncio.Task] = set()

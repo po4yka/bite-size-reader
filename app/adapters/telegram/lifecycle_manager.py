@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TelegramLifecycleManager:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.openrouter.chat_models import (
@@ -10,6 +9,7 @@ from app.adapters.openrouter.chat_models import (
 )
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 from app.models.llm.llm_models import ChatRequest, LLMCallResult
 
 if TYPE_CHECKING:
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from app.adapters.openrouter.chat_transport import ChatTransport
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ChatAttemptRunner:

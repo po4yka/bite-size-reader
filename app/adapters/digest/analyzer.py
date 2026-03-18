@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.core.call_status import CallStatus
 from app.core.json_utils import extract_json
+from app.core.logging_utils import get_logger
 from app.core.time_utils import utc_now
 from app.db.models import ChannelPost, ChannelPostAnalysis
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 PROMPT_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
 

@@ -9,13 +9,13 @@ This module provides:
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.external.firecrawl.models import FirecrawlSearchResult
 from app.core.backoff import sleep_backoff as _sleep_backoff
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 from app.utils.retry_utils import is_retryable_status_code
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ class ErrorHandler:
         self._backoff_base = backoff_base
         self._max_response_size_bytes = max_response_size_bytes
         self._payload_logger = payload_logger
-        self._logger = logging.getLogger(__name__)
+        self._logger = get_logger(__name__)
 
     async def sleep_backoff(self, attempt: int) -> None:
         """Sleep with exponential backoff and jitter.

@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.command_handlers.decorators import audit_command, track_interaction
 from app.adapters.telegram.session_init_state import SESSION_INIT_TTL_SECONDS, SessionInitState
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     )
     from app.config import AppConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Mini App URL template - served by FastAPI at /static/
 _MINI_APP_PATH = "/static/init_session.html"

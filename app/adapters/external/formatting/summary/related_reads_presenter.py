@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
 
 if TYPE_CHECKING:
     from app.adapters.external.formatting.protocols import ResponseSender
     from app.application.services.related_reads_service import RelatedReadItem
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _MAX_TITLE_LEN = 40
 

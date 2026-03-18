@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.llm_response_workflow import (
@@ -14,6 +13,7 @@ from app.adapters.content.llm_response_workflow import (
     LLMWorkflowNotifications,
 )
 from app.core.lang import LANG_RU
+from app.core.logging_utils import get_logger
 from app.utils.typing_indicator import typing_indicator
 
 if TYPE_CHECKING:
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Maximum character length for forward content sent to the LLM.
 # Typical model context windows are ~128k tokens; 45k chars (~11k tokens) leaves

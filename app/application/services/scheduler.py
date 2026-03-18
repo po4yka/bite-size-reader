@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -10,6 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.di.scheduler import build_scheduler_dependencies
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.di.types import SchedulerDependencies
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SchedulerService:

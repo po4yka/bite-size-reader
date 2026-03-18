@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeVar
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 TFn = TypeVar("TFn", bound=Callable[..., Any])
 

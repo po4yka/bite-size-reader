@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.access_controller import AccessController
@@ -12,6 +11,7 @@ from app.adapters.telegram.message_router import MessageRouter
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.url_handler import URLHandler
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 from app.di.repositories import build_audit_log_repository, build_batch_session_repository
 from app.security.file_validation import SecureFileValidator
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.search.hybrid_search_service import HybridSearchService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MessageHandler:

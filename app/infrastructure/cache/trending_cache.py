@@ -6,12 +6,12 @@ Supports both Redis (shared across workers) and in-memory (fallback) caching.
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import Request as RequestModel, Summary
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from app.config import AppConfig
     from app.infrastructure.cache.redis_cache import RedisCache
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 TRENDING_CACHE_TTL_SECONDS = 300
 TRENDING_MAX_SCAN = 1000

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -16,6 +15,7 @@ from app.adapters.twitter.article_link_resolver import (
     resolve_twitter_article_link,
 )
 from app.core.lang import detect_language
+from app.core.logging_utils import get_logger
 from app.core.url_utils import (
     canonicalize_twitter_url,
     compute_dedupe_hash,
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from app.adapters.twitter.playwright_extractor import TwitterPlaywrightExtractor
     from app.adapters.twitter.tier_policy import TwitterTierPolicy
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 _ARTICLE_REDIRECT_HOSTS = {
     "x.com",
     "twitter.com",

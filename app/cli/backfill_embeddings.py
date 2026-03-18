@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import sys
 from pathlib import Path
 
 from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
 from app.config import load_config
+from app.core.logging_utils import get_logger
 from app.db.models import Summary, SummaryEmbedding
 from app.db.session import DatabaseSessionManager
 from app.infrastructure.embedding.embedding_factory import create_embedding_service
@@ -20,7 +20,7 @@ from app.infrastructure.persistence.sqlite.repositories.summary_repository impor
     SqliteSummaryRepositoryAdapter,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def get_summaries_for_embedding_backfill(

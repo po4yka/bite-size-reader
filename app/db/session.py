@@ -13,16 +13,16 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 import sqlite3
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import peewee
 from playhouse.sqlite_ext import SqliteExtDatabase
 
+from app.core.logging_utils import get_logger
 from app.db.database_diagnostics import DatabaseDiagnostics
 from app.db.models import (
     ALL_MODELS,
@@ -31,6 +31,9 @@ from app.db.models import (
 from app.db.rw_lock import AsyncRWLock
 from app.db.schema_migrator import SchemaMigrator
 from app.db.topic_search_index import TopicSearchIndexManager
+
+if TYPE_CHECKING:
+    import logging
 
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
 
@@ -74,7 +77,7 @@ class DatabaseSessionManager:
     """
 
     path: str
-    _logger: logging.Logger = field(default_factory=lambda: logging.getLogger(__name__))
+    _logger: logging.Logger = field(default_factory=lambda: get_logger(__name__))
     _database: peewee.SqliteDatabase = field(init=False)
     _rw_lock: AsyncRWLock = field(init=False)
     _diagnostics: DatabaseDiagnostics = field(init=False)

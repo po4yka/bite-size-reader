@@ -10,11 +10,13 @@ import asyncio
 import logging
 from pathlib import Path
 
+from app.core.logging_utils import get_logger
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def _init_session() -> None:

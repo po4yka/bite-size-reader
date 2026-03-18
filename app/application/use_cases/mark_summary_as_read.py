@@ -1,11 +1,11 @@
 """Use case for marking a summary as read."""
 
-import logging
 from dataclasses import dataclass
 from datetime import datetime
 
 from app.application.ports import SummaryRepositoryPort
 from app.application.use_cases.summary_fetch import fetch_summary_or_raise
+from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.domain.events.summary_events import SummaryMarkedAsRead
 from app.domain.exceptions.domain_exceptions import (
@@ -14,7 +14,7 @@ from app.domain.exceptions.domain_exceptions import (
 from app.domain.models.summary import summary_from_dict
 from app.domain.services.summary_validator import SummaryValidator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

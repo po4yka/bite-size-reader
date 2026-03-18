@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.domain.events.request_events import RequestCompleted, RequestFailed
     from app.domain.events.summary_events import SummaryCreated
+
 from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
     SqliteAuditLogRepositoryAdapter,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class AuditLogEventHandler:

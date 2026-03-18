@@ -9,14 +9,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import logging
 import time
 from urllib.parse import parse_qs
 
 from app.api.exceptions import AuthenticationError, AuthorizationError
 from app.config import Config
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # initData is valid for 15 minutes, with 1 minute clock skew tolerance
 _AUTH_DATE_MAX_AGE_SEC = 15 * 60

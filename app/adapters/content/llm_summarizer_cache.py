@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.llm_response_workflow_attempts import summary_has_content
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.infrastructure.cache.redis_cache import RedisCache
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LLMSummaryCache:

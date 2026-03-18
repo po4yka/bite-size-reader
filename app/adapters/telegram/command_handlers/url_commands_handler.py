@@ -6,10 +6,10 @@ including single URL processing, batch processing, and cancellation.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.command_handlers.decorators import audit_command
+from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_all_urls
 from app.db.user_interactions import async_safe_update_user_interaction
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.task_manager import UserTaskManager
     from app.adapters.telegram.url_handler import URLHandler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class URLCommandsHandler:

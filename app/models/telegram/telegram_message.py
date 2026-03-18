@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.logging_utils import log_exception
+from app.core.logging_utils import get_logger, log_exception
 from app.models.telegram.telegram_chat import TelegramChat
 from app.models.telegram.telegram_entity import MessageEntity
 from app.models.telegram.telegram_enums import MediaType, MessageEntityType
 from app.models.telegram.telegram_user import TelegramUser
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _pyrogram_to_dict(obj: Any) -> dict[str, Any]:

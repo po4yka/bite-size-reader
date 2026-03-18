@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _encoder = None
 _encoder_loaded = False

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def create_action_buttons(summary_id: int | str, lang: str = "en") -> list[list[dict[str, str]]]:

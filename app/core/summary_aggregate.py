@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import contextlib
-import logging
 import re
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 def _dedupe_list(items: list[str], limit: int | None = None) -> list[str]:

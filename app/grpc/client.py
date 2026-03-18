@@ -7,10 +7,11 @@ and receiving streaming status updates.
 from __future__ import annotations
 
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -37,7 +38,7 @@ else:
     processing_pb2: Any = _processing_pb2
     processing_pb2_grpc: Any = _processing_pb2_grpc
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)

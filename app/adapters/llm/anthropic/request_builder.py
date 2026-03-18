@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from app.adapters.llm.message_sanitizer import sanitize_messages_for_logging
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Anthropic pricing per 1M tokens (as of 2024)

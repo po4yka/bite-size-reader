@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,12 +11,13 @@ from typing import TYPE_CHECKING
 from app.adapters.elevenlabs.exceptions import ElevenLabsError
 from app.adapters.elevenlabs.tts_client import ElevenLabsTTSClient
 from app.core.call_status import CallStatus
+from app.core.logging_utils import get_logger
 from app.db.models import AudioGeneration, Summary
 
 if TYPE_CHECKING:
     from app.config.tts import ElevenLabsConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _VALID_SOURCE_FIELDS = frozenset({"summary_250", "summary_1000", "tldr"})
 

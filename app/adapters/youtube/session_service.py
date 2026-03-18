@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -18,6 +17,7 @@ from app.adapters.content.platform_extraction.models import (
 from app.adapters.youtube.youtube_downloader_parts import metadata as _metadata, storage as _storage
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
+from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_youtube_video_id, url_hash_sha256
 from app.di.repositories import build_request_repository, build_video_download_repository
 from app.domain.models.request import RequestStatus
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.application.ports import RequestRepositoryPort, VideoDownloadRepositoryPort
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(slots=True)

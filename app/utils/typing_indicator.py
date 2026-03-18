@@ -7,16 +7,17 @@ during long-running operations.
 from __future__ import annotations
 
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from app.adapters.external.response_formatter import ResponseFormatter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TypingIndicator:

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from statistics import mean
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 # Telegram hard message length limit.
 # Digest messages are pre-formatted in bulk and use the full Telegram limit (4096).

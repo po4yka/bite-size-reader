@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -16,7 +17,7 @@ from app.core.embedding_space import resolve_embedding_space_identifier
 from app.infrastructure.embedding.embedding_factory import create_embedding_service
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def upgrade(db: DatabaseSessionManager) -> None:

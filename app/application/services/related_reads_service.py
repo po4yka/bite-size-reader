@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Protocol
 
+from app.core.logging_utils import get_logger
 from app.infrastructure.embedding.embedding_service import prepare_text_for_embedding
 
 if TYPE_CHECKING:
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from app.infrastructure.search.vector_search_service import VectorSearchResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class VectorSearchPort(Protocol):

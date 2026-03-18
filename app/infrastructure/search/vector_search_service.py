@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.lang import detect_language
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.application.ports import EmbeddingRepositoryPort, TopicSearchRepositoryPort
     from app.infrastructure.embedding.embedding_protocol import EmbeddingServiceProtocol
     from app.infrastructure.search.search_filters import SearchFilters
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class VectorSearchResult(BaseModel):

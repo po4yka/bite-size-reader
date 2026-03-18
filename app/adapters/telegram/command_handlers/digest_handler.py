@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
@@ -14,6 +13,7 @@ from app.application.services.digest_subscription_ops import (
     unsubscribe_channel_atomic,
 )
 from app.core.channel_utils import parse_channel_input
+from app.core.logging_utils import get_logger
 from app.db.models import Channel, ChannelSubscription
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
         CommandExecutionContext,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DigestHandler(HandlerDependenciesMixin):

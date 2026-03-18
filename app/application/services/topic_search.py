@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.application.dto.topic_search import TopicArticle
 from app.application.services.topic_search_utils import clean_snippet, tokenize
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from app.adapters.external.firecrawl.models import FirecrawlSearchItem
     from app.application.ports import TopicSearchRepositoryPort
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 __all__ = ["LocalTopicSearchService", "TopicArticle", "TopicSearchService"]
 

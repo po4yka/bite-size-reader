@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -10,6 +9,7 @@ from app.core.call_status import CallStatus
 from app.core.content_cleaner import clean_content_for_llm
 from app.core.json_utils import dumps as json_dumps, extract_json
 from app.core.lang import LANG_RU
+from app.core.logging_utils import get_logger
 from app.core.summary_contract import validate_and_shape_summary
 from app.core.token_utils import count_tokens
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from .summarization_models import EnsureSummaryPayloadRequest, PureSummaryRequest
     from .summarization_runtime import SummarizationRuntime
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PureSummaryService:

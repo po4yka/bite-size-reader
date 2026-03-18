@@ -18,7 +18,6 @@ Handlers:
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -43,6 +42,7 @@ from app.application.ports import (
 )
 from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
 from app.config import AppConfig
+from app.core.logging_utils import get_logger
 from app.di.repositories import (
     build_llm_repository,
     build_request_repository,
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.search.hybrid_search_service import HybridSearchService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CommandProcessor:

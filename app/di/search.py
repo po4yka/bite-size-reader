@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
 from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
 from app.core.embedding_space import resolve_embedding_space_identifier
+from app.core.logging_utils import get_logger
 from app.di.repositories import (
     build_embedding_repository,
     build_request_repository,
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_TOPIC_SEARCH_MAX_RESULTS = 5
 

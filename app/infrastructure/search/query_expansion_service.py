@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 import re
 
 from pydantic import BaseModel, ConfigDict, Field
 
-logger = logging.getLogger(__name__)
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 # Common synonyms and expansions for technical/general terms

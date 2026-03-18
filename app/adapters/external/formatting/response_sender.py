@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import io
 import json
-import logging
 import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -15,6 +14,7 @@ from app.adapters.telegram.draft_stream_sender import (
 )
 from app.api.models.responses import success_response
 from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
 from app.utils.retry_utils import retry_telegram_operation
 
 if TYPE_CHECKING:
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from app.adapters.external.formatting.protocols import MessageValidator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _normalize_parse_mode(mode: str | None) -> Any:

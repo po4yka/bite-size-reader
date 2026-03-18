@@ -7,11 +7,11 @@ falling back gracefully when insufficient data is available.
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_domain
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
         LatencyStats,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)

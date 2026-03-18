@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from app.adapters.content.quality_filters import detect_low_value_content
@@ -10,6 +9,7 @@ from app.adapters.twitter.article_quality import is_low_quality_article_content
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
 from app.core.html_utils import clean_markdown_article_text, html_to_text
+from app.core.logging_utils import get_logger
 from app.observability.failure_observability import (
     REASON_FIRECRAWL_ERROR,
     REASON_FIRECRAWL_LOW_VALUE,
@@ -17,7 +17,7 @@ from app.observability.failure_observability import (
 )
 from app.observability.metrics import record_twitter_article_extraction
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TwitterFirecrawlExtractor:

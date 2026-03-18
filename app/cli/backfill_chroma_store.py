@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,7 @@ from typing import Any
 from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
 from app.config import ChromaConfig, load_config
 from app.core.embedding_space import resolve_embedding_space_identifier
+from app.core.logging_utils import get_logger
 from app.db.session import DatabaseSessionManager
 from app.infrastructure.embedding.embedding_factory import create_embedding_service
 from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
@@ -25,7 +25,7 @@ from app.infrastructure.persistence.sqlite.repositories.summary_repository impor
 from app.infrastructure.vector.chroma_store import ChromaVectorStore
 from app.infrastructure.vector.metadata_builder import MetadataBuilder
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _fetch_summaries(db: DatabaseSessionManager, limit: int | None) -> list[dict[str, Any]]:

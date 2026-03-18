@@ -6,8 +6,9 @@ when the feature is disabled via configuration.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.config.push import PushNotificationConfig
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
         SqliteDeviceRepositoryAdapter,
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Attempt to import firebase_admin; fall back gracefully.
 try:

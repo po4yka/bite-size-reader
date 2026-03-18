@@ -6,14 +6,14 @@ Similar to TypingIndicator but for editable progress messages in Reader mode.
 """
 
 import asyncio
-import logging
 import time
 from collections.abc import Callable
 from typing import Any
 
+from app.core.logging_utils import get_logger
 from app.core.telegram_progress_message import TelegramProgressMessage
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ProgressMessageUpdater:

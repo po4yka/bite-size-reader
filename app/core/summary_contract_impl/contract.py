@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import logging
-
+from app.core.logging_utils import get_logger
 from app.core.summary_contract_impl.common import SummaryJSON
 from app.core.summary_contract_impl.field_names import normalize_field_names
 from app.core.summary_contract_impl.rag_fields import shape_rag_fields
@@ -25,7 +24,7 @@ from app.types.summary_types import (
     SummaryDict,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 __all__ = [
     "Entities",

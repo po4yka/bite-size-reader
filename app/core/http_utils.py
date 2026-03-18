@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     import httpx
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ResponseSizeError(ValueError):

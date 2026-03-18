@@ -9,10 +9,12 @@ This module provides logging helpers for:
 from __future__ import annotations
 
 import contextlib
-import logging
 from typing import TYPE_CHECKING, Any
 
+from app.core.logging_utils import get_logger
+
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Callable
 
 
@@ -29,7 +31,7 @@ class PayloadLogger:
         self._audit = audit
         self._debug_payloads = debug_payloads
         self._log_truncate_length = log_truncate_length
-        self._logger = logger or logging.getLogger(__name__)
+        self._logger = logger or get_logger(__name__)
 
     def audit_safe(self, level: str, event: str, details: dict[str, Any]) -> None:
         """Safely invoke audit callback, suppressing any exceptions.

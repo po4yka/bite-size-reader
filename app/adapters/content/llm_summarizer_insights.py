@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
 from app.core.json_utils import extract_json
 from app.core.lang import LANG_RU
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def insights_has_content(payload: dict[str, Any]) -> bool:

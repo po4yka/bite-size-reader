@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import TYPE_CHECKING, Any
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -16,7 +17,7 @@ from app.adapters.content.url_flow_models import (
 from app.core.url_utils import compute_dedupe_hash
 from app.db.user_interactions import async_safe_update_user_interaction
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CachedSummaryResponder:

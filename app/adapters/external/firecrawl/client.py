@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -57,6 +56,7 @@ from app.adapters.external.firecrawl.validators import (
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
 from app.core.http_utils import ResponseSizeError, validate_response_size
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -146,7 +146,7 @@ class FirecrawlClient:
             self._extract_url = FIRECRAWL_EXTRACT_URL
         self._max_retries = max(0, int(cfg.max_retries))
         self._backoff_base = float(cfg.backoff_base)
-        self._logger = logging.getLogger(__name__)
+        self._logger = get_logger(__name__)
         self._max_response_size_bytes = int(cfg.max_response_size_mb) * 1024 * 1024
 
         self._options = FirecrawlOptionsBuilder(
