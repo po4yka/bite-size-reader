@@ -41,17 +41,7 @@ class LLMWorkflowAttemptsMixin:
             if (ctx.llm.error_text or "") == "structured_output_parse_error":
                 salvage = self._attempt_salvage_parsing(ctx.llm, ctx.correlation_id)
             if salvage is not None:
-                return await self.finalize_success(
-                    salvage,
-                    ctx.llm,
-                    ctx.req_id,
-                    ctx.correlation_id,
-                    ctx.interaction_config,
-                    ctx.persistence,
-                    ctx.ensure_summary,
-                    ctx.on_success,
-                    ctx.defer_persistence,
-                )
+                return await self.finalize_success(ctx, salvage)
 
             if ctx.is_last_attempt:
                 await self._handle_llm_error(
@@ -130,17 +120,7 @@ class LLMWorkflowAttemptsMixin:
                     parse_result=repair_hint,
                 )
                 if repaired and self._summary_has_content(repaired, ctx.required_summary_fields):
-                    return await self.finalize_success(
-                        repaired,
-                        ctx.llm,
-                        ctx.req_id,
-                        ctx.correlation_id,
-                        ctx.interaction_config,
-                        ctx.persistence,
-                        ctx.ensure_summary,
-                        ctx.on_success,
-                        ctx.defer_persistence,
-                    )
+                    return await self.finalize_success(ctx, repaired)
             except Exception as exc:
                 logger.warning(
                     "summary_repair_failed",
@@ -150,31 +130,23 @@ class LLMWorkflowAttemptsMixin:
             self._set_failure_context(ctx.llm, "summary_fields_empty")
             return None
 
-        return await self.finalize_success(
-            shaped,
-            ctx.llm,
-            ctx.req_id,
-            ctx.correlation_id,
-            ctx.interaction_config,
-            ctx.persistence,
-            ctx.ensure_summary,
-            ctx.on_success,
-            ctx.defer_persistence,
-        )
+        return await self.finalize_success(ctx, shaped)
 
     async def finalize_success(
         self,
+        ctx: AttemptContext,
         summary: dict[str, Any],
-        llm: Any,
-        req_id: int,
-        correlation_id: str | None,
-        interaction_config: Any,
-        persistence: Any,
-        ensure_summary: Any | None,
-        on_success: Any | None,
-        defer_persistence: bool,
     ) -> dict[str, Any]:
         from app.adapters.external.formatting.data_formatter import normalize_metric_names
+
+        llm = ctx.llm
+        req_id = ctx.req_id
+        correlation_id = ctx.correlation_id
+        interaction_config = ctx.interaction_config
+        persistence = ctx.persistence
+        ensure_summary = ctx.ensure_summary
+        on_success = ctx.on_success
+        defer_persistence = ctx.defer_persistence
 
         summary = normalize_metric_names(summary)
 

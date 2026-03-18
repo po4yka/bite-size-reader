@@ -82,7 +82,7 @@ class FirecrawlSearchItem(BaseModel):
 class FirecrawlSearchResult(BaseModel):
     """Result container for Firecrawl search queries."""
 
-    status: CallStatus
+    status: str
     http_status: int | None = None
     results: list[FirecrawlSearchItem] = Field(default_factory=list)
     total_results: int | None = None
