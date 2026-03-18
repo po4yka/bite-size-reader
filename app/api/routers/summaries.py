@@ -82,13 +82,6 @@ def _extract_request_fields(
     )
 
 
-def _resolve_use_case(use_case: Any) -> SummaryReadModelUseCase:
-    """Resolve FastAPI Depends defaults when handlers are called directly in tests."""
-    if isinstance(use_case, SummaryReadModelUseCase):
-        return use_case
-    return _get_summary_use_case()
-
-
 @router.get("")
 async def get_summaries(
     limit: int = Query(20, ge=1, le=100),
@@ -114,7 +107,6 @@ async def get_summaries(
     - end_date: Filter by creation date (ISO 8601)
     - sort: Sort order (created_at_desc/created_at_asc)
     """
-    use_case = _resolve_use_case(use_case)
 
     # Use service layer for business logic
     summaries, total, unread_count = await use_case.get_user_summaries(
@@ -186,7 +178,6 @@ async def get_summary_by_url(
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Get a single summary (article) by its original URL."""
-    use_case = _resolve_use_case(use_case)
     summary_id = await use_case.get_summary_id_by_url_for_user(user_id=user["user_id"], url=url)
     if not summary_id:
         raise ResourceNotFoundError("Article", url)
@@ -201,7 +192,6 @@ async def get_recommendations(
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Get personalized summary recommendations based on reading history."""
-    use_case = _resolve_use_case(use_case)
     user_id = user["user_id"]
 
     # Get recently-read summaries to determine interest tags
@@ -286,7 +276,6 @@ async def get_summary(
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Get a single summary with full details."""
-    use_case = _resolve_use_case(use_case)
     context = await use_case.get_summary_context_for_user(
         user_id=user["user_id"],
         summary_id=summary_id,
@@ -409,7 +398,6 @@ async def get_summary_content(
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Get full article content for offline reading."""
-    use_case = _resolve_use_case(use_case)
     context = await use_case.get_summary_context_for_user(
         user_id=user["user_id"],
         summary_id=summary_id,
@@ -522,7 +510,6 @@ async def export_summary(
     from app.adapters.external.formatting.export_formatter import ExportFormatter
     from app.api.dependencies.database import get_session_manager
 
-    use_case = _resolve_use_case(use_case)
     summary = await use_case.get_summary_by_id_for_user(
         user_id=user["user_id"],
         summary_id=summary_id,
@@ -568,7 +555,6 @@ async def update_summary(
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Update summary metadata (e.g., mark as read)."""
-    use_case = _resolve_use_case(use_case)
     updated_summary = await use_case.update_summary(
         user_id=user["user_id"],
         summary_id=summary_id,
@@ -596,7 +582,6 @@ async def save_reading_position(
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Save the reading position (scroll progress) for a summary."""
-    use_case = _resolve_use_case(use_case)
     updated = await use_case.update_reading_progress(
         user_id=user["user_id"],
         summary_id=summary_id,
@@ -622,7 +607,6 @@ async def delete_summary(
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Delete a summary (soft delete)."""
-    use_case = _resolve_use_case(use_case)
     deleted = await use_case.soft_delete_summary(user_id=user["user_id"], summary_id=summary_id)
     if not deleted:
         raise ResourceNotFoundError("Summary", summary_id)
@@ -642,7 +626,6 @@ async def toggle_favorite(
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ):
     """Toggle the favorite status of a summary."""
-    use_case = _resolve_use_case(use_case)
     is_favorited = await use_case.toggle_favorite(user_id=user["user_id"], summary_id=summary_id)
     if is_favorited is None:
         raise ResourceNotFoundError("Summary", summary_id)
@@ -661,8 +644,6 @@ async def submit_feedback(
     import uuid
 
     from app.db.models import SummaryFeedback
-
-    use_case = _resolve_use_case(use_case)
 
     # Verify summary belongs to user
     context = await use_case.get_summary_context_for_user(
