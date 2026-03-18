@@ -30,6 +30,8 @@ class NotRequired(metaclass=_NotRequiredMeta):
 # Note: These shims are also set up in tests/conftest.py (root)
 # No need to set them up again here as conftest.py is loaded first
 
+import app.di.database as _di_database
+from app.api.dependencies.database import clear_session_manager
 from app.db.models import Request, Summary, User, database_proxy
 from app.db.session import DatabaseSessionManager
 
@@ -53,9 +55,16 @@ def db(tmp_path, monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-at-least-32-chars-long-string")
     monkeypatch.setenv("REDIS_ENABLED", "0")  # Disable Redis for tests
 
+    # Clear cached runtime DB so get_session_manager() will use DB_PATH
+    clear_session_manager()
+
     db_path = tmp_path / "test.db"
     database = DatabaseSessionManager(str(db_path))
     database.migrate()
+
+    # Register the test DatabaseSessionManager as the cached runtime DB so
+    # resolve_repository_session() returns it instead of the raw peewee proxy.
+    _di_database._cached_runtime_db = database
 
     # Explicitly ensure database_proxy points to this test database
     # This is needed because previous tests or imports may have changed it
@@ -63,7 +72,8 @@ def db(tmp_path, monkeypatch):
 
     yield database
 
-    # Close and restore the original database_proxy
+    # Restore session and proxy state
+    clear_session_manager()
     database._database.close()
     database_proxy.initialize(old_proxy_obj)
 

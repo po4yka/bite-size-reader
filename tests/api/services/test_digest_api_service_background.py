@@ -31,8 +31,8 @@ async def test_enqueue_methods_schedule_background_work(digest_service: DigestAP
     digest_service._execute_digest_trigger = AsyncMock()  # type: ignore[method-assign]
     digest_service._execute_channel_digest_trigger = AsyncMock()  # type: ignore[method-assign]
 
-    await digest_service.enqueue_digest_trigger(user_id=1, correlation_id="cid-1")
-    await digest_service.enqueue_channel_digest_trigger(
+    digest_service.enqueue_digest_trigger(user_id=1, correlation_id="cid-1")
+    digest_service.enqueue_channel_digest_trigger(
         user_id=1,
         correlation_id="cid-2",
         channel_username="channel",

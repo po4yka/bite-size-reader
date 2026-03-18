@@ -25,7 +25,7 @@ async def test_require_owner_allows_owner_and_rejects_non_owner(db, user_factory
 
 @pytest.mark.asyncio
 async def test_get_target_user_creates_new_user_and_ensure_user_fetches_existing(db) -> None:
-    target = await AuthService.get_target_user(2001, username="new-user")
+    target = await AuthService.get_or_create_target_user(2001, username="new-user")
 
     assert target["telegram_user_id"] == 2001
     assert User.get(User.telegram_user_id == 2001).username == "new-user"

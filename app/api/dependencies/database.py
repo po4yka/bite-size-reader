@@ -89,7 +89,7 @@ def resolve_repository_session(
         return resolve_api_runtime(request).db
 
     proxy_target = getattr(database_proxy, "obj", None)
-    if proxy_target is not None:
+    if proxy_target is not None and hasattr(proxy_target, "async_execute"):
         return proxy_target
 
     return get_session_manager(request)
