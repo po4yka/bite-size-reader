@@ -252,6 +252,7 @@ class DigestService:
                 logger.warning(
                     "digest_send_chunk_failed",
                     extra={"cid": correlation_id, "error": str(e)},
+                    exc_info=True,
                 )
                 result.errors.append(f"Send failed: {e}")
 
@@ -303,6 +304,11 @@ class DigestService:
             await self._send(user_id, text)
             result.messages_sent = 1
         except Exception as e:
+            logger.warning(
+                "digest_send_info_failed",
+                extra={"uid": user_id, "error": str(e)},
+                exc_info=True,
+            )
             result.errors.append(f"Send failed: {e}")
 
     @staticmethod
