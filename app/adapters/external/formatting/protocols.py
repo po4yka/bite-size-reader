@@ -89,6 +89,8 @@ class ResponseSender(Protocol):
         text: str,
         *,
         parse_mode: str | None = None,
+        reply_markup: Any | None = None,
+        disable_web_page_preview: bool | None = None,
     ) -> bool:
         """Edit an existing message in Telegram with security checks."""
         ...

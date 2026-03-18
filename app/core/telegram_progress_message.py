@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.async_utils import raise_if_cancelled
 
 if TYPE_CHECKING:
-    from app.adapters.external.formatting.response_sender import ResponseSenderImpl
+    from app.adapters.external.formatting.protocols import ResponseSender
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class TelegramProgressMessage:
     """Manages a single editable progress message per incoming request."""
 
-    def __init__(self, response_sender: ResponseSenderImpl) -> None:
+    def __init__(self, response_sender: ResponseSender) -> None:
         self._response_sender = response_sender
         # (chat_id, trigger_msg_id) -> progress_msg_id
         self._progress_msgs: dict[tuple[int, int], int] = {}
