@@ -178,10 +178,11 @@ services:
           memory: 128M
           cpus: "0.10"
   firecrawl:
-    # Pin to a specific version tag; never use :latest in production.
-    # To update: check https://github.com/mendableai/firecrawl/releases for the
-    # latest tag, then update this value and test before deploying.
-    image: ghcr.io/mendableai/firecrawl:v0.0.57
+    # DISABLED: Firecrawl v2 requires RabbitMQ + dedicated PostgreSQL + Playwright
+    # microservice -- not a drop-in replacement for the old v0.0.57 standalone image.
+    # The scraper chain degrades gracefully without it (required: false).
+    # TODO(po4yka): evaluate deploying firecrawl v2 as a separate compose stack.
+    image: ghcr.io/firecrawl/firecrawl@sha256:90a10e0053d78f36308c46a7fbb84d6d8258ec1da13fa08e6b821bd650d5e569
     container_name: bsr-firecrawl
     init: true
     environment:
@@ -189,8 +190,8 @@ services:
       - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-fc-bsr-local}
       - NUM_WORKERS_PER_QUEUE=1
     ports:
-      - "127.0.0.1:3002:3002"
-    restart: unless-stopped
+      - "127.0.0.1:3003:3002"
+    restart: "no"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:3002/v2/health || exit 1"]
       interval: 30s
