@@ -88,7 +88,7 @@ class DigestFacade:
         )
         return data
 
-    async def trigger_channel_digest(self, user_id: int, channel_username: str) -> dict[str, str]:
+    def trigger_channel_digest(self, user_id: int, channel_username: str) -> dict[str, str]:
         service = self._service()
         data = service.trigger_channel_digest(user_id, channel_username)
         service.enqueue_channel_digest_trigger(

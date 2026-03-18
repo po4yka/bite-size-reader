@@ -29,20 +29,10 @@ class NotificationEventHandler:
         )
 
         if self._telegram:
-            try:
-                logger.debug(
-                    "notification_would_be_sent",
-                    extra={"request_id": event.request_id, "channel": "telegram"},
-                )
-            except Exception as exc:
-                logger.warning(
-                    "notification_send_failed",
-                    extra={
-                        "request_id": event.request_id,
-                        "channel": "telegram",
-                        "error": str(exc),
-                    },
-                )
+            logger.debug(
+                "notification_would_be_sent",
+                extra={"request_id": event.request_id, "channel": "telegram"},
+            )
 
         if self._notification_service:
             try:
@@ -71,13 +61,7 @@ class NotificationEventHandler:
         )
 
         if self._telegram:
-            try:
-                logger.debug(
-                    "failure_notification_would_be_sent",
-                    extra={"request_id": event.request_id, "channel": "telegram"},
-                )
-            except Exception as exc:
-                logger.warning(
-                    "notification_send_failed",
-                    extra={"request_id": event.request_id, "error": str(exc)},
-                )
+            logger.debug(
+                "failure_notification_would_be_sent",
+                extra={"request_id": event.request_id, "channel": "telegram"},
+            )

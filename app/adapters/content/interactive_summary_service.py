@@ -80,34 +80,28 @@ class _InteractiveSummaryCallbacks:
     def _silent(self) -> bool:
         return self._request.silent
 
-    async def on_llm_error(self, llm_result: Any, details: str | None) -> None:
+    async def _notify_error(self, event: str, details: str | None) -> None:
+        """Send error notification; no-op in silent mode."""
         if self._silent:
             return
         await self._runtime.response_formatter.send_error_notification(
             self._request.message,
-            "llm_error",
+            event,
             self._request.correlation_id or "unknown",
             details=details,
         )
 
+    async def on_llm_error(self, llm_result: Any, details: str | None) -> None:
+        await self._notify_error("llm_error", details)
+
     async def on_repair_failure(self) -> None:
-        if self._silent:
-            return
-        await self._runtime.response_formatter.send_error_notification(
-            self._request.message,
-            "processing_failed",
-            self._request.correlation_id or "unknown",
-            details="Unable to repair invalid JSON returned by the model",
+        await self._notify_error(
+            "processing_failed", "Unable to repair invalid JSON returned by the model"
         )
 
     async def on_parsing_failure(self) -> None:
-        if self._silent:
-            return
-        await self._runtime.response_formatter.send_error_notification(
-            self._request.message,
-            "processing_failed",
-            self._request.correlation_id or "unknown",
-            details="Model did not produce valid summary output after retries",
+        await self._notify_error(
+            "processing_failed", "Model did not produce valid summary output after retries"
         )
 
     async def on_retry(self) -> None:

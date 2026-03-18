@@ -25,6 +25,7 @@ from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.domain.models.request import RequestStatus
 from app.models.batch_processing import URLBatchStatus, URLStatus
 from app.utils.progress_tracker import ProgressTracker
 
@@ -215,7 +216,7 @@ class URLBatchProcessor:
         existing_request = await _await_if_needed(
             self._request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
         )
-        if not existing_request or existing_request.get("status") != "ok":
+        if not existing_request or existing_request.get("status") != RequestStatus.COMPLETED:
             return False
 
         request_id = existing_request.get("id")

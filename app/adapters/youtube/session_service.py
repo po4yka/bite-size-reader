@@ -20,6 +20,7 @@ from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
 from app.core.url_utils import extract_youtube_video_id, url_hash_sha256
 from app.di.repositories import build_request_repository, build_video_download_repository
+from app.domain.models.request import RequestStatus
 
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.lifecycle import PlatformRequestLifecycle
@@ -280,7 +281,7 @@ class YouTubeDownloadSessionService:
             transcript_source=transcript_source,
         )
         await self.video_repo.async_update_video_download_status(download_id, "completed")
-        await self.request_repo.async_update_request_status(req_id, "ok")
+        await self.request_repo.async_update_request_status(req_id, RequestStatus.COMPLETED)
         await self.request_repo.async_update_request_lang_detected(req_id, detected_lang)
 
     async def handle_failure(
@@ -297,7 +298,7 @@ class YouTubeDownloadSessionService:
             "error",
             error_text=str(error),
         )
-        await self.request_repo.async_update_request_status(req_id, "error")
+        await self.request_repo.async_update_request_status(req_id, RequestStatus.ERROR)
         self._audit(
             "ERROR",
             "youtube_download_failed",

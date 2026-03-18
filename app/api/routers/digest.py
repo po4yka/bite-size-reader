@@ -164,7 +164,7 @@ async def trigger_channel_digest(
     """Trigger digest for a single channel (equivalent to /cdigest bot command)."""
     await AuthService.require_owner(current_user)
 
-    data = await digest_facade.trigger_channel_digest(
+    data = digest_facade.trigger_channel_digest(
         current_user["user_id"],
         body.channel_username,
     )

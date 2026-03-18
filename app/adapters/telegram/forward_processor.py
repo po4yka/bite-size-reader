@@ -17,6 +17,7 @@ from app.di.repositories import (
     build_summary_repository,
     build_user_repository,
 )
+from app.domain.models.request import RequestStatus
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -284,7 +285,7 @@ class ForwardProcessor:
             summary_id=f"req:{req_id}" if req_id else None,
         )
 
-        await self.request_repo.async_update_request_status(req_id, "ok")
+        await self.request_repo.async_update_request_status(req_id, RequestStatus.COMPLETED)
 
         if interaction_id:
             await async_safe_update_user_interaction(
