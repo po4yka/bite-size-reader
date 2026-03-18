@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from app.core.time_utils import UTC
 from app.core.url_utils import extract_domain
 from app.db.models import CrawlResult, LLMCall, Request
+from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
 
@@ -148,7 +149,7 @@ class SqliteLatencyStatsRepositoryAdapter(SqliteBaseRepository):
             query = LLMCall.select(LLMCall.latency_ms, LLMCall.created_at).where(
                 LLMCall.model == model,
                 LLMCall.latency_ms.is_null(False),
-                LLMCall.status == "success",
+                LLMCall.status == "ok",
                 LLMCall.created_at >= cutoff,
             )
 
@@ -211,7 +212,7 @@ class SqliteLatencyStatsRepositoryAdapter(SqliteBaseRepository):
             # Also include LLM call latencies for comprehensive view
             llm_query = LLMCall.select(LLMCall.latency_ms, LLMCall.created_at).where(
                 LLMCall.latency_ms.is_null(False),
-                LLMCall.status == "success",
+                LLMCall.status == "ok",
                 LLMCall.created_at >= cutoff,
             )
 
@@ -261,7 +262,7 @@ class SqliteLatencyStatsRepositoryAdapter(SqliteBaseRepository):
                 Request.id, Request.normalized_url, Request.updated_at
             ).where(
                 Request.updated_at >= cutoff,
-                Request.status == "completed",
+                Request.status == RequestStatus.COMPLETED,
             )
 
             combined_latencies: list[int] = []
@@ -283,7 +284,7 @@ class SqliteLatencyStatsRepositoryAdapter(SqliteBaseRepository):
                 llm_calls = LLMCall.select(LLMCall.latency_ms).where(
                     LLMCall.request == req.id,
                     LLMCall.latency_ms.is_null(False),
-                    LLMCall.status == "success",
+                    LLMCall.status == "ok",
                 )
                 llm_ms = sum(call.latency_ms for call in llm_calls)
 

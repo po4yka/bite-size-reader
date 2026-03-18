@@ -238,7 +238,7 @@ class CatalogReadService:
             success_calls = (
                 LLMCall.select(LLMCall.id)
                 .join(Request)
-                .where(*llm_scope_filters, LLMCall.status == "success")
+                .where(*llm_scope_filters, LLMCall.status == "ok")
                 .count()
             )
             error_calls = (
@@ -256,7 +256,7 @@ class CatalogReadService:
                     fn.AVG(LLMCall.latency_ms).alias("avg_latency_ms"),
                 )
                 .join(Request)
-                .where(*llm_scope_filters, LLMCall.status == "success")
+                .where(*llm_scope_filters, LLMCall.status == "ok")
                 .dicts()
                 .first()
             ) or {}
@@ -265,9 +265,7 @@ class CatalogReadService:
             for row in (
                 LLMCall.select(LLMCall.model)
                 .join(Request)
-                .where(
-                    *llm_scope_filters, LLMCall.status == "success", LLMCall.model.is_null(False)
-                )
+                .where(*llm_scope_filters, LLMCall.status == "ok", LLMCall.model.is_null(False))
                 .dicts()
             ):
                 model = row.get("model") or "unknown"

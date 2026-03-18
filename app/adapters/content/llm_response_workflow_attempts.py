@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.domain.models.request import RequestStatus
 from app.utils.json_validation import finalize_summary_texts
 
 if TYPE_CHECKING:
@@ -63,7 +64,7 @@ class LLMWorkflowAttemptsMixin:
                     is_final_error=True,
                 )
             else:
-                await self.request_repo.async_update_request_status(ctx.req_id, "error")
+                await self.request_repo.async_update_request_status(ctx.req_id, RequestStatus.ERROR)
             return None
 
         json_parse_timeout = getattr(self.cfg.runtime, "json_parse_timeout_sec", 60.0)

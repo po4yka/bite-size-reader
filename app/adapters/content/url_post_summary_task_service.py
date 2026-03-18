@@ -6,7 +6,14 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    import asyncio
+
+    from app.adapters.content.llm_summarizer_articles import LLMArticleGenerator
+    from app.adapters.content.llm_summarizer_insights import LLMInsightsGenerator
+    from app.adapters.content.url_summary_delivery_service import URLSummaryDeliveryService
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.application.ports import SummaryRepositoryPort
+    from app.application.services.related_reads_service import RelatedReadsService
 
 from app.core.async_utils import raise_if_cancelled
 
@@ -20,11 +27,11 @@ class URLPostSummaryTaskService:
         self,
         *,
         response_formatter: ResponseFormatter,
-        summary_repo: Any,
-        article_generator: Any,
-        insights_generator: Any,
-        summary_delivery: Any,
-        related_reads_service: Any | None = None,
+        summary_repo: SummaryRepositoryPort,
+        article_generator: LLMArticleGenerator,
+        insights_generator: LLMInsightsGenerator,
+        summary_delivery: URLSummaryDeliveryService,
+        related_reads_service: RelatedReadsService | None = None,
     ) -> None:
         self._response_formatter = response_formatter
         self._summary_repo = summary_repo
@@ -32,7 +39,7 @@ class URLPostSummaryTaskService:
         self._insights_generator = insights_generator
         self._summary_delivery = summary_delivery
         self._related_reads_service = related_reads_service
-        self._background_tasks: set[Any] = set()
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     async def aclose(self, timeout: float = 5.0) -> None:
         """Drain outstanding post-summary background tasks."""

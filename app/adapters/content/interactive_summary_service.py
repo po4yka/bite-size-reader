@@ -16,6 +16,7 @@ from app.adapters.external.formatting.single_url_progress_formatter import (
     SingleURLProgressFormatter,
 )
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.domain.models.request import RequestStatus
 from app.utils.progress_message_updater import ProgressMessageUpdater
 from app.utils.typing_indicator import typing_indicator
 
@@ -384,7 +385,9 @@ class InteractiveSummaryService:
             "empty_content_for_llm",
             extra={"cid": request.correlation_id, "content_source": "unknown"},
         )
-        await self._runtime.request_repo.async_update_request_status(request.req_id, "error")
+        await self._runtime.request_repo.async_update_request_status(
+            request.req_id, RequestStatus.ERROR
+        )
         await self._runtime.response_formatter.send_error_notification(
             request.message,
             "empty_content",

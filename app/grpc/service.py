@@ -11,6 +11,7 @@ import grpc
 from app.api.background_processor import process_url_request
 from app.core.logging_utils import log_exception
 from app.core.url_utils import compute_dedupe_hash, normalize_url
+from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
@@ -200,7 +201,9 @@ class ProcessingService(processing_pb2_grpc.ProcessingServiceServicer):
                 existing = await self.request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
                 if existing:
                     request_id = int(existing["id"])
-                    await self.request_repo.async_update_request_status(request_id, "pending")
+                    await self.request_repo.async_update_request_status(
+                        request_id, RequestStatus.PENDING
+                    )
                 else:
                     request_id = await self.request_repo.async_create_request(
                         type_="url",

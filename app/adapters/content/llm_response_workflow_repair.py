@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from app.core.summary_contract import validate_and_shape_summary
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.domain.models.request import RequestStatus
 from app.utils.json_validation import finalize_summary_texts
 
 logger = logging.getLogger("app.adapters.content.llm_response_workflow")
@@ -193,7 +194,7 @@ class LLMWorkflowRepairMixin:
         notifications: Any | None,
         is_final_error: bool = False,
     ) -> None:
-        await self.request_repo.async_update_request_status(req_id, "error")
+        await self.request_repo.async_update_request_status(req_id, RequestStatus.ERROR)
 
         error_parts: list[str] = []
         context = getattr(llm, "error_context", None) or {}
@@ -271,7 +272,7 @@ class LLMWorkflowRepairMixin:
         interaction_label: str,
     ) -> None:
         """Update request status to error, notify, and update interaction record."""
-        await self.request_repo.async_update_request_status(req_id, "error")
+        await self.request_repo.async_update_request_status(req_id, RequestStatus.ERROR)
 
         if notification_cb:
             try:
@@ -342,7 +343,7 @@ class LLMWorkflowRepairMixin:
         failed_attempts: list[tuple[Any, Any]],
     ) -> None:
         """Handle the case when all LLM attempts have failed."""
-        await self.request_repo.async_update_request_status(req_id, "error")
+        await self.request_repo.async_update_request_status(req_id, RequestStatus.ERROR)
 
         error_details_list: list[str] = []
         models_tried: list[str] = []
