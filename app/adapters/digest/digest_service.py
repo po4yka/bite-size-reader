@@ -94,7 +94,7 @@ class DigestService:
             return result
 
         # 2-5. Analyze, filter, format, deliver, persist
-        return await self._process_and_deliver(posts, result, correlation_id, lang)
+        return await self._run_digest_pipeline(posts, result, correlation_id, lang)
 
     async def generate_channel_digest(
         self,
@@ -147,9 +147,9 @@ class DigestService:
             return result
 
         # 2-5. Analyze, filter, format, deliver, persist
-        return await self._process_and_deliver(posts, result, correlation_id, lang)
+        return await self._run_digest_pipeline(posts, result, correlation_id, lang)
 
-    async def _process_and_deliver(
+    async def _run_digest_pipeline(
         self,
         posts: list[dict[str, Any]],
         result: DigestResult,
