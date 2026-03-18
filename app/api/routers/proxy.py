@@ -7,9 +7,16 @@ from ipaddress import ip_address, ip_network
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from starlette.responses import Response
 
+from app.api.exceptions import (
+    AuthorizationError,
+    ExternalAPIError,
+    ProcessingError,
+    ResourceNotFoundError,
+    ValidationError,
+)
 from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger, log_exception
 
@@ -51,10 +58,7 @@ async def _read_limited_content(response: httpx.Response, max_bytes: int) -> byt
                 "proxy_response_size_exceeded",
                 extra={"total_bytes": total, "max_bytes": max_bytes},
             )
-            raise HTTPException(
-                status_code=413,
-                detail=f"Image too large (max {max_bytes // (1024 * 1024)} MB)",
-            )
+            raise ValidationError(f"Image too large (max {max_bytes // (1024 * 1024)} MB)")
         chunks.append(chunk)
     return b"".join(chunks)
 
@@ -111,7 +115,7 @@ async def proxy_image(
     and potential hotlink protection.
     """
     if not url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="Invalid URL scheme")
+        raise ValidationError("Invalid URL scheme")
 
     try:
         # Use a real browser User-Agent to avoid getting blocked by some servers
@@ -126,7 +130,7 @@ async def proxy_image(
                 # SSRF protection: block requests to internal/private networks
                 if not _is_url_safe(current_url):
                     logger.warning("proxy_blocked_ssrf", extra={"url": current_url})
-                    raise HTTPException(status_code=403, detail="URL resolves to blocked address")
+                    raise AuthorizationError("URL resolves to blocked address")
 
                 req = client.build_request("GET", current_url, headers=headers)
                 resp = await client.send(req, stream=True)
@@ -135,17 +139,15 @@ async def proxy_image(
                     location = resp.headers.get("location")
                     await resp.aclose()
                     if not location:
-                        raise HTTPException(
-                            status_code=502, detail="Upstream redirect missing location"
-                        )
+                        raise ExternalAPIError("upstream", "Redirect missing location")
                     next_url = str(httpx.URL(current_url).join(location))
                     if not next_url.startswith(("http://", "https://")):
-                        raise HTTPException(status_code=400, detail="Invalid redirect URL scheme")
+                        raise ValidationError("Invalid redirect URL scheme")
                     current_url = next_url
                     continue
                 break
             else:
-                raise HTTPException(status_code=502, detail="Too many redirects")
+                raise ExternalAPIError("upstream", "Too many redirects")
 
             if resp.status_code >= 400:
                 await resp.aclose()
@@ -153,7 +155,7 @@ async def proxy_image(
                     "proxy_fetch_failed",
                     extra={"url": current_url, "status_code": resp.status_code},
                 )
-                raise HTTPException(status_code=404, detail="Image not found or inaccessible")
+                raise ResourceNotFoundError("Image", current_url)
 
             content_type = resp.headers.get("content-type", "")
             if not content_type.startswith("image/"):
@@ -162,7 +164,7 @@ async def proxy_image(
                     "proxy_non_image_content",
                     extra={"url": current_url, "content_type": content_type},
                 )
-                raise HTTPException(status_code=400, detail="URL does not point to an image")
+                raise ValidationError("URL does not point to an image")
 
             content_length_header = resp.headers.get("content-length")
             if content_length_header and content_length_header.isdigit():
@@ -175,9 +177,8 @@ async def proxy_image(
                             "max_bytes": _MAX_PROXY_RESPONSE_BYTES,
                         },
                     )
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"Image too large (max {_MAX_PROXY_RESPONSE_BYTES // (1024 * 1024)} MB)",
+                    raise ValidationError(
+                        f"Image too large (max {_MAX_PROXY_RESPONSE_BYTES // (1024 * 1024)} MB)"
                     )
 
             try:
@@ -195,9 +196,9 @@ async def proxy_image(
 
     except httpx.RequestError as e:
         log_exception(logger, "proxy_request_error", e, url=url)
-        raise HTTPException(status_code=502, detail="Failed to fetch upstream image") from e
-    except HTTPException:
+        raise ExternalAPIError("upstream", "Failed to fetch upstream image") from e
+    except (ValidationError, AuthorizationError, ExternalAPIError, ResourceNotFoundError):
         raise
     except Exception as e:
         log_exception(logger, "proxy_unexpected_error", e, url=url)
-        raise HTTPException(status_code=500, detail="Internal proxy error") from e
+        raise ProcessingError("Internal proxy error") from e
