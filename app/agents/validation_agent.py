@@ -44,7 +44,6 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
     async def execute(self, input_data: ValidationInput) -> AgentResult[ValidationOutput]:
         """Validate summary JSON against strict contract."""
         summary = input_data.summary_json
-        self.log_info("Starting summary validation")
 
         errors: list[str] = []
         warnings: list[str] = []
@@ -72,7 +71,6 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 )
 
             validated_summary = validate_and_shape_summary(summary)
-            self.log_info("Summary validation successful")
 
             if warnings:
                 self.log_warning(f"Validation warnings: {'; '.join(warnings)}")

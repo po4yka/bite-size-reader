@@ -56,20 +56,18 @@ class BaseAgent(ABC, Generic[TInput, TOutput]):
     async def execute(self, input_data: TInput) -> AgentResult[TOutput]:
         """Execute the agent's primary task."""
 
-    def log_info(self, message: str, **kwargs: Any) -> None:
-        self.logger.info(
+    def _log(self, level: str, message: str, **kwargs: Any) -> None:
+        """Emit a structured log entry with agent name and correlation ID."""
+        getattr(self.logger, level)(
             f"[{self.name}] {message}",
             extra={"correlation_id": self.correlation_id, **kwargs},
         )
+
+    def log_info(self, message: str, **kwargs: Any) -> None:
+        self._log("info", message, **kwargs)
 
     def log_warning(self, message: str, **kwargs: Any) -> None:
-        self.logger.warning(
-            f"[{self.name}] {message}",
-            extra={"correlation_id": self.correlation_id, **kwargs},
-        )
+        self._log("warning", message, **kwargs)
 
     def log_error(self, message: str, **kwargs: Any) -> None:
-        self.logger.error(
-            f"[{self.name}] {message}",
-            extra={"correlation_id": self.correlation_id, **kwargs},
-        )
+        self._log("error", message, **kwargs)
