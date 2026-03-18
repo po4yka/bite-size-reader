@@ -5,6 +5,7 @@ All endpoints use Telegram WebApp initData authentication.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, Path, Query
@@ -150,7 +151,7 @@ async def trigger_digest(
 ) -> dict[str, Any]:
     """Trigger an on-demand digest generation. Result delivered to Telegram chat."""
     await AuthService.require_owner(user)
-    data = digest_facade.trigger_digest(user["user_id"])
+    data = await asyncio.to_thread(digest_facade.trigger_digest, user["user_id"])
     return success_response(data)
 
 
@@ -162,8 +163,8 @@ async def trigger_channel_digest(
 ) -> dict[str, Any]:
     """Trigger digest for a single channel (equivalent to /cdigest bot command)."""
     await AuthService.require_owner(user)
-
-    data = digest_facade.trigger_channel_digest(
+    data = await asyncio.to_thread(
+        digest_facade.trigger_channel_digest,
         user["user_id"],
         body.channel_username,
     )

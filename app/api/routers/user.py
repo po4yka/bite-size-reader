@@ -2,6 +2,7 @@
 User preferences, statistics, goals, and streaks endpoints.
 """
 
+import asyncio
 import datetime as _dt
 import uuid
 from datetime import datetime, timedelta
@@ -252,11 +253,16 @@ async def get_user_stats(user: dict[str, Any] = Depends(get_current_user)):
 
 
 @router.get("/goals")
-def list_goals(user: dict[str, Any] = Depends(get_current_user)):
+async def list_goals(user: dict[str, Any] = Depends(get_current_user)):
     """List all reading goals for the current user."""
     from app.db.models import UserGoal
 
-    goals: Sequence[UserGoal] = list(UserGoal.select().where(UserGoal.user == user["user_id"]))
+    user_id = user["user_id"]
+
+    def _query() -> list[Any]:
+        return list(UserGoal.select().where(UserGoal.user == user_id))
+
+    goals: Sequence[UserGoal] = await asyncio.to_thread(_query)
     return success_response(
         {
             "goals": [
@@ -273,26 +279,29 @@ def list_goals(user: dict[str, Any] = Depends(get_current_user)):
 
 
 @router.post("/goals")
-def upsert_goal(
+async def upsert_goal(
     body: CreateGoalRequest,
     user: dict[str, Any] = Depends(get_current_user),
 ):
     """Create or update a reading goal (one per goal_type per user)."""
     from app.db.models import UserGoal
 
-    goal, created = UserGoal.get_or_create(
-        user=user["user_id"],
-        goal_type=body.goal_type,
-        defaults={
-            "id": uuid.uuid4(),
-            "target_count": body.target_count,
-        },
-    )
+    user_id = user["user_id"]
+    goal_type = body.goal_type
+    target_count = body.target_count
 
-    if not created:
-        goal.target_count = body.target_count
-        goal.save()
+    def _upsert() -> Any:
+        g, created = UserGoal.get_or_create(
+            user=user_id,
+            goal_type=goal_type,
+            defaults={"id": uuid.uuid4(), "target_count": target_count},
+        )
+        if not created:
+            g.target_count = target_count
+            g.save()
+        return g
 
+    goal = await asyncio.to_thread(_upsert)
     return success_response(
         GoalResponse(
             goal_type=goal.goal_type,
@@ -304,18 +313,23 @@ def upsert_goal(
 
 
 @router.delete("/goals/{goal_type}")
-def delete_goal(
+async def delete_goal(
     goal_type: str,
     user: dict[str, Any] = Depends(get_current_user),
 ):
     """Remove a reading goal."""
     from app.db.models import UserGoal
 
-    deleted_count = (
-        UserGoal.delete()
-        .where((UserGoal.user == user["user_id"]) & (UserGoal.goal_type == goal_type))
-        .execute()
-    )
+    user_id = user["user_id"]
+
+    def _delete() -> int:
+        return (
+            UserGoal.delete()
+            .where((UserGoal.user == user_id) & (UserGoal.goal_type == goal_type))
+            .execute()
+        )
+
+    deleted_count = await asyncio.to_thread(_delete)
     if deleted_count == 0:
         from app.api.exceptions import ResourceNotFoundError
 
@@ -431,9 +445,9 @@ def _compute_streak_data(
 
 
 @router.get("/streak")
-def get_streak(user: dict[str, Any] = Depends(get_current_user)):
+async def get_streak(user: dict[str, Any] = Depends(get_current_user)):
     """Compute and return the user's reading streak data."""
-    data = _compute_streak_data(user["user_id"])
+    data = await asyncio.to_thread(_compute_streak_data, user["user_id"])
     return success_response(
         StreakResponse(
             current_streak=data["current_streak"],
@@ -452,15 +466,20 @@ def get_streak(user: dict[str, Any] = Depends(get_current_user)):
 
 
 @router.get("/goals/progress")
-def get_goal_progress(user: dict[str, Any] = Depends(get_current_user)):
+async def get_goal_progress(user: dict[str, Any] = Depends(get_current_user)):
     """Return each goal with current progress."""
     from app.db.models import UserGoal
 
-    goals: Sequence[UserGoal] = list(UserGoal.select().where(UserGoal.user == user["user_id"]))
+    user_id = user["user_id"]
+
+    def _query_goals() -> list[Any]:
+        return list(UserGoal.select().where(UserGoal.user == user_id))
+
+    goals: Sequence[UserGoal] = await asyncio.to_thread(_query_goals)
     if not goals:
         return success_response({"progress": []})
 
-    streak_data = _compute_streak_data(user["user_id"])
+    streak_data = await asyncio.to_thread(_compute_streak_data, user_id)
 
     progress_list: list[dict[str, Any]] = []
     for g in goals:
