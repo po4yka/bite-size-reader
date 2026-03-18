@@ -311,7 +311,6 @@ app/
   handlers/      -- Request handlers
   infrastructure/ -- Persistence layer, event bus, vector store
     cache/       -- Cache layer (Redis)
-    clients/     -- HTTP client wrappers
     messaging/   -- Messaging infrastructure
   mcp/           -- MCP server for AI agent access
   models/        -- Pydantic-style models (Telegram entities, LLM config)
