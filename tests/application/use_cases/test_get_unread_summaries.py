@@ -52,6 +52,9 @@ async def test_get_unread_summaries_empty() -> None:
     result = await use_case.execute(query)
 
     assert result == []
+    repo.async_get_unread_summaries.assert_awaited_once_with(
+        user_id=1, chat_id=2, limit=10, topic=None
+    )
 
 
 @pytest.mark.asyncio
@@ -61,8 +64,10 @@ async def test_get_unread_summaries_with_topic() -> None:
     use_case = GetUnreadSummariesUseCase(summary_repository=repo)
     query = GetUnreadSummariesQuery(user_id=1, chat_id=2, limit=10, topic="tech")
 
-    await use_case.execute(query)
+    result = await use_case.execute(query)
 
+    assert len(result) == 1
+    assert result[0].id == 3
     repo.async_get_unread_summaries.assert_awaited_once_with(
         user_id=1, chat_id=2, limit=10, topic="tech"
     )

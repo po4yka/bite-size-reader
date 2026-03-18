@@ -44,14 +44,6 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-def _instantiate_repository(factory: Any) -> Any:
-    session = resolve_repository_session()
-    try:
-        return factory(session)
-    except TypeError:
-        return factory()
-
-
 def _build_search_repositories() -> tuple[Any, Any, Any]:
     session = resolve_repository_session()
     return (
