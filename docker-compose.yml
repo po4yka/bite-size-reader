@@ -24,7 +24,7 @@ services:
       - MAX_CONCURRENT_CALLS=${MAX_CONCURRENT_CALLS:-4}
       - REQUEST_TIMEOUT_SEC=${REQUEST_TIMEOUT_SEC:-60}
       - FIRECRAWL_SELF_HOSTED_ENABLED=${FIRECRAWL_SELF_HOSTED_ENABLED:-0}
-      - FIRECRAWL_SELF_HOSTED_URL=http://firecrawl:3002
+      - FIRECRAWL_SELF_HOSTED_URL=http://firecrawl-api:3002
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -60,6 +60,7 @@ services:
     networks:
       - default
       - karakeep
+      - firecrawl_net
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 30s
@@ -293,6 +294,9 @@ services:
 networks:
   karakeep:
     name: karakeep_default
+    external: true
+  firecrawl_net:
+    name: firecrawl_net
     external: true
 volumes:
   redis_data:
