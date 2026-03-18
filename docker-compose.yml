@@ -49,9 +49,6 @@ services:
       chroma:
         condition: service_healthy
         required: false # Allow bot to start without ChromaDB (graceful degradation)
-      firecrawl:
-        condition: service_healthy
-        required: false # Graceful degradation -- Scrapling works without it
     logging:
       driver: "json-file"
       options:
@@ -178,40 +175,6 @@ services:
         reservations:
           memory: 128M
           cpus: "0.10"
-  firecrawl:
-    # DISABLED: Firecrawl v2 requires RabbitMQ + dedicated PostgreSQL + Playwright
-    # microservice -- not a drop-in replacement for the old v0.0.57 standalone image.
-    # The scraper chain degrades gracefully without it (required: false).
-    # TODO(po4yka): evaluate deploying firecrawl v2 as a separate compose stack.
-    image: ghcr.io/firecrawl/firecrawl@sha256:90a10e0053d78f36308c46a7fbb84d6d8258ec1da13fa08e6b821bd650d5e569
-    container_name: bsr-firecrawl
-    init: true
-    environment:
-      - PORT=3002
-      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-fc-bsr-local}
-      - NUM_WORKERS_PER_QUEUE=1
-    ports:
-      - "127.0.0.1:3003:3002"
-    restart: "no"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:3002/v2/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: "0.50"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    security_opt:
-      - no-new-privileges:true
-    stop_grace_period: 30s
   redis:
     image: redis:7-alpine
     container_name: bsr-redis
