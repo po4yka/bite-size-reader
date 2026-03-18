@@ -50,7 +50,7 @@ pre-commit-run:
 .PHONY: lock-uv lock-piptools
 lock-uv:
 	uv lock
-	uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
+	uv pip compile --python-version 3.13 --no-dev pyproject.toml -o requirements.txt
 	@set -eu; \
 	TMP_REQ=.requirements-all.tmp.txt; \
 	uv pip compile --python-version 3.13 --extra api --extra ml --extra youtube --extra export --extra scheduler --extra mcp pyproject.toml -o $$TMP_REQ; \
@@ -64,7 +64,7 @@ lock-piptools:
 
 check-lock:
 	uv lock
-	uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
+	uv pip compile --python-version 3.13 --no-dev pyproject.toml -o requirements.txt
 	@set -eu; \
 	TMP_REQ=.requirements-all.tmp.txt; \
 	uv pip compile --python-version 3.13 --extra api --extra ml --extra youtube --extra export --extra scheduler --extra mcp pyproject.toml -o $$TMP_REQ; \

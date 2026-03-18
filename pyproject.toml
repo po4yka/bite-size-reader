@@ -230,6 +230,12 @@ mcp = [
   "mcp>=1.26,<2",
 ]
 
+# gRPC service layer (aspirational; not wired into bot.py by default)
+grpc = [
+  "grpcio>=1.60.0",
+  "grpcio-tools>=1.60.0",
+]
+
 # Full spaCy language models (only needed if spacy.load() is used; spacy.blank() works without them)
 nlp = [
   "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
