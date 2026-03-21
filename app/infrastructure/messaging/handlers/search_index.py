@@ -11,6 +11,7 @@ from app.infrastructure.persistence.sqlite.repositories.topic_search_repository 
 
 if TYPE_CHECKING:
     from app.domain.events.summary_events import SummaryCreated
+    from app.domain.events.tag_events import TagAttached, TagDetached
 
 logger = get_logger(__name__)
 
@@ -46,6 +47,48 @@ class SearchIndexEventHandler:
                 extra={
                     "summary_id": event.summary_id,
                     "request_id": event.request_id,
+                    "error": str(exc),
+                },
+            )
+
+    async def on_tag_attached(self, event: TagAttached) -> None:
+        logger.info(
+            "updating_search_index_tags_on_attach",
+            extra={"summary_id": event.summary_id, "tag_id": event.tag_id},
+        )
+        try:
+            await self._repo.async_update_tags_for_summary(event.summary_id)
+            logger.debug(
+                "search_index_tags_updated",
+                extra={"summary_id": event.summary_id, "tag_id": event.tag_id},
+            )
+        except Exception as exc:
+            logger.exception(
+                "search_index_tag_update_failed",
+                extra={
+                    "summary_id": event.summary_id,
+                    "tag_id": event.tag_id,
+                    "error": str(exc),
+                },
+            )
+
+    async def on_tag_detached(self, event: TagDetached) -> None:
+        logger.info(
+            "updating_search_index_tags_on_detach",
+            extra={"summary_id": event.summary_id, "tag_id": event.tag_id},
+        )
+        try:
+            await self._repo.async_update_tags_for_summary(event.summary_id)
+            logger.debug(
+                "search_index_tags_updated",
+                extra={"summary_id": event.summary_id, "tag_id": event.tag_id},
+            )
+        except Exception as exc:
+            logger.exception(
+                "search_index_tag_update_failed",
+                extra={
+                    "summary_id": event.summary_id,
+                    "tag_id": event.tag_id,
                     "error": str(exc),
                 },
             )

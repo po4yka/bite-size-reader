@@ -26,6 +26,9 @@ from app.infrastructure.persistence.sqlite.repositories.request_repository impor
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
+from app.infrastructure.persistence.sqlite.repositories.tag_repository import (
+    SqliteTagRepositoryAdapter,
+)
 from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
     SqliteTopicSearchRepositoryAdapter,
 )
@@ -46,6 +49,7 @@ if TYPE_CHECKING:
         LLMRepositoryPort,
         RequestRepositoryPort,
         SummaryRepositoryPort,
+        TagRepositoryPort,
         TopicSearchRepositoryPort,
         UserRepositoryPort,
         VideoDownloadRepositoryPort,
@@ -95,3 +99,7 @@ def build_topic_search_repository(db: DatabaseSessionManager) -> TopicSearchRepo
 
 def build_embedding_repository(db: DatabaseSessionManager) -> EmbeddingRepositoryPort:
     return SqliteEmbeddingRepositoryAdapter(db)
+
+
+def build_tag_repository(db: DatabaseSessionManager) -> TagRepositoryPort:
+    return SqliteTagRepositoryAdapter(db)

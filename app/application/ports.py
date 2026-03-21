@@ -672,3 +672,120 @@ class EmbeddingRepositoryPort(Protocol):
 
     async def async_get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
         """Return summary embedding by summary ID."""
+
+
+@runtime_checkable
+class WebhookRepositoryPort(Protocol):
+    """Port for webhook subscription and delivery operations."""
+
+    async def async_get_user_subscriptions(
+        self, user_id: int, enabled_only: bool = True
+    ) -> list[dict[str, Any]]:
+        """Return webhook subscriptions for a user."""
+
+    async def async_get_subscription_by_id(self, subscription_id: int) -> dict[str, Any] | None:
+        """Return a single subscription by ID."""
+
+    async def async_create_subscription(
+        self,
+        user_id: int,
+        name: str | None,
+        url: str,
+        secret: str,
+        events: list[str],
+    ) -> dict[str, Any]:
+        """Create a new webhook subscription."""
+
+    async def async_update_subscription(
+        self, subscription_id: int, **kwargs: Any
+    ) -> dict[str, Any]:
+        """Update an existing webhook subscription."""
+
+    async def async_delete_subscription(self, subscription_id: int) -> None:
+        """Delete a webhook subscription."""
+
+    async def async_log_delivery(
+        self,
+        subscription_id: int,
+        event_type: str,
+        payload: dict[str, Any],
+        response_status: int | None,
+        response_body: str | None,
+        duration_ms: int | None,
+        success: bool,
+        attempt: int,
+        error: str | None,
+    ) -> dict[str, Any]:
+        """Persist a webhook delivery attempt."""
+
+    async def async_get_deliveries(
+        self, subscription_id: int, limit: int = 50, offset: int = 0
+    ) -> list[dict[str, Any]]:
+        """Return delivery log entries for a subscription."""
+
+    async def async_increment_failure_count(self, subscription_id: int) -> int:
+        """Increment consecutive failure count. Returns the new count."""
+
+    async def async_reset_failure_count(self, subscription_id: int) -> None:
+        """Reset consecutive failure count to zero."""
+
+    async def async_disable_subscription(self, subscription_id: int) -> None:
+        """Disable a webhook subscription."""
+
+    async def async_rotate_secret(self, subscription_id: int, new_secret: str) -> None:
+        """Rotate the HMAC secret for a subscription."""
+
+
+@runtime_checkable
+class TagRepositoryPort(Protocol):
+    """Port for tag CRUD and summary-tag association operations."""
+
+    async def async_get_user_tags(self, user_id: int) -> list[dict[str, Any]]:
+        """Return all tags owned by a user."""
+
+    async def async_get_tag_by_id(self, tag_id: int) -> dict[str, Any] | None:
+        """Return tag by ID."""
+
+    async def async_create_tag(
+        self,
+        user_id: int,
+        name: str,
+        normalized_name: str,
+        color: str | None,
+    ) -> dict[str, Any]:
+        """Create a tag and return the created record."""
+
+    async def async_update_tag(
+        self,
+        tag_id: int,
+        name: str | None,
+        color: str | None,
+    ) -> dict[str, Any]:
+        """Update a tag and return the updated record."""
+
+    async def async_delete_tag(self, tag_id: int) -> None:
+        """Delete a tag."""
+
+    async def async_attach_tag(
+        self,
+        summary_id: int,
+        tag_id: int,
+        source: str,
+    ) -> dict[str, Any]:
+        """Attach a tag to a summary and return the association record."""
+
+    async def async_detach_tag(self, summary_id: int, tag_id: int) -> None:
+        """Detach a tag from a summary."""
+
+    async def async_get_tags_for_summary(self, summary_id: int) -> list[dict[str, Any]]:
+        """Return all tags attached to a summary."""
+
+    async def async_merge_tags(self, source_tag_ids: list[int], target_tag_id: int) -> None:
+        """Merge source tags into target tag, reassigning all associations."""
+
+    async def async_get_tag_by_normalized_name(
+        self,
+        user_id: int,
+        normalized_name: str,
+    ) -> dict[str, Any] | None:
+        """Return tag by normalized name within a user scope."""

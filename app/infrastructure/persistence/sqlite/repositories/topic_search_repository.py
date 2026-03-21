@@ -23,7 +23,7 @@ from app.application.services.topic_search_utils import (
     tokenize,
 )
 from app.core.logging_utils import get_logger
-from app.db.models import Request, Summary, TopicSearchIndex, model_to_dict
+from app.db.models import Request, Summary, SummaryTag, Tag, TopicSearchIndex, model_to_dict
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
 if TYPE_CHECKING:
@@ -64,6 +64,20 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
             self._refresh_topic_search_index(request_id)
 
         await self._execute(_refresh, operation_name="refresh_topic_search_index")
+
+    async def async_update_tags_for_summary(self, summary_id: int) -> None:
+        """Re-index user tags in FTS for a given summary.
+
+        Looks up the request_id from the summary, queries all active user tags,
+        and updates the ``tags`` column of the existing FTS5 entry.  If no FTS5
+        row exists yet the call is a no-op (the entry will be created when the
+        summary is first indexed).
+        """
+
+        def _update() -> None:
+            self._update_tags_for_summary(summary_id)
+
+        await self._execute(_update, operation_name="update_tags_for_summary")
 
     async def async_rebuild_index(self) -> None:
         """Rebuild the entire search index."""
@@ -230,6 +244,78 @@ class SqliteTopicSearchRepositoryAdapter(SqliteBaseRepository):
         )
         if doc:
             self._write_topic_search_index(doc)
+
+    def _update_tags_for_summary(self, summary_id: int) -> None:
+        """Update the tags column in FTS5 for a summary's request."""
+        summary = Summary.select(Summary.request).where(Summary.id == summary_id).first()
+        if not summary:
+            return
+
+        request_id = summary.request_id
+
+        # Check whether an FTS5 entry exists for this request
+        table_name = TopicSearchIndex._meta.table_name
+        cursor = self._session.database.execute_sql(
+            f"SELECT rowid FROM {table_name} WHERE request_id = ?",  # nosec B608
+            (str(request_id),),
+        )
+        row = cursor.fetchone() if cursor else None
+        if not row:
+            return
+
+        # Gather all active user tags for this summary
+        tag_names: list[str] = []
+        query = (
+            Tag.select(Tag.name)
+            .join(SummaryTag, on=(SummaryTag.tag == Tag.id))
+            .where(
+                (SummaryTag.summary == summary_id) & (Tag.is_deleted == False)  # noqa: E712
+            )
+        )
+        for tag_row in query:
+            name = tag_row.name.strip() if tag_row.name else ""
+            if name:
+                tag_names.append(name)
+
+        # FTS5 content-less tables need DELETE + INSERT to update a column.
+        # Re-index the full entry so all other fields stay intact.
+        self._refresh_topic_search_index(request_id)
+
+        # Now patch the tags field with the user tags merged in.
+        # Re-read the freshly written entry to get current tags from the payload.
+        cursor = self._session.database.execute_sql(
+            f"SELECT rowid, tags FROM {table_name} WHERE request_id = ?",  # nosec B608
+            (str(request_id),),
+        )
+        fresh_row = cursor.fetchone() if cursor else None
+        if not fresh_row:
+            return
+
+        rowid = fresh_row[0]
+        existing_tags = fresh_row[1] or ""
+
+        # Merge: existing payload tags + user tags (deduplicated, preserving order)
+        merged_parts: list[str] = []
+        seen: set[str] = set()
+        for part in existing_tags.split():
+            lower = part.lower()
+            if lower not in seen:
+                merged_parts.append(part)
+                seen.add(lower)
+        for name in tag_names:
+            lower = name.lower()
+            if lower not in seen:
+                merged_parts.append(name)
+                seen.add(lower)
+
+        merged_tags = " ".join(merged_parts) if merged_parts else ""
+
+        if merged_tags != existing_tags:
+            # FTS5 UPDATE requires special syntax via the content table
+            self._session.database.execute_sql(
+                f"UPDATE {table_name} SET tags = ? WHERE rowid = ?",  # nosec B608
+                (merged_tags, rowid),
+            )
 
     def _remove_topic_search_index_entry(self, request_id: int) -> None:
         TopicSearchIndex.delete().where(TopicSearchIndex.request_id == request_id).execute()

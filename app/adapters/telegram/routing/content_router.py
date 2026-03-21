@@ -68,6 +68,9 @@ class MessageContentRouter:
             ("/cancel", command_processor.handle_cancel_command),
         )
         self._post_summarize_text_commands: tuple[tuple[str, TextCommandHandler], ...] = (
+            ("/untag", command_processor.handle_untag_command),
+            ("/tags", command_processor.handle_tags_command),
+            ("/tag", command_processor.handle_tag_command),
             ("/unread", command_processor.handle_unread_command),
             ("/read", command_processor.handle_read_command),
             ("/search", command_processor.handle_search_command),

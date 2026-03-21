@@ -7,6 +7,7 @@ from typing import Any
 from app.core.logging_utils import get_logger
 from app.domain.events.request_events import RequestCompleted, RequestFailed
 from app.domain.events.summary_events import SummaryCreated, SummaryMarkedAsRead
+from app.domain.events.tag_events import TagAttached, TagDetached
 from app.infrastructure.messaging.handlers.analytics import AnalyticsEventHandler
 from app.infrastructure.messaging.handlers.audit_log import AuditLogEventHandler
 from app.infrastructure.messaging.handlers.cache_invalidation import CacheInvalidationEventHandler
@@ -17,6 +18,7 @@ from app.infrastructure.messaging.handlers.notification import NotificationEvent
 from app.infrastructure.messaging.handlers.push_notification import PushNotificationEventHandler
 from app.infrastructure.messaging.handlers.search_index import SearchIndexEventHandler
 from app.infrastructure.messaging.handlers.webhook import WebhookEventHandler
+from app.infrastructure.messaging.handlers.webhook_dispatcher import WebhookDispatcher
 
 logger = get_logger(__name__)
 
@@ -35,6 +37,7 @@ def wire_event_handlers(
     summary_repository: Any | None = None,
     push_notification_service: Any | None = None,
     request_repository: Any | None = None,
+    webhook_repository: Any | None = None,
 ) -> None:
     search_index_handler = SearchIndexEventHandler(database)
     analytics_handler = AnalyticsEventHandler(analytics_service)
@@ -50,6 +53,8 @@ def wire_event_handlers(
     )
 
     event_bus.subscribe(SummaryCreated, search_index_handler.on_summary_created)
+    event_bus.subscribe(TagAttached, search_index_handler.on_tag_attached)
+    event_bus.subscribe(TagDetached, search_index_handler.on_tag_detached)
     event_bus.subscribe(SummaryCreated, audit_log_handler.on_summary_created)
     event_bus.subscribe(SummaryCreated, cache_handler.on_summary_created)
     event_bus.subscribe(SummaryCreated, webhook_handler.on_summary_created)
@@ -79,6 +84,16 @@ def wire_event_handlers(
     event_bus.subscribe(RequestFailed, notification_handler.on_request_failed)
     event_bus.subscribe(RequestFailed, webhook_handler.on_request_failed)
 
+    # Per-user webhook dispatcher (additive alongside system-wide WebhookEventHandler)
+    webhook_dispatcher: WebhookDispatcher | None = None
+    if webhook_repository is not None:
+        webhook_dispatcher = WebhookDispatcher(webhook_repository)
+        event_bus.subscribe(SummaryCreated, webhook_dispatcher.on_summary_created)
+        event_bus.subscribe(RequestCompleted, webhook_dispatcher.on_request_completed)
+        event_bus.subscribe(RequestFailed, webhook_dispatcher.on_request_failed)
+        event_bus.subscribe(TagAttached, webhook_dispatcher.on_tag_attached)
+        event_bus.subscribe(TagDetached, webhook_dispatcher.on_tag_detached)
+
     logger.info(
         "event_handlers_wired",
         extra={
@@ -92,6 +107,7 @@ def wire_event_handlers(
                 "webhooks": webhook_client is not None and webhook_url is not None,
                 "embeddings": embedding_generator is not None,
                 "push_notifications": push_handler is not None,
+                "webhook_dispatcher": webhook_dispatcher is not None,
             },
         },
     )

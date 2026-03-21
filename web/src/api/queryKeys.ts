@@ -13,6 +13,10 @@ export const queryKeys = {
     detail: (id: number) => ["summaries", "detail", id] as const,
     content: (id: number) => ["summaries", "content", id] as const,
   },
+  tags: {
+    all: ["tags"] as const,
+    list: () => ["tags", "list"] as const,
+  },
   collections: {
     all: ["collections"] as const,
     tree: ["collections", "tree"] as const,
@@ -46,6 +50,11 @@ export const queryKeys = {
   auth: {
     sessions: ["auth", "sessions"] as const,
     telegramLink: ["auth", "telegram-link"] as const,
+  },
+  webhooks: {
+    all: ["webhooks"] as const,
+    list: () => ["webhooks", "list"] as const,
+    deliveries: (id: number) => ["webhooks", "deliveries", id] as const,
   },
   admin: {
     dbInfo: ["admin", "db-info"] as const,

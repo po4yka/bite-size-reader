@@ -31,6 +31,7 @@ from app.adapters.telegram.command_handlers.listen_handler import ListenHandler
 from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandler
 from app.adapters.telegram.command_handlers.search_handler import SearchHandler
 from app.adapters.telegram.command_handlers.settings_handler import SettingsHandler
+from app.adapters.telegram.command_handlers.tag_handler import TagHandler
 from app.adapters.telegram.command_handlers.url_commands_handler import URLCommandsHandler
 from app.adapters.telegram.command_handlers.utils import maybe_load_json
 from app.adapters.telegram.task_manager import UserTaskManager
@@ -169,6 +170,12 @@ class CommandProcessor:
         self._settings = SettingsHandler(
             verbosity_resolver=verbosity_resolver,
             cfg=cfg,
+        )
+
+        self._tag = TagHandler(
+            cfg=cfg,
+            db=db,
+            response_formatter=response_formatter,
         )
 
     def _build_context(
@@ -679,6 +686,49 @@ class CommandProcessor:
     def has_active_init_session(self, uid: int) -> bool:
         """Check if user has an active session init flow."""
         return self._init_session.has_active_session(uid)
+
+    # =========================================================================
+    # Tag delegation
+    # =========================================================================
+
+    async def handle_tag_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /tag command -- add a tag to a summary."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._tag.handle_tag(ctx)
+
+    async def handle_untag_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /untag command -- remove a tag from a summary."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._tag.handle_untag(ctx)
+
+    async def handle_tags_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /tags command -- list tags or summaries for a tag."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._tag.handle_tags(ctx)
 
     # =========================================================================
     # Settings delegation

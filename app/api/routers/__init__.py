@@ -16,8 +16,10 @@ from . import (
     summaries,
     sync,
     system,
+    tags,
     tts,
     user,
+    webhooks,
 )
 
 __all__ = [
@@ -34,6 +36,8 @@ __all__ = [
     "summaries",
     "sync",
     "system",
+    "tags",
     "tts",
     "user",
+    "webhooks",
 ]

@@ -16,6 +16,7 @@ from app.di.repositories import (
     build_llm_repository,
     build_request_repository,
     build_summary_repository,
+    build_tag_repository,
     build_topic_search_repository,
 )
 from app.di.search import build_search_dependencies
@@ -125,6 +126,7 @@ async def build_api_runtime(
         llm_repository=llm_repository,
     )
     sync_service = SyncService(app_cfg, database)
+    tag_repo = build_tag_repository(database)
     return ApiRuntime(
         cfg=app_cfg,
         db=database,
@@ -136,6 +138,7 @@ async def build_api_runtime(
         search_read_model_use_case=search_read_model_use_case,
         request_service=request_service,
         sync_service=sync_service,
+        tag_repo=tag_repo,
     )
 
 

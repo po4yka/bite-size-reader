@@ -17,6 +17,8 @@ const CollectionsPage = lazy(() => import("./features/collections/CollectionsPag
 const DigestPage = lazy(() => import("./features/digest/DigestPage"));
 const CustomDigestViewPage = lazy(() => import("./features/digest/CustomDigestViewPage"));
 const SearchPage = lazy(() => import("./features/search/SearchPage"));
+const TagManagementPage = lazy(() => import("./features/tags/TagManagementPage"));
+const WebhooksPage = lazy(() => import("./features/webhooks/WebhooksPage"));
 const AdminPage = lazy(() => import("./features/admin/AdminPage"));
 
 function RouteLoader() {
@@ -108,6 +110,14 @@ export default function App() {
         <Route
           path="collections/:id"
           element={<Suspense fallback={<RouteLoader />}><CollectionsPage /></Suspense>}
+        />
+        <Route
+          path="tags"
+          element={<Suspense fallback={<RouteLoader />}><TagManagementPage /></Suspense>}
+        />
+        <Route
+          path="webhooks"
+          element={<Suspense fallback={<RouteLoader />}><WebhooksPage /></Suspense>}
         />
         <Route
           path="digest"

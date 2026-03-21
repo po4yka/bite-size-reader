@@ -678,6 +678,8 @@ class SyncEntityEnvelope(BaseModel):
     crawl_result: dict[str, Any] | None = Field(default=None, serialization_alias="crawlResult")
     llm_call: dict[str, Any] | None = Field(default=None, serialization_alias="llmCall")
     highlight: dict[str, Any] | None = None
+    tag: dict[str, Any] | None = None
+    summary_tag: dict[str, Any] | None = Field(default=None, serialization_alias="summaryTag")
 
 
 class FullSyncResponseData(BaseModel):
@@ -915,6 +917,23 @@ class HighlightListResponse(BaseModel):
     highlights: list[HighlightResponse]
 
 
+class TagResponse(BaseModel):
+    """Response for a single tag."""
+
+    id: int
+    name: str
+    color: str | None = None
+    summary_count: int = Field(default=0, serialization_alias="summaryCount")
+    created_at: str = Field(serialization_alias="createdAt")
+    updated_at: str = Field(serialization_alias="updatedAt")
+
+
+class TagListResponse(BaseModel):
+    """Response for listing tags."""
+
+    tags: list[TagResponse]
+
+
 class GoalResponse(BaseModel):
     """A single reading goal."""
 
@@ -951,6 +970,35 @@ class CustomDigestResponse(BaseModel):
     title: str | None = None
     content: str | None = None
     status: str
+    created_at: str = Field(serialization_alias="createdAt")
+
+
+class WebhookSubscriptionResponse(BaseModel):
+    """Response for a single webhook subscription."""
+
+    id: int
+    name: str | None = None
+    url: str
+    events: list[str]
+    enabled: bool
+    status: str
+    secret_preview: str = Field(serialization_alias="secretPreview")
+    failure_count: int = Field(serialization_alias="failureCount")
+    last_delivery_at: str | None = Field(default=None, serialization_alias="lastDeliveryAt")
+    created_at: str = Field(serialization_alias="createdAt")
+    updated_at: str = Field(serialization_alias="updatedAt")
+
+
+class WebhookDeliveryResponse(BaseModel):
+    """Response for a single webhook delivery attempt."""
+
+    id: int
+    event_type: str = Field(serialization_alias="eventType")
+    response_status: int | None = Field(default=None, serialization_alias="responseStatus")
+    success: bool
+    attempt: int
+    duration_ms: int | None = Field(default=None, serialization_alias="durationMs")
+    error: str | None = None
     created_at: str = Field(serialization_alias="createdAt")
 
 

@@ -44,8 +44,10 @@ from app.api.routers import (
     summaries,
     sync,
     system,
+    tags,
     tts,
     user,
+    webhooks,
 )
 from app.api.routers.auth import get_current_user
 from app.config import Config
@@ -152,6 +154,9 @@ app.include_router(proxy.router, prefix="/v1/proxy", tags=["Proxy"])
 app.include_router(notifications.router, prefix="/v1/notifications", tags=["Notifications"])
 app.include_router(digest.router, prefix="/v1/digest", tags=["Digest"])
 app.include_router(custom_digests.router, prefix="/v1/digests/custom", tags=["custom-digests"])
+app.include_router(tags.router, prefix="/v1/tags", tags=["Tags"])
+app.include_router(tags.summary_tags_router, prefix="/v1/summaries", tags=["Tags"])
+app.include_router(webhooks.router, prefix="/v1/webhooks", tags=["Webhooks"])
 app.include_router(highlights.router, prefix="/v1/summaries", tags=["Highlights"])
 app.include_router(tts.router, prefix="/v1/summaries", tags=["TTS"])
 app.include_router(health.router, tags=["Health"])

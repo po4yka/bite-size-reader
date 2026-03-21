@@ -887,6 +887,92 @@ class UserGoal(BaseModel):
         indexes = ((("user", "goal_type"), True),)
 
 
+class Tag(BaseModel):
+    """User-defined tag for organizing summaries."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="tags", on_delete="CASCADE")
+    name = peewee.TextField()
+    normalized_name = peewee.TextField()
+    color = peewee.TextField(null=True)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    is_deleted = peewee.BooleanField(default=False)
+    deleted_at = peewee.DateTimeField(null=True)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "tags"
+        indexes = ((("user", "normalized_name"), True),)
+
+
+class SummaryTag(BaseModel):
+    """Association between a Summary and a Tag."""
+
+    id = peewee.AutoField()
+    summary = peewee.ForeignKeyField(Summary, backref="summary_tags", on_delete="CASCADE")
+    tag = peewee.ForeignKeyField(Tag, backref="summary_tags", on_delete="CASCADE")
+    source = peewee.TextField(default="manual")  # manual | ai | rule | import
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "summary_tags"
+        indexes = (
+            (("summary", "tag"), True),
+            (("tag",), False),
+        )
+
+
+class WebhookSubscription(BaseModel):
+    """Per-user webhook endpoint subscription."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="webhooks", on_delete="CASCADE")
+    name = peewee.TextField(null=True)
+    url = peewee.TextField()
+    secret = peewee.TextField()
+    events_json = JSONField(default=list)
+    enabled = peewee.BooleanField(default=True)
+    status = peewee.TextField(default="active")  # active | paused | disabled
+    failure_count = peewee.IntegerField(default=0)
+    last_delivery_at = peewee.DateTimeField(null=True)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    is_deleted = peewee.BooleanField(default=False)
+    deleted_at = peewee.DateTimeField(null=True)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "webhook_subscriptions"
+        indexes = ((("user", "enabled"), False),)
+
+
+class WebhookDelivery(BaseModel):
+    """Delivery attempt log for a webhook."""
+
+    id = peewee.AutoField()
+    subscription = peewee.ForeignKeyField(
+        WebhookSubscription, backref="deliveries", on_delete="CASCADE"
+    )
+    event_type = peewee.TextField()
+    payload_json = JSONField()
+    response_status = peewee.IntegerField(null=True)
+    response_body = peewee.TextField(null=True)
+    duration_ms = peewee.IntegerField(null=True)
+    success = peewee.BooleanField()
+    attempt = peewee.IntegerField(default=1)
+    error = peewee.TextField(null=True)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "webhook_deliveries"
+        indexes = (
+            (("subscription",), False),
+            (("created_at",), False),
+        )
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -923,6 +1009,10 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     CustomDigest,
     SummaryHighlight,
     UserGoal,
+    Tag,
+    SummaryTag,
+    WebhookSubscription,
+    WebhookDelivery,
 )
 
 

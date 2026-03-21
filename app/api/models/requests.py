@@ -190,3 +190,48 @@ class SaveReadingPositionRequest(BaseModel):
 
     progress: float = Field(..., ge=0.0, le=1.0, description="Scroll progress 0.0-1.0")
     last_read_offset: int = Field(default=0, ge=0, description="Pixel or character offset")
+
+
+class CreateTagRequest(BaseModel):
+    """Request body for creating a tag."""
+
+    name: str
+    color: str | None = None
+
+
+class UpdateTagRequest(BaseModel):
+    """Request body for updating a tag."""
+
+    name: str | None = None
+    color: str | None = None
+
+
+class MergeTagsRequest(BaseModel):
+    """Request body for merging tags."""
+
+    source_tag_ids: list[int]
+    target_tag_id: int
+
+
+class AttachTagsRequest(BaseModel):
+    """Request body for attaching tags to a summary."""
+
+    tag_ids: list[int] | None = None
+    tag_names: list[str] | None = None
+
+
+class CreateWebhookRequest(BaseModel):
+    """Request body for creating a webhook subscription."""
+
+    name: str | None = None
+    url: str
+    events: list[str]
+
+
+class UpdateWebhookRequest(BaseModel):
+    """Request body for updating a webhook subscription."""
+
+    name: str | None = None
+    url: str | None = None
+    events: list[str] | None = None
+    enabled: bool | None = None

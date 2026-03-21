@@ -20,11 +20,13 @@ import {
   Catalog,
   Search as SearchIcon,
   Add,
+  Tag,
   Notification,
   Settings,
   User,
   Logout,
   Renew,
+  ConnectionSignal,
 } from "@carbon/icons-react";
 import { useAuth } from "../auth/AuthProvider";
 import { FEATURE_FLAGS } from "../routes/features";
@@ -35,7 +37,9 @@ const NAV_ITEMS = [
   { path: "/search", label: "Search", icon: SearchIcon },
   { path: "/submit", label: "Submit", icon: Add },
   { path: "/collections", label: "Collections", icon: Catalog },
+  { path: "/tags", label: "Tags", icon: Tag },
   { path: "/digest", label: "Digest", icon: Notification },
+  { path: "/webhooks", label: "Webhooks", icon: ConnectionSignal },
   { path: "/preferences", label: "Preferences", icon: User },
 ] as const;
 

@@ -388,12 +388,79 @@ class SyncService:
             },
         )
 
+    def _serialize_tag(self, tag: dict[str, Any]) -> SyncEntityEnvelope:
+        """Serialize a tag dict to SyncEntityEnvelope."""
+        payload = None
+        if not tag.get("is_deleted"):
+            payload = {
+                "id": tag.get("id"),
+                "name": tag.get("name"),
+                "normalized_name": tag.get("normalized_name"),
+                "color": tag.get("color"),
+                "server_version": int(tag.get("server_version") or 0),
+                "is_deleted": tag.get("is_deleted", False),
+                "created_at": self._coerce_iso(tag.get("created_at")),
+                "updated_at": self._coerce_iso(tag.get("updated_at")),
+            }
+        return SyncEntityEnvelope(
+            entity_type="tag",
+            id=tag.get("id"),
+            server_version=int(tag.get("server_version") or 0),
+            updated_at=self._coerce_iso(tag.get("updated_at")),
+            deleted_at=self._deleted_at(tag),
+            tag=payload,
+        )
+
+    def _serialize_summary_tag(self, st: dict[str, Any]) -> SyncEntityEnvelope:
+        """Serialize a summary_tag dict to SyncEntityEnvelope."""
+        summary_val = st.get("summary")
+        summary_id = summary_val.get("id") if isinstance(summary_val, dict) else summary_val
+        tag_val = st.get("tag")
+        tag_id = tag_val.get("id") if isinstance(tag_val, dict) else tag_val
+
+        payload = {
+            "id": st.get("id"),
+            "summary_id": summary_id,
+            "tag_id": tag_id,
+            "source": st.get("source"),
+            "server_version": int(st.get("server_version") or 0),
+            "created_at": self._coerce_iso(st.get("created_at")),
+        }
+        return SyncEntityEnvelope(
+            entity_type="summary_tag",
+            id=st.get("id"),
+            server_version=int(st.get("server_version") or 0),
+            updated_at=self._coerce_iso(st.get("created_at")),
+            summary_tag=payload,
+        )
+
     @staticmethod
     def _get_highlights_for_user(user_id: int) -> list[dict[str, Any]]:
         """Fetch all highlights for a user as dicts."""
         from app.db.models import SummaryHighlight, model_to_dict
 
         rows = SummaryHighlight.select().where(SummaryHighlight.user == user_id)
+        return [d for row in rows if (d := model_to_dict(row)) is not None]
+
+    @staticmethod
+    def _get_tags_for_user(user_id: int) -> list[dict[str, Any]]:
+        """Fetch all tags for a user as dicts (including soft-deleted)."""
+        from app.db.models import Tag, model_to_dict
+
+        rows = Tag.select().where(Tag.user == user_id)
+        return [d for row in rows if (d := model_to_dict(row)) is not None]
+
+    @staticmethod
+    def _get_summary_tags_for_user(user_id: int) -> list[dict[str, Any]]:
+        """Fetch all summary_tags for a user's summaries as dicts."""
+        from app.db.models import Request, Summary, SummaryTag, model_to_dict
+
+        rows = (
+            SummaryTag.select()
+            .join(Summary, on=(SummaryTag.summary == Summary.id))
+            .join(Request, on=(Summary.request == Request.id))
+            .where(Request.user_id == user_id)
+        )
         return [d for row in rows if (d := model_to_dict(row)) is not None]
 
     async def _collect_records(self, user_id: int) -> list[SyncEntityEnvelope]:
@@ -429,6 +496,16 @@ class SyncService:
         highlights = self._get_highlights_for_user(user_id)
         for highlight in highlights:
             records.append(self._serialize_highlight(highlight))
+
+        # Get all tags for user
+        tags = self._get_tags_for_user(user_id)
+        for tag in tags:
+            records.append(self._serialize_tag(tag))
+
+        # Get all summary_tags for user
+        summary_tags = self._get_summary_tags_for_user(user_id)
+        for st in summary_tags:
+            records.append(self._serialize_summary_tag(st))
 
         # Sort by server_version and id for consistent ordering
         records.sort(key=lambda r: (r.server_version, str(r.id)))
