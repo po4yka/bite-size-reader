@@ -3,6 +3,7 @@ import {
   addSummaryToCollection,
   createCollection,
   deleteCollection,
+  evaluateSmartCollection,
   fetchCollectionItems,
   fetchCollectionTree,
   moveCollectionItems,
@@ -30,8 +31,19 @@ export function useCollectionItems(collectionId: number | null) {
 export function useCreateCollection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, parentId }: { name: string; parentId?: number }) =>
-      createCollection(name, parentId),
+    mutationFn: ({
+      name,
+      parentId,
+      smartFields,
+    }: {
+      name: string;
+      parentId?: number;
+      smartFields?: {
+        collection_type: "smart";
+        query_conditions: Array<{ type: string; operator: string; value: unknown }>;
+        query_match_mode: "all" | "any";
+      };
+    }) => createCollection(name, parentId, undefined, smartFields),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.collections.tree });
     },
@@ -114,6 +126,42 @@ export function useAddToCollection() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.collections.tree });
       void queryClient.invalidateQueries({ queryKey: ["collections", "items"] });
+    },
+  });
+}
+
+export function useUpdateSmartConditions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      collectionId,
+      name,
+      queryConditions,
+      queryMatchMode,
+    }: {
+      collectionId: number;
+      name: string;
+      queryConditions: Array<{ type: string; operator: string; value: unknown }>;
+      queryMatchMode: "all" | "any";
+    }) =>
+      updateCollection(collectionId, {
+        name,
+        query_conditions: queryConditions,
+        query_match_mode: queryMatchMode,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.collections.tree });
+      void queryClient.invalidateQueries({ queryKey: ["collections", "items"] });
+    },
+  });
+}
+
+export function useEvaluateSmartCollection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (collectionId: number) => evaluateSmartCollection(collectionId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.collections.all });
     },
   });
 }

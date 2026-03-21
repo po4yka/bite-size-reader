@@ -69,6 +69,10 @@ export interface Collection {
   position?: number | null;
   itemCount: number;
   children?: Collection[];
+  collectionType?: "manual" | "smart";
+  queryConditions?: Array<{ type: string; operator: string; value: unknown }>;
+  queryMatchMode?: "all" | "any";
+  lastEvaluatedAt?: string | null;
 }
 
 export interface CollectionItem {

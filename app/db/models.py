@@ -463,6 +463,10 @@ class Collection(BaseModel):
     share_count = peewee.IntegerField(default=0)
     is_deleted = peewee.BooleanField(default=False)
     deleted_at = peewee.DateTimeField(null=True)
+    collection_type = peewee.TextField(default="manual")  # manual | smart
+    query_conditions_json = JSONField(null=True)
+    query_match_mode = peewee.TextField(default="all")  # all | any
+    last_evaluated_at = peewee.DateTimeField(null=True)
 
     class Meta:
         table_name = "collections"
@@ -471,6 +475,7 @@ class Collection(BaseModel):
             (("user", "parent", "name"), False),
             (("updated_at",), False),
             (("parent", "position"), False),
+            (("collection_type",), False),
         )
 
 

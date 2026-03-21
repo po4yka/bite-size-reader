@@ -10,6 +10,10 @@ interface CollectionPayload {
   position?: number | null;
   itemCount?: number;
   children?: CollectionPayload[];
+  collectionType?: "manual" | "smart";
+  queryConditions?: Array<{ type: string; operator: string; value: unknown }>;
+  queryMatchMode?: "all" | "any";
+  lastEvaluatedAt?: string | null;
 }
 
 function mapCollection(raw: CollectionPayload): Collection {
@@ -21,6 +25,10 @@ function mapCollection(raw: CollectionPayload): Collection {
     position: raw.position ?? null,
     itemCount: raw.itemCount ?? 0,
     children: raw.children?.map(mapCollection),
+    collectionType: raw.collectionType ?? "manual",
+    queryConditions: raw.queryConditions,
+    queryMatchMode: raw.queryMatchMode,
+    lastEvaluatedAt: raw.lastEvaluatedAt ?? null,
   };
 }
 
@@ -49,17 +57,37 @@ export async function createCollection(
   name: string,
   parentId?: number,
   description?: string | null,
+  smartFields?: {
+    collection_type: "smart";
+    query_conditions: Array<{ type: string; operator: string; value: unknown }>;
+    query_match_mode: "all" | "any";
+  },
 ): Promise<Collection> {
+  const body: Record<string, unknown> = {
+    name,
+    description: description ?? null,
+    parent_id: parentId ?? null,
+  };
+  if (smartFields) {
+    body.collection_type = smartFields.collection_type;
+    body.query_conditions = smartFields.query_conditions;
+    body.query_match_mode = smartFields.query_match_mode;
+  }
   const data = await apiRequest<CollectionPayload>("/v1/collections", {
     method: "POST",
-    body: JSON.stringify({
-      name,
-      description: description ?? null,
-      parent_id: parentId ?? null,
-    }),
+    body: JSON.stringify(body),
   });
 
   return mapCollection(data);
+}
+
+export async function evaluateSmartCollection(
+  collectionId: number,
+): Promise<{ itemCount: number }> {
+  return apiRequest<{ itemCount: number }>(
+    `/v1/collections/${collectionId}/evaluate`,
+    { method: "POST" },
+  );
 }
 
 export async function fetchCollectionItems(collectionId: number): Promise<CollectionItem[]> {
@@ -111,6 +139,8 @@ export async function updateCollection(
     description?: string | null;
     parent_id?: number | null;
     position?: number | null;
+    query_conditions?: Array<{ type: string; operator: string; value: unknown }>;
+    query_match_mode?: "all" | "any";
   },
 ): Promise<Collection> {
   const data = await apiRequest<CollectionPayload>(`/v1/collections/${collectionId}`, {

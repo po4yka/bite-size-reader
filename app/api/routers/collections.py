@@ -40,6 +40,29 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+def _build_collection_response(c: dict) -> CollectionResponse:
+    """Build a CollectionResponse from a collection dict."""
+    return CollectionResponse(
+        id=c["id"],
+        name=c["name"],
+        description=c.get("description"),
+        parent_id=c.get("parent_id") or c.get("parent"),
+        position=c.get("position"),
+        created_at=isotime(c.get("created_at")),
+        updated_at=isotime(c.get("updated_at")),
+        server_version=c.get("server_version"),
+        is_shared=bool(c.get("is_shared", False)),
+        share_count=c.get("share_count"),
+        item_count=c.get("item_count", 0),
+        collection_type=c.get("collection_type", "manual"),
+        query_conditions=c.get("query_conditions_json"),
+        query_match_mode=c.get("query_match_mode"),
+        last_evaluated_at=isotime(c.get("last_evaluated_at"))
+        if c.get("last_evaluated_at")
+        else None,
+    )
+
+
 @router.get("")
 async def get_collections(
     parent_id: int | None = Query(default=None, ge=1),
@@ -57,22 +80,7 @@ async def get_collections(
     collections = await CollectionService.list_collections(
         user_id=user["user_id"], parent_id=parent_id, limit=limit, offset=offset
     )
-    data = [
-        CollectionResponse(
-            id=c["id"],
-            name=c["name"],
-            description=c.get("description"),
-            parent_id=c.get("parent_id") or c.get("parent"),
-            position=c.get("position"),
-            created_at=isotime(c.get("created_at")),
-            updated_at=isotime(c.get("updated_at")),
-            server_version=c.get("server_version"),
-            is_shared=bool(c.get("is_shared", False)),
-            share_count=c.get("share_count"),
-            item_count=c.get("item_count", 0),
-        )
-        for c in collections
-    ]
+    data = [_build_collection_response(c) for c in collections]
     pagination = PaginationInfo(
         total=len(data),
         limit=limit,
@@ -98,24 +106,14 @@ async def create_collection(
             description=body.description,
             parent_id=body.parent_id,
             position=body.position,
+            collection_type=body.collection_type,
+            query_conditions=body.query_conditions,
+            query_match_mode=body.query_match_mode,
         )
     except ValueError as err:
         raise ValidationError(str(err)) from err
 
-    return success_response(
-        CollectionResponse(
-            id=collection["id"],
-            name=collection["name"],
-            description=collection.get("description"),
-            parent_id=collection.get("parent_id") or collection.get("parent"),
-            position=collection.get("position"),
-            created_at=isotime(collection.get("created_at")),
-            updated_at=isotime(collection.get("updated_at")),
-            server_version=collection.get("server_version"),
-            is_shared=bool(collection.get("is_shared", False)),
-            share_count=collection.get("share_count"),
-        )
-    )
+    return success_response(_build_collection_response(collection))
 
 
 @router.get("/{collection_id}")
@@ -128,21 +126,7 @@ async def get_collection(
         collection_id, user["user_id"], "viewer"
     )
 
-    return success_response(
-        CollectionResponse(
-            id=collection["id"],
-            name=collection["name"],
-            description=collection.get("description"),
-            parent_id=collection.get("parent_id") or collection.get("parent"),
-            position=collection.get("position"),
-            created_at=isotime(collection.get("created_at")),
-            updated_at=isotime(collection.get("updated_at")),
-            server_version=collection.get("server_version"),
-            is_shared=bool(collection.get("is_shared", False)),
-            share_count=collection.get("share_count"),
-            item_count=collection.get("item_count", 0),
-        )
-    )
+    return success_response(_build_collection_response(collection))
 
 
 @router.patch("/{collection_id}")
@@ -160,24 +144,13 @@ async def update_collection(
             description=body.description,
             parent_id=body.parent_id,
             position=body.position,
+            query_conditions=body.query_conditions,
+            query_match_mode=body.query_match_mode,
         )
     except ValueError as err:
         raise ValidationError(str(err)) from err
 
-    return success_response(
-        CollectionResponse(
-            id=collection["id"],
-            name=collection["name"],
-            description=collection.get("description"),
-            parent_id=collection.get("parent_id") or collection.get("parent"),
-            position=collection.get("position"),
-            created_at=isotime(collection.get("created_at")),
-            updated_at=isotime(collection.get("updated_at")),
-            server_version=collection.get("server_version"),
-            is_shared=bool(collection.get("is_shared", False)),
-            share_count=collection.get("share_count"),
-        )
-    )
+    return success_response(_build_collection_response(collection))
 
 
 @router.delete("/{collection_id}")
@@ -315,20 +288,9 @@ async def get_collection_tree(
 
     def to_response(col: dict) -> CollectionResponse:
         children = col.get("_children") or []
-        return CollectionResponse(
-            id=col["id"],
-            name=col["name"],
-            description=col.get("description"),
-            parent_id=col.get("parent_id") or col.get("parent"),
-            position=col.get("position"),
-            created_at=isotime(col.get("created_at")),
-            updated_at=isotime(col.get("updated_at")),
-            server_version=col.get("server_version"),
-            is_shared=bool(col.get("is_shared", False)),
-            share_count=col.get("share_count"),
-            item_count=col.get("item_count", 0),
-            children=[to_response(c) for c in children],
-        )
+        resp = _build_collection_response(col)
+        resp.children = [to_response(c) for c in children]
+        return resp
 
     data = [to_response(c) for c in tree]
     return success_response({"collections": data})
@@ -427,3 +389,18 @@ async def accept_collection_invite(
 ):
     await CollectionService.accept_invite(token=token, user_id=user["user_id"])
     return success_response({"success": True})
+
+
+@router.post("/{collection_id}/evaluate")
+async def evaluate_smart_collection(
+    collection_id: int,
+    user: dict[str, Any] = Depends(get_current_user),
+):
+    """Force re-evaluation of a smart collection's items."""
+    try:
+        count = await CollectionService.evaluate_smart_collection(
+            collection_id=collection_id, user_id=user["user_id"]
+        )
+    except ValueError as err:
+        raise ValidationError(str(err)) from err
+    return success_response({"item_count": count})

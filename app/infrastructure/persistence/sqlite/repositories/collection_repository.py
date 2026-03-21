@@ -19,6 +19,7 @@ from app.db.models import (
     CollectionCollaborator,
     CollectionInvite,
     CollectionItem,
+    Request,
     Summary,
     model_to_dict,
 )
@@ -126,6 +127,9 @@ class SqliteCollectionRepositoryAdapter(SqliteBaseRepository):
         description: str | None,
         parent_id: int | None,
         position: int,
+        collection_type: str = "manual",
+        query_conditions_json: list[dict] | None = None,
+        query_match_mode: str = "all",
     ) -> int:
         """Create a new collection.
 
@@ -145,6 +149,9 @@ class SqliteCollectionRepositoryAdapter(SqliteBaseRepository):
                 description=description,
                 parent=parent,
                 position=position,
+                collection_type=collection_type,
+                query_conditions_json=query_conditions_json,
+                query_match_mode=query_match_mode,
                 created_at=_now(),
                 updated_at=_now(),
             )
@@ -585,6 +592,123 @@ class SqliteCollectionRepositoryAdapter(SqliteBaseRepository):
             return result
 
         return await self._execute(_get_tree, operation_name="get_collection_tree", read_only=True)
+
+    # -------------------------------------------------------------------------
+    # Smart Collection Operations
+    # -------------------------------------------------------------------------
+
+    async def async_bulk_set_items(self, collection_id: int, summary_ids: list[int]) -> int:
+        """Replace all items in a collection atomically.
+
+        Deletes existing items and inserts new ones with sequential positions.
+
+        Args:
+            collection_id: The collection ID.
+            summary_ids: List of summary IDs to set as the collection's items.
+
+        Returns:
+            Count of items inserted.
+        """
+
+        def _bulk_set() -> int:
+            collection = Collection.get_or_none(
+                (Collection.id == collection_id) & (~Collection.is_deleted)
+            )
+            if not collection:
+                return 0
+
+            with self._session.database.atomic():
+                # Remove all existing items
+                CollectionItem.delete().where(CollectionItem.collection == collection).execute()
+
+                # Insert new items with sequential positions
+                now = _now()
+                inserted = 0
+                for pos, sid in enumerate(summary_ids, start=1):
+                    summary = Summary.get_or_none(Summary.id == sid)
+                    if not summary:
+                        continue
+                    try:
+                        CollectionItem.create(
+                            collection=collection,
+                            summary=summary,
+                            position=pos,
+                            created_at=now,
+                        )
+                        inserted += 1
+                    except IntegrityError:
+                        logger.debug(
+                            "bulk_set_item_skipped",
+                            extra={"summary_id": sid, "collection_id": collection_id},
+                        )
+                        continue
+
+                collection.updated_at = now
+                collection.save()
+
+            return inserted
+
+        return await self._execute(_bulk_set, operation_name="bulk_set_collection_items")
+
+    async def async_list_smart_collections_for_user(self, user_id: int) -> list[dict]:
+        """Return all smart collections for a user (not deleted).
+
+        Args:
+            user_id: The user ID.
+
+        Returns:
+            List of smart collection dicts.
+        """
+
+        def _list() -> list[dict]:
+            query = (
+                Collection.select()
+                .where(
+                    (Collection.user_id == user_id)
+                    & (Collection.collection_type == "smart")
+                    & (~Collection.is_deleted)
+                )
+                .order_by(Collection.created_at)
+            )
+            return [model_to_dict(c) or {} for c in query]
+
+        return await self._execute(
+            _list, operation_name="list_smart_collections_for_user", read_only=True
+        )
+
+    async def async_list_user_summaries_with_request(
+        self, user_id: int, limit: int = 10000
+    ) -> list[dict]:
+        """List all non-deleted summaries for a user with request data.
+
+        Used by smart collection evaluation. Returns summary + request dicts.
+
+        Args:
+            user_id: The user ID.
+            limit: Maximum number of summaries to return.
+
+        Returns:
+            List of dicts with 'summary' and 'request' keys.
+        """
+
+        def _list() -> list[dict]:
+            query = (
+                Summary.select(Summary, Request)
+                .join(Request)
+                .where((Request.user_id == user_id) & (~Summary.is_deleted))
+                .order_by(Summary.created_at.desc())
+                .limit(limit)
+            )
+            results = []
+            for row in query:
+                s_dict = model_to_dict(row) or {}
+                r_dict = model_to_dict(row.request) if hasattr(row, "request") else {}
+                results.append({"summary": s_dict, "request": r_dict})
+            return results
+
+        return await self._execute(
+            _list, operation_name="list_user_summaries_with_request", read_only=True
+        )
 
     # -------------------------------------------------------------------------
     # Advanced Collection Operations

@@ -87,6 +87,9 @@ class CollectionCreateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=500)
     parent_id: int | None = Field(default=None, ge=1)
     position: int | None = Field(default=None, ge=1)
+    collection_type: str = Field(default="manual", pattern="^(manual|smart)$")
+    query_conditions: list[dict[str, Any]] | None = None
+    query_match_mode: str = Field(default="all", pattern="^(all|any)$")
 
 
 class CollectionUpdateRequest(BaseModel):
@@ -96,6 +99,8 @@ class CollectionUpdateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=500)
     parent_id: int | None = Field(default=None, ge=1)
     position: int | None = Field(default=None, ge=1)
+    query_conditions: list[dict[str, Any]] | None = None
+    query_match_mode: str | None = None
 
 
 class CollectionItemCreateRequest(BaseModel):

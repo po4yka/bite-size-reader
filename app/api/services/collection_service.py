@@ -7,10 +7,20 @@ compatibility until the migration is complete.
 
 from __future__ import annotations
 
+import datetime as dt
+import json
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from app.api.dependencies.database import get_collection_repository
-from app.api.exceptions import AuthorizationError, ResourceNotFoundError
+from app.api.exceptions import AuthorizationError, ResourceNotFoundError, ValidationError
+from app.core.logging_utils import get_logger
+from app.core.time_utils import UTC
+from app.domain.services.smart_collection import (
+    MAX_SMART_COLLECTIONS_PER_USER,
+    evaluate_summary,
+    validate_smart_conditions,
+)
+from app.domain.services.summary_context import build_summary_context
 from app.infrastructure.persistence.sqlite.repositories.collection_repository import (  # noqa: TC001
     SqliteCollectionRepositoryAdapter,
 )
@@ -18,6 +28,8 @@ from app.infrastructure.persistence.sqlite.repositories.collection_repository im
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from datetime import datetime
+
+logger = get_logger(__name__)
 
 Role = Literal["owner", "editor", "viewer"]
 ROLE_RANK = {"owner": 3, "editor": 2, "viewer": 1}
@@ -127,6 +139,16 @@ class CollectionService:
 
         return build(None, 1)
 
+    # ---- helpers ----
+    @staticmethod
+    async def _guard_smart_collection(
+        repo: SqliteCollectionRepositoryAdapter, collection_id: int
+    ) -> None:
+        """Raise ValidationError if the collection is a smart collection."""
+        collection = await repo.async_get_collection(collection_id)
+        if collection and collection.get("collection_type") == "smart":
+            raise ValidationError("Cannot manually modify items in a smart collection")
+
     # ---- CRUD ----
     @classmethod
     async def create_collection(
@@ -137,6 +159,9 @@ class CollectionService:
         description: str | None,
         parent_id: int | None,
         position: int | None,
+        collection_type: str = "manual",
+        query_conditions: list[dict[str, Any]] | None = None,
+        query_match_mode: str = "all",
     ) -> dict[str, Any]:
         """Create a new collection."""
         repo = cls._repo()
@@ -147,6 +172,20 @@ class CollectionService:
             if not parent:
                 raise ResourceNotFoundError("Collection", parent_id)
             await cls._require_role(repo, parent_id, user_id, "editor")
+
+        # Smart collection validation
+        if collection_type == "smart":
+            if not query_conditions:
+                raise ValidationError("Smart collections must have at least one condition")
+            valid, err = validate_smart_conditions(query_conditions, query_match_mode)
+            if not valid:
+                raise ValidationError(err or "Invalid smart collection conditions")
+            # Check limit
+            existing_smart = await repo.async_list_smart_collections_for_user(user_id)
+            if len(existing_smart) >= MAX_SMART_COLLECTIONS_PER_USER:
+                raise ValidationError(
+                    f"Maximum of {MAX_SMART_COLLECTIONS_PER_USER} smart collections reached"
+                )
 
         # Calculate position
         pos = position if position is not None else await repo.async_get_next_position(parent_id)
@@ -161,9 +200,26 @@ class CollectionService:
             description=description,
             parent_id=parent_id,
             position=pos,
+            collection_type=collection_type,
+            query_conditions_json=query_conditions,
+            query_match_mode=query_match_mode,
         )
 
         result = await repo.async_get_collection(collection_id)
+
+        # Trigger initial evaluation for smart collections
+        if collection_type == "smart" and result:
+            try:
+                await cls.evaluate_smart_collection(collection_id, user_id)
+                # Re-fetch to get updated item_count
+                result = await repo.async_get_collection(collection_id)
+            except Exception:
+                logger.warning(
+                    "smart_collection_initial_eval_failed",
+                    extra={"collection_id": collection_id},
+                    exc_info=True,
+                )
+
         return result or {}
 
     @classmethod
@@ -176,6 +232,8 @@ class CollectionService:
         description: str | None,
         parent_id: int | None = None,
         position: int | None = None,
+        query_conditions: list[dict[str, Any]] | None = None,
+        query_match_mode: str | None = None,
     ) -> dict[str, Any]:
         """Update a collection."""
         repo = cls._repo()
@@ -185,6 +243,8 @@ class CollectionService:
 
         updates: dict[str, Any] = {}
         current_parent_id = collection.get("parent_id") or collection.get("parent")
+        is_smart = collection.get("collection_type") == "smart"
+        conditions_changed = False
 
         # Handle parent change
         if parent_id is not None and parent_id != current_parent_id:
@@ -203,6 +263,18 @@ class CollectionService:
         if description is not None:
             updates["description"] = description
 
+        # Handle smart collection condition updates
+        if is_smart and query_conditions is not None:
+            match_mode = query_match_mode or collection.get("query_match_mode", "all")
+            valid, err = validate_smart_conditions(query_conditions, match_mode)
+            if not valid:
+                raise ValidationError(err or "Invalid smart collection conditions")
+            updates["query_conditions_json"] = query_conditions
+            conditions_changed = True
+        if is_smart and query_match_mode is not None:
+            updates["query_match_mode"] = query_match_mode
+            conditions_changed = True
+
         # Handle position
         if position is not None:
             target_parent = updates.get("parent_id", current_parent_id)
@@ -215,6 +287,17 @@ class CollectionService:
 
         if updates:
             await repo.async_update_collection(collection_id, **updates)
+
+        # Re-evaluate if conditions changed
+        if is_smart and conditions_changed:
+            try:
+                await cls.evaluate_smart_collection(collection_id, user_id)
+            except Exception:
+                logger.warning(
+                    "smart_collection_re_eval_failed",
+                    extra={"collection_id": collection_id},
+                    exc_info=True,
+                )
 
         result = await repo.async_get_collection(collection_id)
         return result or {}
@@ -232,6 +315,7 @@ class CollectionService:
     async def add_item(cls, collection_id: int, summary_id: int, user_id: int) -> None:
         """Add a summary to a collection."""
         repo = cls._repo()
+        await cls._guard_smart_collection(repo, collection_id)
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "editor")
 
@@ -245,6 +329,7 @@ class CollectionService:
     async def remove_item(cls, collection_id: int, summary_id: int, user_id: int) -> None:
         """Remove a summary from a collection."""
         repo = cls._repo()
+        await cls._guard_smart_collection(repo, collection_id)
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "editor")
         await repo.async_remove_item(collection_id, summary_id)
@@ -265,6 +350,7 @@ class CollectionService:
     ) -> None:
         """Reorder items in a collection."""
         repo = cls._repo()
+        await cls._guard_smart_collection(repo, collection_id)
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "editor")
         await repo.async_reorder_items(collection_id, list(items))
@@ -280,6 +366,10 @@ class CollectionService:
     ) -> list[int]:
         """Move items from one collection to another."""
         repo = cls._repo()
+
+        # Guard against smart collections on both sides
+        await cls._guard_smart_collection(repo, source_collection_id)
+        await cls._guard_smart_collection(repo, target_collection_id)
 
         # Check both collections exist and user has editor access
         await cls._get_collection_or_raise(repo, source_collection_id)
@@ -400,3 +490,69 @@ class CollectionService:
         result = await repo.async_accept_invite(token, user_id)
         if result is None:
             raise ResourceNotFoundError("Invite", token)
+
+    # ---- smart collections ----
+    @classmethod
+    async def evaluate_smart_collection(cls, collection_id: int, user_id: int) -> int:
+        """Evaluate a smart collection against all user summaries.
+
+        Loads the collection's conditions, evaluates each user summary,
+        and replaces the collection's items with matching summaries.
+
+        Args:
+            collection_id: The smart collection ID.
+            user_id: The owner/editor user ID.
+
+        Returns:
+            Count of matching items set in the collection.
+
+        Raises:
+            ResourceNotFoundError: If collection not found.
+            ValidationError: If collection is not a smart collection.
+        """
+        repo = cls._repo()
+        collection = await cls._get_collection_or_raise(repo, collection_id)
+        await cls._require_role(repo, collection_id, user_id, "editor")
+
+        if collection.get("collection_type") != "smart":
+            raise ValidationError("Collection is not a smart collection")
+
+        conditions = collection.get("query_conditions_json")
+        if isinstance(conditions, str):
+            conditions = json.loads(conditions)
+        if not conditions:
+            raise ValidationError("Smart collection has no conditions")
+
+        match_mode = collection.get("query_match_mode", "all")
+
+        # Load all user summaries with request data
+        summaries = await repo.async_list_user_summaries_with_request(user_id)
+
+        # Evaluate each summary against conditions
+        matching_ids: list[int] = []
+        for entry in summaries:
+            s_dict = entry.get("summary", {})
+            r_dict = entry.get("request", {})
+            context = build_summary_context(s_dict, r_dict)
+            if evaluate_summary(conditions, context, match_mode):
+                summary_id = s_dict.get("id")
+                if summary_id is not None:
+                    matching_ids.append(summary_id)
+
+        # Replace collection items atomically
+        count = await repo.async_bulk_set_items(collection_id, matching_ids)
+
+        # Update last_evaluated_at
+        await repo.async_update_collection(collection_id, last_evaluated_at=dt.datetime.now(UTC))
+
+        logger.info(
+            "smart_collection_evaluated",
+            extra={
+                "collection_id": collection_id,
+                "user_id": user_id,
+                "candidates": len(summaries),
+                "matched": count,
+            },
+        )
+
+        return count

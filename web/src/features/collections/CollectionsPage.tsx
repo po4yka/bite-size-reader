@@ -17,6 +17,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tag,
   TextInput,
   TreeNode,
   TreeView,
@@ -33,8 +34,11 @@ import {
   useDeleteCollection,
   useRemoveFromCollection,
   useReorderCollectionItems,
+  useEvaluateSmartCollection,
+  useUpdateSmartConditions,
 } from "../../hooks/useCollections";
 import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
+import SmartCollectionEditor, { type SmartCondition } from "./SmartCollectionEditor";
 
 function RenderTree({
   collection,
@@ -43,10 +47,21 @@ function RenderTree({
   collection: Collection;
   onSelect: (id: number) => void;
 }) {
+  const isSmart = collection.collectionType === "smart";
+  const label = (
+    <span>
+      {collection.name} ({collection.itemCount})
+      {isSmart && (
+        <Tag size="sm" type="blue" style={{ marginLeft: "0.25rem" }}>
+          Smart
+        </Tag>
+      )}
+    </span>
+  );
   return (
     <TreeNode
       id={String(collection.id)}
-      label={`${collection.name} (${collection.itemCount})`}
+      label={label}
       onSelect={() => onSelect(collection.id)}
     >
       {(collection.children ?? []).map((child) => (
@@ -105,6 +120,8 @@ export default function CollectionsPage() {
   const [moveSummaryId, setMoveSummaryId] = useState<number | null>(null);
   const [moveTargetCollectionId, setMoveTargetCollectionId] = useState("");
   const [moveNewCollectionName, setMoveNewCollectionName] = useState("");
+  const [smartEditorOpen, setSmartEditorOpen] = useState(false);
+  const [smartEditMode, setSmartEditMode] = useState(false);
 
   useEffect(() => {
     const fromRoute = Number(params.id);
@@ -170,6 +187,8 @@ export default function CollectionsPage() {
   const deleteMutation = useDeleteCollection();
   const removeMutation = useRemoveFromCollection();
   const reorderMutation = useReorderCollectionItems(selectedCollectionId);
+  const evaluateMutation = useEvaluateSmartCollection();
+  const updateSmartMutation = useUpdateSmartConditions();
 
   const moveItemMutation = useMutation({
     mutationFn: async () => {
@@ -218,6 +237,8 @@ export default function CollectionsPage() {
     }));
   }, [sortedItems]);
 
+  const isSmartCollection = selectedCollection?.collectionType === "smart";
+
   const firstMutationError = [
     createMutation.error,
     renameMutation.error,
@@ -225,6 +246,8 @@ export default function CollectionsPage() {
     removeMutation.error,
     moveItemMutation.error,
     reorderMutation.error,
+    evaluateMutation.error,
+    updateSmartMutation.error,
   ].find((error): error is Error => error instanceof Error);
 
   const canCreate = newCollectionName.trim().length > 0;
@@ -244,7 +267,9 @@ export default function CollectionsPage() {
     deleteMutation.isPending ||
     moveItemMutation.isPending ||
     removeMutation.isPending ||
-    reorderMutation.isPending;
+    reorderMutation.isPending ||
+    evaluateMutation.isPending ||
+    updateSmartMutation.isPending;
 
   useTelegramClosingConfirmation(isDirty);
 
@@ -319,6 +344,15 @@ export default function CollectionsPage() {
           >
             Create
           </Button>
+          <Button
+            kind="tertiary"
+            onClick={() => {
+              setSmartEditMode(false);
+              setSmartEditorOpen(true);
+            }}
+          >
+            Create smart collection
+          </Button>
         </div>
 
         {treeQuery.isLoading && <InlineLoading description="Loading collections…" />}
@@ -380,6 +414,53 @@ export default function CollectionsPage() {
       <div className="collections-items">
         <h2>{selectedCollection ? selectedCollection.name : "Select a collection"}</h2>
 
+        {selectedCollection && isSmartCollection && (
+          <div style={{ marginBottom: "1rem" }}>
+            <Tag type="blue" size="sm" style={{ marginBottom: "0.5rem" }}>
+              Smart collection
+            </Tag>
+            {selectedCollection.queryMatchMode && (
+              <p style={{ margin: "0.25rem 0" }}>
+                Match mode: <strong>{selectedCollection.queryMatchMode === "all" ? "All conditions" : "Any condition"}</strong>
+              </p>
+            )}
+            {selectedCollection.queryConditions && selectedCollection.queryConditions.length > 0 && (
+              <ul style={{ margin: "0.25rem 0 0.5rem 1rem", fontSize: "0.875rem" }}>
+                {selectedCollection.queryConditions.map((cond, i) => (
+                  <li key={i}>
+                    {cond.type} {cond.operator} {String(cond.value)}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {selectedCollection.lastEvaluatedAt && (
+              <p style={{ margin: "0.25rem 0", fontSize: "0.875rem", color: "#525252" }}>
+                Last evaluated: {new Date(selectedCollection.lastEvaluatedAt).toLocaleString()}
+              </p>
+            )}
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+              <Button
+                kind="tertiary"
+                size="sm"
+                onClick={() => {
+                  setSmartEditMode(true);
+                  setSmartEditorOpen(true);
+                }}
+              >
+                Edit conditions
+              </Button>
+              <Button
+                kind="secondary"
+                size="sm"
+                onClick={() => selectedCollectionId && evaluateMutation.mutate(selectedCollectionId)}
+                disabled={evaluateMutation.isPending}
+              >
+                {evaluateMutation.isPending ? "Evaluating..." : "Re-evaluate"}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {itemsQuery.isLoading && selectedCollectionId && (
           <DataTableSkeleton columnCount={headers.length} rowCount={6} showToolbar={false} />
         )}
@@ -418,54 +499,56 @@ export default function CollectionsPage() {
                             if (cell.info.header === "Actions") {
                               return (
                                 <TableCell key={cell.id}>
-                                  <div className="table-actions">
-                                    <Button
-                                      kind="ghost"
-                                      size="sm"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        handleReorder(item.summaryId, -1);
-                                      }}
-                                      disabled={item.index === 0 || reorderMutation.isPending}
-                                    >
-                                      Up
-                                    </Button>
-                                    <Button
-                                      kind="ghost"
-                                      size="sm"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        handleReorder(item.summaryId, 1);
-                                      }}
-                                      disabled={item.index === rows.length - 1 || reorderMutation.isPending}
-                                    >
-                                      Down
-                                    </Button>
-                                    <Button
-                                      kind="tertiary"
-                                      size="sm"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        handleMoveItem(item.summaryId);
-                                      }}
-                                    >
-                                      Move
-                                    </Button>
-                                    <Button
-                                      kind="danger--ghost"
-                                      size="sm"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        removeMutation.mutate({
-                                          collectionId: selectedCollectionId,
-                                          summaryId: item.summaryId,
-                                        });
-                                      }}
-                                      disabled={removeMutation.isPending}
-                                    >
-                                      Remove
-                                    </Button>
-                                  </div>
+                                  {!isSmartCollection && (
+                                    <div className="table-actions">
+                                      <Button
+                                        kind="ghost"
+                                        size="sm"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          handleReorder(item.summaryId, -1);
+                                        }}
+                                        disabled={item.index === 0 || reorderMutation.isPending}
+                                      >
+                                        Up
+                                      </Button>
+                                      <Button
+                                        kind="ghost"
+                                        size="sm"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          handleReorder(item.summaryId, 1);
+                                        }}
+                                        disabled={item.index === rows.length - 1 || reorderMutation.isPending}
+                                      >
+                                        Down
+                                      </Button>
+                                      <Button
+                                        kind="tertiary"
+                                        size="sm"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          handleMoveItem(item.summaryId);
+                                        }}
+                                      >
+                                        Move
+                                      </Button>
+                                      <Button
+                                        kind="danger--ghost"
+                                        size="sm"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          removeMutation.mutate({
+                                            collectionId: selectedCollectionId,
+                                            summaryId: item.summaryId,
+                                          });
+                                        }}
+                                        disabled={removeMutation.isPending}
+                                      >
+                                        Remove
+                                      </Button>
+                                    </div>
+                                  )}
                                 </TableCell>
                               );
                             }
@@ -520,6 +603,54 @@ export default function CollectionsPage() {
           />
         </div>
       </Modal>
+
+      <SmartCollectionEditor
+        key={smartEditMode ? `edit-${selectedCollectionId}` : "create"}
+        open={smartEditorOpen}
+        onClose={() => setSmartEditorOpen(false)}
+        onSave={(data) => {
+          if (smartEditMode && selectedCollectionId) {
+            updateSmartMutation.mutate(
+              {
+                collectionId: selectedCollectionId,
+                name: data.name,
+                queryConditions: data.conditions,
+                queryMatchMode: data.matchMode,
+              },
+              { onSuccess: () => setSmartEditorOpen(false) },
+            );
+          } else {
+            createMutation.mutate(
+              {
+                name: data.name,
+                parentId: createParentMode === "selected" ? selectedCollectionId ?? undefined : undefined,
+                smartFields: {
+                  collection_type: "smart",
+                  query_conditions: data.conditions,
+                  query_match_mode: data.matchMode,
+                },
+              },
+              {
+                onSuccess: (collection) => {
+                  setSmartEditorOpen(false);
+                  setSelectedCollectionId(collection.id);
+                  navigate(`/collections/${collection.id}`);
+                },
+              },
+            );
+          }
+        }}
+        initialData={
+          smartEditMode && selectedCollection?.collectionType === "smart"
+            ? {
+                name: selectedCollection.name,
+                conditions: (selectedCollection.queryConditions ?? []) as SmartCondition[],
+                matchMode: selectedCollection.queryMatchMode ?? "all",
+              }
+            : undefined
+        }
+        isSaving={createMutation.isPending || updateSmartMutation.isPending}
+      />
 
       <Modal
         open={deleteModalOpen}

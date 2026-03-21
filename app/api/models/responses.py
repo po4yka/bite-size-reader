@@ -540,6 +540,12 @@ class CollectionResponse(BaseModel):
     share_count: int | None = Field(default=None, serialization_alias="shareCount")
     item_count: int | None = Field(default=None, serialization_alias="itemCount")
     children: list[CollectionResponse] | None = None
+    collection_type: str = Field(default="manual", serialization_alias="collectionType")
+    query_conditions: list[dict[str, Any]] | None = Field(
+        default=None, serialization_alias="queryConditions"
+    )
+    query_match_mode: str | None = Field(default=None, serialization_alias="queryMatchMode")
+    last_evaluated_at: str | None = Field(default=None, serialization_alias="lastEvaluatedAt")
 
 
 class CollectionListResponse(BaseModel):
