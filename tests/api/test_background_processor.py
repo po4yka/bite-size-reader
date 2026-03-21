@@ -445,6 +445,7 @@ def test_db_override_uses_injected_url_processor_factory(monkeypatch):
     cfg = DummyCfg()
     base_processor = StubURLProcessor(StubExtractor(), StubPureSummaryService())
     factory = MagicMock(return_value=StubURLProcessor(StubExtractor(), StubPureSummaryService()))
+    db_builder = MagicMock()
     processor = BackgroundProcessor(
         cfg=cfg,
         db=StubDB(),
@@ -453,16 +454,14 @@ def test_db_override_uses_injected_url_processor_factory(monkeypatch):
         semaphore=asyncio.Semaphore(1),
         audit_func=lambda *_args, **_kwargs: None,
         url_processor_factory=factory,
+        database_builder=db_builder,
     )
     override_db = StubDB()
-
-    monkeypatch.setattr(
-        "app.api.background_processor.build_runtime_database",
-        lambda _cfg: override_db,
-    )
+    db_builder.return_value = override_db
 
     resolved_db, resolved_processor = processor._maybe_override_db("/tmp/override.db")
 
     assert resolved_db is override_db
     assert resolved_processor is factory.return_value
+    db_builder.assert_called_once()
     factory.assert_called_once_with(override_db)

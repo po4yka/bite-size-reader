@@ -23,6 +23,7 @@ import pytest
 
 from app.db.models import database_proxy
 from app.db.session import DatabaseSessionManager
+from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 from tests.conftest import make_test_app_config
 
@@ -318,6 +319,9 @@ class TestForwardProcessorCachedSummary(unittest.IsolatedAsyncioTestCase):
             response_formatter=response_formatter,
             audit_func=lambda *a, **kw: audit_calls.append(a),
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
+            summary_repo=MagicMock(),
+            request_repo=MagicMock(),
+            user_repo=MagicMock(),
         )
         return processor, response_formatter, audit_calls
 
@@ -421,6 +425,9 @@ class TestForwardProcessorExceptionHandling(unittest.IsolatedAsyncioTestCase):
             response_formatter=MagicMock(),
             audit_func=lambda *a, **kw: None,
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
+            summary_repo=MagicMock(),
+            request_repo=MagicMock(),
+            user_repo=MagicMock(),
         )
 
         processor.content_processor.process_forward_content = AsyncMock(  # type: ignore[method-assign]
@@ -448,6 +455,9 @@ class TestForwardProcessorExceptionHandling(unittest.IsolatedAsyncioTestCase):
             response_formatter=MagicMock(),
             audit_func=lambda *a, **kw: None,
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
+            summary_repo=MagicMock(),
+            request_repo=MagicMock(),
+            user_repo=MagicMock(),
         )
 
         processor.content_processor.process_forward_content = AsyncMock(  # type: ignore[method-assign]
@@ -480,6 +490,9 @@ class TestForwardProcessorCustomArticle(unittest.IsolatedAsyncioTestCase):
             response_formatter=MagicMock(),
             audit_func=lambda *a, **kw: None,
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
+            summary_repo=MagicMock(),
+            request_repo=MagicMock(),
+            user_repo=MagicMock(),
         )
 
     async def test_none_summary_returns_early(self) -> None:
@@ -857,7 +870,7 @@ class TestMessagePersistenceForwardDefaults(unittest.IsolatedAsyncioTestCase):
             # Create a request first (user forward -- no chat_id/msg_id pair)
             req_id = await persistence.request_repo.async_create_request(
                 type_="forward",
-                status="pending",
+                status=RequestStatus.PENDING,
                 correlation_id="cid",
                 chat_id=99,
                 user_id=7,
@@ -885,7 +898,7 @@ class TestMessagePersistenceForwardDefaults(unittest.IsolatedAsyncioTestCase):
 
             req_id = await persistence.request_repo.async_create_request(
                 type_="forward",
-                status="pending",
+                status=RequestStatus.PENDING,
                 correlation_id="cid",
                 chat_id=99,
                 user_id=7,

@@ -7,6 +7,7 @@ from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import load_config
 from app.db.write_queue import DbWriteQueue
 from app.di.database import build_runtime_database
+from app.di.scheduler import build_scheduler_dependencies
 
 # Use uvloop for better async performance if available
 try:
@@ -31,7 +32,12 @@ async def main() -> None:
 
     # Create bot using factory pattern (while maintaining backward compatibility)
     # The factory is used internally by TelegramBot.__post_init__
-    bot = TelegramBot(cfg=cfg, db=db, db_write_queue=db_write_queue)
+    bot = TelegramBot(
+        cfg=cfg,
+        db=db,
+        db_write_queue=db_write_queue,
+        scheduler_dependencies=build_scheduler_dependencies(cfg, db),
+    )
     try:
         await bot.start()
     finally:

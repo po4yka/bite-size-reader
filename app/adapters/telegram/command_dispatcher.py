@@ -77,11 +77,7 @@ class CommandDispatchOutcome:
 
 
 class TelegramCommandDispatcher:
-    """Handle Telegram bot commands and dispatch them by precedence.
-
-    The dispatcher keeps the legacy command-processor methods for compatibility,
-    but the main runtime now routes through :meth:`dispatch_command`.
-    """
+    """Handle Telegram commands by precedence while preserving legacy processor APIs."""
 
     def __init__(
         self,
@@ -123,7 +119,9 @@ class TelegramCommandDispatcher:
         self._verbosity_resolver = verbosity_resolver
         self.hybrid_search = hybrid_search
 
-        wired_handlers = handlers or self._build_default_handlers()
+        wired_handlers = self._build_default_handlers()
+        if handlers:
+            wired_handlers.update(handlers)
         self._onboarding = self._require_handler(wired_handlers, "onboarding", OnboardingHandler)
         self._admin = self._require_handler(wired_handlers, "admin", AdminHandler)
         self._url_commands = self._require_handler(

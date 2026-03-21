@@ -27,6 +27,9 @@ from app.adapters.content.url_summary_delivery_service import URLSummaryDelivery
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.message_persistence import MessagePersistence
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -75,9 +78,7 @@ class URLProcessor:
         self._audit = audit_func
         self._db_write_queue = db_write_queue
         if summary_repo is None:
-            from app.di.repositories import build_summary_repository
-
-            summary_repo = build_summary_repository(db)
+            summary_repo = SqliteSummaryRepositoryAdapter(db)
         self.summary_repo = summary_repo
 
         self.content_extractor = ContentExtractor(

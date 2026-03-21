@@ -4,6 +4,14 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from app.api.background_processor import BackgroundProcessor
+from app.api.services.sync import (
+    FallbackSyncSessionStore,
+    InMemorySyncSessionStore,
+    RedisSyncSessionStore,
+    SyncApplyService,
+    SyncEnvelopeSerializer,
+    SyncRecordCollector,
+)
 from app.api.services.sync_service import SyncService
 from app.application.services.request_service import RequestService
 from app.application.use_cases.search_read_model import SearchReadModelUseCase
@@ -18,6 +26,7 @@ from app.di.repositories import (
     build_summary_repository,
     build_tag_repository,
     build_topic_search_repository,
+    build_user_repository,
 )
 from app.di.search import build_search_dependencies
 from app.di.shared import (
@@ -26,7 +35,8 @@ from app.di.shared import (
     build_url_processor,
     close_runtime_resources,
 )
-from app.di.types import ApiRuntime
+from app.di.types import ApiRuntime, DatabaseRuntimeServices, SyncDeps
+from app.infrastructure.persistence.sqlite.sync_aux_read_adapter import SqliteSyncAuxReadAdapter
 from app.infrastructure.redis import get_redis
 
 if TYPE_CHECKING:
@@ -61,6 +71,13 @@ async def build_api_runtime(
             },
         )
     database = db or build_runtime_database(app_cfg, connect=True, migrate=True)
+    database_services = DatabaseRuntimeServices(
+        executor=database.executor,
+        bootstrap=database.bootstrap,
+        maintenance=database.maintenance,
+        inspection=database.inspection,
+        backups=database.backups,
+    )
     audit_sink = build_async_audit_sink(database)
     core = build_core_dependencies(app_cfg, database, audit_sink=audit_sink)
     search = build_search_dependencies(
@@ -94,19 +111,25 @@ async def build_api_runtime(
             topic_search=search.topic_searcher if app_cfg.web_search.enabled else None,
         )
 
-    background_processor = BackgroundProcessor(
-        cfg=app_cfg,
-        db=database,
-        url_processor=url_processor,
-        url_processor_factory=url_processor_factory,
-        redis=redis,
-        semaphore=core.semaphore_factory(),
-        audit_func=core.audit_sink,
-    )
+    user_repository = build_user_repository(database)
     request_repository = build_request_repository(database)
     summary_repository = build_summary_repository(database)
     crawl_result_repository = build_crawl_result_repository(database)
     llm_repository = build_llm_repository(database)
+    background_processor = BackgroundProcessor(
+        cfg=app_cfg,
+        db=database,
+        url_processor=url_processor,
+        redis=redis,
+        semaphore=core.semaphore_factory(),
+        audit_func=core.audit_sink,
+        url_processor_factory=url_processor_factory,
+        database_builder=lambda override_cfg: build_runtime_database(override_cfg),
+        request_repo=request_repository,
+        summary_repo=summary_repository,
+        request_repo_factory=build_request_repository,
+        summary_repo_factory=build_summary_repository,
+    )
     summary_read_model_use_case = SummaryReadModelUseCase(
         summary_repository=summary_repository,
         request_repository=request_repository,
@@ -125,11 +148,56 @@ async def build_api_runtime(
         crawl_result_repository=crawl_result_repository,
         llm_repository=llm_repository,
     )
-    sync_service = SyncService(app_cfg, database)
+    sync_serializer = SyncEnvelopeSerializer()
+    sync_aux_reads = SqliteSyncAuxReadAdapter()
+    sync_session_store = FallbackSyncSessionStore(
+        redis_store=RedisSyncSessionStore(app_cfg),
+        fallback_store=InMemorySyncSessionStore(),
+    )
+    sync_record_collector = SyncRecordCollector(
+        user_repository=user_repository,
+        request_repository=request_repository,
+        summary_repository=summary_repository,
+        crawl_result_repository=crawl_result_repository,
+        llm_repository=llm_repository,
+        aux_read_port=sync_aux_reads,
+        serializer=sync_serializer,
+    )
+    sync_apply_service = SyncApplyService(
+        summary_repository=summary_repository,
+        serializer=sync_serializer,
+    )
+    sync_deps = SyncDeps(
+        user_repository=user_repository,
+        request_repository=request_repository,
+        summary_repository=summary_repository,
+        crawl_result_repository=crawl_result_repository,
+        llm_repository=llm_repository,
+        session_store=sync_session_store,
+        aux_read_port=sync_aux_reads,
+        record_collector=sync_record_collector,
+        envelope_serializer=sync_serializer,
+        apply_service=sync_apply_service,
+    )
+    sync_service = SyncService(
+        app_cfg,
+        database,
+        user_repository=sync_deps.user_repository,
+        request_repository=sync_deps.request_repository,
+        summary_repository=sync_deps.summary_repository,
+        crawl_result_repository=sync_deps.crawl_result_repository,
+        llm_repository=sync_deps.llm_repository,
+        session_store=sync_deps.session_store,
+        aux_read_port=sync_deps.aux_read_port,
+        record_collector=sync_deps.record_collector,
+        envelope_serializer=sync_deps.envelope_serializer,
+        apply_service=sync_deps.apply_service,
+    )
     tag_repo = build_tag_repository(database)
     return ApiRuntime(
         cfg=app_cfg,
         db=database,
+        database_services=database_services,
         redis_client=redis,
         core=core,
         search=search,

@@ -5,7 +5,6 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 from app.adapters.telegram.message_handler import MessageHandler
-from app.db.session import DatabaseSessionManager
 from tests.conftest import make_test_app_config
 
 
@@ -21,18 +20,22 @@ class _ResponseFormatterStub:
 
 
 def test_message_handler_wires_callback_handler_during_construction(tmp_path) -> None:
-    response_formatter = _ResponseFormatterStub()
-    url_processor = SimpleNamespace(summary_repo=None, audit_func=None)
-    forward_processor = SimpleNamespace(handle_forward_flow=AsyncMock())
-    db = DatabaseSessionManager(str(tmp_path / "assembly.db"))
-    db.migrate()
+    callback_handler = SimpleNamespace(handle_callback=AsyncMock())
+    message_router = SimpleNamespace(
+        callback_handler=callback_handler,
+        route_message=AsyncMock(),
+    )
 
     handler = MessageHandler(
         cfg=make_test_app_config(db_path=":memory:"),
-        db=db,
-        response_formatter=cast("Any", response_formatter),
-        url_processor=cast("Any", url_processor),
-        forward_processor=cast("Any", forward_processor),
+        db=None,
+        audit_repo=None,
+        task_manager=None,
+        access_controller=cast("Any", SimpleNamespace()),
+        url_handler=cast("Any", SimpleNamespace(url_processor=SimpleNamespace())),
+        command_dispatcher=cast("Any", SimpleNamespace()),
+        callback_handler=cast("Any", callback_handler),
+        message_router=cast("Any", message_router),
     )
 
     assert handler.message_router.callback_handler is handler.callback_handler

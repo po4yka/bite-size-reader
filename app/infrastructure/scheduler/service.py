@@ -11,12 +11,10 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.di.scheduler import build_scheduler_dependencies
 
 if TYPE_CHECKING:
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
-    from app.di.types import SchedulerDependencies
 
 logger = get_logger(__name__)
 
@@ -29,11 +27,11 @@ class SchedulerService:
         cfg: AppConfig,
         db: DatabaseSessionManager,
         *,
-        deps: SchedulerDependencies | None = None,
+        deps: Any,
     ) -> None:
         self.cfg = cfg
         self.db = db
-        self._deps = deps or build_scheduler_dependencies(cfg, db)
+        self._deps = deps
         self._scheduler: AsyncIOScheduler | None = None
         self._started = False
 

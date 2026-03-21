@@ -7,6 +7,18 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict
 
 from app.core.logging_utils import get_logger
+from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
+    SqliteLLMRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
+)
 from app.utils.json_validation import parse_summary_response  # noqa: F401
 
 from .llm_response_workflow_attempts import LLMWorkflowAttemptsMixin
@@ -154,18 +166,14 @@ class LLMResponseWorkflow(
         self._sem = sem
         self._db_write_queue = db_write_queue
         self._adaptive_timeout = adaptive_timeout_service
-        if summary_repo is None or request_repo is None or llm_repo is None or user_repo is None:
-            from app.di.repositories import (
-                build_llm_repository,
-                build_request_repository,
-                build_summary_repository,
-                build_user_repository,
-            )
-
-            summary_repo = summary_repo or build_summary_repository(db)
-            request_repo = request_repo or build_request_repository(db)
-            llm_repo = llm_repo or build_llm_repository(db)
-            user_repo = user_repo or build_user_repository(db)
+        if summary_repo is None:
+            summary_repo = SqliteSummaryRepositoryAdapter(db)
+        if request_repo is None:
+            request_repo = SqliteRequestRepositoryAdapter(db)
+        if llm_repo is None:
+            llm_repo = SqliteLLMRepositoryAdapter(db)
+        if user_repo is None:
+            user_repo = SqliteUserRepositoryAdapter(db)
         self.summary_repo = summary_repo
         self.request_repo = request_repo
         self.llm_repo = llm_repo

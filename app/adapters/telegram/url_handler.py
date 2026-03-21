@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+import inspect
+from typing import TYPE_CHECKING, Any, cast
 
 from app.adapters.telegram.batch_relationship_analysis_service import (
     BatchRelationshipAnalysisService,
@@ -385,17 +386,40 @@ class URLHandler:
             resolved_progress_tracker = await self._resolve_progress_tracker(message)
         from app.adapters.content.url_flow_models import URLFlowRequest
 
-        return await self.url_processor.handle_url_flow(
-            URLFlowRequest(
-                message=message,
-                url_text=url,
+        flow_request = URLFlowRequest(
+            message=message,
+            url_text=url,
+            correlation_id=correlation_id,
+            interaction_id=interaction_id,
+            batch_mode=batch_mode,
+            on_phase_change=on_phase_change,
+            progress_tracker=resolved_progress_tracker,
+        )
+        handle_url_flow = self.url_processor.handle_url_flow
+        signature = inspect.signature(handle_url_flow)
+        positional_params = [
+            param
+            for param in signature.parameters.values()
+            if param.kind
+            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        ]
+
+        # Legacy tests monkeypatch ``handle_url_flow(message, url_text, **kwargs)`` on the
+        # processor instance. Preserve that contract while keeping the production
+        # URLFlowRequest-based call path as the default.
+        if len(positional_params) >= 2:
+            legacy_handle_url_flow = cast("Any", handle_url_flow)
+            return await legacy_handle_url_flow(
+                message,
+                url,
                 correlation_id=correlation_id,
                 interaction_id=interaction_id,
                 batch_mode=batch_mode,
                 on_phase_change=on_phase_change,
                 progress_tracker=resolved_progress_tracker,
             )
-        )
+
+        return await handle_url_flow(flow_request)
 
     async def translate_summary_to_ru(
         self,

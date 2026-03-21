@@ -7,6 +7,7 @@ from app.adapters.telegram.access_controller import AccessController
 from app.adapters.telegram.callback_handler import CallbackHandler
 from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
 from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandler
+from app.adapters.telegram.command_handlers.listen_handler import ListenHandler
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.message_router import MessageRouter
@@ -15,6 +16,7 @@ from app.adapters.telegram.telegram_client import TelegramClient
 from app.adapters.telegram.url_handler import URLHandler
 from app.application.services.adaptive_timeout import AdaptiveTimeoutService
 from app.application.services.related_reads_service import RelatedReadsService
+from app.application.services.tts_service import TTSService
 from app.core.logging_utils import get_logger
 from app.core.verbosity import VerbosityResolver
 from app.di.application import build_application_services
@@ -36,6 +38,11 @@ from app.di.types import (
     TelegramCommandDispatcherDeps,
     TelegramRepositories,
     TelegramRuntime,
+)
+from app.infrastructure.audio.elevenlabs_provider import ElevenLabsTTSProviderAdapter
+from app.infrastructure.audio.filesystem_storage import FileSystemAudioStorageAdapter
+from app.infrastructure.persistence.sqlite.repositories.audio_generation_repository import (
+    SqliteAudioGenerationRepositoryAdapter,
 )
 from app.infrastructure.persistence.sqlite.repositories.latency_stats_repository import (
     SqliteLatencyStatsRepositoryAdapter,
@@ -194,7 +201,21 @@ def build_telegram_runtime(
                 db=db,
                 response_formatter=core.response_formatter,
                 repository=karakeep_sync_repo,
-            )
+            ),
+            "listen": ListenHandler(
+                cfg=cfg,
+                db=db,
+                response_formatter=core.response_formatter,
+                tts_service_factory=lambda: TTSService(
+                    summary_repository=summary_repo,
+                    audio_generation_repository=SqliteAudioGenerationRepositoryAdapter(db),
+                    tts_provider=ElevenLabsTTSProviderAdapter(cfg.tts),
+                    audio_storage=FileSystemAudioStorageAdapter(cfg.tts.audio_storage_path),
+                    voice_id=cfg.tts.voice_id,
+                    model_name=cfg.tts.model,
+                    max_chars_per_request=cfg.tts.max_chars_per_request,
+                ),
+            ),
         },
     )
     command_dispatcher = TelegramCommandDispatcher(
@@ -344,7 +365,21 @@ def build_summary_cli_runtime(
                 db=db,
                 response_formatter=core.response_formatter,
                 repository=karakeep_sync_repo,
-            )
+            ),
+            "listen": ListenHandler(
+                cfg=cfg,
+                db=db,
+                response_formatter=core.response_formatter,
+                tts_service_factory=lambda: TTSService(
+                    summary_repository=summary_repo,
+                    audio_generation_repository=SqliteAudioGenerationRepositoryAdapter(db),
+                    tts_provider=ElevenLabsTTSProviderAdapter(cfg.tts),
+                    audio_storage=FileSystemAudioStorageAdapter(cfg.tts.audio_storage_path),
+                    voice_id=cfg.tts.voice_id,
+                    model_name=cfg.tts.model,
+                    max_chars_per_request=cfg.tts.max_chars_per_request,
+                ),
+            ),
         },
     )
     return SummaryCliRuntime(

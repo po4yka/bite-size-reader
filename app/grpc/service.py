@@ -15,7 +15,7 @@ except ImportError as exc:
         "install with: pip install bite-size-reader[grpc]"
     ) from exc
 
-from app.api.background_processor import process_url_request
+from app.api.background_tasks import process_url_request
 from app.core.logging_utils import log_exception
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.domain.models.request import RequestStatus

@@ -19,8 +19,13 @@ from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
 from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_youtube_video_id, url_hash_sha256
-from app.di.repositories import build_request_repository, build_video_download_repository
 from app.domain.models.request import RequestStatus
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.video_download_repository import (
+    SqliteVideoDownloadRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.lifecycle import PlatformRequestLifecycle
@@ -57,8 +62,8 @@ class YouTubeDownloadSessionService:
         self._response_formatter = response_formatter
         self._audit = audit_func
         self._lifecycle = lifecycle
-        self.request_repo = request_repo or build_request_repository(db)
-        self.video_repo = video_repo or build_video_download_repository(db)
+        self.request_repo = request_repo or SqliteRequestRepositoryAdapter(db)
+        self.video_repo = video_repo or SqliteVideoDownloadRepositoryAdapter(db)
         self.storage_path = Path(cfg.youtube.storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self._url_locks: dict[str, asyncio.Lock] = {}

@@ -16,6 +16,15 @@ from app.adapters.content.llm_summarizer_semantic import LLMSemanticHelper
 from app.adapters.content.llm_summarizer_text import coerce_string_list, truncate_content_text
 from app.adapters.content.search_context_enricher import SearchContextEnricher
 from app.infrastructure.cache.redis_cache import RedisCache
+from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+    SqliteCrawlResultRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -60,16 +69,12 @@ class SummarizationRuntime:
         self.topic_search = topic_search
         self.db_write_queue = db_write_queue
 
-        if summary_repo is None or request_repo is None or crawl_result_repo is None:
-            from app.di.repositories import (
-                build_crawl_result_repository,
-                build_request_repository,
-                build_summary_repository,
-            )
-
-            summary_repo = summary_repo or build_summary_repository(db)
-            request_repo = request_repo or build_request_repository(db)
-            crawl_result_repo = crawl_result_repo or build_crawl_result_repository(db)
+        if summary_repo is None:
+            summary_repo = SqliteSummaryRepositoryAdapter(db)
+        if request_repo is None:
+            request_repo = SqliteRequestRepositoryAdapter(db)
+        if crawl_result_repo is None:
+            crawl_result_repo = SqliteCrawlResultRepositoryAdapter(db)
         self.summary_repo = summary_repo
         self.request_repo = request_repo
         self.crawl_result_repo = crawl_result_repo

@@ -12,11 +12,10 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.telegram import telegram_client as telegram_client_module
 from app.adapters.telegram.component_wiring import TelegramComponentWiring
 from app.adapters.telegram.lifecycle_manager import TelegramLifecycleManager
+from app.bootstrap.telegram_runtime import build_bot_runtime, create_bot_audit_repository
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id, get_logger, setup_json_logging
 from app.core.time_utils import UTC, format_iso_z
-from app.di.repositories import build_audit_log_repository
-from app.di.telegram import build_telegram_runtime
 
 try:
     from pyrogram import Client as _PyroClient, filters as _pyro_filters
@@ -44,6 +43,7 @@ class TelegramBot:
     cfg: AppConfig
     db: DatabaseSessionManager
     db_write_queue: DbWriteQueue | None = None
+    scheduler_dependencies: Any | None = None
 
     # Dynamically assigned by component_wiring.bind_runtime_components()
     telegram_client: Any = field(default=None, init=False, repr=False)
@@ -72,8 +72,8 @@ class TelegramBot:
         )
 
         self._audit_tasks: set[asyncio.Task[Any]] = set()
-        self.audit_repo = build_audit_log_repository(self.db)
-        components = build_telegram_runtime(
+        self.audit_repo = create_bot_audit_repository(self.db)
+        components = build_bot_runtime(
             cfg=self.cfg,
             db=self.db,
             safe_reply_func=self._safe_reply,
@@ -127,8 +127,15 @@ class TelegramBot:
         # Lazy import to avoid apscheduler dependency in tests
         from app.infrastructure.scheduler.service import SchedulerService
 
-        self._scheduler = SchedulerService(cfg=self.cfg, db=self.db)
-        self._scheduler.start()
+        if self.scheduler_dependencies is not None:
+            self._scheduler = SchedulerService(
+                cfg=self.cfg,
+                db=self.db,
+                deps=self.scheduler_dependencies,
+            )
+            self._scheduler.start()
+        else:
+            logger.warning("scheduler_dependencies_missing")
 
         try:
             await self.telegram_client.start(

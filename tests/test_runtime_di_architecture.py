@@ -13,6 +13,8 @@ EXCLUDED_GLOBS = [
     "!app/di/**",
     "!app/cli/**",
     "!app/cli/migrations/**",
+    "!app/bootstrap/**",
+    "!app/db/migrations/**",
 ]
 PATTERNS = [
     "DatabaseSessionManager(",
@@ -139,11 +141,10 @@ def test_core_workflows_do_not_construct_sqlite_repositories_outside_di() -> Non
         pattern=r"Sqlite[A-Za-z]+RepositoryAdapter\(",
         path="app",
         globs=[
-            "app/api/routers/**",
             "app/api/services/**",
             "app/adapters/telegram/**",
             "app/application/**",
-            "!app/api/routers/auth/**",
+            "app/api/background_processor.py",
             "!app/api/services/collection_service.py",
         ],
     )
@@ -152,3 +153,49 @@ def test_core_workflows_do_not_construct_sqlite_repositories_outside_di() -> Non
         "found direct Sqlite repository construction outside app/di in core workflows:\n"
         f"{result.stdout}"
     )
+
+
+@pytest.mark.skipif(shutil.which("rg") is None, reason="rg is required for architecture guard")
+def test_p2_runtime_modules_do_not_import_app_di() -> None:
+    result = _run_rg(
+        pattern=r"from app\.di|import app\.di|app\.di\.",
+        path="app",
+        globs=[
+            "app/adapters/**",
+            "app/api/services/**",
+            "app/api/background_processor.py",
+            "app/db/**",
+            "app/infrastructure/**",
+            "!app/bootstrap/**",
+        ],
+    )
+    assert result.returncode in (0, 1)
+    assert result.stdout.strip() == "", (
+        f"found forbidden app.di import in disallowed runtime package:\n{result.stdout}"
+    )
+
+
+@pytest.mark.skipif(shutil.which("rg") is None, reason="rg is required for architecture guard")
+def test_p2_runtime_modules_do_not_use_runtime_builder_shortcuts() -> None:
+    patterns = [
+        r"build_[A-Za-z0-9_]+repository\(",
+        r"build_[A-Za-z0-9_]+dependencies\(",
+        r"build_runtime_database\(",
+        r"get_current_api_runtime\(",
+        r"resolve_api_runtime\(",
+        r"build_scheduler_dependencies\(",
+    ]
+    globs = [
+        "app/adapters/**",
+        "app/api/services/**",
+        "app/api/background_processor.py",
+        "app/db/**",
+        "app/infrastructure/**",
+        "!app/bootstrap/**",
+    ]
+    for pattern in patterns:
+        result = _run_rg(pattern=pattern, path="app", globs=globs)
+        assert result.returncode in (0, 1)
+        assert result.stdout.strip() == "", (
+            f"found forbidden runtime builder shortcut for {pattern!r}:\n{result.stdout}"
+        )

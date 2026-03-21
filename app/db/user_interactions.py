@@ -7,14 +7,14 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger, log_exception
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     import logging
 
     from app.db.session import DatabaseSessionManager
-    from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-        SqliteUserRepositoryAdapter,
-    )
 
 logger = get_logger(__name__)
 
@@ -63,9 +63,7 @@ def safe_update_user_interaction(
                 **payload,
             )
         else:
-            from app.di.repositories import build_user_repository
-
-            user_repo = build_user_repository(db)
+            user_repo = SqliteUserRepositoryAdapter(db)
             coro = user_repo.async_update_user_interaction(
                 interaction_id=interaction_id,
                 updates=update_mapping,

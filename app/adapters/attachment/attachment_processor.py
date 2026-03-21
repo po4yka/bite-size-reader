@@ -32,8 +32,13 @@ from app.adapters.content.llm_response_workflow import (
 )
 from app.core.lang import LANG_AUTO, LANG_RU, choose_language, detect_language
 from app.db.user_interactions import async_safe_update_user_interaction
-from app.di.repositories import build_request_repository, build_user_repository
 from app.domain.models.request import RequestStatus
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+    SqliteUserRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -93,8 +98,8 @@ class AttachmentProcessor:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
-        self.request_repo = request_repo or build_request_repository(db)
-        self.user_repo = user_repo or build_user_repository(db)
+        self.request_repo = request_repo or SqliteRequestRepositoryAdapter(db)
+        self.user_repo = user_repo or SqliteUserRepositoryAdapter(db)
         self._workflow = LLMResponseWorkflow(
             cfg=cfg,
             db=db,

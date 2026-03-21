@@ -12,11 +12,6 @@ from app.adapters.telegram.forward_content_processor import ForwardContentProces
 from app.adapters.telegram.forward_summarizer import ForwardSummarizer
 from app.core.logging_utils import get_logger
 from app.db.user_interactions import async_safe_update_user_interaction
-from app.di.repositories import (
-    build_request_repository,
-    build_summary_repository,
-    build_user_repository,
-)
 from app.domain.models.request import RequestStatus
 
 if TYPE_CHECKING:
@@ -51,16 +46,17 @@ class ForwardProcessor:
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],
         db_write_queue: DbWriteQueue | None = None,
-        summary_repo: SummaryRepositoryPort | None = None,
-        request_repo: RequestRepositoryPort | None = None,
-        user_repo: UserRepositoryPort | None = None,
+        *,
+        summary_repo: SummaryRepositoryPort,
+        request_repo: RequestRepositoryPort,
+        user_repo: UserRepositoryPort,
         related_reads_service: RelatedReadsService | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
-        self.summary_repo = summary_repo or build_summary_repository(db)
-        self.request_repo = request_repo or build_request_repository(db)
-        self.user_repo = user_repo or build_user_repository(db)
+        self.summary_repo = summary_repo
+        self.request_repo = request_repo
+        self.user_repo = user_repo
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
@@ -334,6 +330,8 @@ class ForwardProcessor:
                 audit_func=self._audit,
                 sem=self._sem,
                 db_write_queue=self._db_write_queue,
+                summary_repo=self.summary_repo,
+                request_repo=self.request_repo,
             )
         return self._summarization_runtime
 
