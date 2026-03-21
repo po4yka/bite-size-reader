@@ -11,6 +11,7 @@ Handlers:
 - ContentHandler: /unread, /read
 - SearchHandler: /find*, /search
 - KarakeepHandler: /sync_karakeep
+- RulesHandler: /rules
 """
 
 # ruff: noqa: E501
@@ -25,10 +26,12 @@ from app.adapters.telegram.command_handlers.admin_handler import AdminHandler
 from app.adapters.telegram.command_handlers.content_handler import ContentHandler
 from app.adapters.telegram.command_handlers.digest_handler import DigestHandler
 from app.adapters.telegram.command_handlers.execution_context import CommandExecutionContext
+from app.adapters.telegram.command_handlers.export_command import ExportHandler
 from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandler
 from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandler
 from app.adapters.telegram.command_handlers.listen_handler import ListenHandler
 from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandler
+from app.adapters.telegram.command_handlers.rules_handler import RulesHandler
 from app.adapters.telegram.command_handlers.search_handler import SearchHandler
 from app.adapters.telegram.command_handlers.settings_handler import SettingsHandler
 from app.adapters.telegram.command_handlers.tag_handler import TagHandler
@@ -173,6 +176,18 @@ class CommandProcessor:
         )
 
         self._tag = TagHandler(
+            cfg=cfg,
+            db=db,
+            response_formatter=response_formatter,
+        )
+
+        self._rules = RulesHandler(
+            cfg=cfg,
+            db=db,
+            response_formatter=response_formatter,
+        )
+
+        self._export = ExportHandler(
             cfg=cfg,
             db=db,
             response_formatter=response_formatter,
@@ -729,6 +744,40 @@ class CommandProcessor:
         """Handle /tags command -- list tags or summaries for a tag."""
         ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
         await self._tag.handle_tags(ctx)
+
+    # =========================================================================
+    # Rules delegation
+    # =========================================================================
+
+    async def handle_rules_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /rules command -- list automation rules."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._rules.handle_rules(ctx)
+
+    # =========================================================================
+    # Export delegation
+    # =========================================================================
+
+    async def handle_export_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /export command -- export summaries as a file."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._export.handle_export(ctx)
 
     # =========================================================================
     # Settings delegation

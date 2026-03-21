@@ -235,3 +235,43 @@ class UpdateWebhookRequest(BaseModel):
     url: str | None = None
     events: list[str] | None = None
     enabled: bool | None = None
+
+
+class CreateRuleRequest(BaseModel):
+    """Request body for creating an automation rule."""
+
+    name: str = Field(min_length=1, max_length=200)
+    event_type: str
+    conditions: list[dict[str, Any]] = Field(default_factory=list)
+    actions: list[dict[str, Any]] = Field(min_length=1)
+    match_mode: str = "all"
+    priority: int = Field(default=0, ge=0, le=1000)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class UpdateRuleRequest(BaseModel):
+    """Request body for updating an automation rule."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    event_type: str | None = None
+    conditions: list[dict[str, Any]] | None = None
+    actions: list[dict[str, Any]] | None = None
+    match_mode: str | None = None
+    priority: int | None = Field(default=None, ge=0, le=1000)
+    description: str | None = Field(default=None, max_length=500)
+    enabled: bool | None = None
+
+
+class TestRuleRequest(BaseModel):
+    """Request body for dry-run testing a rule."""
+
+    summary_id: int
+
+
+class ImportOptionsRequest(BaseModel):
+    """Options for bookmark import."""
+
+    summarize: bool = False
+    create_tags: bool = True
+    target_collection_id: int | None = None
+    skip_duplicates: bool = True

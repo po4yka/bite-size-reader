@@ -19,6 +19,8 @@ const CustomDigestViewPage = lazy(() => import("./features/digest/CustomDigestVi
 const SearchPage = lazy(() => import("./features/search/SearchPage"));
 const TagManagementPage = lazy(() => import("./features/tags/TagManagementPage"));
 const WebhooksPage = lazy(() => import("./features/webhooks/WebhooksPage"));
+const RulesPage = lazy(() => import("./features/rules/RulesPage"));
+const ImportExportPage = lazy(() => import("./features/import-export/ImportExportPage"));
 const AdminPage = lazy(() => import("./features/admin/AdminPage"));
 
 function RouteLoader() {
@@ -118,6 +120,14 @@ export default function App() {
         <Route
           path="webhooks"
           element={<Suspense fallback={<RouteLoader />}><WebhooksPage /></Suspense>}
+        />
+        <Route
+          path="rules"
+          element={<Suspense fallback={<RouteLoader />}><RulesPage /></Suspense>}
+        />
+        <Route
+          path="import-export"
+          element={<Suspense fallback={<RouteLoader />}><ImportExportPage /></Suspense>}
         />
         <Route
           path="digest"

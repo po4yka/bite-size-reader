@@ -83,6 +83,8 @@ class MessageContentRouter:
             ("/unsubscribe", command_processor.handle_unsubscribe_command),
             ("/init_session", command_processor.handle_init_session_command),
             ("/settings", command_processor.handle_settings_command),
+            ("/rules", command_processor.handle_rules_command),
+            ("/export", command_processor.handle_export_command),
         )
         self._tail_uid_commands: tuple[tuple[str, UidCommandHandler], ...] = (
             ("/debug", command_processor.handle_debug_command),

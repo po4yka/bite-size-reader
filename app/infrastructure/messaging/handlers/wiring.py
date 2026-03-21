@@ -16,6 +16,7 @@ from app.infrastructure.messaging.handlers.embedding_generation import (
 )
 from app.infrastructure.messaging.handlers.notification import NotificationEventHandler
 from app.infrastructure.messaging.handlers.push_notification import PushNotificationEventHandler
+from app.infrastructure.messaging.handlers.rule_engine_handler import RuleEngineHandler
 from app.infrastructure.messaging.handlers.search_index import SearchIndexEventHandler
 from app.infrastructure.messaging.handlers.webhook import WebhookEventHandler
 from app.infrastructure.messaging.handlers.webhook_dispatcher import WebhookDispatcher
@@ -84,6 +85,14 @@ def wire_event_handlers(
     event_bus.subscribe(RequestFailed, notification_handler.on_request_failed)
     event_bus.subscribe(RequestFailed, webhook_handler.on_request_failed)
 
+    # Rule engine handler (stateless -- always wired)
+    rule_handler = RuleEngineHandler()
+    event_bus.subscribe(SummaryCreated, rule_handler.on_summary_created)
+    event_bus.subscribe(RequestCompleted, rule_handler.on_request_completed)
+    event_bus.subscribe(RequestFailed, rule_handler.on_request_failed)
+    event_bus.subscribe(TagAttached, rule_handler.on_tag_attached)
+    event_bus.subscribe(TagDetached, rule_handler.on_tag_detached)
+
     # Per-user webhook dispatcher (additive alongside system-wide WebhookEventHandler)
     webhook_dispatcher: WebhookDispatcher | None = None
     if webhook_repository is not None:
@@ -107,6 +116,7 @@ def wire_event_handlers(
                 "webhooks": webhook_client is not None and webhook_url is not None,
                 "embeddings": embedding_generator is not None,
                 "push_notifications": push_handler is not None,
+                "rule_engine": True,
                 "webhook_dispatcher": webhook_dispatcher is not None,
             },
         },

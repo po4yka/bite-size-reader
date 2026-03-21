@@ -14,6 +14,9 @@ from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository 
 from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
     SqliteEmbeddingRepositoryAdapter,
 )
+from app.infrastructure.persistence.sqlite.repositories.import_job_repository import (
+    SqliteImportJobRepositoryAdapter,
+)
 from app.infrastructure.persistence.sqlite.repositories.karakeep_sync_repository import (
     SqliteKarakeepSyncRepositoryAdapter,
 )
@@ -22,6 +25,9 @@ from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
 )
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.rule_repository import (
+    SqliteRuleRepositoryAdapter,
 )
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
@@ -45,9 +51,11 @@ if TYPE_CHECKING:
         BatchSessionRepositoryPort,
         CrawlResultRepositoryPort,
         EmbeddingRepositoryPort,
+        ImportJobRepositoryPort,
         KarakeepSyncRepositoryPort,
         LLMRepositoryPort,
         RequestRepositoryPort,
+        RuleRepositoryPort,
         SummaryRepositoryPort,
         TagRepositoryPort,
         TopicSearchRepositoryPort,
@@ -103,3 +111,11 @@ def build_embedding_repository(db: DatabaseSessionManager) -> EmbeddingRepositor
 
 def build_tag_repository(db: DatabaseSessionManager) -> TagRepositoryPort:
     return SqliteTagRepositoryAdapter(db)
+
+
+def build_import_job_repository(db: DatabaseSessionManager) -> ImportJobRepositoryPort:
+    return SqliteImportJobRepositoryAdapter(db)
+
+
+def build_rule_repository(db: DatabaseSessionManager) -> RuleRepositoryPort:
+    return SqliteRuleRepositoryAdapter(db)

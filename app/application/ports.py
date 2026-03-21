@@ -789,3 +789,99 @@ class TagRepositoryPort(Protocol):
         normalized_name: str,
     ) -> dict[str, Any] | None:
         """Return tag by normalized name within a user scope."""
+
+
+@runtime_checkable
+class RuleRepositoryPort(Protocol):
+    """Port for automation rule CRUD and execution log operations."""
+
+    async def async_get_user_rules(
+        self, user_id: int, enabled_only: bool = False
+    ) -> list[dict[str, Any]]:
+        """Return all non-deleted rules owned by a user."""
+
+    async def async_get_rule_by_id(self, rule_id: int) -> dict[str, Any] | None:
+        """Return rule by ID."""
+
+    async def async_get_rules_by_event_type(
+        self, user_id: int, event_type: str
+    ) -> list[dict[str, Any]]:
+        """Return enabled rules matching event type, ordered by priority."""
+
+    async def async_create_rule(
+        self,
+        user_id: int,
+        name: str,
+        event_type: str,
+        conditions: list[dict[str, Any]],
+        actions: list[dict[str, Any]],
+        match_mode: str = "all",
+        priority: int = 0,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a rule and return the created record."""
+
+    async def async_update_rule(self, rule_id: int, **fields: Any) -> dict[str, Any]:
+        """Update provided fields on a rule and return the updated record."""
+
+    async def async_soft_delete_rule(self, rule_id: int) -> None:
+        """Soft-delete a rule."""
+
+    async def async_increment_run_count(self, rule_id: int) -> None:
+        """Increment run_count and set last_triggered_at to now."""
+
+    async def async_create_execution_log(
+        self,
+        rule_id: int,
+        summary_id: int | None,
+        event_type: str,
+        matched: bool,
+        conditions_result: list[dict[str, Any]] | None = None,
+        actions_taken: list[dict[str, Any]] | None = None,
+        error: str | None = None,
+        duration_ms: int | None = None,
+    ) -> dict[str, Any]:
+        """Insert an execution log entry and return the created record."""
+
+    async def async_get_execution_logs(
+        self, rule_id: int, limit: int = 50, offset: int = 0
+    ) -> list[dict[str, Any]]:
+        """Return paginated execution logs for a rule."""
+
+
+@runtime_checkable
+class ImportJobRepositoryPort(Protocol):
+    """Port for import job tracking operations."""
+
+    async def async_create_job(
+        self,
+        user_id: int,
+        source_format: str,
+        file_name: str | None,
+        total_items: int,
+        options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Insert a new ImportJob and return the created record."""
+
+    async def async_get_job(self, job_id: int) -> dict[str, Any] | None:
+        """Return a single import job by ID."""
+
+    async def async_list_jobs(self, user_id: int) -> list[dict[str, Any]]:
+        """List user's import jobs, ordered by created_at DESC."""
+
+    async def async_update_progress(
+        self,
+        job_id: int,
+        processed: int,
+        created: int,
+        skipped: int,
+        failed: int,
+        errors: list[str] | None = None,
+    ) -> None:
+        """Update import job progress counters."""
+
+    async def async_set_status(self, job_id: int, status: str) -> None:
+        """Update the status field of an import job."""
+
+    async def async_delete_job(self, job_id: int) -> None:
+        """Hard delete an import job."""

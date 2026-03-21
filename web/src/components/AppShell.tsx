@@ -27,6 +27,8 @@ import {
   Logout,
   Renew,
   ConnectionSignal,
+  DocumentImport,
+  Lightning,
 } from "@carbon/icons-react";
 import { useAuth } from "../auth/AuthProvider";
 import { FEATURE_FLAGS } from "../routes/features";
@@ -40,6 +42,8 @@ const NAV_ITEMS = [
   { path: "/tags", label: "Tags", icon: Tag },
   { path: "/digest", label: "Digest", icon: Notification },
   { path: "/webhooks", label: "Webhooks", icon: ConnectionSignal },
+  { path: "/rules", label: "Rules", icon: Lightning },
+  { path: "/import-export", label: "Import/Export", icon: DocumentImport },
   { path: "/preferences", label: "Preferences", icon: User },
 ] as const;
 

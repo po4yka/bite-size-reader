@@ -973,6 +973,84 @@ class WebhookDelivery(BaseModel):
         )
 
 
+class AutomationRule(BaseModel):
+    """User-defined automation rule (event -> condition -> action)."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="rules", on_delete="CASCADE")
+    name = peewee.TextField()
+    description = peewee.TextField(null=True)
+    enabled = peewee.BooleanField(default=True)
+    event_type = peewee.TextField()
+    match_mode = peewee.TextField(default="all")  # all | any
+    conditions_json = JSONField(default=list)
+    actions_json = JSONField(default=list)
+    priority = peewee.IntegerField(default=0)
+    run_count = peewee.IntegerField(default=0)
+    last_triggered_at = peewee.DateTimeField(null=True)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    is_deleted = peewee.BooleanField(default=False)
+    deleted_at = peewee.DateTimeField(null=True)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "automation_rules"
+        indexes = (
+            (("user", "enabled"), False),
+            (("event_type",), False),
+        )
+
+
+class RuleExecutionLog(BaseModel):
+    """Audit trail for rule executions."""
+
+    id = peewee.AutoField()
+    rule = peewee.ForeignKeyField(AutomationRule, backref="logs", on_delete="CASCADE")
+    summary = peewee.ForeignKeyField(Summary, null=True, on_delete="SET NULL")
+    event_type = peewee.TextField()
+    matched = peewee.BooleanField()
+    conditions_result_json = JSONField(null=True)
+    actions_taken_json = JSONField(null=True)
+    error = peewee.TextField(null=True)
+    duration_ms = peewee.IntegerField(null=True)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "rule_execution_logs"
+        indexes = (
+            (("rule",), False),
+            (("created_at",), False),
+        )
+
+
+class ImportJob(BaseModel):
+    """Tracks a bulk import operation."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="import_jobs", on_delete="CASCADE")
+    source_format = peewee.TextField()
+    file_name = peewee.TextField(null=True)
+    status = peewee.TextField(default="pending")  # pending | processing | completed | failed
+    total_items = peewee.IntegerField(default=0)
+    processed_items = peewee.IntegerField(default=0)
+    created_items = peewee.IntegerField(default=0)
+    skipped_items = peewee.IntegerField(default=0)
+    failed_items = peewee.IntegerField(default=0)
+    errors_json = JSONField(default=list)
+    options_json = JSONField(default=dict)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "import_jobs"
+        indexes = (
+            (("user",), False),
+            (("status",), False),
+        )
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -1013,6 +1091,9 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     SummaryTag,
     WebhookSubscription,
     WebhookDelivery,
+    AutomationRule,
+    RuleExecutionLog,
+    ImportJob,
 )
 
 

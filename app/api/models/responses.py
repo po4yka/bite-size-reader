@@ -1002,6 +1002,60 @@ class WebhookDeliveryResponse(BaseModel):
     created_at: str = Field(serialization_alias="createdAt")
 
 
+class RuleResponse(BaseModel):
+    """Response for a single automation rule."""
+
+    id: int
+    name: str
+    description: str | None = None
+    enabled: bool
+    event_type: str = Field(serialization_alias="eventType")
+    match_mode: str = Field(serialization_alias="matchMode")
+    conditions: list[dict[str, Any]]
+    actions: list[dict[str, Any]]
+    priority: int
+    run_count: int = Field(serialization_alias="runCount")
+    last_triggered_at: str | None = Field(default=None, serialization_alias="lastTriggeredAt")
+    created_at: str = Field(serialization_alias="createdAt")
+    updated_at: str = Field(serialization_alias="updatedAt")
+
+
+class RuleLogResponse(BaseModel):
+    """Response for a single rule execution log entry."""
+
+    id: int
+    rule_id: int = Field(serialization_alias="ruleId")
+    summary_id: int | None = Field(default=None, serialization_alias="summaryId")
+    event_type: str = Field(serialization_alias="eventType")
+    matched: bool
+    conditions_result: list[dict[str, Any]] | None = Field(
+        default=None, serialization_alias="conditionsResult"
+    )
+    actions_taken: list[dict[str, Any]] | None = Field(
+        default=None, serialization_alias="actionsTaken"
+    )
+    error: str | None = None
+    duration_ms: int | None = Field(default=None, serialization_alias="durationMs")
+    created_at: str = Field(serialization_alias="createdAt")
+
+
+class ImportJobResponse(BaseModel):
+    """Response for a single import job."""
+
+    id: int
+    source_format: str = Field(serialization_alias="sourceFormat")
+    file_name: str | None = Field(default=None, serialization_alias="fileName")
+    status: str
+    total_items: int = Field(serialization_alias="totalItems")
+    processed_items: int = Field(serialization_alias="processedItems")
+    created_items: int = Field(serialization_alias="createdItems")
+    skipped_items: int = Field(serialization_alias="skippedItems")
+    failed_items: int = Field(serialization_alias="failedItems")
+    errors: list[str] = Field(default_factory=list)
+    created_at: str = Field(serialization_alias="createdAt")
+    updated_at: str = Field(serialization_alias="updatedAt")
+
+
 def _coerce_pagination(pagination: BaseModel | dict[str, Any] | None) -> PaginationInfo | None:
     if pagination is None:
         return None

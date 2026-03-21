@@ -1,0 +1,4 @@
+[
+    {"url": "https://example.com/omni1", "title": "Omnivore Article 1", "labels": [{"name": "ai"}, {"name": "research"}], "savedAt": "2024-01-15T10:30:00Z", "highlights": [{"quote": "important text"}]},
+    {"url": "https://example.com/omni2", "title": "Omnivore Article 2", "labels": [{"name": "news"}], "savedAt": "2024-02-20T14:00:00Z"}
+]

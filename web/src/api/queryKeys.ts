@@ -56,6 +56,17 @@ export const queryKeys = {
     list: () => ["webhooks", "list"] as const,
     deliveries: (id: number) => ["webhooks", "deliveries", id] as const,
   },
+  rules: {
+    all: ["rules"] as const,
+    list: () => ["rules", "list"] as const,
+    detail: (id: number) => ["rules", "detail", id] as const,
+    logs: (id: number) => ["rules", "logs", id] as const,
+  },
+  importExport: {
+    all: ["importExport"] as const,
+    jobs: () => ["importExport", "jobs"] as const,
+    job: (id: number) => ["importExport", "job", id] as const,
+  },
   admin: {
     dbInfo: ["admin", "db-info"] as const,
   },
