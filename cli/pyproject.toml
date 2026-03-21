@@ -1,0 +1,22 @@
+[project]
+name = "bsr-cli"
+version = "0.1.0"
+description = "CLI client for Bite-Size Reader"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "click>=8.1",
+    "httpx>=0.27",
+    "tomli-w>=1.0",
+    "rich>=13.0",
+]
+
+[project.scripts]
+bsr = "bsr_cli.main:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bsr_cli"]
