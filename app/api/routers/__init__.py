@@ -3,15 +3,20 @@ API route handlers.
 """
 
 from . import (
+    admin,
     auth,
+    backups,
     collections,
     custom_digests,
     digest,
     health,
     highlights,
+    import_export,
     notifications,
     proxy,
+    quick_save,
     requests,
+    rules,
     search,
     summaries,
     sync,
@@ -23,15 +28,20 @@ from . import (
 )
 
 __all__ = [
+    "admin",
     "auth",
+    "backups",
     "collections",
     "custom_digests",
     "digest",
     "health",
     "highlights",
+    "import_export",
     "notifications",
     "proxy",
+    "quick_save",
     "requests",
+    "rules",
     "search",
     "summaries",
     "sync",

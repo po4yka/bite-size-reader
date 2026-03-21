@@ -1051,6 +1051,29 @@ class ImportJob(BaseModel):
         )
 
 
+class UserBackup(BaseModel):
+    """Per-user backup archive."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, backref="backups", on_delete="CASCADE")
+    type = peewee.TextField(default="manual")  # manual | scheduled
+    status = peewee.TextField(default="pending")  # pending | processing | completed | failed
+    file_path = peewee.TextField(null=True)
+    file_size_bytes = peewee.IntegerField(null=True)
+    items_count = peewee.IntegerField(null=True)
+    error = peewee.TextField(null=True)
+    server_version = peewee.BigIntegerField(default=_next_server_version)
+    updated_at = peewee.DateTimeField(default=_utcnow)
+    created_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "user_backups"
+        indexes = (
+            (("user",), False),
+            (("status",), False),
+        )
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     User,
     Chat,
@@ -1094,6 +1117,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     AutomationRule,
     RuleExecutionLog,
     ImportJob,
+    UserBackup,
 )
 
 

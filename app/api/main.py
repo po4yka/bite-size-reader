@@ -31,7 +31,9 @@ from app.api.middleware import (
 )
 from app.api.models.responses import success_response
 from app.api.routers import (
+    admin,
     auth,
+    backups,
     collections,
     custom_digests,
     digest,
@@ -40,6 +42,7 @@ from app.api.routers import (
     import_export,
     notifications,
     proxy,
+    quick_save,
     requests,
     rules,
     search,
@@ -159,10 +162,13 @@ app.include_router(custom_digests.router, prefix="/v1/digests/custom", tags=["cu
 app.include_router(tags.router, prefix="/v1/tags", tags=["Tags"])
 app.include_router(tags.summary_tags_router, prefix="/v1/summaries", tags=["Tags"])
 app.include_router(webhooks.router, prefix="/v1/webhooks", tags=["Webhooks"])
+app.include_router(backups.router, prefix="/v1/backups", tags=["Backups"])
 app.include_router(rules.router, prefix="/v1/rules", tags=["Rules"])
 app.include_router(import_export.router, prefix="/v1", tags=["Import/Export"])
+app.include_router(quick_save.router, prefix="/v1", tags=["Quick Save"])
 app.include_router(highlights.router, prefix="/v1/summaries", tags=["Highlights"])
 app.include_router(tts.router, prefix="/v1/summaries", tags=["TTS"])
+app.include_router(admin.router, prefix="/v1/admin", tags=["Admin"])
 app.include_router(health.router, tags=["Health"])
 
 # Serve static files (Mini App HTML for session init, etc.)

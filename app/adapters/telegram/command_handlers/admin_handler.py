@@ -1,4 +1,4 @@
-"""Admin/maintenance command handlers (/dbinfo, /dbverify).
+"""Admin/maintenance command handlers (/admin, /dbinfo, /dbverify).
 
 This module handles administrative commands for database inspection
 and verification, including automated reprocessing of failed requests.
@@ -6,10 +6,15 @@ and verification, including automated reprocessing of failed requests.
 
 from __future__ import annotations
 
+import datetime as _dt
 from typing import TYPE_CHECKING, Any
+
+import peewee
 
 from app.adapters.telegram.command_handlers.decorators import audit_command
 from app.core.logging_utils import generate_correlation_id, get_logger
+from app.core.time_utils import UTC
+from app.db.models import ImportJob, Request, Summary, User
 from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
@@ -25,7 +30,7 @@ logger = get_logger(__name__)
 
 
 class AdminHandler:
-    """Implementation of admin/maintenance commands (/dbinfo, /dbverify).
+    """Implementation of admin/maintenance commands (/admin, /dbinfo, /dbverify).
 
     These commands provide database inspection and verification capabilities
     for the bot owner to monitor system health and data integrity.
@@ -42,6 +47,198 @@ class AdminHandler:
         self._formatter = response_formatter
         self._url_processor = url_processor
         self._url_handler = url_handler
+
+    @audit_command("command_admin")
+    async def handle_admin(self, ctx: CommandExecutionContext) -> None:
+        """Handle /admin command with subcommands.
+
+        Subcommands:
+            (none) - Show overview stats (users, summaries, requests).
+            jobs   - Show background job / pipeline status.
+            errors - Show recent error summary (last 24h).
+
+        Args:
+            ctx: The command execution context.
+        """
+        subcommand = self._parse_admin_subcommand(ctx.text)
+
+        try:
+            if subcommand == "jobs":
+                reply = self._build_jobs_reply()
+            elif subcommand == "errors":
+                reply = self._build_errors_reply()
+            else:
+                reply = self._build_overview_reply()
+        except Exception as exc:
+            logger.exception("command_admin_failed", extra={"cid": ctx.correlation_id})
+            await ctx.response_formatter.safe_reply(
+                ctx.message,
+                "Unable to fetch admin stats right now. Check bot logs for details.",
+            )
+            if ctx.interaction_id:
+                await async_safe_update_user_interaction(
+                    ctx.user_repo,
+                    interaction_id=ctx.interaction_id,
+                    response_sent=True,
+                    response_type="admin_error",
+                    error_occurred=True,
+                    error_message=str(exc)[:500],
+                    start_time=ctx.start_time,
+                    logger_=logger,
+                )
+            return
+
+        await ctx.response_formatter.safe_reply(ctx.message, reply)
+
+        if ctx.interaction_id:
+            await async_safe_update_user_interaction(
+                ctx.user_repo,
+                interaction_id=ctx.interaction_id,
+                response_sent=True,
+                response_type=f"admin_{subcommand or 'overview'}",
+                start_time=ctx.start_time,
+                logger_=logger,
+            )
+
+    # ------------------------------------------------------------------
+    # /admin subcommand helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_admin_subcommand(text: str) -> str | None:
+        """Extract the subcommand token after ``/admin``.
+
+        Returns ``None`` when no recognised subcommand is present.
+        """
+        parts = text.strip().split(maxsplit=1)
+        if len(parts) < 2:
+            return None
+        sub = parts[1].strip().lower()
+        if sub in ("jobs", "errors"):
+            return sub
+        return None
+
+    @staticmethod
+    def _build_overview_reply() -> str:
+        """Build the default /admin overview message."""
+        user_count = User.select().count()
+        summary_count = Summary.select().count()
+        total_requests = Request.select().count()
+        pending_requests = Request.select().where(Request.status == "pending").count()
+
+        now = _dt.datetime.now(UTC)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        failed_today = (
+            Request.select()
+            .where(
+                (Request.status == "error") & (Request.created_at >= today_start),
+            )
+            .count()
+        )
+
+        return (
+            "Admin Overview:\n"
+            f"Users: {user_count:,}\n"
+            f"Total summaries: {summary_count:,}\n"
+            f"Total requests: {total_requests:,}\n"
+            f"Pending requests: {pending_requests:,}\n"
+            f"Failed today: {failed_today:,}"
+        )
+
+    @staticmethod
+    def _build_jobs_reply() -> str:
+        """Build the /admin jobs message."""
+        now = _dt.datetime.now(UTC)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Pipeline (Request) stats
+        pending = Request.select().where(Request.status == "pending").count()
+        processing = Request.select().where(Request.status == "processing").count()
+        completed_today = (
+            Request.select()
+            .where(
+                (Request.status == "completed") & (Request.created_at >= today_start),
+            )
+            .count()
+        )
+        failed_today = (
+            Request.select()
+            .where(
+                (Request.status == "error") & (Request.created_at >= today_start),
+            )
+            .count()
+        )
+
+        # ImportJob stats
+        import_active = (
+            ImportJob.select().where(ImportJob.status.in_(["pending", "processing"])).count()
+        )
+        import_completed_today = (
+            ImportJob.select()
+            .where(
+                (ImportJob.status == "completed") & (ImportJob.created_at >= today_start),
+            )
+            .count()
+        )
+
+        return (
+            "Pipeline Status:\n"
+            f"Pending: {pending} | Processing: {processing}\n"
+            f"Completed today: {completed_today} | Failed: {failed_today}\n"
+            "\n"
+            "Import Jobs:\n"
+            f"Active: {import_active} | Completed today: {import_completed_today}"
+        )
+
+    @staticmethod
+    def _build_errors_reply() -> str:
+        """Build the /admin errors message."""
+        now = _dt.datetime.now(UTC)
+        cutoff = now - _dt.timedelta(hours=24)
+
+        error_rows = (
+            Request.select(Request.error_type, peewee.fn.COUNT(Request.id).alias("cnt"))
+            .where(
+                (Request.status == "error") & (Request.created_at >= cutoff),
+            )
+            .group_by(Request.error_type)
+            .order_by(peewee.fn.COUNT(Request.id).desc())
+            .dicts()
+        )
+
+        if not error_rows:
+            return "Recent Errors (last 24h):\nNo errors recorded."
+
+        lines = ["Recent Errors (last 24h):"]
+        for row in error_rows:
+            label = row.get("error_type") or "unknown"
+            lines.append(f"{label}: {row['cnt']}")
+
+        # Latest failure
+        latest = (
+            Request.select()
+            .where(
+                (Request.status == "error") & (Request.created_at >= cutoff),
+            )
+            .order_by(Request.created_at.desc())
+            .first()
+        )
+
+        if latest is not None:
+            url = latest.input_url or latest.normalized_url or "N/A"
+            error_msg = latest.error_message or "N/A"
+            # Compute relative time
+            delta = now - latest.created_at.replace(tzinfo=UTC)
+            if delta.total_seconds() < 3600:
+                ago = f"{int(delta.total_seconds() / 60)}m ago"
+            else:
+                ago = f"{int(delta.total_seconds() / 3600)}h ago"
+            lines.append("")
+            lines.append("Latest failure:")
+            lines.append(f"URL: {url}")
+            lines.append(f"Error: {error_msg} ({ago})")
+
+        return "\n".join(lines)
 
     @audit_command("command_dbinfo")
     async def handle_dbinfo(self, ctx: CommandExecutionContext) -> None:

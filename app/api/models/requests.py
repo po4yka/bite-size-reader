@@ -275,3 +275,13 @@ class ImportOptionsRequest(BaseModel):
     create_tags: bool = True
     target_collection_id: int | None = None
     skip_duplicates: bool = True
+
+
+class QuickSaveRequest(BaseModel):
+    """Request body for browser extension quick-save."""
+
+    url: str = Field(..., max_length=2048)
+    title: str | None = None
+    selected_text: str | None = None
+    tag_names: list[str] = Field(default_factory=list)
+    summarize: bool = True

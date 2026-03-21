@@ -1039,6 +1039,20 @@ class RuleLogResponse(BaseModel):
     created_at: str = Field(serialization_alias="createdAt")
 
 
+class BackupResponse(BaseModel):
+    """Response for a single user backup."""
+
+    id: int
+    type: str
+    status: str
+    file_path: str | None = Field(default=None, serialization_alias="filePath")
+    file_size_bytes: int | None = Field(default=None, serialization_alias="fileSizeBytes")
+    items_count: int | None = Field(default=None, serialization_alias="itemsCount")
+    error: str | None = None
+    created_at: str = Field(serialization_alias="createdAt")
+    updated_at: str = Field(serialization_alias="updatedAt")
+
+
 class ImportJobResponse(BaseModel):
     """Response for a single import job."""
 

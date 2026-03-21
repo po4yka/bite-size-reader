@@ -6,7 +6,7 @@ with existing code while delegating to specialized handlers.
 
 Handlers:
 - OnboardingHandler: /start, /help
-- AdminHandler: /dbinfo, /dbverify
+- AdminHandler: /admin, /dbinfo, /dbverify
 - URLCommandsHandler: /summarize, /summarize_all, /cancel
 - ContentHandler: /unread, /read
 - SearchHandler: /find*, /search
@@ -23,6 +23,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.command_handlers.admin_handler import AdminHandler
+from app.adapters.telegram.command_handlers.backup_handler import BackupHandler
 from app.adapters.telegram.command_handlers.content_handler import ContentHandler
 from app.adapters.telegram.command_handlers.digest_handler import DigestHandler
 from app.adapters.telegram.command_handlers.execution_context import CommandExecutionContext
@@ -193,6 +194,12 @@ class CommandProcessor:
             response_formatter=response_formatter,
         )
 
+        self._backup = BackupHandler(
+            cfg=cfg,
+            db=db,
+            response_formatter=response_formatter,
+        )
+
     def _build_context(
         self,
         message: Any,
@@ -274,6 +281,28 @@ class CommandProcessor:
     # =========================================================================
     # Admin delegation
     # =========================================================================
+
+    async def handle_admin_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /admin command with subcommands.
+
+        Args:
+            message: The Pyrogram message object.
+            text: The message text.
+            uid: The user ID.
+            correlation_id: Request correlation ID.
+            interaction_id: Database interaction ID.
+            start_time: Processing start timestamp.
+        """
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._admin.handle_admin(ctx)
 
     async def handle_dbinfo_command(
         self,
@@ -778,6 +807,36 @@ class CommandProcessor:
         """Handle /export command -- export summaries as a file."""
         ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
         await self._export.handle_export(ctx)
+
+    # =========================================================================
+    # Backup delegation
+    # =========================================================================
+
+    async def handle_backup_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /backup command -- create and send a backup."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._backup.handle_backup(ctx)
+
+    async def handle_backups_command(
+        self,
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        """Handle /backups command -- list recent backups."""
+        ctx = self._build_context(message, uid, correlation_id, interaction_id, start_time, text)
+        await self._backup.handle_backups(ctx)
 
     # =========================================================================
     # Settings delegation

@@ -67,7 +67,18 @@ export const queryKeys = {
     jobs: () => ["importExport", "jobs"] as const,
     job: (id: number) => ["importExport", "job", id] as const,
   },
+  backups: {
+    all: ["backups"] as const,
+    list: () => ["backups", "list"] as const,
+    detail: (id: number) => ["backups", "detail", id] as const,
+    schedule: () => ["backups", "schedule"] as const,
+  },
   admin: {
     dbInfo: ["admin", "db-info"] as const,
+    users: ["admin", "users"] as const,
+    jobs: ["admin", "jobs"] as const,
+    health: ["admin", "health"] as const,
+    metrics: ["admin", "metrics"] as const,
+    auditLog: (params: Record<string, unknown>) => ["admin", "audit-log", params] as const,
   },
 } as const;

@@ -61,6 +61,9 @@ class MessageContentRouter:
             ("/dbverify", command_processor.handle_dbverify_command),
             ("/clearcache", command_processor.handle_clearcache_command),
         )
+        self._pre_alias_text_commands: tuple[tuple[str, TextCommandHandler], ...] = (
+            ("/admin", command_processor.handle_admin_command),
+        )
         self._pre_summarize_text_commands: tuple[tuple[str, TextCommandHandler], ...] = (
             ("/summarize_all", command_processor.handle_summarize_all_command),
         )
@@ -85,6 +88,8 @@ class MessageContentRouter:
             ("/settings", command_processor.handle_settings_command),
             ("/rules", command_processor.handle_rules_command),
             ("/export", command_processor.handle_export_command),
+            ("/backups", command_processor.handle_backups_command),
+            ("/backup", command_processor.handle_backup_command),
         )
         self._tail_uid_commands: tuple[tuple[str, UidCommandHandler], ...] = (
             ("/debug", command_processor.handle_debug_command),
@@ -206,6 +211,15 @@ class MessageContentRouter:
         if await self._dispatch_uid_command(
             context.text,
             self._pre_alias_uid_commands,
+            context,
+            interaction_id,
+            start_time,
+        ):
+            return True
+
+        if await self._dispatch_text_command(
+            context.text,
+            self._pre_alias_text_commands,
             context,
             interaction_id,
             start_time,

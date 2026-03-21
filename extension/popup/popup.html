@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bite-Size Reader</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <header>
+        <h1>Bite-Size Reader</h1>
+    </header>
+
+    <main>
+        <section id="save-section">
+            <div class="field">
+                <label for="page-title">Title</label>
+                <input type="text" id="page-title" readonly>
+            </div>
+            <div class="field">
+                <label for="page-url">URL</label>
+                <input type="text" id="page-url" readonly>
+            </div>
+            <div class="field">
+                <label>Tags</label>
+                <div id="tag-chips" class="tag-chips"></div>
+                <input type="text" id="tag-input" placeholder="Add tag and press Enter">
+            </div>
+            <div class="field checkbox-field">
+                <label>
+                    <input type="checkbox" id="summarize-checkbox">
+                    Summarize
+                </label>
+            </div>
+            <button id="save-btn" class="primary-btn">Save</button>
+            <div id="status-msg" class="status-msg" hidden></div>
+        </section>
+
+        <section id="recent-section">
+            <h2>Recent Saves</h2>
+            <ul id="recent-list"></ul>
+            <p id="no-recent" hidden>No recent saves.</p>
+        </section>
+
+        <div id="not-configured" hidden>
+            <p>Extension not configured. <a href="#" id="open-options">Open settings</a>.</p>
+        </div>
+    </main>
+
+    <script src="popup.js"></script>
+</body>
+</html>

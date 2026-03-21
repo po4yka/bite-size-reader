@@ -21,6 +21,7 @@ const TagManagementPage = lazy(() => import("./features/tags/TagManagementPage")
 const WebhooksPage = lazy(() => import("./features/webhooks/WebhooksPage"));
 const RulesPage = lazy(() => import("./features/rules/RulesPage"));
 const ImportExportPage = lazy(() => import("./features/import-export/ImportExportPage"));
+const BackupsPage = lazy(() => import("./features/backups/BackupsPage"));
 const AdminPage = lazy(() => import("./features/admin/AdminPage"));
 
 function RouteLoader() {
@@ -128,6 +129,10 @@ export default function App() {
         <Route
           path="import-export"
           element={<Suspense fallback={<RouteLoader />}><ImportExportPage /></Suspense>}
+        />
+        <Route
+          path="backups"
+          element={<Suspense fallback={<RouteLoader />}><BackupsPage /></Suspense>}
         />
         <Route
           path="digest"

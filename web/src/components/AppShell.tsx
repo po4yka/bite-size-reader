@@ -27,6 +27,7 @@ import {
   Logout,
   Renew,
   ConnectionSignal,
+  DataBackup,
   DocumentImport,
   Lightning,
 } from "@carbon/icons-react";
@@ -44,6 +45,7 @@ const NAV_ITEMS = [
   { path: "/webhooks", label: "Webhooks", icon: ConnectionSignal },
   { path: "/rules", label: "Rules", icon: Lightning },
   { path: "/import-export", label: "Import/Export", icon: DocumentImport },
+  { path: "/backups", label: "Backups", icon: DataBackup },
   { path: "/preferences", label: "Preferences", icon: User },
 ] as const;
 

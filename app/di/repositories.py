@@ -5,6 +5,9 @@ from typing import TYPE_CHECKING
 from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
     SqliteAuditLogRepositoryAdapter,
 )
+from app.infrastructure.persistence.sqlite.repositories.backup_repository import (
+    SqliteBackupRepositoryAdapter,
+)
 from app.infrastructure.persistence.sqlite.repositories.batch_session_repository import (
     SqliteBatchSessionRepositoryAdapter,
 )
@@ -48,6 +51,7 @@ from app.infrastructure.persistence.sqlite.repositories.video_download_repositor
 if TYPE_CHECKING:
     from app.application.ports import (
         AuditLogRepositoryPort,
+        BackupRepositoryPort,
         BatchSessionRepositoryPort,
         CrawlResultRepositoryPort,
         EmbeddingRepositoryPort,
@@ -119,3 +123,7 @@ def build_import_job_repository(db: DatabaseSessionManager) -> ImportJobReposito
 
 def build_rule_repository(db: DatabaseSessionManager) -> RuleRepositoryPort:
     return SqliteRuleRepositoryAdapter(db)
+
+
+def build_backup_repository(db: DatabaseSessionManager) -> BackupRepositoryPort:
+    return SqliteBackupRepositoryAdapter(db)
