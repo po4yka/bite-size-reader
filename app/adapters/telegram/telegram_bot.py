@@ -28,10 +28,10 @@ except ImportError:
     _PYRO_FILTERS = None
 
 if TYPE_CHECKING:
-    from app.application.services.scheduler import SchedulerService
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
+    from app.infrastructure.scheduler.service import SchedulerService
 
 logger = get_logger(__name__)
 
@@ -125,7 +125,7 @@ class TelegramBot:
 
         # Start background scheduler for periodic tasks (e.g., Karakeep sync)
         # Lazy import to avoid apscheduler dependency in tests
-        from app.application.services.scheduler import SchedulerService
+        from app.infrastructure.scheduler.service import SchedulerService
 
         self._scheduler = SchedulerService(cfg=self.cfg, db=self.db)
         self._scheduler.start()

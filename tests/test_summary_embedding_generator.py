@@ -11,38 +11,26 @@ from app.application.services.summary_embedding_generator import SummaryEmbeddin
 def generator_fixture():
     embedding_service = MagicMock()
     embedding_service.get_model_name.return_value = "test-model"
-    embedding_service.get_dimensions.return_value = 3
     embedding_service.generate_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
     embedding_service.serialize_embedding.return_value = b"serialized"
 
-    with (
-        patch(
-            "app.services.summary_embedding_generator.SqliteEmbeddingRepositoryAdapter"
-        ) as embedding_repo_cls,
-        patch(
-            "app.services.summary_embedding_generator.SqliteRequestRepositoryAdapter"
-        ) as request_repo_cls,
-        patch(
-            "app.services.summary_embedding_generator.SqliteSummaryRepositoryAdapter"
-        ) as summary_repo_cls,
-    ):
-        embedding_repo = MagicMock()
-        embedding_repo.async_get_summary_embedding = AsyncMock(return_value=None)
-        embedding_repo.async_create_or_update_summary_embedding = AsyncMock()
-        request_repo = MagicMock()
-        request_repo.async_get_request_by_id = AsyncMock(return_value=None)
-        summary_repo = MagicMock()
-        summary_repo.async_get_summary_by_request = AsyncMock(return_value=None)
-        embedding_repo_cls.return_value = embedding_repo
-        request_repo_cls.return_value = request_repo
-        summary_repo_cls.return_value = summary_repo
+    embedding_repo = MagicMock()
+    embedding_repo.async_get_summary_embedding = AsyncMock(return_value=None)
+    embedding_repo.async_create_or_update_summary_embedding = AsyncMock()
 
-        generator = SummaryEmbeddingGenerator(
-            db=MagicMock(),
-            embedding_service=embedding_service,
-            model_version="2.0",
-        )
+    request_repo = MagicMock()
+    request_repo.async_get_request_by_id = AsyncMock(return_value=None)
 
+    summary_repo = MagicMock()
+    summary_repo.async_get_summary_by_request = AsyncMock(return_value=None)
+
+    generator = SummaryEmbeddingGenerator(
+        embedding_repository=embedding_repo,
+        request_repository=request_repo,
+        summary_repository=summary_repo,
+        embedding_service=embedding_service,
+        model_version="2.0",
+    )
     return generator, embedding_service, embedding_repo, request_repo, summary_repo
 
 
@@ -67,12 +55,12 @@ async def test_generate_embedding_for_summary_skips_existing_matching_model(
 
 
 @pytest.mark.asyncio
-async def test_generate_embedding_for_summary_regenerates_when_dimensions_change(
+async def test_generate_embedding_for_summary_regenerates_when_model_changes(
     generator_fixture,
 ) -> None:
     generator, embedding_service, embedding_repo, _, _ = generator_fixture
     embedding_repo.async_get_summary_embedding.return_value = {
-        "model_name": "test-model",
+        "model_name": "other-model",
         "dimensions": 768,
     }
 
@@ -93,7 +81,8 @@ async def test_generate_embedding_for_summary_returns_false_for_empty_prepared_t
     generator, embedding_service, _, _, _ = generator_fixture
 
     with patch(
-        "app.services.summary_embedding_generator.prepare_text_for_embedding", return_value=""
+        "app.application.services.summary_embedding_generator.prepare_text_for_embedding",
+        return_value="",
     ):
         created = await generator.generate_embedding_for_summary(10, {"summary_250": "ignored"})
 

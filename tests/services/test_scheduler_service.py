@@ -19,8 +19,6 @@ def _build_cfg(
             api_key="kk-key",
             auto_sync_enabled=True,
             sync_interval_hours=6,
-            api_url="https://karakeep.example",
-            sync_tag="bsr",
         ),
         digest=SimpleNamespace(
             enabled=digest_enabled,
@@ -32,11 +30,6 @@ def _build_cfg(
             api_id=1,
             api_hash="hash",
             bot_token="123:token",
-        ),
-        openrouter=SimpleNamespace(
-            api_key="or-key",
-            model="openrouter/model",
-            fallback_models=["backup/model"],
         ),
     )
 
@@ -99,17 +92,33 @@ def _load_scheduler_module(monkeypatch):
     trigger_interval.IntervalTrigger = FakeIntervalTrigger
     monkeypatch.setitem(sys.modules, "apscheduler.triggers.interval", trigger_interval)
 
-    sys.modules.pop("app.services.scheduler", None)
-    module = importlib.import_module("app.services.scheduler")
-    return module, FakeAsyncIOScheduler, FakeCronTrigger, FakeIntervalTrigger
+    sys.modules.pop("app.infrastructure.scheduler.service", None)
+    module = importlib.import_module("app.infrastructure.scheduler.service")
+    return module, FakeCronTrigger, FakeIntervalTrigger
 
 
-@pytest.mark.asyncio
-async def test_start_stop_and_next_run_time(monkeypatch) -> None:
-    scheduler_module, _, FakeCronTrigger, FakeIntervalTrigger = _load_scheduler_module(monkeypatch)
-    service = scheduler_module.SchedulerService(_build_cfg(), db=MagicMock())
+def _minimal_deps(**overrides):
+    base = {
+        "karakeep_service_factory": MagicMock(),
+        "karakeep_user_id_resolver": MagicMock(return_value=123),
+        "digest_userbot_factory": MagicMock(),
+        "digest_llm_factory": MagicMock(),
+        "digest_bot_client_factory": MagicMock(),
+        "digest_service_factory": MagicMock(),
+    }
+    base.update(overrides)
+    return SimpleNamespace(**base)
 
-    await service.start()
+
+def test_start_stop_and_next_run_time(monkeypatch) -> None:
+    scheduler_module, FakeCronTrigger, FakeIntervalTrigger = _load_scheduler_module(monkeypatch)
+    service = scheduler_module.SchedulerService(
+        _build_cfg(),
+        db=MagicMock(),
+        deps=_minimal_deps(),
+    )
+
+    service.start()
 
     assert service.is_running is True
     assert isinstance(service._scheduler.jobs["karakeep_sync"]["trigger"], FakeIntervalTrigger)
@@ -119,18 +128,14 @@ async def test_start_stop_and_next_run_time(monkeypatch) -> None:
     assert service.get_next_run_time("karakeep_sync") == datetime(2026, 1, 1, 9, 0, 0)
     assert service.get_next_run_time("missing") is None
 
-    await service.stop()
+    service.stop()
 
     assert service.is_running is False
 
 
 @pytest.mark.asyncio
 async def test_run_karakeep_sync_uses_first_allowed_user(monkeypatch) -> None:
-    scheduler_module, _, _, _ = _load_scheduler_module(monkeypatch)
-    service = scheduler_module.SchedulerService(
-        _build_cfg(allowed_user_ids=(42, 99)), db=MagicMock()
-    )
-
+    scheduler_module, _, _ = _load_scheduler_module(monkeypatch)
     sync_service = MagicMock()
     sync_service.run_full_sync = AsyncMock(
         return_value=SimpleNamespace(
@@ -143,12 +148,13 @@ async def test_run_karakeep_sync_uses_first_allowed_user(monkeypatch) -> None:
             total_duration_seconds=12.5,
         )
     )
-    monkeypatch.setattr(
-        "app.adapters.karakeep.KarakeepSyncService", MagicMock(return_value=sync_service)
-    )
-    monkeypatch.setattr(
-        "app.infrastructure.persistence.sqlite.repositories.karakeep_sync_repository.SqliteKarakeepSyncRepositoryAdapter",
-        MagicMock(return_value=MagicMock()),
+    service = scheduler_module.SchedulerService(
+        _build_cfg(allowed_user_ids=(42, 99)),
+        db=MagicMock(),
+        deps=_minimal_deps(
+            karakeep_service_factory=MagicMock(return_value=sync_service),
+            karakeep_user_id_resolver=MagicMock(return_value=42),
+        ),
     )
 
     await service._run_karakeep_sync()
@@ -158,16 +164,16 @@ async def test_run_karakeep_sync_uses_first_allowed_user(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_run_karakeep_sync_returns_early_without_allowed_user(monkeypatch) -> None:
-    scheduler_module, _, _, _ = _load_scheduler_module(monkeypatch)
-    service = scheduler_module.SchedulerService(_build_cfg(allowed_user_ids=()), db=MagicMock())
+    scheduler_module, _, _ = _load_scheduler_module(monkeypatch)
     sync_service = MagicMock()
     sync_service.run_full_sync = AsyncMock()
-    monkeypatch.setattr(
-        "app.adapters.karakeep.KarakeepSyncService", MagicMock(return_value=sync_service)
-    )
-    monkeypatch.setattr(
-        "app.infrastructure.persistence.sqlite.repositories.karakeep_sync_repository.SqliteKarakeepSyncRepositoryAdapter",
-        MagicMock(return_value=MagicMock()),
+    service = scheduler_module.SchedulerService(
+        _build_cfg(allowed_user_ids=()),
+        db=MagicMock(),
+        deps=_minimal_deps(
+            karakeep_service_factory=MagicMock(return_value=sync_service),
+            karakeep_user_id_resolver=MagicMock(return_value=None),
+        ),
     )
 
     await service._run_karakeep_sync()
@@ -177,27 +183,19 @@ async def test_run_karakeep_sync_returns_early_without_allowed_user(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_run_channel_digest_starts_and_stops_dependencies(monkeypatch) -> None:
-    scheduler_module, _, _, _ = _load_scheduler_module(monkeypatch)
-    service = scheduler_module.SchedulerService(_build_cfg(), db=MagicMock())
+    scheduler_module, _, _ = _load_scheduler_module(monkeypatch)
 
-    class FakeUserbotClient:
-        def __init__(self, cfg, session_dir) -> None:
-            self.cfg = cfg
-            self.session_dir = session_dir
+    class FakeUserbot:
+        def __init__(self) -> None:
             self.start = AsyncMock()
             self.stop = AsyncMock()
-            userbot_instances.append(self)
 
-    userbot_instances: list[FakeUserbotClient] = []
-
-    class FakeOpenRouterClient:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
+    class FakeLLMClient:
+        def __init__(self) -> None:
             self.aclose = AsyncMock()
 
-    class FakePyroClient:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
+    class FakeBotClient:
+        def __init__(self) -> None:
             self.send_message = AsyncMock()
 
         async def __aenter__(self):
@@ -207,30 +205,31 @@ async def test_run_channel_digest_starts_and_stops_dependencies(monkeypatch) -> 
             return None
 
     class FakeDigestService:
-        def __init__(self, **kwargs) -> None:
-            self.kwargs = kwargs
-            self.generate_digest = AsyncMock(
-                side_effect=[
-                    SimpleNamespace(post_count=3, channel_count=1, messages_sent=1, errors=[]),
-                    RuntimeError("user failure"),
-                ]
-            )
-
         def get_users_with_subscriptions(self):
             return [1001, 1002]
 
-    monkeypatch.setattr("app.adapters.digest.userbot_client.UserbotClient", FakeUserbotClient)
-    monkeypatch.setattr(
-        "app.adapters.openrouter.openrouter_client.OpenRouterClient", FakeOpenRouterClient
+        async def generate_digest(self, **kwargs):
+            if kwargs["user_id"] == 1002:
+                raise RuntimeError("user failure")
+            return SimpleNamespace(post_count=3, errors=["minor"])
+
+    userbot = FakeUserbot()
+    llm_client = FakeLLMClient()
+    bot_client = FakeBotClient()
+    digest_service = FakeDigestService()
+    service = scheduler_module.SchedulerService(
+        _build_cfg(),
+        db=MagicMock(),
+        deps=_minimal_deps(
+            digest_userbot_factory=MagicMock(return_value=userbot),
+            digest_llm_factory=MagicMock(return_value=llm_client),
+            digest_bot_client_factory=MagicMock(return_value=bot_client),
+            digest_service_factory=MagicMock(return_value=digest_service),
+        ),
     )
-    monkeypatch.setattr("app.adapters.digest.channel_reader.ChannelReader", MagicMock())
-    monkeypatch.setattr("app.adapters.digest.analyzer.DigestAnalyzer", MagicMock())
-    monkeypatch.setattr("app.adapters.digest.formatter.DigestFormatter", MagicMock())
-    monkeypatch.setattr("app.adapters.digest.digest_service.DigestService", FakeDigestService)
-    monkeypatch.setitem(sys.modules, "pyrogram", types.SimpleNamespace(Client=FakePyroClient))
 
     await service._run_channel_digest()
 
-    assert len(userbot_instances) == 1
-    userbot_instances[0].start.assert_awaited_once()
-    userbot_instances[0].stop.assert_awaited_once()
+    userbot.start.assert_awaited_once()
+    userbot.stop.assert_awaited_once()
+    llm_client.aclose.assert_awaited_once()

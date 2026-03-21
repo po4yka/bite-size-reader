@@ -126,6 +126,31 @@ class SqliteLLMRepositoryAdapter(SqliteBaseRepository):
             read_only=True,
         )
 
+    async def async_get_latest_error_by_request(self, request_id: int) -> dict[str, Any] | None:
+        """Return the newest error-like LLM call for the request."""
+
+        def _get() -> dict[str, Any] | None:
+            row = (
+                LLMCall.select()
+                .where(
+                    (LLMCall.request == request_id)
+                    & (
+                        (LLMCall.status == "error")
+                        | LLMCall.error_text.is_null(False)
+                        | LLMCall.error_context_json.is_null(False)
+                    )
+                )
+                .order_by(LLMCall.updated_at.desc(), LLMCall.id.desc())
+                .first()
+            )
+            return model_to_dict(row)
+
+        return await self._execute(
+            _get,
+            operation_name="get_latest_llm_error_by_request",
+            read_only=True,
+        )
+
     async def async_get_max_server_version(self, user_id: int) -> int | None:
         """Return the maximum server_version across LLM calls owned by *user_id*."""
         from peewee import JOIN

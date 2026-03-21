@@ -27,10 +27,6 @@ from app.api.models.digest import (
     ResolveChannelResponse,
     TriggerDigestResponse,
 )
-from app.application.services.digest_subscription_ops import (
-    subscribe_channel_atomic,
-    unsubscribe_channel_atomic,
-)
 from app.config.digest import ChannelDigestConfig  # noqa: TC001 - used at runtime
 from app.core.channel_utils import parse_channel_input
 from app.core.logging_utils import get_logger
@@ -43,6 +39,10 @@ from app.db.models import (
     DigestDelivery,
     UserDigestPreference,
     _utcnow,
+)
+from app.infrastructure.persistence.sqlite.digest_subscription_ops import (
+    subscribe_channel_atomic,
+    unsubscribe_channel_atomic,
 )
 
 logger = get_logger(__name__)

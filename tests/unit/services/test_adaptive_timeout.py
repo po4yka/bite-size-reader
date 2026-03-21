@@ -233,12 +233,12 @@ class TestAdaptiveTimeoutService:
 
     @pytest.fixture
     def service(self, config: AdaptiveTimeoutConfig, mock_db: MagicMock) -> AdaptiveTimeoutService:
-        return AdaptiveTimeoutService(config=config, session_manager=mock_db)
+        return AdaptiveTimeoutService(config=config, repository=mock_db)
 
     @pytest.mark.asyncio
     async def test_disabled_returns_default(self, mock_db: MagicMock) -> None:
         config = AdaptiveTimeoutConfig(enabled=False, default_timeout_sec=300.0)
-        service = AdaptiveTimeoutService(config=config, session_manager=mock_db)
+        service = AdaptiveTimeoutService(config=config, repository=mock_db)
 
         estimate = await service.get_timeout(url="https://example.com")
         assert estimate.timeout_sec == 300.0

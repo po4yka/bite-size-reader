@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.infrastructure.embedding.embedding_service import prepare_text_for_embedding
+from app.core.embedding_text import prepare_text_for_embedding
 
 
 @dataclass(frozen=True)

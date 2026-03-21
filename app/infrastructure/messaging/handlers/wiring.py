@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.application.use_cases.rule_execution import RuleExecutionUseCase
 from app.core.logging_utils import get_logger
 from app.domain.events.request_events import RequestCompleted, RequestFailed
 from app.domain.events.summary_events import SummaryCreated, SummaryMarkedAsRead
@@ -18,8 +19,22 @@ from app.infrastructure.messaging.handlers.notification import NotificationEvent
 from app.infrastructure.messaging.handlers.push_notification import PushNotificationEventHandler
 from app.infrastructure.messaging.handlers.rule_engine_handler import RuleEngineHandler
 from app.infrastructure.messaging.handlers.search_index import SearchIndexEventHandler
+from app.infrastructure.messaging.handlers.smart_collection_handler import SmartCollectionHandler
 from app.infrastructure.messaging.handlers.webhook import WebhookEventHandler
 from app.infrastructure.messaging.handlers.webhook_dispatcher import WebhookDispatcher
+from app.infrastructure.persistence.sqlite.repositories.rule_repository import (
+    SqliteRuleRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.tag_repository import (
+    SqliteTagRepositoryAdapter,
+)
+from app.infrastructure.rules.collection_membership import SqliteCollectionMembershipAdapter
+from app.infrastructure.rules.context import SqliteRuleContextAdapter
+from app.infrastructure.rules.http_webhook_dispatcher import HttpWebhookDispatchAdapter
+from app.infrastructure.rules.in_memory_rate_limiter import InMemoryRuleRateLimiter
 
 logger = get_logger(__name__)
 
@@ -85,13 +100,26 @@ def wire_event_handlers(
     event_bus.subscribe(RequestFailed, notification_handler.on_request_failed)
     event_bus.subscribe(RequestFailed, webhook_handler.on_request_failed)
 
-    # Rule engine handler (stateless -- always wired)
-    rule_handler = RuleEngineHandler()
+    rule_handler = RuleEngineHandler(
+        RuleExecutionUseCase(
+            rule_repository=SqliteRuleRepositoryAdapter(database),
+            tag_repository=SqliteTagRepositoryAdapter(database),
+            summary_repository=summary_repository or SqliteSummaryRepositoryAdapter(database),
+            collection_membership=SqliteCollectionMembershipAdapter(database),
+            rule_context=SqliteRuleContextAdapter(database),
+            webhook_dispatcher=HttpWebhookDispatchAdapter(),
+            rate_limiter=InMemoryRuleRateLimiter(),
+        )
+    )
     event_bus.subscribe(SummaryCreated, rule_handler.on_summary_created)
     event_bus.subscribe(RequestCompleted, rule_handler.on_request_completed)
     event_bus.subscribe(RequestFailed, rule_handler.on_request_failed)
     event_bus.subscribe(TagAttached, rule_handler.on_tag_attached)
     event_bus.subscribe(TagDetached, rule_handler.on_tag_detached)
+
+    # Smart collection auto-population on new summaries
+    smart_collection_handler = SmartCollectionHandler()
+    event_bus.subscribe(SummaryCreated, smart_collection_handler.on_summary_created)
 
     # Per-user webhook dispatcher (additive alongside system-wide WebhookEventHandler)
     webhook_dispatcher: WebhookDispatcher | None = None
@@ -117,6 +145,7 @@ def wire_event_handlers(
                 "embeddings": embedding_generator is not None,
                 "push_notifications": push_handler is not None,
                 "rule_engine": True,
+                "smart_collections": True,
                 "webhook_dispatcher": webhook_dispatcher is not None,
             },
         },

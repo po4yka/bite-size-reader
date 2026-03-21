@@ -4,23 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any
 
-from app.core.logging_utils import get_logger
-from app.infrastructure.embedding.embedding_service import prepare_text_for_embedding
+from app.core.embedding_text import prepare_text_for_embedding
 
 if TYPE_CHECKING:
-    from typing import Any
-
-    from app.infrastructure.search.vector_search_service import VectorSearchResult
-
-logger = get_logger(__name__)
-
-
-class VectorSearchPort(Protocol):
-    async def search(
-        self, query: str, *, correlation_id: str | None = None
-    ) -> list[VectorSearchResult]: ...
+    from app.application.ports import VectorSearchPort
 
 
 @dataclass(frozen=True)
@@ -46,10 +35,9 @@ def _format_age(dt: datetime | str | None) -> str:
         if parsed is None:
             return ""
         dt = parsed
-    now = datetime.now(tz=UTC)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
-    delta = now - dt
+    delta = datetime.now(tz=UTC) - dt
     days = max(delta.days, 0)
     if days < 1:
         return "today"
@@ -61,8 +49,7 @@ def _format_age(dt: datetime | str | None) -> str:
     months = days // 30
     if months < 12:
         return f"{months}mo"
-    years = days // 365
-    return f"{years}y"
+    return f"{days // 365}y"
 
 
 class RelatedReadsService:
@@ -85,13 +72,9 @@ class RelatedReadsService:
         exclude_request_id: int | None = None,
         language: str | None = None,
     ) -> list[RelatedReadItem]:
+        del language
         metadata = summary_payload.get("metadata", {}) if isinstance(summary_payload, dict) else {}
-        title = (
-            metadata.get("title") or summary_payload.get("title")
-            if isinstance(summary_payload, dict)
-            else None
-        )
-
+        title = metadata.get("title") or summary_payload.get("title")
         search_text = prepare_text_for_embedding(
             title=title,
             summary_1000=summary_payload.get("summary_1000"),

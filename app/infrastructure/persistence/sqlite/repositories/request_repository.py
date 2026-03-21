@@ -332,6 +332,22 @@ class SqliteRequestRepositoryAdapter(SqliteBaseRepository):
 
         return await self._execute(_get, operation_name="get_request_error_context", read_only=True)
 
+    async def async_count_pending_requests_before(self, created_at: datetime) -> int:
+        """Count pending requests created before *created_at*."""
+
+        def _count() -> int:
+            return (
+                Request.select()
+                .where((Request.status == "pending") & (Request.created_at < created_at))
+                .count()
+            )
+
+        return await self._execute(
+            _count,
+            operation_name="count_pending_requests_before",
+            read_only=True,
+        )
+
     async def async_create_minimal_request(
         self,
         *,

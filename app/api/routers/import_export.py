@@ -13,8 +13,9 @@ from app.api.exceptions import APIException, ErrorCode, ResourceNotFoundError
 from app.api.models.responses import ImportJobResponse, success_response
 from app.api.routers.auth import get_current_user
 from app.api.search_helpers import isotime
+from app.application.dto.import_bookmarks import ImportBookmarksCommand
+from app.application.use_cases.import_pipeline import ImportBookmarksUseCase
 from app.core.logging_utils import get_logger
-from app.domain.models.request import RequestStatus
 from app.domain.services.import_export import (
     CsvExporter,
     FormatDetector,
@@ -25,6 +26,7 @@ from app.domain.services.import_parsers import PARSER_REGISTRY
 
 logger = get_logger(__name__)
 router = APIRouter()
+_background_import_tasks: set[asyncio.Task[None]] = set()
 
 _EXPORT_FORMAT_MAP: dict[str, tuple[type, str, str]] = {
     "json": (JsonExporter, "application/json", "bookmarks.json"),
@@ -81,86 +83,27 @@ async def _process_import(
     user_id: int,
 ) -> None:
     """Background task: process parsed bookmarks and update job progress."""
+    from app.di.api import get_current_api_runtime
+    from app.infrastructure.persistence.sqlite.repositories.bookmark_import_repository import (
+        SqliteBookmarkImportAdapter,
+    )
+
+    runtime = get_current_api_runtime()
+    use_case = ImportBookmarksUseCase(
+        import_job_repository=repo,
+        bookmark_import_repository=SqliteBookmarkImportAdapter(runtime.db),
+    )
     try:
-        await repo.async_set_status(job_id, "processing")
-
-        processed = 0
-        created = 0
-        skipped = 0
-        failed = 0
-        errors: list[str] = []
-        skip_duplicates = options.get("skip_duplicates", True)
-
-        from app.di.api import get_current_api_runtime
-
-        runtime = get_current_api_runtime()
-        from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-            SqliteRequestRepositoryAdapter,
+        await use_case.execute(
+            ImportBookmarksCommand(
+                job_id=job_id,
+                bookmarks=bookmarks,
+                user_id=user_id,
+                options=options,
+            )
         )
-
-        request_repo = SqliteRequestRepositoryAdapter(runtime.db)
-
-        for bookmark in bookmarks:
-            try:
-                # Check for duplicates by URL
-                if skip_duplicates and bookmark.url:
-                    from app.core.url_utils import normalize_url
-
-                    normalized = normalize_url(bookmark.url)
-                    existing = await request_repo.async_get_request_id_by_url_with_summary(
-                        user_id, normalized or bookmark.url
-                    )
-                    if existing is not None:
-                        skipped += 1
-                        processed += 1
-                        continue
-
-                # Create a request for each bookmark
-                from hashlib import sha256
-
-                from app.core.url_utils import normalize_url
-
-                normalized_url = normalize_url(bookmark.url)
-                dedupe_hash = sha256((normalized_url or bookmark.url).encode()).hexdigest()
-
-                await request_repo.async_create_request(
-                    type_="url",
-                    status=RequestStatus.PENDING
-                    if options.get("summarize")
-                    else RequestStatus.COMPLETED,
-                    user_id=user_id,
-                    input_url=bookmark.url,
-                    normalized_url=normalized_url,
-                    dedupe_hash=dedupe_hash,
-                )
-                created += 1
-            except Exception as exc:
-                failed += 1
-                errors.append(f"{bookmark.url}: {exc}")
-            finally:
-                processed += 1
-
-            # Update progress periodically
-            if processed % 50 == 0:
-                await repo.async_update_progress(
-                    job_id, processed, created, skipped, failed, errors
-                )
-
-        # Final progress update
-        await repo.async_update_progress(job_id, processed, created, skipped, failed, errors)
-        await repo.async_set_status(job_id, "completed")
-
     except Exception as exc:
         logger.error("import_processing_failed", extra={"job_id": job_id, "error": str(exc)})
-        await repo.async_set_status(job_id, "failed")
-        await repo.async_update_progress(
-            job_id,
-            processed=0,
-            created=0,
-            skipped=0,
-            failed=0,
-            errors=[str(exc)],
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -227,10 +170,9 @@ async def import_bookmarks(
     )
 
     # Kick off background processing -- store reference to prevent GC
-    _bg_tasks: set[asyncio.Task[None]] = set()
     task = asyncio.create_task(_process_import(repo, job["id"], bookmarks, opts, user["user_id"]))
-    _bg_tasks.add(task)
-    task.add_done_callback(_bg_tasks.discard)
+    _background_import_tasks.add(task)
+    task.add_done_callback(_background_import_tasks.discard)
 
     return success_response(_job_to_response(job).model_dump(by_alias=True))
 

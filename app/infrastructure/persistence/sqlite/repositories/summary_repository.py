@@ -517,6 +517,14 @@ class SqliteSummaryRepositoryAdapter(SqliteBaseRepository):
 
         return await self._execute(_toggle, operation_name="toggle_favorite")
 
+    async def async_set_favorite(self, summary_id: int, value: bool) -> None:
+        """Persist an explicit favorite status for a summary."""
+
+        def _set() -> None:
+            Summary.update({Summary.is_favorited: value}).where(Summary.id == summary_id).execute()
+
+        await self._execute(_set, operation_name="set_favorite")
+
     async def async_upsert_feedback(
         self,
         user_id: int,

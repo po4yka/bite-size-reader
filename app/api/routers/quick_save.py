@@ -81,12 +81,12 @@ async def quick_save(
     if duplicate_info:
         return success_response(
             {
-                "request_id": duplicate_info.get("existing_request_id"),
+                "request_id": duplicate_info.existing_request_id,
                 "status": "duplicate",
                 "title": body.title,
                 "url": normalized_url,
                 "duplicate": True,
-                "summary_id": duplicate_info.get("existing_summary_id"),
+                "summary_id": duplicate_info.existing_summary_id,
             }
         )
 
@@ -99,12 +99,12 @@ async def quick_save(
         dup = await request_service.check_duplicate_url(user["user_id"], input_url)
         return success_response(
             {
-                "request_id": dup.get("existing_request_id") if dup else None,
+                "request_id": dup.existing_request_id if dup else None,
                 "status": "duplicate",
                 "title": body.title,
                 "url": normalized_url,
                 "duplicate": True,
-                "summary_id": dup.get("existing_summary_id") if dup else None,
+                "summary_id": dup.existing_summary_id if dup else None,
             }
         )
 

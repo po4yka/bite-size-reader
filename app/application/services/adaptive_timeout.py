@@ -9,17 +9,13 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_domain
 
 if TYPE_CHECKING:
     from app.config.adaptive_timeout import AdaptiveTimeoutConfig
-    from app.db.session import DatabaseSessionManager
-    from app.infrastructure.persistence.sqlite.repositories.latency_stats_repository import (
-        LatencyStats,
-    )
 
 logger = get_logger(__name__)
 
@@ -44,7 +40,7 @@ class TimeoutEstimate:
 class CacheEntry:
     """Cached latency statistics with TTL tracking."""
 
-    stats: LatencyStats
+    stats: Any
     timestamp: float
     key: str
 
@@ -64,7 +60,7 @@ class TimeoutCache:
         """Check if a cache entry has expired."""
         return time.time() - entry.timestamp > self.ttl_sec
 
-    async def get_domain(self, domain: str) -> LatencyStats | None:
+    async def get_domain(self, domain: str) -> Any | None:
         """Get cached domain stats if not expired."""
         async with self._lock:
             entry = self.domain_stats.get(domain)
@@ -72,12 +68,12 @@ class TimeoutCache:
                 return entry.stats
             return None
 
-    async def set_domain(self, domain: str, stats: LatencyStats) -> None:
+    async def set_domain(self, domain: str, stats: Any) -> None:
         """Cache domain stats."""
         async with self._lock:
             self.domain_stats[domain] = CacheEntry(stats=stats, timestamp=time.time(), key=domain)
 
-    async def get_model(self, model: str) -> LatencyStats | None:
+    async def get_model(self, model: str) -> Any | None:
         """Get cached model stats if not expired."""
         async with self._lock:
             entry = self.model_stats.get(model)
@@ -85,24 +81,24 @@ class TimeoutCache:
                 return entry.stats
             return None
 
-    async def set_model(self, model: str, stats: LatencyStats) -> None:
+    async def set_model(self, model: str, stats: Any) -> None:
         """Cache model stats."""
         async with self._lock:
             self.model_stats[model] = CacheEntry(stats=stats, timestamp=time.time(), key=model)
 
-    async def get_global(self) -> LatencyStats | None:
+    async def get_global(self) -> Any | None:
         """Get cached global stats if not expired."""
         async with self._lock:
             if self.global_stats and not self._is_expired(self.global_stats):
                 return self.global_stats.stats
             return None
 
-    async def set_global(self, stats: LatencyStats) -> None:
+    async def set_global(self, stats: Any) -> None:
         """Cache global stats."""
         async with self._lock:
             self.global_stats = CacheEntry(stats=stats, timestamp=time.time(), key="global")
 
-    async def get_combined(self, domain: str) -> LatencyStats | None:
+    async def get_combined(self, domain: str) -> Any | None:
         """Get cached combined (crawl + LLM) stats for a domain."""
         async with self._lock:
             entry = self.combined_stats.get(domain)
@@ -110,7 +106,7 @@ class TimeoutCache:
                 return entry.stats
             return None
 
-    async def set_combined(self, domain: str, stats: LatencyStats) -> None:
+    async def set_combined(self, domain: str, stats: Any) -> None:
         """Cache combined stats for a domain."""
         async with self._lock:
             self.combined_stats[domain] = CacheEntry(stats=stats, timestamp=time.time(), key=domain)
@@ -147,19 +143,12 @@ class AdaptiveTimeoutService:
     def __init__(
         self,
         config: AdaptiveTimeoutConfig,
-        session_manager: DatabaseSessionManager,
+        repository: Any,
     ) -> None:
         self._config = config
-        self._session = session_manager
         self._cache = TimeoutCache(ttl_sec=config.cache_ttl_sec)
         self._initialized = False
-
-        # Lazy import to avoid circular dependency
-        from app.infrastructure.persistence.sqlite.repositories.latency_stats_repository import (
-            SqliteLatencyStatsRepositoryAdapter,
-        )
-
-        self._repo = SqliteLatencyStatsRepositoryAdapter(session_manager)
+        self._repo = repository
 
     @property
     def enabled(self) -> bool:
@@ -187,7 +176,7 @@ class AdaptiveTimeoutService:
         # Below threshold: 0 to 0.9 scaled by ratio
         return 0.9 * ratio
 
-    def _stats_to_timeout(self, stats: LatencyStats, source: str) -> TimeoutEstimate | None:
+    def _stats_to_timeout(self, stats: Any, source: str) -> TimeoutEstimate | None:
         """Convert latency stats to a timeout estimate.
 
         Applies safety margin and clamps to configured bounds.

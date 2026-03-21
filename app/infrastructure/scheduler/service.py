@@ -45,7 +45,6 @@ class SchedulerService:
 
         self._scheduler = AsyncIOScheduler()
 
-        # Add Karakeep sync job if enabled
         if (
             self.cfg.karakeep.enabled
             and self.cfg.karakeep.api_key
@@ -57,7 +56,7 @@ class SchedulerService:
                 id="karakeep_sync",
                 name="Karakeep Bookmark Sync",
                 replace_existing=True,
-                max_instances=1,  # Prevent overlapping runs
+                max_instances=1,
             )
             logger.info(
                 "scheduler_karakeep_job_added",
@@ -76,7 +75,6 @@ class SchedulerService:
                 },
             )
 
-        # Add channel digest jobs if enabled (one per configured time)
         if self.cfg.digest.enabled:
             for idx, time_str in enumerate(self.cfg.digest.digest_times):
                 hour, minute = map(int, time_str.split(":"))
@@ -147,10 +145,10 @@ class SchedulerService:
                 },
             )
 
-        except Exception as e:
+        except Exception as exc:
             logger.exception(
                 "scheduled_karakeep_sync_failed",
-                extra={"cid": correlation_id, "error": str(e)},
+                extra={"cid": correlation_id, "error": str(exc)},
             )
 
     async def _run_channel_digest(self) -> None:
@@ -170,11 +168,7 @@ class SchedulerService:
             async with bot:
 
                 async def send_message(user_id: int, text: str, reply_markup: Any = None) -> None:
-                    await bot.send_message(
-                        chat_id=user_id,
-                        text=text,
-                        reply_markup=reply_markup,
-                    )
+                    await bot.send_message(chat_id=user_id, text=text, reply_markup=reply_markup)
 
                 service = self._deps.digest_service_factory(
                     userbot,
@@ -182,7 +176,6 @@ class SchedulerService:
                     send_message,
                 )
 
-                # Deliver to all users with subscriptions
                 user_ids = service.get_users_with_subscriptions()
                 logger.info(
                     "scheduled_digest_users",
@@ -206,16 +199,16 @@ class SchedulerService:
                                 "errors": len(result.errors),
                             },
                         )
-                    except Exception as e:
+                    except Exception as exc:
                         logger.exception(
                             "scheduled_digest_user_failed",
-                            extra={"cid": correlation_id, "uid": uid, "error": str(e)},
+                            extra={"cid": correlation_id, "uid": uid, "error": str(exc)},
                         )
 
-        except Exception as e:
+        except Exception as exc:
             logger.exception(
                 "scheduled_digest_failed",
-                extra={"cid": correlation_id, "error": str(e)},
+                extra={"cid": correlation_id, "error": str(exc)},
             )
         finally:
             if llm_client is not None:
@@ -224,14 +217,7 @@ class SchedulerService:
                 await userbot.stop()
 
     def get_next_run_time(self, job_id: str) -> datetime | None:
-        """Get next scheduled run time for a job.
-
-        Args:
-            job_id: Job identifier (e.g., "karakeep_sync")
-
-        Returns:
-            Next run time or None if job doesn't exist or scheduler not started
-        """
+        """Get next scheduled run time for a job."""
         if not self._scheduler or not self._started:
             return None
         job = self._scheduler.get_job(job_id)

@@ -164,31 +164,28 @@ class TestAuthorizationChecks:
     @pytest.mark.asyncio
     async def test_cannot_access_other_users_request(self, mock_user, other_user):
         """Test that users cannot access each other's requests via service layer."""
-        from app.api.exceptions import ResourceNotFoundError
-        from app.api.services.request_service import RequestService
+        from app.application.services.request_service import RequestService
+        from app.domain.exceptions.domain_exceptions import ResourceNotFoundError
 
-        # Mock the repository to return a request owned by a different user
-        with patch("app.api.services.request_service.SqliteRequestRepositoryAdapter") as MockRepo:
-            mock_repo_instance = MagicMock()
-            # Return request owned by mock_user, not other_user
-            mock_repo_instance.async_get_request_by_id = AsyncMock(
-                return_value={
-                    "id": 100,
-                    "user_id": mock_user["user_id"],  # Owned by mock_user
-                    "status": "ok",
-                }
+        request_repo = MagicMock()
+        request_repo.async_get_request_context = AsyncMock(return_value=None)
+        request_repo.async_get_request_by_id = AsyncMock(
+            return_value={"id": 100, "user_id": mock_user["user_id"], "status": "ok"}
+        )
+
+        service = RequestService(
+            db=None,
+            request_repository=request_repo,
+            summary_repository=MagicMock(),
+            crawl_result_repository=MagicMock(),
+            llm_repository=MagicMock(),
+        )
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_request_by_id(
+                user_id=other_user["user_id"],
+                request_id=100,
             )
-            MockRepo.return_value = mock_repo_instance
-
-            # Try to access as other_user - should raise ResourceNotFoundError
-            with pytest.raises(ResourceNotFoundError) as exc_info:
-                await RequestService.get_request_by_id(
-                    user_id=other_user["user_id"],  # Different user
-                    request_id=100,
-                )
-
-            assert exc_info.value.status_code == 404
-            assert "100" in str(exc_info.value.message)
 
 
 class TestJWTSecretValidation:
@@ -196,35 +193,25 @@ class TestJWTSecretValidation:
 
     def test_jwt_secret_required(self):
         """Test that JWT_SECRET_KEY must be configured."""
-        # This test should be run in isolation or with proper mocking
-        # as it affects module import
+        from app.api.routers.auth import tokens
 
-        with patch("app.api.routers.auth.tokens.Config.get") as mock_config:
-            mock_config.return_value = ""  # Empty secret
-
+        with patch("app.api.routers.auth.tokens.Config.get", return_value=""):
+            tokens._SECRET_KEY = None
             with pytest.raises(RuntimeError) as exc_info:
-                # Re-import to trigger validation
-                import importlib
+                tokens._get_secret_key()
 
-                import app.api.routers.auth.tokens
-
-                importlib.reload(app.api.routers.auth.tokens)
-
-            assert "JWT_SECRET_KEY" in str(exc_info.value)
+        assert "JWT_SECRET_KEY" in str(exc_info.value)
 
     def test_jwt_secret_minimum_length(self):
         """Test that JWT_SECRET_KEY must be at least 32 characters."""
-        with patch("app.api.routers.auth.tokens.Config.get") as mock_config:
-            mock_config.return_value = "short"  # Too short
+        from app.api.routers.auth import tokens
 
+        with patch("app.api.routers.auth.tokens.Config.get", return_value="short"):
+            tokens._SECRET_KEY = None
             with pytest.raises(RuntimeError) as exc_info:
-                import importlib
+                tokens._get_secret_key()
 
-                import app.api.routers.auth.tokens
-
-                importlib.reload(app.api.routers.auth.tokens)
-
-            assert "at least 32 characters" in str(exc_info.value)
+        assert "at least 32 characters" in str(exc_info.value)
 
 
 class TestSecurityHeaders:

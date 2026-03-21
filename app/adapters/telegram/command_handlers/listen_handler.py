@@ -9,9 +9,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
+from app.application.services.tts_service import TTSService
 from app.core.logging_utils import get_logger
 from app.db.models import Request, Summary
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.audio.elevenlabs_provider import ElevenLabsTTSProviderAdapter
+from app.infrastructure.audio.filesystem_storage import FileSystemAudioStorageAdapter
+from app.infrastructure.persistence.sqlite.repositories.audio_generation_repository import (
+    SqliteAudioGenerationRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
@@ -78,9 +87,15 @@ class ListenHandler(HandlerDependenciesMixin):
         # Generate audio
         await self._formatter.safe_reply(ctx.message, "Generating audio...")
 
-        from app.application.services.tts_service import TTSService
-
-        service = TTSService(self._cfg.tts)
+        service = TTSService(
+            summary_repository=SqliteSummaryRepositoryAdapter(self._db),
+            audio_generation_repository=SqliteAudioGenerationRepositoryAdapter(self._db),
+            tts_provider=ElevenLabsTTSProviderAdapter(self._cfg.tts),
+            audio_storage=FileSystemAudioStorageAdapter(self._cfg.tts.audio_storage_path),
+            voice_id=self._cfg.tts.voice_id,
+            model_name=self._cfg.tts.model,
+            max_chars_per_request=self._cfg.tts.max_chars_per_request,
+        )
         try:
             result = await service.generate_audio(summary.id)
         finally:

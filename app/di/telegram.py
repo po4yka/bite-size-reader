@@ -22,6 +22,10 @@ from app.di.repositories import (
 from app.di.search import build_search_dependencies, get_topic_search_limit
 from app.di.shared import build_async_audit_sink, build_core_dependencies, build_url_processor
 from app.di.types import SummaryCliRuntime, TelegramRuntime
+from app.infrastructure.persistence.sqlite.repositories.latency_stats_repository import (
+    SqliteLatencyStatsRepositoryAdapter,
+)
+from app.infrastructure.search.vector_search_port_adapter import VectorSearchPortAdapter
 from app.infrastructure.search.vector_search_service import VectorSearchService
 from app.security.file_validation import SecureFileValidator
 
@@ -246,7 +250,7 @@ def _create_adaptive_timeout_service(
     try:
         service = AdaptiveTimeoutService(
             config=cfg.adaptive_timeout,
-            session_manager=db,
+            repository=SqliteLatencyStatsRepositoryAdapter(db),
         )
         logger.info(
             "adaptive_timeout_service_initialized",
@@ -285,7 +289,7 @@ def _wire_related_reads(
             min_similarity=0.3,
         )
         related_reads_service = RelatedReadsService(
-            vector_search_service,
+            VectorSearchPortAdapter(vector_search_service),
             min_similarity=cfg.runtime.related_reads_min_similarity,
         )
         url_processor.post_summary_tasks._related_reads_service = related_reads_service

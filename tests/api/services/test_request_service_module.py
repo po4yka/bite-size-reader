@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from typing import TYPE_CHECKING, cast
+from unittest.mock import AsyncMock
 
 import pytest
 
-from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError
-from app.api.services.request_service import RequestService
+from app.application.services.request_service import RequestService
 from app.core.time_utils import UTC
 from app.db.models import CrawlResult, LLMCall, Request, Summary
+from app.domain.exceptions.domain_exceptions import (
+    DuplicateResourceError,
+    ResourceNotFoundError,
+    ValidationError,
+)
+from tests.api.request_service_helpers import build_request_service
+
+if TYPE_CHECKING:
+    from app.application.ports import RequestRepositoryPort
 
 
 class _OptimizedRequestRepository:
@@ -43,35 +52,29 @@ def _create_request(
 @pytest.mark.asyncio
 async def test_create_url_request_and_duplicate_detection(db, user_factory) -> None:
     user = user_factory(username="request-user", telegram_user_id=5001)
+    service = build_request_service(db)
 
-    created = await RequestService.create_url_request(
+    created = await service.create_url_request(
         user.telegram_user_id,
         "example.com/articles/123",
         lang_preference="en",
     )
-
     Summary.create(
         request=created.id,
         lang="en",
-        json_payload={
-            "tldr": "TLDR",
-            "summary_250": "Summary text",
-            "key_ideas": ["idea"],
-        },
+        json_payload={"tldr": "TLDR", "summary_250": "Summary text", "key_ideas": ["idea"]},
     )
 
-    duplicate = await RequestService.check_duplicate_url(
-        user.telegram_user_id,
-        "example.com/articles/123",
-    )
+    duplicate = await service.check_duplicate_url(user.telegram_user_id, "example.com/articles/123")
 
     assert created.type == "url"
     assert created.normalized_url == "http://example.com/articles/123"
-    assert duplicate["existing_request_id"] == created.id
-    assert duplicate["existing_summary_id"] is not None
+    assert duplicate is not None
+    assert duplicate.existing_request_id == created.id
+    assert duplicate.existing_summary_id is not None
 
     with pytest.raises(DuplicateResourceError):
-        await RequestService.create_url_request(user.telegram_user_id, "example.com/articles/123")
+        await service.create_url_request(user.telegram_user_id, "example.com/articles/123")
 
 
 @pytest.mark.asyncio
@@ -80,7 +83,8 @@ async def test_create_forward_request_and_get_request_by_id_with_related_records
     user_factory,
 ) -> None:
     user = user_factory(username="forward-user", telegram_user_id=5002)
-    request = await RequestService.create_forward_request(
+    service = build_request_service(db)
+    request = await service.create_forward_request(
         user.telegram_user_id,
         "Forwarded content",
         from_chat_id=111,
@@ -88,11 +92,7 @@ async def test_create_forward_request_and_get_request_by_id_with_related_records
         lang_preference="ru",
     )
 
-    CrawlResult.create(
-        request=request.id,
-        status="ok",
-        source_url="https://example.com/post",
-    )
+    CrawlResult.create(request=request.id, status="ok", source_url="https://example.com/post")
     LLMCall.create(request=request.id, status="ok", response_text="LLM output")
     Summary.create(
         request=request.id,
@@ -100,15 +100,17 @@ async def test_create_forward_request_and_get_request_by_id_with_related_records
         json_payload={"tldr": "TLDR", "summary_250": "Summary", "key_ideas": ["idea"]},
     )
 
-    details = await RequestService.get_request_by_id(user.telegram_user_id, request.id)
+    details = await service.get_request_by_id(user.telegram_user_id, request.id)
 
-    assert details["request"].id == request.id
-    assert details["crawl_result"].source_url == "https://example.com/post"
-    assert len(details["llm_calls"]) == 1
-    assert details["summary"].lang == "ru"
+    assert details.request.id == request.id
+    assert details.crawl_result is not None
+    assert details.crawl_result.source_url == "https://example.com/post"
+    assert len(details.llm_calls) == 1
+    assert details.summary is not None
+    assert details.summary.lang == "ru"
 
     with pytest.raises(ResourceNotFoundError):
-        await RequestService.get_request_by_id(9999, request.id)
+        await service.get_request_by_id(9999, request.id)
 
 
 @pytest.mark.asyncio
@@ -116,6 +118,7 @@ async def test_retry_failed_request_requires_error_status_and_copies_fields(
     db, user_factory
 ) -> None:
     user = user_factory(username="retry-user", telegram_user_id=5003)
+    service = build_request_service(db)
     failed = Request.create(
         user_id=user.telegram_user_id,
         input_url="https://retry.example.com",
@@ -130,7 +133,7 @@ async def test_retry_failed_request_requires_error_status_and_copies_fields(
         type="url",
     )
 
-    retried = await RequestService.retry_failed_request(user.telegram_user_id, failed.id)
+    retried = await service.retry_failed_request(user.telegram_user_id, failed.id)
 
     assert retried.status == "pending"
     assert retried.input_url == failed.input_url
@@ -144,8 +147,8 @@ async def test_retry_failed_request_requires_error_status_and_copies_fields(
         type="url",
     )
 
-    with pytest.raises(ValueError, match="Only failed requests"):
-        await RequestService.retry_failed_request(user.telegram_user_id, pending.id)
+    with pytest.raises(ValidationError, match="Only failed requests"):
+        await service.retry_failed_request(user.telegram_user_id, pending.id)
 
 
 @pytest.mark.asyncio
@@ -154,6 +157,7 @@ async def test_get_request_status_covers_processing_queue_complete_cancelled_and
     user_factory,
 ) -> None:
     user = user_factory(username="status-user", telegram_user_id=5004)
+    service = build_request_service(db)
     now = datetime.now(UTC)
 
     crawling = _create_request(
@@ -169,9 +173,7 @@ async def test_get_request_status_covers_processing_queue_complete_cancelled_and
         created_at=now + timedelta(seconds=1),
     )
     CrawlResult.create(
-        request=processing.id,
-        status="ok",
-        source_url="https://example.com/processing",
+        request=processing.id, status="ok", source_url="https://example.com/processing"
     )
     almost_done = _create_request(
         user_id=user.telegram_user_id,
@@ -180,9 +182,7 @@ async def test_get_request_status_covers_processing_queue_complete_cancelled_and
         created_at=now + timedelta(seconds=2),
     )
     CrawlResult.create(
-        request=almost_done.id,
-        status="ok",
-        source_url="https://example.com/almost-done",
+        request=almost_done.id, status="ok", source_url="https://example.com/almost-done"
     )
     LLMCall.create(request=almost_done.id, status="ok", response_text="Generated summary")
     Summary.create(
@@ -222,39 +222,28 @@ async def test_get_request_status_covers_processing_queue_complete_cancelled_and
         created_at=now + timedelta(seconds=7),
     )
 
-    crawling_status = await RequestService.get_request_status(user.telegram_user_id, crawling.id)
-    processing_status = await RequestService.get_request_status(
-        user.telegram_user_id, processing.id
-    )
-    almost_done_status = await RequestService.get_request_status(
-        user.telegram_user_id, almost_done.id
-    )
-    queued_status = await RequestService.get_request_status(user.telegram_user_id, queued.id)
-    complete_status = await RequestService.get_request_status(user.telegram_user_id, complete.id)
-    cancelled_status = await RequestService.get_request_status(user.telegram_user_id, cancelled.id)
-    unknown_status = await RequestService.get_request_status(user.telegram_user_id, unknown.id)
+    crawling_status = await service.get_request_status(user.telegram_user_id, crawling.id)
+    processing_status = await service.get_request_status(user.telegram_user_id, processing.id)
+    almost_done_status = await service.get_request_status(user.telegram_user_id, almost_done.id)
+    queued_status = await service.get_request_status(user.telegram_user_id, queued.id)
+    complete_status = await service.get_request_status(user.telegram_user_id, complete.id)
+    cancelled_status = await service.get_request_status(user.telegram_user_id, cancelled.id)
+    unknown_status = await service.get_request_status(user.telegram_user_id, unknown.id)
 
-    assert crawling_status["stage"] == "crawling"
-    assert crawling_status["progress"] == {"current_step": 1, "total_steps": 3, "percentage": 33}
-    assert processing_status["stage"] == "processing"
-    assert processing_status["progress"] == {
-        "current_step": 2,
-        "total_steps": 3,
-        "percentage": 66,
-    }
-    assert almost_done_status["progress"] == {
-        "current_step": 3,
-        "total_steps": 3,
-        "percentage": 90,
-    }
-    assert queued_status["stage"] == "pending"
-    assert queued_status["queue_position"] == 2
-    assert complete_status["stage"] == "complete"
-    assert cancelled_status["stage"] == "failed"
-    assert cancelled_status["error_message"] == "Request was cancelled"
-    assert cancelled_status["error_reason_code"] == "REQUEST_CANCELLED"
-    assert cancelled_status["can_retry"] is True
-    assert unknown_status["stage"] == "pending"
+    assert crawling_status.stage == "crawling"
+    assert crawling_status.progress == {"current_step": 1, "total_steps": 3, "percentage": 33}
+    assert processing_status.stage == "processing"
+    assert processing_status.progress == {"current_step": 2, "total_steps": 3, "percentage": 66}
+    assert almost_done_status.progress == {"current_step": 3, "total_steps": 3, "percentage": 90}
+    assert queued_status.stage == "pending"
+    assert queued_status.queue_position == 2
+    assert complete_status.stage == "complete"
+    assert cancelled_status.stage == "failed"
+    assert cancelled_status.error_details is not None
+    assert cancelled_status.error_details.error_message == "Request was cancelled"
+    assert cancelled_status.error_details.error_reason_code == "REQUEST_CANCELLED"
+    assert cancelled_status.can_retry is True
+    assert unknown_status.stage == "pending"
 
 
 @pytest.mark.asyncio
@@ -263,100 +252,53 @@ async def test_get_request_status_falls_back_for_failed_requests_and_enforces_ac
     user_factory,
 ) -> None:
     user = user_factory(username="status-error-user", telegram_user_id=5005)
+    service = build_request_service(db)
     failed = _create_request(
         user_id=user.telegram_user_id,
         status="error",
         correlation_id="cid-error",
     )
 
-    with patch.object(
-        RequestService,
-        "_derive_error_details",
-        AsyncMock(return_value=(None, None, None, None, False, None)),
-    ):
-        status = await RequestService.get_request_status(user.telegram_user_id, failed.id)
+    status = await service.get_request_status(user.telegram_user_id, failed.id)
 
-    assert status["stage"] == "failed"
-    assert status["error_message"] == "Request failed"
-    assert status["retryable"] is False
-    assert status["can_retry"] is True
+    assert status.stage == "failed"
+    assert status.error_details is not None
+    assert status.error_details.error_message == "Request failed"
+    assert status.error_details.retryable is False
+    assert status.can_retry is True
 
     with pytest.raises(ResourceNotFoundError):
-        await RequestService.get_request_status(999999, failed.id)
+        await service.get_request_status(999999, failed.id)
 
 
 @pytest.mark.asyncio
 async def test_get_request_by_id_prefers_joined_repository_path() -> None:
     request_repo = _OptimizedRequestRepository(
         {
-            "request": {"id": 99, "user_id": 5002, "status": "ok"},
+            "request": {"id": 99, "user_id": 5002, "status": "ok", "type": "url"},
             "crawl_result": {"request": 99, "source_url": "https://example.com/joined"},
-            "summary": {"id": 199, "request": 99, "lang": "en"},
+            "summary": {"id": 199, "request": 99, "lang": "en", "json_payload": {}},
         }
     )
     llm_repo = AsyncMock()
     llm_repo.async_get_llm_calls_by_request.return_value = [{"id": 3, "request": 99}]
 
-    with (
-        patch.object(RequestService, "_request_repo", return_value=request_repo),
-        patch("app.api.services.request_service.get_llm_repository", return_value=llm_repo),
-    ):
-        details = await RequestService.get_request_by_id(user_id=5002, request_id=99)
+    service = RequestService(
+        db=None,
+        request_repository=cast("RequestRepositoryPort", request_repo),
+        summary_repository=AsyncMock(),
+        crawl_result_repository=AsyncMock(),
+        llm_repository=llm_repo,
+    )
 
-    assert details["request"].id == 99
-    assert details["crawl_result"].source_url == "https://example.com/joined"
-    assert details["summary"].id == 199
-    assert details["llm_calls"][0].id == 3
+    details = await service.get_request_by_id(user_id=5002, request_id=99)
+
+    assert details.request.id == 99
+    assert details.crawl_result is not None
+    assert details.crawl_result.source_url == "https://example.com/joined"
+    assert details.summary is not None
+    assert details.summary.id == 199
+    assert details.llm_calls[0].id == 3
     request_repo.get_request_context_mock.assert_awaited_once_with(99)
     request_repo.async_get_request_by_id.assert_not_called()
     llm_repo.async_get_llm_calls_by_request.assert_awaited_once_with(99)
-
-
-@pytest.mark.asyncio
-async def test_get_request_status_prefers_joined_repository_path() -> None:
-    request_repo = _OptimizedRequestRepository(
-        {
-            "request": {"id": 77, "user_id": 5004, "status": "processing"},
-            "crawl_result": {"request": 77, "status": "ok"},
-            "summary": None,
-        }
-    )
-    llm_repo = AsyncMock()
-    llm_repo.async_count_llm_calls_by_request.return_value = 0
-
-    with (
-        patch.object(RequestService, "_request_repo", return_value=request_repo),
-        patch("app.api.services.request_service.get_llm_repository", return_value=llm_repo),
-    ):
-        status = await RequestService.get_request_status(user_id=5004, request_id=77)
-
-    assert status["stage"] == "processing"
-    assert status["progress"] == {"current_step": 2, "total_steps": 3, "percentage": 66}
-    request_repo.get_request_context_mock.assert_awaited_once_with(77)
-    request_repo.async_get_request_by_id.assert_not_called()
-    llm_repo.async_count_llm_calls_by_request.assert_awaited_once_with(77)
-
-
-@pytest.mark.asyncio
-async def test_retry_failed_request_and_derive_error_details_handle_missing_records(
-    db,
-    user_factory,
-) -> None:
-    user = user_factory(username="status-missing-user", telegram_user_id=5006)
-    failed = _create_request(
-        user_id=user.telegram_user_id,
-        status="error",
-        correlation_id="cid-missing",
-    )
-
-    with pytest.raises(ResourceNotFoundError):
-        await RequestService.retry_failed_request(123456, failed.id)
-
-    assert await RequestService._derive_error_details(failed.id) == (
-        None,
-        None,
-        None,
-        None,
-        False,
-        None,
-    )

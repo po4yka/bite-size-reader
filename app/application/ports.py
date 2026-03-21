@@ -166,6 +166,9 @@ class SummaryRepositoryPort(Protocol):
     async def async_toggle_favorite(self, summary_id: int) -> bool:
         """Toggle favorite status and return the new state."""
 
+    async def async_set_favorite(self, summary_id: int, value: bool) -> None:
+        """Persist an explicit favorite state for a summary."""
+
     async def async_get_max_server_version(self, user_id: int) -> int | None:
         """Return the maximum server_version for summaries owned by *user_id*."""
 
@@ -275,6 +278,9 @@ class RequestRepositoryPort(Protocol):
     async def async_get_request_error_context(self, request_id: int) -> dict[str, Any] | None:
         """Return structured request error context."""
 
+    async def async_count_pending_requests_before(self, created_at: datetime) -> int:
+        """Count pending requests created before the supplied timestamp."""
+
     async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
         """Return all request rows for sync operations."""
 
@@ -325,6 +331,9 @@ class LLMRepositoryPort(Protocol):
 
     async def async_get_max_server_version(self, user_id: int) -> int | None:
         """Return the maximum server_version for LLM calls owned by *user_id*."""
+
+    async def async_get_latest_error_by_request(self, request_id: int) -> dict[str, Any] | None:
+        """Return the latest error-like LLM call for a request."""
 
 
 @runtime_checkable

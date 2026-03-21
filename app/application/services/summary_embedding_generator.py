@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from app.core.embedding_text import prepare_text_for_embedding
 from app.core.logging_utils import get_logger
-from app.infrastructure.embedding.embedding_service import prepare_text_for_embedding
 
 if TYPE_CHECKING:
     from app.application.ports import (
+        EmbeddingProviderPort,
         EmbeddingRepositoryPort,
         RequestRepositoryPort,
         SummaryRepositoryPort,
     )
-    from app.infrastructure.embedding.embedding_protocol import EmbeddingServiceProtocol
 
 logger = get_logger(__name__)
 
@@ -27,7 +27,7 @@ class SummaryEmbeddingGenerator:
         embedding_repository: EmbeddingRepositoryPort,
         request_repository: RequestRepositoryPort,
         summary_repository: SummaryRepositoryPort,
-        embedding_service: EmbeddingServiceProtocol,
+        embedding_service: EmbeddingProviderPort,
         model_version: str = "1.0",
         max_token_length: int = 512,
     ) -> None:
@@ -39,8 +39,8 @@ class SummaryEmbeddingGenerator:
         self._max_token_length = max_token_length
 
     @property
-    def embedding_service(self) -> EmbeddingServiceProtocol:
-        """Expose the embedding service in use."""
+    def embedding_service(self) -> EmbeddingProviderPort:
+        """Expose the embedding provider in use."""
         return self._embedding_service
 
     async def generate_embedding_for_summary(
@@ -51,24 +51,18 @@ class SummaryEmbeddingGenerator:
         language: str | None = None,
         force: bool = False,
     ) -> bool:
-        """Generate and store embedding for a summary."""
+        """Generate and store an embedding for a specific summary."""
         model_name = self._embedding_service.get_model_name(language)
-
         if not force:
             existing = await self.embedding_repo.async_get_summary_embedding(summary_id)
             if existing and existing.get("model_name") == model_name:
                 logger.debug(
                     "embedding_already_exists",
-                    extra={
-                        "summary_id": summary_id,
-                        "model": existing.get("model_name"),
-                        "language": language,
-                    },
+                    extra={"summary_id": summary_id, "model": model_name, "language": language},
                 )
                 return False
 
         metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
-
         try:
             text = prepare_text_for_embedding(
                 title=metadata.get("title") or payload.get("title"),
@@ -82,33 +76,30 @@ class SummaryEmbeddingGenerator:
                 semantic_chunks=payload.get("semantic_chunks"),
                 max_length=self._max_token_length,
             )
-
-            if not text or not text.strip():
+            if not text.strip():
                 logger.warning("empty_text_for_embedding", extra={"summary_id": summary_id})
                 return False
 
             embedding = await self._embedding_service.generate_embedding(
-                text, language=language, task_type="document"
+                text,
+                language=language,
+                task_type="document",
             )
-            embedding_blob = self._embedding_service.serialize_embedding(embedding)
-            dimensions = len(embedding)
-
             await self.embedding_repo.async_create_or_update_summary_embedding(
                 summary_id=summary_id,
-                embedding_blob=embedding_blob,
+                embedding_blob=self._embedding_service.serialize_embedding(embedding),
                 model_name=model_name,
                 model_version=self._model_version,
-                dimensions=dimensions,
+                dimensions=len(embedding),
                 language=language,
             )
-
             logger.info(
                 "embedding_generated",
                 extra={
                     "summary_id": summary_id,
                     "model": model_name,
                     "language": language,
-                    "dimensions": dimensions,
+                    "dimensions": len(embedding),
                     "text_length": len(text),
                 },
             )
@@ -120,19 +111,13 @@ class SummaryEmbeddingGenerator:
             )
             return False
 
-    async def generate_embedding_for_request(
-        self,
-        request_id: int,
-        *,
-        force: bool = False,
-    ) -> bool:
-        """Generate embedding for a summary by request ID."""
+    async def generate_embedding_for_request(self, request_id: int, *, force: bool = False) -> bool:
+        """Generate an embedding for the summary produced by a request."""
         request = await self.request_repo.async_get_request_by_id(request_id)
         if not request:
             logger.warning("no_request_found", extra={"request_id": request_id})
             return False
 
-        language = request.get("lang_detected")
         summary = await self.summary_repo.async_get_summary_by_request(request_id)
         if not summary:
             logger.warning("no_summary_for_request", extra={"request_id": request_id})
@@ -140,7 +125,7 @@ class SummaryEmbeddingGenerator:
 
         summary_id = summary.get("id")
         payload = summary.get("json_payload")
-        if not summary_id or not payload:
+        if not summary_id or not isinstance(payload, dict):
             logger.warning(
                 "invalid_summary_data",
                 extra={"request_id": request_id, "summary_id": summary_id},
@@ -150,6 +135,6 @@ class SummaryEmbeddingGenerator:
         return await self.generate_embedding_for_summary(
             summary_id=summary_id,
             payload=payload,
-            language=language,
+            language=request.get("lang_detected"),
             force=force,
         )

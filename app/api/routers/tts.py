@@ -5,70 +5,68 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse
 
+from app.api.dependencies.database import get_session_manager, get_summary_repository
 from app.api.exceptions import FeatureDisabledError, ResourceNotFoundError
 from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
+from app.application.services.tts_service import TTSService
 from app.config import load_config
-from app.core.logging_utils import get_logger
-from app.db.models import AudioGeneration, Request, Summary
-
-logger = get_logger(__name__)
+from app.infrastructure.audio.elevenlabs_provider import ElevenLabsTTSProviderAdapter
+from app.infrastructure.audio.filesystem_storage import FileSystemAudioStorageAdapter
+from app.infrastructure.persistence.sqlite.repositories.audio_generation_repository import (
+    SqliteAudioGenerationRepositoryAdapter,
+)
 
 router = APIRouter()
 
-# Module-level singleton — avoids creating a new httpx.AsyncClient per request.
-_tts_service = None
-
 
 def _get_tts_config():
-    """Lazy-load TTS config."""
     return load_config(allow_stub_telegram=True).tts
 
 
-def _get_tts_service():
-    """Return a shared TTSService instance (lazy init)."""
-    global _tts_service
-    if _tts_service is None:
-        from app.application.services.tts_service import TTSService
-
-        _tts_service = TTSService(_get_tts_config())
-    return _tts_service
-
-
-def _get_user_summary(summary_id: int, user_id: int) -> Summary:
-    """Get a summary that belongs to the given user, or raise 404."""
-    row: Summary | None = (
-        Summary.select()
-        .join(Request)
-        .where((Summary.id == summary_id) & (Request.user_id == user_id))
-        .first()
+def _get_tts_service(request: Request) -> TTSService:
+    config = _get_tts_config()
+    db = get_session_manager(request)
+    return TTSService(
+        summary_repository=get_summary_repository(db, request),
+        audio_generation_repository=SqliteAudioGenerationRepositoryAdapter(db),
+        tts_provider=ElevenLabsTTSProviderAdapter(config),
+        audio_storage=FileSystemAudioStorageAdapter(config.audio_storage_path),
+        voice_id=config.voice_id,
+        model_name=config.model,
+        max_chars_per_request=config.max_chars_per_request,
     )
-    if row is None:
+
+
+async def _ensure_summary_owned(summary_id: int, user_id: int, request: Request) -> None:
+    summary = await get_summary_repository(
+        get_session_manager(request), request
+    ).async_get_summary_by_id(summary_id)
+    if summary is None or summary.get("user_id") != user_id:
         raise ResourceNotFoundError("Summary", summary_id)
-    return row
 
 
 @router.post("/{summary_id}/audio")
 async def generate_audio(
     summary_id: int,
+    request: Request,
     source_field: str = Query("summary_1000", pattern="^(summary_250|summary_1000|tldr)$"),
     user: dict[str, Any] = Depends(get_current_user),
-):
-    """Trigger audio generation for a summary.
-
-    Returns immediately with status if already cached, otherwise generates
-    on-demand and returns the result.
-    """
+) -> dict[str, Any]:
+    """Generate audio for a summary, reusing cached output when available."""
     tts_config = _get_tts_config()
     if not tts_config.enabled:
         raise FeatureDisabledError("tts")
 
-    _get_user_summary(summary_id, user["user_id"])
-
-    result = await _get_tts_service().generate_audio(summary_id, source_field=source_field)
+    await _ensure_summary_owned(summary_id, user["user_id"], request)
+    service = _get_tts_service(request)
+    try:
+        result = await service.generate_audio(summary_id, source_field=source_field)
+    finally:
+        await service.close()
 
     return success_response(
         {
@@ -83,27 +81,27 @@ async def generate_audio(
 
 
 @router.get("/{summary_id}/audio")
-def get_audio(
+async def get_audio(
     summary_id: int,
+    request: Request,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> FileResponse:
     """Stream/download the generated audio file for a summary."""
     tts_config = _get_tts_config()
     if not tts_config.enabled:
         raise FeatureDisabledError("tts")
 
-    _get_user_summary(summary_id, user["user_id"])
+    await _ensure_summary_owned(summary_id, user["user_id"], request)
+    service = _get_tts_service(request)
+    try:
+        result = await service.get_audio_status(summary_id)
+    finally:
+        await service.close()
 
-    # Look up audio record
-    row: AudioGeneration | None = (
-        AudioGeneration.select()
-        .where((AudioGeneration.summary == summary_id) & (AudioGeneration.status == "completed"))
-        .first()
-    )
-    if row is None or not row.file_path:
+    if result is None or result.status != "completed" or not result.file_path:
         raise ResourceNotFoundError("audio", summary_id)
 
-    file_path = Path(row.file_path)
+    file_path = Path(result.file_path)
     if not file_path.is_file():
         raise ResourceNotFoundError("audio_file", summary_id)
 
