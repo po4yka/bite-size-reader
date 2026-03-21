@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from app.config import AppConfig
-    from app.di.types import TelegramRuntime
 
 
 class TelegramComponentWiring:
@@ -32,7 +31,7 @@ class TelegramComponentWiring:
         self,
         *,
         bot: Any,
-        components: TelegramRuntime,
+        components: Any,
         llm_client: Any,
     ) -> None:
         """Assign components to bot and wire cross-component dependencies."""

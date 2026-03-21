@@ -4,30 +4,26 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.telegram.access_controller import AccessController
-from app.adapters.telegram.callback_handler import CallbackHandler
-from app.adapters.telegram.command_processor import CommandProcessor
-from app.adapters.telegram.message_router import MessageRouter
 from app.adapters.telegram.task_manager import UserTaskManager
-from app.adapters.telegram.url_handler import URLHandler
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
-from app.di.repositories import build_audit_log_repository, build_batch_session_repository
-from app.security.file_validation import SecureFileValidator
 
 if TYPE_CHECKING:
-    from app.adapters.attachment.attachment_processor import AttachmentProcessor
-    from app.adapters.content.url_processor import URLProcessor
-    from app.adapters.external.response_formatter import ResponseFormatter
-    from app.adapters.telegram.forward_processor import ForwardProcessor
+    from app.adapters.telegram.access_controller import AccessController
+    from app.adapters.telegram.callback_handler import CallbackHandler
+    from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
+    from app.adapters.telegram.message_router import MessageRouter
+    from app.adapters.telegram.url_handler import URLHandler
     from app.application.ports import AuditLogRepositoryPort
-    from app.application.services.adaptive_timeout import AdaptiveTimeoutService
-    from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
-    from app.infrastructure.search.hybrid_search_service import HybridSearchService
 
 logger = get_logger(__name__)
+
+
+class _NullAuditLogRepository:
+    async def async_insert_audit_log(self, **_kwargs: object) -> None:
+        return None
 
 
 class MessageHandler:
@@ -36,90 +32,27 @@ class MessageHandler:
     def __init__(
         self,
         cfg: AppConfig,
-        db: DatabaseSessionManager,
-        response_formatter: ResponseFormatter,
-        url_processor: URLProcessor,
-        forward_processor: ForwardProcessor,
-        topic_searcher: TopicSearchService | None = None,
-        local_searcher: LocalTopicSearchService | None = None,
-        hybrid_search: HybridSearchService | None = None,
-        attachment_processor: AttachmentProcessor | None = None,
-        verbosity_resolver: Any | None = None,
-        adaptive_timeout_service: AdaptiveTimeoutService | None = None,
-        audit_repo: AuditLogRepositoryPort | None = None,
-        llm_client: Any | None = None,
-        batch_session_repo: Any | None = None,
-        batch_config: Any | None = None,
-        file_validator: SecureFileValidator | None = None,
-        application_services: Any | None = None,
+        db: DatabaseSessionManager | None,
+        *,
+        audit_repo: AuditLogRepositoryPort | None,
+        task_manager: UserTaskManager | None,
+        access_controller: AccessController,
+        url_handler: URLHandler,
+        command_dispatcher: TelegramCommandDispatcher,
+        callback_handler: CallbackHandler,
+        message_router: MessageRouter,
+        url_processor: Any | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
-        self.audit_repo = audit_repo or build_audit_log_repository(db)
-
-        # Initialize components
-        self.task_manager = UserTaskManager()
-        self.access_controller = AccessController(
-            cfg=cfg,
-            db=db,
-            response_formatter=response_formatter,
-            audit_func=self._audit,
-        )
-
-        self.url_handler = URLHandler(
-            db=db,
-            response_formatter=response_formatter,
-            url_processor=url_processor,
-            adaptive_timeout_service=adaptive_timeout_service,
-            verbosity_resolver=verbosity_resolver,
-            llm_client=llm_client,
-            batch_session_repo=batch_session_repo or build_batch_session_repository(db),
-            batch_config=batch_config,
-            file_validator=file_validator or SecureFileValidator(max_file_size=10 * 1024 * 1024),
-        )
-        # Expose url_processor for legacy integrations/tests
-        self.url_processor = url_processor
-
-        self.command_processor = CommandProcessor(
-            cfg=cfg,
-            response_formatter=response_formatter,
-            db=db,
-            url_processor=url_processor,
-            audit_func=self._audit,
-            url_handler=self.url_handler,
-            topic_searcher=topic_searcher,
-            local_searcher=local_searcher,
-            task_manager=self.task_manager,
-            hybrid_search=hybrid_search,
-            verbosity_resolver=verbosity_resolver,
-            application_services=application_services,
-        )
-
-        # Resolve UI language from response formatter
-        _lang = getattr(response_formatter, "_lang", "en")
-
-        self.callback_handler = CallbackHandler(
-            db=db,
-            response_formatter=response_formatter,
-            url_handler=self.url_handler,
-            hybrid_search=hybrid_search,
-            lang=_lang,
-        )
-
-        self.message_router = MessageRouter(
-            cfg=cfg,
-            db=db,
-            access_controller=self.access_controller,
-            command_processor=self.command_processor,
-            url_handler=self.url_handler,
-            forward_processor=forward_processor,
-            response_formatter=response_formatter,
-            audit_func=self._audit,
-            task_manager=self.task_manager,
-            attachment_processor=attachment_processor,
-            callback_handler=self.callback_handler,
-            lang=_lang,
-        )
+        self.audit_repo = audit_repo or _NullAuditLogRepository()
+        self.task_manager = task_manager or UserTaskManager()
+        self.access_controller = access_controller
+        self.url_handler = url_handler
+        self.url_processor = url_processor or getattr(url_handler, "url_processor", None)
+        self.command_processor = command_dispatcher
+        self.callback_handler = callback_handler
+        self.message_router = message_router
 
     async def handle_message(self, message: Any) -> None:
         """Main message handling entry point."""

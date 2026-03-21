@@ -1,46 +1,36 @@
-"""Database session management and core infrastructure.
-
-This module provides the DatabaseSessionManager class, which is the primary
-infrastructure component for database operations. It handles:
-- Connection management with SQLite
-- Read/write locking for concurrent access
-- Async operation wrappers with timeout and retry logic
-- Database migrations and maintenance
-- Backup creation
-"""
+"""Database session management and runtime façade."""
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import sqlite3
-from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import peewee
 from playhouse.sqlite_ext import SqliteExtDatabase
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+    from pathlib import Path
+
+    import peewee
+
 from app.core.logging_utils import get_logger
-from app.db.database_diagnostics import DatabaseDiagnostics
-from app.db.models import (
-    ALL_MODELS,
-    database_proxy,
-)
+from app.db.runtime.backup import DatabaseBackupService
+from app.db.runtime.bootstrap import DatabaseBootstrapService
+from app.db.runtime.inspection import DatabaseInspectionService
+from app.db.runtime.maintenance import DatabaseMaintenanceService
+from app.db.runtime.operation_executor import DatabaseOperationExecutor
 from app.db.rw_lock import AsyncRWLock
-from app.db.schema_migrator import SchemaMigrator
-from app.db.topic_search_index import TopicSearchIndexManager
 
 if TYPE_CHECKING:
     import logging
 
-JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
+JSONValue = dict[str, Any] | list[Any] | str | None
 
-# Default database operation constants
 DB_OPERATION_TIMEOUT = 30.0
 DB_MAX_RETRIES = 3
-DB_JSON_MAX_SIZE = 10_000_000  # 10MB
+DB_JSON_MAX_SIZE = 10_000_000
 DB_JSON_MAX_DEPTH = 20
 DB_JSON_MAX_ARRAY_LENGTH = 10_000
 DB_JSON_MAX_DICT_KEYS = 1_000
@@ -61,29 +51,13 @@ class RowSqliteDatabase(SqliteExtDatabase):
 
 @dataclass
 class DatabaseSessionManager:
-    """Peewee-backed database session manager.
-
-    Handles connection management, locking, async operations, and migrations.
-    This is the core infrastructure class that repositories use for database access.
-
-    Attributes:
-        path: Path to the SQLite database file, or ":memory:" for in-memory
-        operation_timeout: Default timeout for database operations in seconds
-        max_retries: Maximum retries for transient database errors
-        json_max_size: Maximum size for JSON fields in bytes
-        json_max_depth: Maximum nesting depth for JSON fields
-        json_max_array_length: Maximum array length in JSON fields
-        json_max_dict_keys: Maximum dictionary keys in JSON fields
-    """
+    """Compatibility façade over dedicated database runtime services."""
 
     path: str
     _logger: logging.Logger = field(default_factory=lambda: get_logger(__name__))
     _database: peewee.SqliteDatabase = field(init=False)
     _rw_lock: AsyncRWLock = field(init=False)
-    _diagnostics: DatabaseDiagnostics = field(init=False)
-    _topic_search_index_delete_warned: bool = field(default=False, init=False)
 
-    # Configuration values
     operation_timeout: float = field(default=DB_OPERATION_TIMEOUT)
     max_retries: int = field(default=DB_MAX_RETRIES)
     json_max_size: int = field(default=DB_JSON_MAX_SIZE)
@@ -92,9 +66,6 @@ class DatabaseSessionManager:
     json_max_dict_keys: int = field(default=DB_JSON_MAX_DICT_KEYS)
 
     def __post_init__(self) -> None:
-        if self.path != ":memory:":
-            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-
         self._database = RowSqliteDatabase(
             self.path,
             pragmas={
@@ -104,120 +75,72 @@ class DatabaseSessionManager:
             },
             check_same_thread=False,
         )
-        database_proxy.initialize(self._database)
-
-        # Initialize read-write lock for thread-safe database access
         self._rw_lock = AsyncRWLock()
-        self._diagnostics = DatabaseDiagnostics(self._database, self._logger)
-        self._topic_search = TopicSearchIndexManager(self._database, self._logger)
+
+        self._bootstrap = DatabaseBootstrapService(
+            path=self.path,
+            database=self._database,
+            logger=self._logger,
+        )
+        self._bootstrap.initialize_database_proxy()
+        self._executor = DatabaseOperationExecutor(
+            database=self._database,
+            rw_lock=self._rw_lock,
+            operation_timeout=self.operation_timeout,
+            max_retries=self.max_retries,
+            logger=self._logger,
+        )
+        self._maintenance = DatabaseMaintenanceService(
+            database=self._database,
+            path=self.path,
+            logger=self._logger,
+        )
+        self._inspection = DatabaseInspectionService(
+            database=self._database,
+            path=self.path,
+            logger=self._logger,
+        )
+        self._backup = DatabaseBackupService(
+            path=self.path,
+            connect=self.connect,
+            logger=self._logger,
+        )
 
     @property
     def database(self) -> peewee.SqliteDatabase:
-        """Access the underlying Peewee database instance."""
         return self._database
 
+    @property
+    def executor(self) -> DatabaseOperationExecutor:
+        return self._executor
+
+    @property
+    def bootstrap(self) -> DatabaseBootstrapService:
+        return self._bootstrap
+
+    @property
+    def maintenance(self) -> DatabaseMaintenanceService:
+        return self._maintenance
+
+    @property
+    def inspection(self) -> DatabaseInspectionService:
+        return self._inspection
+
+    @property
+    def backups(self) -> DatabaseBackupService:
+        return self._backup
+
     def connection_context(self) -> Any:
-        """Return a connection context manager."""
-        return self._database.connection_context()
+        return self._executor.connection_context()
 
     @contextlib.contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        """Return a context manager yielding the raw sqlite3 connection."""
         with self._database.connection_context():
             yield self._database.connection()
 
     def migrate(self) -> None:
-        """Create tables, run versioned migrations, and perform startup maintenance."""
-        with self._database.connection_context(), self._database.bind_ctx(ALL_MODELS):
-            self._database.create_tables(ALL_MODELS, safe=True)
-
-            # Run versioned migrations (column additions, data migrations).
-            # Must stay inside the same connection_context to preserve tables
-            # on :memory: databases.
-            from app.cli.migrations.migration_runner import MigrationRunner
-
-            runner = MigrationRunner(self)
-            runner.run_pending()
-
-            # Idempotent JSON coercion (runs every startup to fix malformed data)
-            SchemaMigrator(self._database, self._logger).ensure_schema_compatibility()
-
-            self._topic_search.ensure_index()
-
-        self._run_database_maintenance()
-        self._logger.info("db_migrated", extra={"path": self._mask_path(self.path)})
-
-    async def _retry_with_backoff(
-        self,
-        run_fn: Callable[[], Awaitable[Any]],
-        *,
-        timeout: float,
-        operation_name: str,
-        log_prefix: str,
-    ) -> Any:
-        """Shared retry/backoff/logging loop for DB operations and transactions."""
-        retries = 0
-        last_error: peewee.OperationalError | None = None
-
-        while retries <= self.max_retries:
-            try:
-                return await asyncio.wait_for(run_fn(), timeout=timeout)
-
-            except TimeoutError:
-                self._logger.exception(
-                    f"{log_prefix}_timeout",
-                    extra={"operation": operation_name, "timeout": timeout, "retries": retries},
-                )
-                raise
-
-            except peewee.OperationalError as e:
-                last_error = e
-                error_msg = str(e).lower()
-                if "locked" in error_msg or "busy" in error_msg:
-                    if retries < self.max_retries:
-                        retries += 1
-                        wait_time = 0.1 * (2**retries)
-                        self._logger.warning(
-                            f"{log_prefix}_locked_retrying",
-                            extra={
-                                "operation": operation_name,
-                                "retry": retries,
-                                "max_retries": self.max_retries,
-                                "wait_time": wait_time,
-                                "error": str(e),
-                            },
-                        )
-                        await asyncio.sleep(wait_time)
-                        continue
-                self._logger.exception(
-                    f"{log_prefix}_operational_error",
-                    extra={"operation": operation_name, "retries": retries, "error": str(e)},
-                )
-                raise
-
-            except peewee.IntegrityError as e:
-                self._logger.exception(
-                    f"{log_prefix}_integrity_error",
-                    extra={"operation": operation_name, "error": str(e)},
-                )
-                raise
-
-            except Exception as e:
-                self._logger.exception(
-                    f"{log_prefix}_unexpected_error",
-                    extra={
-                        "operation": operation_name,
-                        "retries": retries,
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                    },
-                )
-                raise
-
-        if last_error:
-            raise last_error
-        msg = f"Database {log_prefix} {operation_name} failed after {self.max_retries} retries"
-        raise RuntimeError(msg)
+        self._bootstrap.migrate()
+        self._maintenance.run_startup_maintenance()
 
     async def _safe_db_operation(
         self,
@@ -228,48 +151,13 @@ class DatabaseSessionManager:
         read_only: bool = False,
         **kwargs: Any,
     ) -> Any:
-        """Execute database operation with timeout, retry, and connection protection.
-
-        Args:
-            operation: The database operation to execute
-            *args: Positional arguments for the operation
-            timeout: Timeout in seconds (default: self.operation_timeout)
-            operation_name: Name for logging purposes
-            read_only: Whether this is a read-only operation (allows concurrent reads)
-            **kwargs: Keyword arguments for the operation
-
-        Returns:
-            Result of the operation
-
-        Raises:
-            asyncio.TimeoutError: If operation times out
-            peewee.OperationalError: If database is locked or busy after retries
-            peewee.IntegrityError: If constraint violation occurs
-            Exception: Other database errors
-        """
-        if timeout is None:
-            timeout = self.operation_timeout
-
-        async def _run_with_lock() -> Any:
-            def _op_wrapper() -> Any:
-                with self._database.connection_context():
-                    return operation(*args, **kwargs)
-
-            if read_only:
-                # Read operations don't need application-level locking.
-                # SQLite WAL mode (configured in __post_init__) handles
-                # reader-writer coordination at the database level,
-                # allowing concurrent reads with a single writer.
-                return await asyncio.shield(asyncio.to_thread(_op_wrapper))
-
-            async with self._rw_lock.write_lock():
-                return await asyncio.shield(asyncio.to_thread(_op_wrapper))
-
-        return await self._retry_with_backoff(
-            _run_with_lock,
+        return await self._executor.async_execute(
+            operation,
+            *args,
             timeout=timeout,
             operation_name=operation_name,
-            log_prefix="db_operation",
+            read_only=read_only,
+            **kwargs,
         )
 
     async def _safe_db_transaction(
@@ -280,49 +168,12 @@ class DatabaseSessionManager:
         operation_name: str = "database_transaction",
         **kwargs: Any,
     ) -> Any:
-        """Execute database operation within an explicit transaction with rollback.
-
-        This method wraps database operations in an atomic transaction, ensuring
-        that all changes are either committed together or rolled back on error.
-
-        Args:
-            operation: The database operation to execute
-            *args: Positional arguments for the operation
-            timeout: Timeout in seconds (default: self.operation_timeout)
-            operation_name: Name for logging purposes
-            **kwargs: Keyword arguments for the operation
-
-        Returns:
-            Result of the operation
-
-        Raises:
-            asyncio.TimeoutError: If operation times out
-            peewee.OperationalError: If database is locked or busy after retries
-            peewee.IntegrityError: If constraint violation occurs
-            Exception: Other database errors
-        """
-        if timeout is None:
-            timeout = self.operation_timeout
-
-        # Transactions always require write lock
-        async def _run_transaction() -> Any:
-            async with self._rw_lock.write_lock():
-
-                def _execute_in_transaction() -> Any:
-                    with self._database.atomic() as txn:
-                        try:
-                            return operation(*args, **kwargs)
-                        except BaseException:
-                            txn.rollback()
-                            raise
-
-                return await asyncio.shield(asyncio.to_thread(_execute_in_transaction))
-
-        return await self._retry_with_backoff(
-            _run_transaction,
+        return await self._executor.async_execute_transaction(
+            operation,
+            *args,
             timeout=timeout,
             operation_name=operation_name,
-            log_prefix="db_transaction",
+            **kwargs,
         )
 
     async def async_execute(
@@ -334,8 +185,7 @@ class DatabaseSessionManager:
         read_only: bool = False,
         **kwargs: Any,
     ) -> Any:
-        """Public interface for DatabaseSessionProtocol; delegates to _safe_db_operation."""
-        return await self._safe_db_operation(
+        return await self._executor.async_execute(
             operation,
             *args,
             timeout=timeout,
@@ -352,8 +202,7 @@ class DatabaseSessionManager:
         operation_name: str = "repository_transaction",
         **kwargs: Any,
     ) -> Any:
-        """Public interface for DatabaseSessionProtocol; delegates to _safe_db_transaction."""
-        return await self._safe_db_transaction(
+        return await self._executor.async_execute_transaction(
             operation,
             *args,
             timeout=timeout,
@@ -362,111 +211,25 @@ class DatabaseSessionManager:
         )
 
     def execute(self, sql: str, params: Iterable | None = None) -> None:
-        """Execute raw SQL synchronously."""
         params = tuple(params or ())
         with self._database.connection_context():
             self._database.execute_sql(sql, params)
         self._logger.debug("db_execute", extra={"sql": sql, "params": list(params)[:10]})
 
     def fetchone(self, sql: str, params: Iterable | None = None) -> sqlite3.Row | None:
-        """Fetch a single row using raw SQL."""
         params = tuple(params or ())
         with self._database.connection_context():
             cursor = self._database.execute_sql(sql, params)
             return cursor.fetchone()
 
     def create_backup_copy(self, dest_path: str) -> Path:
-        """Create a full backup of the database file.
-
-        Args:
-            dest_path: Destination path for the backup
-
-        Returns:
-            Path to the created backup file
-
-        Raises:
-            ValueError: If trying to backup an in-memory database
-            FileNotFoundError: If source database file doesn't exist
-        """
-        if self.path == ":memory:":
-            raise ValueError("Cannot create a backup for an in-memory database")
-
-        source = Path(self.path)
-        if not source.exists():
-            raise FileNotFoundError(f"Database file not found at {self.path}")
-
-        destination = Path(dest_path)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-
-        with self.connect() as conn, sqlite3.connect(str(destination)) as dest_conn:
-            conn.backup(dest_conn)
-            dest_conn.commit()
-
-            # Verify backup integrity with quick_check
-            try:
-                cursor = dest_conn.execute("PRAGMA quick_check")
-                row = cursor.fetchone()
-                backup_check = row[0] if row else "unknown"
-                backup_ok = backup_check == "ok"
-            except sqlite3.DatabaseError as check_err:
-                backup_ok = False
-                backup_check = str(check_err)
-
-            if backup_ok:
-                self._logger.info(
-                    "db_backup_integrity_verified",
-                    extra={"dest": self._mask_path(str(destination))},
-                )
-            else:
-                self._logger.warning(
-                    "db_backup_integrity_failed",
-                    extra={
-                        "dest": self._mask_path(str(destination)),
-                        "quick_check_result": backup_check,
-                    },
-                )
-
-        self._logger.info(
-            "db_backup_copy_created",
-            extra={
-                "source": self._mask_path(str(source)),
-                "dest": self._mask_path(str(destination)),
-            },
-        )
-        return destination
+        return self._backup.create_backup_copy(dest_path)
 
     def check_integrity(self) -> tuple[bool, str]:
-        """Run a fast integrity check on the database.
-
-        Uses ``PRAGMA quick_check`` which is significantly faster than a full
-        ``integrity_check`` -- suitable for frequent health-check calls.
-
-        Returns:
-            A tuple of ``(is_ok, result_text)`` where *is_ok* is True when the
-            database reports no issues.
-        """
-        try:
-            with self._database.connection_context():
-                cursor = self._database.execute_sql("PRAGMA quick_check")
-                row = cursor.fetchone()
-                result = row[0] if row else "unknown"
-                is_ok = result == "ok"
-                if not is_ok:
-                    self._logger.warning(
-                        "db_quick_check_issue",
-                        extra={"result": result, "path": self._mask_path(self.path)},
-                    )
-                return is_ok, str(result)
-        except (peewee.DatabaseError, sqlite3.DatabaseError) as exc:
-            self._logger.error(
-                "db_quick_check_failed",
-                extra={"error": str(exc), "path": self._mask_path(self.path)},
-            )
-            return False, str(exc)
+        return self._inspection.check_integrity()
 
     def get_database_overview(self) -> dict[str, Any]:
-        """Return diagnostic overview of database tables and counts."""
-        return self._diagnostics.get_database_overview()
+        return self._inspection.get_database_overview()
 
     def verify_processing_integrity(
         self,
@@ -474,47 +237,7 @@ class DatabaseSessionManager:
         required_fields: Iterable[str] | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
-        """Perform deep integrity check on processed summaries."""
-        return self._diagnostics.verify_processing_integrity(
+        return self._inspection.verify_processing_integrity(
             required_fields=required_fields,
             limit=limit,
         )
-
-    # -- Internal helpers -------------------------------------------------
-
-    @staticmethod
-    def _mask_path(path: str) -> str:
-        """Mask a path for logging (show only parent/filename)."""
-        try:
-            p = Path(path)
-            if not p.name:
-                return str(p)
-            parent = p.parent.name
-            if parent:
-                return f".../{parent}/{p.name}"
-            return p.name
-        except (OSError, ValueError, AttributeError):
-            return "..."
-
-    def _run_database_maintenance(self) -> None:
-        """Run database maintenance operations (ANALYZE, checkpoint)."""
-        if self.path == ":memory:":
-            self._logger.debug("db_maintenance_skipped_in_memory")
-            return
-
-        try:
-            with self._database.connection_context():
-                self._database.execute_sql("ANALYZE")
-                self._database.execute_sql("PRAGMA wal_checkpoint(TRUNCATE)")
-        except peewee.DatabaseError as exc:
-            self._logger.warning(
-                "db_maintenance_failed",
-                extra={"path": self._mask_path(self.path), "error": str(exc)},
-            )
-
-    def _count_table_rows(self, table_name: str) -> int:
-        """Count rows in a table by model."""
-        model = next((m for m in ALL_MODELS if m._meta.table_name == table_name), None)
-        if model is not None:
-            return model.select().count()
-        return 0

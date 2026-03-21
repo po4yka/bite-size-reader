@@ -15,7 +15,6 @@ from app.adapters.telegram.routing import (
     MessageRouteFailureHandler,
 )
 from app.core.logging_utils import generate_correlation_id
-from app.di.repositories import build_user_repository
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -24,7 +23,7 @@ if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.access_controller import AccessController
     from app.adapters.telegram.callback_handler import CallbackHandler
-    from app.adapters.telegram.command_processor import CommandProcessor
+    from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
     from app.adapters.telegram.forward_processor import ForwardProcessor
     from app.adapters.telegram.routing.models import PreparedRouteContext
     from app.adapters.telegram.task_manager import UserTaskManager
@@ -37,15 +36,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger("app.adapters.telegram.message_router")
 
 
+class _NullUserRepository:
+    async def async_insert_user_interaction(self, **_kwargs: object) -> int:
+        return 0
+
+    async def async_update_user_interaction(self, **_kwargs: object) -> None:
+        return None
+
+
 class MessageRouter:
     """Coordinate explicit Telegram routing collaborators."""
 
     def __init__(
         self,
         cfg: AppConfig,
-        db: DatabaseSessionManager,
         access_controller: AccessController,
-        command_processor: CommandProcessor,
+        command_processor: TelegramCommandDispatcher,
         url_handler: URLHandler,
         forward_processor: ForwardProcessor,
         response_formatter: ResponseFormatter,
@@ -55,6 +61,7 @@ class MessageRouter:
         user_repo: UserRepositoryPort | None = None,
         callback_handler: CallbackHandler | None = None,
         lang: str = "en",
+        db: DatabaseSessionManager | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -62,7 +69,7 @@ class MessageRouter:
         self.response_formatter = response_formatter
         self._task_manager = task_manager
 
-        self.user_repo = user_repo or build_user_repository(db)
+        self.user_repo = user_repo or _NullUserRepository()
         self._interaction_recorder = MessageInteractionRecorder(
             self.user_repo,
             structured_output_enabled=cfg.openrouter.enable_structured_outputs,
@@ -79,7 +86,7 @@ class MessageRouter:
             recent_message_ttl=self._rate_limit_coordinator.recent_message_ttl,
         )
         self._content_router = MessageContentRouter(
-            command_processor=command_processor,
+            command_dispatcher=command_processor,
             url_handler=url_handler,
             forward_processor=forward_processor,
             response_formatter=response_formatter,

@@ -3,5 +3,6 @@
     "app/adapters/content/llm_response_workflow.py::LLMResponseWorkflow": 1113,
     "app/adapters/content/llm_summarizer.py::LLMSummarizer": 1095,
     "app/adapters/external/formatting/summary_presenter.py::SummaryPresenterImpl": 1034,
-    "app/db/database.py::Database": 1150
+    "app/db/database.py::Database": 1150,
+    "app/adapters/telegram/command_dispatcher.py::TelegramCommandDispatcher": 1115
 }

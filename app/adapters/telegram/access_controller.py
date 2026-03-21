@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
 from app.db.user_interactions import async_safe_update_user_interaction
-from app.di.repositories import build_user_repository
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -21,20 +20,25 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+class _NullUserRepository:
+    async def async_update_user_interaction(self, **_kwargs: object) -> None:
+        return None
+
+
 class AccessController:
     """Handles access control and user validation."""
 
     def __init__(
         self,
         cfg: AppConfig,
-        db: DatabaseSessionManager,
+        db: DatabaseSessionManager | None,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
         user_repo: UserRepositoryPort | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
-        self.user_repo = user_repo or build_user_repository(db)
+        self.user_repo = user_repo or _NullUserRepository()
         self.response_formatter = response_formatter
         self._audit = audit_func
 

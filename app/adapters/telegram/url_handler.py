@@ -19,7 +19,6 @@ from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_all_urls, normalize_url
 from app.core.verbosity import VerbosityLevel
-from app.di.repositories import build_request_repository, build_user_repository
 from app.security.file_validation import FileValidationError, SecureFileValidator
 
 if TYPE_CHECKING:
@@ -31,6 +30,11 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
 
 logger = get_logger(__name__)
+
+
+class _NullRepository:
+    def __getattr__(self, _name: str) -> Any:  # pragma: no cover - defensive only
+        raise AttributeError(_name)
 
 
 class URLHandler:
@@ -54,7 +58,7 @@ class URLHandler:
 
     def __init__(
         self,
-        db: DatabaseSessionManager,
+        db: DatabaseSessionManager | None,
         response_formatter: ResponseFormatter,
         url_processor: URLProcessor,
         adaptive_timeout_service: AdaptiveTimeoutService | None = None,
@@ -71,8 +75,8 @@ class URLHandler:
         relationship_analysis_service: BatchRelationshipAnalysisService | None = None,
     ) -> None:
         self.db = db
-        self.user_repo = user_repo or build_user_repository(db)
-        self.request_repo = request_repo or build_request_repository(db)
+        self.user_repo = user_repo or _NullRepository()
+        self.request_repo = request_repo or _NullRepository()
         self.response_formatter = response_formatter
         self.url_processor = url_processor
         self._llm_client = llm_client

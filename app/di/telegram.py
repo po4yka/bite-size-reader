@@ -3,9 +3,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.attachment.attachment_processor import AttachmentProcessor
-from app.adapters.telegram.command_processor import CommandProcessor
+from app.adapters.telegram.access_controller import AccessController
+from app.adapters.telegram.callback_handler import CallbackHandler
+from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
+from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandler
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
+from app.adapters.telegram.message_router import MessageRouter
+from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.telegram_client import TelegramClient
 from app.adapters.telegram.url_handler import URLHandler
 from app.application.services.adaptive_timeout import AdaptiveTimeoutService
@@ -14,14 +19,24 @@ from app.core.logging_utils import get_logger
 from app.core.verbosity import VerbosityResolver
 from app.di.application import build_application_services
 from app.di.repositories import (
+    build_audit_log_repository,
     build_batch_session_repository,
     build_embedding_repository,
+    build_karakeep_sync_repository,
+    build_llm_repository,
+    build_request_repository,
+    build_summary_repository,
     build_topic_search_repository,
     build_user_repository,
 )
 from app.di.search import build_search_dependencies, get_topic_search_limit
 from app.di.shared import build_async_audit_sink, build_core_dependencies, build_url_processor
-from app.di.types import SummaryCliRuntime, TelegramRuntime
+from app.di.types import (
+    SummaryCliRuntime,
+    TelegramCommandDispatcherDeps,
+    TelegramRepositories,
+    TelegramRuntime,
+)
 from app.infrastructure.persistence.sqlite.repositories.latency_stats_repository import (
     SqliteLatencyStatsRepositoryAdapter,
 )
@@ -49,6 +64,21 @@ def build_telegram_runtime(
 ) -> TelegramRuntime:
     """Build the full Telegram runtime graph from shared DI modules."""
     user_repo = build_user_repository(db)
+    summary_repo = build_summary_repository(db)
+    request_repo = build_request_repository(db)
+    llm_repo = build_llm_repository(db)
+    audit_repo = build_audit_log_repository(db)
+    batch_session_repo = build_batch_session_repository(db)
+    karakeep_sync_repo = build_karakeep_sync_repository(db)
+    telegram_repositories = TelegramRepositories(
+        user_repository=user_repo,
+        summary_repository=summary_repo,
+        request_repository=request_repo,
+        llm_repository=llm_repo,
+        audit_log_repository=audit_repo,
+        batch_session_repository=batch_session_repo,
+        karakeep_sync_repository=karakeep_sync_repo,
+    )
     verbosity_resolver = VerbosityResolver(user_repo)
     audit_sink = build_async_audit_sink(db, task_registry=audit_task_registry)
     core = build_core_dependencies(
@@ -91,6 +121,9 @@ def build_telegram_runtime(
         audit_func=core.audit_sink,
         sem=core.semaphore_factory,
         db_write_queue=db_write_queue,
+        summary_repo=summary_repo,
+        request_repo=request_repo,
+        user_repo=user_repo,
     )
     attachment_processor = AttachmentProcessor(
         cfg=cfg,
@@ -100,6 +133,8 @@ def build_telegram_runtime(
         audit_func=core.audit_sink,
         sem=core.semaphore_factory,
         db_write_queue=db_write_queue,
+        request_repo=request_repo,
+        user_repo=user_repo,
     )
 
     _wire_related_reads(
@@ -126,24 +161,102 @@ def build_telegram_runtime(
     )
 
     adaptive_timeout_service = _create_adaptive_timeout_service(cfg=cfg, db=db)
-    batch_session_repo = build_batch_session_repository(db)
-    message_handler = MessageHandler(
-        cfg=cfg,
+    task_manager = UserTaskManager()
+    url_handler = URLHandler(
         db=db,
         response_formatter=core.response_formatter,
         url_processor=url_processor,
-        forward_processor=forward_processor,
-        topic_searcher=search.topic_searcher,
-        local_searcher=search.local_searcher,
-        hybrid_search=search.hybrid_search_service,
-        attachment_processor=attachment_processor,
-        verbosity_resolver=verbosity_resolver,
         adaptive_timeout_service=adaptive_timeout_service,
+        verbosity_resolver=verbosity_resolver,
         llm_client=core.llm_client,
         batch_session_repo=batch_session_repo,
         batch_config=cfg.batch_analysis,
+        user_repo=user_repo,
+        request_repo=request_repo,
         file_validator=SecureFileValidator(max_file_size=10 * 1024 * 1024),
+    )
+    dispatcher_deps = TelegramCommandDispatcherDeps(
+        user_repository=user_repo,
+        response_formatter=core.response_formatter,
+        audit_func=audit_sink,
+        url_processor=url_processor,
+        url_handler=url_handler,
+        topic_searcher=search.topic_searcher,
+        local_searcher=search.local_searcher,
+        task_manager=task_manager,
+        hybrid_search=search.hybrid_search_service,
+        verbosity_resolver=verbosity_resolver,
         application_services=application_services,
+        repositories=telegram_repositories,
+        handlers={
+            "karakeep": KarakeepHandler(
+                cfg=cfg,
+                db=db,
+                response_formatter=core.response_formatter,
+                repository=karakeep_sync_repo,
+            )
+        },
+    )
+    command_dispatcher = TelegramCommandDispatcher(
+        cfg=cfg,
+        response_formatter=dispatcher_deps.response_formatter,
+        db=db,
+        url_processor=dispatcher_deps.url_processor,
+        audit_func=dispatcher_deps.audit_func,
+        url_handler=dispatcher_deps.url_handler,
+        topic_searcher=dispatcher_deps.topic_searcher,
+        local_searcher=dispatcher_deps.local_searcher,
+        task_manager=dispatcher_deps.task_manager,
+        hybrid_search=dispatcher_deps.hybrid_search,
+        verbosity_resolver=dispatcher_deps.verbosity_resolver,
+        user_repo=telegram_repositories.user_repository,
+        summary_repo=telegram_repositories.summary_repository,
+        request_repo=telegram_repositories.request_repository,
+        llm_repo=telegram_repositories.llm_repository,
+        application_services=dispatcher_deps.application_services,
+        handlers=dispatcher_deps.handlers,
+    )
+    access_controller = AccessController(
+        cfg=cfg,
+        db=db,
+        response_formatter=core.response_formatter,
+        audit_func=audit_sink,
+        user_repo=user_repo,
+    )
+    _lang = getattr(core.response_formatter, "_lang", "en")
+    callback_handler = CallbackHandler(
+        db=db,
+        response_formatter=core.response_formatter,
+        url_handler=url_handler,
+        hybrid_search=search.hybrid_search_service,
+        lang=_lang,
+    )
+    message_router = MessageRouter(
+        cfg=cfg,
+        db=db,
+        access_controller=access_controller,
+        command_processor=command_dispatcher,
+        url_handler=url_handler,
+        forward_processor=forward_processor,
+        response_formatter=core.response_formatter,
+        audit_func=audit_sink,
+        task_manager=task_manager,
+        attachment_processor=attachment_processor,
+        user_repo=user_repo,
+        callback_handler=callback_handler,
+        lang=_lang,
+    )
+    message_handler = MessageHandler(
+        cfg=cfg,
+        db=db,
+        audit_repo=audit_repo,
+        task_manager=task_manager,
+        access_controller=access_controller,
+        url_handler=url_handler,
+        command_dispatcher=command_dispatcher,
+        callback_handler=callback_handler,
+        message_router=message_router,
+        url_processor=url_processor,
     )
 
     logger.info(
@@ -199,12 +312,19 @@ def build_summary_cli_runtime(
         vector_store=search.vector_store,
         embedding_generator=search.embedding_generator,
     )
+    user_repo = build_user_repository(db)
+    summary_repo = build_summary_repository(db)
+    request_repo = build_request_repository(db)
+    llm_repo = build_llm_repository(db)
+    karakeep_sync_repo = build_karakeep_sync_repository(db)
     url_handler = URLHandler(
         db=db,
         response_formatter=core.response_formatter,
         url_processor=url_processor,
+        user_repo=user_repo,
+        request_repo=request_repo,
     )
-    command_processor = CommandProcessor(
+    command_processor = TelegramCommandDispatcher(
         cfg=cfg,
         response_formatter=core.response_formatter,
         db=db,
@@ -213,7 +333,19 @@ def build_summary_cli_runtime(
         url_handler=url_handler,
         topic_searcher=search.topic_searcher,
         local_searcher=search.local_searcher,
+        user_repo=user_repo,
+        summary_repo=summary_repo,
+        request_repo=request_repo,
+        llm_repo=llm_repo,
         application_services=application_services,
+        handlers={
+            "karakeep": KarakeepHandler(
+                cfg=cfg,
+                db=db,
+                response_formatter=core.response_formatter,
+                repository=karakeep_sync_repo,
+            )
+        },
     )
     return SummaryCliRuntime(
         core=core,

@@ -12,12 +12,15 @@ from typing import TYPE_CHECKING, ClassVar
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.core.logging_utils import get_logger
 from app.db.user_interactions import async_safe_update_user_interaction
-from app.di.repositories import build_karakeep_sync_repository
 
 if TYPE_CHECKING:
+    from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
     )
+    from app.application.ports import KarakeepSyncRepositoryPort
+    from app.config import AppConfig
+    from app.db.session import DatabaseSessionManager
 
 logger = get_logger(__name__)
 
@@ -34,6 +37,22 @@ class KarakeepHandler(HandlerDependenciesMixin):
 
     # Class-level rate limiting for Karakeep sync
     _last_sync: ClassVar[dict[int, float]] = {}
+
+    def __init__(
+        self,
+        cfg: AppConfig,
+        db: DatabaseSessionManager,
+        response_formatter: ResponseFormatter,
+        repository: KarakeepSyncRepositoryPort | None = None,
+    ) -> None:
+        super().__init__(cfg, db, response_formatter)
+        self._repository = repository
+
+    def _require_repository(self) -> KarakeepSyncRepositoryPort:
+        if self._repository is None:
+            msg = "Karakeep repository is not configured"
+            raise RuntimeError(msg)
+        return self._repository
 
     async def handle_sync_karakeep(self, ctx: CommandExecutionContext) -> None:
         """Handle /sync_karakeep command.
@@ -95,12 +114,11 @@ class KarakeepHandler(HandlerDependenciesMixin):
         from app.adapters.karakeep import KarakeepSyncService
 
         try:
-            karakeep_repo = build_karakeep_sync_repository(self._db)
             service = KarakeepSyncService(
                 api_url=self._cfg.karakeep.api_url,
                 api_key=self._cfg.karakeep.api_key,
                 sync_tag=self._cfg.karakeep.sync_tag,
-                repository=karakeep_repo,
+                repository=self._require_repository(),
             )
             status = await service.get_sync_status()
 
@@ -167,12 +185,11 @@ class KarakeepHandler(HandlerDependenciesMixin):
         await self._formatter.safe_reply(ctx.message, f"Starting Karakeep sync{mode_label}...")
 
         try:
-            karakeep_repo = build_karakeep_sync_repository(self._db)
             service = KarakeepSyncService(
                 api_url=self._cfg.karakeep.api_url,
                 api_key=self._cfg.karakeep.api_key,
                 sync_tag=self._cfg.karakeep.sync_tag,
-                repository=karakeep_repo,
+                repository=self._require_repository(),
             )
 
             result = await service.run_full_sync(user_id=ctx.uid, force=force)
@@ -247,8 +264,7 @@ class KarakeepHandler(HandlerDependenciesMixin):
             ctx: The command execution context.
         """
         try:
-            karakeep_repo = build_karakeep_sync_repository(self._db)
-            deleted = await karakeep_repo.async_delete_all_sync_records()
+            deleted = await self._require_repository().async_delete_all_sync_records()
             await self._formatter.safe_reply(
                 ctx.message,
                 f"Cleared {deleted} sync records. Running fresh sync...",

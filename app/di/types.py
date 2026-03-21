@@ -35,6 +35,34 @@ class SearchDependencies:
 
 
 @dataclass(frozen=True, slots=True)
+class TelegramRepositories:
+    user_repository: Any
+    summary_repository: Any
+    request_repository: Any
+    llm_repository: Any
+    audit_log_repository: Any
+    batch_session_repository: Any
+    karakeep_sync_repository: Any | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TelegramCommandDispatcherDeps:
+    user_repository: Any
+    response_formatter: Any
+    audit_func: Any
+    url_processor: Any
+    url_handler: Any | None
+    topic_searcher: Any | None
+    local_searcher: Any | None
+    task_manager: Any | None
+    hybrid_search: Any | None
+    verbosity_resolver: Any | None
+    application_services: Any | None
+    repositories: TelegramRepositories
+    handlers: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
 class ApplicationServices:
     unread_summaries: Any
     mark_summary_as_read: Any
@@ -71,6 +99,7 @@ class SummaryCliRuntime:
 class ApiRuntime:
     cfg: AppConfig
     db: DatabaseSessionManager
+    database_services: Any | None
     redis_client: Any | None
     core: CoreDependencies
     search: SearchDependencies
@@ -115,3 +144,39 @@ class SchedulerDependencies:
     digest_service_factory: Callable[
         [Any, Any, Callable[[int, str, Any | None], Awaitable[None]]], Any
     ]
+
+
+@dataclass(frozen=True, slots=True)
+class BackgroundProcessorDeps:
+    request_repository: Any
+    summary_repository: Any
+    db_override_factory: Any
+    lock_manager: Any
+    retry_runner: Any
+    progress_publisher: Any
+    failure_handler: Any
+    url_handler: Any
+    forward_handler: Any
+
+
+@dataclass(frozen=True, slots=True)
+class SyncDeps:
+    user_repository: Any
+    request_repository: Any
+    summary_repository: Any
+    crawl_result_repository: Any
+    llm_repository: Any
+    session_store: Any
+    aux_read_port: Any
+    record_collector: Any
+    envelope_serializer: Any
+    apply_service: Any
+
+
+@dataclass(frozen=True, slots=True)
+class DatabaseRuntimeServices:
+    executor: Any
+    bootstrap: Any
+    maintenance: Any
+    inspection: Any
+    backups: Any
