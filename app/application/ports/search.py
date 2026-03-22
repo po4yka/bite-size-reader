@@ -1,0 +1,98 @@
+"""Topic-search and embedding ports."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from app.application.dto.vector_search import VectorSearchHitDTO
+
+
+@runtime_checkable
+class TopicSearchRepositoryPort(Protocol):
+    """Port for topic search query operations."""
+
+    async def async_fts_search_paginated(
+        self, query: str, *, limit: int = 20, offset: int = 0, user_id: int | None = None
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Execute paginated FTS query, scoped to user_id when provided."""
+
+    async def async_search_request_ids(
+        self,
+        query: str,
+        *,
+        candidate_limit: int = 100,
+    ) -> list[int] | None:
+        """Return request IDs matching the topic query."""
+
+    async def async_search_documents(self, query: str, *, limit: int) -> list[Any]:
+        """Return indexed topic-search documents."""
+
+    async def async_scan_documents(
+        self,
+        *,
+        terms: list[str],
+        normalized_query: str,
+        seen_urls: set[str],
+        limit: int,
+        max_scan: int,
+    ) -> list[Any]:
+        """Return fallback-scanned topic-search documents."""
+
+
+@runtime_checkable
+class EmbeddingRepositoryPort(Protocol):
+    async def async_get_all_embeddings(self) -> list[dict[str, Any]]:
+        """Return all summary embeddings."""
+
+    async def async_get_embeddings_by_request_ids(
+        self,
+        request_ids: list[int],
+    ) -> list[dict[str, Any]]:
+        """Return embeddings for selected request IDs."""
+
+    async def async_get_recent_embeddings(self, *, limit: int) -> list[dict[str, Any]]:
+        """Return recent embeddings."""
+
+    async def async_create_or_update_summary_embedding(
+        self,
+        summary_id: int,
+        embedding_blob: bytes,
+        model_name: str,
+        model_version: str,
+        dimensions: int,
+        language: str | None = None,
+    ) -> None:
+        """Upsert a summary embedding."""
+
+    async def async_get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
+        """Return summary embedding by summary ID."""
+
+
+@runtime_checkable
+class VectorSearchPort(Protocol):
+    async def search(
+        self,
+        query: str,
+        *,
+        correlation_id: str | None = None,
+    ) -> list[VectorSearchHitDTO]:
+        """Return vector-search hits for the query."""
+
+
+@runtime_checkable
+class EmbeddingProviderPort(Protocol):
+    async def generate_embedding(
+        self,
+        text: str,
+        *,
+        language: str | None = None,
+        task_type: str = "document",
+    ) -> list[float]:
+        """Generate an embedding vector."""
+
+    def serialize_embedding(self, embedding: list[float]) -> bytes:
+        """Serialize the embedding for persistence."""
+
+    def get_model_name(self, language: str | None = None) -> str:
+        """Return the effective model name for the requested language."""

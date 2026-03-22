@@ -1,0 +1,214 @@
+"""Request, crawl, LLM, and video-download ports."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, runtime_checkable
+
+from app.domain.models.request import RequestStatus
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+
+class LLMCallRecord(TypedDict, total=False):
+    """Typed record for persisting an LLM call."""
+
+    request_id: int | None
+    provider: str | None
+    model: str | None
+    endpoint: str | None
+    request_headers_json: Any
+    request_messages_json: Any
+    response_text: str | None
+    response_json: Any
+    tokens_prompt: int | None
+    tokens_completion: int | None
+    cost_usd: float | None
+    latency_ms: int | None
+    status: str | None
+    error_text: str | None
+    structured_output_used: bool | None
+    structured_output_mode: str | None
+    error_context_json: Any
+
+
+@runtime_checkable
+class RequestRepositoryPort(Protocol):
+    """Port for request read operations used in application use cases."""
+
+    async def async_get_request_id_by_url_with_summary(self, user_id: int, url: str) -> int | None:
+        """Return request ID for URL owned by user that has a summary."""
+
+    async def async_get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
+        """Return request by ID."""
+
+    async def async_get_request_context(self, request_id: int) -> dict[str, Any] | None:
+        """Return request joined with its crawl result and summary."""
+
+    async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
+        """Return request by dedupe hash."""
+
+    async def async_get_requests_by_ids(
+        self, request_ids: list[int], user_id: int | None = None
+    ) -> dict[int, dict[str, Any]]:
+        """Return requests mapped by ID."""
+
+    async def async_create_request(
+        self,
+        *,
+        type_: str = "url",
+        status: RequestStatus = RequestStatus.PENDING,
+        correlation_id: str | None = None,
+        chat_id: int | None = None,
+        user_id: int | None = None,
+        input_url: str | None = None,
+        normalized_url: str | None = None,
+        dedupe_hash: str | None = None,
+        input_message_id: int | None = None,
+        fwd_from_chat_id: int | None = None,
+        fwd_from_msg_id: int | None = None,
+        lang_detected: str | None = None,
+        content_text: str | None = None,
+        route_version: int = 1,
+    ) -> int:
+        """Create a request."""
+
+    async def async_create_minimal_request(
+        self,
+        *,
+        type_: str = "url",
+        status: RequestStatus = RequestStatus.PENDING,
+        correlation_id: str | None = None,
+        chat_id: int | None = None,
+        user_id: int | None = None,
+        input_url: str | None = None,
+        normalized_url: str | None = None,
+        dedupe_hash: str | None = None,
+    ) -> tuple[int, bool]:
+        """Create a minimal request row."""
+
+    async def async_get_request_by_forward(
+        self, chat_id: int, fwd_message_id: int
+    ) -> dict[str, Any] | None:
+        """Return request by forward source identifiers."""
+
+    async def async_update_request_status(self, request_id: int, status: str) -> None:
+        """Update request status."""
+
+    async def async_update_request_status_with_correlation(
+        self,
+        request_id: int,
+        status: str,
+        correlation_id: str | None,
+    ) -> None:
+        """Update request status and correlation ID."""
+
+    async def async_update_request_lang_detected(self, request_id: int, lang: str) -> None:
+        """Update detected language."""
+
+    async def async_update_request_correlation_id(
+        self,
+        request_id: int,
+        correlation_id: str,
+    ) -> None:
+        """Update correlation ID."""
+
+    async def async_update_request_error(
+        self,
+        request_id: int,
+        status: str,
+        error_type: str | None = None,
+        error_message: str | None = None,
+        processing_time_ms: int | None = None,
+        error_context_json: Any | None = None,
+    ) -> None:
+        """Persist structured request error details."""
+
+    async def async_get_request_error_context(self, request_id: int) -> dict[str, Any] | None:
+        """Return structured request error context."""
+
+    async def async_count_pending_requests_before(self, created_at: datetime) -> int:
+        """Count pending requests created before the supplied timestamp."""
+
+    async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        """Return all request rows for sync operations."""
+
+    async def async_get_max_server_version(self, user_id: int) -> int | None:
+        """Return the maximum server_version for requests owned by *user_id*."""
+
+    async def async_update_bot_reply_message_id(
+        self, request_id: int, bot_reply_message_id: int
+    ) -> None:
+        """Persist the Telegram message-id of the bot's reply for a request."""
+
+
+@runtime_checkable
+class CrawlResultRepositoryPort(Protocol):
+    """Port for crawl-result query operations."""
+
+    async def async_get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
+        """Return crawl result by request ID."""
+
+    async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        """Return all crawl rows for sync operations."""
+
+    async def async_get_max_server_version(self, user_id: int) -> int | None:
+        """Return the maximum server_version for crawl results owned by *user_id*."""
+
+
+@runtime_checkable
+class LLMRepositoryPort(Protocol):
+    """Port for LLM-call query operations."""
+
+    async def async_get_llm_calls_by_request(self, request_id: int) -> list[dict[str, Any]]:
+        """Return LLM calls by request ID."""
+
+    async def async_count_llm_calls_by_request(self, request_id: int) -> int:
+        """Return the number of LLM calls by request ID."""
+
+    async def async_insert_llm_call(self, record: LLMCallRecord) -> int:
+        """Persist an LLM call."""
+
+    async def async_insert_llm_calls_batch(self, calls: list[dict[str, Any]]) -> list[int]:
+        """Persist a batch of LLM calls."""
+
+    async def async_get_latest_llm_model_by_request_id(self, request_id: int) -> str | None:
+        """Return the latest model used for a request."""
+
+    async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        """Return all LLM rows for sync operations."""
+
+    async def async_get_max_server_version(self, user_id: int) -> int | None:
+        """Return the maximum server_version for LLM calls owned by *user_id*."""
+
+    async def async_get_latest_error_by_request(self, request_id: int) -> dict[str, Any] | None:
+        """Return the latest error-like LLM call for a request."""
+
+
+@runtime_checkable
+class VideoDownloadRepositoryPort(Protocol):
+    async def async_get_video_download_by_request(
+        self,
+        request_id: int,
+    ) -> dict[str, Any] | None:
+        """Return video-download record by request ID."""
+
+    async def async_create_video_download(
+        self,
+        request_id: int,
+        video_id: str,
+        status: str = "pending",
+    ) -> int:
+        """Create a video-download row."""
+
+    async def async_update_video_download(self, download_id: int, **kwargs: Any) -> None:
+        """Update a video-download row."""
+
+    async def async_update_video_download_status(
+        self,
+        download_id: int,
+        status: str,
+        error_text: str | None = None,
+        download_started_at: Any | None = None,
+    ) -> None:
+        """Update video-download status."""
