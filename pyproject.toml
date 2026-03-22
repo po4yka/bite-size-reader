@@ -1,16 +1,3 @@
-[tool.black]
-line-length = 100
-target-version = ["py313"]
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  data
- |build
- |dist
- |venv
-)/
-'''
-
 [tool.isort]
 profile = "black"
 line_length = 100
@@ -230,11 +217,6 @@ mcp = [
   "mcp>=1.26,<2",
 ]
 
-# gRPC service layer (aspirational; not wired into bot.py by default)
-grpc = [
-  "grpcio>=1.60.0",
-  "grpcio-tools>=1.60.0",
-]
 
 # NOTE: spaCy trained models (en_core_web_sm, ru_core_news_sm) were removed because
 # the codebase only uses spacy.blank() + sentencizer, which needs no trained models.

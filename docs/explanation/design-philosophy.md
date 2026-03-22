@@ -330,7 +330,7 @@ class SummaryRepository:
 
 ### Factory Pattern (Object Creation)
 
-**Location:** `app/di/container.py`
+**Location:** `app/di/` (split across `api.py`, `application.py`, `telegram.py`, `repositories.py`, `shared.py`, etc.)
 
 **Purpose:** Centralize object creation and dependency injection.
 

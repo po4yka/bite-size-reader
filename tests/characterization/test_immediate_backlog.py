@@ -22,11 +22,6 @@ from tests.conftest import make_test_app_config
 from tests.test_commands import BotSpy, FakeMessage
 
 
-async def _async_generator(items):
-    for item in items:
-        yield item
-
-
 @pytest.mark.asyncio
 async def test_characterization_summary_command_happy_path_preserved() -> None:
     """Lock current /summarize command behavior for a single URL."""
@@ -261,63 +256,3 @@ async def test_characterization_unread_read_unread_transition_with_topic_filter(
         GetUnreadSummariesQuery(user_id=1, chat_id=1, topic="rust")
     )
     assert [s.id for s in rust_after_unread] == [1]
-
-
-@pytest.mark.asyncio
-async def test_characterization_grpc_submit_url_stream_order_and_terminal_state() -> None:
-    """Lock stream contract: queued -> processing -> done with terminal summary id."""
-    pytest.importorskip("grpc", reason="grpcio not installed")
-
-    from unittest.mock import AsyncMock, MagicMock, patch
-
-    from app.grpc.client import ProcessingClient
-    from app.protos import processing_pb2
-
-    # Cast to Any so mypy doesn't complain about dynamically-generated protobuf attrs
-    _pb2: Any = processing_pb2
-
-    updates = [
-        _pb2.ProcessingUpdate(
-            request_id=101,
-            status=_pb2.ProcessingStatus.ProcessingStatus_PENDING,
-            stage=_pb2.ProcessingStage.ProcessingStage_QUEUED,
-            message="queued",
-            progress=0.0,
-        ),
-        _pb2.ProcessingUpdate(
-            request_id=101,
-            status=_pb2.ProcessingStatus.ProcessingStatus_PROCESSING,
-            stage=_pb2.ProcessingStage.ProcessingStage_EXTRACTION,
-            message="extracting",
-            progress=0.3,
-        ),
-        _pb2.ProcessingUpdate(
-            request_id=101,
-            status=_pb2.ProcessingStatus.ProcessingStatus_COMPLETED,
-            stage=_pb2.ProcessingStage.ProcessingStage_DONE,
-            message="done",
-            progress=1.0,
-            summary_id=777,
-        ),
-    ]
-
-    mock_channel = MagicMock()
-    mock_channel.channel_ready = AsyncMock()
-    mock_channel.close = AsyncMock()
-
-    mock_stub = MagicMock()
-    mock_stub.SubmitUrl = MagicMock(return_value=_async_generator(updates))
-
-    with (
-        patch("grpc.aio.insecure_channel", return_value=mock_channel),
-        patch("app.grpc.client.processing_pb2_grpc.ProcessingServiceStub", return_value=mock_stub),
-    ):
-        client = ProcessingClient("localhost:50051")
-        await client.connect()
-
-        received = []
-        async for u in client.submit_url("https://example.com/article"):
-            received.append(u)
-
-        assert [u.status for u in received] == ["PENDING", "PROCESSING", "COMPLETED"]
-        assert received[-1].summary_id == 777

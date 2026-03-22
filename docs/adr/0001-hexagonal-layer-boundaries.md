@@ -9,7 +9,7 @@ Accepted
 The codebase had drifted into two competing architecture maps:
 
 - hexagonal layering via `app/domain`, `app/application`, `app/adapters`, `app/infrastructure`, and `app/di`
-- a parallel service/container map via `app/services`, adapter-side repository ports, and `app/di/container.py`
+- a parallel service/container map via `app/services`, adapter-side repository ports, and a monolithic DI container (since split into `app/di/*.py` modules)
 
 That split made it easy for API, Telegram, CLI, scheduler, and MCP code to bypass application ports and assemble concrete repositories or service graphs locally.
 

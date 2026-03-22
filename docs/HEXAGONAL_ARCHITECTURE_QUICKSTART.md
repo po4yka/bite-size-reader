@@ -16,7 +16,7 @@ This doc keeps our layering consistent across Telegram, CLI, and the mobile API.
 - Application: `app/application/use_cases/*`, DTOs in `app/application/dto/*`
 - Domain: `app/domain/*` (models, events, services, exceptions)
 - Infrastructure: `app/infrastructure/*`, `app/db/*`, external clients in `app/adapters/*`
-- DI: `app/di/container.py`
+- DI: `app/di/` (split by concern: `api.py`, `application.py`, `telegram.py`, `repositories.py`, `shared.py`)
 
 ## DB Layer
 
@@ -69,7 +69,7 @@ sequenceDiagram
 1) Domain: add/adjust entities or domain services in `app/domain/*` (no external deps).
 2) Application: create a use case in `app/application/use_cases/` that orchestrates domain + repositories.
 3) Infrastructure: ensure repository/client implementations exist in `app/infrastructure/*` or `app/adapters/*`.
-4) DI: wire it in `app/di/container.py`.
+4) DI: wire it in the appropriate `app/di/` module (e.g., `application.py` for use cases, `repositories.py` for repos).
 5) Presentation: call the use case from Telegram handlers (`app/adapters/telegram/*`) or FastAPI (`app/api/*`), formatting responses via `app/adapters/external/response_formatter.py`.
 
 ## When to add a use case

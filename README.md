@@ -307,7 +307,6 @@ app/
   db/            -- SQLite schema, migrations, audit logging helpers
   di/            -- Dependency injection
   domain/        -- Domain models and services (DDD patterns)
-  grpc/          -- gRPC service definitions (aspirational; not wired into production)
   infrastructure/ -- Persistence layer, event bus, vector store
     cache/       -- Cache layer (Redis)
     messaging/   -- Messaging infrastructure

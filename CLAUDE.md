@@ -124,7 +124,6 @@ app/
 +-- db/                 # Database schema and models
 +-- di/                 # Dependency injection
 +-- domain/             # Domain models and services (DDD patterns)
-+-- grpc/               # gRPC service definitions (aspirational; not wired into bot.py or DI)
 +-- infrastructure/     # Persistence, event bus, vector store
 |   +-- cache/          # Cache layer (Redis)
 |   +-- messaging/      # Messaging infrastructure

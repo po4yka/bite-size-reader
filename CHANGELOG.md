@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nlp` optional extra group and spaCy trained model dependencies (en_core_web_sm, ru_core_news_sm) -- codebase only uses `spacy.blank()` + sentencizer
 - `lock-piptools` Makefile target -- `lock-uv` is the canonical dependency locking path
 - `PROMPT.md` -- referenced non-existent migration docs
+- `app/grpc/` module, `app/protos/`, and `grpc` optional extra -- aspirational gRPC layer never wired into production
 
 ### Security
 - Update pyjwt 2.11.0 to 2.12.1 (CVE-2026-32597)
