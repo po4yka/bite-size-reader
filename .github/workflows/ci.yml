@@ -56,15 +56,14 @@ jobs:
         run: |
           # Include all extras for comprehensive test coverage
           # Scheduler import is now lazy in TelegramBot, avoiding metaclass conflicts
-          uv pip compile \
-            --python-version 3.13 \
+          # Use uv export (lockfile-based) so versions stay consistent with dev group
+          uv export --no-dev --no-hashes --format requirements-txt -p 3.13 \
             --extra api \
             --extra ml \
             --extra youtube \
             --extra export \
             --extra scheduler \
             --extra mcp \
-            pyproject.toml \
             -o requirements-all.txt
 
       - name: Compile locked requirements (dev)
