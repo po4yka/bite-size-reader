@@ -94,6 +94,7 @@ class TestModelValidation(unittest.TestCase):
             "FIRECRAWL_API_KEY": "fc_" + "h" * 20,
             "OPENROUTER_API_KEY": "or_" + "i" * 20,
             "ALLOWED_USER_IDS": "77",
+            "MODELS_CONFIG_PATH": "/nonexistent/models.yaml",
         }
 
         with patch.dict(os.environ, test_env, clear=True):
@@ -103,7 +104,7 @@ class TestModelValidation(unittest.TestCase):
             # Check that defaults are applied when env vars are not set
             assert cfg.runtime.db_path == "/data/app.db"
             assert cfg.openrouter.temperature == 0.2
-            # DeepSeek v3.2 is most reliable for structured outputs
+            # DeepSeek v3.2 is the code default (YAML file not loaded in this test)
             assert cfg.openrouter.model == "deepseek/deepseek-v3.2"
             # Default fallback models from config.py
             assert cfg.openrouter.fallback_models == (

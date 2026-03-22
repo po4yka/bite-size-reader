@@ -268,6 +268,79 @@ class OpenRouterConfig(BaseModel):
         return threshold
 
 
+class ModelRoutingConfig(BaseModel):
+    """Content-aware model routing configuration.
+
+    Routes content to different models based on detected content tier
+    (technical, sociopolitical, default) using lightweight heuristics.
+    """
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    enabled: bool = Field(default=False, validation_alias="MODEL_ROUTING_ENABLED")
+    default_model: str = Field(
+        default="anthropic/claude-sonnet-4.6",
+        validation_alias="MODEL_ROUTING_DEFAULT",
+    )
+    technical_model: str = Field(
+        default="google/gemini-3.1-pro-preview",
+        validation_alias="MODEL_ROUTING_TECHNICAL",
+    )
+    sociopolitical_model: str = Field(
+        default="x-ai/grok-4.20-beta",
+        validation_alias="MODEL_ROUTING_SOCIOPOLITICAL",
+    )
+    long_context_model: str = Field(
+        default="anthropic/claude-sonnet-4.6",
+        validation_alias="MODEL_ROUTING_LONG_CONTEXT",
+    )
+    fallback_models: tuple[str, ...] = Field(
+        default_factory=lambda: (
+            "deepseek/deepseek-v3.2",
+            "anthropic/claude-opus-4.6",
+            "openai/gpt-5.4",
+        ),
+        validation_alias="MODEL_ROUTING_FALLBACK_MODELS",
+    )
+    long_context_threshold: int = Field(
+        default=50000,
+        validation_alias="MODEL_ROUTING_LONG_CONTEXT_THRESHOLD",
+    )
+
+    @field_validator(
+        "default_model",
+        "technical_model",
+        "sociopolitical_model",
+        "long_context_model",
+        mode="before",
+    )
+    @classmethod
+    def _validate_model(cls, value: Any) -> str:
+        if value in (None, ""):
+            return str(value or "")
+        return validate_model_name(str(value))
+
+    @field_validator("fallback_models", mode="before")
+    @classmethod
+    def _parse_fallback_models(cls, value: Any) -> tuple[str, ...]:
+        return parse_fallback_models(value)
+
+    @field_validator("long_context_threshold", mode="before")
+    @classmethod
+    def _validate_threshold(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 50000
+        try:
+            threshold = int(str(value))
+        except ValueError as exc:
+            msg = "Long context threshold must be a valid integer"
+            raise ValueError(msg) from exc
+        if threshold < 1000:
+            msg = "Long context threshold must be at least 1000"
+            raise ValueError(msg)
+        return threshold
+
+
 class OpenAIConfig(_FallbackModelsMixin, BaseModel):
     """OpenAI API configuration for direct API access."""
 

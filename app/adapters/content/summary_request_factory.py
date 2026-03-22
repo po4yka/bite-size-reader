@@ -124,6 +124,7 @@ class SummaryRequestFactory:
             max_chars=request.max_chars,
             correlation_id=request.correlation_id,
             images=request.images,
+            url=request.url,
         )
         search_context = await self._runtime.search_enricher.enrich(
             content_text=content_for_summary,
@@ -252,14 +253,21 @@ class SummaryRequestFactory:
         max_chars: int,
         correlation_id: str | None,
         images: list[str] | None,
+        url: str | None = None,
     ) -> tuple[str, str | None]:
         """Choose truncation/model strategy and return cleaned content."""
         content_for_summary = content_text
         model_override = self._runtime.cfg.attachment.vision_model if images else None
 
         if len(content_text) > max_chars:
-            if self._runtime.cfg.openrouter.long_context_model:
-                model_override = self._runtime.cfg.openrouter.long_context_model
+            routing_cfg = self._runtime.cfg.model_routing
+            long_ctx_model = (
+                routing_cfg.long_context_model
+                if routing_cfg.enabled
+                else self._runtime.cfg.openrouter.long_context_model
+            )
+            if long_ctx_model:
+                model_override = long_ctx_model
             else:
                 content_for_summary = truncate_content_text(content_text, max_chars)
                 logger.info(
@@ -270,6 +278,22 @@ class SummaryRequestFactory:
                         "truncated_len": len(content_for_summary),
                         "max_chars": max_chars,
                     },
+                )
+
+        # Content-aware model routing (lower priority than vision/long-context)
+        if model_override is None:
+            routing_cfg = self._runtime.cfg.model_routing
+            if routing_cfg.enabled:
+                from app.core.content_classifier import classify_content
+                from app.core.model_router import resolve_model_for_content
+
+                tier = classify_content(content_for_summary, url=url)
+                model_override = resolve_model_for_content(
+                    tier=tier,
+                    content_length=len(content_for_summary),
+                    has_images=bool(images),
+                    routing_config=routing_cfg,
+                    openrouter_config=self._runtime.cfg.openrouter,
                 )
 
         return clean_content_for_llm(content_for_summary), model_override
@@ -355,11 +379,13 @@ class SummaryRequestFactory:
             )
             added_flash_models.add(model_name)
 
-        fallback_models = [
-            model
-            for model in self._runtime.cfg.openrouter.fallback_models
-            if model and model != base_model
-        ]
+        routing_cfg = self._runtime.cfg.model_routing
+        fallback_source = (
+            routing_cfg.fallback_models
+            if routing_cfg.enabled
+            else self._runtime.cfg.openrouter.fallback_models
+        )
+        fallback_models = [model for model in fallback_source if model and model != base_model]
         if fallback_models:
             fallback_model = fallback_models[0]
             if fallback_model not in added_flash_models:

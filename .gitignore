@@ -49,6 +49,9 @@ coverage.xml
 .env
 *.env
 
+# Model configuration (deployment-specific; track config/models.yaml.example instead)
+config/models.yaml
+
 # --- Database ---
 # The SQLite database file contains all user data and should not be versioned.
 # Your code should generate this file on first run.

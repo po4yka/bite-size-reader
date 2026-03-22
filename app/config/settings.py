@@ -30,7 +30,7 @@ from .integrations import (
     McpConfig,
     WebSearchConfig,
 )
-from .llm import AnthropicConfig, OpenAIConfig, OpenRouterConfig
+from .llm import AnthropicConfig, ModelRoutingConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
@@ -106,6 +106,7 @@ class AppConfig:
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     tts: ElevenLabsConfig = field(default_factory=ElevenLabsConfig)
     push: PushNotificationConfig = field(default_factory=PushNotificationConfig)
+    model_routing: ModelRoutingConfig = field(default_factory=ModelRoutingConfig)
 
 
 class Settings(BaseSettings):
@@ -152,6 +153,7 @@ class Settings(BaseSettings):
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     tts: ElevenLabsConfig = Field(default_factory=ElevenLabsConfig)
     push: PushNotificationConfig = Field(default_factory=PushNotificationConfig)
+    model_routing: ModelRoutingConfig = Field(default_factory=ModelRoutingConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -167,9 +169,14 @@ class Settings(BaseSettings):
 
         result = dict(data)
 
-        # Merge os.environ with constructor data (constructor takes precedence)
+        # Load YAML model config (lowest priority layer)
+        from app.config.models_file import load_models_yaml
+
+        yaml_data = load_models_yaml()
+
+        # Merge: YAML < env vars < constructor args (constructor takes precedence)
         env_data: dict[str, Any] = dict(os.environ)
-        merged_source = {**env_data, **data}
+        merged_source = {**yaml_data, **env_data, **data}
         cls._fail_on_deprecated_scraper_envs(merged_source)
 
         for field_name, field_info in cls.model_fields.items():
@@ -269,6 +276,7 @@ class Settings(BaseSettings):
             embedding=self.embedding,
             tts=self.tts,
             push=self.push,
+            model_routing=self.model_routing,
         )
 
 

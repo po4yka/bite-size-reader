@@ -9,6 +9,7 @@ services:
       - .env
     volumes:
       - ./data:/data
+      - ./config:/app/config:ro
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
       - /tmp
@@ -83,6 +84,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
     volumes:
       - ./data:/data
+      - ./config:/app/config:ro
       - /etc/localtime:/etc/localtime:ro
     ports:
       - "127.0.0.1:18000:8000"
@@ -139,6 +141,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
     volumes:
       - ./data:/data:ro
+      - ./config:/app/config:ro
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
       - /tmp

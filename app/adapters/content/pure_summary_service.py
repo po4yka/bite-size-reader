@@ -35,10 +35,16 @@ class PureSummaryService:
 
         content_for_summary = request.content_text
         model_override = None
-        max_chars_threshold = 50000
+        routing_cfg = self._runtime.cfg.model_routing
+        max_chars_threshold = routing_cfg.long_context_threshold if routing_cfg.enabled else 50000
         if len(request.content_text) > max_chars_threshold:
-            if self._runtime.cfg.openrouter.long_context_model:
-                model_override = self._runtime.cfg.openrouter.long_context_model
+            long_ctx_model = (
+                routing_cfg.long_context_model
+                if routing_cfg.enabled
+                else self._runtime.cfg.openrouter.long_context_model
+            )
+            if long_ctx_model:
+                model_override = long_ctx_model
             else:
                 content_for_summary = self._truncate_content(
                     request.content_text,
@@ -53,6 +59,20 @@ class PureSummaryService:
                         "max_chars": max_chars_threshold,
                     },
                 )
+
+        # Content-aware model routing (lower priority than long-context)
+        if model_override is None and routing_cfg.enabled:
+            from app.core.content_classifier import classify_content
+            from app.core.model_router import resolve_model_for_content
+
+            tier = classify_content(content_for_summary)
+            model_override = resolve_model_for_content(
+                tier=tier,
+                content_length=len(content_for_summary),
+                has_images=False,
+                routing_config=routing_cfg,
+                openrouter_config=self._runtime.cfg.openrouter,
+            )
 
         content_for_summary = clean_content_for_llm(content_for_summary)
         content_hint = detect_content_type_hint(content_for_summary)
