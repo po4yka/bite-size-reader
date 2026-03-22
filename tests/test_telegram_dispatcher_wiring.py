@@ -17,7 +17,6 @@ def test_command_dispatcher_routes_preserve_expected_precedence_order() -> None:
         llm_repository=MagicMock(),
         audit_log_repository=MagicMock(),
         batch_session_repository=MagicMock(),
-        karakeep_sync_repository=MagicMock(),
     )
     application_services = SimpleNamespace(
         unread_summaries=MagicMock(),
@@ -67,7 +66,6 @@ def test_command_dispatcher_routes_preserve_expected_precedence_order() -> None:
         "/unread",
         "/read",
         "/search",
-        "/sync_karakeep",
         "/listen",
         "/cdigest",
         "/digest",

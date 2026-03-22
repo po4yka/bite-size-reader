@@ -57,7 +57,6 @@ def _make_dispatcher(
         ),
         content_handler=cast("Any", SimpleNamespace()),
         search_handler=cast("Any", SimpleNamespace()),
-        karakeep_handler=cast("Any", SimpleNamespace()),
         listen_handler=cast("Any", SimpleNamespace()),
         digest_handler=cast("Any", SimpleNamespace()),
         init_session_handler=cast(

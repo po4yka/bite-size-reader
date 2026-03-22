@@ -75,7 +75,6 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 - **Twitter/X Adapter** (`app/adapters/twitter/`) -- Two-tier extraction: Firecrawl (public) + Playwright (authenticated). GraphQL interception for tweets/threads, DOM scraping for X Articles
 - **LLM Abstraction** (`app/adapters/llm/`) -- Provider-agnostic LLM interface (OpenRouter, OpenAI, Anthropic)
 - **External Services** (`app/adapters/openrouter/`, `app/adapters/external/`) -- OpenRouter client, Firecrawl parser, response formatting
-- **Karakeep Integration** (`app/adapters/karakeep/`) -- Bookmark sync from self-hosted Karakeep
 - **ElevenLabs TTS** (`app/adapters/elevenlabs/`) -- Text-to-speech audio generation via ElevenLabs API
 - **Attachment Processing** (`app/adapters/attachment/`) -- Attachment handling and processing
 - **Digest** (`app/adapters/digest/`, `app/adapters/telegram/command_handlers/digest*.py`) -- Channel digest orchestration with userbot, scheduler, and bot-mediated session init via Mini App
@@ -106,7 +105,6 @@ app/
 |   +-- digest/         # Channel digest orchestration
 |   +-- elevenlabs/     # ElevenLabs TTS integration
 |   +-- external/       # Firecrawl parser, response formatter
-|   +-- karakeep/       # Karakeep bookmark sync
 |   +-- llm/            # Provider-agnostic LLM abstraction
 |   +-- openrouter/     # OpenRouter client and helpers
 |   +-- telegram/       # Telegram bot logic, command_handlers/
@@ -146,7 +144,7 @@ web/                    # Carbon web interface (React + TypeScript + Vite)
 
 31 Peewee model classes in `app/db/models.py`:
 
-`BaseModel`, `User`, `ClientSecret`, `Chat`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `TopicSearchIndex` (FTS5), `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `AudioGeneration`, `AttachmentProcessing`, `Collection`, `UserDevice`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`, `RefreshToken`, `KarakeepSync`, `BatchSession`, `BatchSessionItem`, `Channel`, `ChannelCategory`, `ChannelSubscription`, `ChannelPost`, `ChannelPostAnalysis`, `DigestDelivery`, `UserDigestPreference`
+`BaseModel`, `User`, `ClientSecret`, `Chat`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `TopicSearchIndex` (FTS5), `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `AudioGeneration`, `AttachmentProcessing`, `Collection`, `UserDevice`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`, `RefreshToken`, `BatchSession`, `BatchSessionItem`, `Channel`, `ChannelCategory`, `ChannelSubscription`, `ChannelPost`, `ChannelPostAnalysis`, `DigestDelivery`, `UserDigestPreference`
 
 ## Summary JSON Contract
 

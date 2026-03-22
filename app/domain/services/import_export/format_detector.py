@@ -13,7 +13,7 @@ class FormatDetector:
 
     @staticmethod
     def detect(filename: str, content: bytes) -> str:
-        """Return format string: netscape_html, pocket, omnivore, linkwarden, karakeep, csv, opml, unknown."""
+        """Return format string: netscape_html, pocket, omnivore, linkwarden, csv, opml, unknown."""
         ext = _extension(filename)
 
         if ext == ".csv":
@@ -69,8 +69,6 @@ def _detect_json(content: bytes) -> str:
         return "unknown"
 
     if isinstance(data, dict):
-        if "bookmarks" in data:
-            return "karakeep"
         return "unknown"
 
     if isinstance(data, list) and len(data) > 0:

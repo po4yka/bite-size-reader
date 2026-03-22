@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
@@ -20,7 +19,7 @@ logger = get_logger(__name__)
 
 
 class SchedulerService:
-    """Manages background scheduled tasks like Karakeep sync."""
+    """Manages background scheduled tasks."""
 
     def __init__(
         self,
@@ -42,36 +41,6 @@ class SchedulerService:
             return
 
         self._scheduler = AsyncIOScheduler()
-
-        if (
-            self.cfg.karakeep.enabled
-            and self.cfg.karakeep.api_key
-            and self.cfg.karakeep.auto_sync_enabled
-        ):
-            self._scheduler.add_job(
-                self._run_karakeep_sync,
-                trigger=IntervalTrigger(hours=self.cfg.karakeep.sync_interval_hours),
-                id="karakeep_sync",
-                name="Karakeep Bookmark Sync",
-                replace_existing=True,
-                max_instances=1,
-            )
-            logger.info(
-                "scheduler_karakeep_job_added",
-                extra={
-                    "job_id": "karakeep_sync",
-                    "interval_hours": self.cfg.karakeep.sync_interval_hours,
-                },
-            )
-        else:
-            logger.info(
-                "scheduler_karakeep_job_skipped",
-                extra={
-                    "enabled": self.cfg.karakeep.enabled,
-                    "has_api_key": bool(self.cfg.karakeep.api_key),
-                    "auto_sync_enabled": self.cfg.karakeep.auto_sync_enabled,
-                },
-            )
 
         if self.cfg.digest.enabled:
             for idx, time_str in enumerate(self.cfg.digest.digest_times):
@@ -109,45 +78,6 @@ class SchedulerService:
             self._scheduler = None
             self._started = False
             logger.info("scheduler_stopped")
-
-    async def _run_karakeep_sync(self) -> None:
-        """Execute scheduled Karakeep sync."""
-        correlation_id = f"scheduled_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
-        logger.info("scheduled_karakeep_sync_starting", extra={"cid": correlation_id})
-
-        try:
-            service = self._deps.karakeep_service_factory()
-            user_id = self._deps.karakeep_user_id_resolver()
-            if user_id is None:
-                logger.warning(
-                    "scheduled_karakeep_sync_no_user_id",
-                    extra={"cid": correlation_id},
-                )
-                return
-
-            result = await service.run_full_sync(user_id=user_id)
-
-            total_errors = len(result.bsr_to_karakeep.errors) + len(result.karakeep_to_bsr.errors)
-            logger.info(
-                "scheduled_karakeep_sync_complete",
-                extra={
-                    "cid": correlation_id,
-                    "bsr_to_karakeep_synced": result.bsr_to_karakeep.items_synced,
-                    "bsr_to_karakeep_skipped": result.bsr_to_karakeep.items_skipped,
-                    "bsr_to_karakeep_failed": result.bsr_to_karakeep.items_failed,
-                    "karakeep_to_bsr_synced": result.karakeep_to_bsr.items_synced,
-                    "karakeep_to_bsr_skipped": result.karakeep_to_bsr.items_skipped,
-                    "karakeep_to_bsr_failed": result.karakeep_to_bsr.items_failed,
-                    "duration_seconds": result.total_duration_seconds,
-                    "errors": total_errors,
-                },
-            )
-
-        except Exception as exc:
-            logger.exception(
-                "scheduled_karakeep_sync_failed",
-                extra={"cid": correlation_id, "error": str(exc)},
-            )
 
     async def _run_channel_digest(self) -> None:
         """Execute scheduled channel digest delivery for all subscribed users."""

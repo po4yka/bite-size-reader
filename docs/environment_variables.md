@@ -395,17 +395,6 @@ Controls which embedding backend generates vectors for semantic search.
 | `SECRET_LOGIN_LOCKOUT_MINUTES` | `15` | Lockout duration |
 | `SECRET_LOGIN_PEPPER` | _(none)_ | Optional pepper for secret hashing |
 
-## Karakeep Integration
-
-| Variable | Default | Description |
-| ---------- | --------- | ------------- |
-| `KARAKEEP_ENABLED` | `false` | Enable Karakeep bookmark sync |
-| `KARAKEEP_API_URL` | `http://localhost:3000/api/v1` | Karakeep API endpoint |
-| `KARAKEEP_API_KEY` | _(empty)_ | Karakeep API key |
-| `KARAKEEP_SYNC_TAG` | `bsr-synced` | Tag applied to synced bookmarks |
-| `KARAKEEP_SYNC_INTERVAL_HOURS` | `6` | Auto-sync interval (1-168h) |
-| `KARAKEEP_AUTO_SYNC_ENABLED` | `true` | Enable automatic periodic sync |
-
 ## Channel Digest
 
 | Variable | Default | Description |

@@ -1,6 +1,6 @@
 """Smoke tests for command handlers not covered by test_commands.py.
 
-Covers OnboardingHandler (/start) and KarakeepHandler (/sync_karakeep).
+Covers OnboardingHandler (/start).
 AdminHandler (/dbinfo, /dbverify) and URLCommandsHandler (/summarize)
 are exercised in test_commands.py via the bot integration path.
 """
@@ -80,31 +80,6 @@ class TestOnboardingHandler(unittest.IsolatedAsyncioTestCase):
             await bot._shutdown()
             bot.db.database.close()
             assert any("Commands" in r for r in msg._replies)
-
-
-class TestKarakeepHandlerDisabled(unittest.IsolatedAsyncioTestCase):
-    """Smoke test for KarakeepHandler when Karakeep integration is disabled."""
-
-    def setUp(self):
-        from app.db.models import database_proxy
-
-        self._old_proxy_obj = database_proxy.obj
-
-    def tearDown(self):
-        from app.db.models import database_proxy
-
-        if database_proxy.obj is not self._old_proxy_obj:
-            database_proxy.initialize(self._old_proxy_obj)
-
-    async def test_sync_karakeep_disabled_replies_gracefully(self):
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-            # Default test config has Karakeep disabled — should reply, not crash.
-            msg = FakeMessage("/sync_karakeep")
-            await bot._on_message(msg)
-            await bot._shutdown()
-            bot.db.database.close()
-            assert msg._replies, "/sync_karakeep should reply even when disabled"
 
 
 if __name__ == "__main__":

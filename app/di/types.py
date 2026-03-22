@@ -42,7 +42,6 @@ class TelegramRepositories:
     llm_repository: Any
     audit_log_repository: Any
     batch_session_repository: Any
-    karakeep_sync_repository: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +54,6 @@ class TelegramCommandDispatcherDeps:
     url_commands_handler: Any
     content_handler: Any
     search_handler: Any
-    karakeep_handler: Any
     listen_handler: Any
     digest_handler: Any
     init_session_handler: Any
@@ -140,8 +138,6 @@ class McpRuntime:
 
 @dataclass(frozen=True, slots=True)
 class SchedulerDependencies:
-    karakeep_service_factory: Callable[[], Any]
-    karakeep_user_id_resolver: Callable[[], int | None]
     digest_userbot_factory: Callable[[], Any]
     digest_llm_factory: Callable[[], Any]
     digest_bot_client_factory: Callable[[], Any]

@@ -583,18 +583,6 @@ Not directly, but you can:
 2. **Sync via Mobile API** (build custom sync script)
 3. **Direct Database Access** (query SQLite, convert to Markdown)
 
-**Karakeep Integration**: Built-in sync with Karakeep (self-hosted bookmark manager).
-
-```bash
-# Enable Karakeep sync
-KARAKEEP_ENABLED=true
-KARAKEEP_API_URL=https://karakeep.example.com
-KARAKEEP_API_KEY=...
-
-# Sync command
-/sync_karakeep
-```
-
 ### Can I use it as a Slack bot?
 
 Not out-of-box, but adaptable:

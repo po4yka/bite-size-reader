@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
     from app.adapters.telegram.message_router import MessageRouter
     from app.adapters.telegram.url_handler import URLHandler
-    from app.application.ports.users import AuditLogRepositoryPort
+    from app.application.ports.audit import AuditLogRepositoryPort
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 

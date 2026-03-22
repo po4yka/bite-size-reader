@@ -21,7 +21,6 @@ from app.adapters.telegram.command_handlers.content_handler import ContentHandle
 from app.adapters.telegram.command_handlers.digest_handler import DigestHandler
 from app.adapters.telegram.command_handlers.export_command import ExportHandler
 from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandler
-from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandler
 from app.adapters.telegram.command_handlers.listen_handler import ListenHandler
 from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandler
 from app.adapters.telegram.command_handlers.rules_handler import RulesHandler
@@ -46,7 +45,6 @@ class TelegramCommandDispatcher:
         url_commands_handler: URLCommandsHandler,
         content_handler: ContentHandler,
         search_handler: SearchHandler,
-        karakeep_handler: KarakeepHandler,
         listen_handler: ListenHandler,
         digest_handler: DigestHandler,
         init_session_handler: InitSessionHandler,
@@ -64,7 +62,6 @@ class TelegramCommandDispatcher:
         self._url_commands = url_commands_handler
         self._content = content_handler
         self._search = search_handler
-        self._karakeep = karakeep_handler
         self._listen = listen_handler
         self._digest = digest_handler
         self._init_session = init_session_handler

@@ -10,16 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 
-def _build_cfg(
-    *, karakeep_enabled: bool = True, digest_enabled: bool = True, allowed_user_ids=(123,)
-):
+def _build_cfg(*, digest_enabled: bool = True, allowed_user_ids=(123,)):
     return SimpleNamespace(
-        karakeep=SimpleNamespace(
-            enabled=karakeep_enabled,
-            api_key="kk-key",
-            auto_sync_enabled=True,
-            sync_interval_hours=6,
-        ),
         digest=SimpleNamespace(
             enabled=digest_enabled,
             digest_times=["09:30", "18:45"],
@@ -99,8 +91,6 @@ def _load_scheduler_module(monkeypatch):
 
 def _minimal_deps(**overrides):
     base = {
-        "karakeep_service_factory": MagicMock(),
-        "karakeep_user_id_resolver": MagicMock(return_value=123),
         "digest_userbot_factory": MagicMock(),
         "digest_llm_factory": MagicMock(),
         "digest_bot_client_factory": MagicMock(),
@@ -111,7 +101,7 @@ def _minimal_deps(**overrides):
 
 
 def test_start_stop_and_next_run_time(monkeypatch) -> None:
-    scheduler_module, FakeCronTrigger, FakeIntervalTrigger = _load_scheduler_module(monkeypatch)
+    scheduler_module, FakeCronTrigger, _FakeIntervalTrigger = _load_scheduler_module(monkeypatch)
     service = scheduler_module.SchedulerService(
         _build_cfg(),
         db=MagicMock(),
@@ -121,64 +111,14 @@ def test_start_stop_and_next_run_time(monkeypatch) -> None:
     service.start()
 
     assert service.is_running is True
-    assert isinstance(service._scheduler.jobs["karakeep_sync"]["trigger"], FakeIntervalTrigger)
     assert isinstance(service._scheduler.jobs["channel_digest_0"]["trigger"], FakeCronTrigger)
     assert service._scheduler.jobs["channel_digest_0"]["trigger"].hour == 9
     assert service._scheduler.jobs["channel_digest_1"]["trigger"].minute == 45
-    assert service.get_next_run_time("karakeep_sync") == datetime(2026, 1, 1, 9, 0, 0)
     assert service.get_next_run_time("missing") is None
 
     service.stop()
 
     assert service.is_running is False
-
-
-@pytest.mark.asyncio
-async def test_run_karakeep_sync_uses_first_allowed_user(monkeypatch) -> None:
-    scheduler_module, _, _ = _load_scheduler_module(monkeypatch)
-    sync_service = MagicMock()
-    sync_service.run_full_sync = AsyncMock(
-        return_value=SimpleNamespace(
-            bsr_to_karakeep=SimpleNamespace(
-                items_synced=1, items_skipped=2, items_failed=0, errors=[]
-            ),
-            karakeep_to_bsr=SimpleNamespace(
-                items_synced=3, items_skipped=4, items_failed=0, errors=[]
-            ),
-            total_duration_seconds=12.5,
-        )
-    )
-    service = scheduler_module.SchedulerService(
-        _build_cfg(allowed_user_ids=(42, 99)),
-        db=MagicMock(),
-        deps=_minimal_deps(
-            karakeep_service_factory=MagicMock(return_value=sync_service),
-            karakeep_user_id_resolver=MagicMock(return_value=42),
-        ),
-    )
-
-    await service._run_karakeep_sync()
-
-    sync_service.run_full_sync.assert_awaited_once_with(user_id=42)
-
-
-@pytest.mark.asyncio
-async def test_run_karakeep_sync_returns_early_without_allowed_user(monkeypatch) -> None:
-    scheduler_module, _, _ = _load_scheduler_module(monkeypatch)
-    sync_service = MagicMock()
-    sync_service.run_full_sync = AsyncMock()
-    service = scheduler_module.SchedulerService(
-        _build_cfg(allowed_user_ids=()),
-        db=MagicMock(),
-        deps=_minimal_deps(
-            karakeep_service_factory=MagicMock(return_value=sync_service),
-            karakeep_user_id_resolver=MagicMock(return_value=None),
-        ),
-    )
-
-    await service._run_karakeep_sync()
-
-    sync_service.run_full_sync.assert_not_awaited()
 
 
 @pytest.mark.asyncio

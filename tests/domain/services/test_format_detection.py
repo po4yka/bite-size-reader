@@ -1,7 +1,7 @@
 """Tests for import file format detection.
 
 Covers FormatDetector.detect across all supported formats:
-csv, opml, netscape_html, pocket, omnivore, linkwarden, karakeep, and unknown.
+csv, opml, netscape_html, pocket, omnivore, linkwarden, and unknown.
 """
 
 from __future__ import annotations
@@ -59,10 +59,6 @@ class TestFormatDetectorHTML:
 
 
 class TestFormatDetectorJSON:
-    def test_karakeep_format(self) -> None:
-        content = json.dumps({"bookmarks": [{"url": "https://test.com"}]}).encode()
-        assert FormatDetector.detect("export.json", content) == "karakeep"
-
     def test_omnivore_format(self) -> None:
         content = json.dumps([{"url": "https://test.com", "labels": [{"name": "tag"}]}]).encode()
         assert FormatDetector.detect("export.json", content) == "omnivore"

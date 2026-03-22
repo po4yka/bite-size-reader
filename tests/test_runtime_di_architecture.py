@@ -199,3 +199,18 @@ def test_p2_runtime_modules_do_not_use_runtime_builder_shortcuts() -> None:
         assert result.stdout.strip() == "", (
             f"found forbidden runtime builder shortcut for {pattern!r}:\n{result.stdout}"
         )
+
+
+@pytest.mark.skipif(shutil.which("rg") is None, reason="rg is required for architecture guard")
+def test_production_code_does_not_import_root_application_ports_facade() -> None:
+    patterns = [
+        "from app.application.ports import",
+        "import app.application.ports",
+    ]
+    for pattern in patterns:
+        result = _run_rg(pattern=pattern, path="app", fixed=True)
+        assert result.returncode in (0, 1)
+        assert result.stdout.strip() == "", (
+            f"found forbidden root ports facade import in production code for {pattern!r}:\n"
+            f"{result.stdout}"
+        )

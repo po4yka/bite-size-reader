@@ -1,13 +1,16 @@
 """Compatibility facade for application-layer ports.
 
-Production code should import from specific submodules under
-``app.application.ports``. This module re-exports the complete surface for
-tests and incremental migration.
+Production code must import from specific submodules under
+``app.application.ports``. This root facade exists only for tests and
+incremental compatibility while the import surface is tightened.
 """
 
 from __future__ import annotations
 
 from .audio import AudioGenerationRepositoryPort, AudioStoragePort, TTSProviderPort
+from .audit import AuditLogRepositoryPort
+from .backups import BackupRepositoryPort
+from .batch_sessions import BatchSessionRepositoryPort
 from .imports import BookmarkImportPort, ImportJobRepositoryPort
 from .requests import (
     CrawlResultRepositoryPort,
@@ -31,13 +34,7 @@ from .search import (
     VectorSearchPort,
 )
 from .summaries import SummaryRepositoryPort, TagRepositoryPort
-from .users import (
-    AuditLogRepositoryPort,
-    BackupRepositoryPort,
-    BatchSessionRepositoryPort,
-    KarakeepSyncRepositoryPort,
-    UserRepositoryPort,
-)
+from .users import UserRepositoryPort
 
 __all__ = [
     "AudioGenerationRepositoryPort",
@@ -51,7 +48,6 @@ __all__ = [
     "EmbeddingProviderPort",
     "EmbeddingRepositoryPort",
     "ImportJobRepositoryPort",
-    "KarakeepSyncRepositoryPort",
     "LLMCallRecord",
     "LLMRepositoryPort",
     "RequestRepositoryPort",

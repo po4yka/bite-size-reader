@@ -20,7 +20,6 @@ from app.adapters.telegram.command_handlers.content_handler import ContentHandle
 from app.adapters.telegram.command_handlers.digest_handler import DigestHandler
 from app.adapters.telegram.command_handlers.export_command import ExportHandler
 from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandler
-from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandler
 from app.adapters.telegram.command_handlers.listen_handler import ListenHandler
 from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandler
 from app.adapters.telegram.command_handlers.rules_handler import RulesHandler
@@ -44,7 +43,6 @@ from app.di.repositories import (
     build_audit_log_repository,
     build_batch_session_repository,
     build_embedding_repository,
-    build_karakeep_sync_repository,
     build_llm_repository,
     build_request_repository,
     build_summary_repository,
@@ -96,7 +94,6 @@ def build_telegram_runtime(
     llm_repo = build_llm_repository(db)
     audit_repo = build_audit_log_repository(db)
     batch_session_repo = build_batch_session_repository(db)
-    karakeep_sync_repo = build_karakeep_sync_repository(db)
     telegram_repositories = TelegramRepositories(
         user_repository=user_repo,
         summary_repository=summary_repo,
@@ -104,7 +101,6 @@ def build_telegram_runtime(
         llm_repository=llm_repo,
         audit_log_repository=audit_repo,
         batch_session_repository=batch_session_repo,
-        karakeep_sync_repository=karakeep_sync_repo,
     )
     verbosity_resolver = VerbosityResolver(user_repo)
     audit_sink = build_async_audit_sink(db, task_registry=audit_task_registry)
@@ -235,7 +231,6 @@ def build_telegram_runtime(
         url_commands_handler=dispatcher_deps.url_commands_handler,
         content_handler=dispatcher_deps.content_handler,
         search_handler=dispatcher_deps.search_handler,
-        karakeep_handler=dispatcher_deps.karakeep_handler,
         listen_handler=dispatcher_deps.listen_handler,
         digest_handler=dispatcher_deps.digest_handler,
         init_session_handler=dispatcher_deps.init_session_handler,
@@ -345,7 +340,6 @@ def build_summary_cli_runtime(
     summary_repo = build_summary_repository(db)
     request_repo = build_request_repository(db)
     llm_repo = build_llm_repository(db)
-    karakeep_sync_repo = build_karakeep_sync_repository(db)
     url_handler = URLHandler(
         db=db,
         response_formatter=core.response_formatter,
@@ -373,7 +367,6 @@ def build_summary_cli_runtime(
             llm_repository=llm_repo,
             audit_log_repository=None,
             batch_session_repository=None,
-            karakeep_sync_repository=karakeep_sync_repo,
         ),
         tts_service_factory=lambda: TTSService(
             summary_repository=summary_repo,
@@ -394,7 +387,6 @@ def build_summary_cli_runtime(
         url_commands_handler=dispatcher_deps.url_commands_handler,
         content_handler=dispatcher_deps.content_handler,
         search_handler=dispatcher_deps.search_handler,
-        karakeep_handler=dispatcher_deps.karakeep_handler,
         listen_handler=dispatcher_deps.listen_handler,
         digest_handler=dispatcher_deps.digest_handler,
         init_session_handler=dispatcher_deps.init_session_handler,
@@ -467,12 +459,6 @@ def _build_command_dispatcher_deps(
         response_formatter=response_formatter,
         searcher_provider=runtime_state,
         search_topics_use_case=getattr(application_services, "search_topics", None),
-    )
-    karakeep_handler = KarakeepHandler(
-        cfg=cfg,
-        db=db,
-        response_formatter=response_formatter,
-        repository=repositories.karakeep_sync_repository,
     )
     listen_handler = ListenHandler(
         cfg=cfg,
@@ -616,10 +602,6 @@ def _build_command_dispatcher_deps(
             TextCommandRoute("/unread", build_text_handler(content_handler.handle_unread)),
             TextCommandRoute("/read", build_text_handler(content_handler.handle_read)),
             TextCommandRoute("/search", build_text_handler(search_handler.handle_search)),
-            TextCommandRoute(
-                "/sync_karakeep",
-                build_text_handler(karakeep_handler.handle_sync_karakeep),
-            ),
             TextCommandRoute("/listen", build_text_handler(listen_handler.handle_listen)),
             TextCommandRoute("/cdigest", build_text_handler(digest_handler.handle_cdigest)),
             TextCommandRoute("/digest", build_text_handler(digest_handler.handle_digest)),
@@ -651,7 +633,6 @@ def _build_command_dispatcher_deps(
         url_commands_handler=url_commands_handler,
         content_handler=content_handler,
         search_handler=search_handler,
-        karakeep_handler=karakeep_handler,
         listen_handler=listen_handler,
         digest_handler=digest_handler,
         init_session_handler=init_session_handler,

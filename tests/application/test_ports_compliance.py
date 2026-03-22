@@ -13,10 +13,25 @@ import inspect
 import pytest
 
 from app.application.ports import (
+    AuditLogRepositoryPort,
+    BackupRepositoryPort,
+    BatchSessionRepositoryPort,
     LLMRepositoryPort,
     RequestRepositoryPort,
     SummaryRepositoryPort,
+    UserRepositoryPort,
 )
+from app.application.ports.audit import AuditLogRepositoryPort as AuditLogRepositoryPortDirect
+from app.application.ports.backups import BackupRepositoryPort as BackupRepositoryPortDirect
+from app.application.ports.batch_sessions import (
+    BatchSessionRepositoryPort as BatchSessionRepositoryPortDirect,
+)
+from app.application.ports.requests import (
+    LLMRepositoryPort as LLMRepositoryPortDirect,
+    RequestRepositoryPort as RequestRepositoryPortDirect,
+)
+from app.application.ports.summaries import SummaryRepositoryPort as SummaryRepositoryPortDirect
+from app.application.ports.users import UserRepositoryPort as UserRepositoryPortDirect
 from tests.integration.helpers import temp_db
 
 
@@ -65,3 +80,45 @@ def test_request_repository_critical_methods_are_async(db) -> None:
         method = getattr(repo, method_name, None)
         assert method is not None, f"Missing method: {method_name}"
         assert inspect.iscoroutinefunction(method), f"{method_name} must be async"
+
+
+def test_root_facade_reexports_current_port_surface() -> None:
+    assert AuditLogRepositoryPort is AuditLogRepositoryPortDirect
+    assert BackupRepositoryPort is BackupRepositoryPortDirect
+    assert BatchSessionRepositoryPort is BatchSessionRepositoryPortDirect
+    assert LLMRepositoryPort is LLMRepositoryPortDirect
+    assert RequestRepositoryPort is RequestRepositoryPortDirect
+    assert SummaryRepositoryPort is SummaryRepositoryPortDirect
+    assert UserRepositoryPort is UserRepositoryPortDirect
+
+
+def test_port_submodules_import_cleanly() -> None:
+    from app.application import ports
+    from app.application.ports import (
+        audio,
+        audit,
+        backups,
+        batch_sessions,
+        imports,
+        requests,
+        rules,
+        search,
+        summaries,
+        users,
+    )
+
+    modules = (
+        ports,
+        audit,
+        audio,
+        backups,
+        batch_sessions,
+        imports,
+        requests,
+        rules,
+        search,
+        summaries,
+        users,
+    )
+
+    assert all(module is not None for module in modules)

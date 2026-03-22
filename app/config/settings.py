@@ -27,7 +27,6 @@ from .integrations import (
     BatchAnalysisConfig,
     ChromaConfig,
     EmbeddingConfig,
-    KarakeepConfig,
     McpConfig,
     WebSearchConfig,
 )
@@ -96,7 +95,6 @@ class AppConfig:
     auth: AuthConfig
     sync: SyncConfig
     background: BackgroundProcessorConfig
-    karakeep: KarakeepConfig
     circuit_breaker: CircuitBreakerConfig
     web_search: WebSearchConfig
     adaptive_timeout: AdaptiveTimeoutConfig
@@ -143,7 +141,6 @@ class Settings(BaseSettings):
     auth: AuthConfig = Field(default_factory=AuthConfig)
     sync: SyncConfig = Field(default_factory=SyncConfig)
     background: BackgroundProcessorConfig = Field(default_factory=BackgroundProcessorConfig)
-    karakeep: KarakeepConfig = Field(default_factory=KarakeepConfig)
     circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)
     web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
@@ -261,7 +258,6 @@ class Settings(BaseSettings):
             auth=self.auth,
             sync=self.sync,
             background=self.background,
-            karakeep=self.karakeep,
             circuit_breaker=self.circuit_breaker,
             web_search=self.web_search,
             adaptive_timeout=self.adaptive_timeout,

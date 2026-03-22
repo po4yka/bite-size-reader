@@ -580,36 +580,6 @@ class RefreshToken(BaseModel):
         indexes = ((("user", "client_id"), False),)
 
 
-class KarakeepSync(BaseModel):
-    """Track synced items between BSR and Karakeep."""
-
-    id = peewee.AutoField()
-    # FK to Summary with CASCADE delete (null if synced from Karakeep)
-    bsr_summary = peewee.ForeignKeyField(
-        Summary,
-        backref="karakeep_syncs",
-        null=True,
-        on_delete="CASCADE",
-    )
-    karakeep_bookmark_id = peewee.TextField(null=True)  # Karakeep bookmark ID
-    url_hash = peewee.TextField(index=True)  # URL hash for deduplication
-    sync_direction = peewee.TextField()  # 'bsr_to_karakeep' or 'karakeep_to_bsr'
-    synced_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-    # Timestamp tracking for conflict resolution
-    bsr_modified_at = peewee.DateTimeField(null=True)  # Last BSR status update
-    karakeep_modified_at = peewee.DateTimeField(null=True)  # Last Karakeep status update
-
-    class Meta:
-        table_name = "karakeep_sync"
-        indexes = (
-            # Unique constraint prevents duplicate sync records for same URL/direction
-            (("url_hash", "sync_direction"), True),
-            (("synced_at",), False),
-            (("bsr_summary",), False),
-        )
-
-
 class BatchSession(BaseModel):
     """Tracks batch URL processing sessions with relationship analysis."""
 
@@ -1162,7 +1132,6 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     CollectionInvite,
     UserDevice,
     RefreshToken,
-    KarakeepSync,
     BatchSession,
     BatchSessionItem,
     Channel,

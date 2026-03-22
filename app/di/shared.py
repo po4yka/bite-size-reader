@@ -16,7 +16,7 @@ from app.di.types import CoreDependencies
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from app.application.ports import SummaryRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.services.related_reads_service import RelatedReadsService
     from app.application.services.topic_search import TopicSearchService
     from app.config import AppConfig

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from app.di.types import SchedulerDependencies
 
@@ -18,8 +18,6 @@ def build_scheduler_dependencies(
 ) -> SchedulerDependencies:
     """Build scheduler job factories without constructing jobs inline in the service."""
     return SchedulerDependencies(
-        karakeep_service_factory=lambda: _create_karakeep_service(cfg, db),
-        karakeep_user_id_resolver=lambda: _resolve_default_user_id(cfg),
         digest_userbot_factory=lambda: _create_digest_userbot(cfg),
         digest_llm_factory=lambda: _create_digest_llm_client(cfg),
         digest_bot_client_factory=lambda: _create_digest_bot_client(cfg),
@@ -29,23 +27,6 @@ def build_scheduler_dependencies(
             llm_client=llm_client,
             send_message=send_message,
         ),
-    )
-
-
-def _resolve_default_user_id(cfg: AppConfig) -> int | None:
-    return cfg.telegram.allowed_user_ids[0] if cfg.telegram.allowed_user_ids else None
-
-
-def _create_karakeep_service(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
-    from app.adapters.karakeep import KarakeepSyncService
-    from app.di.repositories import build_karakeep_sync_repository
-
-    karakeep_repo = build_karakeep_sync_repository(db)
-    return KarakeepSyncService(
-        api_url=cfg.karakeep.api_url,
-        api_key=cfg.karakeep.api_key,
-        sync_tag=cfg.karakeep.sync_tag,
-        repository=cast("Any", karakeep_repo),
     )
 
 

@@ -63,16 +63,6 @@ class RedisConfig(BaseModel):
         validation_alias="REDIS_EMBEDDING_CACHE_TTL_SECONDS",
         description="TTL for embedding results cache (default: 24 hours)",
     )
-    karakeep_cache_ttl_seconds: int = Field(
-        default=3_600,
-        validation_alias="REDIS_KARAKEEP_CACHE_TTL_SECONDS",
-        description="TTL for Karakeep bookmark index cache (default: 1 hour)",
-    )
-    karakeep_lock_ttl_seconds: int = Field(
-        default=600,
-        validation_alias="REDIS_KARAKEEP_LOCK_TTL_SECONDS",
-        description="TTL for Karakeep sync distributed lock (default: 10 minutes)",
-    )
 
     @field_validator("url", mode="before")
     @classmethod
@@ -184,8 +174,6 @@ class RedisConfig(BaseModel):
         "auth_token_cache_ttl_seconds",
         "batch_progress_ttl_seconds",
         "embedding_cache_ttl_seconds",
-        "karakeep_cache_ttl_seconds",
-        "karakeep_lock_ttl_seconds",
         mode="before",
     )
     @classmethod
@@ -207,8 +195,6 @@ class RedisConfig(BaseModel):
             "auth_token_cache_ttl_seconds": (60, 86_400 * 30),  # 1 min to 30 days
             "batch_progress_ttl_seconds": (60, 86_400),  # 1 min to 1 day
             "embedding_cache_ttl_seconds": (300, 86_400 * 7),  # 5 min to 7 days
-            "karakeep_cache_ttl_seconds": (60, 86_400),  # 1 min to 1 day
-            "karakeep_lock_ttl_seconds": (30, 3_600),  # 30 sec to 1 hour
         }
         min_val, max_val = ttl_limits.get(info.field_name, (60, 86_400 * 14))
 

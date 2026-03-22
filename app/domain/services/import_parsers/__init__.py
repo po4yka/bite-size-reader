@@ -6,7 +6,6 @@ format into a list of ImportedBookmark dataclasses.
 
 from app.domain.services.import_parsers.base import BookmarkParser, ImportedBookmark
 from app.domain.services.import_parsers.csv_parser import CsvBookmarkParser
-from app.domain.services.import_parsers.karakeep_parser import KarakeepParser
 from app.domain.services.import_parsers.linkwarden import LinkwardenParser
 from app.domain.services.import_parsers.netscape import NetscapeHTMLParser
 from app.domain.services.import_parsers.omnivore import OmnivoreParser
@@ -18,7 +17,6 @@ PARSER_REGISTRY: dict[str, type[BookmarkParser]] = {
     "pocket": PocketParser,
     "omnivore": OmnivoreParser,
     "linkwarden": LinkwardenParser,
-    "karakeep": KarakeepParser,
     "csv": CsvBookmarkParser,
     "opml": OPMLParser,
 }
@@ -28,7 +26,6 @@ __all__ = [
     "BookmarkParser",
     "CsvBookmarkParser",
     "ImportedBookmark",
-    "KarakeepParser",
     "LinkwardenParser",
     "NetscapeHTMLParser",
     "OPMLParser",

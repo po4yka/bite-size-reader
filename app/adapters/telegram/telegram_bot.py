@@ -123,7 +123,7 @@ class TelegramBot:
         self._backup_task = self._lifecycle.backup_task
         self._rate_limiter_cleanup_task = self._lifecycle.rate_limiter_cleanup_task
 
-        # Start background scheduler for periodic tasks (e.g., Karakeep sync)
+        # Start background scheduler for periodic tasks
         # Lazy import to avoid apscheduler dependency in tests
         from app.infrastructure.scheduler.service import SchedulerService
 

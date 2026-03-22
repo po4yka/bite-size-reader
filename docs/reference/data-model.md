@@ -886,46 +886,6 @@ CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
 
 ---
 
-### karakeep_sync
-
-**Purpose:** Track Karakeep bookmark sync state.
-
-**Schema:**
-
-```sql
-CREATE TABLE karakeep_sync (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id          INTEGER REFERENCES users(telegram_user_id),
-    last_sync_at     TIMESTAMP,
-    sync_token       TEXT,
-    bookmarks_synced INTEGER DEFAULT 0,
-    errors_count     INTEGER DEFAULT 0,
-    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-**Fields:**
-
-- `id` (int, PK, autoincrement) - Internal ID
-- `user_id` (int, FK) - Foreign key to `users`
-- `last_sync_at` (datetime, nullable) - Last successful sync timestamp
-- `sync_token` (str, nullable) - Sync continuation token
-- `bookmarks_synced` (int) - Total bookmarks synced
-- `errors_count` (int) - Sync error count
-- `created_at` (datetime) - Record creation timestamp
-
-**Indexes:**
-
-```sql
-CREATE INDEX idx_karakeep_sync_user_id ON karakeep_sync(user_id);
-```
-
-**Relationships:**
-
-- Many-to-one with `users`
-
----
-
 ## Client Secrets (Mobile API)
 
 ### client_secrets

@@ -20,9 +20,6 @@ from app.infrastructure.persistence.sqlite.repositories.embedding_repository imp
 from app.infrastructure.persistence.sqlite.repositories.import_job_repository import (
     SqliteImportJobRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.karakeep_sync_repository import (
-    SqliteKarakeepSyncRepositoryAdapter,
-)
 from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
     SqliteLLMRepositoryAdapter,
 )
@@ -49,23 +46,20 @@ from app.infrastructure.persistence.sqlite.repositories.video_download_repositor
 )
 
 if TYPE_CHECKING:
-    from app.application.ports import (
-        AuditLogRepositoryPort,
-        BackupRepositoryPort,
-        BatchSessionRepositoryPort,
+    from app.application.ports.audit import AuditLogRepositoryPort
+    from app.application.ports.backups import BackupRepositoryPort
+    from app.application.ports.batch_sessions import BatchSessionRepositoryPort
+    from app.application.ports.imports import ImportJobRepositoryPort
+    from app.application.ports.requests import (
         CrawlResultRepositoryPort,
-        EmbeddingRepositoryPort,
-        ImportJobRepositoryPort,
-        KarakeepSyncRepositoryPort,
         LLMRepositoryPort,
         RequestRepositoryPort,
-        RuleRepositoryPort,
-        SummaryRepositoryPort,
-        TagRepositoryPort,
-        TopicSearchRepositoryPort,
-        UserRepositoryPort,
         VideoDownloadRepositoryPort,
     )
+    from app.application.ports.rules import RuleRepositoryPort
+    from app.application.ports.search import EmbeddingRepositoryPort, TopicSearchRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort, TagRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
     from app.db.session import DatabaseSessionManager
 
 
@@ -99,10 +93,6 @@ def build_audit_log_repository(db: DatabaseSessionManager) -> AuditLogRepository
 
 def build_batch_session_repository(db: DatabaseSessionManager) -> BatchSessionRepositoryPort:
     return SqliteBatchSessionRepositoryAdapter(db)
-
-
-def build_karakeep_sync_repository(db: DatabaseSessionManager) -> KarakeepSyncRepositoryPort:
-    return SqliteKarakeepSyncRepositoryAdapter(db)
 
 
 def build_topic_search_repository(db: DatabaseSessionManager) -> TopicSearchRepositoryPort:
