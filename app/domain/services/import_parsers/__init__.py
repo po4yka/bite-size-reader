@@ -10,6 +10,7 @@ from app.domain.services.import_parsers.karakeep_parser import KarakeepParser
 from app.domain.services.import_parsers.linkwarden import LinkwardenParser
 from app.domain.services.import_parsers.netscape import NetscapeHTMLParser
 from app.domain.services.import_parsers.omnivore import OmnivoreParser
+from app.domain.services.import_parsers.opml import OPMLParser
 from app.domain.services.import_parsers.pocket import PocketParser
 
 PARSER_REGISTRY: dict[str, type[BookmarkParser]] = {
@@ -19,6 +20,7 @@ PARSER_REGISTRY: dict[str, type[BookmarkParser]] = {
     "linkwarden": LinkwardenParser,
     "karakeep": KarakeepParser,
     "csv": CsvBookmarkParser,
+    "opml": OPMLParser,
 }
 
 __all__ = [
@@ -29,6 +31,7 @@ __all__ = [
     "KarakeepParser",
     "LinkwardenParser",
     "NetscapeHTMLParser",
+    "OPMLParser",
     "OmnivoreParser",
     "PocketParser",
 ]

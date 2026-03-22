@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
     SqliteAuditLogRepositoryAdapter,
@@ -127,3 +127,11 @@ def build_rule_repository(db: DatabaseSessionManager) -> RuleRepositoryPort:
 
 def build_backup_repository(db: DatabaseSessionManager) -> BackupRepositoryPort:
     return SqliteBackupRepositoryAdapter(db)
+
+
+def build_rss_feed_repository(db: DatabaseSessionManager) -> Any:
+    from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
+        SqliteRSSFeedRepositoryAdapter,
+    )
+
+    return SqliteRSSFeedRepositoryAdapter(db)

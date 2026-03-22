@@ -26,6 +26,11 @@ export const queryKeys = {
     results: (params: Record<string, unknown>) => ["search", "results", params] as const,
     trending: ["search", "trending"] as const,
   },
+  rss: {
+    all: ["rss"] as const,
+    subscriptions: () => ["rss", "subscriptions"] as const,
+    items: (feedId: number) => ["rss", "items", feedId] as const,
+  },
   digest: {
     all: ["digest"] as const,
     channels: ["digest", "channels"] as const,

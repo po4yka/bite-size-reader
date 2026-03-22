@@ -44,6 +44,7 @@ from app.api.routers import (
     proxy,
     quick_save,
     requests,
+    rss,
     rules,
     search,
     summaries,
@@ -168,6 +169,7 @@ app.include_router(import_export.router, prefix="/v1", tags=["Import/Export"])
 app.include_router(quick_save.router, prefix="/v1", tags=["Quick Save"])
 app.include_router(highlights.router, prefix="/v1/summaries", tags=["Highlights"])
 app.include_router(tts.router, prefix="/v1/summaries", tags=["TTS"])
+app.include_router(rss.router, prefix="/v1/rss", tags=["RSS"])
 app.include_router(admin.router, prefix="/v1/admin", tags=["Admin"])
 app.include_router(health.router, tags=["Health"])
 

@@ -13,17 +13,23 @@ class FormatDetector:
 
     @staticmethod
     def detect(filename: str, content: bytes) -> str:
-        """Return format string: netscape_html, pocket, omnivore, linkwarden, karakeep, csv, unknown."""
+        """Return format string: netscape_html, pocket, omnivore, linkwarden, karakeep, csv, opml, unknown."""
         ext = _extension(filename)
 
         if ext == ".csv":
             return "csv"
+
+        if ext == ".opml":
+            return "opml"
 
         if ext in {".html", ".htm"}:
             return _detect_html(content)
 
         if ext == ".json":
             return _detect_json(content)
+
+        if ext == ".xml":
+            return _detect_xml(content)
 
         return "unknown"
 
@@ -81,5 +87,17 @@ def _detect_json(content: bytes) -> str:
                     return "linkwarden"
 
         return "unknown"
+
+    return "unknown"
+
+
+def _detect_xml(content: bytes) -> str:
+    try:
+        text = content[:2048].decode("utf-8", errors="replace").lower()
+    except Exception:
+        return "unknown"
+
+    if "<opml" in text:
+        return "opml"
 
     return "unknown"
