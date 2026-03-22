@@ -152,7 +152,7 @@ For the mobile API, routers are transport-focused and delegate infrastructure or
 
 ## Docker
 
-- If you updated dependencies in `pyproject.toml`, generate lock files first: `make lock-uv` (or `make lock-piptools`).
+- If you updated dependencies in `pyproject.toml`, generate lock files first: `make lock-uv`.
 - Build: `docker build -t bite-size-reader .`
 - Run: `docker run --env-file .env -v $(pwd)/data:/data --name bsr bite-size-reader`
 
@@ -448,9 +448,6 @@ Hooks run in this order to minimize churn: Ruff (check with `--fix`, format), is
 - With uv (recommended):
   - Install: `curl -Ls https://astral.sh/uv/install.sh | sh`
   - Lock: `make lock-uv`
-- With pip-tools:
-  - `python -m pip install pip-tools`
-  - Lock: `make lock-piptools`
 - Regenerate locks after changing dependencies in `pyproject.toml`.
 
 ## CI

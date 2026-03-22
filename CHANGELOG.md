@@ -24,7 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Redirect-aware X article link resolver with structured reason codes (`path_match`, `redirect_match`, `canonical_match`, `not_article`, `resolve_failed`)
 - Optional manual live smoke script for X article links (`scripts/twitter_article_live_smoke.py`) with per-link JSON diagnostics
 
+### Removed
+- `nlp` optional extra group and spaCy trained model dependencies (en_core_web_sm, ru_core_news_sm) -- codebase only uses `spacy.blank()` + sentencizer
+- `lock-piptools` Makefile target -- `lock-uv` is the canonical dependency locking path
+- `PROMPT.md` -- referenced non-existent migration docs
+
+### Security
+- Update pyjwt 2.11.0 to 2.12.1 (CVE-2026-32597)
+
 ### Changed
+- Replace `uv pip compile --extra dev` with `uv export --only-group dev` across CI workflows, Makefile, and scripts (PEP 735 dependency groups)
+- Add retry wrapper around `uv lock --check` in CI to handle transient GitHub CDN failures
+- Prune stale paths from coverage_includes.txt and file_size_baseline.json
 - Renamed ContentExtractor methods (breaking change for tests)
 - Improved PDF extraction flow with async processing and enhanced Russian language detection
 - Enhanced "Analyzing with AI" messages with additional context

@@ -27,7 +27,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - SQLite (persistence with Peewee ORM)
 - httpx (async HTTP client)
 - pydantic / pydantic-settings (validation, configuration)
-- trafilatura, spacy (content extraction fallbacks, NLP)
+- trafilatura, spacy (lightweight sentence tokenizer via spacy.blank())
 - json-repair (JSON recovery from LLM output)
 - scikit-learn, sentence-transformers, chromadb (search, local embeddings, vector store)
 - google-genai (optional: Gemini Embedding 2 API provider)
@@ -181,7 +181,6 @@ cd web && npm run test
 
 # Dependencies
 make lock-uv               # Lock dependencies with uv (recommended)
-make lock-piptools         # Lock dependencies with pip-tools
 
 # Docker
 docker build -t bite-size-reader .
@@ -455,7 +454,7 @@ Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-03-13
+**Last Updated:** 2026-03-22
 
 For questions about the codebase, always refer to:
 

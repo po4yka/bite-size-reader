@@ -13,8 +13,8 @@ pip install --upgrade pip wheel setuptools
 
 if command -v uv >/dev/null 2>&1; then
   echo "uv detected; compiling locks from pyproject.toml..."
-  uv pip compile pyproject.toml -o requirements.txt
-  uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+  uv export --no-dev --no-hashes --format requirements-txt -o requirements.txt
+  uv export --only-group dev --no-hashes --format requirements-txt -o requirements-dev.txt
 fi
 
 pip install -r requirements.txt -r requirements-dev.txt

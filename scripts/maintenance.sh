@@ -139,8 +139,8 @@ handle_dependency_locks() {
             return 1
         fi
 
-        if uv pip compile pyproject.toml -o requirements.txt && \
-           uv pip compile --extra dev pyproject.toml -o requirements-dev.txt; then
+        if uv export --no-dev --no-hashes --format requirements-txt -o requirements.txt && \
+           uv export --only-group dev --no-hashes --format requirements-txt -o requirements-dev.txt; then
             log_success "Lockfiles recompiled successfully"
         else
             log_error "Failed to recompile lockfiles"

@@ -90,7 +90,7 @@ How to use (no commands needed)
 
 ## Docker Deployment
 
-1) (Recommended) lock deps: `make lock-uv` (or `make lock-piptools`).
+1) Lock deps: `make lock-uv`.
 2) Build: `docker build -t bite-size-reader .`
 3) Run:
 
@@ -211,7 +211,7 @@ Pin to a specific tag: `git checkout tags/<tag>`
 ### 3. Refresh deps (when pyproject/lock changed)
 
 ```bash
-make lock-uv   # or: make lock-piptools
+make lock-uv
 ```
 
 ### 4. Rebuild & redeploy

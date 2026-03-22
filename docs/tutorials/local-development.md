@@ -460,7 +460,7 @@ sqlite3 data/app.db "SELECT * FROM requests WHERE id = '<correlation_id>';"
 ```bash
 # 1. Add to pyproject.toml [project.dependencies]
 # 2. Lock dependencies
-make lock-uv  # or make lock-piptools
+make lock-uv
 
 # 3. Install
 pip install -r requirements.txt

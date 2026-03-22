@@ -47,16 +47,11 @@ pre-commit-install:
 pre-commit-run:
 	pre-commit run --all-files
 
-.PHONY: lock-uv lock-piptools
+.PHONY: lock-uv
 lock-uv:
 	uv lock
 	uv export --no-dev --format requirements-txt -p 3.13 -o requirements.txt
 	uv export --only-group dev --no-hashes --format requirements-txt -p 3.13 -o requirements-dev.txt
-
-lock-piptools:
-	pip install pip-tools
-	pip-compile pyproject.toml --output-file requirements.txt
-	pip-compile pyproject.toml --extra dev --output-file requirements-dev.txt
 
 check-lock:
 	uv lock

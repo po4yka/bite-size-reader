@@ -96,8 +96,8 @@ setup_uv() {
 
     # Compile requirements
     log_info "Compiling requirements..."
-    uv pip compile pyproject.toml -o requirements.txt
-    uv pip compile --extra dev pyproject.toml -o requirements-dev.txt
+    uv export --no-dev --no-hashes --format requirements-txt -o requirements.txt
+    uv export --only-group dev --no-hashes --format requirements-txt -o requirements-dev.txt
 
     log_success "Dependencies compiled"
 }
