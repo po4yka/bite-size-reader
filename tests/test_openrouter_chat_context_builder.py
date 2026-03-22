@@ -7,15 +7,15 @@ import pytest
 from app.adapters.openrouter.chat_context_builder import ChatContextBuilder
 from app.adapters.openrouter.chat_models import StructuredOutputState
 from app.adapters.openrouter.exceptions import ValidationError
-from app.adapters.openrouter.openrouter_client import OpenRouterClient
+from app.adapters.openrouter.openrouter_client import OpenRouterClient, OpenRouterClientConfig
 
 
 def _make_client(*, model: str = "qwen/qwen3-max") -> OpenRouterClient:
     return OpenRouterClient(
         api_key="sk-or-test-key",
+        config=OpenRouterClientConfig(max_retries=2),
         model=model,
         fallback_models=["fallback/model"],
-        max_retries=2,
     )
 
 

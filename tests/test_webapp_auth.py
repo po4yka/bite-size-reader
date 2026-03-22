@@ -138,7 +138,7 @@ class TestVerifyInitData:
         token = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
         init_data = _build_init_data(token)
 
-        with pytest.raises(AuthorizationError, match="No authorized users configured"):
+        with pytest.raises(AuthorizationError, match="User not authorized"):
             verify_telegram_webapp_init_data(init_data)
 
     def test_missing_user_field(self):

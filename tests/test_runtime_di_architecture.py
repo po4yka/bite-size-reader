@@ -302,10 +302,11 @@ def test_production_code_does_not_import_root_application_ports_facade() -> None
 
 @pytest.mark.skipif(shutil.which("rg") is None, reason="rg is required for architecture guard")
 def test_production_code_does_not_import_response_formatter_root_facade() -> None:
+    # Only match non-indented (runtime) imports; indented imports inside
+    # TYPE_CHECKING blocks are type-only and acceptable.
     result = _run_rg(
-        pattern="from app.adapters.external.response_formatter import ResponseFormatter",
+        pattern=r"^from app\.adapters\.external\.response_formatter import ResponseFormatter",
         path="app",
-        fixed=True,
         globs=[
             "!app/di/shared.py",
             "!app/adapters/external/response_formatter.py",

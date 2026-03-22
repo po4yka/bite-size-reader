@@ -277,7 +277,7 @@ async def test_retries_and_error_status(monkeypatch):
 @pytest.mark.asyncio
 async def test_local_locks_cleaned_after_release():
     """_local_locks entries must be removed after lock release to prevent memory leak."""
-    from app.api.background_processor import LockHandle
+    from app.api.background.models import LockHandle
 
     cfg = DummyCfg()
     processor = BackgroundProcessor(

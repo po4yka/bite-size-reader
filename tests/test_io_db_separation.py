@@ -111,7 +111,7 @@ async def test_summary_persistence_deferred_from_llm_flow() -> None:
     persist_release = asyncio.Event()
 
     class _SlowSummaryRepo:
-        async def async_upsert_summary(self, **kwargs) -> int:
+        async def async_finalize_request_summary(self, **kwargs) -> int:
             persist_started.set()
             await persist_release.wait()
             return 42

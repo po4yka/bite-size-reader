@@ -6,7 +6,7 @@ from typing import Any, cast
 import httpx
 
 import app.adapters.external.firecrawl.client as _fc_client_module
-from app.adapters.external.firecrawl.client import FirecrawlClient
+from app.adapters.external.firecrawl.client import FirecrawlClient, FirecrawlClientConfig
 
 fc_httpx = _fc_client_module.httpx
 from app.adapters.openrouter.openrouter_client import httpx as or_httpx
@@ -117,7 +117,8 @@ class TestRetries(unittest.IsolatedAsyncioTestCase):
 
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
-                api_key="fc-dummy-key", timeout_sec=2, max_retries=2, backoff_base=0.0
+                api_key="fc-dummy-key",
+                config=FirecrawlClientConfig(timeout_sec=2, max_retries=2, backoff_base=0.0),
             )
             res = await client.scrape_markdown("https://example.com")
             assert res.status == "ok"

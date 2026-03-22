@@ -115,7 +115,7 @@ async def test_semantic_search_groups_chunks_and_min_similarity(
     async def fake_chroma() -> FakeChromaService:
         return FakeChromaService(fake_results)
 
-    monkeypatch.setattr(context, "get_chroma_service", fake_chroma)
+    monkeypatch.setattr(context, "init_chroma_service", fake_chroma)
 
     payload = await service.semantic_search(
         "ai policy",
@@ -147,7 +147,7 @@ async def test_semantic_search_keyword_fallback_when_semantic_unavailable(
     async def no_local(*_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
         return []
 
-    monkeypatch.setattr(context, "get_chroma_service", no_chroma)
+    monkeypatch.setattr(context, "init_chroma_service", no_chroma)
     monkeypatch.setattr(service, "_search_local_vectors", no_local)
     monkeypatch.setattr(
         article_service,
@@ -212,7 +212,7 @@ async def test_find_similar_articles_excludes_source_summary(
     async def fake_chroma() -> FakeChromaService:
         return FakeChromaService(fake_results)
 
-    monkeypatch.setattr(context, "get_chroma_service", fake_chroma)
+    monkeypatch.setattr(context, "init_chroma_service", fake_chroma)
 
     payload = await service.find_similar_articles(summary_id=sid1, limit=10)
     result_ids = [row["summary_id"] for row in payload["results"]]
@@ -262,7 +262,7 @@ async def test_chroma_sync_gap_reports_missing_and_extra(
 
     context = McpServerContext(user_id=1)
     service = SemanticSearchService(context, ArticleReadService(context))
-    monkeypatch.setattr(context, "get_chroma_service", fake_chroma)
+    monkeypatch.setattr(context, "init_chroma_service", fake_chroma)
 
     payload = await service.chroma_sync_gap(max_scan=1000, sample_size=10)
     assert payload["missing_in_chroma_count"] == 1

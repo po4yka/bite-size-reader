@@ -30,7 +30,9 @@ def _make_handler() -> URLHandler:
             sender=SimpleNamespace(is_draft_streaming_enabled=MagicMock(return_value=False)),
         ),
     )
-    url_processor = cast("Any", SimpleNamespace(handle_url_flow=AsyncMock()))
+    url_processor = cast(
+        "Any", SimpleNamespace(handle_url_flow=AsyncMock(), summary_repo=None, audit_func=None)
+    )
     file_validator = MagicMock()
     file_validator.cleanup_file = MagicMock()
     return URLHandler(

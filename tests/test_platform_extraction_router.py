@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.adapters.content.content_extractor import ContentExtractor
+from app.adapters.content.content_extractor import ContentExtractionResult, ContentExtractor
 from app.adapters.content.platform_extraction.models import PlatformExtractionResult
 
 if TYPE_CHECKING:
@@ -168,7 +168,14 @@ async def test_extract_and_process_content_routes_platform_urls_before_generic_s
         silent=True,
     )
 
-    assert result == (9, "tweet text", "twitter_graphql", "en", "Title", [])
+    assert result == ContentExtractionResult(
+        request_id=9,
+        content_text="tweet text",
+        content_source="twitter_graphql",
+        detected_lang="en",
+        title="Title",
+        images=[],
+    )
     extractor.firecrawl.scrape_markdown.assert_not_awaited()
 
 
@@ -191,5 +198,12 @@ async def test_generic_urls_fall_back_to_existing_scraper_chain_when_router_miss
         silent=True,
     )
 
-    assert result == (55, "body", "markdown", "en", "Title", [])
+    assert result == ContentExtractionResult(
+        request_id=55,
+        content_text="body",
+        content_source="markdown",
+        detected_lang="en",
+        title="Title",
+        images=[],
+    )
     extractor._handle_request_dedupe_or_create.assert_awaited_once()

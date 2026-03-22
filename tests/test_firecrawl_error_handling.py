@@ -2,7 +2,7 @@ import unittest
 from typing import Any, cast
 
 import app.adapters.external.firecrawl.client as _fc_client_module
-from app.adapters.external.firecrawl.client import FirecrawlClient
+from app.adapters.external.firecrawl.client import FirecrawlClient, FirecrawlClientConfig
 
 fc_httpx = _fc_client_module.httpx
 
@@ -59,9 +59,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,  # No retries for this test
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -101,9 +103,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,  # No retries for this test
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -143,9 +147,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,  # No retries for this test
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -184,9 +190,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,  # No retries for this test
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -225,9 +233,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,  # No retries for this test
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -271,9 +281,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,  # No retries for this test
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -317,9 +329,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,  # No retries for this test
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -362,9 +376,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,  # No retries for this test
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -407,9 +423,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,  # No retries for this test
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -444,9 +462,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -480,9 +500,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -516,9 +538,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")
@@ -553,9 +577,11 @@ class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
             fc_httpx.AsyncClient = cast("Any", _make_fc_client)
             client = FirecrawlClient(
                 api_key="fc-test_key",
-                timeout_sec=30,
-                max_retries=0,  # No retries for this test
-                debug_payloads=True,
+                config=FirecrawlClientConfig(
+                    timeout_sec=30,
+                    max_retries=0,
+                    debug_payloads=True,
+                ),
             )
 
             result = await client.scrape_markdown("https://example.com")

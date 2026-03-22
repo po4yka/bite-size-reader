@@ -75,8 +75,8 @@ class TestSetFailureContextCancelledError:
         with pytest.raises(asyncio.CancelledError):
             wf._set_failure_context(CancellingLLM(), "test_reason")
 
-    def test_swallows_regular_exception(self) -> None:
-        """Non-CancelledError exceptions should still be swallowed."""
+    def test_propagates_regular_exception(self) -> None:
+        """Non-CancelledError exceptions from attribute access propagate (no try/except)."""
         wf = self._make_workflow()
 
         class BrokenLLM:
@@ -96,8 +96,9 @@ class TestSetFailureContextCancelledError:
             def error_context(self, _value: dict[str, Any]) -> None:
                 raise TypeError("immutable")
 
-        # Should NOT raise
-        wf._set_failure_context(BrokenLLM(), "test_reason")
+        # _set_failure_context does not catch exceptions from attribute access
+        with pytest.raises(TypeError, match="immutable"):
+            wf._set_failure_context(BrokenLLM(), "test_reason")
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +165,7 @@ class TestSummaryWorkflowLoopCancelledError:
 
         wf.openrouter.chat = AsyncMock(return_value=CancellingLLM())
 
-        with patch.object(wf, "_process_attempt", side_effect=RuntimeError("boom")):
+        with patch.object(wf, "_evaluate_attempt_outcome", side_effect=RuntimeError("boom")):
             with patch.object(wf, "_persist_llm_call", new_callable=AsyncMock):
                 with pytest.raises(asyncio.CancelledError):
                     await wf.execute_summary_workflow(

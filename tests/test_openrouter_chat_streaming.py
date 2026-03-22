@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -52,7 +52,7 @@ def _make_request() -> ChatRequest:
 @pytest.mark.asyncio
 async def test_chat_streaming_reconstructs_normal_sse_flow() -> None:
     response_handler = SimpleNamespace(
-        handle_successful_response=AsyncMock(
+        handle_successful_response=MagicMock(
             return_value=AttemptOutcome(success=True, response_text="done")
         )
     )
@@ -91,7 +91,7 @@ async def test_chat_streaming_reconstructs_normal_sse_flow() -> None:
         state=state,
     )
 
-    call = response_handler.handle_successful_response.await_args.kwargs
+    call = response_handler.handle_successful_response.call_args.kwargs
     assert call["data"]["choices"][0]["message"]["content"] == "Hello world"
     assert call["data"]["usage"]["completion_tokens"] == 1
 
@@ -99,7 +99,7 @@ async def test_chat_streaming_reconstructs_normal_sse_flow() -> None:
 @pytest.mark.asyncio
 async def test_chat_streaming_tolerates_malformed_frames() -> None:
     response_handler = SimpleNamespace(
-        handle_successful_response=AsyncMock(
+        handle_successful_response=MagicMock(
             return_value=AttemptOutcome(success=True, response_text="done")
         )
     )
@@ -139,7 +139,7 @@ async def test_chat_streaming_tolerates_malformed_frames() -> None:
     )
 
     assert state.malformed_frames == 1
-    call = response_handler.handle_successful_response.await_args.kwargs
+    call = response_handler.handle_successful_response.call_args.kwargs
     assert call["data"]["choices"][0]["message"]["content"] == "Recovered"
 
 

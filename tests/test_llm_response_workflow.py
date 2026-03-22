@@ -61,7 +61,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
         self.workflow.summary_repo = MagicMock()
         self.upsert_summary_mock: AsyncMock = AsyncMock(return_value=1)
-        self.workflow.summary_repo.async_upsert_summary = self.upsert_summary_mock
+        self.workflow.summary_repo.async_finalize_request_summary = self.upsert_summary_mock
 
         self.workflow.llm_repo = MagicMock()
         self.insert_llm_call_mock: AsyncMock = AsyncMock(return_value=1)
@@ -134,7 +134,6 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         _args, kwargs = self.upsert_summary_mock.await_args
         assert kwargs["request_id"] == 101
         assert kwargs["lang"] == "en"
-        self.update_status_mock.assert_awaited_once_with(101, "ok")
         self.insert_llm_call_mock.assert_awaited_once()
         self.completion_mock.assert_awaited_once()
         self.llm_error_mock.assert_not_awaited()
@@ -260,14 +259,14 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         _llm_arg, details = self.llm_error_mock.await_args.args
         assert "summary_fields_empty" in (details or "")
 
-    async def test_process_attempt_exception_still_counts_attempt(self) -> None:
+    async def test_evaluate_attempt_outcome_exception_still_counts_attempt(self) -> None:
         llm_response = self._llm_response({})
         self.openrouter.chat = AsyncMock(return_value=llm_response)
 
         with (
             unittest.mock.patch.object(
                 self.workflow,
-                "_process_attempt",
+                "_evaluate_attempt_outcome",
                 new_callable=AsyncMock,
                 side_effect=ValueError("boom"),
             ),

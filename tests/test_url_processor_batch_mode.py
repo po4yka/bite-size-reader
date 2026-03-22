@@ -87,6 +87,7 @@ def _make_processor(
     proc.post_summary_tasks = MagicMock()
     proc.post_summary_tasks.schedule_tasks = AsyncMock()
     proc.summarization_runtime = MagicMock()
+    proc.summarization_runtime.semantic_helper = proc.semantic_helper
     return proc
 
 

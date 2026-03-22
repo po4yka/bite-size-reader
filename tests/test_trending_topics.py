@@ -34,7 +34,7 @@ async def test_trending_payload_prunes_expired_in_memory_entries(monkeypatch):
     trending_cache.clear_trending_cache()
 
     expired_key = (999, 1, 1)
-    trending_cache._trending_cache[expired_key] = trending_cache.TrendingCacheEntry(
+    trending_cache._cache_manager._trending_cache[expired_key] = trending_cache.TrendingCacheEntry(
         expires_at=datetime.now(UTC) - timedelta(seconds=1),
         payload={"tags": []},
     )
@@ -52,13 +52,13 @@ async def test_trending_payload_prunes_expired_in_memory_entries(monkeypatch):
         del user_id, previous_period_start, max_scan
         return []
 
-    monkeypatch.setattr(trending_cache, "_get_from_redis", fake_get_from_redis)
-    monkeypatch.setattr(trending_cache, "_set_to_redis", fake_set_to_redis)
+    monkeypatch.setattr(trending_cache._cache_manager, "get_from_redis", fake_get_from_redis)
+    monkeypatch.setattr(trending_cache._cache_manager, "set_to_redis", fake_set_to_redis)
     monkeypatch.setattr(trending_cache, "_fetch_trending_records", fake_fetch)
 
     await trending_cache.get_trending_payload(1, limit=5, days=30)
 
-    assert expired_key not in trending_cache._trending_cache
+    assert expired_key not in trending_cache._cache_manager._trending_cache
 
     trending_cache.clear_trending_cache()
 

@@ -160,6 +160,7 @@ async def test_interactive_summary_service_uses_cached_summary(monkeypatch):
     db = SimpleNamespace(
         async_upsert_summary=AsyncMock(),
         async_update_request_status=AsyncMock(),
+        async_execute_transaction=AsyncMock(),
     )
     response_formatter = SimpleNamespace(
         send_llm_start_notification=AsyncMock(),
@@ -200,7 +201,7 @@ async def test_interactive_summary_service_uses_cached_summary(monkeypatch):
     async def _finalize_success(*args, **kwargs):
         return cached_summary
 
-    runtime.workflow._finalize_success = _finalize_success
+    runtime.workflow.finalize_success = _finalize_success
 
     result = await service.summarize(
         InteractiveSummaryRequest(

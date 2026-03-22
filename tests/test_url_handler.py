@@ -30,7 +30,7 @@ async def test_handle_awaited_url_rejects_invalid_links() -> None:
     handle_url_flow_mock = AsyncMock()
     url_processor = cast(
         "URLProcessor",
-        SimpleNamespace(handle_url_flow=handle_url_flow_mock),
+        SimpleNamespace(handle_url_flow=handle_url_flow_mock, summary_repo=None, audit_func=None),
     )
     handler = URLHandler(
         db=cast("DatabaseSessionManager", SimpleNamespace()),
@@ -70,7 +70,7 @@ async def test_handle_awaited_url_filters_invalid_before_processing() -> None:
     handle_url_flow_mock = AsyncMock()
     url_processor = cast(
         "URLProcessor",
-        SimpleNamespace(handle_url_flow=handle_url_flow_mock),
+        SimpleNamespace(handle_url_flow=handle_url_flow_mock, summary_repo=None, audit_func=None),
     )
     handler = URLHandler(
         db=cast("DatabaseSessionManager", SimpleNamespace()),
@@ -96,7 +96,7 @@ async def test_handle_single_url_delegates_to_processor() -> None:
     handle_url_flow_mock = AsyncMock(return_value="ok")
     url_processor = cast(
         "URLProcessor",
-        SimpleNamespace(handle_url_flow=handle_url_flow_mock),
+        SimpleNamespace(handle_url_flow=handle_url_flow_mock, summary_repo=None, audit_func=None),
     )
     handler = URLHandler(
         db=cast("DatabaseSessionManager", SimpleNamespace()),
@@ -132,7 +132,7 @@ def _make_handler() -> URLHandler:
                 MAX_BATCH_URLS=5, safe_reply=AsyncMock(), send_error_notification=AsyncMock()
             ),
         ),
-        url_processor=cast("URLProcessor", SimpleNamespace()),
+        url_processor=cast("URLProcessor", SimpleNamespace(summary_repo=None, audit_func=None)),
     )
 
 

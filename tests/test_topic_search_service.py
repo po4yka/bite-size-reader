@@ -270,7 +270,7 @@ def test_database_populates_topic_search_index(test_database) -> None:
             },
         },
     )
-    database._topic_search.refresh_index(request_id)
+    database._bootstrap._topic_search.refresh_index(request_id)
 
     with database._database.connection_context():
         cursor = database._database.execute_sql(

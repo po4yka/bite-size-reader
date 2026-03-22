@@ -5,10 +5,14 @@ from typing import Any, cast
 import pytest
 
 import app.adapters.external.firecrawl.client as _fc_client_module
-from app.adapters.external.firecrawl.client import FirecrawlClient
+from app.adapters.external.firecrawl.client import FirecrawlClient, FirecrawlClientConfig
 
 firecrawl_httpx = _fc_client_module.httpx
-from app.adapters.openrouter.openrouter_client import OpenRouterClient, httpx as or_httpx
+from app.adapters.openrouter.openrouter_client import (
+    OpenRouterClient,
+    OpenRouterClientConfig,
+    httpx as or_httpx,
+)
 
 
 class _FakeResponse:
@@ -90,7 +94,10 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
 
             firecrawl_httpx.AsyncClient = cast("Any", _make_fc_client)
 
-            client = FirecrawlClient(api_key="fc-dummy-key", timeout_sec=5)
+            client = FirecrawlClient(
+                api_key="fc-dummy-key",
+                config=FirecrawlClientConfig(timeout_sec=5),
+            )
             res = await client.scrape_markdown("https://example.com")
             assert res.status == "ok"
             assert res.http_status == 200
@@ -116,11 +123,13 @@ class TestAdaptersIntegration(unittest.IsolatedAsyncioTestCase):
 
             client = OpenRouterClient(
                 api_key="sk-test-key-123456789",
+                config=OpenRouterClientConfig(
+                    timeout_sec=5,
+                    enable_stats=False,
+                    log_truncate_length=1000,
+                ),
                 model="qwen/qwen3-max",
-                timeout_sec=5,
                 provider_order=None,
-                enable_stats=False,
-                log_truncate_length=1000,
             )
             res = await client.chat([{"role": "user", "content": "hi"}])
             assert res.status == "ok"

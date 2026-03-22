@@ -11,14 +11,14 @@ import pytest
 from app.core.http_utils import ResponseSizeError, bytes_to_mb, validate_response_size
 
 
-class TestResponseSizeValidation(unittest.IsolatedAsyncioTestCase):
+class TestResponseSizeValidation(unittest.TestCase):
     """Test response size validation function."""
 
     def setUp(self):
         """Set up test fixtures."""
         self.max_size = 10 * 1024 * 1024  # 10 MB
 
-    async def test_valid_response_under_limit(self):
+    def test_valid_response_under_limit(self):
         """Test that responses under the limit pass validation."""
         # Create mock response with Content-Length header
         response = Mock(spec=httpx.Response)
@@ -26,9 +26,9 @@ class TestResponseSizeValidation(unittest.IsolatedAsyncioTestCase):
         response.headers = {"content-length": "1000000"}  # 1 MB
 
         # Should not raise
-        await validate_response_size(response, self.max_size, "TestService")
+        validate_response_size(response, self.max_size, "TestService")
 
-    async def test_response_exceeds_limit_with_header(self):
+    def test_response_exceeds_limit_with_header(self):
         """Test that responses exceeding limit with Content-Length header raise error."""
         # Create mock response with large Content-Length
         response = Mock(spec=httpx.Response)
@@ -37,14 +37,14 @@ class TestResponseSizeValidation(unittest.IsolatedAsyncioTestCase):
 
         # Should raise ResponseSizeError
         with pytest.raises(ResponseSizeError) as exc_info:
-            await validate_response_size(response, self.max_size, "TestService")
+            validate_response_size(response, self.max_size, "TestService")
 
         error = exc_info.value
         assert error.actual_size == self.max_size + 1
         assert error.max_size == self.max_size
         assert "exceeds limit" in str(error)
 
-    async def test_response_no_content_length_header(self):
+    def test_response_no_content_length_header(self):
         """Test response without Content-Length header."""
         # Create mock response without Content-Length
         response = Mock(spec=httpx.Response)
@@ -53,9 +53,9 @@ class TestResponseSizeValidation(unittest.IsolatedAsyncioTestCase):
         response._content = b"test content"
 
         # Should not raise (small content)
-        await validate_response_size(response, self.max_size, "TestService")
+        validate_response_size(response, self.max_size, "TestService")
 
-    async def test_response_no_content_length_exceeds_limit(self):
+    def test_response_no_content_length_exceeds_limit(self):
         """Test response without Content-Length but with large content."""
         # Create mock response with large content but no header
         response = Mock(spec=httpx.Response)
@@ -65,13 +65,13 @@ class TestResponseSizeValidation(unittest.IsolatedAsyncioTestCase):
 
         # Should raise ResponseSizeError
         with pytest.raises(ResponseSizeError) as exc_info:
-            await validate_response_size(response, self.max_size, "TestService")
+            validate_response_size(response, self.max_size, "TestService")
 
         error = exc_info.value
         assert error.actual_size == self.max_size + 1
         assert error.max_size == self.max_size
 
-    async def test_invalid_content_length_header(self):
+    def test_invalid_content_length_header(self):
         """Test response with invalid Content-Length header."""
         # Create mock response with invalid Content-Length
         response = Mock(spec=httpx.Response)
@@ -80,31 +80,31 @@ class TestResponseSizeValidation(unittest.IsolatedAsyncioTestCase):
         response._content = b"test content"
 
         # Should not raise (validation skipped for invalid header)
-        await validate_response_size(response, self.max_size, "TestService")
+        validate_response_size(response, self.max_size, "TestService")
 
-    async def test_invalid_max_size_negative(self):
+    def test_invalid_max_size_negative(self):
         """Test that negative max_size raises ValueError."""
         response = Mock(spec=httpx.Response)
         response.status_code = 200
         response.headers = {"content-length": "1000"}
 
         with pytest.raises(ValueError) as exc_info:
-            await validate_response_size(response, -1, "TestService")
+            validate_response_size(response, -1, "TestService")
 
         assert "positive integer" in str(exc_info.value)
 
-    async def test_invalid_max_size_zero(self):
+    def test_invalid_max_size_zero(self):
         """Test that zero max_size raises ValueError."""
         response = Mock(spec=httpx.Response)
         response.status_code = 200
         response.headers = {"content-length": "1000"}
 
         with pytest.raises(ValueError) as exc_info:
-            await validate_response_size(response, 0, "TestService")
+            validate_response_size(response, 0, "TestService")
 
         assert "positive integer" in str(exc_info.value)
 
-    async def test_invalid_max_size_too_large(self):
+    def test_invalid_max_size_too_large(self):
         """Test that excessively large max_size raises ValueError."""
         response = Mock(spec=httpx.Response)
         response.status_code = 200
@@ -112,20 +112,20 @@ class TestResponseSizeValidation(unittest.IsolatedAsyncioTestCase):
 
         # More than 1GB
         with pytest.raises(ValueError) as exc_info:
-            await validate_response_size(response, 2 * 1024 * 1024 * 1024, "TestService")
+            validate_response_size(response, 2 * 1024 * 1024 * 1024, "TestService")
 
         assert "too large" in str(exc_info.value)
 
-    async def test_response_at_exact_limit(self):
+    def test_response_at_exact_limit(self):
         """Test response exactly at the limit."""
         response = Mock(spec=httpx.Response)
         response.status_code = 200
         response.headers = {"content-length": str(self.max_size)}
 
         # Should not raise (exactly at limit)
-        await validate_response_size(response, self.max_size, "TestService")
+        validate_response_size(response, self.max_size, "TestService")
 
-    async def test_response_one_byte_over_limit(self):
+    def test_response_one_byte_over_limit(self):
         """Test response one byte over the limit."""
         response = Mock(spec=httpx.Response)
         response.status_code = 200
@@ -133,9 +133,9 @@ class TestResponseSizeValidation(unittest.IsolatedAsyncioTestCase):
 
         # Should raise
         with pytest.raises(ResponseSizeError):
-            await validate_response_size(response, self.max_size, "TestService")
+            validate_response_size(response, self.max_size, "TestService")
 
-    async def test_large_response_warning_threshold(self):
+    def test_large_response_warning_threshold(self):
         """Test that large responses (>50% of limit) log warning."""
         # This test verifies behavior but doesn't check logging directly
         response = Mock(spec=httpx.Response)
@@ -144,7 +144,7 @@ class TestResponseSizeValidation(unittest.IsolatedAsyncioTestCase):
         response.headers = {"content-length": str(int(self.max_size * 0.6))}
 
         # Should not raise but would log warning
-        await validate_response_size(response, self.max_size, "TestService")
+        validate_response_size(response, self.max_size, "TestService")
 
 
 class TestBytesToMB(unittest.TestCase):
@@ -200,10 +200,10 @@ class TestResponseSizeErrorException(unittest.TestCase):
 
 
 # Integration-style tests with more realistic scenarios
-class TestResponseSizeValidationIntegration(unittest.IsolatedAsyncioTestCase):
+class TestResponseSizeValidationIntegration(unittest.TestCase):
     """Integration tests for response size validation."""
 
-    async def test_firecrawl_response_validation(self):
+    def test_firecrawl_response_validation(self):
         """Test validation with Firecrawl-like response size (50MB limit)."""
         max_size = 50 * 1024 * 1024  # 50 MB (Firecrawl default)
 
@@ -213,9 +213,9 @@ class TestResponseSizeValidationIntegration(unittest.IsolatedAsyncioTestCase):
         response.headers = {"content-length": str(40 * 1024 * 1024)}  # 40 MB
 
         # Should not raise
-        await validate_response_size(response, max_size, "Firecrawl")
+        validate_response_size(response, max_size, "Firecrawl")
 
-    async def test_openrouter_response_validation(self):
+    def test_openrouter_response_validation(self):
         """Test validation with OpenRouter-like response size (10MB limit)."""
         max_size = 10 * 1024 * 1024  # 10 MB (OpenRouter default)
 
@@ -225,9 +225,9 @@ class TestResponseSizeValidationIntegration(unittest.IsolatedAsyncioTestCase):
         response.headers = {"content-length": str(100 * 1024)}  # 100 KB
 
         # Should not raise
-        await validate_response_size(response, max_size, "OpenRouter")
+        validate_response_size(response, max_size, "OpenRouter")
 
-    async def test_malicious_response_blocked(self):
+    def test_malicious_response_blocked(self):
         """Test that maliciously large response is blocked."""
         max_size = 10 * 1024 * 1024  # 10 MB
 
@@ -238,7 +238,7 @@ class TestResponseSizeValidationIntegration(unittest.IsolatedAsyncioTestCase):
 
         # Should raise
         with pytest.raises(ResponseSizeError) as exc_info:
-            await validate_response_size(response, max_size, "OpenRouter")
+            validate_response_size(response, max_size, "OpenRouter")
 
         error = exc_info.value
         assert error.actual_size == 1024 * 1024 * 1024
