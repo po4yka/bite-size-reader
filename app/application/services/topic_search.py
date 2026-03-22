@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
     from app.adapters.external.firecrawl.client import FirecrawlClient
     from app.adapters.external.firecrawl.models import FirecrawlSearchItem
-    from app.application.ports import TopicSearchRepositoryPort
+    from app.application.ports.search import TopicSearchRepositoryPort
 
 logger = get_logger(__name__)
 

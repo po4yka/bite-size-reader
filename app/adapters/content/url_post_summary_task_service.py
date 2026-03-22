@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from app.adapters.content.llm_summarizer_insights import LLMInsightsGenerator
     from app.adapters.content.url_summary_delivery_service import URLSummaryDeliveryService
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.application.ports import SummaryRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.services.related_reads_service import RelatedReadsService
 
 from app.core.async_utils import raise_if_cancelled
@@ -41,6 +41,10 @@ class URLPostSummaryTaskService:
         self._summary_delivery = summary_delivery
         self._related_reads_service = related_reads_service
         self._background_tasks: set[asyncio.Task[Any]] = set()
+
+    def set_related_reads_service(self, service: RelatedReadsService | None) -> None:
+        """Inject or replace the related-reads service after construction."""
+        self._related_reads_service = service
 
     async def aclose(self, timeout: float = 5.0) -> None:
         """Drain outstanding post-summary background tasks."""

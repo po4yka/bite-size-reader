@@ -41,12 +41,9 @@ from app.adapters.telegram.command_handlers.tag_handler import TagHandler
 from app.adapters.telegram.command_handlers.url_commands_handler import URLCommandsHandler
 from app.adapters.telegram.command_handlers.utils import maybe_load_json
 from app.adapters.telegram.task_manager import UserTaskManager
-from app.application.ports import (
-    LLMRepositoryPort,
-    RequestRepositoryPort,
-    SummaryRepositoryPort,
-    UserRepositoryPort,
-)
+from app.application.ports.requests import LLMRepositoryPort, RequestRepositoryPort
+from app.application.ports.summaries import SummaryRepositoryPort
+from app.application.ports.users import UserRepositoryPort
 from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
 from app.config import AppConfig
 from app.core.logging_utils import get_logger

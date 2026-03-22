@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from app.adapters.content.scraper.protocol import ContentScraperProtocol
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
-    from app.application.ports import SummaryRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.services.related_reads_service import RelatedReadsService
     from app.application.services.topic_search import TopicSearchService
     from app.config import AppConfig

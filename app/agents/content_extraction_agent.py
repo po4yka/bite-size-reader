@@ -11,7 +11,7 @@ from app.core.url_utils import compute_dedupe_hash, normalize_url
 
 if TYPE_CHECKING:
     from app.adapters.content.content_extractor import ContentExtractor
-    from app.application.ports import CrawlResultRepositoryPort, RequestRepositoryPort
+    from app.application.ports.requests import CrawlResultRepositoryPort, RequestRepositoryPort
 
 
 class ExtractionInput(BaseModel):

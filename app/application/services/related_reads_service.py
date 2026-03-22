@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.embedding_text import prepare_text_for_embedding
 
 if TYPE_CHECKING:
-    from app.application.ports import VectorSearchPort
+    from app.application.ports.search import VectorSearchPort
 
 
 @dataclass(frozen=True)

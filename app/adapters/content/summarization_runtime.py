@@ -31,11 +31,8 @@ if TYPE_CHECKING:
 
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
-    from app.application.ports import (
-        CrawlResultRepositoryPort,
-        RequestRepositoryPort,
-        SummaryRepositoryPort,
-    )
+    from app.application.ports.requests import CrawlResultRepositoryPort, RequestRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.services.topic_search import TopicSearchService
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager

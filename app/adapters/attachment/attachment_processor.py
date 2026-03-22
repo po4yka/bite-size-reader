@@ -13,7 +13,8 @@ from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
-    from app.application.ports import RequestRepositoryPort, UserRepositoryPort
+    from app.application.ports.requests import RequestRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
 
 from app.adapters.attachment.image_extractor import ImageExtractor
 from app.adapters.attachment.pdf_extractor import PDFExtractor

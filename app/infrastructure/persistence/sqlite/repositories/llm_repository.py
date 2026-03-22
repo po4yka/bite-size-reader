@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 import peewee
 
 if TYPE_CHECKING:
-    from app.application.ports import LLMCallRecord
+    from app.application.ports.requests import LLMCallRecord
 
 from app.db.json_utils import prepare_json_payload
 from app.db.models import LLMCall, model_to_dict

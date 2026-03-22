@@ -30,12 +30,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.application.ports import (
-        LLMRepositoryPort,
-        RequestRepositoryPort,
-        SummaryRepositoryPort,
-        UserRepositoryPort,
-    )
+    from app.application.ports.requests import LLMRepositoryPort, RequestRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
 

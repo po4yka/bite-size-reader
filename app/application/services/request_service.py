@@ -26,12 +26,12 @@ from app.domain.exceptions.domain_exceptions import (
 from app.domain.models.request import RequestStatus
 
 if TYPE_CHECKING:
-    from app.application.ports import (
+    from app.application.ports.requests import (
         CrawlResultRepositoryPort,
         LLMRepositoryPort,
         RequestRepositoryPort,
-        SummaryRepositoryPort,
     )
+    from app.application.ports.summaries import SummaryRepositoryPort
 
 logger = get_logger(__name__)
 

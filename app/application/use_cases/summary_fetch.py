@@ -8,7 +8,7 @@ from app.core.logging_utils import get_logger
 from app.domain.exceptions.domain_exceptions import ResourceNotFoundError
 
 if TYPE_CHECKING:
-    from app.application.ports import SummaryRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
 
 logger = get_logger(__name__)
 

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from app.application.ports import SummaryRepositoryPort
+from app.application.ports.summaries import SummaryRepositoryPort
 from app.core.logging_utils import get_logger
 from app.domain.models.summary import Summary, summary_from_dict
 

@@ -7,11 +7,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from app.application.ports import (
-        RequestRepositoryPort,
-        SummaryRepositoryPort,
-        TopicSearchRepositoryPort,
-    )
+    from app.application.ports.requests import RequestRepositoryPort
+    from app.application.ports.search import TopicSearchRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
 
 
 class SearchReadModelUseCase:

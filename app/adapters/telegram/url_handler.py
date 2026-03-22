@@ -25,7 +25,8 @@ from app.security.file_validation import FileValidationError, SecureFileValidato
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.application.ports import RequestRepositoryPort, UserRepositoryPort
+    from app.application.ports.requests import RequestRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
     from app.application.services.adaptive_timeout import AdaptiveTimeoutService
     from app.core.verbosity import VerbosityResolver
     from app.db.session import DatabaseSessionManager

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
     )
-    from app.application.ports import KarakeepSyncRepositoryPort
+    from app.application.ports.users import KarakeepSyncRepositoryPort
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 

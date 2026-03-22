@@ -11,7 +11,7 @@ from app.application.dto.import_bookmarks import (
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
-    from app.application.ports import BookmarkImportPort, ImportJobRepositoryPort
+    from app.application.ports.imports import BookmarkImportPort, ImportJobRepositoryPort
 
 logger = get_logger(__name__)
 

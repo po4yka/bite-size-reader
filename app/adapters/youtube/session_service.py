@@ -30,7 +30,7 @@ from app.infrastructure.persistence.sqlite.repositories.video_download_repositor
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.lifecycle import PlatformRequestLifecycle
     from app.adapters.external.response_formatter import ResponseFormatter
-    from app.application.ports import RequestRepositoryPort, VideoDownloadRepositoryPort
+    from app.application.ports.requests import RequestRepositoryPort, VideoDownloadRepositoryPort
 
 logger = get_logger(__name__)
 

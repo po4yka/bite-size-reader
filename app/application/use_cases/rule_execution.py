@@ -16,15 +16,14 @@ from app.domain.services.rule_engine import MAX_EXECUTIONS_PER_MINUTE, RuleCondi
 from app.domain.services.tag_service import normalize_tag_name
 
 if TYPE_CHECKING:
-    from app.application.ports import (
+    from app.application.ports.rules import (
         CollectionMembershipPort,
         RuleContextPort,
         RuleRateLimiterPort,
         RuleRepositoryPort,
-        SummaryRepositoryPort,
-        TagRepositoryPort,
         WebhookDispatchPort,
     )
+    from app.application.ports.summaries import SummaryRepositoryPort, TagRepositoryPort
 
 logger = get_logger(__name__)
 

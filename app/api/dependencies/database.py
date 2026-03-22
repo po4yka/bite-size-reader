@@ -40,14 +40,14 @@ from app.infrastructure.persistence.sqlite.repositories.user_repository import (
 )
 
 if TYPE_CHECKING:
-    from app.application.ports import (
+    from app.application.ports.requests import (
         CrawlResultRepositoryPort,
         LLMRepositoryPort,
         RequestRepositoryPort,
-        SummaryRepositoryPort,
-        TopicSearchRepositoryPort,
-        UserRepositoryPort,
     )
+    from app.application.ports.search import TopicSearchRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
     from app.db.session import DatabaseSessionManager
 
 logger = get_logger(__name__)

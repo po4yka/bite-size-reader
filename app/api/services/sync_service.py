@@ -30,13 +30,13 @@ if TYPE_CHECKING:
     from app.api.models.requests import SyncApplyItem
     from app.api.services.sync.collector import SyncAuxReadPort
     from app.api.services.sync.session_store import SyncSessionStorePort
-    from app.application.ports import (
+    from app.application.ports.requests import (
         CrawlResultRepositoryPort,
         LLMRepositoryPort,
         RequestRepositoryPort,
-        SummaryRepositoryPort,
-        UserRepositoryPort,
     )
+    from app.application.ports.summaries import SummaryRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 

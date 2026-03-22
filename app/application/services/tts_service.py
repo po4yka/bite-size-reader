@@ -9,12 +9,12 @@ from app.application.dto.audio_generation import AudioGenerationResult
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
-    from app.application.ports import (
+    from app.application.ports.audio import (
         AudioGenerationRepositoryPort,
         AudioStoragePort,
-        SummaryRepositoryPort,
         TTSProviderPort,
     )
+    from app.application.ports.summaries import SummaryRepositoryPort
 
 logger = get_logger(__name__)
 

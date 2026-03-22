@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.application.ports import SummaryRepositoryPort
+from app.application.ports.summaries import SummaryRepositoryPort
 from app.application.use_cases.summary_fetch import fetch_summary_or_raise
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC

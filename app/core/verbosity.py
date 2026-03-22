@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
-    from app.application.ports import UserRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
 
 logger = get_logger(__name__)
 

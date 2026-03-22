@@ -17,11 +17,9 @@ from app.domain.models.request import RequestStatus
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
-    from app.application.ports import (
-        RequestRepositoryPort,
-        SummaryRepositoryPort,
-        UserRepositoryPort,
-    )
+    from app.application.ports.requests import RequestRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
     from app.application.services.related_reads_service import RelatedReadsService
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager

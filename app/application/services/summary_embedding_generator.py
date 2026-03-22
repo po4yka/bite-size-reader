@@ -8,12 +8,9 @@ from app.core.embedding_text import prepare_text_for_embedding
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
-    from app.application.ports import (
-        EmbeddingProviderPort,
-        EmbeddingRepositoryPort,
-        RequestRepositoryPort,
-        SummaryRepositoryPort,
-    )
+    from app.application.ports.requests import RequestRepositoryPort
+    from app.application.ports.search import EmbeddingProviderPort, EmbeddingRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
 
 logger = get_logger(__name__)
 

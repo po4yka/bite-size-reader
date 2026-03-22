@@ -20,7 +20,8 @@ if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
     )
-    from app.application.ports import LLMRepositoryPort, SummaryRepositoryPort
+    from app.application.ports.requests import LLMRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
 
 logger = get_logger(__name__)
 

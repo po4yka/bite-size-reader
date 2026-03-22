@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.routing.models import PreparedRouteContext
     from app.adapters.telegram.task_manager import UserTaskManager
     from app.adapters.telegram.url_handler import URLHandler
-    from app.application.ports import UserRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.security.rate_limiter import RedisUserRateLimiter, UserRateLimiter
