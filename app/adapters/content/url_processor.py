@@ -178,12 +178,29 @@ class URLProcessor:
 
         try:
             context = await self.context_builder.build(request)
+
+            # Resolve the model that will actually be used (routing-aware)
+            display_model = self.cfg.openrouter.model
+            routing_cfg = self.cfg.model_routing
+            if routing_cfg.enabled:
+                from app.core.content_classifier import classify_content
+                from app.core.model_router import resolve_model_for_content
+
+                tier = classify_content(context.content_text, url=request.url_text)
+                display_model = resolve_model_for_content(
+                    tier=tier,
+                    content_length=len(context.content_text),
+                    has_images=bool(context.images),
+                    routing_config=routing_cfg,
+                    openrouter_config=self.cfg.openrouter,
+                )
+
             if request.on_phase_change:
                 await request.on_phase_change(
                     "analyzing",
                     context.title,
                     len(context.content_text),
-                    self.cfg.openrouter.model,
+                    display_model,
                 )
 
             if context.should_chunk and context.chunks:
