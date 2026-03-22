@@ -5,9 +5,29 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.attachment.attachment_processor import AttachmentProcessor
 from app.adapters.telegram.access_controller import AccessController
 from app.adapters.telegram.callback_handler import CallbackHandler
+from app.adapters.telegram.command_dispatch import (
+    AliasCommandRoute,
+    CommandContextFactory,
+    TelegramCommandRoutes,
+    TelegramCommandRuntimeState,
+    TextCommandRoute,
+    UidCommandRoute,
+)
 from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
+from app.adapters.telegram.command_handlers.admin_handler import AdminHandler
+from app.adapters.telegram.command_handlers.backup_handler import BackupHandler
+from app.adapters.telegram.command_handlers.content_handler import ContentHandler
+from app.adapters.telegram.command_handlers.digest_handler import DigestHandler
+from app.adapters.telegram.command_handlers.export_command import ExportHandler
+from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandler
 from app.adapters.telegram.command_handlers.karakeep_handler import KarakeepHandler
 from app.adapters.telegram.command_handlers.listen_handler import ListenHandler
+from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandler
+from app.adapters.telegram.command_handlers.rules_handler import RulesHandler
+from app.adapters.telegram.command_handlers.search_handler import SearchHandler
+from app.adapters.telegram.command_handlers.settings_handler import SettingsHandler
+from app.adapters.telegram.command_handlers.tag_handler import TagHandler
+from app.adapters.telegram.command_handlers.url_commands_handler import URLCommandsHandler
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.message_router import MessageRouter
@@ -182,8 +202,9 @@ def build_telegram_runtime(
         request_repo=request_repo,
         file_validator=SecureFileValidator(max_file_size=10 * 1024 * 1024),
     )
-    dispatcher_deps = TelegramCommandDispatcherDeps(
-        user_repository=user_repo,
+    dispatcher_deps = _build_command_dispatcher_deps(
+        cfg=cfg,
+        db=db,
         response_formatter=core.response_formatter,
         audit_func=audit_sink,
         url_processor=url_processor,
@@ -195,47 +216,34 @@ def build_telegram_runtime(
         verbosity_resolver=verbosity_resolver,
         application_services=application_services,
         repositories=telegram_repositories,
-        handlers={
-            "karakeep": KarakeepHandler(
-                cfg=cfg,
-                db=db,
-                response_formatter=core.response_formatter,
-                repository=karakeep_sync_repo,
-            ),
-            "listen": ListenHandler(
-                cfg=cfg,
-                db=db,
-                response_formatter=core.response_formatter,
-                tts_service_factory=lambda: TTSService(
-                    summary_repository=summary_repo,
-                    audio_generation_repository=SqliteAudioGenerationRepositoryAdapter(db),
-                    tts_provider=ElevenLabsTTSProviderAdapter(cfg.tts),
-                    audio_storage=FileSystemAudioStorageAdapter(cfg.tts.audio_storage_path),
-                    voice_id=cfg.tts.voice_id,
-                    model_name=cfg.tts.model,
-                    max_chars_per_request=cfg.tts.max_chars_per_request,
-                ),
-            ),
-        },
+        tts_service_factory=lambda: TTSService(
+            summary_repository=summary_repo,
+            audio_generation_repository=SqliteAudioGenerationRepositoryAdapter(db),
+            tts_provider=ElevenLabsTTSProviderAdapter(cfg.tts),
+            audio_storage=FileSystemAudioStorageAdapter(cfg.tts.audio_storage_path),
+            voice_id=cfg.tts.voice_id,
+            model_name=cfg.tts.model,
+            max_chars_per_request=cfg.tts.max_chars_per_request,
+        ),
     )
     command_dispatcher = TelegramCommandDispatcher(
-        cfg=cfg,
-        response_formatter=dispatcher_deps.response_formatter,
-        db=db,
-        url_processor=dispatcher_deps.url_processor,
-        audit_func=dispatcher_deps.audit_func,
-        url_handler=dispatcher_deps.url_handler,
-        topic_searcher=dispatcher_deps.topic_searcher,
-        local_searcher=dispatcher_deps.local_searcher,
-        task_manager=dispatcher_deps.task_manager,
-        hybrid_search=dispatcher_deps.hybrid_search,
-        verbosity_resolver=dispatcher_deps.verbosity_resolver,
-        user_repo=telegram_repositories.user_repository,
-        summary_repo=telegram_repositories.summary_repository,
-        request_repo=telegram_repositories.request_repository,
-        llm_repo=telegram_repositories.llm_repository,
-        application_services=dispatcher_deps.application_services,
-        handlers=dispatcher_deps.handlers,
+        routes=dispatcher_deps.routes,
+        runtime_state=dispatcher_deps.runtime_state,
+        context_factory=dispatcher_deps.context_factory,
+        onboarding_handler=dispatcher_deps.onboarding_handler,
+        admin_handler=dispatcher_deps.admin_handler,
+        url_commands_handler=dispatcher_deps.url_commands_handler,
+        content_handler=dispatcher_deps.content_handler,
+        search_handler=dispatcher_deps.search_handler,
+        karakeep_handler=dispatcher_deps.karakeep_handler,
+        listen_handler=dispatcher_deps.listen_handler,
+        digest_handler=dispatcher_deps.digest_handler,
+        init_session_handler=dispatcher_deps.init_session_handler,
+        settings_handler=dispatcher_deps.settings_handler,
+        tag_handler=dispatcher_deps.tag_handler,
+        rules_handler=dispatcher_deps.rules_handler,
+        export_handler=dispatcher_deps.export_handler,
+        backup_handler=dispatcher_deps.backup_handler,
     )
     access_controller = AccessController(
         cfg=cfg,
@@ -345,42 +353,56 @@ def build_summary_cli_runtime(
         user_repo=user_repo,
         request_repo=request_repo,
     )
-    command_processor = TelegramCommandDispatcher(
+    dispatcher_deps = _build_command_dispatcher_deps(
         cfg=cfg,
-        response_formatter=core.response_formatter,
         db=db,
-        url_processor=url_processor,
+        response_formatter=core.response_formatter,
         audit_func=core.audit_sink,
+        url_processor=url_processor,
         url_handler=url_handler,
         topic_searcher=search.topic_searcher,
         local_searcher=search.local_searcher,
-        user_repo=user_repo,
-        summary_repo=summary_repo,
-        request_repo=request_repo,
-        llm_repo=llm_repo,
+        task_manager=None,
+        hybrid_search=search.hybrid_search_service,
+        verbosity_resolver=None,
         application_services=application_services,
-        handlers={
-            "karakeep": KarakeepHandler(
-                cfg=cfg,
-                db=db,
-                response_formatter=core.response_formatter,
-                repository=karakeep_sync_repo,
-            ),
-            "listen": ListenHandler(
-                cfg=cfg,
-                db=db,
-                response_formatter=core.response_formatter,
-                tts_service_factory=lambda: TTSService(
-                    summary_repository=summary_repo,
-                    audio_generation_repository=SqliteAudioGenerationRepositoryAdapter(db),
-                    tts_provider=ElevenLabsTTSProviderAdapter(cfg.tts),
-                    audio_storage=FileSystemAudioStorageAdapter(cfg.tts.audio_storage_path),
-                    voice_id=cfg.tts.voice_id,
-                    model_name=cfg.tts.model,
-                    max_chars_per_request=cfg.tts.max_chars_per_request,
-                ),
-            ),
-        },
+        repositories=TelegramRepositories(
+            user_repository=user_repo,
+            summary_repository=summary_repo,
+            request_repository=request_repo,
+            llm_repository=llm_repo,
+            audit_log_repository=None,
+            batch_session_repository=None,
+            karakeep_sync_repository=karakeep_sync_repo,
+        ),
+        tts_service_factory=lambda: TTSService(
+            summary_repository=summary_repo,
+            audio_generation_repository=SqliteAudioGenerationRepositoryAdapter(db),
+            tts_provider=ElevenLabsTTSProviderAdapter(cfg.tts),
+            audio_storage=FileSystemAudioStorageAdapter(cfg.tts.audio_storage_path),
+            voice_id=cfg.tts.voice_id,
+            model_name=cfg.tts.model,
+            max_chars_per_request=cfg.tts.max_chars_per_request,
+        ),
+    )
+    command_processor = TelegramCommandDispatcher(
+        routes=dispatcher_deps.routes,
+        runtime_state=dispatcher_deps.runtime_state,
+        context_factory=dispatcher_deps.context_factory,
+        onboarding_handler=dispatcher_deps.onboarding_handler,
+        admin_handler=dispatcher_deps.admin_handler,
+        url_commands_handler=dispatcher_deps.url_commands_handler,
+        content_handler=dispatcher_deps.content_handler,
+        search_handler=dispatcher_deps.search_handler,
+        karakeep_handler=dispatcher_deps.karakeep_handler,
+        listen_handler=dispatcher_deps.listen_handler,
+        digest_handler=dispatcher_deps.digest_handler,
+        init_session_handler=dispatcher_deps.init_session_handler,
+        settings_handler=dispatcher_deps.settings_handler,
+        tag_handler=dispatcher_deps.tag_handler,
+        rules_handler=dispatcher_deps.rules_handler,
+        export_handler=dispatcher_deps.export_handler,
+        backup_handler=dispatcher_deps.backup_handler,
     )
     return SummaryCliRuntime(
         core=core,
@@ -388,6 +410,256 @@ def build_summary_cli_runtime(
         application_services=application_services,
         url_processor=url_processor,
         command_processor=command_processor,
+    )
+
+
+def _build_command_dispatcher_deps(
+    *,
+    cfg: AppConfig,
+    db: DatabaseSessionManager,
+    response_formatter: Any,
+    audit_func: Any,
+    url_processor: URLProcessor,
+    url_handler: URLHandler | None,
+    topic_searcher: Any | None,
+    local_searcher: Any | None,
+    task_manager: UserTaskManager | None,
+    hybrid_search: Any | None,
+    verbosity_resolver: Any | None,
+    application_services: Any | None,
+    repositories: TelegramRepositories,
+    tts_service_factory: Any | None,
+) -> TelegramCommandDispatcherDeps:
+    runtime_state = TelegramCommandRuntimeState(
+        url_processor=url_processor,
+        url_handler=url_handler,
+        topic_searcher=topic_searcher,
+        local_searcher=local_searcher,
+        _task_manager=task_manager,
+        hybrid_search=hybrid_search,
+    )
+    context_factory = CommandContextFactory(
+        user_repo=repositories.user_repository,
+        response_formatter=response_formatter,
+        audit_func=audit_func,
+    )
+
+    onboarding_handler = OnboardingHandler(response_formatter)
+    admin_handler = AdminHandler(
+        db=db,
+        response_formatter=response_formatter,
+        url_processor=url_processor,
+        url_handler=url_handler,
+    )
+    url_commands_handler = URLCommandsHandler(
+        response_formatter=response_formatter,
+        processor_provider=runtime_state,
+    )
+    content_handler = ContentHandler(
+        response_formatter=response_formatter,
+        summary_repo=repositories.summary_repository,
+        llm_repo=repositories.llm_repository,
+        unread_summaries_use_case=getattr(application_services, "unread_summaries", None),
+        mark_summary_as_read_use_case=getattr(application_services, "mark_summary_as_read", None),
+        event_bus=getattr(application_services, "event_bus", None),
+    )
+    search_handler = SearchHandler(
+        response_formatter=response_formatter,
+        searcher_provider=runtime_state,
+        search_topics_use_case=getattr(application_services, "search_topics", None),
+    )
+    karakeep_handler = KarakeepHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+        repository=repositories.karakeep_sync_repository,
+    )
+    listen_handler = ListenHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+        tts_service_factory=tts_service_factory,
+    )
+    digest_handler = DigestHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
+    init_session_handler = InitSessionHandler(
+        cfg=cfg,
+        response_formatter=response_formatter,
+    )
+    settings_handler = SettingsHandler(
+        verbosity_resolver=verbosity_resolver,
+        cfg=cfg,
+    )
+    tag_handler = TagHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
+    rules_handler = RulesHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
+    export_handler = ExportHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
+    backup_handler = BackupHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
+
+    def build_uid_handler(handler_method: Any) -> Any:
+        async def _handler(
+            message: Any,
+            uid: int,
+            correlation_id: str,
+            interaction_id: int,
+            start_time: float,
+        ) -> None:
+            ctx = context_factory.build(
+                message=message,
+                uid=uid,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                start_time=start_time,
+            )
+            await handler_method(ctx)
+
+        return _handler
+
+    def build_text_handler(handler_method: Any) -> Any:
+        async def _handler(
+            message: Any,
+            text: str,
+            uid: int,
+            correlation_id: str,
+            interaction_id: int,
+            start_time: float,
+        ) -> None:
+            ctx = context_factory.build(
+                message=message,
+                text=text,
+                uid=uid,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                start_time=start_time,
+            )
+            await handler_method(ctx)
+
+        return _handler
+
+    def build_alias_handler(handler_method: Any) -> Any:
+        async def _handler(
+            message: Any,
+            text: str,
+            uid: int,
+            correlation_id: str,
+            interaction_id: int,
+            start_time: float,
+            command: str,
+        ) -> None:
+            ctx = context_factory.build(
+                message=message,
+                text=text,
+                uid=uid,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                start_time=start_time,
+            )
+            await handler_method(ctx, command=command)
+
+        return _handler
+
+    routes = TelegramCommandRoutes(
+        pre_alias_uid=(
+            UidCommandRoute("/start", build_uid_handler(onboarding_handler.handle_start)),
+            UidCommandRoute("/help", build_uid_handler(onboarding_handler.handle_help)),
+            UidCommandRoute("/dbinfo", build_uid_handler(admin_handler.handle_dbinfo)),
+            UidCommandRoute("/dbverify", build_uid_handler(admin_handler.handle_dbverify)),
+            UidCommandRoute("/clearcache", build_uid_handler(admin_handler.handle_clearcache)),
+        ),
+        pre_alias_text=(
+            TextCommandRoute("/admin", build_text_handler(admin_handler.handle_admin)),
+        ),
+        local_search_aliases=(
+            AliasCommandRoute(
+                ("/finddb", "/findlocal"),
+                build_alias_handler(search_handler.handle_find_local),
+            ),
+        ),
+        online_search_aliases=(
+            AliasCommandRoute(
+                ("/findweb", "/findonline", "/find"),
+                build_alias_handler(search_handler.handle_find_online),
+            ),
+        ),
+        pre_summarize_text=(
+            TextCommandRoute(
+                "/summarize_all",
+                build_text_handler(url_commands_handler.handle_summarize_all),
+            ),
+        ),
+        summarize_prefix="/summarize",
+        post_summarize_uid=(
+            UidCommandRoute("/cancel", build_uid_handler(url_commands_handler.handle_cancel)),
+        ),
+        post_summarize_text=(
+            TextCommandRoute("/untag", build_text_handler(tag_handler.handle_untag)),
+            TextCommandRoute("/tags", build_text_handler(tag_handler.handle_tags)),
+            TextCommandRoute("/tag", build_text_handler(tag_handler.handle_tag)),
+            TextCommandRoute("/unread", build_text_handler(content_handler.handle_unread)),
+            TextCommandRoute("/read", build_text_handler(content_handler.handle_read)),
+            TextCommandRoute("/search", build_text_handler(search_handler.handle_search)),
+            TextCommandRoute(
+                "/sync_karakeep",
+                build_text_handler(karakeep_handler.handle_sync_karakeep),
+            ),
+            TextCommandRoute("/listen", build_text_handler(listen_handler.handle_listen)),
+            TextCommandRoute("/cdigest", build_text_handler(digest_handler.handle_cdigest)),
+            TextCommandRoute("/digest", build_text_handler(digest_handler.handle_digest)),
+            TextCommandRoute("/channels", build_text_handler(digest_handler.handle_channels)),
+            TextCommandRoute("/subscribe", build_text_handler(digest_handler.handle_subscribe)),
+            TextCommandRoute(
+                "/unsubscribe",
+                build_text_handler(digest_handler.handle_unsubscribe),
+            ),
+            TextCommandRoute(
+                "/init_session",
+                build_text_handler(init_session_handler.handle_init_session),
+            ),
+            TextCommandRoute("/settings", build_text_handler(settings_handler.handle_settings)),
+            TextCommandRoute("/rules", build_text_handler(rules_handler.handle_rules)),
+            TextCommandRoute("/export", build_text_handler(export_handler.handle_export)),
+            TextCommandRoute("/backups", build_text_handler(backup_handler.handle_backups)),
+            TextCommandRoute("/backup", build_text_handler(backup_handler.handle_backup)),
+        ),
+        tail_uid=(UidCommandRoute("/debug", build_uid_handler(settings_handler.handle_debug)),),
+    )
+
+    return TelegramCommandDispatcherDeps(
+        routes=routes,
+        runtime_state=runtime_state,
+        context_factory=context_factory,
+        onboarding_handler=onboarding_handler,
+        admin_handler=admin_handler,
+        url_commands_handler=url_commands_handler,
+        content_handler=content_handler,
+        search_handler=search_handler,
+        karakeep_handler=karakeep_handler,
+        listen_handler=listen_handler,
+        digest_handler=digest_handler,
+        init_session_handler=init_session_handler,
+        settings_handler=settings_handler,
+        tag_handler=tag_handler,
+        rules_handler=rules_handler,
+        export_handler=export_handler,
+        backup_handler=backup_handler,
     )
 
 

@@ -51,7 +51,7 @@ class TelegramComponentWiring:
         bot._application_services = components.application_services
         bot._adaptive_timeout_service = components.adaptive_timeout_service
 
-        bot.message_handler.command_processor.url_processor = bot.url_processor
+        bot.message_handler.command_processor.runtime_state.url_processor = bot.url_processor
         bot.message_handler.url_processor = bot.url_processor
 
         bot._awaiting_url_users = bot.message_handler.url_handler._awaiting_url_users

@@ -58,6 +58,7 @@ def test_command_dispatcher_routes_preserve_expected_precedence_order() -> None:
         ("/findweb", "/findonline", "/find")
     ]
     assert [route.prefix for route in deps.routes.pre_summarize_text] == ["/summarize_all"]
+    assert deps.routes.summarize_prefix == "/summarize"
     assert [route.prefix for route in deps.routes.post_summarize_uid] == ["/cancel"]
     assert [route.prefix for route in deps.routes.post_summarize_text] == [
         "/untag",
@@ -79,6 +80,5 @@ def test_command_dispatcher_routes_preserve_expected_precedence_order() -> None:
         "/export",
         "/backups",
         "/backup",
-        "/rss",
     ]
     assert [route.prefix for route in deps.routes.tail_uid] == ["/debug"]
