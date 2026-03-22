@@ -13,7 +13,6 @@ import {
 } from "@carbon/react";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useAdminUsers } from "../../hooks/useAdmin";
-import type { AdminUser } from "../../api/admin";
 
 const headers = [
   { key: "username", header: "Username" },
@@ -27,11 +26,9 @@ const headers = [
 
 export default function AdminUsers() {
   const { data, isLoading, error } = useAdminUsers();
-  const users: AdminUser[] = data?.users ?? [];
-
   const rows = useMemo(
     () =>
-      users.map((u) => ({
+      (data?.users ?? []).map((u) => ({
         id: String(u.userId),
         username: u.username ?? `User #${u.userId}`,
         isOwner: u.isOwner,
@@ -41,7 +38,7 @@ export default function AdminUsers() {
         collectionCount: String(u.collectionCount),
         createdAt: new Date(u.createdAt).toLocaleDateString(),
       })),
-    [users],
+    [data],
   );
 
   if (isLoading) return <DataTableSkeleton columnCount={headers.length} rowCount={5} showToolbar={false} />;

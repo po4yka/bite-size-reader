@@ -1,3 +1,4 @@
+import type { SyntheticEvent } from "react";
 import { useState } from "react";
 import { FileUploader, InlineLoading, InlineNotification } from "@carbon/react";
 import { useRestoreBackup } from "../../hooks/useBackups";
@@ -7,8 +8,9 @@ export default function RestoreUpload() {
   const restoreMutation = useRestoreBackup();
   const [result, setResult] = useState<RestoreResult | null>(null);
 
-  function handleChange(event: { target: { files: FileList | null } }): void {
-    const file = event.target.files?.[0];
+  function handleChange(event: SyntheticEvent<HTMLElement>): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
 
     setResult(null);

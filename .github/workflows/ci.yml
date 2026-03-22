@@ -68,7 +68,7 @@ jobs:
             -o requirements-all.txt
 
       - name: Compile locked requirements (dev)
-        run: uv pip compile --python-version 3.13 --extra dev -c requirements-all.txt pyproject.toml -o requirements-dev.txt
+        run: uv pip compile --python-version 3.13 --group dev -c requirements-all.txt pyproject.toml -o requirements-dev.txt
 
       - name: Check lockfile drift
         id: lockcheck

@@ -262,7 +262,7 @@ export default function BackupsPage() {
               labelA="Disabled"
               labelB="Enabled"
               toggled={schedule.backupEnabled ?? false}
-              onToggle={(_event: React.ChangeEvent<HTMLInputElement>) => {
+              onToggle={() => {
                 handleToggleEnabled(!(schedule.backupEnabled ?? false));
               }}
               disabled={updateScheduleMutation.isPending}

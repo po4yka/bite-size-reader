@@ -36,6 +36,9 @@ config:
   # MD036: Emphasis used instead of a heading - allow for emphasized text in lists
   MD036: false
 
+  # MD060: Table column style - disabled; compact separator rows are standard
+  MD060: false
+
   # MD051: Link fragments should be valid - disabled due to non-breaking hyphens in SPEC.md headings
   MD051: false
 

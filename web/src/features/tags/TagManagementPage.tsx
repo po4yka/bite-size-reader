@@ -42,7 +42,7 @@ export default function TagManagementPage() {
   const deleteMutation = useDeleteTag();
   const mergeMutation = useMergeTags();
 
-  const tags = tagsQuery.data ?? [];
+  const tags = useMemo(() => tagsQuery.data ?? [], [tagsQuery.data]);
 
   const deleteTagObj = useMemo(
     () => tags.find((t) => t.id === deleteTagId) ?? null,
