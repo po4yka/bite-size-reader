@@ -67,6 +67,16 @@ FORMATTER_PRIVATE_PATTERNS = {
         r"\b[\w.]*response_formatter\._reply_json_func\b"
     ),
 }
+FORMATTER_PRIVATE_MODULE_PATTERNS = [
+    re.compile(r"from app\.adapters\.external\.formatting\._response_sender_"),
+    re.compile(r"import app\.adapters\.external\.formatting\._response_sender_"),
+    re.compile(
+        r"from app\.adapters\.external\.formatting\.summary\.(presenter_context|summary_blocks|followup_presenters|structured_summary_flow)"
+    ),
+    re.compile(
+        r"import app\.adapters\.external\.formatting\.summary\.(presenter_context|summary_blocks|followup_presenters|structured_summary_flow)"
+    ),
+]
 
 
 def _run_rg(
@@ -121,6 +131,55 @@ def test_formatter_private_surfaces_are_not_used_outside_formatting_package() ->
         ]
         assert offenders == [], f"found forbidden formatter surface usage in {path}:\n" + "\n".join(
             offenders
+        )
+
+
+def test_formatter_private_modules_are_not_imported_outside_formatting_package() -> None:
+    """Production code should import only formatter public modules/protocols."""
+    for path in APP_ROOT.rglob("*.py"):
+        if "app/adapters/external/formatting/" in path.as_posix():
+            continue
+        if path == APP_ROOT / "adapters" / "external" / "response_formatter.py":
+            continue
+        text = path.read_text()
+        offenders = [
+            pattern.pattern for pattern in FORMATTER_PRIVATE_MODULE_PATTERNS if pattern.search(text)
+        ]
+        assert offenders == [], (
+            f"found forbidden formatter private import in {path}:\n" + "\n".join(offenders)
+        )
+
+
+def test_formatter_concrete_root_modules_remain_thin_shells() -> None:
+    """Concrete formatter roots should only expose construction and public delegation."""
+    module_expectations = {
+        APP_ROOT / "adapters" / "external" / "formatting" / "response_sender.py": (
+            "ResponseSenderImpl"
+        ),
+        APP_ROOT / "adapters" / "external" / "formatting" / "summary_presenter.py": (
+            "SummaryPresenterImpl"
+        ),
+    }
+
+    for path, class_name in module_expectations.items():
+        tree = _parse_python(path)
+        module_functions = [node.name for node in tree.body if isinstance(node, ast.FunctionDef)]
+        assert module_functions == [], (
+            f"{path} should not define module-level helpers: {module_functions}"
+        )
+
+        classes = [
+            node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name
+        ]
+        assert len(classes) == 1, f"{path} should define exactly one {class_name}"
+        methods = [
+            node.name
+            for node in classes[0].body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        private_methods = [name for name in methods if name.startswith("_") and name != "__init__"]
+        assert private_methods == [], (
+            f"{path} should not define private helper methods in {class_name}: {private_methods}"
         )
 
 
