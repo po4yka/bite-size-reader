@@ -524,7 +524,7 @@ uvloop==0.22.1
     # via
     #   -c .requirements-all.tmp.txt
     #   bite-size-reader (pyproject.toml)
-virtualenv==20.38.0
+virtualenv==21.1.0
     # via pre-commit
 w3lib==2.4.0
     # via
