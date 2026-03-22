@@ -1,1116 +1,124 @@
-"""Peewee ORM models for the application database."""
+"""Compatibility export surface for Peewee ORM models."""
 
 from __future__ import annotations
 
-import datetime as _dt
-from typing import Any
-
-import peewee
-from playhouse.sqlite_ext import FTS5Model, JSONField, SearchField
-
-from app.core.time_utils import UTC
-
-# A proxy that will be initialised with the concrete database instance at runtime.
-database_proxy: peewee.Database = peewee.DatabaseProxy()
-TOPIC_SEARCH_INDEX_OPTIONS: dict[str, str] = {"tokenize": "unicode61 remove_diacritics 2"}
-
-
-class BaseModel(peewee.Model):
-    """Base Peewee model bound to the lazily initialised database proxy."""
-
-    def save(self, *args: Any, **kwargs: Any) -> int:
-        """Ensure updated_at/server_version fields stay monotonic on every save."""
-        now = _utcnow()
-
-        if hasattr(self, "updated_at"):
-            self.updated_at = now
-
-        if hasattr(self, "server_version"):
-            current = getattr(self, "server_version", 0) or 0
-            next_version = int(now.timestamp() * 1000)
-            if next_version <= current:
-                next_version = current + 1
-            self.server_version = next_version
-            if hasattr(self, "version"):
-                self.version = next_version
-
-        return super().save(*args, **kwargs)
-
-    class Meta:
-        database = database_proxy
-        legacy_table_names = False
-
-
-def _utcnow() -> _dt.datetime:
-    """Timezone-aware UTC now (avoids deprecated datetime.utcnow)."""
-    return _dt.datetime.now(UTC)
-
-
-def _next_server_version() -> int:
-    """Monotonic-ish server version seed based on current UTC timestamp (ms)."""
-    return int(_utcnow().timestamp() * 1000)
-
-
-class User(BaseModel):
-    telegram_user_id = peewee.BigIntegerField(primary_key=True)
-    username = peewee.TextField(null=True)
-    is_owner = peewee.BooleanField(default=False)
-    preferences_json = JSONField(null=True)  # User preferences (lang, notifications, app settings)
-    linked_telegram_user_id = peewee.BigIntegerField(null=True)
-    linked_telegram_username = peewee.TextField(null=True)
-    linked_telegram_photo_url = peewee.TextField(null=True)
-    linked_telegram_first_name = peewee.TextField(null=True)
-    linked_telegram_last_name = peewee.TextField(null=True)
-    linked_at = peewee.DateTimeField(null=True)
-    link_nonce = peewee.TextField(null=True)
-    link_nonce_expires_at = peewee.DateTimeField(null=True)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "users"
-        indexes = ((("linked_telegram_user_id",), False),)
-
-
-class ClientSecret(BaseModel):
-    """Client-bound secret keys for alternate authentication."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="client_secrets", on_delete="CASCADE")
-    client_id = peewee.TextField()
-    secret_hash = peewee.TextField()
-    secret_salt = peewee.TextField()
-    status = peewee.TextField(default="active")  # active | revoked | expired | locked
-    label = peewee.TextField(null=True)
-    description = peewee.TextField(null=True)
-    expires_at = peewee.DateTimeField(null=True)
-    last_used_at = peewee.DateTimeField(null=True)
-    failed_attempts = peewee.IntegerField(default=0)
-    locked_until = peewee.DateTimeField(null=True)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "client_secrets"
-        indexes = (
-            (("user", "client_id"), False),
-            (("status",), False),
-        )
-
-
-class Chat(BaseModel):
-    chat_id = peewee.BigIntegerField(primary_key=True)
-    type = peewee.TextField()
-    title = peewee.TextField(null=True)
-    username = peewee.TextField(null=True)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "chats"
-
-
-class Request(BaseModel):
-    created_at = peewee.DateTimeField(default=_utcnow)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    type = peewee.TextField()
-    status = peewee.TextField(default="pending")
-    correlation_id = peewee.TextField(null=True)
-    chat_id = peewee.BigIntegerField(null=True)
-    user_id = peewee.BigIntegerField(null=True)
-    input_url = peewee.TextField(null=True)
-    normalized_url = peewee.TextField(null=True)
-    dedupe_hash = peewee.TextField(null=True, unique=True)
-    input_message_id = peewee.IntegerField(null=True)
-    bot_reply_message_id = peewee.IntegerField(null=True)
-    fwd_from_chat_id = peewee.BigIntegerField(null=True)
-    fwd_from_msg_id = peewee.IntegerField(null=True)
-    lang_detected = peewee.TextField(null=True)
-    content_text = peewee.TextField(null=True)
-    route_version = peewee.IntegerField(default=1)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    is_deleted = peewee.BooleanField(default=False)
-    deleted_at = peewee.DateTimeField(null=True)
-    # Error tracking fields for batch processing persistence
-    error_type = peewee.TextField(null=True)  # timeout, network, extraction_failed, etc.
-    error_message = peewee.TextField(null=True)  # Human-readable error description
-    error_timestamp = peewee.DateTimeField(null=True)  # When the error occurred
-    processing_time_ms = peewee.IntegerField(null=True)  # Total processing time in milliseconds
-    error_context_json = JSONField(null=True)  # Structured failure snapshot/context
-
-    class Meta:
-        table_name = "requests"
-        indexes = (
-            # Single column indexes
-            (("user_id",), False),  # Heavily filtered in all API queries
-            (("status",), False),  # Filtered in status queries
-            (("created_at",), False),  # Used for sorting
-            # Composite index for common query pattern (user filtering + date sorting)
-            (("user_id", "created_at"), False),
-        )
-
-
-class TelegramMessage(BaseModel):
-    request = peewee.ForeignKeyField(
-        Request, backref="telegram_message", unique=True, on_delete="CASCADE"
-    )
-    message_id = peewee.IntegerField(null=True)
-    chat_id = peewee.BigIntegerField(null=True)
-    date_ts = peewee.IntegerField(null=True)
-    text_full = peewee.TextField(null=True)
-    entities_json = JSONField(null=True)
-    media_type = peewee.TextField(null=True)
-    media_file_ids_json = JSONField(null=True)
-    forward_from_chat_id = peewee.BigIntegerField(null=True)
-    forward_from_chat_type = peewee.TextField(null=True)
-    forward_from_chat_title = peewee.TextField(null=True)
-    forward_from_message_id = peewee.IntegerField(null=True)
-    forward_date_ts = peewee.IntegerField(null=True)
-    telegram_raw_json = JSONField(null=True)
-
-    class Meta:
-        table_name = "telegram_messages"
-
-
-class CrawlResult(BaseModel):
-    request = peewee.ForeignKeyField(
-        Request, backref="crawl_result", unique=True, on_delete="CASCADE"
-    )
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    source_url = peewee.TextField(null=True)
-    endpoint = peewee.TextField(null=True)
-    http_status = peewee.IntegerField(null=True)
-    status = peewee.TextField(null=True)
-    options_json = JSONField(null=True)
-    correlation_id = peewee.TextField(null=True)
-    content_markdown = peewee.TextField(null=True)
-    content_html = peewee.TextField(null=True)
-    structured_json = JSONField(null=True)
-    metadata_json = JSONField(null=True)
-    links_json = JSONField(null=True)
-    screenshots_paths_json = JSONField(null=True)
-    firecrawl_success = peewee.BooleanField(null=True)
-    firecrawl_error_code = peewee.TextField(null=True)
-    firecrawl_error_message = peewee.TextField(null=True)
-    firecrawl_details_json = JSONField(null=True)
-    raw_response_json = JSONField(null=True)
-    latency_ms = peewee.IntegerField(null=True)
-    error_text = peewee.TextField(null=True)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    is_deleted = peewee.BooleanField(default=False)
-    deleted_at = peewee.DateTimeField(null=True)
-
-    class Meta:
-        table_name = "crawl_results"
-
-
-class LLMCall(BaseModel):
-    request = peewee.ForeignKeyField(
-        Request, backref="llm_calls", null=False, on_delete="CASCADE"
-    )  # Phase 2: Made NOT NULL for data integrity
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    provider = peewee.TextField(null=True)
-    model = peewee.TextField(null=True)
-    endpoint = peewee.TextField(null=True)
-    request_headers_json = JSONField(null=True)
-    request_messages_json = JSONField(null=True)
-    response_text = peewee.TextField(null=True)
-    response_json = JSONField(null=True)
-    openrouter_response_text = peewee.TextField(null=True)
-    openrouter_response_json = JSONField(null=True)
-    tokens_prompt = peewee.IntegerField(null=True)
-    tokens_completion = peewee.IntegerField(null=True)
-    cost_usd = peewee.FloatField(null=True)
-    latency_ms = peewee.IntegerField(null=True)
-    status = peewee.TextField(null=True)
-    error_text = peewee.TextField(null=True)
-    structured_output_used = peewee.BooleanField(null=True)
-    structured_output_mode = peewee.TextField(null=True)
-    error_context_json = JSONField(null=True)
-    created_at = peewee.DateTimeField(default=_utcnow)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    is_deleted = peewee.BooleanField(default=False)
-    deleted_at = peewee.DateTimeField(null=True)
-
-    class Meta:
-        table_name = "llm_calls"
-
-
-class Summary(BaseModel):
-    request = peewee.ForeignKeyField(Request, backref="summary", unique=True, on_delete="CASCADE")
-    lang = peewee.TextField(null=True)
-    json_payload = JSONField(null=True)
-    insights_json = JSONField(null=True)
-    version = peewee.IntegerField(default=1)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    is_read = peewee.BooleanField(default=False)
-    is_favorited = peewee.BooleanField(default=False)
-    is_deleted = peewee.BooleanField(default=False)
-    deleted_at = peewee.DateTimeField(null=True)
-    reading_progress = peewee.FloatField(default=0.0, null=True)
-    last_read_offset = peewee.IntegerField(default=0, null=True)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "summaries"
-        indexes = (
-            (("is_read",), False),  # Filtered in GET /summaries for unread count
-            (("lang",), False),  # Filtered in GET /summaries by language
-            (("created_at",), False),  # Filtered in delta sync
-        )
-
-
-class TopicSearchIndex(FTS5Model):
-    """FTS-backed search index for locally stored summaries."""
-
-    request_id = SearchField()
-    url = SearchField()
-    title = SearchField()
-    snippet = SearchField()
-    source = SearchField()
-    published_at = SearchField()
-    body = SearchField()
-    tags = SearchField()
-
-    class Meta:
-        table_name = "topic_search_index"
-        database = database_proxy
-        options = TOPIC_SEARCH_INDEX_OPTIONS
-
-
-class UserInteraction(BaseModel):
-    user_id = peewee.BigIntegerField()
-    chat_id = peewee.BigIntegerField(null=True)
-    message_id = peewee.IntegerField(null=True)
-    interaction_type = peewee.TextField()
-    command = peewee.TextField(null=True)
-    input_text = peewee.TextField(null=True)
-    input_url = peewee.TextField(null=True)
-    has_forward = peewee.BooleanField(default=False)
-    forward_from_chat_id = peewee.BigIntegerField(null=True)
-    forward_from_chat_title = peewee.TextField(null=True)
-    forward_from_message_id = peewee.IntegerField(null=True)
-    media_type = peewee.TextField(null=True)
-    correlation_id = peewee.TextField(null=True)
-    structured_output_enabled = peewee.BooleanField(default=False)
-    response_sent = peewee.BooleanField(default=False)
-    response_type = peewee.TextField(null=True)
-    error_occurred = peewee.BooleanField(default=False)
-    error_message = peewee.TextField(null=True)
-    processing_time_ms = peewee.IntegerField(null=True)
-    request = peewee.ForeignKeyField(
-        Request, backref="interactions", null=True, on_delete="SET NULL"
-    )
-    created_at = peewee.DateTimeField(default=_utcnow)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "user_interactions"
-        indexes = ((("user_id",), False), (("request",), False))
-
-
-class AuditLog(BaseModel):
-    ts = peewee.DateTimeField(default=_utcnow)
-    level = peewee.TextField()
-    event = peewee.TextField()
-    details_json = JSONField(null=True)
-
-    class Meta:
-        table_name = "audit_logs"
-
-
-class SummaryEmbedding(BaseModel):
-    """Vector embeddings for semantic search."""
-
-    summary = peewee.ForeignKeyField(Summary, backref="embedding", unique=True, on_delete="CASCADE")
-    model_name = peewee.TextField()
-    model_version = peewee.TextField()
-    embedding_blob = peewee.BlobField()
-    dimensions = peewee.IntegerField()
-    language = peewee.TextField(null=True)  # Language code (en, ru, auto)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "summary_embeddings"
-        indexes = ((("model_name", "model_version"), False),)
-
-
-class VideoDownload(BaseModel):
-    """YouTube video downloads with transcripts and metadata."""
-
-    request = peewee.ForeignKeyField(
-        Request, backref="video_download", unique=True, on_delete="CASCADE"
-    )
-    video_id = peewee.TextField()  # YouTube video ID
-    video_file_path = peewee.TextField(null=True)  # Path to downloaded video file
-    subtitle_file_path = peewee.TextField(null=True)  # Path to subtitle file (.vtt)
-    metadata_file_path = peewee.TextField(null=True)  # Path to metadata JSON file
-    thumbnail_file_path = peewee.TextField(null=True)  # Path to thumbnail image
-
-    # Video metadata
-    title = peewee.TextField(null=True)
-    channel = peewee.TextField(null=True)
-    channel_id = peewee.TextField(null=True)
-    duration_sec = peewee.IntegerField(null=True)
-    upload_date = peewee.TextField(null=True)  # YYYYMMDD format
-    view_count = peewee.BigIntegerField(null=True)
-    like_count = peewee.BigIntegerField(null=True)
-
-    # Download details
-    resolution = peewee.TextField(null=True)  # e.g., "1080p", "720p"
-    file_size_bytes = peewee.BigIntegerField(null=True)
-    video_codec = peewee.TextField(null=True)  # e.g., "avc1"
-    audio_codec = peewee.TextField(null=True)  # e.g., "mp4a"
-    format_id = peewee.TextField(null=True)  # yt-dlp format identifier
-
-    # Transcript details
-    subtitle_language = peewee.TextField(null=True)  # Language of extracted subtitles
-    auto_generated = peewee.BooleanField(null=True)  # Whether subtitles are auto-generated
-    transcript_text = peewee.TextField(null=True)  # Extracted transcript (cached)
-    transcript_source = peewee.TextField(null=True)  # "youtube-transcript-api" or "vtt"
-
-    # Timestamps
-    download_started_at = peewee.DateTimeField(null=True)
-    download_completed_at = peewee.DateTimeField(null=True)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    # Status tracking
-    status = peewee.TextField(default="pending")  # 'pending', 'downloading', 'completed', 'error'
-    error_text = peewee.TextField(null=True)
-
-    class Meta:
-        table_name = "video_downloads"
-        indexes = (
-            (("video_id",), False),
-            (("status",), False),
-            (("created_at",), False),
-        )
-
-
-class AudioGeneration(BaseModel):
-    """Cached TTS audio files generated from summaries."""
-
-    summary = peewee.ForeignKeyField(
-        Summary, backref="audio_generations", unique=True, on_delete="CASCADE"
-    )
-    provider = peewee.TextField(default="elevenlabs")
-    voice_id = peewee.TextField()
-    model = peewee.TextField()
-    file_path = peewee.TextField(null=True)
-    file_size_bytes = peewee.BigIntegerField(null=True)
-    duration_sec = peewee.FloatField(null=True)
-    char_count = peewee.IntegerField(null=True)
-    source_field = peewee.TextField(default="summary_1000")
-    language = peewee.TextField(null=True)
-    status = peewee.TextField(default="pending")  # pending | generating | completed | error
-    error_text = peewee.TextField(null=True)
-    latency_ms = peewee.IntegerField(null=True)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "audio_generations"
-        indexes = (
-            (("status",), False),
-            (("created_at",), False),
-        )
-
-
-class AttachmentProcessing(BaseModel):
-    """Tracks image and PDF attachment processing."""
-
-    id = peewee.AutoField()
-    request = peewee.ForeignKeyField(
-        Request, backref="attachment", unique=True, on_delete="CASCADE"
-    )
-    file_type = peewee.TextField()  # "image", "pdf"
-    mime_type = peewee.TextField(null=True)
-    file_name = peewee.TextField(null=True)
-    file_size_bytes = peewee.BigIntegerField(null=True)
-    page_count = peewee.IntegerField(null=True)
-    extracted_text_length = peewee.IntegerField(null=True)
-    vision_used = peewee.BooleanField(default=False)
-    vision_pages_count = peewee.IntegerField(null=True)
-    processing_method = peewee.TextField(null=True)  # "vision", "text_extraction", "hybrid"
-    status = peewee.TextField(default="pending")  # "pending", "processing", "completed", "error"
-    error_text = peewee.TextField(null=True)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "attachment_processing"
-        indexes = (
-            (("status",), False),
-            (("created_at",), False),
-        )
-
-
-class Collection(BaseModel):
-    """User-created collections for organizing summaries."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="collections", on_delete="CASCADE")
-    name = peewee.TextField()
-    description = peewee.TextField(null=True)
-    parent = peewee.ForeignKeyField("self", backref="children", null=True, on_delete="SET NULL")
-    position = peewee.IntegerField(null=True)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-    is_shared = peewee.BooleanField(default=False)
-    share_count = peewee.IntegerField(default=0)
-    is_deleted = peewee.BooleanField(default=False)
-    deleted_at = peewee.DateTimeField(null=True)
-    collection_type = peewee.TextField(default="manual")  # manual | smart
-    query_conditions_json = JSONField(null=True)
-    query_match_mode = peewee.TextField(default="all")  # all | any
-    last_evaluated_at = peewee.DateTimeField(null=True)
-
-    class Meta:
-        table_name = "collections"
-        indexes = (
-            (("user", "name"), True),  # Unique name per user
-            (("user", "parent", "name"), False),
-            (("updated_at",), False),
-            (("parent", "position"), False),
-            (("collection_type",), False),
-        )
-
-
-class UserDevice(BaseModel):
-    """Mobile devices registered for push notifications."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="devices", on_delete="CASCADE")
-    token = peewee.TextField(unique=True)  # FCM/APNS token
-    platform = peewee.TextField()  # ios | android
-    device_id = peewee.TextField(null=True)  # Unique device identifier
-    is_active = peewee.BooleanField(default=True)
-    last_seen_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "user_devices"
-        indexes = (
-            (("user", "platform"), False),
-            (("token",), True),
-        )
-
-
-class CollectionItem(BaseModel):
-    """Link table for items in a collection."""
-
-    id = peewee.AutoField()
-    collection = peewee.ForeignKeyField(Collection, backref="items", on_delete="CASCADE")
-    summary = peewee.ForeignKeyField(Summary, backref="collection_items", on_delete="CASCADE")
-    position = peewee.IntegerField(null=True)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "collection_items"
-        indexes = (
-            (("collection", "summary"), True),  # Prevent duplicate items
-            (("collection", "position"), False),
-        )
-
-
-class CollectionCollaborator(BaseModel):
-    """Collaborators on a collection."""
-
-    id = peewee.AutoField()
-    collection = peewee.ForeignKeyField(Collection, backref="collaborators", on_delete="CASCADE")
-    user = peewee.ForeignKeyField(User, backref="collection_collaborations", on_delete="CASCADE")
-    role = peewee.TextField()  # owner|editor|viewer
-    status = peewee.TextField(default="active")  # active|pending|revoked
-    invited_by = peewee.ForeignKeyField(User, backref="collection_invites_sent", null=True)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    created_at = peewee.DateTimeField(default=_utcnow)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "collection_collaborators"
-        indexes = (
-            (("collection", "user"), True),
-            (("user",), False),
-        )
-
-
-class CollectionInvite(BaseModel):
-    """Invite tokens for collection collaboration."""
-
-    id = peewee.AutoField()
-    collection = peewee.ForeignKeyField(Collection, backref="invites", on_delete="CASCADE")
-    token = peewee.TextField(unique=True)
-    role = peewee.TextField()  # editor|viewer
-    expires_at = peewee.DateTimeField(null=True)
-    used_at = peewee.DateTimeField(null=True)
-    invited_email = peewee.TextField(null=True)
-    invited_user_id = peewee.BigIntegerField(null=True)
-    status = peewee.TextField(default="active")  # active|used|revoked|expired
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    created_at = peewee.DateTimeField(default=_utcnow)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "collection_invites"
-        indexes = (
-            (("collection",), False),
-            (("status",), False),
-        )
-
-
-class RefreshToken(BaseModel):
-    """Store for refresh tokens to support revocation and session management."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="refresh_tokens", on_delete="CASCADE")
-    token_hash = peewee.TextField(index=True)
-    client_id = peewee.TextField(null=True)
-    device_info = peewee.TextField(null=True)
-    ip_address = peewee.TextField(null=True)
-    is_revoked = peewee.BooleanField(default=False)
-    expires_at = peewee.DateTimeField()
-    last_used_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "refresh_tokens"
-        indexes = ((("user", "client_id"), False),)
-
-
-class BatchSession(BaseModel):
-    """Tracks batch URL processing sessions with relationship analysis."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="batch_sessions", on_delete="CASCADE")
-    correlation_id = peewee.TextField(unique=True)
-
-    # Batch counts
-    total_urls = peewee.IntegerField()
-    successful_count = peewee.IntegerField(default=0)
-    failed_count = peewee.IntegerField(default=0)
-
-    # Relationship detection results
-    relationship_type = peewee.TextField(
-        null=True
-    )  # series, topic_cluster, author_collection, domain_related, unrelated
-    relationship_confidence = peewee.FloatField(null=True)  # 0.0-1.0
-    relationship_metadata_json = JSONField(null=True)  # Additional relationship details
-    combined_summary_json = JSONField(null=True)  # Synthesized summary across articles
-
-    # Status tracking
-    status = peewee.TextField(default="processing")  # processing, completed, error
-    analysis_status = peewee.TextField(null=True)  # pending, analyzing, complete, skipped, error
-    processing_time_ms = peewee.IntegerField(null=True)  # Total processing time
-
-    # Sync/versioning
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "batch_sessions"
-        indexes = (
-            (("user",), False),
-            (("status",), False),
-            (("created_at",), False),
-            (("relationship_type",), False),
-        )
-
-
-class BatchSessionItem(BaseModel):
-    """Links batch sessions to individual requests with ordering metadata."""
-
-    id = peewee.AutoField()
-    batch_session = peewee.ForeignKeyField(BatchSession, backref="items", on_delete="CASCADE")
-    request = peewee.ForeignKeyField(Request, backref="batch_item", on_delete="CASCADE")
-    position = peewee.IntegerField()  # Order in the batch (0-indexed)
-
-    # Series detection metadata
-    is_series_part = peewee.BooleanField(default=False)
-    series_order = peewee.IntegerField(null=True)  # Order in series (1, 2, 3...)
-    series_title = peewee.TextField(null=True)  # Detected series name
-
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "batch_session_items"
-        indexes = (
-            (("batch_session", "position"), False),
-            (("batch_session", "request"), True),  # Unique constraint
-            (("is_series_part",), False),
-        )
-
-
-# ---------------------------------------------------------------------------
-# Channel Digest models
-# ---------------------------------------------------------------------------
-
-
-class Channel(BaseModel):
-    """A Telegram channel tracked for digest analysis."""
-
-    id = peewee.AutoField()
-    username = peewee.TextField(unique=True)  # @channel without '@'
-    title = peewee.TextField(null=True)
-    channel_id = peewee.BigIntegerField(null=True)  # Telegram numeric chat ID
-    last_fetched_at = peewee.DateTimeField(null=True)
-    is_active = peewee.BooleanField(default=True)
-    fetch_error_count = peewee.IntegerField(default=0)
-    last_error = peewee.TextField(null=True)
-    description = peewee.TextField(null=True)
-    member_count = peewee.IntegerField(null=True)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "channels"
-
-
-class ChannelCategory(BaseModel):
-    """User-defined category for organising channel subscriptions."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="channel_categories", on_delete="CASCADE")
-    name = peewee.TextField()
-    position = peewee.IntegerField(default=0)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "channel_categories"
-        indexes = ((("user", "name"), True),)
-
-
-class ChannelSubscription(BaseModel):
-    """Links a user to a tracked channel."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="channel_subscriptions", on_delete="CASCADE")
-    channel = peewee.ForeignKeyField(Channel, backref="subscriptions", on_delete="CASCADE")
-    category = peewee.ForeignKeyField(
-        ChannelCategory, null=True, backref="subscriptions", on_delete="SET NULL"
-    )
-    is_active = peewee.BooleanField(default=True)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "channel_subscriptions"
-        indexes = ((("user", "channel"), True),)
-
-
-class ChannelPost(BaseModel):
-    """A single post fetched from a tracked channel."""
-
-    id = peewee.AutoField()
-    channel = peewee.ForeignKeyField(Channel, backref="posts", on_delete="CASCADE")
-    message_id = peewee.IntegerField()  # Telegram message ID
-    text = peewee.TextField()
-    media_type = peewee.TextField(null=True)  # photo, video, document, etc.
-    date = peewee.DateTimeField()
-    views = peewee.IntegerField(null=True)
-    forwards = peewee.IntegerField(null=True)
-    url = peewee.TextField(null=True)  # t.me/channel/msg_id
-    analyzed_at = peewee.DateTimeField(null=True)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "channel_posts"
-        indexes = (
-            (("channel", "message_id"), True),
-            (("date",), False),
-        )
-
-
-class ChannelPostAnalysis(BaseModel):
-    """Lightweight LLM analysis result for a channel post."""
-
-    id = peewee.AutoField()
-    post = peewee.ForeignKeyField(ChannelPost, backref="analysis", unique=True, on_delete="CASCADE")
-    real_topic = peewee.TextField()  # 2-4 word topic label
-    tldr = peewee.TextField()  # 1-2 sentence summary
-    key_insights = JSONField(null=True)  # list[str]
-    relevance_score = peewee.FloatField(default=0.5)  # 0.0-1.0
-    content_type = peewee.TextField(default="other")  # news/tutorial/opinion/announcement/other
-    llm_call = peewee.ForeignKeyField(
-        LLMCall, backref="digest_analyses", null=True, on_delete="SET NULL"
-    )
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "channel_post_analyses"
-
-
-class DigestDelivery(BaseModel):
-    """Record of a digest delivered to a user."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="digest_deliveries", on_delete="CASCADE")
-    delivered_at = peewee.DateTimeField(default=_utcnow)
-    post_count = peewee.IntegerField(default=0)
-    channel_count = peewee.IntegerField(default=0)
-    digest_type = peewee.TextField()  # scheduled / on_demand
-    correlation_id = peewee.TextField(null=True)
-    posts_json = JSONField(null=True)  # list of post IDs included in digest
-
-    class Meta:
-        table_name = "digest_deliveries"
-        indexes = (
-            (("user",), False),
-            (("delivered_at",), False),
-        )
-
-
-class UserDigestPreference(BaseModel):
-    """Per-user digest preference overrides.
-
-    Null fields fall back to global ChannelDigestConfig defaults.
-    """
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(
-        User, backref="digest_preferences", unique=True, on_delete="CASCADE"
-    )
-    delivery_time = peewee.TextField(null=True)  # HH:MM (null = global default)
-    timezone = peewee.TextField(null=True)  # IANA tz (null = global default)
-    hours_lookback = peewee.IntegerField(null=True)  # null = global default
-    max_posts_per_digest = peewee.IntegerField(null=True)
-    min_relevance_score = peewee.FloatField(null=True)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "user_digest_preferences"
-
-
-class SummaryFeedback(BaseModel):
-    """User feedback on a summary."""
-
-    id = peewee.UUIDField(primary_key=True)
-    user = peewee.ForeignKeyField(User, backref="summary_feedbacks", on_delete="CASCADE")
-    summary = peewee.ForeignKeyField(Summary, backref="feedbacks", on_delete="CASCADE")
-    rating = peewee.IntegerField(null=True)
-    issues = peewee.TextField(null=True)  # JSON list of strings
-    comment = peewee.TextField(null=True)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "summary_feedbacks"
-        indexes = ((("user", "summary"), True),)
-
-
-class CustomDigest(BaseModel):
-    """User-created custom digest from selected summaries."""
-
-    id = peewee.UUIDField(primary_key=True)
-    user = peewee.ForeignKeyField(User, backref="custom_digests", on_delete="CASCADE")
-    title = peewee.TextField(null=True)
-    summary_ids = peewee.TextField()  # JSON list of summary IDs
-    format = peewee.TextField(default="markdown")
-    content = peewee.TextField(null=True)
-    status = peewee.TextField(default="pending")
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "custom_digests"
-        indexes = (
-            (("user",), False),
-            (("created_at",), False),
-        )
-
-
-class SummaryHighlight(BaseModel):
-    """User highlight on a summary's content."""
-
-    id = peewee.UUIDField(primary_key=True)
-    user = peewee.ForeignKeyField(User, backref="highlights", on_delete="CASCADE")
-    summary = peewee.ForeignKeyField(Summary, backref="highlights", on_delete="CASCADE")
-    text = peewee.TextField()
-    start_offset = peewee.IntegerField(null=True)
-    end_offset = peewee.IntegerField(null=True)
-    color = peewee.TextField(null=True)
-    note = peewee.TextField(null=True)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "summary_highlights"
-        indexes = (
-            (("user", "summary"), False),
-            (("updated_at",), False),
-        )
-
-
-class UserGoal(BaseModel):
-    """Reading goal per user per period type, optionally scoped to a tag or collection."""
-
-    id = peewee.UUIDField(primary_key=True)
-    user = peewee.ForeignKeyField(User, backref="goals", on_delete="CASCADE")
-    goal_type = peewee.TextField()  # daily | weekly | monthly
-    target_count = peewee.IntegerField()
-    scope_type = peewee.TextField(default="global")  # global | tag | collection
-    scope_id = peewee.IntegerField(null=True)  # tag.id or collection.id
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "user_goals"
-        indexes = ((("user", "goal_type", "scope_type"), False),)
-
-
-class Tag(BaseModel):
-    """User-defined tag for organizing summaries."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="tags", on_delete="CASCADE")
-    name = peewee.TextField()
-    normalized_name = peewee.TextField()
-    color = peewee.TextField(null=True)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    is_deleted = peewee.BooleanField(default=False)
-    deleted_at = peewee.DateTimeField(null=True)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "tags"
-        indexes = ((("user", "normalized_name"), True),)
-
-
-class SummaryTag(BaseModel):
-    """Association between a Summary and a Tag."""
-
-    id = peewee.AutoField()
-    summary = peewee.ForeignKeyField(Summary, backref="summary_tags", on_delete="CASCADE")
-    tag = peewee.ForeignKeyField(Tag, backref="summary_tags", on_delete="CASCADE")
-    source = peewee.TextField(default="manual")  # manual | ai | rule | import
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "summary_tags"
-        indexes = (
-            (("summary", "tag"), True),
-            (("tag",), False),
-        )
-
-
-class WebhookSubscription(BaseModel):
-    """Per-user webhook endpoint subscription."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="webhooks", on_delete="CASCADE")
-    name = peewee.TextField(null=True)
-    url = peewee.TextField()
-    secret = peewee.TextField()
-    events_json = JSONField(default=list)
-    enabled = peewee.BooleanField(default=True)
-    status = peewee.TextField(default="active")  # active | paused | disabled
-    failure_count = peewee.IntegerField(default=0)
-    last_delivery_at = peewee.DateTimeField(null=True)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    is_deleted = peewee.BooleanField(default=False)
-    deleted_at = peewee.DateTimeField(null=True)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "webhook_subscriptions"
-        indexes = ((("user", "enabled"), False),)
-
-
-class WebhookDelivery(BaseModel):
-    """Delivery attempt log for a webhook."""
-
-    id = peewee.AutoField()
-    subscription = peewee.ForeignKeyField(
-        WebhookSubscription, backref="deliveries", on_delete="CASCADE"
-    )
-    event_type = peewee.TextField()
-    payload_json = JSONField()
-    response_status = peewee.IntegerField(null=True)
-    response_body = peewee.TextField(null=True)
-    duration_ms = peewee.IntegerField(null=True)
-    success = peewee.BooleanField()
-    attempt = peewee.IntegerField(default=1)
-    error = peewee.TextField(null=True)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "webhook_deliveries"
-        indexes = (
-            (("subscription",), False),
-            (("created_at",), False),
-        )
-
-
-class AutomationRule(BaseModel):
-    """User-defined automation rule (event -> condition -> action)."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="rules", on_delete="CASCADE")
-    name = peewee.TextField()
-    description = peewee.TextField(null=True)
-    enabled = peewee.BooleanField(default=True)
-    event_type = peewee.TextField()
-    match_mode = peewee.TextField(default="all")  # all | any
-    conditions_json = JSONField(default=list)
-    actions_json = JSONField(default=list)
-    priority = peewee.IntegerField(default=0)
-    run_count = peewee.IntegerField(default=0)
-    last_triggered_at = peewee.DateTimeField(null=True)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    is_deleted = peewee.BooleanField(default=False)
-    deleted_at = peewee.DateTimeField(null=True)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "automation_rules"
-        indexes = (
-            (("user", "enabled"), False),
-            (("event_type",), False),
-        )
-
-
-class RuleExecutionLog(BaseModel):
-    """Audit trail for rule executions."""
-
-    id = peewee.AutoField()
-    rule = peewee.ForeignKeyField(AutomationRule, backref="logs", on_delete="CASCADE")
-    summary = peewee.ForeignKeyField(Summary, null=True, on_delete="SET NULL")
-    event_type = peewee.TextField()
-    matched = peewee.BooleanField()
-    conditions_result_json = JSONField(null=True)
-    actions_taken_json = JSONField(null=True)
-    error = peewee.TextField(null=True)
-    duration_ms = peewee.IntegerField(null=True)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "rule_execution_logs"
-        indexes = (
-            (("rule",), False),
-            (("created_at",), False),
-        )
-
-
-class ImportJob(BaseModel):
-    """Tracks a bulk import operation."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="import_jobs", on_delete="CASCADE")
-    source_format = peewee.TextField()
-    file_name = peewee.TextField(null=True)
-    status = peewee.TextField(default="pending")  # pending | processing | completed | failed
-    total_items = peewee.IntegerField(default=0)
-    processed_items = peewee.IntegerField(default=0)
-    created_items = peewee.IntegerField(default=0)
-    skipped_items = peewee.IntegerField(default=0)
-    failed_items = peewee.IntegerField(default=0)
-    errors_json = JSONField(default=list)
-    options_json = JSONField(default=dict)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "import_jobs"
-        indexes = (
-            (("user",), False),
-            (("status",), False),
-        )
-
-
-class UserBackup(BaseModel):
-    """Per-user backup archive."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="backups", on_delete="CASCADE")
-    type = peewee.TextField(default="manual")  # manual | scheduled
-    status = peewee.TextField(default="pending")  # pending | processing | completed | failed
-    file_path = peewee.TextField(null=True)
-    file_size_bytes = peewee.IntegerField(null=True)
-    items_count = peewee.IntegerField(null=True)
-    error = peewee.TextField(null=True)
-    server_version = peewee.BigIntegerField(default=_next_server_version)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "user_backups"
-        indexes = (
-            (("user",), False),
-            (("status",), False),
-        )
-
-
-class RSSFeed(BaseModel):
-    """RSS/Atom feed source."""
-
-    id = peewee.AutoField()
-    url = peewee.TextField(unique=True)
-    title = peewee.TextField(null=True)
-    description = peewee.TextField(null=True)
-    site_url = peewee.TextField(null=True)
-    last_fetched_at = peewee.DateTimeField(null=True)
-    last_successful_at = peewee.DateTimeField(null=True)
-    fetch_error_count = peewee.IntegerField(default=0)
-    last_error = peewee.TextField(null=True)
-    etag = peewee.TextField(null=True)
-    last_modified = peewee.TextField(null=True)
-    is_active = peewee.BooleanField(default=True)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "rss_feeds"
-
-
-class RSSFeedSubscription(BaseModel):
-    """User subscription to an RSS feed."""
-
-    id = peewee.AutoField()
-    user = peewee.ForeignKeyField(User, backref="rss_subscriptions", on_delete="CASCADE")
-    feed = peewee.ForeignKeyField(RSSFeed, backref="subscriptions", on_delete="CASCADE")
-    category = peewee.ForeignKeyField(ChannelCategory, null=True, on_delete="SET NULL")
-    is_active = peewee.BooleanField(default=True)
-    updated_at = peewee.DateTimeField(default=_utcnow)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "rss_feed_subscriptions"
-        indexes = ((("user", "feed"), True),)
-
-
-class RSSFeedItem(BaseModel):
-    """Individual item from an RSS feed."""
-
-    id = peewee.AutoField()
-    feed = peewee.ForeignKeyField(RSSFeed, backref="items", on_delete="CASCADE")
-    guid = peewee.TextField()
-    title = peewee.TextField(null=True)
-    url = peewee.TextField(null=True)
-    content = peewee.TextField(null=True)
-    author = peewee.TextField(null=True)
-    published_at = peewee.DateTimeField(null=True)
-    created_at = peewee.DateTimeField(default=_utcnow)
-
-    class Meta:
-        table_name = "rss_feed_items"
-        indexes = (
-            (("feed", "guid"), True),
-            (("published_at",), False),
-        )
-
-
-ALL_MODELS: tuple[type[BaseModel], ...] = (
+from app.db._models_base import (
+    TOPIC_SEARCH_INDEX_OPTIONS,
+    BaseModel,
+    _next_server_version,
+    _utcnow,
+    database_proxy,
+    model_to_dict,
+)
+from app.db._models_batch import BatchSession, BatchSessionItem
+from app.db._models_collections import (
+    Collection,
+    CollectionCollaborator,
+    CollectionInvite,
+    CollectionItem,
+)
+from app.db._models_core import (
+    AttachmentProcessing,
+    AudioGeneration,
+    AuditLog,
+    Chat,
+    ClientSecret,
+    CrawlResult,
+    LLMCall,
+    RefreshToken,
+    Request,
+    Summary,
+    SummaryEmbedding,
+    TelegramMessage,
+    TopicSearchIndex,
+    User,
+    UserDevice,
+    UserInteraction,
+    VideoDownload,
+)
+from app.db._models_digest import (
+    Channel,
+    ChannelCategory,
+    ChannelPost,
+    ChannelPostAnalysis,
+    ChannelSubscription,
+    DigestDelivery,
+    UserDigestPreference,
+)
+from app.db._models_rss import RSSFeed, RSSFeedItem, RSSFeedSubscription
+from app.db._models_rules import (
+    AutomationRule,
+    ImportJob,
+    RuleExecutionLog,
+    UserBackup,
+    WebhookDelivery,
+    WebhookSubscription,
+)
+from app.db._models_user_content import (
+    CustomDigest,
+    SummaryFeedback,
+    SummaryHighlight,
+    SummaryTag,
+    Tag,
+    UserGoal,
+)
+
+__all__ = [
+    "ALL_MODELS",
+    "TOPIC_SEARCH_INDEX_OPTIONS",
+    "AttachmentProcessing",
+    "AudioGeneration",
+    "AuditLog",
+    "AutomationRule",
+    "BaseModel",
+    "BatchSession",
+    "BatchSessionItem",
+    "Channel",
+    "ChannelCategory",
+    "ChannelPost",
+    "ChannelPostAnalysis",
+    "ChannelSubscription",
+    "Chat",
+    "ClientSecret",
+    "Collection",
+    "CollectionCollaborator",
+    "CollectionInvite",
+    "CollectionItem",
+    "CrawlResult",
+    "CustomDigest",
+    "DigestDelivery",
+    "ImportJob",
+    "LLMCall",
+    "RSSFeed",
+    "RSSFeedItem",
+    "RSSFeedSubscription",
+    "RefreshToken",
+    "Request",
+    "RuleExecutionLog",
+    "Summary",
+    "SummaryEmbedding",
+    "SummaryFeedback",
+    "SummaryHighlight",
+    "SummaryTag",
+    "Tag",
+    "TelegramMessage",
+    "TopicSearchIndex",
+    "User",
+    "UserBackup",
+    "UserDevice",
+    "UserDigestPreference",
+    "UserGoal",
+    "UserInteraction",
+    "VideoDownload",
+    "WebhookDelivery",
+    "WebhookSubscription",
+    "_next_server_version",
+    "_utcnow",
+    "database_proxy",
+    "model_to_dict",
+]
+
+ALL_MODELS = (
     User,
     Chat,
     Request,
@@ -1157,16 +165,3 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     RSSFeedSubscription,
     RSSFeedItem,
 )
-
-
-def model_to_dict(model: BaseModel | None) -> dict[str, Any] | None:
-    """Convert a Peewee model instance to a plain dictionary."""
-    if model is None:
-        return None
-    data: dict[str, Any] = {}
-    for field_name in model._meta.sorted_field_names:
-        value = getattr(model, field_name)
-        if isinstance(value, peewee.Model):
-            value = value.get_id()
-        data[field_name] = value
-    return data

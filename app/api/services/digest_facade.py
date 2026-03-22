@@ -14,7 +14,7 @@ by request_service.py once the digest domain stabilizes.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.api.services.digest_api_service import DigestAPIService
 from app.config.digest import ChannelDigestConfig
@@ -35,9 +35,14 @@ class DigestFacade:
 
     def __init__(
         self,
-        config_factory: Callable[[], ChannelDigestConfig] | None = None,
+        config_factory: Callable[[], ChannelDigestConfig] | DigestAPIService | None = None,
         service_factory: Callable[[ChannelDigestConfig], DigestAPIService] | None = None,
     ) -> None:
+        self._svc: DigestAPIService
+        if config_factory is not None and hasattr(config_factory, "list_subscriptions"):
+            self._svc = cast("DigestAPIService", config_factory)
+            return
+
         cfg_factory = config_factory or ChannelDigestConfig
         svc_factory = service_factory or DigestAPIService
         self._svc = svc_factory(cfg_factory())
