@@ -163,11 +163,13 @@ inference_core = [
 # Mobile REST API dependencies (FastAPI, JWT auth, vector search client)
 api = [
   "bite-size-reader[inference_core]",
+  "bite-size-reader[browser_scraper]",
   "fastapi>=0.128.0",
   "uvicorn[standard]>=0.40.0",
   "starlette>=0.50.0",
   "pyjwt>=2.12.0",
   "python-multipart>=0.0.22",
+  "defusedxml>=0.7.1",
 ]
 
 # Machine learning dependencies (embeddings, vector search, transformers)

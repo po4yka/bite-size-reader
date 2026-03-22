@@ -36,7 +36,7 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cache/pip \
     echo "Starting uv sync with extras: ml youtube export scheduler mcp" && \
-    uv sync --frozen --no-dev --extra ml --extra youtube --extra export --extra scheduler --extra mcp --verbose && \
+    uv sync --frozen --no-dev --extra ml --extra youtube --extra export --extra scheduler --extra mcp --extra browser_scraper --verbose && \
     echo "uv sync completed successfully"
 
 # =============================================================================

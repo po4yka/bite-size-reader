@@ -201,8 +201,11 @@ dependencies = [
 [package.optional-dependencies]
 api = [
     { name = "chromadb" },
+    { name = "crawlee", extra = ["beautifulsoup", "playwright"] },
+    { name = "defusedxml" },
     { name = "fastapi" },
     { name = "onnxruntime" },
+    { name = "playwright" },
     { name = "pyjwt" },
     { name = "python-multipart" },
     { name = "sentence-transformers" },
@@ -271,10 +274,12 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "apscheduler", marker = "extra == 'scheduler'", specifier = ">=3.11.2,<4.0.0" },
+    { name = "bite-size-reader", extras = ["browser-scraper"], marker = "extra == 'api'" },
     { name = "bite-size-reader", extras = ["inference-core"], marker = "extra == 'api'" },
     { name = "bite-size-reader", extras = ["inference-core"], marker = "extra == 'ml'" },
     { name = "chromadb", marker = "extra == 'inference-core'", specifier = ">=1.5.0" },
     { name = "crawlee", extras = ["beautifulsoup", "playwright"], marker = "extra == 'browser-scraper'", specifier = ">=1.4.0" },
+    { name = "defusedxml", marker = "extra == 'api'", specifier = ">=0.7.1" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.128.0" },
     { name = "firebase-admin", marker = "extra == 'push'", specifier = ">=6.0.0" },
     { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.0.0" },
