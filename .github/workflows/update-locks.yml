@@ -54,21 +54,7 @@ jobs:
         run: uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
 
       - name: Compile locked requirements (dev)
-        run: |
-          set -euo pipefail
-          TMP_REQ=.requirements-all.tmp.txt
-          uv pip compile \
-            --python-version 3.13 \
-            --extra api \
-            --extra ml \
-            --extra youtube \
-            --extra export \
-            --extra scheduler \
-            --extra mcp \
-            pyproject.toml \
-            -o "$TMP_REQ"
-          uv pip compile --python-version 3.13 --extra dev -c "$TMP_REQ" pyproject.toml -o requirements-dev.txt
-          rm -f "$TMP_REQ"
+        run: uv export --only-group dev --no-hashes --format requirements-txt -p 3.13 -o requirements-dev.txt
 
       - name: Check for changes
         id: changes

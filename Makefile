@@ -50,12 +50,8 @@ pre-commit-run:
 .PHONY: lock-uv lock-piptools
 lock-uv:
 	uv lock
-	uv pip compile --python-version 3.13 --no-dev pyproject.toml -o requirements.txt
-	@set -eu; \
-	TMP_REQ=.requirements-all.tmp.txt; \
-	uv pip compile --python-version 3.13 --extra api --extra ml --extra youtube --extra export --extra scheduler --extra mcp pyproject.toml -o $$TMP_REQ; \
-	uv pip compile --python-version 3.13 --extra dev -c $$TMP_REQ pyproject.toml -o requirements-dev.txt; \
-	rm -f $$TMP_REQ
+	uv export --no-dev --format requirements-txt -p 3.13 -o requirements.txt
+	uv export --only-group dev --no-hashes --format requirements-txt -p 3.13 -o requirements-dev.txt
 
 lock-piptools:
 	pip install pip-tools
@@ -64,12 +60,8 @@ lock-piptools:
 
 check-lock:
 	uv lock
-	uv pip compile --python-version 3.13 --no-dev pyproject.toml -o requirements.txt
-	@set -eu; \
-	TMP_REQ=.requirements-all.tmp.txt; \
-	uv pip compile --python-version 3.13 --extra api --extra ml --extra youtube --extra export --extra scheduler --extra mcp pyproject.toml -o $$TMP_REQ; \
-	uv pip compile --python-version 3.13 --extra dev -c $$TMP_REQ pyproject.toml -o requirements-dev.txt; \
-	rm -f $$TMP_REQ
+	uv export --no-dev --format requirements-txt -p 3.13 -o requirements.txt
+	uv export --only-group dev --no-hashes --format requirements-txt -p 3.13 -o requirements-dev.txt
 	@git diff --exit-code uv.lock requirements.txt requirements-dev.txt || (echo "Lockfiles are out of date. Run 'make lock-uv' and commit changes." && exit 1)
 
 check-openapi: ## Run OpenAPI spec sync checks
