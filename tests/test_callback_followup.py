@@ -81,7 +81,7 @@ async def test_followup_question_uses_llm_grounded_context() -> None:
             "metadata": {"title": "Example"},
         }
     )
-    cast("Any", handler._followup)._load_source_context = AsyncMock(
+    cast("Any", handler._followup)._load_source_context = MagicMock(
         return_value="Source excerpt from stored crawl."
     )
 

@@ -4930,6 +4930,21 @@ components:
         position:
           type: integer
           nullable: true
+        collection_type:
+          type: string
+          enum:
+          - manual
+          - smart
+        query_conditions:
+          type: array
+          items:
+            type: object
+          nullable: true
+        query_match_mode:
+          type: string
+          enum:
+          - all
+          - any
     CollectionUpdateRequest:
       type: object
       properties:
@@ -4944,6 +4959,14 @@ components:
           nullable: true
         position:
           type: integer
+          nullable: true
+        query_conditions:
+          type: array
+          items:
+            type: object
+          nullable: true
+        query_match_mode:
+          type: string
           nullable: true
     CollectionItemCreateRequest:
       type: object

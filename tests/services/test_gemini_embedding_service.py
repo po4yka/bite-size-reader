@@ -38,7 +38,7 @@ class TestGeminiEmbeddingServiceGenerate:
         mock_client = MagicMock()
         mock_client.models.embed_content.return_value = fake_result
 
-        with patch("app.services.gemini_embedding_service.genai", create=True):
+        with patch("app.infrastructure.embedding.gemini_embedding_service.genai", create=True):
             svc._client = mock_client
 
             result = await svc.generate_embedding("hello world")

@@ -73,7 +73,7 @@ os.environ.setdefault("BOT_TOKEN", "123456789:test-token-secret-part-at-least-30
 os.environ.setdefault("ALLOWED_USER_IDS", "123456789,987654321")
 os.environ.setdefault("API_ID", "12345")
 os.environ.setdefault("API_HASH", "test_api_hash")
-os.environ.setdefault("FIRECRAWL_API_KEY", "test_firecrawl_key")
+os.environ.setdefault("FIRECRAWL_API_KEY", "fc-test-firecrawl-key")
 os.environ.setdefault("OPENROUTER_API_KEY", "test_openrouter_key")
 
 

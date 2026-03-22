@@ -206,8 +206,10 @@ async def test_characterization_unread_read_unread_transition_with_topic_filter(
                 },
             }
 
-        async def async_get_unread_summaries(self, uid, cid, limit=10, topic=None):
-            _ = (uid, cid)
+        async def async_get_unread_summaries(
+            self, user_id=None, chat_id=None, limit=10, topic=None
+        ):
+            _ = (user_id, chat_id)
             unread = [v for v in self.rows.values() if not v["is_read"]]
             if topic:
                 t = topic.casefold()
