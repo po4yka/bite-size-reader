@@ -322,6 +322,7 @@ class NotificationFormatter(Protocol):
         error_type: str,
         correlation_id: str,
         details: str | None = None,
+        reply_markup: Any | None = None,
     ) -> None:
         """Send error notification with rich formatting."""
         ...

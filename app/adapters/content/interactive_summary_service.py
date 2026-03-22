@@ -278,6 +278,8 @@ class InteractiveSummaryService:
                         content_length=len(plan.content_for_summary),
                         model=plan.base_model,
                         phase="analyzing",
+                        content_tier=plan.content_tier,
+                        content_lang=request.chosen_lang,
                     )
                 )
             else:
@@ -310,6 +312,8 @@ class InteractiveSummaryService:
                             content_length=len(plan.content_for_summary),
                             model=plan.base_model,
                             phase="enriching",
+                            content_tier=plan.content_tier,
+                            content_lang=request.chosen_lang,
                         )
                     )
                 summary = await self._pure_summary_service.enrich_two_pass(
@@ -414,6 +418,8 @@ class InteractiveSummaryService:
         content_length: int,
         model: str,
         phase: str,
+        content_tier: str | None = None,
+        content_lang: str | None = None,
     ) -> Any:
         def _formatter(elapsed: float) -> str:
             return SingleURLProgressFormatter.format_llm_progress(
@@ -421,6 +427,8 @@ class InteractiveSummaryService:
                 model=model,
                 elapsed_sec=elapsed,
                 phase=phase,
+                content_tier=content_tier,
+                content_lang=content_lang,
             )
 
         return _formatter

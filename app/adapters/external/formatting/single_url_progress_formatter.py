@@ -54,6 +54,46 @@ class SingleURLProgressFormatter:
         idx = int(time.time() * 2) % len(frames)
         return frames[idx]
 
+    @staticmethod
+    def _short_model(model: str) -> str:
+        """Strip provider prefix from model name (e.g. 'anthropic/claude-sonnet-4.6' -> 'claude-sonnet-4.6')."""
+        return model.split("/", 1)[-1] if "/" in model else model
+
+    @staticmethod
+    def _progress_bar(elapsed_sec: float, estimate_sec: float = 30.0) -> str:
+        """Render a text progress bar based on elapsed vs estimated time."""
+        ratio = min(elapsed_sec / estimate_sec, 0.95) if estimate_sec > 0 else 0.0
+        filled = int(ratio * 10)
+        return "\u2593" * filled + "\u2591" * (10 - filled)
+
+    @classmethod
+    def format_extraction_progress(
+        cls,
+        url: str,
+        elapsed_sec: float,
+        lang: str = "en",
+    ) -> str:
+        """Format content-extraction progress message (HTML).
+
+        Args:
+            url: The URL being extracted.
+            elapsed_sec: Elapsed time in seconds.
+            lang: UI language code ("en" or "ru").
+
+        Returns:
+            HTML-formatted extraction progress message.
+        """
+        spinner = cls._get_spinner()
+        duration = cls._format_duration(elapsed_sec)
+        display_url = url[:60] + "..." if len(url) > 60 else url
+        bar = cls._progress_bar(elapsed_sec, estimate_sec=20.0)
+        return (
+            f"\U0001f310 <b>{t('progress_extracting_content', lang)}</b>\n\n"
+            f"\U0001f517 {cls._html_escape(display_url)}\n"
+            f"\u23f1\ufe0f {t('progress_extracting', lang)} ({duration}) {spinner}\n"
+            f"<code>{bar}</code>"
+        )
+
     @classmethod
     def format_llm_progress(
         cls,
@@ -62,15 +102,20 @@ class SingleURLProgressFormatter:
         elapsed_sec: float,
         phase: str = "analyzing",
         lang: str = "en",
+        *,
+        content_tier: str | None = None,
+        content_lang: str | None = None,
     ) -> str:
         """Format LLM analysis progress message (HTML).
 
         Args:
             content_length: Number of characters in content
-            model: LLM model name (e.g., "deepseek-v3.2")
+            model: LLM model name (e.g., "anthropic/claude-sonnet-4.6")
             elapsed_sec: Elapsed time in seconds
             phase: Current phase ("analyzing", "retrying", "enriching")
             lang: UI language code ("en" or "ru").
+            content_tier: Content classification tier (e.g., "technical", "sociopolitical")
+            content_lang: Detected content language (e.g., "en", "ru")
 
         Returns:
             HTML-formatted progress message
@@ -85,14 +130,37 @@ class SingleURLProgressFormatter:
         spinner = cls._get_spinner()
         duration = cls._format_duration(elapsed_sec)
         content_formatted = f"{content_length:,}"
+        model_short = cls._short_model(model)
+        bar = cls._progress_bar(elapsed_sec)
 
-        return (
-            f"\U0001f9e0 <b>{t('progress_ai_analysis', lang)}</b>\n\n"
-            f"\U0001f4dd {t('progress_content', lang)}: {content_formatted} chars\n"
-            f"\U0001f916 {t('progress_model', lang)}: {cls._html_escape(model)}\n"
-            f"\u23f1\ufe0f {phase_label} ({duration}) {spinner}\n\n"
-            f"<i>{t('progress_status_processing', lang)}</i>"
-        )
+        # Tier display with icon
+        tier_icons = {
+            "technical": "\U0001f52c",
+            "sociopolitical": "\U0001f30d",
+            "default": "\U0001f4c4",
+        }
+        tier_icon = tier_icons.get(content_tier or "default", "\U0001f4c4")
+        tier_label = (content_tier or "general").capitalize()
+
+        # Language display
+        lang_map = {"en": "English", "ru": "Russian"}
+        lang_label = lang_map.get(content_lang or "", content_lang or "auto")
+
+        lines = [
+            f"\U0001f9e0 <b>{t('progress_ai_analysis', lang)}</b>",
+            "",
+            f"\U0001f4dd {t('progress_content', lang)}: {content_formatted} chars",
+            f"\U0001f310 {t('progress_lang', lang)}: {lang_label}",
+            f"{tier_icon} {t('progress_tier', lang)}: {tier_label}",
+            f"\U0001f916 {t('progress_model', lang)}: <code>{cls._html_escape(model_short)}</code>",
+            "",
+            f"\u23f1\ufe0f {phase_label} ({duration}) {spinner}",
+            f"<code>{bar}</code>",
+            "",
+            f"<i>{t('progress_status_processing', lang)}</i>",
+        ]
+
+        return "\n".join(lines)
 
     @classmethod
     def format_llm_complete(

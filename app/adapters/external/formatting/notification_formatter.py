@@ -223,10 +223,12 @@ class NotificationFormatterImpl:
         error_type: str,
         correlation_id: str,
         details: str | None = None,
+        reply_markup: Any | None = None,
     ) -> None:
         await self._errors.send_error_notification(
             message,
             error_type,
             correlation_id,
             details=details,
+            reply_markup=reply_markup,
         )

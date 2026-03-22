@@ -789,3 +789,72 @@ class CallbackActionService:
             "insights": summary.insights_json if isinstance(summary.insights_json, dict) else None,
             **payload,
         }
+
+    async def handle_retry(
+        self,
+        message: Any,
+        uid: int,
+        parts: list[str],
+        correlation_id: str,
+    ) -> bool:
+        """Retry a failed URL summarization (retry:<original_correlation_id>)."""
+        if len(parts) < 2:
+            logger.warning("retry_callback_missing_cid", extra={"parts": parts})
+            return False
+
+        original_cid = parts[1]
+
+        def _lookup_url(cid: str) -> str | None:
+            from app.db.models import Request
+
+            req = (
+                Request.select(Request.input_url)
+                .where(Request.correlation_id == cid)
+                .order_by(Request.created_at.desc())
+                .first()
+            )
+            return req.input_url if req else None
+
+        url = await asyncio.to_thread(_lookup_url, original_cid)
+        if not url:
+            logger.warning(
+                "retry_url_not_found",
+                extra={"original_cid": original_cid, "uid": uid, "cid": correlation_id},
+            )
+            await self.response_formatter.safe_reply(
+                message, t("cb_retry_url_not_found", self._lang)
+            )
+            return True
+
+        if not self.url_handler:
+            logger.error("retry_no_url_handler", extra={"cid": correlation_id})
+            await self.response_formatter.safe_reply(message, t("cb_retry_unavailable", self._lang))
+            return True
+
+        await self.response_formatter.safe_reply(message, t("cb_retrying", self._lang))
+
+        try:
+            await asyncio.wait_for(
+                self.url_handler.handle_single_url(
+                    message=message,
+                    url=url,
+                    correlation_id=correlation_id,
+                ),
+                timeout=_CB_TIMEOUT_LLM,
+            )
+        except TimeoutError:
+            logger.warning(
+                "retry_timeout",
+                extra={"cid": correlation_id, "url": url, "timeout": _CB_TIMEOUT_LLM},
+            )
+            await self.response_formatter.safe_reply(message, t("cb_timeout", self._lang))
+        except Exception as exc:
+            logger.exception(
+                "retry_failed",
+                extra={"cid": correlation_id, "url": url, "error": str(exc)},
+            )
+            await self.response_formatter.send_error_notification(
+                message, "processing_failed", correlation_id
+            )
+
+        return True

@@ -90,6 +90,7 @@ class SummaryExecutionPlan:
     content_for_summary: str
     user_content: str
     base_model: str
+    content_tier: str | None
     requests: list[LLMRequestConfig]
     repair_context: LLMRepairContext
     notifications: LLMWorkflowNotifications
@@ -119,7 +120,7 @@ class SummaryRequestFactory:
         callbacks: Any,
     ) -> SummaryExecutionPlan:
         """Build the full workflow input bundle for an interactive summary."""
-        content_for_summary, model_override = self._prepare_summary_content(
+        content_for_summary, model_override, content_tier = self._prepare_summary_content(
             content_text=request.content_text,
             max_chars=request.max_chars,
             correlation_id=request.correlation_id,
@@ -168,6 +169,7 @@ class SummaryRequestFactory:
             content_for_summary=content_for_summary,
             user_content=user_content,
             base_model=base_model,
+            content_tier=content_tier,
             requests=requests,
             repair_context=self.build_summary_repair_context(
                 request.system_prompt,
@@ -254,10 +256,11 @@ class SummaryRequestFactory:
         correlation_id: str | None,
         images: list[str] | None,
         url: str | None = None,
-    ) -> tuple[str, str | None]:
-        """Choose truncation/model strategy and return cleaned content."""
+    ) -> tuple[str, str | None, str | None]:
+        """Choose truncation/model strategy and return (cleaned_content, model_override, content_tier)."""
         content_for_summary = content_text
         model_override = self._runtime.cfg.attachment.vision_model if images else None
+        content_tier: str | None = None
 
         if len(content_text) > max_chars:
             routing_cfg = self._runtime.cfg.model_routing
@@ -288,6 +291,7 @@ class SummaryRequestFactory:
                 from app.core.model_router import resolve_model_for_content
 
                 tier = classify_content(content_for_summary, url=url)
+                content_tier = tier.value
                 model_override = resolve_model_for_content(
                     tier=tier,
                     content_length=len(content_for_summary),
@@ -296,7 +300,7 @@ class SummaryRequestFactory:
                     openrouter_config=self._runtime.cfg.openrouter,
                 )
 
-        return clean_content_for_llm(content_for_summary), model_override
+        return clean_content_for_llm(content_for_summary), model_override, content_tier
 
     def _build_summary_requests(
         self,

@@ -64,7 +64,8 @@ async def test_draft_sender_throttles_small_fast_updates() -> None:
 
 
 @pytest.mark.asyncio
-async def test_draft_sender_fallback_is_sticky_per_request() -> None:
+async def test_draft_sender_cooldown_after_single_failure() -> None:
+    """A single failure triggers a 10-second cooldown, not permanent fallback."""
     telegram_client = SimpleNamespace(client=SimpleNamespace(invoke=AsyncMock()))
     sender = DraftStreamSender(
         telegram_client=telegram_client,
@@ -85,6 +86,41 @@ async def test_draft_sender_fallback_is_sticky_per_request() -> None:
 
         assert first.ok is False
         assert first.fallback is True
+        # Second call skipped due to cooldown (still reports fallback=True to caller)
         assert second.ok is False
         assert second.fallback is True
+        # Only one actual network call was made (second was skipped by cooldown)
         assert send_custom_request.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_draft_sender_permanent_fallback_after_three_consecutive_failures() -> None:
+    """Three consecutive failures trigger permanent fallback for the request."""
+    telegram_client = SimpleNamespace(client=SimpleNamespace(invoke=AsyncMock()))
+    sender = DraftStreamSender(
+        telegram_client=telegram_client,
+        settings=DraftStreamSettings(
+            enabled=True, min_interval_ms=0, min_delta_chars=1, max_chars=256
+        ),
+    )
+
+    with patch.object(
+        sender,
+        "_send_custom_request",
+        AsyncMock(side_effect=RuntimeError("unknown method sendMessageDraft")),
+    ) as send_custom_request:
+        message = _MessageStub()
+        key = sender.request_key(message)
+        assert key is not None
+
+        # Simulate 3 failures with expired cooldowns between them
+        for i in range(3):
+            state = sender._states.get(key)
+            if state is not None:
+                state.fallback_until = 0.0  # expire cooldown so next call retries
+            await sender.send_update(message, f"attempt-{i}", force=True)
+
+        assert send_custom_request.await_count == 3
+        state = sender._states[key]
+        assert state.fallback is True
+        assert state.consecutive_failures == 3

@@ -81,6 +81,13 @@ class NotificationPipelinePresenter:
         if silent:
             return
         try:
+            # Send native Telegram typing indicator for immediate responsiveness
+            chat_id = getattr(message, "chat", None)
+            if chat_id is not None:
+                chat_id = getattr(chat_id, "id", chat_id)
+            if chat_id is not None:
+                await self._context.response_sender.send_chat_action(chat_id, "typing")
+
             url_display = ""
             if url:
                 url_display = f"\n{url[:57]}..." if len(url) > 60 else f"\n{url}"

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
-from app.utils.retry_utils import retry_telegram_operation
 
 from ._response_sender_shared import (
     ResponseSenderSharedState,
@@ -16,6 +16,10 @@ from ._response_sender_shared import (
 )
 
 logger = get_logger(__name__)
+
+# Retry configuration for edit operations
+_EDIT_MAX_RETRIES: int = 2
+_EDIT_BACKOFF_DELAYS: tuple[float, ...] = (0.5, 1.0)
 
 
 class ResponseSenderEditFlow:
@@ -67,6 +71,55 @@ class ResponseSenderEditFlow:
             message_thread_id=message_thread_id,
         )
 
+    @staticmethod
+    def _is_retryable_edit_error(exc: Exception) -> bool:
+        """Determine whether an edit failure is worth retrying.
+
+        Retryable: network errors, timeouts, rate-limits (FloodWait / 429).
+        Non-retryable: message deleted, forbidden, not-modified, etc.
+        """
+        exc_name = type(exc).__name__.lower()
+        exc_str = str(exc).lower()
+
+        # FloodWait / 429 -- retryable (Telegram rate-limit)
+        if "floodwait" in exc_name or "too many requests" in exc_str or "429" in exc_str:
+            return True
+
+        # MessageNotModified -- not an error at all (handled separately)
+        if "message is not modified" in exc_str or "message_not_modified" in exc_str:
+            return False
+
+        # Message deleted / invalid / forbidden -- not retryable
+        non_retryable_signals = (
+            "message_id_invalid",
+            "messageidinvalid",
+            "message_delete_forbidden",
+            "messagedeleteforbidden",
+            "forbidden",
+            "message not found",
+            "chat not found",
+            "bot was blocked",
+        )
+        if any(signal in exc_str or signal in exc_name for signal in non_retryable_signals):
+            return False
+
+        # Network / timeout / connection errors -- retryable
+        retryable_signals = ("network", "timeout", "connection")
+        if any(signal in exc_str or signal in exc_name for signal in retryable_signals):
+            return True
+
+        # Unknown errors -- not retryable (fall back immediately)
+        return False
+
+    @staticmethod
+    def _get_flood_wait_seconds(exc: Exception) -> float | None:
+        """Extract the wait duration from a FloodWait-style exception."""
+        # Pyrogram FloodWait stores the delay in exc.value
+        value = getattr(exc, "value", None)
+        if isinstance(value, (int, float)) and value > 0:
+            return float(value)
+        return None
+
     async def edit_message(
         self,
         chat_id: int,
@@ -99,24 +152,65 @@ class ResponseSenderEditFlow:
         if not self._validate_edit_identifiers(chat_id, message_id, text):
             return False
 
-        try:
-            return await self._perform_edit_message(
-                client,
-                chat_id,
-                message_id,
-                text,
-                parse_mode=parse_mode,
-                reply_markup=reply_markup,
-                disable_web_page_preview=disable_web_page_preview,
-            )
-        except Exception as exc:
-            raise_if_cancelled(exc)
-            logger.warning(
-                "edit_message_failed",
-                exc_info=True,
-                extra={"error": str(exc), "chat_id": chat_id, "message_id": message_id},
-            )
-            return False
+        last_exc: Exception | None = None
+        for attempt in range(_EDIT_MAX_RETRIES + 1):
+            try:
+                return await self._perform_edit_message(
+                    client,
+                    chat_id,
+                    message_id,
+                    text,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=disable_web_page_preview,
+                )
+            except Exception as exc:
+                raise_if_cancelled(exc)
+                last_exc = exc
+
+                # MessageNotModified is success -- content already matches
+                if self._is_message_not_modified_error(exc):
+                    logger.debug(
+                        "edit_message_not_modified_success",
+                        extra={"chat_id": chat_id, "message_id": message_id},
+                    )
+                    return True
+
+                if not self._is_retryable_edit_error(exc) or attempt >= _EDIT_MAX_RETRIES:
+                    break
+
+                # Determine backoff delay
+                flood_wait = self._get_flood_wait_seconds(exc)
+                delay = (
+                    flood_wait
+                    if flood_wait is not None
+                    else _EDIT_BACKOFF_DELAYS[min(attempt, len(_EDIT_BACKOFF_DELAYS) - 1)]
+                )
+
+                logger.debug(
+                    "edit_message_retry",
+                    extra={
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "attempt": attempt + 1,
+                        "max_retries": _EDIT_MAX_RETRIES,
+                        "delay": delay,
+                        "error": str(exc),
+                    },
+                )
+                await asyncio.sleep(delay)
+
+        logger.warning(
+            "edit_message_failed",
+            exc_info=True,
+            extra={
+                "error": str(last_exc),
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "attempts": min(attempt + 1, _EDIT_MAX_RETRIES + 1),
+            },
+        )
+        return False
 
     def _log_edit_attempt(self, chat_id: int, message_id: int) -> None:
         logger.debug(
@@ -188,46 +282,23 @@ class ResponseSenderEditFlow:
         reply_markup: Any | None = None,
         disable_web_page_preview: bool | None = None,
     ) -> bool:
-        last_error_exc: Exception | None = None
+        """Execute a single edit attempt. Raises on failure so the caller can retry."""
+        kwargs: dict[str, Any] = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": self._build_edit_text(text, parse_mode),
+        }
+        normalized_mode = normalize_parse_mode(parse_mode)
+        if normalized_mode is not None:
+            kwargs["parse_mode"] = normalized_mode
+        if reply_markup is not None:
+            kwargs["reply_markup"] = reply_markup
+        if disable_web_page_preview is not None:
+            kwargs["disable_web_page_preview"] = disable_web_page_preview
 
-        async def edit() -> None:
-            nonlocal last_error_exc
-            kwargs: dict[str, Any] = {
-                "chat_id": chat_id,
-                "message_id": message_id,
-                "text": self._build_edit_text(text, parse_mode),
-            }
-            normalized_mode = normalize_parse_mode(parse_mode)
-            if normalized_mode is not None:
-                kwargs["parse_mode"] = normalized_mode
-            if reply_markup is not None:
-                kwargs["reply_markup"] = reply_markup
-            if disable_web_page_preview is not None:
-                kwargs["disable_web_page_preview"] = disable_web_page_preview
-            try:
-                await client.edit_message_text(**kwargs)
-            except Exception as exc:
-                raise_if_cancelled(exc)
-                last_error_exc = exc
-                raise
-
-        _, success = await retry_telegram_operation(edit, operation_name="edit_message")
-        if success:
-            logger.debug(
-                "edit_message_success",
-                extra={"chat_id": chat_id, "message_id": message_id},
-            )
-            return True
-
-        if self._is_message_not_modified_error(last_error_exc):
-            logger.debug(
-                "edit_message_not_modified_success",
-                extra={"chat_id": chat_id, "message_id": message_id},
-            )
-            return True
-
-        logger.warning(
-            "edit_message_retry_failed",
+        await client.edit_message_text(**kwargs)
+        logger.debug(
+            "edit_message_success",
             extra={"chat_id": chat_id, "message_id": message_id},
         )
-        return False
+        return True

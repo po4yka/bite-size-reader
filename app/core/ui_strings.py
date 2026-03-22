@@ -405,6 +405,18 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "Operation timed out. Please try again.",
         "ru": "Превышено время ожидания. Попробуйте снова.",
     },
+    "cb_retrying": {
+        "en": "Retrying summarization...",
+        "ru": "Повторная попытка суммаризации...",
+    },
+    "cb_retry_url_not_found": {
+        "en": "Could not find the original URL for this request. Please send the URL again.",
+        "ru": "Не удалось найти исходный URL для этого запроса. Отправьте URL повторно.",
+    },
+    "cb_retry_unavailable": {
+        "en": "Retry is temporarily unavailable. Please send the URL again.",
+        "ru": "Повторная попытка временно недоступна. Отправьте URL повторно.",
+    },
     # ------------------------------------------------------------------
     # Callback handler -- "More" section headers
     # ------------------------------------------------------------------
@@ -427,8 +439,15 @@ _STRINGS: dict[str, dict[str, str]] = {
     # ------------------------------------------------------------------
     # Progress formatter (single_url_progress_formatter.py)
     # ------------------------------------------------------------------
+    "progress_extracting_content": {
+        "en": "Content Extraction",
+        "ru": "Извлечение контента",
+    },
+    "progress_extracting": {"en": "Extracting...", "ru": "Извлекаем..."},
     "progress_ai_analysis": {"en": "AI Analysis", "ru": "AI-анализ"},
     "progress_content": {"en": "Content", "ru": "Контент"},
+    "progress_lang": {"en": "Language", "ru": "Язык"},
+    "progress_tier": {"en": "Category", "ru": "Категория"},
     "progress_model": {"en": "Model", "ru": "Модель"},
     "progress_status_processing": {
         "en": "Status: Processing with smart fallbacks",

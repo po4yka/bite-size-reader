@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.external.formatting.single_url_progress_formatter import (
+    SingleURLProgressFormatter,
+)
 from app.core.logging_utils import get_logger
+from app.utils.progress_message_updater import ProgressMessageUpdater
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -54,14 +59,39 @@ class URLFlowContextBuilder:
         if request.on_phase_change:
             await request.on_phase_change("extracting", None, None, None)
 
-        extraction = await self._content_extractor.extract_and_process_content(
-            request.message,
-            request.url_text,
-            request.correlation_id,
-            request.interaction_id,
-            request.effective_silent,
-            request.progress_tracker,
-        )
+        # Run extraction with periodic progress updates when a tracker is available
+        updater: ProgressMessageUpdater | None = None
+        if request.progress_tracker is not None and not request.effective_silent:
+            lang = self._cfg.runtime.preferred_lang or "en"
+            updater = ProgressMessageUpdater(
+                request.progress_tracker, request.message, update_interval=4.0
+            )
+            await updater.start(
+                lambda elapsed: SingleURLProgressFormatter.format_extraction_progress(
+                    url=request.url_text,
+                    elapsed_sec=elapsed,
+                    lang=lang,
+                )
+            )
+
+        try:
+            extraction = await self._content_extractor.extract_and_process_content(
+                request.message,
+                request.url_text,
+                request.correlation_id,
+                request.interaction_id,
+                request.effective_silent,
+                request.progress_tracker,
+            )
+        finally:
+            # Stop periodic extraction updates without sending a final message;
+            # the next pipeline notification will overwrite the progress card.
+            if updater is not None:
+                updater._stop_event.set()
+                if updater._task is not None:
+                    updater._task.cancel()
+                    await asyncio.gather(updater._task, return_exceptions=True)
+                    updater._task = None
         req_id = extraction.request_id
         content_text = extraction.content_text
         detected = extraction.detected_lang

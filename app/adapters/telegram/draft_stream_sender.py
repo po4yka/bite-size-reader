@@ -32,6 +32,8 @@ class DraftStreamState:
     last_sent_monotonic: float = 0.0
     fallback: bool = False
     fallback_reason: str | None = None
+    fallback_until: float = 0.0
+    consecutive_failures: int = 0
 
 
 @dataclass(frozen=True)
@@ -99,12 +101,12 @@ class DraftStreamSender:
             )
 
         state = self._states.setdefault(key, DraftStreamState())
-        if state.fallback:
+        if state.fallback or (state.fallback_until > 0 and time.time() < state.fallback_until):
             return DraftSendResult(
                 ok=False,
                 sent=False,
                 fallback=True,
-                reason=state.fallback_reason or "draft_disabled_for_request",
+                reason=state.fallback_reason or "draft_cooldown",
             )
 
         normalized = self._normalize_text(text)
@@ -133,6 +135,8 @@ class DraftStreamSender:
             await self._send_custom_request(params)
             state.last_text = normalized
             state.last_sent_monotonic = time.monotonic()
+            state.consecutive_failures = 0
+            state.fallback_until = 0.0
             record_draft_stream_event("draft_send_success")
             logger.debug(
                 "draft_send_success",
@@ -142,8 +146,12 @@ class DraftStreamSender:
         except Exception as exc:
             raise_if_cancelled(exc)
             reason = self._classify_failure_reason(exc)
-            state.fallback = True
+            state.consecutive_failures += 1
             state.fallback_reason = reason
+            if state.consecutive_failures >= 3:
+                state.fallback = True
+            else:
+                state.fallback_until = time.time() + 10
             record_draft_stream_event("draft_send_fallback")
             if reason == "policy_reject":
                 record_draft_stream_event("draft_send_policy_reject")

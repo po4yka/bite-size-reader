@@ -527,10 +527,11 @@ class ResponseFormatter:
         error_type: str,
         correlation_id: str,
         details: str | None = None,
+        reply_markup: Any | None = None,
     ) -> None:
         """Send error notification with rich formatting."""
         await self._notification_formatter.send_error_notification(
-            message, error_type, correlation_id, details
+            message, error_type, correlation_id, details, reply_markup=reply_markup
         )
 
     # =========================================================================

@@ -26,6 +26,7 @@ class NotificationErrorPresenter:
         error_type: str,
         correlation_id: str,
         details: str | None = None,
+        reply_markup: Any | None = None,
     ) -> None:
         if correlation_id and correlation_id in self._context.notified_error_ids:
             return
@@ -38,7 +39,7 @@ class NotificationErrorPresenter:
                 correlation_id=correlation_id,
                 details=details,
             )
-            await self._emit_html_error(message, error_text)
+            await self._emit_html_error(message, error_text, reply_markup=reply_markup)
             if should_admin_log:
                 await self._context.response_sender.send_to_admin_log(
                     error_text,
@@ -48,10 +49,14 @@ class NotificationErrorPresenter:
             logger.debug("notification_send_failed", extra={"error": str(exc)})
             raise_if_cancelled(exc)
 
-    async def _emit_html_error(self, message: Any, error_text: str) -> None:
+    async def _emit_html_error(
+        self, message: Any, error_text: str, *, reply_markup: Any | None = None
+    ) -> None:
         if self._context.progress_tracker is not None:
             self._context.progress_tracker.clear(message)
-        await self._context.response_sender.safe_reply(message, error_text, parse_mode="HTML")
+        await self._context.response_sender.safe_reply(
+            message, error_text, parse_mode="HTML", reply_markup=reply_markup
+        )
 
     def _build_error_text(
         self,
