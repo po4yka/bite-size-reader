@@ -397,6 +397,14 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "I could not generate a grounded answer from the stored summary and source.",
         "ru": "Не удалось сформировать обоснованный ответ на основе сохраненных резюме и источника.",
     },
+    "cb_followup_thinking": {
+        "en": "Thinking...",
+        "ru": "Думаю...",
+    },
+    "cb_timeout": {
+        "en": "Operation timed out. Please try again.",
+        "ru": "Превышено время ожидания. Попробуйте снова.",
+    },
     # ------------------------------------------------------------------
     # Callback handler -- "More" section headers
     # ------------------------------------------------------------------

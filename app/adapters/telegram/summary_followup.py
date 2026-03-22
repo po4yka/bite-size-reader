@@ -30,6 +30,7 @@ class _FollowupSession(TypedDict):
 _FOLLOWUP_TTL_SECONDS = 20 * 60
 _FOLLOWUP_MAX_HISTORY_PAIRS = 4
 _FOLLOWUP_MAX_QUESTION_CHARS = 1200
+_FOLLOWUP_LLM_TIMEOUT_SEC = 120.0
 _FOLLOWUP_MAX_SOURCE_CHARS = 12000
 _FOLLOWUP_MAX_SUMMARY_JSON_CHARS = 8000
 
@@ -130,18 +131,33 @@ class SummaryFollowupManager:
             )
             return True
 
-        source_context = self._load_source_context(
+        await self._response_formatter.safe_reply(message, t("cb_followup_thinking", self._lang))
+
+        source_context = await asyncio.to_thread(
+            self._load_source_context,
             summary_data.get("request_id"),
             correlation_id=correlation_id,
         )
-        answer_text = await self._generate_answer(
-            llm_client=llm_client,
-            summary_data=summary_data,
-            source_context=source_context,
-            question=question_clean,
-            history=session.get("history") or [],
-            correlation_id=correlation_id,
-        )
+        try:
+            answer_text = await asyncio.wait_for(
+                self._generate_answer(
+                    llm_client=llm_client,
+                    summary_data=summary_data,
+                    source_context=source_context,
+                    question=question_clean,
+                    history=session.get("history") or [],
+                    correlation_id=correlation_id,
+                ),
+                timeout=_FOLLOWUP_LLM_TIMEOUT_SEC,
+            )
+        except TimeoutError:
+            logger.warning(
+                "followup_llm_timeout",
+                extra={"uid": uid, "summary_id": summary_id, "cid": correlation_id},
+            )
+            await self._response_formatter.safe_reply(message, t("cb_timeout", self._lang))
+            return True
+
         if not answer_text:
             answer_text = t("cb_followup_no_answer", self._lang)
 

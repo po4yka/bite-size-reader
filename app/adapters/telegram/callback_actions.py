@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
+import time
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 from app.core.logging_utils import get_logger
@@ -15,6 +17,17 @@ if TYPE_CHECKING:
     from app.infrastructure.search.hybrid_search_service import HybridSearchService
 
 logger = get_logger(__name__)
+
+# Timeout constants for expensive callback operations (seconds).
+_CB_TIMEOUT_LLM = 120.0
+_CB_TIMEOUT_SEARCH = 30.0
+_CB_TIMEOUT_DIGEST = 180.0
+_CB_TIMEOUT_EXPORT = 60.0
+
+# Simple TTL cache for load_summary_payload() to avoid redundant DB queries
+# when the same summary is accessed by multiple button clicks.
+_SUMMARY_CACHE_TTL = 30.0
+_SUMMARY_CACHE_MAX = 50
 
 
 class _Insights(TypedDict, total=False):
@@ -38,6 +51,7 @@ class CallbackActionService:
         self.url_handler = url_handler
         self.hybrid_search = hybrid_search
         self._lang = lang
+        self._summary_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
     async def handle_digest_full_summary(
         self,
@@ -59,17 +73,17 @@ class CallbackActionService:
             await self.response_formatter.safe_reply(message, "Invalid digest callback data.")
             return True
 
-        from app.db.models import Channel, ChannelPost
+        def _load_digest_post_sync(ch_id: int, m_id: int) -> Any:
+            from app.db.models import Channel, ChannelPost
 
-        post = (
-            ChannelPost.select()
-            .join(Channel)
-            .where(
-                Channel.id == channel_id,
-                ChannelPost.message_id == msg_id,
+            return (
+                ChannelPost.select()
+                .join(Channel)
+                .where(Channel.id == ch_id, ChannelPost.message_id == m_id)
+                .first()
             )
-            .first()
-        )
+
+        post = await asyncio.to_thread(_load_digest_post_sync, channel_id, msg_id)
 
         if not post:
             await self.response_formatter.safe_reply(message, "Post not found in database.")
@@ -80,12 +94,21 @@ class CallbackActionService:
         post_url = post.url or ""
         if post_url and self.url_handler:
             try:
-                await self.url_handler.handle_single_url(
-                    message=message,
-                    url=post_url,
-                    correlation_id=correlation_id,
-                    interaction_id=0,
+                await asyncio.wait_for(
+                    self.url_handler.handle_single_url(
+                        message=message,
+                        url=post_url,
+                        correlation_id=correlation_id,
+                        interaction_id=0,
+                    ),
+                    timeout=_CB_TIMEOUT_DIGEST,
                 )
+            except TimeoutError:
+                logger.warning(
+                    "digest_full_summary_timeout",
+                    extra={"cid": correlation_id, "timeout": _CB_TIMEOUT_DIGEST},
+                )
+                await self.response_formatter.safe_reply(message, t("cb_timeout", self._lang))
             except Exception as exc:
                 logger.exception(
                     "digest_full_summary_failed",
@@ -149,10 +172,14 @@ class CallbackActionService:
                 message, t("cb_export_generating", self._lang).format(fmt=export_format.upper())
             )
 
-            file_path, filename = exporter.export_summary(
-                summary_id=summary_id,
-                export_format=export_format,
-                correlation_id=correlation_id,
+            file_path, filename = await asyncio.wait_for(
+                asyncio.to_thread(
+                    exporter.export_summary,
+                    summary_id=summary_id,
+                    export_format=export_format,
+                    correlation_id=correlation_id,
+                ),
+                timeout=_CB_TIMEOUT_EXPORT,
             )
 
             if file_path and filename:
@@ -170,6 +197,12 @@ class CallbackActionService:
                     message,
                     t("cb_export_failed", self._lang).format(cid=correlation_id),
                 )
+        except TimeoutError:
+            logger.warning(
+                "export_timeout",
+                extra={"format": export_format, "summary_id": summary_id, "cid": correlation_id},
+            )
+            await self.response_formatter.safe_reply(message, t("cb_timeout", self._lang))
         except Exception as exc:
             logger.exception(
                 "export_failed",
@@ -258,11 +291,14 @@ class CallbackActionService:
             if not isinstance(request_id, int):
                 raise ValueError("Invalid request ID for translation")
 
-            translated_text = await self.url_handler.translate_summary_to_ru(
-                summary=summary_data,
-                req_id=request_id,
-                correlation_id=correlation_id,
-                source_lang=summary_data.get("lang"),
+            translated_text = await asyncio.wait_for(
+                self.url_handler.translate_summary_to_ru(
+                    summary=summary_data,
+                    req_id=request_id,
+                    correlation_id=correlation_id,
+                    source_lang=summary_data.get("lang"),
+                ),
+                timeout=_CB_TIMEOUT_LLM,
             )
 
             if translated_text:
@@ -276,6 +312,12 @@ class CallbackActionService:
                     message,
                     "Translation failed to generate meaningful output.",
                 )
+        except TimeoutError:
+            logger.warning(
+                "translation_timeout",
+                extra={"summary_id": summary_id, "cid": correlation_id},
+            )
+            await self.response_formatter.safe_reply(message, t("cb_timeout", self._lang))
         except Exception as exc:
             logger.exception(
                 "translation_failed",
@@ -347,7 +389,10 @@ class CallbackActionService:
         )
 
         try:
-            results = await self.hybrid_search.search(query, correlation_id=correlation_id)
+            results = await asyncio.wait_for(
+                self.hybrid_search.search(query, correlation_id=correlation_id),
+                timeout=_CB_TIMEOUT_SEARCH,
+            )
 
             current_url = summary_data.get("url")
             filtered_results = [
@@ -363,6 +408,12 @@ class CallbackActionService:
                     articles=filtered_results,
                     source="hybrid",
                 )
+        except TimeoutError:
+            logger.warning(
+                "find_similar_timeout",
+                extra={"summary_id": summary_id, "cid": correlation_id},
+            )
+            await self.response_formatter.safe_reply(message, t("cb_timeout", self._lang))
         except Exception as exc:
             logger.exception(
                 "find_similar_failed",
@@ -395,29 +446,35 @@ class CallbackActionService:
         summary_id = ":".join(parts[1:]).strip()
 
         try:
-            from app.db.models import Summary
 
-            if summary_id.startswith("req:"):
-                request_id = int(summary_id[4:])
-                summary = Summary.get_or_none(Summary.request_id == request_id)
-            else:
-                summary = Summary.get_or_none(Summary.id == int(summary_id))
+            def _toggle_save_sync(sid: str) -> bool | None:
+                """Toggle favorite in a thread. Returns new state or None."""
+                from app.db.models import Summary
 
-            if summary:
+                if sid.startswith("req:"):
+                    req_id = int(sid[4:])
+                    summary = Summary.get_or_none(Summary.request_id == req_id)
+                else:
+                    summary = Summary.get_or_none(Summary.id == int(sid))
+                if not summary:
+                    return None
                 summary.is_favorited = not summary.is_favorited
                 summary.save()
+                return summary.is_favorited
 
-                status_msg = (
-                    t("cb_saved", self._lang)
-                    if summary.is_favorited
-                    else t("cb_removed", self._lang)
-                )
+            new_state = await asyncio.to_thread(_toggle_save_sync, summary_id)
+
+            # Invalidate cache after write.
+            self._summary_cache.pop(summary_id, None)
+
+            if new_state is not None:
+                status_msg = t("cb_saved", self._lang) if new_state else t("cb_removed", self._lang)
                 await self.response_formatter.safe_reply(message, status_msg)
                 logger.info(
                     "summary_favorite_toggled",
                     extra={
                         "summary_id": summary_id,
-                        "is_favorited": summary.is_favorited,
+                        "is_favorited": new_state,
                         "uid": uid,
                         "cid": correlation_id,
                     },
@@ -675,39 +732,60 @@ class CallbackActionService:
         *,
         correlation_id: str | None = None,
     ) -> dict[str, Any] | None:
-        """Load summary JSON payload from database (supports 'req:' IDs)."""
+        """Load summary JSON payload from database (supports 'req:' IDs).
+
+        Uses a short-lived TTL cache to avoid redundant DB queries when the
+        same summary is accessed by multiple button clicks in quick succession.
+        """
+        now = time.time()
+        cached = self._summary_cache.get(summary_id)
+        if cached is not None:
+            cached_at, cached_payload = cached
+            if now - cached_at < _SUMMARY_CACHE_TTL:
+                return cached_payload
+
         try:
-            from app.db.models import Request, Summary
-
-            if summary_id.startswith("req:"):
-                request_id = int(summary_id[4:])
-                summary = Summary.get_or_none(Summary.request_id == request_id)
-            else:
-                summary = Summary.get_or_none(Summary.id == int(summary_id))
-
-            if not summary:
-                return None
-
-            request = Request.get_or_none(Request.id == summary.request_id)
-            url = request.normalized_url if request else None
-
-            payload = summary.json_payload or {}
-            if not isinstance(payload, dict):
-                payload = {}
-
-            return {
-                "id": str(summary.id),
-                "request_id": summary.request_id,
-                "url": url,
-                "lang": summary.lang,
-                "insights": summary.insights_json
-                if isinstance(summary.insights_json, dict)
-                else None,
-                **payload,
-            }
+            result = await asyncio.to_thread(self._load_summary_payload_sync, summary_id)
+            if result is not None:
+                # Evict oldest entries if cache is full.
+                if len(self._summary_cache) >= _SUMMARY_CACHE_MAX:
+                    oldest_key = min(self._summary_cache, key=lambda k: self._summary_cache[k][0])
+                    self._summary_cache.pop(oldest_key, None)
+                self._summary_cache[summary_id] = (now, result)
+            return result
         except Exception as exc:
             logger.exception(
                 "load_summary_payload_failed",
                 extra={"summary_id": summary_id, "error": str(exc), "cid": correlation_id},
             )
             return None
+
+    @staticmethod
+    def _load_summary_payload_sync(summary_id: str) -> dict[str, Any] | None:
+        """Synchronous DB lookup -- run via asyncio.to_thread()."""
+        from app.db.models import Request, Summary
+
+        if summary_id.startswith("req:"):
+            request_id = int(summary_id[4:])
+            summary = Summary.get_or_none(Summary.request_id == request_id)
+        else:
+            summary = Summary.get_or_none(Summary.id == int(summary_id))
+
+        if not summary:
+            return None
+
+        request = Request.get_or_none(Request.id == summary.request_id)
+        url = request.normalized_url if request else None
+
+        payload = summary.json_payload or {}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        return {
+            "id": str(summary.id),
+            "request_id": summary.request_id,
+            "url": url,
+            "lang": summary.lang,
+            "insights": summary.insights_json if isinstance(summary.insights_json, dict) else None,
+            **payload,
+        }
