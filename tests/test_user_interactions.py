@@ -15,6 +15,7 @@ from app.db.user_interactions import (
     async_safe_update_user_interaction,
     safe_update_user_interaction,
 )
+from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
@@ -101,7 +102,7 @@ def test_safe_update_user_interaction_updates_interaction(db: DatabaseSessionMan
     request_id = asyncio.run(
         request_repo.async_create_request(
             type_="url",
-            status="ok",
+            status=RequestStatus.COMPLETED,
             correlation_id="test-corr-id",
             user_id=7,
             chat_id=11,
@@ -161,7 +162,7 @@ def test_async_safe_update_user_interaction_updates_interaction(db: DatabaseSess
     request_id = asyncio.run(
         request_repo.async_create_request(
             type_="url",
-            status="ok",
+            status=RequestStatus.COMPLETED,
             correlation_id="test-async-corr-id",
             user_id=13,
             chat_id=44,

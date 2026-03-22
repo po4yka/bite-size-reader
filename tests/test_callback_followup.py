@@ -9,6 +9,7 @@ from app.adapters.telegram.callback_handler import CallbackHandler
 from app.adapters.telegram.routing.content_router import MessageContentRouter
 from app.adapters.telegram.routing.interactions import MessageInteractionRecorder
 from app.adapters.telegram.routing.models import PreparedRouteContext
+from app.core.call_status import CallStatus
 from app.models.llm.llm_models import LLMCallResult
 
 
@@ -51,7 +52,7 @@ async def test_followup_question_uses_llm_grounded_context() -> None:
     llm_client = SimpleNamespace(
         chat=AsyncMock(
             return_value=LLMCallResult(
-                status="ok",
+                status=CallStatus.OK,
                 response_text="Answer based on the stored summary and source.",
                 model="test/model",
             )
@@ -119,7 +120,7 @@ async def test_message_router_prioritizes_followup_questions() -> None:
     )
     response_formatter = _ResponseFormatterStub()
     router = MessageContentRouter(
-        command_processor=cast("Any", command_processor),
+        command_dispatcher=cast("Any", command_processor),
         url_handler=cast(
             "Any",
             SimpleNamespace(

@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.api.services.digest_facade import DigestFacade, get_digest_facade
-from app.config.digest import ChannelDigestConfig
 
 
 def test_digest_facade_delegates_sync_methods() -> None:
@@ -30,10 +29,7 @@ def test_digest_facade_delegates_sync_methods() -> None:
         "error_count": 0,
     }
 
-    facade = DigestFacade(
-        config_factory=ChannelDigestConfig,
-        service_factory=lambda cfg: service,
-    )
+    facade = DigestFacade(service)
 
     assert facade.list_channels(10) == {"channels": []}
     assert facade.subscribe_channel(10, "@chan") == {"status": "created", "username": "chan"}
@@ -87,10 +83,7 @@ async def test_digest_facade_resolve_channel_delegates_async_call() -> None:
         return_value=SimpleNamespace(username="resolved", title="Resolved")
     )
 
-    facade = DigestFacade(
-        config_factory=ChannelDigestConfig,
-        service_factory=lambda cfg: service,
-    )
+    facade = DigestFacade(service)
 
     result = await facade.resolve_channel(55, "@resolved")
 
@@ -102,10 +95,7 @@ def test_digest_facade_trigger_digest_enqueues_job() -> None:
     service = MagicMock()
     service.trigger_digest.return_value = SimpleNamespace(status="queued", correlation_id="cid-123")
 
-    facade = DigestFacade(
-        config_factory=ChannelDigestConfig,
-        service_factory=lambda cfg: service,
-    )
+    facade = DigestFacade(service)
 
     result = facade.trigger_digest(77)
 
@@ -121,10 +111,7 @@ def test_digest_facade_trigger_channel_digest_uses_normalized_channel() -> None:
         "correlation_id": "cid-456",
     }
 
-    facade = DigestFacade(
-        config_factory=ChannelDigestConfig,
-        service_factory=lambda cfg: service,
-    )
+    facade = DigestFacade(service)
 
     result = facade.trigger_channel_digest(88, "@ExampleChannel")
 

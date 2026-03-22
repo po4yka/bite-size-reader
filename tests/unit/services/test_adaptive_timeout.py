@@ -248,16 +248,16 @@ class TestAdaptiveTimeoutService:
     @pytest.mark.asyncio
     async def test_no_data_returns_default(self, service: AdaptiveTimeoutService) -> None:
         # Mock the repository to return empty stats
-        service._repo.async_get_combined_url_processing_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_combined_url_processing_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=None, p95_ms=None, sample_count=0)
         )
-        service._repo.async_get_domain_latency_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_domain_latency_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=None, p95_ms=None, sample_count=0)
         )
-        service._repo.async_get_model_latency_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_model_latency_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=None, p95_ms=None, sample_count=0)
         )
-        service._repo.async_get_global_latency_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_global_latency_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=None, p95_ms=None, sample_count=0)
         )
 
@@ -268,11 +268,11 @@ class TestAdaptiveTimeoutService:
     @pytest.mark.asyncio
     async def test_domain_stats_used_when_available(self, service: AdaptiveTimeoutService) -> None:
         # Mock combined to return insufficient data
-        service._repo.async_get_combined_url_processing_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_combined_url_processing_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=None, p95_ms=None, sample_count=0)
         )
         # Mock domain stats to return sufficient data
-        service._repo.async_get_domain_latency_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_domain_latency_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=100000.0, p95_ms=200000.0, sample_count=20)
         )
 
@@ -284,10 +284,10 @@ class TestAdaptiveTimeoutService:
     @pytest.mark.asyncio
     async def test_timeout_clamped_to_max(self, service: AdaptiveTimeoutService) -> None:
         # Mock with very high latency that would exceed max
-        service._repo.async_get_combined_url_processing_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_combined_url_processing_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=None, p95_ms=None, sample_count=0)
         )
-        service._repo.async_get_domain_latency_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_domain_latency_stats = AsyncMock(
             return_value=LatencyStats(
                 p50_ms=500000.0, p95_ms=1000000.0, sample_count=20
             )  # 1000s P95
@@ -299,10 +299,10 @@ class TestAdaptiveTimeoutService:
     @pytest.mark.asyncio
     async def test_timeout_clamped_to_min(self, service: AdaptiveTimeoutService) -> None:
         # Mock with very low latency that would be below min
-        service._repo.async_get_combined_url_processing_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_combined_url_processing_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=None, p95_ms=None, sample_count=0)
         )
-        service._repo.async_get_domain_latency_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_domain_latency_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=1000.0, p95_ms=5000.0, sample_count=20)  # 5s P95
         )
 
@@ -312,16 +312,16 @@ class TestAdaptiveTimeoutService:
     @pytest.mark.asyncio
     async def test_content_length_estimation(self, service: AdaptiveTimeoutService) -> None:
         # Mock all stats to return insufficient data
-        service._repo.async_get_combined_url_processing_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_combined_url_processing_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=None, p95_ms=None, sample_count=0)
         )
-        service._repo.async_get_domain_latency_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_domain_latency_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=None, p95_ms=None, sample_count=0)
         )
-        service._repo.async_get_model_latency_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_model_latency_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=None, p95_ms=None, sample_count=0)
         )
-        service._repo.async_get_global_latency_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_global_latency_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=None, p95_ms=None, sample_count=0)
         )
 
@@ -334,7 +334,7 @@ class TestAdaptiveTimeoutService:
     @pytest.mark.asyncio
     async def test_cache_warming(self, service: AdaptiveTimeoutService) -> None:
         # Mock global stats
-        service._repo.async_get_global_latency_stats = AsyncMock(  # type: ignore[method-assign]
+        service._repo.async_get_global_latency_stats = AsyncMock(
             return_value=LatencyStats(p50_ms=100000.0, p95_ms=200000.0, sample_count=50)
         )
 

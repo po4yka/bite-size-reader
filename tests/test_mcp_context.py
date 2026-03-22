@@ -65,15 +65,15 @@ async def test_get_chroma_service_retries_after_backoff(
 
     context = McpServerContext(db_path=str(db_path), chroma_retry_interval_sec=60.0)
 
-    assert await context.get_chroma_service() is None
+    assert await context.init_chroma_service() is None
     assert attempts["count"] == 1
 
     clock["now"] = 10.0
-    assert await context.get_chroma_service() is None
+    assert await context.init_chroma_service() is None
     assert attempts["count"] == 1
 
     clock["now"] = 61.0
-    assert await context.get_chroma_service() is None
+    assert await context.init_chroma_service() is None
     assert attempts["count"] == 2
 
 
@@ -123,7 +123,7 @@ async def test_get_chroma_service_forwards_required_and_timeout(
     database._database.close()
 
     context = McpServerContext(db_path=str(db_path))
-    await context.get_chroma_service()
+    await context.init_chroma_service()
 
     assert captured["store_kwargs"] == {
         "host": "http://localhost:8000",

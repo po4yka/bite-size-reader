@@ -4,6 +4,8 @@ import peewee
 import pytest
 
 from app.db.models import Request, database_proxy
+from app.db.runtime.operation_executor import DatabaseOperationExecutor
+from app.db.rw_lock import AsyncRWLock
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
@@ -17,7 +19,13 @@ def in_memory_db(tmp_path):
     database_proxy.initialize(db)
     db.bind([Request], bind_refs=False, bind_backrefs=False)
     db.create_tables([Request])
-    yield db
+    executor = DatabaseOperationExecutor(
+        database=db,
+        rw_lock=AsyncRWLock(),
+        operation_timeout=30.0,
+        max_retries=0,
+    )
+    yield db, executor
     db.drop_tables([Request])
     db.close()
     database_proxy.initialize(old_db)
@@ -26,6 +34,7 @@ def in_memory_db(tmp_path):
 
 @pytest.mark.asyncio
 async def test_async_update_request_error_persists_error_context_json(in_memory_db):
+    _db, executor = in_memory_db
     req = Request.create(
         type="url",
         status="pending",
@@ -35,7 +44,7 @@ async def test_async_update_request_error_persists_error_context_json(in_memory_
         normalized_url="https://example.com",
         dedupe_hash="hash-r1",
     )
-    repo = SqliteRequestRepositoryAdapter(database_proxy)
+    repo = SqliteRequestRepositoryAdapter(executor)
 
     await repo.async_update_request_error(
         req.id,

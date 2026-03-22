@@ -4,6 +4,8 @@ import peewee
 import pytest
 
 from app.db.models import LLMCall, Request, database_proxy
+from app.db.runtime.operation_executor import DatabaseOperationExecutor
+from app.db.rw_lock import AsyncRWLock
 from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
     SqliteLLMRepositoryAdapter,
 )
@@ -17,7 +19,13 @@ def in_memory_db(tmp_path):
     database_proxy.initialize(db)
     db.bind([Request, LLMCall], bind_refs=False, bind_backrefs=False)
     db.create_tables([Request, LLMCall])
-    yield db
+    executor = DatabaseOperationExecutor(
+        database=db,
+        rw_lock=AsyncRWLock(),
+        operation_timeout=30.0,
+        max_retries=0,
+    )
+    yield db, executor
     db.drop_tables([Request, LLMCall])
     db.close()
     database_proxy.initialize(old_db)
@@ -27,6 +35,7 @@ def in_memory_db(tmp_path):
 
 @pytest.mark.asyncio
 async def test_insert_llm_calls_batch_persists_all_rows(in_memory_db) -> None:
+    _db, executor = in_memory_db
     request = Request.create(
         type="url",
         status="processing",
@@ -36,7 +45,7 @@ async def test_insert_llm_calls_batch_persists_all_rows(in_memory_db) -> None:
         normalized_url="https://example.com/llm-batch",
         dedupe_hash="hash-llm-batch",
     )
-    repo = SqliteLLMRepositoryAdapter(database_proxy)
+    repo = SqliteLLMRepositoryAdapter(executor)
 
     inserted_ids = await repo.async_insert_llm_calls_batch(
         [

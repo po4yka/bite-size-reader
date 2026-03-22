@@ -58,7 +58,7 @@ def _make_service() -> BatchRelationshipAnalysisService:
         batch_session_repo=batch_session_repo,
         llm_client=SimpleNamespace(),
         batch_config=cast("Any", batch_config),
-        response_formatter=response_formatter,
+        response_formatter=response_formatter,  # type: ignore[arg-type]
     )
 
 
@@ -78,7 +78,7 @@ async def test_insufficient_article_count_skips_analysis() -> None:
     await service.analyze_batch(batch_result=batch_result, message=SimpleNamespace())
 
     service._batch_session_repo.async_create_batch_session.assert_not_called()
-    service._response_formatter.safe_reply.assert_not_awaited()
+    service._response_formatter.safe_reply.assert_not_awaited()  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
@@ -99,7 +99,7 @@ async def test_unrelated_batch_completes_without_sending_message() -> None:
     await service.analyze_batch(batch_result=batch_result, message=SimpleNamespace())
 
     service._batch_session_repo.async_update_batch_session_relationship.assert_awaited_once()
-    service._response_formatter.safe_reply.assert_not_awaited()
+    service._response_formatter.safe_reply.assert_not_awaited()  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
@@ -130,4 +130,4 @@ async def test_related_batch_persists_combined_summary_and_sends_result() -> Non
     await service.analyze_batch(batch_result=batch_result, message=SimpleNamespace())
 
     service._batch_session_repo.async_update_batch_session_combined_summary.assert_awaited_once()
-    service._response_formatter.safe_reply.assert_awaited_once()
+    service._response_formatter.safe_reply.assert_awaited_once()  # type: ignore[attr-defined]

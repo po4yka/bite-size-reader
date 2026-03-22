@@ -13,6 +13,7 @@ from app.adapters.telegram import forward_content_processor as fcp
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
 from app.config import AppConfig, RuntimeConfig, YouTubeConfig
 from app.core import html_utils
+from app.core.call_status import CallStatus
 from tests.conftest import make_test_app_config
 
 if TYPE_CHECKING:
@@ -98,7 +99,7 @@ async def test_successful_crawl_with_html_fallback_normalizes_text() -> None:
     extractor = _make_content_extractor(enable_textacy=True, response_formatter=response_formatter)
 
     crawl = FirecrawlResult(
-        status="ok",
+        status=CallStatus.OK,
         http_status=200,
         content_markdown=None,
         content_html=html_body,

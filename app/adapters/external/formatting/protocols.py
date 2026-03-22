@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from app.application.services.related_reads_service import RelatedReadItem
     from app.application.services.topic_search import TopicArticle
 
 
@@ -370,6 +371,16 @@ class SummaryPresenter(Protocol):
         """Send the custom generated article with a nice header and downloadable JSON."""
         ...
 
+    async def send_related_reads(
+        self,
+        message: Any,
+        items: list[RelatedReadItem],
+        *,
+        lang: str | None = None,
+    ) -> None:
+        """Send related-read follow-up suggestions."""
+        ...
+
 
 @runtime_checkable
 class DatabasePresenter(Protocol):
@@ -413,4 +424,39 @@ class DatabasePresenter(Protocol):
         source: str = "online",
     ) -> None:
         """Send a formatted list of topic search results to the user."""
+        ...
+
+
+@runtime_checkable
+class ResponseFormatterFacade(
+    DataFormatter,
+    MessageValidator,
+    ResponseSender,
+    TextProcessor,
+    NotificationFormatter,
+    SummaryPresenter,
+    DatabasePresenter,
+    Protocol,
+):
+    """Compatibility protocol matching the legacy formatter facade surface."""
+
+    MAX_BATCH_URLS: int
+    MIN_MESSAGE_INTERVAL_MS: int
+    progress_tracker: Any
+
+    async def is_reader_mode(self, message: Any) -> bool:
+        """Return whether the user prefers reader-mode progress updates."""
+        ...
+
+    def set_topic_manager(self, topic_manager: Any | None) -> None:
+        """Update topic routing without rebuilding the formatter."""
+        ...
+
+    def set_reply_callbacks(
+        self,
+        *,
+        safe_reply_func: Any = ...,
+        reply_json_func: Any = ...,
+    ) -> None:
+        """Rebind runtime reply callbacks after construction."""
         ...

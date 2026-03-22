@@ -21,21 +21,25 @@ class _FakeResponse:
 
 @pytest.mark.asyncio
 async def test_scrape_builds_formats_and_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.adapters.external.firecrawl.client import FirecrawlClientConfig
+
     client = FirecrawlClient(
         api_key="fc-test",
-        include_links_format=True,
-        include_summary_format=True,
-        include_images_format=True,
-        enable_screenshot_format=True,
-        screenshot_full_page=False,
-        screenshot_quality=90,
-        screenshot_viewport_width=1200,
-        screenshot_viewport_height=800,
-        json_prompt="Extract",
-        max_age_seconds=100,
-        remove_base64_images=False,
-        block_ads=False,
-        skip_tls_verification=False,
+        config=FirecrawlClientConfig(
+            include_links_format=True,
+            include_summary_format=True,
+            include_images_format=True,
+            enable_screenshot_format=True,
+            screenshot_full_page=False,
+            screenshot_quality=90,
+            screenshot_viewport_width=1200,
+            screenshot_viewport_height=800,
+            json_prompt="Extract",
+            max_age_seconds=100,
+            remove_base64_images=False,
+            block_ads=False,
+            skip_tls_verification=False,
+        ),
     )
 
     payload = {

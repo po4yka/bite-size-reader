@@ -10,11 +10,12 @@ from app.adapters.openrouter.openrouter_client import OpenRouterClient
 
 
 def _make_client() -> OpenRouterClient:
+    from app.adapters.openrouter.openrouter_client import OpenRouterClientConfig
+
     client = OpenRouterClient(
         api_key="sk-or-test-key",
         model="qwen/qwen3-max",
-        max_retries=2,
-        enable_stats=True,
+        config=OpenRouterClientConfig(max_retries=2, enable_stats=True),
     )
     client._price_input_per_1k = 0.001
     client._price_output_per_1k = 0.002
@@ -42,7 +43,7 @@ def _make_payload(
 @pytest.mark.asyncio
 async def test_chat_response_handler_returns_success_for_valid_structured_payload() -> None:
     handler = ChatResponseHandler(_make_client())
-    outcome = await handler.handle_successful_response(
+    outcome = handler.handle_successful_response(
         data={
             "model": "qwen/qwen3-max",
             "choices": [{"message": {"content": '{"summary_250":"ok"}'}, "finish_reason": "stop"}],
@@ -74,7 +75,7 @@ async def test_chat_response_handler_downgrades_invalid_json_schema_then_disable
 ):
     handler = ChatResponseHandler(_make_client())
 
-    schema_outcome = await handler.handle_successful_response(
+    schema_outcome = handler.handle_successful_response(
         data={
             "model": "qwen/qwen3-max",
             "choices": [{"message": {"content": "not json"}, "finish_reason": "stop"}],
@@ -97,7 +98,7 @@ async def test_chat_response_handler_downgrades_invalid_json_schema_then_disable
     assert schema_outcome.retry is not None
     assert schema_outcome.retry.rf_mode == "json_object"
 
-    object_outcome = await handler.handle_successful_response(
+    object_outcome = handler.handle_successful_response(
         data={
             "model": "qwen/qwen3-max",
             "choices": [{"message": {"content": "still not json"}, "finish_reason": "stop"}],
@@ -211,7 +212,7 @@ async def test_chat_response_handler_retries_server_errors_and_tries_next_model_
 async def test_chat_response_handler_estimates_cost_and_propagates_cache_metrics() -> None:
     handler = ChatResponseHandler(_make_client())
 
-    outcome = await handler.handle_successful_response(
+    outcome = handler.handle_successful_response(
         data={
             "model": "qwen/qwen3-max",
             "choices": [{"message": {"content": "plain text"}, "finish_reason": "stop"}],

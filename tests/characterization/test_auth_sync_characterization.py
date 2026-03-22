@@ -29,16 +29,15 @@ async def test_characterization_telegram_login_response_shape_is_stable() -> Non
         client_id="mobile-ios",
     )
 
+    mock_user_repo = MagicMock()
+    mock_user_repo.async_get_or_create_user = AsyncMock(
+        return_value=({"telegram_user_id": 12345, "username": "characterization"}, True)
+    )
+
     with (
         patch.object(endpoints_telegram, "validate_client_id", return_value=None),
         patch.object(endpoints_telegram, "verify_telegram_auth", return_value=None),
-        patch.object(
-            endpoints_telegram.SqliteUserRepositoryAdapter,
-            "async_get_or_create_user",
-            AsyncMock(
-                return_value=({"telegram_user_id": 12345, "username": "characterization"}, True)
-            ),
-        ),
+        patch.object(endpoints_telegram, "get_user_repository", return_value=mock_user_repo),
         patch.object(endpoints_telegram, "create_access_token", return_value="access-token"),
         patch.object(endpoints_telegram.logger, "info", return_value=None),
         patch.object(
@@ -81,11 +80,11 @@ async def test_characterization_sync_session_response_shape_is_stable() -> None:
         },
     )()
 
-    with patch.object(sync_router, "_get_sync_service", return_value=fake_service):
-        response = await sync_router.create_sync_session(
-            body=SyncSessionRequest(limit=50),
-            user={"user_id": 7, "client_id": "mobile-ios"},
-        )
+    response = await sync_router.create_sync_session(
+        body=SyncSessionRequest(limit=50),
+        user={"user_id": 7, "client_id": "mobile-ios"},
+        svc=fake_service,
+    )
 
     assert response["success"] is True
     assert response["data"]["sessionId"] == "sync-1"

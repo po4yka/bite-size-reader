@@ -10,6 +10,7 @@ import pytest
 from app.adapters.content.content_extractor import ContentExtractor
 from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.external.firecrawl.client import FirecrawlResult
+from app.core.call_status import CallStatus
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -51,7 +52,7 @@ def _make_extractor(
 
 def _firecrawl_result(markdown: str | None, html: str | None) -> FirecrawlResult:
     return FirecrawlResult(
-        status="ok",
+        status=CallStatus.OK,
         http_status=200,
         content_markdown=markdown,
         content_html=html,

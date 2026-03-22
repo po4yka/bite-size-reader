@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
@@ -18,6 +18,7 @@ from app.api.models.responses import (
     RequestDetailRequest,
     RequestDetailResponse,
     RequestDetailSummary,
+    RequestStage,
     RequestStatus,
     RetryRequestResponse,
     SubmitRequestData,
@@ -118,7 +119,7 @@ async def submit_request(
                 request=SubmitRequestResponse(
                     request_id=created.id,
                     correlation_id=created.correlation_id,
-                    type=created.type,
+                    type=cast("Literal['url', 'forward']", created.type),
                     status="pending",
                     estimated_wait_seconds=15,
                     created_at=created.created_at.isoformat().replace("+00:00", "Z"),
@@ -144,7 +145,7 @@ async def submit_request(
             request=SubmitRequestResponse(
                 request_id=created.id,
                 correlation_id=created.correlation_id,
-                type=created.type,
+                type=cast("Literal['url', 'forward']", created.type),
                 status="pending",
                 estimated_wait_seconds=10,
                 created_at=created.created_at.isoformat().replace("+00:00", "Z"),
@@ -240,7 +241,7 @@ async def get_request_status(
         RequestStatus(
             request_id=status_info.request_id,
             status=status_info.status,
-            stage=status_info.stage,
+            stage=RequestStage(status_info.stage),
             progress=status_info.progress,
             estimated_seconds_remaining=status_info.estimated_seconds_remaining,
             queue_position=status_info.queue_position,

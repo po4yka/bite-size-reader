@@ -37,7 +37,7 @@ class SqliteTagRepositoryAdapter(SqliteBaseRepository):
             for row in rows:
                 d = model_to_dict(row)
                 if d is not None:
-                    d["summary_count"] = row.summary_count  # type: ignore[attr-defined]
+                    d["summary_count"] = row.summary_count
                     result.append(d)
             return result
 
@@ -164,8 +164,8 @@ class SqliteTagRepositoryAdapter(SqliteBaseRepository):
             for row in rows:
                 d = model_to_dict(row)
                 if d is not None:
-                    d["source"] = row.summarytag.source  # type: ignore[attr-defined]
-                    d["attached_at"] = row.attached_at  # type: ignore[attr-defined]
+                    d["source"] = row.summarytag.source
+                    d["attached_at"] = row.attached_at
                     result.append(d)
             return result
 

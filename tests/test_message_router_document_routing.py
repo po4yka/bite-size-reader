@@ -44,7 +44,7 @@ async def test_txt_documents_are_routed_via_url_handler() -> None:
         add_awaiting_user=AsyncMock(),
     )
     router = MessageContentRouter(
-        command_processor=cast("Any", command_processor),
+        command_dispatcher=cast("Any", command_processor),
         url_handler=cast("Any", url_handler),
         forward_processor=cast(
             "Any",

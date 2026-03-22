@@ -8,11 +8,13 @@ import pytest
 
 from app.adapters.content.content_extractor import ContentExtractor
 from app.adapters.content.llm_response_workflow import (
+    AttemptContext,
     LLMInteractionConfig,
     LLMResponseWorkflow,
     LLMSummaryPersistenceSettings,
 )
 from app.adapters.external.firecrawl.client import FirecrawlResult
+from app.core.call_status import CallStatus
 from app.core.lang import LANG_EN
 
 
@@ -49,7 +51,7 @@ async def test_firecrawl_persistence_runs_in_background() -> None:
 
     async def fake_scrape(url: str, request_id: int | None = None) -> FirecrawlResult:
         return FirecrawlResult(
-            status="ok",
+            status=CallStatus.OK,
             http_status=200,
             content_markdown=" ".join(["hello world"] * 80),
             content_html=None,
@@ -143,9 +145,8 @@ async def test_summary_persistence_deferred_from_llm_flow() -> None:
     persistence = LLMSummaryPersistenceSettings(
         lang=LANG_EN, is_read=True, defer_write=True, insights_getter=lambda _: None
     )
-
-    result = await workflow._finalize_success(
-        summary=summary,
+    ctx = AttemptContext(
+        message=SimpleNamespace(),
         llm=llm_stub,
         req_id=11,
         correlation_id="cid-llm",
@@ -155,6 +156,8 @@ async def test_summary_persistence_deferred_from_llm_flow() -> None:
         on_success=None,
         defer_persistence=True,
     )
+
+    result = await workflow.finalize_success(ctx, summary)
 
     await asyncio.wait_for(persist_started.wait(), timeout=0.2)
     assert result["summary_250"].startswith("short")

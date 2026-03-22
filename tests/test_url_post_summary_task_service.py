@@ -46,12 +46,12 @@ def _make_service() -> tuple[URLPostSummaryTaskService, Any, list[str]]:
     )
     related_reads_service = SimpleNamespace(find_related=AsyncMock(return_value=["item"]))
     service = URLPostSummaryTaskService(
-        response_formatter=formatter,
+        response_formatter=formatter,  # type: ignore[arg-type]
         summary_repo=summary_repo,
-        article_generator=article_generator,
-        insights_generator=insights_generator,
-        summary_delivery=summary_delivery,
-        related_reads_service=related_reads_service,
+        article_generator=article_generator,  # type: ignore[arg-type]
+        insights_generator=insights_generator,  # type: ignore[arg-type]
+        summary_delivery=summary_delivery,  # type: ignore[arg-type]
+        related_reads_service=related_reads_service,  # type: ignore[arg-type]
     )
     return service, formatter, scheduled
 
@@ -120,7 +120,7 @@ async def test_handle_additional_insights_persists_and_notifies() -> None:
     )
 
     formatter.send_additional_insights_message.assert_awaited_once()
-    service._summary_repo.async_update_summary_insights.assert_awaited_once_with(
+    service._summary_repo.async_update_summary_insights.assert_awaited_once_with(  # type: ignore[attr-defined]
         7,
         {"topic_overview": "overview", "new_facts": [{"fact": "one"}]},
     )
@@ -132,4 +132,4 @@ async def test_aclose_drains_background_tasks() -> None:
 
     await service.aclose(timeout=2.0)
 
-    service._summary_delivery.drain_tasks.assert_awaited_once()
+    service._summary_delivery.drain_tasks.assert_awaited_once()  # type: ignore[attr-defined]

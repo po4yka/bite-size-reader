@@ -116,7 +116,7 @@ def test_search_articles_preserves_fts_order_and_scope(
     monkeypatch.setattr(TopicSearchIndex, "search", lambda _query: FakeFtsResult(fts_rows))
 
     payload = ArticleReadService(McpServerContext(user_id=1)).search_articles("topic", limit=10)
-    summary_ids = [row["summary_id"] for row in payload["results"]]
+    summary_ids = [row["summary_id"] for row in payload["results"]]  # type: ignore[typeddict-item]
 
     assert sid_user2 not in summary_ids
     assert summary_ids == [sid_user1_old, sid_user1_new]

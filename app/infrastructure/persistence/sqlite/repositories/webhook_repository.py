@@ -64,7 +64,7 @@ class SqliteWebhookRepositoryAdapter(SqliteBaseRepository):
                 enabled=True,
                 status="active",
             )
-            return model_to_dict(sub)  # type: ignore[return-value]
+            return model_to_dict(sub)
 
         return await self._execute(_create, operation_name="create_subscription")
 
@@ -85,7 +85,7 @@ class SqliteWebhookRepositoryAdapter(SqliteBaseRepository):
                 .execute()
             )
             sub = WebhookSubscription.get_by_id(subscription_id)
-            return model_to_dict(sub)  # type: ignore[return-value]
+            return model_to_dict(sub)
 
         return await self._execute(_update, operation_name="update_subscription")
 
@@ -138,7 +138,7 @@ class SqliteWebhookRepositoryAdapter(SqliteBaseRepository):
                 .where(WebhookSubscription.id == subscription_id)
                 .execute()
             )
-            return model_to_dict(delivery)  # type: ignore[return-value]
+            return model_to_dict(delivery)
 
         return await self._execute(_log, operation_name="log_delivery")
 

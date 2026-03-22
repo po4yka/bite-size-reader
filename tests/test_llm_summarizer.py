@@ -83,16 +83,10 @@ class TestLLMSummaryCacheHitMiss(unittest.IsolatedAsyncioTestCase):
         mock_redis.get_json = AsyncMock(return_value=cached_value)
         mock_redis.set_json = AsyncMock()
 
-        mock_workflow = MagicMock()
-        mock_workflow._summary_has_content = MagicMock(
-            return_value=cached_value is not None and isinstance(cached_value, dict)
-        )
-
         return LLMSummaryCache(
             cache=mock_redis,
             cfg=SimpleNamespace(redis=SimpleNamespace(llm_ttl_seconds=7200)),
             prompt_version="v1",
-            workflow=mock_workflow,
             insights_has_content=lambda d: bool(d.get("insights")),
         )
 
@@ -135,7 +129,6 @@ class TestBuildTopicsCacheKey(unittest.TestCase):
             cache=mock_redis,
             cfg=SimpleNamespace(redis=SimpleNamespace(llm_ttl_seconds=7200)),
             prompt_version="v1",
-            workflow=MagicMock(),
             insights_has_content=lambda d: False,
         )
 

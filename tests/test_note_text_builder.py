@@ -1,4 +1,4 @@
-from app.infrastructure.embedding.embedding_service import prepare_text_for_embedding
+from app.core.embedding_text import prepare_text_for_embedding
 from app.infrastructure.vector.note_text_builder import NoteText, build_note_text
 
 

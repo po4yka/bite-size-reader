@@ -47,7 +47,13 @@ class _HttpResponse:
 
 @pytest.mark.asyncio
 async def test_openrouter_stream_success_invokes_delta_callback() -> None:
-    client = OpenRouterClient(api_key="sk-or-test-key", model="qwen/qwen3-max", max_retries=1)
+    from app.adapters.openrouter.openrouter_client import OpenRouterClientConfig
+
+    client = OpenRouterClient(
+        api_key="sk-or-test-key",
+        model="qwen/qwen3-max",
+        config=OpenRouterClientConfig(max_retries=1),
+    )
     deltas: list[str] = []
 
     async def on_delta(delta: str) -> None:
@@ -87,7 +93,13 @@ async def test_openrouter_stream_success_invokes_delta_callback() -> None:
 
 @pytest.mark.asyncio
 async def test_openrouter_stream_tolerates_malformed_frames() -> None:
-    client = OpenRouterClient(api_key="sk-or-test-key", model="qwen/qwen3-max", max_retries=1)
+    from app.adapters.openrouter.openrouter_client import OpenRouterClientConfig
+
+    client = OpenRouterClient(
+        api_key="sk-or-test-key",
+        model="qwen/qwen3-max",
+        config=OpenRouterClientConfig(max_retries=1),
+    )
 
     with patch("httpx.AsyncClient") as mock_client:
         stream_lines = [
@@ -117,7 +129,13 @@ async def test_openrouter_stream_tolerates_malformed_frames() -> None:
 
 @pytest.mark.asyncio
 async def test_openrouter_stream_failure_falls_back_to_non_stream() -> None:
-    client = OpenRouterClient(api_key="sk-or-test-key", model="qwen/qwen3-max", max_retries=2)
+    from app.adapters.openrouter.openrouter_client import OpenRouterClientConfig
+
+    client = OpenRouterClient(
+        api_key="sk-or-test-key",
+        model="qwen/qwen3-max",
+        config=OpenRouterClientConfig(max_retries=2),
+    )
 
     with patch("httpx.AsyncClient") as mock_client:
         mock_client.return_value.stream.side_effect = RuntimeError("stream transport failed")

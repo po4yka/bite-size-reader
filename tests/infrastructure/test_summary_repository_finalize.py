@@ -4,6 +4,8 @@ import peewee
 import pytest
 
 from app.db.models import Request, Summary, database_proxy
+from app.db.runtime.operation_executor import DatabaseOperationExecutor
+from app.db.rw_lock import AsyncRWLock
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
@@ -17,7 +19,13 @@ def in_memory_db(tmp_path):
     database_proxy.initialize(db)
     db.bind([Request, Summary], bind_refs=False, bind_backrefs=False)
     db.create_tables([Request, Summary])
-    yield db
+    executor = DatabaseOperationExecutor(
+        database=db,
+        rw_lock=AsyncRWLock(),
+        operation_timeout=30.0,
+        max_retries=0,
+    )
+    yield db, executor
     db.drop_tables([Request, Summary])
     db.close()
     database_proxy.initialize(old_db)
@@ -27,6 +35,7 @@ def in_memory_db(tmp_path):
 
 @pytest.mark.asyncio
 async def test_finalize_request_summary_updates_summary_and_request_status(in_memory_db) -> None:
+    _db, executor = in_memory_db
     request = Request.create(
         type="url",
         status="processing",
@@ -36,7 +45,7 @@ async def test_finalize_request_summary_updates_summary_and_request_status(in_me
         normalized_url="https://example.com/finalize",
         dedupe_hash="hash-finalize",
     )
-    repo = SqliteSummaryRepositoryAdapter(database_proxy)
+    repo = SqliteSummaryRepositoryAdapter(executor)
 
     version = await repo.async_finalize_request_summary(
         request_id=request.id,

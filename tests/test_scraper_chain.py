@@ -13,6 +13,7 @@ from app.adapters.content.scraper.factory import ContentScraperFactory
 from app.adapters.content.scraper.firecrawl_provider import FirecrawlProvider
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.config.scraper import ScraperConfig
+from app.core.call_status import CallStatus
 
 from .conftest import make_test_app_config
 
@@ -54,7 +55,7 @@ class _MockProvider:
 
 def _ok_result(url: str = "https://example.com", markdown: str = "# OK") -> FirecrawlResult:
     return FirecrawlResult(
-        status="ok",
+        status=CallStatus.OK,
         http_status=200,
         content_markdown=markdown,
         source_url=url,
@@ -67,7 +68,7 @@ def _error_result(
     error: str = "provider failed",
 ) -> FirecrawlResult:
     return FirecrawlResult(
-        status="error",
+        status=CallStatus.ERROR,
         error_text=error,
         source_url=url,
         endpoint="mock",

@@ -214,3 +214,21 @@ def test_production_code_does_not_import_root_application_ports_facade() -> None
             f"found forbidden root ports facade import in production code for {pattern!r}:\n"
             f"{result.stdout}"
         )
+
+
+@pytest.mark.skipif(shutil.which("rg") is None, reason="rg is required for architecture guard")
+def test_production_code_does_not_import_response_formatter_root_facade() -> None:
+    result = _run_rg(
+        pattern="from app.adapters.external.response_formatter import ResponseFormatter",
+        path="app",
+        fixed=True,
+        globs=[
+            "!app/di/shared.py",
+            "!app/adapters/external/response_formatter.py",
+        ],
+    )
+    assert result.returncode in (0, 1)
+    assert result.stdout.strip() == "", (
+        "found forbidden ResponseFormatter root facade import outside DI compatibility layer:\n"
+        f"{result.stdout}"
+    )

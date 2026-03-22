@@ -16,11 +16,13 @@ from fastapi import APIRouter, Depends
 from app.api.dependencies.database import get_summary_repository, get_user_repository
 from app.api.models.requests import CreateGoalRequest, UpdatePreferencesRequest
 from app.api.models.responses import (
+    DomainStat,
     GoalProgressResponse,
     GoalResponse,
     PreferencesData,
     PreferencesUpdateResult,
     StreakResponse,
+    TopicStat,
     UserStatsData,
     success_response,
 )
@@ -213,10 +215,10 @@ async def get_user_stats(user: dict[str, Any] = Depends(get_current_user)):
 
     # Get top topics and domains
     favorite_topics = [
-        {"topic": tag, "count": count} for tag, count in topic_counter.most_common(10)
+        TopicStat(topic=tag, count=count) for tag, count in topic_counter.most_common(10)
     ]
     favorite_domains = [
-        {"domain": domain, "count": count} for domain, count in domain_counter.most_common(10)
+        DomainStat(domain=domain, count=count) for domain, count in domain_counter.most_common(10)
     ]
 
     # Get user record

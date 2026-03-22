@@ -27,7 +27,7 @@ def _make_processor(
         sender=None,
     )
     return URLBatchProcessor(
-        response_formatter=response_formatter,
+        response_formatter=response_formatter,  # type: ignore[arg-type]
         request_repo=request_repo
         or SimpleNamespace(
             async_get_request_by_dedupe_hash=AsyncMock(return_value=None),
@@ -64,19 +64,19 @@ async def test_cache_hit_delivers_cached_summary_without_new_request() -> None:
         patch("app.adapters.telegram.url_batch_processor.asyncio.sleep", new=AsyncMock()),
         patch.object(processor, "_progress_heartbeat", new=AsyncMock()),
     ):
-        result = await processor.process(request)
+        result = await processor.execute_batch(request)
 
     assert result is not None
     assert result.url_to_request_id["https://example.com/cached"] == 5
     request_repo.async_create_minimal_request.assert_not_called()
-    processor._response_formatter.send_cached_summary_notification.assert_awaited_once()
-    processor._response_formatter.send_structured_summary_response.assert_awaited_once()
+    processor._response_formatter.send_cached_summary_notification.assert_awaited_once()  # type: ignore[attr-defined]
+    processor._response_formatter.send_structured_summary_response.assert_awaited_once()  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
 async def test_progress_edit_circuit_breaker_stops_after_three_failures() -> None:
     processor = _make_processor()
-    processor._response_formatter.edit_message = AsyncMock(return_value=False)
+    processor._response_formatter.edit_message = AsyncMock(return_value=False)  # type: ignore[method-assign]
     request = BatchProcessRequest(
         message=SimpleNamespace(chat=SimpleNamespace(id=1)),
         urls=["https://example.com/1"],
@@ -126,7 +126,7 @@ async def test_batch_completion_updates_interaction_once_processing_finishes() -
         patch("app.adapters.telegram.url_batch_processor.asyncio.sleep", new=AsyncMock()),
         patch.object(processor, "_progress_heartbeat", new=AsyncMock()),
     ):
-        await processor.process(request)
+        await processor.execute_batch(request)
 
     user_repo.async_update_user_interaction.assert_awaited_once()
     _, kwargs = user_repo.async_update_user_interaction.await_args

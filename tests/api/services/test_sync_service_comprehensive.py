@@ -54,21 +54,14 @@ def mock_session_manager():
 @pytest.fixture
 def sync_service(mock_config, mock_session_manager):
     """Create SyncService instance with mocked dependencies."""
-    with (
-        patch("app.api.services.sync_service.SqliteUserRepositoryAdapter"),
-        patch("app.api.services.sync_service.SqliteRequestRepositoryAdapter"),
-        patch("app.api.services.sync_service.SqliteSummaryRepositoryAdapter"),
-        patch("app.api.services.sync_service.SqliteCrawlResultRepositoryAdapter"),
-        patch("app.api.services.sync_service.SqliteLLMRepositoryAdapter"),
-    ):
-        service = SyncService(mock_config, mock_session_manager)
-        # Mock the repositories
-        service._user_repo = MagicMock()
-        service._request_repo = MagicMock()
-        service._summary_repo = MagicMock()
-        service._crawl_repo = MagicMock()
-        service._llm_repo = MagicMock()
-        return service
+    service = SyncService(mock_config, mock_session_manager)
+    # Mock the repositories
+    service._user_repo = MagicMock()
+    service._request_repo = MagicMock()
+    service._summary_repo = MagicMock()
+    service._crawl_repo = MagicMock()
+    service._llm_repo = MagicMock()
+    return service
 
 
 @pytest.fixture(autouse=True)

@@ -54,15 +54,19 @@ class TestOpenRouterCompliance(unittest.TestCase):
         self.mock_fetch_structured_models.return_value = {"qwen/qwen3-max"}
         self.addCleanup(self.patcher_fetch_structured_models.stop)
 
+        from app.adapters.openrouter.openrouter_client import OpenRouterClientConfig
+
         self.client = OpenRouterClient(
             api_key="sk-or-test-key",
             model="qwen/qwen3-max",
             fallback_models=["google/gemini-2.5-pro"],
             http_referer="https://github.com/test-repo",
             x_title="Test Bot",
-            timeout_sec=30,
-            max_retries=2,
-            debug_payloads=True,
+            config=OpenRouterClientConfig(
+                timeout_sec=30,
+                max_retries=2,
+                debug_payloads=True,
+            ),
         )
 
     def tearDown(self) -> None:

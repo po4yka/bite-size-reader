@@ -80,7 +80,7 @@ async def test_chat_streaming_reconstructs_normal_sse_flow() -> None:
         ),
         process_event_payload=process_payload,
     )
-    await handler.finalize_stream_success(
+    handler.finalize_stream_success(
         attempt=0,
         request_id=10,
         model="qwen/qwen3-max",
@@ -127,7 +127,7 @@ async def test_chat_streaming_tolerates_malformed_frames() -> None:
         ),
         process_event_payload=process_payload,
     )
-    await handler.finalize_stream_success(
+    handler.finalize_stream_success(
         attempt=0,
         request_id=11,
         model="qwen/qwen3-max",

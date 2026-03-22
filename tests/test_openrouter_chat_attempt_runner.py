@@ -11,7 +11,8 @@ from app.adapters.openrouter.chat_models import (
     StructuredOutputState,
     TruncationRecovery,
 )
-from app.adapters.openrouter.openrouter_client import OpenRouterClient
+from app.adapters.openrouter.openrouter_client import OpenRouterClient, OpenRouterClientConfig
+from app.core.call_status import CallStatus
 from app.models.llm.llm_models import ChatRequest, LLMCallResult
 
 
@@ -19,7 +20,7 @@ def _make_client() -> OpenRouterClient:
     return OpenRouterClient(
         api_key="sk-or-test-key",
         model="qwen/qwen3-max",
-        max_retries=2,
+        config=OpenRouterClientConfig(max_retries=2),
     )
 
 
@@ -53,7 +54,7 @@ async def test_chat_attempt_runner_retries_with_backoff_and_returns_success() ->
             ),
             AttemptOutcome(
                 success=True,
-                llm_result=LLMCallResult(status="ok", model="qwen/qwen3-max"),
+                llm_result=LLMCallResult(status=CallStatus.OK, model="qwen/qwen3-max"),
                 structured_output_state=StructuredOutputState(used=True, mode="json_object"),
             ),
         ]
@@ -96,7 +97,7 @@ async def test_chat_attempt_runner_falls_back_from_stream_to_non_stream() -> Non
             ),
             AttemptOutcome(
                 success=True,
-                llm_result=LLMCallResult(status="ok", model="qwen/qwen3-max"),
+                llm_result=LLMCallResult(status=CallStatus.OK, model="qwen/qwen3-max"),
                 structured_output_state=StructuredOutputState(used=True, mode="json_schema"),
             ),
         ]

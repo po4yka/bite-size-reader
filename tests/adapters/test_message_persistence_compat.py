@@ -18,4 +18,4 @@ def test_message_persistence_compat_shim_raises_for_unknown() -> None:
     import app.adapters.telegram.message_persistence as shim
 
     with pytest.raises(AttributeError, match="has no attribute 'NonExistent'"):
-        _ = shim.NonExistent  # type: ignore[attr-defined]
+        _ = shim.NonExistent
