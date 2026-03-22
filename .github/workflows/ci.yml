@@ -47,7 +47,12 @@ jobs:
             uv.lock
 
       - name: Validate uv.lock
-        run: uv lock --check
+        uses: nick-fields/retry@v3
+        with:
+          max_attempts: 3
+          timeout_minutes: 5
+          retry_wait_seconds: 10
+          command: uv lock --check
 
       - name: Compile locked requirements (runtime - core only)
         run: uv export --no-dev --format requirements-txt -p 3.13 -o requirements.txt

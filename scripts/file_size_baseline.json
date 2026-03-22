@@ -4,7 +4,7 @@
   "docs/openapi/mobile_api.json": 9168,
   "docs/openapi/mobile_api.yaml": 6319,
   "monitoring/grafana/provisioning/dashboards/bsr-overview.json": 1666,
-  "uv.lock": 4842,
+  "uv.lock": 4782,
   "web/package-lock.json": 6736,
   "web/src/api/generated.ts": 5589
 }
