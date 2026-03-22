@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 import shutil
 import subprocess
@@ -24,6 +25,26 @@ PATTERNS = [
     "LocalTopicSearchService(",
     "SummaryEmbeddingGenerator(",
     "ChromaVectorStore(",
+]
+ROOT_SQLITE_REPOSITORY_MODULES = [
+    APP_ROOT
+    / "infrastructure"
+    / "persistence"
+    / "sqlite"
+    / "repositories"
+    / "request_repository.py",
+    APP_ROOT
+    / "infrastructure"
+    / "persistence"
+    / "sqlite"
+    / "repositories"
+    / "summary_repository.py",
+    APP_ROOT
+    / "infrastructure"
+    / "persistence"
+    / "sqlite"
+    / "repositories"
+    / "collection_repository.py",
 ]
 FORMATTER_PRIVATE_PATTERNS = {
     "response_formatter.sender": re.compile(r"\b[\w.]*response_formatter\.sender\b"),
@@ -65,6 +86,10 @@ def _run_rg(
         text=True,
         check=False,
     )
+
+
+def _parse_python(path: Path) -> ast.Module:
+    return ast.parse(path.read_text(), filename=str(path))
 
 
 @pytest.mark.skipif(shutil.which("rg") is None, reason="rg is required for architecture guard")
@@ -232,3 +257,54 @@ def test_production_code_does_not_import_response_formatter_root_facade() -> Non
         "found forbidden ResponseFormatter root facade import outside DI compatibility layer:\n"
         f"{result.stdout}"
     )
+
+
+def test_sqlite_repository_root_modules_are_thin_and_model_free() -> None:
+    for path in ROOT_SQLITE_REPOSITORY_MODULES:
+        module = _parse_python(path)
+
+        imports_db_models = False
+        for node in module.body:
+            if isinstance(node, ast.Import):
+                imports_db_models = imports_db_models or any(
+                    alias.name == "app.db.models" for alias in node.names
+                )
+            elif isinstance(node, ast.ImportFrom):
+                imports_db_models = imports_db_models or node.module == "app.db.models"
+        assert not imports_db_models, f"{path} must not import app.db.models directly"
+
+        top_level_functions = [
+            node
+            for node in module.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        assert top_level_functions == [], f"{path} must not define top-level helper functions"
+
+        class_defs = [node for node in module.body if isinstance(node, ast.ClassDef)]
+        assert len(class_defs) == 1, f"{path} must expose exactly one root adapter class"
+
+        class_methods = [
+            node
+            for node in class_defs[0].body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        assert class_methods == [], f"{path} must remain a thin assembly shell"
+
+
+@pytest.mark.skipif(shutil.which("rg") is None, reason="rg is required for architecture guard")
+def test_private_sqlite_repository_modules_are_not_imported_outside_repository_package() -> None:
+    patterns = [
+        r"from app\.infrastructure\.persistence\.sqlite\.repositories\._",
+        r"import app\.infrastructure\.persistence\.sqlite\.repositories\._",
+    ]
+    for pattern in patterns:
+        result = _run_rg(
+            pattern=pattern,
+            path="app",
+            globs=["!app/infrastructure/persistence/sqlite/repositories/**"],
+        )
+        assert result.returncode in (0, 1)
+        assert result.stdout.strip() == "", (
+            f"found private SQLite repository module import outside repository package for {pattern!r}:\n"
+            f"{result.stdout}"
+        )
