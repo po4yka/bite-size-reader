@@ -6,7 +6,7 @@ including single URL processing, batch processing, and cancellation.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Protocol
 
 from app.adapters.telegram.command_handlers.decorators import audit_command
 from app.core.logging_utils import get_logger
@@ -25,6 +25,14 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+class URLProcessorProvider(Protocol):
+    """Protocol for objects that supply URL processing collaborators."""
+
+    url_processor: URLProcessor
+    url_handler: URLHandler | None
+    _task_manager: UserTaskManager | None
+
+
 class URLCommandsHandler:
     """Implementation of URL processing commands.
 
@@ -35,7 +43,7 @@ class URLCommandsHandler:
     def __init__(
         self,
         response_formatter: ResponseFormatter,
-        processor_provider: Any,
+        processor_provider: URLProcessorProvider,
     ) -> None:
         """Initialize the URL commands handler.
 

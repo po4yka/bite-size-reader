@@ -47,19 +47,23 @@ class TelegramRepositories:
 
 @dataclass(frozen=True, slots=True)
 class TelegramCommandDispatcherDeps:
-    user_repository: Any
-    response_formatter: Any
-    audit_func: Any
-    url_processor: Any
-    url_handler: Any | None
-    topic_searcher: Any | None
-    local_searcher: Any | None
-    task_manager: Any | None
-    hybrid_search: Any | None
-    verbosity_resolver: Any | None
-    application_services: Any | None
-    repositories: TelegramRepositories
-    handlers: dict[str, Any]
+    routes: Any
+    runtime_state: Any
+    context_factory: Any
+    onboarding_handler: Any
+    admin_handler: Any
+    url_commands_handler: Any
+    content_handler: Any
+    search_handler: Any
+    karakeep_handler: Any
+    listen_handler: Any
+    digest_handler: Any
+    init_session_handler: Any
+    settings_handler: Any
+    tag_handler: Any
+    rules_handler: Any
+    export_handler: Any
+    backup_handler: Any
 
 
 @dataclass(frozen=True, slots=True)

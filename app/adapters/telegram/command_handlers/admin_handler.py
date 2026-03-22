@@ -336,6 +336,44 @@ class AdminHandler:
                 logger_=logger,
             )
 
+    async def handle_clearcache(self, ctx: CommandExecutionContext) -> None:
+        """Handle /clearcache command."""
+        try:
+            if self._url_handler is None:
+                msg = "URL handler is unavailable"
+                raise RuntimeError(msg)
+            count = await self._url_handler.clear_extraction_cache()
+            await ctx.response_formatter.safe_reply(
+                ctx.message,
+                f"✅ Cache cleared. Removed {count} keys.",
+            )
+            if ctx.interaction_id:
+                await async_safe_update_user_interaction(
+                    ctx.user_repo,
+                    interaction_id=ctx.interaction_id,
+                    response_sent=True,
+                    response_type="cache_cleared",
+                    start_time=ctx.start_time,
+                    logger_=logger,
+                )
+        except Exception as exc:
+            logger.error("cache_clear_failed", extra={"error": str(exc), "uid": ctx.uid})
+            await ctx.response_formatter.safe_reply(
+                ctx.message,
+                f"❌ Failed to clear cache: {exc}",
+            )
+            if ctx.interaction_id:
+                await async_safe_update_user_interaction(
+                    ctx.user_repo,
+                    interaction_id=ctx.interaction_id,
+                    response_sent=True,
+                    response_type="error",
+                    error_occurred=True,
+                    error_message=str(exc),
+                    start_time=ctx.start_time,
+                    logger_=logger,
+                )
+
     async def _process_reprocess_entries(
         self,
         ctx: CommandExecutionContext,
