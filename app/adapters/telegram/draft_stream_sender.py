@@ -24,6 +24,9 @@ class DraftStreamSettings:
     max_chars: int = 3500
 
 
+_STALE_ENTRY_THRESHOLD_SEC: float = 1800.0  # 30 minutes
+
+
 @dataclass
 class DraftStreamState:
     """Mutable state for a single request-level draft stream."""
@@ -34,6 +37,11 @@ class DraftStreamState:
     fallback_reason: str | None = None
     fallback_until: float = 0.0
     consecutive_failures: int = 0
+    _created_at: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self._created_at == 0.0:
+            self._created_at = time.time()
 
 
 @dataclass(frozen=True)
@@ -82,6 +90,19 @@ class DraftStreamSender:
             return None
         return int(chat_id), int(trigger_message_id)
 
+    def _evict_stale(self) -> None:
+        """Remove state entries older than the staleness threshold."""
+        now = time.time()
+        stale_keys = [
+            key
+            for key, state in self._states.items()
+            if now - state._created_at > _STALE_ENTRY_THRESHOLD_SEC
+        ]
+        for key in stale_keys:
+            del self._states[key]
+        if stale_keys:
+            logger.debug("draft_evict_stale", extra={"evicted": len(stale_keys)})
+
     async def send_update(
         self,
         message: Any,
@@ -91,6 +112,8 @@ class DraftStreamSender:
         force: bool = False,
     ) -> DraftSendResult:
         """Send one draft update with strict fallback-once semantics."""
+        self._evict_stale()
+
         if not self._settings.enabled:
             return DraftSendResult(ok=False, sent=False, fallback=True, reason="disabled")
 

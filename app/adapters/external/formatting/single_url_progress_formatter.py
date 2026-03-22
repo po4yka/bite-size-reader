@@ -60,6 +60,17 @@ class SingleURLProgressFormatter:
         return model.split("/", 1)[-1] if "/" in model else model
 
     @staticmethod
+    def _estimate_seconds(content_length: int) -> float:
+        """Estimate LLM processing time based on content length in characters."""
+        if content_length < 3000:
+            return 15.0
+        if content_length < 10000:
+            return 25.0
+        if content_length < 30000:
+            return 40.0
+        return 60.0
+
+    @staticmethod
     def _progress_bar(elapsed_sec: float, estimate_sec: float = 30.0) -> str:
         """Render a text progress bar based on elapsed vs estimated time."""
         ratio = min(elapsed_sec / estimate_sec, 0.95) if estimate_sec > 0 else 0.0
@@ -86,11 +97,13 @@ class SingleURLProgressFormatter:
         spinner = cls._get_spinner()
         duration = cls._format_duration(elapsed_sec)
         display_url = url[:60] + "..." if len(url) > 60 else url
-        bar = cls._progress_bar(elapsed_sec, estimate_sec=20.0)
+        estimate = cls._estimate_seconds(0) + 15.0  # base extraction estimate
+        bar = cls._progress_bar(elapsed_sec, estimate_sec=estimate)
+        eta_str = cls._format_duration(estimate)
         return (
             f"\U0001f310 <b>{t('progress_extracting_content', lang)}</b>\n\n"
             f"\U0001f517 {cls._html_escape(display_url)}\n"
-            f"\u23f1\ufe0f {t('progress_extracting', lang)} ({duration}) {spinner}\n"
+            f"\u23f1\ufe0f {t('progress_extracting', lang)} ({duration} / ~{eta_str}) {spinner}\n"
             f"<code>{bar}</code>"
         )
 
@@ -131,7 +144,9 @@ class SingleURLProgressFormatter:
         duration = cls._format_duration(elapsed_sec)
         content_formatted = f"{content_length:,}"
         model_short = cls._short_model(model)
-        bar = cls._progress_bar(elapsed_sec)
+        estimate = cls._estimate_seconds(content_length)
+        bar = cls._progress_bar(elapsed_sec, estimate_sec=estimate)
+        eta_str = cls._format_duration(estimate)
 
         # Tier display with icon
         tier_icons = {
@@ -154,7 +169,7 @@ class SingleURLProgressFormatter:
             f"{tier_icon} {t('progress_tier', lang)}: {tier_label}",
             f"\U0001f916 {t('progress_model', lang)}: <code>{cls._html_escape(model_short)}</code>",
             "",
-            f"\u23f1\ufe0f {phase_label} ({duration}) {spinner}",
+            f"\u23f1\ufe0f {phase_label} ({duration} / ~{eta_str}) {spinner}",
             f"<code>{bar}</code>",
             "",
             f"<i>{t('progress_status_processing', lang)}</i>",

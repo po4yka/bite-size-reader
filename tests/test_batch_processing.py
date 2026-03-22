@@ -241,10 +241,12 @@ class TestBatchProgressFormatter(unittest.TestCase):
         message = BatchProgressFormatter.format_progress_message(batch)
 
         assert "Processing 2 links..." in message
+        assert "elapsed" in message
         assert '<a href="https://a.com">a.com</a>  💤 Pending' in message
         assert '<a href="https://b.com">b.com</a>  💤 Pending' in message
         assert "Progress:" in message
         assert "0/2" in message
+        assert "Elapsed:" in message
 
     def test_format_progress_with_completed(self):
         """Test progress message shows completed entries as HTML links."""
@@ -269,6 +271,35 @@ class TestBatchProgressFormatter(unittest.TestCase):
             '<a href="https://example.com/article">example.com/article</a>  ⏳ Processing...'
             in message
         )
+
+    def test_format_progress_shows_elapsed_time_in_header(self):
+        """Test progress message shows elapsed time in header."""
+        batch = URLBatchStatus.from_urls(["https://a.com"])
+        message = BatchProgressFormatter.format_progress_message(batch)
+
+        # Header should contain elapsed time
+        first_line = message.split("\n")[0]
+        assert "elapsed" in first_line
+
+    def test_format_progress_shows_retrying_in_active_section(self):
+        """Test progress message includes retrying entries in active work section."""
+        batch = URLBatchStatus.from_urls(["https://a.com", "https://b.com"])
+        batch.mark_processing("https://a.com")
+        batch.mark_retrying("https://a.com")
+
+        message = BatchProgressFormatter.format_progress_message(batch)
+
+        assert "Retrying:" in message
+
+    def test_format_progress_shows_retry_waiting_in_active_section(self):
+        """Test progress message includes retry-waiting entries in active work section."""
+        batch = URLBatchStatus.from_urls(["https://a.com", "https://b.com"])
+        batch.mark_processing("https://a.com")
+        batch.mark_retry_waiting("https://a.com")
+
+        message = BatchProgressFormatter.format_progress_message(batch)
+
+        assert "Waiting to retry:" in message
 
     def test_format_progress_with_eta(self):
         """Test progress message shows ETA."""

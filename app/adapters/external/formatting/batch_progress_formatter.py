@@ -61,14 +61,17 @@ class BatchProgressFormatter:
 
         Example output::
 
-            Processing 4 links... ⠙
+            Processing 4 links... (45s elapsed) @
 
-            [1/4] techcrunch.com -- Done (12s)
-            [2/4] arxiv.org -- Analyzing... (5s)
-            [Cache] medium.com -- Done
-            [4/4] github.io -- Pending
+            >> Extracting: techcrunch.com/article
+            >> Analyzing: arxiv.org/.../2401.1234 [deepseek-v3] (12k chars)
 
-            Progress: 2/4 (50%) | ETA: ~30s
+            [1/4] techcrunch.com/article  Extracting... (5s) @
+            [2/4] arxiv.org/.../2401.1234  Analyzing [deepseek-v3]... (12s) @
+            [Cache] medium.com/.../slug  Done (cached)
+            [4/4] github.io/page  Pending
+
+            Progress: 2/4 (50%) | ETA: ~30s | Elapsed: 45s
             Updated 2s ago
 
         Args:
@@ -81,22 +84,43 @@ class BatchProgressFormatter:
         total = batch.total
         spinner = cls._get_spinner()
 
-        # Header
-        lines.append(f"<b>Processing {total} links...</b> {spinner}")
+        # Header with elapsed time
+        elapsed_sec = batch.total_elapsed_time_sec()
+        elapsed_str = cls._format_duration(elapsed_sec)
+        lines.append(f"<b>Processing {total} links...</b> ({elapsed_str} elapsed) {spinner}")
         lines.append("")
 
         # Active work indicator (prominent top section)
         active = batch.processing
-        if active:
-            for entry in active[:2]:  # Show top 2 active tasks
+        retrying = [
+            e for e in batch.entries if e.status in {URLStatus.RETRYING, URLStatus.RETRY_WAITING}
+        ]
+        active_all = active + retrying
+        if active_all:
+            for entry in active_all[:3]:  # Show top 3 active/retrying tasks
                 label = entry.title or entry.display_label or entry.domain
                 if len(label) > 40:
                     label = label[:37] + "..."
-                phase_emoji = "📥" if entry.status == URLStatus.EXTRACTING else "🧠"
-                phase_name = "Extracting" if entry.status == URLStatus.EXTRACTING else "Analyzing"
+
+                if entry.status == URLStatus.EXTRACTING:
+                    phase_emoji = "\U0001f4e5"  # inbox tray
+                    phase_name = "Extracting"
+                elif entry.status == URLStatus.ANALYZING:
+                    phase_emoji = "\U0001f9e0"  # brain
+                    phase_name = "Analyzing"
+                elif entry.status == URLStatus.RETRYING:
+                    phase_emoji = "\U0001f504"  # arrows
+                    phase_name = "Retrying"
+                elif entry.status == URLStatus.RETRY_WAITING:
+                    phase_emoji = "\u23f3"  # hourglass
+                    phase_name = "Waiting to retry"
+                else:
+                    phase_emoji = "\u23f3"  # hourglass
+                    phase_name = "Processing"
+
                 detail = ""
                 if entry.status == URLStatus.ANALYZING:
-                    parts = []
+                    parts: list[str] = []
                     if entry.model:
                         m = entry.model.split("/")[-1]
                         parts.append(f"model: {m}")
@@ -105,9 +129,13 @@ class BatchProgressFormatter:
                     if parts:
                         detail = f" ({', '.join(parts)})"
 
+                live = cls._format_live_elapsed(entry.start_time)
                 lines.append(
-                    f"{phase_emoji} <b>{phase_name}:</b> {cls._html_escape(label)}{detail} {spinner}"
+                    f"{phase_emoji} <b>{phase_name}:</b> "
+                    f"{cls._html_escape(label)}{detail}{live} {spinner}"
                 )
+            if len(active_all) > 3:
+                lines.append(f"  <i>... and {len(active_all) - 3} more active</i>")
             lines.append("")
 
         # Per-URL status lines
@@ -116,7 +144,7 @@ class BatchProgressFormatter:
 
         lines.append("")
 
-        # Footer: progress + ETA
+        # Footer: progress + ETA + elapsed
         done = batch.done_count
         percentage = int((done / total) * 100) if total > 0 else 0
         footer_parts = [f"Progress: <b>{done}/{total}</b> ({percentage}%)"]
@@ -124,6 +152,8 @@ class BatchProgressFormatter:
         eta_sec = batch.estimate_remaining_time_sec()
         if eta_sec is not None and eta_sec > 0:
             footer_parts.append(f"ETA: ~{cls._format_duration(eta_sec)}")
+
+        footer_parts.append(f"Elapsed: {elapsed_str}")
 
         lines.append(" | ".join(footer_parts))
 
@@ -140,7 +170,7 @@ class BatchProgressFormatter:
             max_active_time = max((time.time() - (e.start_time or time.time())) for e in active)
             if max_active_time > 60:
                 lines.append("")
-                lines.append("<i>⌛ Heavily loaded source or complex content. Still working...</i>")
+                lines.append("<i>Heavily loaded source or complex content. Still working...</i>")
 
         message = "\n".join(lines)
 
