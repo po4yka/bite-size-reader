@@ -943,8 +943,12 @@ class TagListResponse(BaseModel):
 class GoalResponse(BaseModel):
     """A single reading goal."""
 
+    id: str = Field(serialization_alias="id")
     goal_type: str = Field(serialization_alias="goalType")
     target_count: int = Field(serialization_alias="targetCount")
+    scope_type: str = Field(default="global", serialization_alias="scopeType")
+    scope_id: int | None = Field(default=None, serialization_alias="scopeId")
+    scope_name: str | None = Field(default=None, serialization_alias="scopeName")
     created_at: str = Field(serialization_alias="createdAt")
     updated_at: str = Field(serialization_alias="updatedAt")
 
@@ -956,6 +960,9 @@ class GoalProgressResponse(BaseModel):
     target_count: int = Field(serialization_alias="targetCount")
     current_count: int = Field(serialization_alias="currentCount")
     achieved: bool
+    scope_type: str = Field(default="global", serialization_alias="scopeType")
+    scope_id: int | None = Field(default=None, serialization_alias="scopeId")
+    scope_name: str | None = Field(default=None, serialization_alias="scopeName")
 
 
 class StreakResponse(BaseModel):

@@ -878,18 +878,20 @@ class SummaryHighlight(BaseModel):
 
 
 class UserGoal(BaseModel):
-    """Reading goal per user per period type (daily/weekly/monthly)."""
+    """Reading goal per user per period type, optionally scoped to a tag or collection."""
 
     id = peewee.UUIDField(primary_key=True)
     user = peewee.ForeignKeyField(User, backref="goals", on_delete="CASCADE")
     goal_type = peewee.TextField()  # daily | weekly | monthly
     target_count = peewee.IntegerField()
+    scope_type = peewee.TextField(default="global")  # global | tag | collection
+    scope_id = peewee.IntegerField(null=True)  # tag.id or collection.id
     updated_at = peewee.DateTimeField(default=_utcnow)
     created_at = peewee.DateTimeField(default=_utcnow)
 
     class Meta:
         table_name = "user_goals"
-        indexes = ((("user", "goal_type"), True),)
+        indexes = ((("user", "goal_type", "scope_type"), False),)
 
 
 class Tag(BaseModel):

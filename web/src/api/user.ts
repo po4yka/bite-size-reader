@@ -38,19 +38,24 @@ export function fetchUserStats(): Promise<UserStats> {
 }
 
 export interface ReadingGoal {
+  id: string;
   goalType: string;
-  target: number;
-  period: string;
-  currentCount: number;
-  isCompleted: boolean;
+  targetCount: number;
+  scopeType: "global" | "tag" | "collection";
+  scopeId: number | null;
+  scopeName: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface GoalProgress {
   goalType: string;
-  target: number;
-  current: number;
-  percentage: number;
-  isCompleted: boolean;
+  targetCount: number;
+  currentCount: number;
+  achieved: boolean;
+  scopeType: string;
+  scopeId: number | null;
+  scopeName: string | null;
 }
 
 export interface ReadingStreak {
@@ -82,17 +87,32 @@ export async function fetchGoalsProgress(): Promise<GoalProgress[]> {
 
 export async function createReadingGoal(
   goalType: string,
-  target: number,
-  period: string,
+  targetCount: number,
+  scopeType: "global" | "tag" | "collection" = "global",
+  scopeId: number | null = null,
 ): Promise<ReadingGoal> {
+  const payload: Record<string, unknown> = {
+    goal_type: goalType,
+    target_count: targetCount,
+    scope_type: scopeType,
+  };
+  if (scopeId !== null) {
+    payload.scope_id = scopeId;
+  }
   return apiRequest<ReadingGoal>("/v1/user/goals", {
     method: "POST",
-    body: JSON.stringify({ goal_type: goalType, target, period }),
+    body: JSON.stringify(payload),
   });
 }
 
 export async function deleteReadingGoal(goalType: string): Promise<void> {
   await apiRequest<Record<string, never>>(`/v1/user/goals/${goalType}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteReadingGoalById(goalId: string): Promise<void> {
+  await apiRequest<Record<string, never>>(`/v1/user/goals/by-id/${goalId}`, {
     method: "DELETE",
   });
 }

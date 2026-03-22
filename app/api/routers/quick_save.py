@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
-from app.api.background_processor import process_url_request
+from app.api.background_tasks import process_url_request
 from app.api.exceptions import ValidationError
 
 if TYPE_CHECKING:

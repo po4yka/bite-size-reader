@@ -4,7 +4,7 @@ Pydantic models for API request validation.
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
 
 class SubmitURLRequest(BaseModel):
@@ -188,6 +188,19 @@ class CreateGoalRequest(BaseModel):
 
     goal_type: Literal["daily", "weekly", "monthly"]
     target_count: int = Field(ge=1, le=1000)
+    scope_type: Literal["global", "tag", "collection"] = "global"
+    scope_id: int | None = None
+
+    @model_validator(mode="after")
+    def validate_scope(self) -> "CreateGoalRequest":
+        if self.scope_type != "global":
+            if self.scope_id is None or self.scope_id < 1:
+                raise ValueError(
+                    "scope_id must be a positive integer when scope_type is not 'global'"
+                )
+        elif self.scope_id is not None:
+            raise ValueError("scope_id must be None when scope_type is 'global'")
+        return self
 
 
 class SaveReadingPositionRequest(BaseModel):

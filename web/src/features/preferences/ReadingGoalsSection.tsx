@@ -3,6 +3,8 @@ import {
   Button,
   NumberInput,
   ProgressBar,
+  RadioButtonGroup,
+  RadioButton,
   Select,
   SelectItem,
   SkeletonText,
@@ -11,39 +13,54 @@ import {
 } from "@carbon/react";
 import { TrashCan } from "@carbon/icons-react";
 import { useReadingGoals, useGoalsProgress, useCreateGoal, useDeleteGoal } from "../../hooks/useUser";
+import { useTags } from "../../hooks/useTags";
+import { useCollectionTree } from "../../hooks/useCollections";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 
 const GOAL_TYPES = ["daily", "weekly", "monthly"] as const;
 type GoalType = (typeof GOAL_TYPES)[number];
-
-const PERIOD_FOR_TYPE: Record<GoalType, string> = {
-  daily: "day",
-  weekly: "week",
-  monthly: "month",
-};
+type ScopeType = "global" | "tag" | "collection";
 
 export default function ReadingGoalsSection() {
   const goalsQuery = useReadingGoals();
   const progressQuery = useGoalsProgress();
   const createGoal = useCreateGoal();
   const deleteGoal = useDeleteGoal();
+  const tagsQuery = useTags();
+  const collectionsQuery = useCollectionTree();
 
   const [newGoalType, setNewGoalType] = useState<GoalType>("daily");
   const [newTarget, setNewTarget] = useState(5);
+  const [newScopeType, setNewScopeType] = useState<ScopeType>("global");
+  const [newScopeId, setNewScopeId] = useState<number | null>(null);
 
-  const progressByType = new Map(
-    (progressQuery.data ?? []).map((p) => [p.goalType, p]),
+  const progressByKey = new Map(
+    (progressQuery.data ?? []).map((p) => {
+      const key = `${p.goalType}:${p.scopeType ?? "global"}:${p.scopeId ?? ""}`;
+      return [key, p];
+    }),
   );
 
   const handleAddGoal = () => {
     createGoal.mutate({
       goalType: newGoalType,
-      target: newTarget,
-      period: PERIOD_FOR_TYPE[newGoalType],
+      targetCount: newTarget,
+      scopeType: newScopeType,
+      scopeId: newScopeType === "global" ? null : newScopeId,
     });
   };
 
+  const handleScopeTypeChange = (value: string | number | undefined) => {
+    if (typeof value === "string") {
+      setNewScopeType(value as ScopeType);
+      setNewScopeId(null);
+    }
+  };
+
   const isLoading = (goalsQuery.isLoading && !goalsQuery.data) || (progressQuery.isLoading && !progressQuery.data);
+
+  const canAdd =
+    newScopeType === "global" || (newScopeId !== null && newScopeId > 0);
 
   return (
     <Tile>
@@ -62,11 +79,16 @@ export default function ReadingGoalsSection() {
           )}
 
           {goalsQuery.data.map((goal) => {
-            const prog = progressByType.get(goal.goalType);
-            const pct = prog ? Math.min(prog.percentage / 100, 1) : 0;
+            const progressKey = `${goal.goalType}:${goal.scopeType ?? "global"}:${goal.scopeId ?? ""}`;
+            const prog = progressByKey.get(progressKey);
+            const current = prog?.currentCount ?? 0;
+            const target = goal.targetCount;
+            const pct = target > 0 ? Math.min((current / target) * 100, 100) : 0;
+            const achieved = prog?.achieved ?? false;
+
             return (
               <div
-                key={goal.goalType}
+                key={goal.id}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -77,13 +99,18 @@ export default function ReadingGoalsSection() {
                 <Tag type="blue" size="md" style={{ minWidth: "5rem", justifyContent: "center" }}>
                   {goal.goalType}
                 </Tag>
+                {goal.scopeType !== "global" && goal.scopeName && (
+                  <Tag type="teal" size="md">
+                    {goal.scopeType === "tag" ? "Tag" : "Collection"}: {goal.scopeName}
+                  </Tag>
+                )}
                 <div style={{ flex: 1 }}>
                   <ProgressBar
-                    label={`${prog?.current ?? goal.currentCount} / ${goal.target}`}
-                    value={pct * 100}
+                    label={`${current} / ${target}`}
+                    value={pct}
                     max={100}
                     size="small"
-                    status={goal.isCompleted ? "finished" : "active"}
+                    status={achieved ? "finished" : "active"}
                   />
                 </div>
                 <Button
@@ -93,7 +120,12 @@ export default function ReadingGoalsSection() {
                   renderIcon={TrashCan}
                   hasIconOnly
                   disabled={deleteGoal.isPending}
-                  onClick={() => deleteGoal.mutate(goal.goalType)}
+                  onClick={() =>
+                    deleteGoal.mutate({
+                      goalType: goal.goalType,
+                      goalId: goal.scopeType !== "global" ? goal.id : undefined,
+                    })
+                  }
                 />
               </div>
             );
@@ -125,9 +157,51 @@ export default function ReadingGoalsSection() {
               onChange={(_, { value }) => setNewTarget(Number(value))}
             />
 
+            <RadioButtonGroup
+              legendText="Scope"
+              name="goal-scope-type"
+              valueSelected={newScopeType}
+              onChange={handleScopeTypeChange}
+              orientation="horizontal"
+            >
+              <RadioButton labelText="Global" value="global" id="scope-global" />
+              <RadioButton labelText="Tag" value="tag" id="scope-tag" />
+              <RadioButton labelText="Collection" value="collection" id="scope-collection" />
+            </RadioButtonGroup>
+
+            {newScopeType === "tag" && (
+              <Select
+                id="new-goal-scope-tag"
+                labelText="Tag"
+                value={newScopeId?.toString() ?? ""}
+                onChange={(e) => setNewScopeId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+                style={{ minWidth: "10rem" }}
+              >
+                <SelectItem value="" text="Select a tag..." />
+                {(tagsQuery.data ?? []).map((tag) => (
+                  <SelectItem key={tag.id} value={tag.id.toString()} text={tag.name} />
+                ))}
+              </Select>
+            )}
+
+            {newScopeType === "collection" && (
+              <Select
+                id="new-goal-scope-collection"
+                labelText="Collection"
+                value={newScopeId?.toString() ?? ""}
+                onChange={(e) => setNewScopeId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+                style={{ minWidth: "10rem" }}
+              >
+                <SelectItem value="" text="Select a collection..." />
+                {(collectionsQuery.data ?? []).map((col) => (
+                  <SelectItem key={col.id} value={col.id.toString()} text={col.name} />
+                ))}
+              </Select>
+            )}
+
             <Button
               onClick={handleAddGoal}
-              disabled={createGoal.isPending}
+              disabled={createGoal.isPending || !canAdd}
             >
               Add Goal
             </Button>

@@ -7,6 +7,7 @@ import {
   fetchGoalsProgress,
   createReadingGoal,
   deleteReadingGoal,
+  deleteReadingGoalById,
   fetchReadingStreak,
 } from "../api/user";
 import {
@@ -61,8 +62,17 @@ export function useGoalsProgress() {
 export function useCreateGoal() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ goalType, target, period }: { goalType: string; target: number; period: string }) =>
-      createReadingGoal(goalType, target, period),
+    mutationFn: ({
+      goalType,
+      targetCount,
+      scopeType = "global",
+      scopeId = null,
+    }: {
+      goalType: string;
+      targetCount: number;
+      scopeType?: "global" | "tag" | "collection";
+      scopeId?: number | null;
+    }) => createReadingGoal(goalType, targetCount, scopeType, scopeId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.user.goals.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.user.goals.progress });
@@ -73,9 +83,15 @@ export function useCreateGoal() {
 export function useDeleteGoal() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (goalType: string) => deleteReadingGoal(goalType),
+    mutationFn: ({ goalType, goalId }: { goalType: string; goalId?: string }) => {
+      if (goalId) {
+        return deleteReadingGoalById(goalId);
+      }
+      return deleteReadingGoal(goalType);
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.user.goals.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.user.goals.progress });
     },
   });
 }
