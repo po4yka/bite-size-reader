@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
+from typing import TYPE_CHECKING
+
+import defusedxml.ElementTree as DefusedET
+
+if TYPE_CHECKING:
+    from xml.etree.ElementTree import Element
 
 from app.domain.services.import_parsers.base import ImportedBookmark
 
@@ -15,8 +20,8 @@ class OPMLParser:
             content = content.decode("utf-8", errors="replace")
 
         try:
-            root = ET.fromstring(content)
-        except ET.ParseError:
+            root = DefusedET.fromstring(content)
+        except DefusedET.ParseError:
             return []
 
         bookmarks: list[ImportedBookmark] = []
@@ -28,7 +33,7 @@ class OPMLParser:
         return bookmarks
 
     def _parse_outlines(
-        self, element: ET.Element, bookmarks: list[ImportedBookmark], category: str | None
+        self, element: Element, bookmarks: list[ImportedBookmark], category: str | None
     ) -> None:
         for outline in element.findall("outline"):
             xml_url = outline.get("xmlUrl")

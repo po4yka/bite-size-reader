@@ -2187,12 +2187,19 @@ export interface components {
             description?: string | null;
             parent_id?: number | null;
             position?: number | null;
+            /** @enum {string} */
+            collection_type?: "manual" | "smart";
+            query_conditions?: Record<string, never>[] | null;
+            /** @enum {string} */
+            query_match_mode?: "all" | "any";
         };
         CollectionUpdateRequest: {
             name?: string | null;
             description?: string | null;
             parent_id?: number | null;
             position?: number | null;
+            query_conditions?: Record<string, never>[] | null;
+            query_match_mode?: string | null;
         };
         CollectionItemCreateRequest: {
             summary_id: number;
