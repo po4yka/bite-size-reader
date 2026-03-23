@@ -218,6 +218,41 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
 
         return revoked
 
+    async def async_revoke_all_user_tokens(self, user_id: int) -> int:
+        """Revoke all refresh tokens for a user (reuse detection).
+
+        Returns:
+            Number of tokens revoked.
+        """
+
+        def _revoke_all() -> tuple[int, list[str]]:
+            tokens = RefreshToken.select().where(
+                (RefreshToken.user == user_id) & (~RefreshToken.is_revoked)
+            )
+            hashes = []
+            count = 0
+            for record in tokens:
+                record.is_revoked = True
+                record.save()
+                hashes.append(record.token_hash)
+                count += 1
+            return count, hashes
+
+        count, hashes = await self._execute(_revoke_all, operation_name="revoke_all_user_tokens")
+
+        # Best-effort cache invalidation
+        if count and self._token_cache:
+            for token_hash in hashes:
+                try:
+                    await self._token_cache.mark_revoked(token_hash)
+                except Exception as exc:
+                    logger.warning(
+                        "auth_token_cache_revoke_failed",
+                        extra={"error": str(exc), "token_hash_prefix": token_hash[:8]},
+                    )
+
+        return count
+
     async def async_update_refresh_token_last_used(self, token_id: int) -> None:
         """Update the last_used_at timestamp for a refresh token."""
 

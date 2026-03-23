@@ -30,7 +30,7 @@ def login(server_url: str, user_id: int, client_id: str, secret: str) -> BSRConf
     data = body["data"]
     tokens = data.get("tokens", data)  # Handle both nested and flat response shapes
 
-    expires_in = tokens.get("expires_in", 3600)
+    expires_in = tokens.get("expires_in", 1800)
     expires_at = datetime.now(UTC).timestamp() + expires_in
     expires_at_iso = datetime.fromtimestamp(expires_at, tz=UTC).isoformat()
 
@@ -74,7 +74,7 @@ def refresh_if_needed(config: BSRConfig) -> BSRConfig:
             config.access_token = tokens["access_token"]
             if tokens.get("refresh_token"):
                 config.refresh_token = tokens["refresh_token"]
-            expires_in = tokens.get("expires_in", 3600)
+            expires_in = tokens.get("expires_in", 1800)
             expires_at_ts = datetime.now(UTC).timestamp() + expires_in
             config.token_expires_at = datetime.fromtimestamp(expires_at_ts, tz=UTC).isoformat()
             save_config(config)

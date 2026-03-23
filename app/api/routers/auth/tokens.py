@@ -54,7 +54,7 @@ def _load_secret_key() -> str:
 # JWT configuration
 _SECRET_KEY: str | None = None
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 

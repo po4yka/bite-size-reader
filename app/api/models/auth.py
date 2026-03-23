@@ -47,7 +47,7 @@ class GoogleLoginRequest(BaseModel):
 class RefreshTokenRequest(BaseModel):
     """Request body for token refresh."""
 
-    refresh_token: str
+    refresh_token: str | None = None
 
 
 class SecretLoginRequest(BaseModel):

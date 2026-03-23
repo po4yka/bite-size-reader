@@ -18,10 +18,16 @@ from app.api.models.responses import (
     success_response,
 )
 from app.api.routers.auth._fastapi import APIRouter, Depends
+from app.api.routers.auth.cookies import (
+    REFRESH_COOKIE_NAME,
+    clear_refresh_cookie,
+    set_refresh_cookie,
+)
 from app.api.routers.auth.dependencies import get_auth_repository, get_current_user
 from app.api.routers.auth.tokens import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
+    create_refresh_token,
     decode_token,
     validate_client_id,
 )
@@ -29,6 +35,9 @@ from app.core.logging_utils import get_logger, log_exception
 from app.core.time_utils import UTC
 
 if TYPE_CHECKING:
+    from starlette.requests import Request
+    from starlette.responses import Response
+
     from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
         SqliteAuthRepositoryAdapter,
     )
@@ -48,13 +57,20 @@ def _format_dt_z(dt_value: Any) -> str:
 
 @router.post("/refresh")
 async def refresh_access_token(
+    request: Request,
+    response: Response,
     refresh_data: RefreshTokenRequest,
     auth_repo: SqliteAuthRepositoryAdapter = Depends(get_auth_repository),
 ):
     """Refresh an expired access token using a refresh token."""
     from app.api.exceptions import TokenInvalidError, TokenRevokedError
 
-    payload = decode_token(refresh_data.refresh_token, expected_type="refresh")
+    # Resolve refresh token: prefer body, fall back to httpOnly cookie
+    raw_token = refresh_data.refresh_token or request.cookies.get(REFRESH_COOKIE_NAME)
+    if not raw_token:
+        raise TokenInvalidError("No refresh token provided")
+
+    payload = decode_token(raw_token, expected_type="refresh")
     user_id = payload.get("user_id")
     if not user_id:
         raise TokenInvalidError("Missing user_id in token payload")
@@ -62,11 +78,20 @@ async def refresh_access_token(
     client_id = payload.get("client_id")
     validate_client_id(client_id)
 
-    token_hash = hashlib.sha256(refresh_data.refresh_token.encode()).hexdigest()
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
     refresh_token_record = await auth_repo.async_get_refresh_token_by_hash(token_hash)
     if not refresh_token_record:
         raise TokenInvalidError("Refresh token is not recognized")
+
+    # Reuse detection: a revoked token being replayed indicates potential theft.
+    # Revoke ALL tokens for the user as a precaution.
     if refresh_token_record.get("is_revoked"):
+        revoked_count = await auth_repo.async_revoke_all_user_tokens(user_id)
+        logger.warning(
+            "refresh_token_reuse_detected",
+            extra={"user_id": user_id, "revoked_count": revoked_count},
+        )
+        clear_refresh_cookie(response)
         raise TokenRevokedError()
 
     user_repo = get_user_repository()
@@ -74,7 +99,14 @@ async def refresh_access_token(
     if not user:
         raise ResourceNotFoundError("User", user_id)
 
-    await auth_repo.async_update_refresh_token_last_used(refresh_token_record["id"])
+    # Rotate: revoke old token, issue new one
+    await auth_repo.async_revoke_refresh_token(token_hash)
+    new_refresh_token, session_id = await create_refresh_token(
+        user_id=user_id,
+        client_id=client_id,
+        auth_repo=auth_repo,
+    )
+
     access_token = create_access_token(
         user.get("telegram_user_id", user_id),
         user.get("username"),
@@ -83,40 +115,47 @@ async def refresh_access_token(
 
     logger.info("session_refreshed", extra={"user_id": user_id, "client_id": client_id})
 
+    # Set the new refresh token as httpOnly cookie for web clients
+    set_refresh_cookie(response, new_refresh_token)
+
     tokens = TokenPair(
         access_token=access_token,
-        refresh_token=None,
+        refresh_token=new_refresh_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         token_type="Bearer",
     )
-    return success_response(AuthTokensResponse(tokens=tokens))
+    return success_response(AuthTokensResponse(tokens=tokens, session_id=session_id))
 
 
 @router.post("/logout")
 async def logout(
+    http_request: Request,
+    response: Response,
     request: RefreshTokenRequest,
     current_user: dict = Depends(get_current_user),
     auth_repo: SqliteAuthRepositoryAdapter = Depends(get_auth_repository),
 ):
     """Logout by revoking the specific refresh token."""
-    token = request.refresh_token
-    try:
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-        record = await auth_repo.async_get_refresh_token_by_hash(token_hash)
-        if record is None:
-            raise ResourceNotFoundError("RefreshToken", token_hash[:8])
-        # model_to_dict() returns "user" for ForeignKeyField; cache may return "user_id"
-        record_user_id = record.get("user_id") or record.get("user")
-        if str(record_user_id) != str(current_user.get("user_id")):
-            raise AuthorizationError("Token does not belong to the authenticated user")
-        revoked = await auth_repo.async_revoke_refresh_token(token_hash)
-        if revoked:
-            logger.info("refresh_session_revoked")
-    except (ResourceNotFoundError, AuthorizationError):
-        raise
-    except Exception as e:
-        log_exception(logger, "logout_failed", e, level="warning")
+    token = request.refresh_token or http_request.cookies.get(REFRESH_COOKIE_NAME)
+    if token:
+        try:
+            token_hash = hashlib.sha256(token.encode()).hexdigest()
+            record = await auth_repo.async_get_refresh_token_by_hash(token_hash)
+            if record is None:
+                raise ResourceNotFoundError("RefreshToken", token_hash[:8])
+            # model_to_dict() returns "user" for ForeignKeyField; cache may return "user_id"
+            record_user_id = record.get("user_id") or record.get("user")
+            if str(record_user_id) != str(current_user.get("user_id")):
+                raise AuthorizationError("Token does not belong to the authenticated user")
+            revoked = await auth_repo.async_revoke_refresh_token(token_hash)
+            if revoked:
+                logger.info("refresh_session_revoked")
+        except (ResourceNotFoundError, AuthorizationError):
+            raise
+        except Exception as e:
+            log_exception(logger, "logout_failed", e, level="warning")
 
+    clear_refresh_cookie(response)
     return success_response({"message": "Logged out successfully"})
 
 
