@@ -32,6 +32,24 @@ import {
   useUnsubscribeFromFeed,
 } from "../../hooks/useRSS";
 
+function resolveSubstackFeedUrl(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "";
+  if (!trimmed.includes("/") && !trimmed.includes(".")) {
+    return `https://${trimmed}.substack.com/feed`;
+  }
+  const url = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+  if (url.includes("substack.com") && !url.endsWith("/feed")) {
+    try {
+      const parsed = new URL(url);
+      return `${parsed.protocol}//${parsed.hostname}/feed`;
+    } catch {
+      return url;
+    }
+  }
+  return url;
+}
+
 function FeedItemsPreview({ feedId }: { feedId: number }) {
   const { data, isLoading } = useFeedItems(feedId);
 
@@ -62,6 +80,7 @@ function FeedItemsPreview({ feedId }: { feedId: number }) {
 
 export function RSSFeedsTab() {
   const [feedUrl, setFeedUrl] = useState("");
+  const [substackName, setSubstackName] = useState("");
   const [confirmUnsubId, setConfirmUnsubId] = useState<number | null>(null);
 
   const subscriptionsQuery = useRSSSubscriptions();
@@ -75,28 +94,22 @@ export function RSSFeedsTab() {
   const headers = [
     { key: "title", header: "Title" },
     { key: "url", header: "URL" },
-    { key: "lastFetched", header: "Last Fetched" },
-    { key: "errors", header: "Errors" },
     { key: "status", header: "Status" },
     { key: "actions", header: "Actions" },
   ];
 
   const subscriptions = useMemo(
-    () => subscriptionsQuery.data?.subscriptions ?? [],
+    () => subscriptionsQuery.data?.feeds ?? [],
     [subscriptionsQuery.data],
   );
 
   const rows = useMemo(
     () =>
       subscriptions.map((sub) => ({
-        id: String(sub.id),
-        title: sub.feed.title ?? "-",
-        url: sub.feed.url,
-        lastFetched: sub.feed.lastFetchedAt
-          ? new Date(sub.feed.lastFetchedAt).toLocaleString()
-          : "Never",
-        errors: sub.feed.fetchErrorCount,
-        status: sub.feed.isActive ? "Active" : "Inactive",
+        id: String(sub.subscriptionId),
+        title: sub.feedTitle ?? "-",
+        url: sub.feedUrl,
+        status: sub.isActive ? "Active" : "Inactive",
         actions: sub,
       })),
     [subscriptions],
@@ -105,7 +118,7 @@ export function RSSFeedsTab() {
   const feedIdLookup = useMemo(() => {
     const map = new Map<string, number>();
     for (const sub of subscriptions) {
-      map.set(String(sub.id), sub.feedId);
+      map.set(String(sub.subscriptionId), sub.feedId);
     }
     return map;
   }, [subscriptions]);
@@ -115,6 +128,12 @@ export function RSSFeedsTab() {
     if (!trimmed) return;
     subscribeMutation.mutate({ url: trimmed }, { onSuccess: () => setFeedUrl("") });
   }, [feedUrl, subscribeMutation]);
+
+  const handleSubstackSubscribe = useCallback(() => {
+    const resolved = resolveSubstackFeedUrl(substackName);
+    if (!resolved) return;
+    subscribeMutation.mutate({ url: resolved }, { onSuccess: () => setSubstackName("") });
+  }, [substackName, subscribeMutation]);
 
   const handleUnsubscribe = useCallback(
     (subscriptionId: number) => {
@@ -166,25 +185,49 @@ export function RSSFeedsTab() {
       <Tile>
         <h3>RSS Feed Subscriptions</h3>
 
-        <div className="form-actions" style={{ marginBottom: "1rem" }}>
-          <TextInput
-            id="rss-feed-url"
-            labelText="Feed URL"
-            placeholder="https://example.com/feed.xml"
-            value={feedUrl}
-            onChange={(e) => setFeedUrl(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSubscribe();
-            }}
-          />
-          <Button
-            kind="primary"
-            size="sm"
-            disabled={!feedUrl.trim() || subscribeMutation.isPending}
-            onClick={handleSubscribe}
-          >
-            Add Feed
-          </Button>
+        <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 300px" }}>
+            <TextInput
+              id="substack-name"
+              labelText="Substack"
+              placeholder="Publication name (e.g. platformer)"
+              value={substackName}
+              onChange={(e) => setSubstackName(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSubstackSubscribe();
+              }}
+            />
+            <Button
+              kind="secondary"
+              size="sm"
+              disabled={!substackName.trim() || subscribeMutation.isPending}
+              onClick={handleSubstackSubscribe}
+              style={{ marginTop: "0.5rem" }}
+            >
+              Add Substack
+            </Button>
+          </div>
+          <div style={{ flex: "1 1 300px" }}>
+            <TextInput
+              id="rss-feed-url"
+              labelText="Feed URL"
+              placeholder="https://example.com/feed.xml"
+              value={feedUrl}
+              onChange={(e) => setFeedUrl(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSubscribe();
+              }}
+            />
+            <Button
+              kind="primary"
+              size="sm"
+              disabled={!feedUrl.trim() || subscribeMutation.isPending}
+              onClick={handleSubscribe}
+              style={{ marginTop: "0.5rem" }}
+            >
+              Add Feed
+            </Button>
+          </div>
         </div>
 
         {anyError && (

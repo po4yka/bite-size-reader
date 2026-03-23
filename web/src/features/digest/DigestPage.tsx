@@ -12,13 +12,13 @@ export default function DigestPage() {
   const { mode, user } = useAuth();
   const [selectedTabIndex, setSelectedTabIndex] = useState(0);
 
+  const isTelegramMode = mode === "telegram-webapp";
+
   return (
     <section className="page-section">
       <h1>Digest</h1>
 
-      {mode !== "telegram-webapp" && <DigestUnavailableNotice />}
-
-      {mode === "telegram-webapp" && (
+      {isTelegramMode ? (
         <Tabs selectedIndex={selectedTabIndex} onChange={({ selectedIndex }) => setSelectedTabIndex(selectedIndex)}>
           <TabList aria-label="Digest tabs" contained>
             <Tab>Channels</Tab>
@@ -45,6 +45,11 @@ export default function DigestPage() {
             </TabPanel>
           </TabPanels>
         </Tabs>
+      ) : (
+        <>
+          <DigestUnavailableNotice />
+          <RSSFeedsTab />
+        </>
       )}
     </section>
   );

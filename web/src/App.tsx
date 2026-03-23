@@ -22,6 +22,7 @@ const WebhooksPage = lazy(() => import("./features/webhooks/WebhooksPage"));
 const RulesPage = lazy(() => import("./features/rules/RulesPage"));
 const ImportExportPage = lazy(() => import("./features/import-export/ImportExportPage"));
 const BackupsPage = lazy(() => import("./features/backups/BackupsPage"));
+const FeedsPage = lazy(() => import("./features/feeds/FeedsPage"));
 const AdminPage = lazy(() => import("./features/admin/AdminPage"));
 
 function RouteLoader() {
@@ -133,6 +134,10 @@ export default function App() {
         <Route
           path="backups"
           element={<Suspense fallback={<RouteLoader />}><BackupsPage /></Suspense>}
+        />
+        <Route
+          path="feeds"
+          element={<Suspense fallback={<RouteLoader />}><FeedsPage /></Suspense>}
         />
         <Route
           path="digest"

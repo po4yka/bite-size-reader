@@ -1,21 +1,14 @@
+import { getApiSession } from "./session";
+import { config } from "../lib/config";
 import { apiRequest } from "./client";
 
-export interface RSSFeed {
-  id: number;
-  url: string;
-  title: string | null;
-  description: string | null;
-  siteUrl: string | null;
-  lastFetchedAt: string | null;
-  fetchErrorCount: number;
-  isActive: boolean;
-}
-
+/** Flat subscription shape matching backend GET /v1/rss/feeds response. */
 export interface RSSSubscription {
-  id: number;
+  subscriptionId: number;
   feedId: number;
-  feed: RSSFeed;
-  categoryId: number | null;
+  feedTitle: string | null;
+  feedUrl: string;
+  siteUrl: string | null;
   categoryName: string | null;
   isActive: boolean;
   createdAt: string;
@@ -32,49 +25,51 @@ export interface RSSFeedItem {
 }
 
 interface RSSSubscriptionsData {
-  subscriptions: RSSSubscription[];
+  feeds: RSSSubscription[];
 }
 
 interface RSSFeedItemsData {
+  feedId: number;
   items: RSSFeedItem[];
-  total: number;
-  limit: number;
-  offset: number;
 }
 
 interface SubscribeResponse {
-  status: string;
   subscriptionId: number;
+  feedId: number;
+  feedTitle: string | null;
+  feedUrl: string;
 }
 
 interface UnsubscribeResponse {
-  status: string;
+  deleted: boolean;
+  id: number;
 }
 
 interface RefreshResponse {
-  status: string;
   feedId: number;
+  newItems: number;
+  notModified?: boolean;
 }
 
 interface ImportOPMLResponse {
-  status: string;
   imported: number;
   errors: number;
+  total: number;
 }
 
 export function fetchRSSSubscriptions(): Promise<RSSSubscriptionsData> {
-  return apiRequest<RSSSubscriptionsData>("/v1/rss/subscriptions");
+  return apiRequest<RSSSubscriptionsData>("/v1/rss/feeds");
 }
 
 export function subscribeToFeed(url: string, categoryId?: number): Promise<SubscribeResponse> {
-  return apiRequest<SubscribeResponse>("/v1/rss/subscribe", {
+  return apiRequest<SubscribeResponse>("/v1/rss/feeds/subscribe", {
     method: "POST",
     body: JSON.stringify({ url, category_id: categoryId }),
   });
 }
 
 export function unsubscribeFromFeed(subscriptionId: number): Promise<UnsubscribeResponse> {
-  return apiRequest<UnsubscribeResponse>(`/v1/rss/subscriptions/${subscriptionId}`, {
+  return apiRequest<UnsubscribeResponse>(`/v1/rss/feeds/${subscriptionId}`, {
     method: "DELETE",
   });
 }
@@ -95,14 +90,24 @@ export function refreshFeed(feedId: number): Promise<RefreshResponse> {
   });
 }
 
-export function exportOPML(): Promise<Blob> {
-  return apiRequest<Blob>("/v1/rss/opml/export");
+export async function exportOPML(): Promise<Blob> {
+  const session = getApiSession();
+  const headers: Record<string, string> = {};
+  if (session.mode === "telegram-webapp" && session.initData) {
+    headers["X-Telegram-Init-Data"] = session.initData;
+  }
+  if (session.mode === "jwt" && session.accessToken) {
+    headers["Authorization"] = `Bearer ${session.accessToken}`;
+  }
+  const response = await fetch(`${config.apiBaseUrl}/v1/rss/export/opml`, { headers });
+  if (!response.ok) throw new Error("OPML export failed");
+  return response.blob();
 }
 
 export function importOPML(file: File): Promise<ImportOPMLResponse> {
   const formData = new FormData();
   formData.append("file", file);
-  return apiRequest<ImportOPMLResponse>("/v1/rss/opml/import", {
+  return apiRequest<ImportOPMLResponse>("/v1/rss/import/opml", {
     method: "POST",
     body: formData,
   });
