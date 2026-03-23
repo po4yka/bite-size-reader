@@ -21,7 +21,8 @@ async def poll_all_feeds() -> dict:
         .distinct()
     )
 
-    stats = {"polled": 0, "new_items": 0, "errors": 0, "skipped": 0}
+    new_item_ids: list[int] = []
+    stats: dict = {"polled": 0, "new_items": 0, "errors": 0, "skipped": 0}
 
     for feed in feeds:
         try:
@@ -39,16 +40,20 @@ async def poll_all_feeds() -> dict:
             new_count = 0
             for entry in result.entries:
                 try:
-                    RSSFeedItem.insert(
+                    item, created = RSSFeedItem.get_or_create(
                         feed=feed.id,
                         guid=entry.guid,
-                        title=entry.title,
-                        url=entry.url,
-                        content=entry.content,
-                        author=entry.author,
-                        published_at=entry.published_at,
-                    ).on_conflict_ignore().execute()
-                    new_count += 1
+                        defaults={
+                            "title": entry.title,
+                            "url": entry.url,
+                            "content": entry.content,
+                            "author": entry.author,
+                            "published_at": entry.published_at,
+                        },
+                    )
+                    if created:
+                        new_count += 1
+                        new_item_ids.append(item.id)
                 except Exception:
                     pass
 
@@ -92,5 +97,6 @@ async def poll_all_feeds() -> dict:
                 },
             )
 
-    logger.info("rss_poll_complete", extra=stats)
+    stats["new_item_ids"] = new_item_ids
+    logger.info("rss_poll_complete", extra={k: v for k, v in stats.items() if k != "new_item_ids"})
     return stats

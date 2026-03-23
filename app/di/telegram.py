@@ -22,6 +22,7 @@ from app.adapters.telegram.command_handlers.export_command import ExportHandler
 from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandler
 from app.adapters.telegram.command_handlers.listen_handler import ListenHandler
 from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandler
+from app.adapters.telegram.command_handlers.rss_handler import RSSHandler
 from app.adapters.telegram.command_handlers.rules_handler import RulesHandler
 from app.adapters.telegram.command_handlers.search_handler import SearchHandler
 from app.adapters.telegram.command_handlers.settings_handler import SettingsHandler
@@ -499,6 +500,11 @@ def _build_command_dispatcher_deps(
         db=db,
         response_formatter=response_formatter,
     )
+    rss_handler = RSSHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
 
     def build_uid_handler(handler_method: Any) -> Any:
         async def _handler(
@@ -620,6 +626,8 @@ def _build_command_dispatcher_deps(
             TextCommandRoute("/export", build_text_handler(export_handler.handle_export)),
             TextCommandRoute("/backups", build_text_handler(backup_handler.handle_backups)),
             TextCommandRoute("/backup", build_text_handler(backup_handler.handle_backup)),
+            TextCommandRoute("/substack", build_text_handler(rss_handler.handle_substack)),
+            TextCommandRoute("/rss", build_text_handler(rss_handler.handle_rss)),
         ),
         tail_uid=(UidCommandRoute("/debug", build_uid_handler(settings_handler.handle_debug)),),
     )

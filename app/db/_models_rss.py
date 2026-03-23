@@ -66,3 +66,17 @@ class RSSFeedItem(BaseModel):
             (("feed", "guid"), True),
             (("published_at",), False),
         )
+
+
+class RSSItemDelivery(BaseModel):
+    """Tracks which RSS items have been delivered to which users."""
+
+    id = peewee.AutoField()
+    user = peewee.ForeignKeyField(User, on_delete="CASCADE")
+    item = peewee.ForeignKeyField(RSSFeedItem, on_delete="CASCADE")
+    summary_request_id = peewee.IntegerField(null=True)
+    delivered_at = peewee.DateTimeField(default=_utcnow)
+
+    class Meta:
+        table_name = "rss_item_deliveries"
+        indexes = ((("user", "item"), True),)

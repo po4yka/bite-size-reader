@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.adapters.rss.substack import is_substack_url, resolve_substack_feed_url
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
@@ -25,6 +26,67 @@ _MAX_ITEMS_PREVIEW = 5
 
 class RSSHandler(HandlerDependenciesMixin):
     """Handle /rss commands for RSS feed management."""
+
+    @combined_handler("command_substack", "substack")
+    async def handle_substack(self, ctx: CommandExecutionContext) -> None:
+        """Handle /substack [subcommand].
+
+        Subcommands:
+            <name>        -- subscribe to a Substack publication by name or URL
+            add <name>    -- same as above
+            list          -- list Substack subscriptions
+            remove <id>   -- unsubscribe by subscription ID
+        """
+        args = ctx.text[len("/substack") :].strip()
+
+        if args == "list":
+            await self._handle_substack_list(ctx)
+        elif args.startswith("remove "):
+            await self._handle_remove(ctx, args[7:].strip())
+        elif args.startswith("add "):
+            feed_url = resolve_substack_feed_url(args[4:].strip())
+            await self._handle_add(ctx, feed_url)
+        elif args:
+            feed_url = resolve_substack_feed_url(args)
+            await self._handle_add(ctx, feed_url)
+        else:
+            await ctx.response_formatter.safe_reply(
+                ctx.message,
+                "Usage:\n"
+                "  /substack <name> -- subscribe (e.g. /substack platformer)\n"
+                "  /substack list -- list Substack subscriptions\n"
+                "  /substack remove <id> -- unsubscribe",
+            )
+
+    async def _handle_substack_list(self, ctx: CommandExecutionContext) -> None:
+        """List only Substack RSS subscriptions."""
+        subs = (
+            RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed)
+            .join(RSSFeed)
+            .where(
+                (RSSFeedSubscription.user == ctx.uid)
+                & (RSSFeedSubscription.is_active == True)  # noqa: E712
+                & (RSSFeed.url.contains("substack.com"))
+            )
+            .order_by(RSSFeedSubscription.created_at.desc())
+        )
+
+        lines: list[str] = []
+        for sub in subs:
+            feed: RSSFeed = sub.feed
+            title = feed.title or feed.url
+            lines.append(f"[{sub.id}] {title}\n  {feed.url}")
+
+        if not lines:
+            await ctx.response_formatter.safe_reply(
+                ctx.message,
+                "No Substack subscriptions yet.\n"
+                "Use /substack <name> to subscribe (e.g. /substack platformer).",
+            )
+            return
+
+        text = "Your Substack subscriptions:\n\n" + "\n\n".join(lines)
+        await ctx.response_formatter.safe_reply(ctx.message, text)
 
     @combined_handler("command_rss", "rss")
     async def handle_rss(self, ctx: CommandExecutionContext) -> None:
@@ -89,6 +151,10 @@ class RSSHandler(HandlerDependenciesMixin):
         url = url.strip()
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
+
+        # Auto-resolve Substack URLs to their feed endpoint
+        if is_substack_url(url) and not url.rstrip("/").endswith("/feed"):
+            url = resolve_substack_feed_url(url)
 
         # Find or create the feed
         feed, _created = RSSFeed.get_or_create(

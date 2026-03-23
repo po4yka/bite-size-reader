@@ -13,6 +13,7 @@ from .llm import AnthropicConfig, ModelRoutingConfig, OpenAIConfig, OpenRouterCo
 from .media import AttachmentConfig, YouTubeConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
+from .rss import RSSConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
 from .settings import AppConfig, Config, ConfigHelper, Settings, clear_config_cache, load_config
@@ -42,6 +43,7 @@ __all__ = [
     "OpenAIConfig",
     "OpenRouterConfig",
     "PushNotificationConfig",
+    "RSSConfig",
     "RedisConfig",
     "RuntimeConfig",
     "ScraperConfig",

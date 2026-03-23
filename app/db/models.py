@@ -45,7 +45,7 @@ from app.db._models_digest import (
     DigestDelivery,
     UserDigestPreference,
 )
-from app.db._models_rss import RSSFeed, RSSFeedItem, RSSFeedSubscription
+from app.db._models_rss import RSSFeed, RSSFeedItem, RSSFeedSubscription, RSSItemDelivery
 from app.db._models_rules import (
     AutomationRule,
     ImportJob,
@@ -92,6 +92,7 @@ __all__ = [
     "RSSFeed",
     "RSSFeedItem",
     "RSSFeedSubscription",
+    "RSSItemDelivery",
     "RefreshToken",
     "Request",
     "RuleExecutionLog",
@@ -164,4 +165,5 @@ ALL_MODELS = (
     RSSFeed,
     RSSFeedSubscription,
     RSSFeedItem,
+    RSSItemDelivery,
 )

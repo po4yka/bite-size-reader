@@ -34,6 +34,7 @@ from .llm import AnthropicConfig, ModelRoutingConfig, OpenAIConfig, OpenRouterCo
 from .media import AttachmentConfig, YouTubeConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
+from .rss import RSSConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig
@@ -107,6 +108,7 @@ class AppConfig:
     tts: ElevenLabsConfig = field(default_factory=ElevenLabsConfig)
     push: PushNotificationConfig = field(default_factory=PushNotificationConfig)
     model_routing: ModelRoutingConfig = field(default_factory=ModelRoutingConfig)
+    rss: RSSConfig = field(default_factory=RSSConfig)
 
 
 class Settings(BaseSettings):
@@ -154,6 +156,7 @@ class Settings(BaseSettings):
     tts: ElevenLabsConfig = Field(default_factory=ElevenLabsConfig)
     push: PushNotificationConfig = Field(default_factory=PushNotificationConfig)
     model_routing: ModelRoutingConfig = Field(default_factory=ModelRoutingConfig)
+    rss: RSSConfig = Field(default_factory=RSSConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -277,6 +280,7 @@ class Settings(BaseSettings):
             tts=self.tts,
             push=self.push,
             model_routing=self.model_routing,
+            rss=self.rss,
         )
 
 

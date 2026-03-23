@@ -17,6 +17,12 @@ def build_scheduler_dependencies(
     db: DatabaseSessionManager,
 ) -> SchedulerDependencies:
     """Build scheduler job factories without constructing jobs inline in the service."""
+    rss_bot_factory = None
+    rss_delivery_factory = None
+    if cfg.rss.enabled:
+        rss_bot_factory = lambda: _create_digest_bot_client(cfg)  # noqa: E731
+        rss_delivery_factory = lambda: _create_rss_delivery_service(cfg, db)  # noqa: E731
+
     return SchedulerDependencies(
         digest_userbot_factory=lambda: _create_digest_userbot(cfg),
         digest_llm_factory=lambda: _create_digest_llm_client(cfg),
@@ -27,6 +33,8 @@ def build_scheduler_dependencies(
             llm_client=llm_client,
             send_message=send_message,
         ),
+        rss_bot_client_factory=rss_bot_factory,
+        rss_delivery_factory=rss_delivery_factory,
     )
 
 
@@ -79,4 +87,43 @@ def _create_digest_service(
         analyzer=analyzer,
         formatter=formatter,
         send_message_func=send_message,
+    )
+
+
+def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
+    from app.adapters.content.pure_summary_service import PureSummaryService
+    from app.adapters.content.summarization_runtime import SummarizationRuntime
+    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.openrouter.openrouter_client import OpenRouterClient
+    from app.adapters.rss.rss_delivery_service import RSSDeliveryService
+    from app.di.shared import LazySemaphoreFactory
+    from app.prompts.manager import get_prompt_manager
+
+    llm_client = OpenRouterClient(
+        api_key=cfg.openrouter.api_key,
+        model=cfg.openrouter.model,
+        fallback_models=cfg.openrouter.fallback_models,
+    )
+    response_formatter = ResponseFormatter(
+        telegram_limits=cfg.telegram_limits,
+        telegram_config=cfg.telegram,
+    )
+    sem_factory = LazySemaphoreFactory(cfg.runtime.max_concurrent_calls)
+    runtime = SummarizationRuntime(
+        cfg=cfg,
+        db=db,
+        openrouter=llm_client,
+        response_formatter=response_formatter,
+        audit_func=lambda *_a, **_kw: None,
+        sem=sem_factory,
+    )
+    pure_service = PureSummaryService(runtime=runtime)
+    prompt_mgr = get_prompt_manager()
+
+    return RSSDeliveryService(
+        cfg=cfg.rss,
+        pure_summary_service=pure_service,
+        system_prompt_loader=lambda lang: prompt_mgr.get_system_prompt(
+            lang, include_examples=True, num_examples=2
+        ),
     )

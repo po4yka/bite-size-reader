@@ -23,6 +23,7 @@ from app.di.repositories import (
     build_crawl_result_repository,
     build_llm_repository,
     build_request_repository,
+    build_rss_feed_repository,
     build_summary_repository,
     build_tag_repository,
     build_topic_search_repository,
@@ -194,6 +195,7 @@ async def build_api_runtime(
         apply_service=sync_deps.apply_service,
     )
     tag_repo = build_tag_repository(database)
+    rss_feed_repo = build_rss_feed_repository(database)
     return ApiRuntime(
         cfg=app_cfg,
         db=database,
@@ -207,6 +209,7 @@ async def build_api_runtime(
         request_service=request_service,
         sync_service=sync_service,
         tag_repo=tag_repo,
+        rss_feed_repo=rss_feed_repo,
     )
 
 

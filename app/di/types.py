@@ -111,6 +111,7 @@ class ApiRuntime:
     request_service: Any
     sync_service: Any
     tag_repo: Any = None
+    rss_feed_repo: Any = None
 
 
 @dataclass(slots=True)
@@ -144,6 +145,8 @@ class SchedulerDependencies:
     digest_service_factory: Callable[
         [Any, Any, Callable[[int, str, Any | None], Awaitable[None]]], Any
     ]
+    rss_bot_client_factory: Callable[[], Any] | None = None
+    rss_delivery_factory: Callable[[], Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)

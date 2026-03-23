@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
@@ -66,6 +67,22 @@ class SchedulerService:
                 )
         else:
             logger.info("scheduler_digest_job_skipped", extra={"enabled": False})
+
+        if self.cfg.rss.enabled:
+            self._scheduler.add_job(
+                self._run_rss_poll,
+                trigger=IntervalTrigger(minutes=self.cfg.rss.poll_interval_minutes),
+                id="rss_feed_poll",
+                name="RSS Feed Poll",
+                replace_existing=True,
+                max_instances=1,
+            )
+            logger.info(
+                "scheduler_rss_job_added",
+                extra={"interval_min": self.cfg.rss.poll_interval_minutes},
+            )
+        else:
+            logger.info("scheduler_rss_job_skipped", extra={"enabled": False})
 
         self._scheduler.start()
         self._started = True
@@ -143,6 +160,56 @@ class SchedulerService:
                 await llm_client.aclose()
             if userbot:
                 await userbot.stop()
+
+    async def _run_rss_poll(self) -> None:
+        """Poll RSS feeds and deliver new items to subscribers."""
+        from app.adapters.rss.feed_poller import poll_all_feeds
+
+        correlation_id = f"rss_poll_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
+        logger.info("rss_poll_starting", extra={"cid": correlation_id})
+
+        try:
+            stats = await poll_all_feeds()
+            new_item_ids: list[int] = stats.get("new_item_ids", [])
+            logger.info(
+                "rss_poll_fetched",
+                extra={
+                    "cid": correlation_id,
+                    "polled": stats.get("polled", 0),
+                    "new_items": stats.get("new_items", 0),
+                    "errors": stats.get("errors", 0),
+                },
+            )
+
+            if not new_item_ids or not self.cfg.rss.auto_summarize:
+                return
+
+            if not self._deps.rss_delivery_factory or not self._deps.rss_bot_client_factory:
+                logger.warning("rss_delivery_not_configured", extra={"cid": correlation_id})
+                return
+
+            delivery_service = self._deps.rss_delivery_factory()
+            bot = self._deps.rss_bot_client_factory()
+
+            async with bot:
+
+                async def send_message(user_id: int, text: str) -> None:
+                    await bot.send_message(chat_id=user_id, text=text)
+
+                delivery_stats = await delivery_service.deliver_new_items(
+                    send_message,
+                    new_item_ids=new_item_ids,
+                )
+                logger.info(
+                    "rss_poll_delivery_complete",
+                    extra={"cid": correlation_id, **delivery_stats},
+                )
+
+        except Exception as exc:
+            logger.exception(
+                "rss_poll_failed",
+                extra={"cid": correlation_id, "error": str(exc)},
+            )
 
     def get_next_run_time(self, job_id: str) -> datetime | None:
         """Get next scheduled run time for a job."""
