@@ -3554,6 +3554,2401 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # RSS
+  # -----------------------------------------------------------------------
+  /v1/rss/feeds:
+    get:
+      tags:
+      - RSS
+      summary: List RSS Feed Subscriptions
+      description: List user's RSS feed subscriptions.
+      operationId: list_feeds_v1_rss_feeds_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: List of RSS subscriptions
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/rss/feeds/subscribe:
+    post:
+      tags:
+      - RSS
+      summary: Subscribe to RSS Feed
+      description: Subscribe to an RSS feed by URL.
+      operationId: subscribe_v1_rss_feeds_subscribe_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                category_id:
+                  type: integer
+              required:
+              - url
+        required: true
+      responses:
+        '201':
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/rss/feeds/{subscription_id}:
+    delete:
+      tags:
+      - RSS
+      summary: Unsubscribe from RSS Feed
+      description: Unsubscribe from an RSS feed (verify ownership).
+      operationId: unsubscribe_v1_rss_feeds__subscription_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: subscription_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Subscription deleted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/rss/feeds/{feed_id}/items:
+    get:
+      tags:
+      - RSS
+      summary: List Feed Items
+      description: List paginated items for a feed.
+      operationId: list_feed_items_v1_rss_feeds__feed_id__items_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: feed_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Paginated feed items
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/rss/feeds/{feed_id}/refresh:
+    post:
+      tags:
+      - RSS
+      summary: Refresh Feed
+      description: Trigger a fetch for a specific feed and store new items.
+      operationId: refresh_feed_v1_rss_feeds__feed_id__refresh_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: feed_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Feed refresh result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/rss/export/opml:
+    get:
+      tags:
+      - RSS
+      summary: Export Subscriptions as OPML
+      description: Export user's RSS subscriptions as OPML 2.0.
+      operationId: export_opml_v1_rss_export_opml_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: OPML XML file
+          content:
+            application/xml:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/rss/import/opml:
+    post:
+      tags:
+      - RSS
+      summary: Import OPML File
+      description: Import OPML file and subscribe to each feed URL.
+      operationId: import_opml_v1_rss_import_opml_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+              - file
+        required: true
+      responses:
+        '200':
+          description: Import result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Tags
+  # -----------------------------------------------------------------------
+  /v1/tags/:
+    get:
+      tags:
+      - Tags
+      summary: List Tags
+      description: List all tags for the current user.
+      operationId: list_tags_v1_tags_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: List of tags
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+      - Tags
+      summary: Create Tag
+      description: Create a new tag.
+      operationId: create_tag_v1_tags_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                color:
+                  type: string
+              required:
+              - name
+        required: true
+      responses:
+        '201':
+          description: Tag created
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/tags/{tag_id}:
+    get:
+      tags:
+      - Tags
+      summary: Get Tag
+      description: Get tag details.
+      operationId: get_tag_v1_tags__tag_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: tag_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Tag details
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags:
+      - Tags
+      summary: Update Tag
+      description: Update a tag's name or color.
+      operationId: update_tag_v1_tags__tag_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: tag_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                color:
+                  type: string
+        required: true
+      responses:
+        '200':
+          description: Tag updated
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+      - Tags
+      summary: Delete Tag
+      description: Soft-delete a tag.
+      operationId: delete_tag_v1_tags__tag_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: tag_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Tag deleted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/tags/merge:
+    post:
+      tags:
+      - Tags
+      summary: Merge Tags
+      description: Merge source tags into a target tag.
+      operationId: merge_tags_v1_tags_merge_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source_tag_ids:
+                  type: array
+                  items:
+                    type: integer
+                target_tag_id:
+                  type: integer
+              required:
+              - source_tag_ids
+              - target_tag_id
+        required: true
+      responses:
+        '200':
+          description: Tags merged
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/summaries/{summary_id}/tags:
+    post:
+      tags:
+      - Tags
+      summary: Attach Tags to Summary
+      description: Attach tags to a summary by ID or name (auto-create if needed).
+      operationId: attach_tags_v1_summaries__summary_id__tags_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tag_ids:
+                  type: array
+                  items:
+                    type: integer
+                tag_names:
+                  type: array
+                  items:
+                    type: string
+        required: true
+      responses:
+        '201':
+          description: Tags attached
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/summaries/{summary_id}/tags/{tag_id}:
+    delete:
+      tags:
+      - Tags
+      summary: Detach Tag from Summary
+      description: Detach a tag from a summary.
+      operationId: detach_tag_v1_summaries__summary_id__tags__tag_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: tag_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Tag detached
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Webhooks
+  # -----------------------------------------------------------------------
+  /v1/webhooks/:
+    get:
+      tags:
+      - Webhooks
+      summary: List Webhook Subscriptions
+      description: List user's webhook subscriptions.
+      operationId: list_subscriptions_v1_webhooks_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: List of webhook subscriptions
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+      - Webhooks
+      summary: Create Webhook Subscription
+      description: Create a new webhook subscription.
+      operationId: create_subscription_v1_webhooks_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                url:
+                  type: string
+                events:
+                  type: array
+                  items:
+                    type: string
+              required:
+              - url
+              - events
+        required: true
+      responses:
+        '201':
+          description: Webhook subscription created
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/webhooks/{webhook_id}:
+    get:
+      tags:
+      - Webhooks
+      summary: Get Webhook Subscription
+      description: Get a webhook subscription's details.
+      operationId: get_subscription_v1_webhooks__webhook_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Webhook subscription details
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags:
+      - Webhooks
+      summary: Update Webhook Subscription
+      description: Update a webhook subscription.
+      operationId: update_subscription_v1_webhooks__webhook_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                url:
+                  type: string
+                events:
+                  type: array
+                  items:
+                    type: string
+                enabled:
+                  type: boolean
+        required: true
+      responses:
+        '200':
+          description: Webhook subscription updated
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+      - Webhooks
+      summary: Delete Webhook Subscription
+      description: Soft-delete a webhook subscription.
+      operationId: delete_subscription_v1_webhooks__webhook_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Webhook subscription deleted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/webhooks/{webhook_id}/deliveries:
+    get:
+      tags:
+      - Webhooks
+      summary: List Webhook Deliveries
+      description: Return paginated delivery history for a webhook subscription.
+      operationId: list_deliveries_v1_webhooks__webhook_id__deliveries_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Paginated delivery history
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/webhooks/{webhook_id}/rotate-secret:
+    post:
+      tags:
+      - Webhooks
+      summary: Rotate Webhook Secret
+      description: Generate a new secret for the subscription. Returns the new secret once.
+      operationId: rotate_secret_v1_webhooks__webhook_id__rotate_secret_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: New secret generated
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/webhooks/{webhook_id}/test:
+    post:
+      tags:
+      - Webhooks
+      summary: Send Test Webhook
+      description: Send a test event to the webhook URL and return the delivery result.
+      operationId: send_test_webhook_v1_webhooks__webhook_id__test_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Test delivery result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Rules
+  # -----------------------------------------------------------------------
+  /v1/rules/:
+    get:
+      tags:
+      - Rules
+      summary: List Automation Rules
+      description: List all automation rules for the current user.
+      operationId: list_rules_v1_rules_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: List of automation rules
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+      - Rules
+      summary: Create Automation Rule
+      description: Create a new automation rule.
+      operationId: create_rule_v1_rules_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                event_type:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                actions:
+                  type: array
+                  items:
+                    type: object
+                  minItems: 1
+                match_mode:
+                  type: string
+                  default: all
+                priority:
+                  type: integer
+                  default: 0
+                  minimum: 0
+                  maximum: 1000
+                description:
+                  type: string
+                  maxLength: 500
+              required:
+              - name
+              - event_type
+              - actions
+        required: true
+      responses:
+        '201':
+          description: Rule created
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/rules/{rule_id}:
+    get:
+      tags:
+      - Rules
+      summary: Get Automation Rule
+      description: Get rule details.
+      operationId: get_rule_v1_rules__rule_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Rule details
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags:
+      - Rules
+      summary: Update Automation Rule
+      description: Update an automation rule.
+      operationId: update_rule_v1_rules__rule_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                event_type:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                actions:
+                  type: array
+                  items:
+                    type: object
+                match_mode:
+                  type: string
+                priority:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000
+                description:
+                  type: string
+                  maxLength: 500
+                enabled:
+                  type: boolean
+        required: true
+      responses:
+        '200':
+          description: Rule updated
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+      - Rules
+      summary: Delete Automation Rule
+      description: Soft-delete an automation rule.
+      operationId: delete_rule_v1_rules__rule_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Rule deleted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/rules/{rule_id}/logs:
+    get:
+      tags:
+      - Rules
+      summary: List Rule Execution Logs
+      description: Return paginated execution history for a rule.
+      operationId: list_execution_logs_v1_rules__rule_id__logs_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Paginated execution logs
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/rules/{rule_id}/test:
+    post:
+      tags:
+      - Rules
+      summary: Dry-Run Rule Test
+      description: Dry-run a rule against a summary without side effects.
+      operationId: dry_run_rule_v1_rules__rule_id__test_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                summary_id:
+                  type: integer
+              required:
+              - summary_id
+        required: true
+      responses:
+        '200':
+          description: Dry-run result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Backups
+  # -----------------------------------------------------------------------
+  /v1/backups/:
+    get:
+      tags:
+      - Backups
+      summary: List Backups
+      description: List user's backups.
+      operationId: list_backups_v1_backups_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: List of backups
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+      - Backups
+      summary: Create Backup
+      description: Create a new backup archive. Processing happens in the background.
+      operationId: create_backup_v1_backups_post
+      security:
+      - HTTPBearer: []
+      responses:
+        '201':
+          description: Backup creation initiated
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/backups/schedule:
+    get:
+      tags:
+      - Backups
+      summary: Get Backup Schedule
+      description: Read the user's backup schedule preferences.
+      operationId: get_backup_schedule_v1_backups_schedule_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Backup schedule preferences
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags:
+      - Backups
+      summary: Update Backup Schedule
+      description: Update the user's backup schedule preferences.
+      operationId: update_backup_schedule_v1_backups_schedule_patch
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                backup_enabled:
+                  type: boolean
+                backup_frequency:
+                  type: string
+                backup_retention_count:
+                  type: integer
+        required: true
+      responses:
+        '200':
+          description: Schedule updated
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/backups/{backup_id}:
+    get:
+      tags:
+      - Backups
+      summary: Get Backup
+      description: Get backup details.
+      operationId: get_backup_v1_backups__backup_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: backup_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Backup details
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+      - Backups
+      summary: Delete Backup
+      description: Delete a backup record and its file from disk.
+      operationId: delete_backup_v1_backups__backup_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: backup_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Backup deleted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/backups/{backup_id}/download:
+    get:
+      tags:
+      - Backups
+      summary: Download Backup
+      description: Download the backup ZIP file.
+      operationId: download_backup_v1_backups__backup_id__download_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: backup_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Backup ZIP file
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/backups/restore:
+    post:
+      tags:
+      - Backups
+      summary: Restore Backup
+      description: Restore user data from an uploaded backup ZIP.
+      operationId: restore_backup_v1_backups_restore_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+              - file
+        required: true
+      responses:
+        '200':
+          description: Restore result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Import/Export
+  # -----------------------------------------------------------------------
+  /v1/export:
+    get:
+      tags:
+      - ImportExport
+      summary: Export Bookmarks
+      description: Export user summaries in the requested format (json, csv, html).
+      operationId: export_bookmarks_v1_export_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: format
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [json, csv, html]
+          default: json
+      - name: tag
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: collection_id
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Exported file
+          content:
+            application/json:
+              schema:
+                type: string
+            text/csv:
+              schema:
+                type: string
+            text/html:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/import:
+    post:
+      tags:
+      - ImportExport
+      summary: Import Bookmarks
+      description: Import bookmarks from an uploaded file.
+      operationId: import_bookmarks_v1_import_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                options:
+                  type: string
+                  description: JSON-encoded import options
+                  default: '{}'
+              required:
+              - file
+        required: true
+      responses:
+        '201':
+          description: Import job created
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      tags:
+      - ImportExport
+      summary: List Import Jobs
+      description: List user's import jobs.
+      operationId: list_import_jobs_v1_import_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: List of import jobs
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/import/{job_id}:
+    get:
+      tags:
+      - ImportExport
+      summary: Get Import Job
+      description: Get import job status and progress.
+      operationId: get_import_job_v1_import__job_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Import job details
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+      - ImportExport
+      summary: Delete Import Job
+      description: Delete an import job.
+      operationId: delete_import_job_v1_import__job_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Import job deleted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # User Goals & Streak
+  # -----------------------------------------------------------------------
+  /v1/user/goals:
+    get:
+      tags:
+      - User
+      summary: List Reading Goals
+      description: List all reading goals for the current user.
+      operationId: list_goals_v1_user_goals_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: List of reading goals
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+      - User
+      summary: Create or Update Reading Goal
+      description: Create or update a reading goal (one per goal_type+scope per user).
+      operationId: upsert_goal_v1_user_goals_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                goal_type:
+                  type: string
+                  enum: [daily, weekly, monthly]
+                target_count:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
+                scope_type:
+                  type: string
+                  enum: [global, tag, collection]
+                  default: global
+                scope_id:
+                  type: integer
+              required:
+              - goal_type
+              - target_count
+        required: true
+      responses:
+        '200':
+          description: Goal created or updated
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/user/goals/{goal_type}:
+    delete:
+      tags:
+      - User
+      summary: Delete Global Goal by Type
+      description: Remove a global reading goal by type (legacy endpoint).
+      operationId: delete_goal_v1_user_goals__goal_type__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: goal_type
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Goal deleted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/user/goals/by-id/{goal_id}:
+    delete:
+      tags:
+      - User
+      summary: Delete Goal by ID
+      description: Remove a reading goal by its UUID.
+      operationId: delete_goal_by_id_v1_user_goals_by_id__goal_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: goal_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Goal deleted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/user/goals/progress:
+    get:
+      tags:
+      - User
+      summary: Get Goal Progress
+      description: Return each goal with current progress.
+      operationId: get_goal_progress_v1_user_goals_progress_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Goal progress list
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/user/streak:
+    get:
+      tags:
+      - User
+      summary: Get Reading Streak
+      description: Compute and return the user's reading streak data.
+      operationId: get_streak_v1_user_streak_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Streak data
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Summaries extras (highlights, reading position, feedback, export, recommendations)
+  # -----------------------------------------------------------------------
+  /v1/summaries/{summary_id}/highlights:
+    get:
+      tags:
+      - Highlights
+      summary: List Highlights
+      description: List all highlights for a summary.
+      operationId: list_highlights_v1_summaries__summary_id__highlights_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: List of highlights
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+      - Highlights
+      summary: Create Highlight
+      description: Create a highlight on a summary.
+      operationId: create_highlight_v1_summaries__summary_id__highlights_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                  minLength: 1
+                start_offset:
+                  type: integer
+                end_offset:
+                  type: integer
+                color:
+                  type: string
+                note:
+                  type: string
+              required:
+              - text
+        required: true
+      responses:
+        '201':
+          description: Highlight created
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/summaries/{summary_id}/highlights/{highlight_id}:
+    patch:
+      tags:
+      - Highlights
+      summary: Update Highlight
+      description: Update a highlight's color or note.
+      operationId: update_highlight_v1_summaries__summary_id__highlights__highlight_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: highlight_id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                color:
+                  type: string
+                note:
+                  type: string
+        required: true
+      responses:
+        '200':
+          description: Highlight updated
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+      - Highlights
+      summary: Delete Highlight
+      description: Delete a highlight.
+      operationId: delete_highlight_v1_summaries__summary_id__highlights__highlight_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: highlight_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Highlight deleted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/summaries/{summary_id}/reading-position:
+    patch:
+      tags:
+      - Summaries
+      summary: Save Reading Position
+      description: Save the reading position (scroll progress) for a summary.
+      operationId: save_reading_position_v1_summaries__summary_id__reading_position_patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                progress:
+                  type: number
+                  minimum: 0.0
+                  maximum: 1.0
+                last_read_offset:
+                  type: integer
+                  default: 0
+                  minimum: 0
+              required:
+              - progress
+        required: true
+      responses:
+        '200':
+          description: Reading position saved
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/summaries/{summary_id}/feedback:
+    post:
+      tags:
+      - Summaries
+      summary: Submit Feedback
+      description: Submit or update feedback for a summary.
+      operationId: submit_feedback_v1_summaries__summary_id__feedback_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rating:
+                  type: integer
+                issues:
+                  type: array
+                  items:
+                    type: string
+                comment:
+                  type: string
+        required: true
+      responses:
+        '200':
+          description: Feedback submitted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/summaries/{summary_id}/export:
+    get:
+      tags:
+      - Summaries
+      summary: Export Summary
+      description: Export a summary as PDF, Markdown, or HTML.
+      operationId: export_summary_v1_summaries__summary_id__export_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: format
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [pdf, md, html]
+          default: pdf
+      responses:
+        '200':
+          description: Exported file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            text/markdown:
+              schema:
+                type: string
+            text/html:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/summaries/recommendations:
+    get:
+      tags:
+      - Summaries
+      summary: Get Recommendations
+      description: Get personalized summary recommendations based on reading history.
+      operationId: get_recommendations_v1_summaries_recommendations_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 50
+      responses:
+        '200':
+          description: List of recommended summaries
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Articles aliases (summaries router mounted at /v1/articles)
+  # -----------------------------------------------------------------------
+  /v1/articles/{summary_id}/reading-position:
+    patch:
+      tags:
+      - Articles
+      summary: Save Reading Position (alias)
+      description: 'Alias for PATCH /v1/summaries/{summary_id}/reading-position.'
+      operationId: save_reading_position_v1_articles__summary_id__reading_position_patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                progress:
+                  type: number
+                  minimum: 0.0
+                  maximum: 1.0
+                last_read_offset:
+                  type: integer
+                  default: 0
+                  minimum: 0
+              required:
+              - progress
+        required: true
+      responses:
+        '200':
+          description: Reading position saved
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/articles/{summary_id}/feedback:
+    post:
+      tags:
+      - Articles
+      summary: Submit Feedback (alias)
+      description: 'Alias for POST /v1/summaries/{summary_id}/feedback.'
+      operationId: submit_feedback_v1_articles__summary_id__feedback_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rating:
+                  type: integer
+                issues:
+                  type: array
+                  items:
+                    type: string
+                comment:
+                  type: string
+        required: true
+      responses:
+        '200':
+          description: Feedback submitted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/articles/{summary_id}/export:
+    get:
+      tags:
+      - Articles
+      summary: Export Article (alias)
+      description: 'Alias for GET /v1/summaries/{summary_id}/export.'
+      operationId: export_summary_v1_articles__summary_id__export_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: summary_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: format
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [pdf, md, html]
+          default: pdf
+      responses:
+        '200':
+          description: Exported file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            text/markdown:
+              schema:
+                type: string
+            text/html:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/articles/recommendations:
+    get:
+      tags:
+      - Articles
+      summary: Get Recommendations (alias)
+      description: 'Alias for GET /v1/summaries/recommendations.'
+      operationId: get_recommendations_v1_articles_recommendations_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+          minimum: 1
+          maximum: 50
+      responses:
+        '200':
+          description: List of recommended summaries
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Custom Digests
+  # -----------------------------------------------------------------------
+  /v1/digests/custom:
+    get:
+      tags:
+      - Digests
+      summary: List Custom Digests
+      description: List all custom digests for the current user, newest first.
+      operationId: list_custom_digests_v1_digests_custom_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: List of custom digests
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+      - Digests
+      summary: Create Custom Digest
+      description: Create a custom digest from a list of summary IDs.
+      operationId: create_custom_digest_v1_digests_custom_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                summary_ids:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                format:
+                  type: string
+                  default: markdown
+                title:
+                  type: string
+              required:
+              - summary_ids
+        required: true
+      responses:
+        '200':
+          description: Custom digest created
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/digests/custom/{digest_id}:
+    get:
+      tags:
+      - Digests
+      summary: Get Custom Digest
+      description: Get a specific custom digest by ID.
+      operationId: get_custom_digest_v1_digests_custom__digest_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: digest_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Custom digest details
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Auth extras (session revocation)
+  # -----------------------------------------------------------------------
+  /v1/auth/sessions/{session_id}:
+    delete:
+      tags:
+      - Authentication
+      summary: Revoke Session
+      description: Revoke a specific session by ID.
+      operationId: revoke_session_v1_auth_sessions__session_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Session revoked
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Collections extras (smart collection evaluate)
+  # -----------------------------------------------------------------------
+  /v1/collections/{collection_id}/evaluate:
+    post:
+      tags:
+      - Collections
+      summary: Evaluate Smart Collection
+      description: Force re-evaluation of a smart collection's items.
+      operationId: evaluate_smart_collection_v1_collections__collection_id__evaluate_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: collection_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Evaluation result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Admin
+  # -----------------------------------------------------------------------
+  /v1/admin/users:
+    get:
+      tags:
+      - Admin
+      summary: List Users
+      description: List all users with per-user summary/request/tag/collection counts.
+      operationId: list_users_v1_admin_users_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: User list with stats
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/admin/health/content:
+    get:
+      tags:
+      - Admin
+      summary: Content Health Report
+      description: 'Content pipeline health: totals, failure breakdown, recent errors.'
+      operationId: content_health_v1_admin_health_content_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Content health report
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/admin/jobs:
+    get:
+      tags:
+      - Admin
+      summary: Background Job Status
+      description: Pipeline and import job status overview.
+      operationId: job_status_v1_admin_jobs_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Job status overview
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/admin/metrics:
+    get:
+      tags:
+      - Admin
+      summary: System Metrics
+      description: 'Database, LLM, and scraper metrics.'
+      operationId: system_metrics_v1_admin_metrics_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/admin/audit-log:
+    get:
+      tags:
+      - Admin
+      summary: Audit Log
+      description: Paginated, filterable audit log.
+      operationId: audit_log_v1_admin_audit_log_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: action
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Filter by event name
+      - name: user_id
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: Filter by user_id in details
+      - name: since
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO datetime lower bound
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+          maximum: 500
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Paginated audit log entries
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  # -----------------------------------------------------------------------
+  # Quick Save
+  # -----------------------------------------------------------------------
+  /v1/quick-save:
+    post:
+      tags:
+      - QuickSave
+      summary: Quick Save URL
+      description: Save a page from the browser extension with optional summarization and tags.
+      operationId: quick_save_v1_quick_save_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  maxLength: 2048
+                title:
+                  type: string
+                selected_text:
+                  type: string
+                tag_names:
+                  type: array
+                  items:
+                    type: string
+                summarize:
+                  type: boolean
+                  default: true
+              required:
+              - url
+        required: true
+      responses:
+        '200':
+          description: Quick save result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 components:
   securitySchemes:
     HTTPBearer:
@@ -5970,11 +8365,10 @@ components:
       properties:
         refresh_token:
           type: string
+          nullable: true
       type: object
-      required:
-      - refresh_token
       title: RefreshTokenRequest
-      description: Request body for token refresh.
+      description: Request body for token refresh. The refresh_token field is optional when using httpOnly cookie transport.
     SubmitForwardRequest:
       properties:
         type:
