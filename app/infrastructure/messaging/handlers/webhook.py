@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
+from app.domain.services.webhook_service import is_webhook_url_safe
 
 if TYPE_CHECKING:
     from app.domain.events.request_events import RequestCompleted, RequestFailed
@@ -20,13 +21,25 @@ class WebhookEventHandler:
         self._webhook_client = webhook_client
         self._webhook_url = webhook_url
 
+    def _check_url_safe(self, event_type: str) -> bool:
+        """Return True if the configured webhook URL passes SSRF checks."""
+        if not self._webhook_url:
+            return False
+        safe, err = is_webhook_url_safe(self._webhook_url)
+        if not safe:
+            logger.warning(
+                "webhook_blocked_ssrf",
+                extra={"event_type": event_type, "reason": err},
+            )
+        return safe
+
     async def on_summary_created(self, event: SummaryCreated) -> None:
         logger.debug(
             "sending_summary_created_webhook",
             extra={"summary_id": event.summary_id, "request_id": event.request_id},
         )
 
-        if self._webhook_client and self._webhook_url:
+        if self._webhook_client and self._webhook_url and self._check_url_safe("summary.created"):
             try:
                 payload = {
                     "event_type": "summary.created",
@@ -70,7 +83,7 @@ class WebhookEventHandler:
             extra={"request_id": event.request_id, "summary_id": event.summary_id},
         )
 
-        if self._webhook_client and self._webhook_url:
+        if self._webhook_client and self._webhook_url and self._check_url_safe("request.completed"):
             try:
                 payload = {
                     "event_type": "request.completed",
@@ -109,7 +122,7 @@ class WebhookEventHandler:
             extra={"request_id": event.request_id, "error_message": event.error_message},
         )
 
-        if self._webhook_client and self._webhook_url:
+        if self._webhook_client and self._webhook_url and self._check_url_safe("request.failed"):
             try:
                 payload = {
                     "event_type": "request.failed",

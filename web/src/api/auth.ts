@@ -57,6 +57,7 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
 export async function deleteAccount(): Promise<void> {
   await apiRequest<Record<string, never>>("/v1/auth/me", {
     method: "DELETE",
+    headers: { "X-Confirm-Delete": "DELETE-MY-ACCOUNT" },
   });
 }
 

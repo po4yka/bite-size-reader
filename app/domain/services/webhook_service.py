@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from ipaddress import ip_address
 from urllib.parse import urlparse
 
+from app.api.routers.proxy import BLOCKED_NETWORKS, _resolve_host_ips
+
 
 def generate_webhook_secret() -> str:
     """Generate a 32-byte hex secret for HMAC signing."""
@@ -26,10 +28,56 @@ def verify_signature(secret: str, payload_bytes: bytes, signature: str) -> bool:
     return hmac.compare_digest(expected, signature)
 
 
+def is_webhook_url_safe(url: str) -> tuple[bool, str | None]:
+    """Check if a webhook URL resolves to a public (non-internal) IP.
+
+    Performs DNS resolution and checks all resolved addresses against
+    BLOCKED_NETWORKS. Returns ``(is_safe, error_message_or_none)``.
+    This should be called both at registration time and before each delivery
+    to guard against DNS rebinding attacks.
+    """
+    try:
+        hostname = urlparse(url).hostname
+    except Exception:
+        return False, "Malformed URL"
+
+    if not hostname:
+        return False, "Hostname is empty"
+
+    hostname_lower = hostname.lower()
+    if hostname_lower in ("localhost", "localhost.localdomain"):
+        return False, "Localhost is not allowed for webhook delivery"
+
+    # Skip DNS resolution for IP literals already validated elsewhere
+    try:
+        addr = ip_address(hostname)
+        if any(addr in network for network in BLOCKED_NETWORKS):
+            return False, "Private or reserved IP addresses are not allowed"
+        return True, None
+    except ValueError:
+        pass  # Not an IP literal; resolve via DNS
+
+    try:
+        resolved_ips = _resolve_host_ips(hostname)
+    except Exception:
+        return False, f"DNS resolution failed for {hostname}"
+
+    if not resolved_ips:
+        return False, f"No DNS records found for {hostname}"
+
+    for resolved in resolved_ips:
+        ip_obj = ip_address(resolved)
+        if any(ip_obj in network for network in BLOCKED_NETWORKS):
+            return False, f"Hostname resolves to a private/reserved IP ({resolved})"
+
+    return True, None
+
+
 def validate_webhook_url(url: str) -> tuple[bool, str | None]:
     """Validate webhook URL.
 
-    Rejects non-HTTPS (except localhost), empty hostnames, and private IPs.
+    Rejects non-HTTPS (except localhost), empty hostnames, private IPs,
+    and hostnames that resolve to internal networks (SSRF protection).
     Returns ``(is_valid, error_message_or_none)``.
     """
     try:
@@ -64,6 +112,11 @@ def validate_webhook_url(url: str) -> tuple[bool, str | None]:
     except ValueError:
         # Not an IP literal -- that's fine, it's a regular hostname
         pass
+
+    # DNS resolution SSRF check: resolve hostname and verify all IPs are public
+    safe, err = is_webhook_url_safe(url)
+    if not safe:
+        return False, err
 
     return True, None
 

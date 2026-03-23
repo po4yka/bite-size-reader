@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import Header, HTTPException
+
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import ProcessingError
 from app.api.models.responses import UserInfo, success_response
@@ -49,9 +51,28 @@ async def get_current_user_info(user: dict[str, Any] = Depends(get_current_user)
     )
 
 
+_CONFIRM_DELETE_VALUE = "DELETE-MY-ACCOUNT"
+
+
 @router.delete("/me")
-async def delete_account(user: dict[str, Any] = Depends(get_current_user)):
-    """Delete the current user account and all associated data."""
+async def delete_account(
+    user: dict[str, Any] = Depends(get_current_user),
+    x_confirm_delete: str | None = Header(None),
+):
+    """Delete the current user account and all associated data.
+
+    Requires the ``X-Confirm-Delete: DELETE-MY-ACCOUNT`` header as an
+    explicit confirmation step to prevent accidental or CSRF-driven deletion.
+    """
+    if x_confirm_delete != _CONFIRM_DELETE_VALUE:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Account deletion requires the X-Confirm-Delete header "
+                f"set to '{_CONFIRM_DELETE_VALUE}'."
+            ),
+        )
+
     user_id = user["user_id"]
     await AuthService.ensure_user(user_id)
 

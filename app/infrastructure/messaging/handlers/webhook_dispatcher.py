@@ -15,7 +15,11 @@ import httpx
 
 from app.core.logging_utils import get_logger
 from app.db.models import Request
-from app.domain.services.webhook_service import build_webhook_payload, sign_payload
+from app.domain.services.webhook_service import (
+    build_webhook_payload,
+    is_webhook_url_safe,
+    sign_payload,
+)
 
 if TYPE_CHECKING:
     from app.domain.events.request_events import RequestCompleted, RequestFailed
@@ -97,6 +101,19 @@ class WebhookDispatcher:
         sub_id: int = sub["id"]
         url: str = sub["url"]
         secret: str = sub["secret"]
+
+        # Pre-delivery SSRF check (guards against DNS rebinding)
+        url_safe, ssrf_error = is_webhook_url_safe(url)
+        if not url_safe:
+            logger.warning(
+                "webhook_delivery_blocked_ssrf",
+                extra={
+                    "subscription_id": sub_id,
+                    "event_type": event_type,
+                    "reason": ssrf_error,
+                },
+            )
+            return
 
         payload = build_webhook_payload(event_type, data)
         payload_bytes = json.dumps(payload, default=str).encode()

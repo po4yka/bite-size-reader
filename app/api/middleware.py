@@ -132,6 +132,8 @@ def _resolve_limit_from_bucket(cfg: AppConfig, bucket: str | None) -> int:
         return limits.requests_limit
     if bucket == "search":
         return limits.search_limit
+    if bucket == "auth":
+        return limits.auth_limit
     return limits.default_limit
 
 
@@ -365,6 +367,8 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
         bucket = "search"
     elif "/requests" in path:
         bucket = "requests"
+    elif "/auth" in path:
+        bucket = "auth"
 
     request.state.interface_route_key = path
     request.state.interface_route_requires_auth = True

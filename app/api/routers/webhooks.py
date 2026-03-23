@@ -24,6 +24,7 @@ from app.core.logging_utils import get_logger
 from app.domain.services.webhook_service import (
     build_webhook_payload,
     generate_webhook_secret,
+    is_webhook_url_safe,
     sign_payload,
     validate_webhook_url,
 )
@@ -259,6 +260,15 @@ async def send_test_webhook(
 
     payload_bytes = orjson.dumps(payload)
     signature = sign_payload(sub["secret"], payload_bytes)
+
+    # Pre-delivery SSRF check (guards against DNS rebinding since registration)
+    url_safe, ssrf_error = is_webhook_url_safe(sub["url"])
+    if not url_safe:
+        raise APIException(
+            message=f"Webhook URL failed SSRF safety check: {ssrf_error}",
+            error_code=ErrorCode.VALIDATION_ERROR,
+            status_code=400,
+        )
 
     start_ms = time.monotonic_ns() // 1_000_000
     response_status: int | None = None

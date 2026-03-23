@@ -25,6 +25,7 @@ class ApiLimitsConfig(BaseModel):
     summaries_limit: int = Field(default=200, validation_alias="API_RATE_LIMIT_SUMMARIES")
     requests_limit: int = Field(default=10, validation_alias="API_RATE_LIMIT_REQUESTS")
     search_limit: int = Field(default=50, validation_alias="API_RATE_LIMIT_SEARCH")
+    auth_limit: int = Field(default=20, validation_alias="API_RATE_LIMIT_AUTH")
 
     @field_validator("window_seconds", mode="before")
     @classmethod
@@ -58,6 +59,7 @@ class ApiLimitsConfig(BaseModel):
         "summaries_limit",
         "requests_limit",
         "search_limit",
+        "auth_limit",
         mode="before",
     )
     @classmethod
