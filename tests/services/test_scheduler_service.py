@@ -10,12 +10,16 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 
-def _build_cfg(*, digest_enabled: bool = True, allowed_user_ids=(123,)):
+def _build_cfg(*, digest_enabled: bool = True, rss_enabled: bool = False, allowed_user_ids=(123,)):
     return SimpleNamespace(
         digest=SimpleNamespace(
             enabled=digest_enabled,
             digest_times=["09:30", "18:45"],
             timezone="UTC",
+        ),
+        rss=SimpleNamespace(
+            enabled=rss_enabled,
+            poll_interval_minutes=60,
         ),
         telegram=SimpleNamespace(
             allowed_user_ids=list(allowed_user_ids),
@@ -58,8 +62,9 @@ def _load_scheduler_module(monkeypatch):
             return entry["job"] if entry else None
 
     class FakeIntervalTrigger:
-        def __init__(self, *, hours: int) -> None:
+        def __init__(self, *, hours: int = 0, minutes: int = 0) -> None:
             self.hours = hours
+            self.minutes = minutes
 
     class FakeCronTrigger:
         def __init__(self, *, hour: int, minute: int, timezone: str) -> None:

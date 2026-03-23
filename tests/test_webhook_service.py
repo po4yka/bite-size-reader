@@ -1,4 +1,6 @@
 # ruff: noqa: RUF059
+from unittest.mock import patch
+
 import pytest
 
 from app.domain.services.webhook_service import (
@@ -74,7 +76,11 @@ class TestValidateWebhookUrl:
         ],
     )
     def test_valid_urls(self, url):
-        valid, error = validate_webhook_url(url)
+        with patch(
+            "app.domain.services.webhook_service.is_webhook_url_safe",
+            return_value=(True, None),
+        ):
+            valid, error = validate_webhook_url(url)
         assert valid is True
         assert error is None
 

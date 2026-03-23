@@ -132,11 +132,22 @@ class TestFeedResultDataclass:
         assert result.entries == []
 
 
+def _patch_ssrf():
+    """Bypass SSRF validation in tests -- example.com is not resolvable in CI."""
+    return patch(
+        "app.adapters.rss.feed_fetcher.is_url_safe",
+        return_value=(True, None),
+    )
+
+
 class TestFetchFeed:
     def test_304_not_modified(self) -> None:
         mock_resp = MagicMock()
         mock_resp.status_code = 304
-        with patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp):
+        with (
+            _patch_ssrf(),
+            patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp),
+        ):
             result = fetch_feed("https://example.com/feed.xml", etag='"abc"')
             assert result.not_modified is True
             assert result.entries == []
@@ -170,6 +181,7 @@ class TestFetchFeed:
         )
 
         with (
+            _patch_ssrf(),
             patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp),
             patch("feedparser.parse", return_value=parsed),
         ):
@@ -203,6 +215,7 @@ class TestFetchFeed:
         )
 
         with (
+            _patch_ssrf(),
             patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp),
             patch("feedparser.parse", return_value=parsed),
         ):
@@ -218,7 +231,10 @@ class TestFetchFeed:
         mock_resp.status_code = 404
         mock_resp.raise_for_status.side_effect = Exception("Not Found")
 
-        with patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp):
+        with (
+            _patch_ssrf(),
+            patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp),
+        ):
             with pytest.raises(Exception, match="Not Found"):
                 fetch_feed("https://example.com/bad-feed")
 
@@ -226,7 +242,10 @@ class TestFetchFeed:
         mock_resp = MagicMock()
         mock_resp.status_code = 304
 
-        with patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp) as mock_get:
+        with (
+            _patch_ssrf(),
+            patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp) as mock_get,
+        ):
             fetch_feed(
                 "https://example.com/feed.xml",
                 etag='"abc"',
@@ -241,7 +260,10 @@ class TestFetchFeed:
         mock_resp = MagicMock()
         mock_resp.status_code = 304
 
-        with patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp) as mock_get:
+        with (
+            _patch_ssrf(),
+            patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp) as mock_get,
+        ):
             fetch_feed("https://example.com/feed.xml")
             call_kwargs = mock_get.call_args
             headers = call_kwargs.kwargs.get("headers") or call_kwargs[1].get("headers", {})
@@ -267,6 +289,7 @@ class TestFetchFeed:
         )
 
         with (
+            _patch_ssrf(),
             patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp),
             patch("feedparser.parse", return_value=parsed),
         ):
@@ -295,6 +318,7 @@ class TestFetchFeed:
         )
 
         with (
+            _patch_ssrf(),
             patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp),
             patch("feedparser.parse", return_value=parsed),
         ):
@@ -323,6 +347,7 @@ class TestFetchFeed:
         )
 
         with (
+            _patch_ssrf(),
             patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp),
             patch("feedparser.parse", return_value=parsed),
         ):
@@ -333,8 +358,11 @@ class TestFetchFeed:
         mock_resp = MagicMock()
         mock_resp.status_code = 304
 
-        with patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp) as mock_get:
+        with (
+            _patch_ssrf(),
+            patch("app.adapters.rss.feed_fetcher.httpx.get", return_value=mock_resp) as mock_get,
+        ):
             fetch_feed("https://example.com/feed.xml", timeout=15.0)
             call_kwargs = mock_get.call_args
-            assert call_kwargs.kwargs.get("follow_redirects") is True
+            assert call_kwargs.kwargs.get("follow_redirects") is False
             assert call_kwargs.kwargs.get("timeout") == 15.0

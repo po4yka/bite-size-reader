@@ -78,10 +78,12 @@ def validate_webhook_url(url: str) -> tuple[bool, str | None]:
         # Not an IP literal -- that's fine, it's a regular hostname
         pass
 
-    # DNS resolution SSRF check: resolve hostname and verify all IPs are public
-    safe, err = is_webhook_url_safe(url)
-    if not safe:
-        return False, err
+    # DNS resolution SSRF check: resolve hostname and verify all IPs are public.
+    # Skip for loopback addresses -- already validated above.
+    if not is_localhost:
+        safe, err = is_webhook_url_safe(url)
+        if not safe:
+            return False, err
 
     return True, None
 

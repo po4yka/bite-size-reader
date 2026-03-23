@@ -17,6 +17,7 @@ class TestNotificationFormatterCancellation(unittest.IsolatedAsyncioTestCase):
 
         response_sender = MagicMock()
         response_sender.safe_reply = safe_reply or AsyncMock()
+        response_sender.send_chat_action = safe_reply or AsyncMock()
         data_formatter = MagicMock()
         data_formatter.format_firecrawl_options = MagicMock(return_value=None)
         return NotificationFormatterImpl(response_sender, data_formatter)

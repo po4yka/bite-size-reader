@@ -56,6 +56,7 @@ class InteractiveSummaryServiceRequestTests(unittest.IsolatedAsyncioTestCase):
                 llm_ttl_seconds=7_200,
             ),
             attachment=SimpleNamespace(vision_model="vision-model"),
+            model_routing=SimpleNamespace(enabled=False, fallback_models=()),
         )
 
         self.db = MagicMock()

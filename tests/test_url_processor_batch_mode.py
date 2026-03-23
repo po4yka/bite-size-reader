@@ -50,6 +50,7 @@ def _make_processor(
     proc: Any = URLProcessor.__new__(URLProcessor)
     cfg = MagicMock()
     cfg.openrouter.model = "test-model"
+    cfg.model_routing.enabled = False
     proc.cfg = cfg
     proc.response_formatter = AsyncMock()
     proc.cached_summary_responder = MagicMock()

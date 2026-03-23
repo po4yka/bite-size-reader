@@ -41,6 +41,7 @@ def _dummy_cfg() -> SimpleNamespace:
             llm_ttl_seconds=7_200,
         ),
         attachment=SimpleNamespace(vision_model="vision-model"),
+        model_routing=SimpleNamespace(enabled=False, long_context_threshold=50000),
     )
 
 
