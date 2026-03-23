@@ -175,50 +175,37 @@ def _validate_url_input_basics(url: str) -> None:
 
 
 def _validate_hostname_security(hostname: str) -> None:
+    from app.security.ssrf import is_ip_blocked
+
     hostname_lower = hostname.lower()
     if hostname_lower in ("localhost", "localhost.localdomain"):
         msg = "Localhost access not allowed"
         raise ValueError(msg)
 
-    ip_obj = _parse_hostname_ip(hostname, hostname_lower)
-    if ip_obj is not None:
-        _validate_blocked_ip(ip_obj)
-        return
-
-    _validate_suspicious_domain_pattern(hostname_lower)
-    resolved = _resolve_hostname_to_addrs(hostname, hostname_lower)
-    _validate_resolved_addresses(resolved, hostname_lower)
-
-
-def _parse_hostname_ip(hostname: str, hostname_lower: str) -> object | None:
+    # Fast path: hostname is an IP literal.
     import ipaddress
 
     try:
-        return ipaddress.ip_address(hostname)
+        ip_obj = ipaddress.ip_address(hostname)
     except ValueError:
-        logger.debug("url_hostname_not_ip_address", extra={"hostname": hostname_lower})
-        return None
+        ip_obj = None
 
+    if ip_obj is not None:
+        if is_ip_blocked(str(ip_obj)):
+            msg = f"Blocked IP address: {ip_obj}"
+            raise ValueError(msg)
+        return
 
-def _validate_blocked_ip(ip_obj: object) -> None:
-    if getattr(ip_obj, "is_private", False):
-        msg = f"Private IP address not allowed: {ip_obj}"
-        raise ValueError(msg)
-    if getattr(ip_obj, "is_loopback", False):
-        msg = f"Loopback address not allowed: {ip_obj}"
-        raise ValueError(msg)
-    if getattr(ip_obj, "is_link_local", False):
-        msg = f"Link-local address not allowed: {ip_obj}"
-        raise ValueError(msg)
-    if getattr(ip_obj, "is_multicast", False):
-        msg = f"Multicast address not allowed: {ip_obj}"
-        raise ValueError(msg)
-    if getattr(ip_obj, "is_reserved", False):
-        msg = f"Reserved IP address not allowed: {ip_obj}"
-        raise ValueError(msg)
-    if getattr(ip_obj, "is_unspecified", False):
-        msg = f"Unspecified address not allowed: {ip_obj}"
-        raise ValueError(msg)
+    # Reject suspicious internal-only domain suffixes.
+    _validate_suspicious_domain_pattern(hostname_lower)
+
+    # Resolve via DNS (with optional per-task cache) and check each address.
+    resolved_ips = _resolve_hostname_to_addrs(hostname, hostname_lower)
+    for info in resolved_ips:
+        addr_str = str(info[4][0])
+        if is_ip_blocked(addr_str):
+            msg = f"Hostname resolves to blocked IP address: {addr_str}"
+            raise ValueError(msg)
 
 
 def _validate_suspicious_domain_pattern(hostname_lower: str) -> None:
@@ -230,6 +217,7 @@ def _validate_suspicious_domain_pattern(hostname_lower: str) -> None:
 
 
 def _resolve_hostname_to_addrs(hostname: str, hostname_lower: str) -> list:
+    """Resolve hostname, respecting the per-task DNS cache when active."""
     import socket
 
     cache = _dns_cache.get()
@@ -243,30 +231,6 @@ def _resolve_hostname_to_addrs(hostname: str, hostname_lower: str) -> list:
     if cache is not None:
         cache[hostname_lower] = resolved
     return resolved
-
-
-def _validate_resolved_addresses(resolved: list, hostname_lower: str) -> None:
-    import ipaddress
-
-    for info in resolved:
-        try:
-            ip_candidate = ipaddress.ip_address(info[4][0])
-        except ValueError:
-            logger.debug(
-                "url_resolved_ip_parse_failed",
-                extra={"hostname": hostname_lower, "candidate": str(info[4][0])},
-            )
-            continue
-        if (
-            ip_candidate.is_private
-            or ip_candidate.is_loopback
-            or ip_candidate.is_link_local
-            or ip_candidate.is_multicast
-            or ip_candidate.is_reserved
-            or ip_candidate.is_unspecified
-        ):
-            msg = f"Hostname resolves to blocked IP address: {ip_candidate}"
-            raise ValueError(msg)
 
 
 def normalize_url(url: str) -> str:

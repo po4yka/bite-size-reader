@@ -6,6 +6,15 @@ from httpx import RequestError, Response
 from app.api.exceptions import ExternalAPIError, ResourceNotFoundError, ValidationError
 from app.api.routers.proxy import proxy_image
 
+_SAFE_URL = (True, None)
+
+
+@pytest.fixture(autouse=True)
+def _bypass_ssrf_check():
+    """Bypass SSRF DNS resolution in proxy tests -- tested separately in test_ssrf.py."""
+    with patch("app.api.routers.proxy.is_url_safe", return_value=_SAFE_URL):
+        yield
+
 
 async def _aiter_bytes(chunks: list[bytes]):
     for chunk in chunks:

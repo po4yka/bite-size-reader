@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -168,8 +167,10 @@ class AccessController:
             )
             return False
 
-        with contextlib.suppress(Exception):
+        try:
             self._audit("WARN", "access_denied", {"uid": uid, "cid": correlation_id})
+        except Exception:
+            logger.warning("audit_callback_failed", extra={"uid": uid, "cid": correlation_id})
 
         if await self._maybe_notify_denied(
             uid, message, current_time, correlation_id=correlation_id
@@ -202,9 +203,13 @@ class AccessController:
         """Send block notification at most once per block window."""
         deadline = self._block_notified_until.get(uid, 0.0)
         if force or current_time >= deadline:
-            with contextlib.suppress(Exception):
+            try:
                 await self.response_formatter.send_error_notification(
                     message, "access_blocked", correlation_id, details=message_text
+                )
+            except Exception:
+                logger.warning(
+                    "block_notification_failed", extra={"uid": uid, "cid": correlation_id}
                 )
             self._block_notified_until[uid] = current_time + self.BLOCK_DURATION_SECONDS
 
@@ -216,9 +221,11 @@ class AccessController:
         if current_time < deadline:
             return False
 
-        with contextlib.suppress(Exception):
+        try:
             await self.response_formatter.send_error_notification(
                 message, "access_denied", correlation_id, details=str(uid)
             )
+        except Exception:
+            logger.warning("deny_notification_failed", extra={"uid": uid, "cid": correlation_id})
         self._deny_notified_until[uid] = current_time + self.DENY_NOTIFICATION_COOLDOWN_SECONDS
         return True

@@ -693,7 +693,8 @@ def _create_adaptive_timeout_service(
     except Exception as exc:
         logger.warning(
             "adaptive_timeout_service_init_failed",
-            extra={"error": str(exc)},
+            extra={"error": str(exc), "error_type": type(exc).__name__},
+            exc_info=True,
         )
         return None
 
@@ -726,5 +727,6 @@ def _wire_related_reads(
     except Exception as exc:
         logger.warning(
             "related_reads_service_init_failed",
-            extra={"error": str(exc)},
+            extra={"error": str(exc), "error_type": type(exc).__name__},
+            exc_info=True,
         )

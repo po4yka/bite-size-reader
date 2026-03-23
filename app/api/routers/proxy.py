@@ -2,10 +2,6 @@
 Proxy endpoints for external resources.
 """
 
-import socket
-from ipaddress import ip_address, ip_network
-from urllib.parse import urlparse
-
 import httpx
 from fastapi import APIRouter, Depends, Query
 from starlette.responses import Response
@@ -19,32 +15,12 @@ from app.api.exceptions import (
 )
 from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger, log_exception
+from app.security.ssrf import is_url_safe
 
 logger = get_logger(__name__)
 router = APIRouter()
 
 _MAX_PROXY_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB
-
-# Private/internal IP ranges that should be blocked to prevent SSRF
-BLOCKED_NETWORKS = [
-    ip_network("10.0.0.0/8"),  # Private Class A
-    ip_network("172.16.0.0/12"),  # Private Class B
-    ip_network("192.168.0.0/16"),  # Private Class C
-    ip_network("127.0.0.0/8"),  # Loopback
-    ip_network("169.254.0.0/16"),  # Link-local / AWS metadata
-    ip_network("0.0.0.0/8"),  # Current network
-    ip_network("100.64.0.0/10"),  # Carrier-grade NAT
-    ip_network("192.0.0.0/24"),  # IETF Protocol Assignments
-    ip_network("192.0.2.0/24"),  # TEST-NET-1
-    ip_network("198.51.100.0/24"),  # TEST-NET-2
-    ip_network("203.0.113.0/24"),  # TEST-NET-3
-    ip_network("224.0.0.0/4"),  # Multicast
-    ip_network("240.0.0.0/4"),  # Reserved
-    ip_network("255.255.255.255/32"),  # Broadcast
-    ip_network("::1/128"),  # IPv6 loopback
-    ip_network("fc00::/7"),  # IPv6 private
-    ip_network("fe80::/10"),  # IPv6 link-local
-]
 
 
 async def _read_limited_content(response: httpx.Response, max_bytes: int) -> bytes:
@@ -61,45 +37,6 @@ async def _read_limited_content(response: httpx.Response, max_bytes: int) -> byt
             raise ValidationError(f"Image too large (max {max_bytes // (1024 * 1024)} MB)")
         chunks.append(chunk)
     return b"".join(chunks)
-
-
-def _resolve_host_ips(hostname: str) -> list[str]:
-    """Resolve hostname to IP addresses (IPv4/IPv6)."""
-    addresses: list[str] = []
-    for info in socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP):
-        addr = str(info[4][0])
-        if addr not in addresses:
-            addresses.append(addr)
-    return addresses
-
-
-def _is_url_safe(url: str) -> bool:
-    """
-    Check if URL resolves to a public IP address.
-
-    Returns False for private networks, localhost, and cloud metadata endpoints.
-    """
-    try:
-        hostname = urlparse(url).hostname
-        if not hostname:
-            return False
-
-        if hostname.lower() in ("localhost", "localhost.localdomain"):
-            return False
-
-        # Resolve hostname to IPs (IPv4/IPv6) and check against blocked networks
-        resolved_ips = _resolve_host_ips(hostname)
-        if not resolved_ips:
-            return False
-
-        for resolved in resolved_ips:
-            ip_obj = ip_address(resolved)
-            if any(ip_obj in network for network in BLOCKED_NETWORKS):
-                return False
-        return True
-    except (socket.gaierror, ValueError, OSError):
-        # DNS resolution failed or invalid IP - block for safety
-        return False
 
 
 @router.get("/image")
@@ -128,8 +65,11 @@ async def proxy_image(
             current_url = url
             for _ in range(max_redirects + 1):
                 # SSRF protection: block requests to internal/private networks
-                if not _is_url_safe(current_url):
-                    logger.warning("proxy_blocked_ssrf", extra={"url": current_url})
+                safe, reason = is_url_safe(current_url)
+                if not safe:
+                    logger.warning(
+                        "proxy_blocked_ssrf", extra={"url": current_url, "reason": reason}
+                    )
                     raise AuthorizationError("URL resolves to blocked address")
 
                 req = client.build_request("GET", current_url, headers=headers)

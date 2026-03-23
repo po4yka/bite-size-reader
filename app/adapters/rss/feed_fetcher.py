@@ -8,35 +8,21 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.api.routers.proxy import BLOCKED_NETWORKS, _resolve_host_ips
 from app.core.logging_utils import get_logger
+from app.security.ssrf import is_url_safe
 
 logger = get_logger(__name__)
 
 
 def _validate_feed_url(url: str) -> None:
     """Validate that *url* points to a public host. Raises ``ValueError`` on failure."""
-    from ipaddress import ip_address
-
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         raise ValueError(f"Blocked URL scheme: {parsed.scheme}")
 
-    hostname = parsed.hostname
-    if not hostname:
-        raise ValueError("Missing hostname in feed URL")
-
-    if hostname.lower() in ("localhost", "localhost.localdomain"):
-        raise ValueError("Feed URL resolves to localhost")
-
-    resolved_ips = _resolve_host_ips(hostname)
-    if not resolved_ips:
-        raise ValueError(f"Could not resolve hostname: {hostname}")
-
-    for resolved in resolved_ips:
-        ip_obj = ip_address(resolved)
-        if any(ip_obj in network for network in BLOCKED_NETWORKS):
-            raise ValueError(f"Feed URL resolves to blocked address: {resolved}")
+    safe, reason = is_url_safe(url)
+    if not safe:
+        raise ValueError(f"Feed URL blocked: {reason}")
 
 
 @dataclass
