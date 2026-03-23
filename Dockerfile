@@ -44,6 +44,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 FROM node:25-alpine AS web-builder
 
+ARG VITE_TELEGRAM_BOT_USERNAME=""
+ENV VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
+
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci
