@@ -304,7 +304,7 @@ peewee==4.0.0
     # via bite-size-reader
 pillow==12.1.1
     # via weasyprint
-posthog==5.4.0
+posthog==7.9.12
     # via chromadb
 preshed==3.0.12
     # via
