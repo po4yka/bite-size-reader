@@ -4,12 +4,39 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 import httpx
 
+from app.api.routers.proxy import BLOCKED_NETWORKS, _resolve_host_ips
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
+
+
+def _validate_feed_url(url: str) -> None:
+    """Validate that *url* points to a public host. Raises ``ValueError`` on failure."""
+    from ipaddress import ip_address
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Blocked URL scheme: {parsed.scheme}")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Missing hostname in feed URL")
+
+    if hostname.lower() in ("localhost", "localhost.localdomain"):
+        raise ValueError("Feed URL resolves to localhost")
+
+    resolved_ips = _resolve_host_ips(hostname)
+    if not resolved_ips:
+        raise ValueError(f"Could not resolve hostname: {hostname}")
+
+    for resolved in resolved_ips:
+        ip_obj = ip_address(resolved)
+        if any(ip_obj in network for network in BLOCKED_NETWORKS):
+            raise ValueError(f"Feed URL resolves to blocked address: {resolved}")
 
 
 @dataclass
@@ -45,13 +72,16 @@ def fetch_feed(
     Uses conditional headers (ETag, Last-Modified) to avoid re-downloading unchanged feeds.
     Returns FeedResult with not_modified=True if server returns 304.
     """
+    # SSRF protection: block requests to internal/private networks
+    _validate_feed_url(url)
+
     headers: dict[str, str] = {"User-Agent": "BSR-FeedFetcher/1.0"}
     if etag:
         headers["If-None-Match"] = etag
     if last_modified:
         headers["If-Modified-Since"] = last_modified
 
-    resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=True)
+    resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=False)
 
     if resp.status_code == 304:
         return FeedResult(not_modified=True)

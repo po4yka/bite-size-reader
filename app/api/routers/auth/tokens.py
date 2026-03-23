@@ -54,6 +54,7 @@ def _load_secret_key() -> str:
 # JWT configuration
 _SECRET_KEY: str | None = None
 ALGORITHM = "HS256"
+_allowlist_empty_warned = False
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
@@ -217,6 +218,13 @@ def validate_client_id(client_id: str | None) -> None:
 
     # If allowlist is empty, allow all clients (backward compatible)
     if not allowed_client_ids:
+        global _allowlist_empty_warned
+        if not _allowlist_empty_warned:
+            logger.warning(
+                "ALLOWED_CLIENT_IDS is empty -- all client IDs are accepted. "
+                "Set ALLOWED_CLIENT_IDS to restrict access."
+            )
+            _allowlist_empty_warned = True
         return
 
     # Otherwise, client must be in allowlist

@@ -5,6 +5,7 @@ Usage:
     uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
 """
 
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path as _Path
@@ -89,12 +90,13 @@ async def lifespan(app: FastAPI):
 
 
 # FastAPI app instance
+_docs_enabled = os.getenv("API_DOCS_ENABLED", "").lower() in ("1", "true")
 app = FastAPI(
     title="Bite-Size Reader Mobile API",
     description="RESTful API for Android/iOS mobile clients",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
     lifespan=lifespan,
 )
 

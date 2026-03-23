@@ -19,16 +19,21 @@ def pack_embedding(embedding: Any) -> bytes:
 def unpack_embedding(blob: bytes) -> list[float]:
     """Deserialize an embedding vector from DB storage.
 
-    Supports both the current struct-packed format and the legacy pickle format
-    for backward compatibility with existing stored embeddings.
+    Deserializes from the struct-packed float32 format.
+
+    Legacy pickle-serialized embeddings are no longer supported due to
+    security concerns (unsafe deserialization). Run a migration to
+    re-encode any old embeddings before upgrading.
     """
     try:
         count = len(blob) // 4  # 4 bytes per float32
         return list(struct.unpack(f"<{count}f", blob))
-    except struct.error:
-        import pickle
-
-        return pickle.loads(blob)  # nosec B301
+    except struct.error as exc:
+        raise ValueError(
+            "Failed to unpack embedding blob as float32 array. "
+            "If this is a legacy pickle-serialized embedding, it must be "
+            "migrated to struct-packed format first."
+        ) from exc
 
 
 class EmbeddingSerializationMixin:

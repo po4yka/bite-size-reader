@@ -312,9 +312,8 @@ class RuntimeConfig(BaseModel):
             return ""
         secret = str(value).strip()
         if len(secret) < 32:
-            logger.warning(
-                "JWT secret key is shorter than 32 characters - this is insecure for production"
-            )
+            msg = "JWT secret key must be at least 32 characters when provided"
+            raise ValueError(msg)
         if len(secret) > 500:
             msg = "JWT secret key appears to be too long"
             raise ValueError(msg)
