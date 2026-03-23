@@ -10,7 +10,7 @@ from app.adapters.youtube.feedback_service import YouTubeFeedbackService
 from app.adapters.youtube.session_service import YouTubeDownloadSessionService
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
-from app.core.url_utils import extract_youtube_video_id, is_youtube_url
+from app.core.urls.youtube import extract_youtube_video_id, is_youtube_url
 
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.lifecycle import PlatformRequestLifecycle

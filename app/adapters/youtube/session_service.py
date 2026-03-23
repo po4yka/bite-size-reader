@@ -18,7 +18,8 @@ from app.adapters.youtube.youtube_downloader_parts import metadata as _metadata,
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
 from app.core.logging_utils import get_logger
-from app.core.url_utils import extract_youtube_video_id, url_hash_sha256
+from app.core.urls.normalization import url_hash_sha256
+from app.core.urls.youtube import extract_youtube_video_id
 from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,

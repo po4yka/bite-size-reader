@@ -9,7 +9,7 @@ from urllib.parse import urljoin, urlparse, urlunparse
 
 import httpx
 
-from app.core.url_utils import canonicalize_twitter_url, extract_twitter_article_id
+from app.core.urls.twitter import canonicalize_twitter_url, extract_twitter_article_id
 
 ResolutionReason = Literal[
     "path_match",

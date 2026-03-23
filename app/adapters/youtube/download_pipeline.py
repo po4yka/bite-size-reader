@@ -25,7 +25,7 @@ from app.adapters.youtube.youtube_downloader_parts import (
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
 from app.core.logging_utils import get_logger
-from app.core.url_utils import extract_youtube_video_id
+from app.core.urls.youtube import extract_youtube_video_id
 
 if TYPE_CHECKING:
     from app.adapters.youtube.feedback_service import YouTubeFeedbackService

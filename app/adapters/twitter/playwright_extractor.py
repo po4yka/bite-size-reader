@@ -18,7 +18,7 @@ from app.adapters.twitter.text_formatter import (
 )
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
-from app.core.url_utils import extract_twitter_article_id, is_twitter_article_url
+from app.core.urls.twitter import extract_twitter_article_id, is_twitter_article_url
 from app.observability.failure_observability import (
     REASON_PLAYWRIGHT_EMPTY_CONTENT,
     REASON_PLAYWRIGHT_UI_OR_LOGIN,

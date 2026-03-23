@@ -96,7 +96,8 @@ class ContentExtractor(
         if self._platform_router is not None:
             return self._platform_router
 
-        from app.core.url_utils import is_twitter_url, is_youtube_url
+        from app.core.urls.twitter import is_twitter_url
+        from app.core.urls.youtube import is_youtube_url
 
         router = PlatformExtractionRouter()
         router.register(
@@ -144,7 +145,8 @@ class ContentExtractor(
         request_id: int | None = None,
     ) -> tuple[str, str, dict[str, Any]]:
         """Pure extraction method without message dependencies."""
-        from app.core.url_utils import is_twitter_url, is_youtube_url
+        from app.core.urls.twitter import is_twitter_url
+        from app.core.urls.youtube import is_youtube_url
 
         normalized_url = normalize_url(url)
         platform_result = await self._get_platform_router().extract(

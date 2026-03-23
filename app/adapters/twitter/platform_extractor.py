@@ -9,7 +9,7 @@ from app.adapters.twitter.extraction_coordinator import TwitterExtractionCoordin
 from app.adapters.twitter.firecrawl_extractor import TwitterFirecrawlExtractor
 from app.adapters.twitter.playwright_extractor import TwitterPlaywrightExtractor
 from app.adapters.twitter.tier_policy import TwitterTierPolicy
-from app.core.url_utils import is_twitter_url
+from app.core.urls.twitter import is_twitter_url
 
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.lifecycle import PlatformRequestLifecycle

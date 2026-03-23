@@ -5,7 +5,7 @@ Handles tweet status URLs, article URLs, and t.co short URL resolution.
 
 from __future__ import annotations
 
-from app.core.url_utils import extract_twitter_article_id, extract_twitter_status_parts
+from app.core.urls.twitter import extract_twitter_article_id, extract_twitter_status_parts
 
 
 def parse_tweet_url(url: str) -> tuple[str, str]:
