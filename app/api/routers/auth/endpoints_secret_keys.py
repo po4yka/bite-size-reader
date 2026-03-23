@@ -7,7 +7,9 @@ from __future__ import annotations
 import hmac
 import secrets
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+from starlette.responses import Response  # noqa: TC002 - needed at runtime for FastAPI DI
 
 from app.api.dependencies.database import get_auth_repository, get_user_repository
 from app.api.exceptions import (
@@ -51,9 +53,6 @@ from app.api.routers.auth.tokens import (
 )
 from app.api.services.auth_service import AuthService
 from app.core.logging_utils import get_logger
-
-if TYPE_CHECKING:
-    from starlette.responses import Response
 
 logger = get_logger(__name__)
 router = APIRouter()

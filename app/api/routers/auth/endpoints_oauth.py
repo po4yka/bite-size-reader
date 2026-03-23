@@ -4,7 +4,9 @@ OAuth login endpoints (Apple / Google).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+from starlette.responses import Response  # noqa: TC002 - needed at runtime for FastAPI DI
 
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import AuthenticationError, AuthorizationError
@@ -32,9 +34,6 @@ from app.api.routers.auth.tokens import (
 from app.api.search_helpers import isotime
 from app.config import Config
 from app.core.logging_utils import get_logger
-
-if TYPE_CHECKING:
-    from starlette.responses import Response
 
 logger = get_logger(__name__)
 router = APIRouter()

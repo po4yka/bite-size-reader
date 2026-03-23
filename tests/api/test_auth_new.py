@@ -1,5 +1,5 @@
 import time
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -44,7 +44,9 @@ async def test_delete_account(tmp_path, monkeypatch: pytest.MonkeyPatch):
     # Mock user context from current_user dependency
     user_context = {"user_id": 123456789, "username": "testuser", "client_id": "com.example.app"}
 
-    response = await auth_endpoints_me.delete_account(user=user_context)
+    response = await auth_endpoints_me.delete_account(
+        user=user_context, x_confirm_delete="DELETE-MY-ACCOUNT"
+    )
 
     assert response["data"]["success"] is True
     assert not User.select().where(User.telegram_user_id == 123456789).exists()
@@ -71,7 +73,7 @@ async def test_apple_login(tmp_path, monkeypatch: pytest.MonkeyPatch):
 
         assert not User.select().where(User.telegram_user_id == apple_user_id).exists()
 
-        response = await auth_endpoints_oauth.apple_login(payload)
+        response = await auth_endpoints_oauth.apple_login(payload, MagicMock())
 
         tokens = response["data"]["tokens"]
         # Response uses camelCase (Pydantic alias)
@@ -104,7 +106,7 @@ async def test_google_login(tmp_path, monkeypatch: pytest.MonkeyPatch):
 
         assert not User.select().where(User.telegram_user_id == google_user_id).exists()
 
-        response = await auth_endpoints_oauth.google_login(payload)
+        response = await auth_endpoints_oauth.google_login(payload, MagicMock())
 
         tokens = response["data"]["tokens"]
         # Response uses camelCase (Pydantic alias)
@@ -130,7 +132,7 @@ async def test_telegram_login_does_not_auto_grant_owner(tmp_path, monkeypatch: p
     )
 
     with patch.object(auth_endpoints_telegram, "verify_telegram_auth", return_value=True):
-        response = await auth_endpoints_telegram.telegram_login(payload)
+        response = await auth_endpoints_telegram.telegram_login(payload, MagicMock())
 
     tokens = response["data"]["tokens"]
     assert tokens["accessToken"]

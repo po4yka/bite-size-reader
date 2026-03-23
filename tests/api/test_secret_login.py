@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 import pytest
 
 import app.di.database as _di_database
@@ -12,6 +14,11 @@ from app.api.models.auth import (
 from app.api.routers.auth import endpoints as auth_endpoints, secret_auth
 from app.db.models import ClientSecret, User, database_proxy
 from app.db.session import DatabaseSessionManager
+
+
+def _mock_response() -> MagicMock:
+    """Create a mock starlette Response for cookie-setting endpoints."""
+    return MagicMock()
 
 
 def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -62,7 +69,8 @@ async def test_secret_login_success(tmp_path, monkeypatch: pytest.MonkeyPatch):
             client_id="mobile-client",
             secret=secret_value,
             username="owner",
-        )
+        ),
+        _mock_response(),
     )
 
     tokens = response["data"]["tokens"]
@@ -98,12 +106,12 @@ async def test_secret_login_lockout(tmp_path, monkeypatch: pytest.MonkeyPatch):
 
     # First failed attempt should raise AuthenticationError
     with pytest.raises(AuthenticationError):
-        await auth_endpoints.secret_login(bad_request)
+        await auth_endpoints.secret_login(bad_request, _mock_response())
 
     # Second failed attempt should also raise AuthenticationError
     # (the lockout happens after enough failures)
     with pytest.raises((AuthenticationError, AuthorizationError)):
-        await auth_endpoints.secret_login(bad_request)
+        await auth_endpoints.secret_login(bad_request, _mock_response())
 
     record = ClientSecret.select().first()
     assert record.status == "locked"

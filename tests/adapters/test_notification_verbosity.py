@@ -26,6 +26,7 @@ def _make_sender() -> MagicMock:
     sender.safe_reply_with_id = AsyncMock(return_value=42)
     sender.edit_message = AsyncMock(return_value=True)
     sender.send_to_admin_log = AsyncMock()
+    sender.send_chat_action = AsyncMock()
     return sender
 
 

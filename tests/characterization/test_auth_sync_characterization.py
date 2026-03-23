@@ -46,7 +46,7 @@ async def test_characterization_telegram_login_response_shape_is_stable() -> Non
             AsyncMock(return_value=("refresh-token", 1)),
         ),
     ):
-        response = await endpoints_telegram.telegram_login(login)
+        response = await endpoints_telegram.telegram_login(login, MagicMock())
 
     assert response["success"] is True
     assert response["data"]["tokens"]["accessToken"] == "access-token"

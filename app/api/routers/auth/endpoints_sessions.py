@@ -8,6 +8,9 @@ import hashlib
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from starlette.requests import Request  # noqa: TC002 - needed at runtime for FastAPI DI
+from starlette.responses import Response  # noqa: TC002 - needed at runtime for FastAPI DI
+
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import AuthorizationError, ResourceNotFoundError
 from app.api.models.auth import RefreshTokenRequest, SessionInfo
@@ -35,9 +38,6 @@ from app.core.logging_utils import get_logger, log_exception
 from app.core.time_utils import UTC
 
 if TYPE_CHECKING:
-    from starlette.requests import Request
-    from starlette.responses import Response
-
     from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
         SqliteAuthRepositoryAdapter,
     )

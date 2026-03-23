@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+from starlette.responses import Response  # noqa: TC002 - needed at runtime for FastAPI DI
 
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import (
@@ -36,9 +38,6 @@ from app.api.routers.auth.tokens import (
 from app.api.services.auth_service import AuthService
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-
-if TYPE_CHECKING:
-    from starlette.responses import Response
 
 logger = get_logger(__name__)
 router = APIRouter()

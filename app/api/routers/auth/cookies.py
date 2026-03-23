@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from starlette.responses import Response
+from starlette.responses import Response  # noqa: TC002 - needed at runtime
 
 REFRESH_COOKIE_NAME = "bsr_refresh_token"
 REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60  # 30 days in seconds
