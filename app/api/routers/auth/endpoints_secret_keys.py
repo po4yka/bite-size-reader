@@ -7,7 +7,7 @@ from __future__ import annotations
 import hmac
 import secrets
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.api.dependencies.database import get_auth_repository, get_user_repository
 from app.api.exceptions import (
@@ -26,6 +26,7 @@ from app.api.models.auth import (
 )
 from app.api.models.responses import AuthTokensResponse, TokenPair, success_response
 from app.api.routers.auth._fastapi import APIRouter, Depends
+from app.api.routers.auth.cookies import set_refresh_cookie
 from app.api.routers.auth.dependencies import get_current_user
 from app.api.routers.auth.secret_auth import (
     build_secret_record,
@@ -50,6 +51,9 @@ from app.api.routers.auth.tokens import (
 )
 from app.api.services.auth_service import AuthService
 from app.core.logging_utils import get_logger
+
+if TYPE_CHECKING:
+    from starlette.responses import Response
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -82,7 +86,7 @@ def _parse_naive_dt(value: Any) -> datetime | None:
 
 
 @router.post("/secret-login")
-async def secret_login(login_data: SecretLoginRequest):
+async def secret_login(login_data: SecretLoginRequest, response: Response):
     """Exchange a pre-registered client secret for JWT tokens."""
     ensure_secret_login_enabled()
     validate_client_id(login_data.client_id)
@@ -136,6 +140,8 @@ async def secret_login(login_data: SecretLoginRequest):
 
     access_token = create_access_token(user_id, username, login_data.client_id)
     refresh_token, session_id = await create_refresh_token(user_id, login_data.client_id)
+
+    set_refresh_cookie(response, refresh_token)
 
     tokens = TokenPair(
         access_token=access_token,

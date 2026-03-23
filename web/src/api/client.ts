@@ -47,13 +47,15 @@ async function parseJsonSafe<T>(response: Response): Promise<T | null> {
   }
 }
 
-async function refreshAccessToken(refreshToken: string): Promise<AuthTokens | null> {
+async function refreshAccessToken(refreshToken: string | null): Promise<AuthTokens | null> {
   const response = await fetch(`${BASE_URL}/v1/auth/refresh`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ refresh_token: refreshToken }),
+    // Send token in body if available; otherwise rely on httpOnly cookie
+    body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
+    credentials: "same-origin",
     signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
 
@@ -69,7 +71,7 @@ async function refreshAccessToken(refreshToken: string): Promise<AuthTokens | nu
   const tokens = normalizeKeys(body.data.tokens);
   const normalized: AuthTokens = {
     accessToken: tokens.accessToken,
-    refreshToken: tokens.refreshToken ?? refreshToken,
+    refreshToken: null, // Cookie handles refresh token storage
     expiresIn: tokens.expiresIn,
     tokenType: tokens.tokenType,
     sessionId: body.data.sessionId ?? null,
@@ -79,7 +81,7 @@ async function refreshAccessToken(refreshToken: string): Promise<AuthTokens | nu
   setApiSession({
     ...current,
     accessToken: normalized.accessToken,
-    refreshToken: normalized.refreshToken,
+    refreshToken: null,
   });
   setStoredTokens(normalized);
 
@@ -146,13 +148,13 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     if (
       status !== 401 ||
       session.mode !== "jwt" ||
-      !session.refreshToken ||
       path === "/v1/auth/refresh" ||
       options._skipRefresh
     ) {
       throw error;
     }
 
+    // refreshToken may be null when httpOnly cookie handles it
     const refreshed = await refreshAccessToken(session.refreshToken);
     if (!refreshed) {
       setStoredTokens(null);

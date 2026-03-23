@@ -102,6 +102,62 @@ describe("apiRequest", () => {
 
     const session = getApiSession();
     expect(session.accessToken).toBe("new-access");
-    expect(session.refreshToken).toBe("new-refresh");
+    expect(session.refreshToken).toBeNull(); // httpOnly cookie handles refresh token
+  });
+
+  it("attempts refresh via httpOnly cookie when no refreshToken in session", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            success: false,
+            error: { message: "expired" },
+          },
+          401,
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          data: {
+            tokens: {
+              accessToken: "cookie-refreshed-access",
+              expiresIn: 3600,
+              tokenType: "Bearer",
+            },
+            sessionId: 42,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          data: { ok: true },
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    setApiSession({
+      mode: "jwt",
+      accessToken: "old-access",
+      refreshToken: null, // no stored refresh token -- cookie handles it
+      initData: "",
+    });
+
+    const result = await apiRequest<{ ok: boolean }>("/v1/protected");
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    // Refresh request should send empty body (cookie sent automatically)
+    const refreshCall = fetchMock.mock.calls[1];
+    const refreshBody = refreshCall?.[1]?.body as string;
+    expect(JSON.parse(refreshBody)).toEqual({});
+
+    const session = getApiSession();
+    expect(session.accessToken).toBe("cookie-refreshed-access");
+    expect(session.refreshToken).toBeNull();
   });
 });

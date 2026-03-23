@@ -26,7 +26,7 @@ export async function loginWithApple(
 
   return {
     accessToken: result.tokens.accessToken,
-    refreshToken: result.tokens.refreshToken ?? null,
+    refreshToken: null, // httpOnly cookie handles refresh token
     expiresIn: result.tokens.expiresIn,
     tokenType: result.tokens.tokenType,
     sessionId: result.tokens.sessionId ?? null,
@@ -44,7 +44,7 @@ export async function loginWithGoogle(idToken: string, clientId: string): Promis
 
   return {
     accessToken: result.tokens.accessToken,
-    refreshToken: result.tokens.refreshToken ?? null,
+    refreshToken: null, // httpOnly cookie handles refresh token
     expiresIn: result.tokens.expiresIn,
     tokenType: result.tokens.tokenType,
     sessionId: result.tokens.sessionId ?? null,
@@ -62,7 +62,7 @@ export async function loginWithSecret(secretKey: string, clientId: string): Prom
 
   return {
     accessToken: result.tokens.accessToken,
-    refreshToken: result.tokens.refreshToken ?? null,
+    refreshToken: null, // httpOnly cookie handles refresh token
     expiresIn: result.tokens.expiresIn,
     tokenType: result.tokens.tokenType,
     sessionId: result.tokens.sessionId ?? null,

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import (
@@ -23,6 +23,7 @@ from app.api.models.auth import (
 )
 from app.api.models.responses import AuthTokensResponse, TokenPair, success_response
 from app.api.routers.auth._fastapi import APIRouter, Depends
+from app.api.routers.auth.cookies import set_refresh_cookie
 from app.api.routers.auth.dependencies import get_current_user
 from app.api.routers.auth.secret_auth import utcnow_naive
 from app.api.routers.auth.telegram import verify_telegram_auth
@@ -36,12 +37,15 @@ from app.api.services.auth_service import AuthService
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 
+if TYPE_CHECKING:
+    from starlette.responses import Response
+
 logger = get_logger(__name__)
 router = APIRouter()
 
 
 @router.post("/telegram-login")
-async def telegram_login(login_data: TelegramLoginRequest):
+async def telegram_login(login_data: TelegramLoginRequest, response: Response):
     """
     Exchange Telegram authentication data for JWT tokens.
 
@@ -82,6 +86,8 @@ async def telegram_login(login_data: TelegramLoginRequest):
                 "created": created,
             },
         )
+
+        set_refresh_cookie(response, refresh_token)
 
         tokens = TokenPair(
             access_token=access_token,

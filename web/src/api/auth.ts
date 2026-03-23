@@ -28,7 +28,7 @@ export async function loginWithTelegram(payload: TelegramAuthPayload): Promise<A
 
   return {
     accessToken: result.tokens.accessToken,
-    refreshToken: result.tokens.refreshToken ?? null,
+    refreshToken: null, // httpOnly cookie handles refresh token
     expiresIn: result.tokens.expiresIn,
     tokenType: result.tokens.tokenType,
     sessionId: result.sessionId ?? null,

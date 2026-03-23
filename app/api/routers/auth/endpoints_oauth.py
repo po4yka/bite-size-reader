@@ -4,7 +4,7 @@ OAuth login endpoints (Apple / Google).
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import AuthenticationError, AuthorizationError
@@ -17,6 +17,7 @@ from app.api.models.responses import (
     success_response,
 )
 from app.api.routers.auth._fastapi import APIRouter
+from app.api.routers.auth.cookies import set_refresh_cookie
 from app.api.routers.auth.oauth import (
     derive_user_id_from_sub,
     verify_apple_id_token,
@@ -31,6 +32,9 @@ from app.api.routers.auth.tokens import (
 from app.api.search_helpers import isotime
 from app.config import Config
 from app.core.logging_utils import get_logger
+
+if TYPE_CHECKING:
+    from starlette.responses import Response
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -78,7 +82,7 @@ def _ensure_allowed_user_id(user_id: int, *, provider: str, sub: str) -> None:
 
 
 @router.post("/apple-login")
-async def apple_login(login_data: AppleLoginRequest):
+async def apple_login(login_data: AppleLoginRequest, response: Response):
     """Exchange Apple authentication data for JWT tokens."""
     logger.info("apple_login_attempt", extra={"client_id": login_data.client_id})
     validate_client_id(login_data.client_id)
@@ -114,6 +118,8 @@ async def apple_login(login_data: AppleLoginRequest):
     access_token = create_access_token(user_id, username, login_data.client_id)
     refresh_token, session_id = await create_refresh_token(user_id, login_data.client_id)
 
+    set_refresh_cookie(response, refresh_token)
+
     tokens = TokenPair(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -139,7 +145,7 @@ async def apple_login(login_data: AppleLoginRequest):
 
 
 @router.post("/google-login")
-async def google_login(login_data: GoogleLoginRequest):
+async def google_login(login_data: GoogleLoginRequest, response: Response):
     """Exchange Google authentication data for JWT tokens."""
     logger.info("google_login_attempt", extra={"client_id": login_data.client_id})
     validate_client_id(login_data.client_id)
@@ -176,6 +182,8 @@ async def google_login(login_data: GoogleLoginRequest):
     username = user.get("username")
     access_token = create_access_token(user_id, username, login_data.client_id)
     refresh_token, session_id = await create_refresh_token(user_id, login_data.client_id)
+
+    set_refresh_cookie(response, refresh_token)
 
     tokens = TokenPair(
         access_token=access_token,
