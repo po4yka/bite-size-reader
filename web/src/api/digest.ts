@@ -135,8 +135,9 @@ export function fetchDigestChannelPosts(
   );
 }
 
-export function listDigestCategories(): Promise<DigestCategory[]> {
-  return apiRequest<DigestCategory[]>("/v1/digest/categories");
+export async function listDigestCategories(): Promise<DigestCategory[]> {
+  const data = await apiRequest<{ categories: DigestCategory[] }>("/v1/digest/categories");
+  return data.categories;
 }
 
 export function createDigestCategory(name: string): Promise<DigestCategory> {

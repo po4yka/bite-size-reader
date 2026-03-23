@@ -72,8 +72,8 @@ export interface UpdateWebhookPayload {
 // ---------------------------------------------------------------------------
 
 export async function fetchWebhooks(): Promise<Webhook[]> {
-  const data = await apiRequest<{ webhooks: Webhook[] }>("/v1/webhooks");
-  return data.webhooks;
+  const data = await apiRequest<{ subscriptions: Webhook[] }>("/v1/webhooks");
+  return data.subscriptions;
 }
 
 export async function createWebhook(payload: CreateWebhookPayload): Promise<WebhookDetail> {

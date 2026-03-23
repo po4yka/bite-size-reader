@@ -62,9 +62,9 @@ export interface ReadingStreak {
   currentStreak: number;
   longestStreak: number;
   todayCount: number;
-  thisWeekCount: number;
-  thisMonthCount: number;
-  lastReadAt: string | null;
+  weekCount: number;
+  monthCount: number;
+  lastActivityDate: string | null;
 }
 
 interface ReadingGoalsResponse {

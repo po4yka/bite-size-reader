@@ -47,15 +47,15 @@ export default function ReadingStreakSection() {
             </div>
             <div>
               <p style={{ fontSize: "0.75rem", color: "var(--cds-text-secondary)" }}>This week</p>
-              <p style={{ fontSize: "1.5rem", fontWeight: 600 }}>{streakQuery.data.thisWeekCount}</p>
+              <p style={{ fontSize: "1.5rem", fontWeight: 600 }}>{streakQuery.data.weekCount}</p>
             </div>
             <div>
               <p style={{ fontSize: "0.75rem", color: "var(--cds-text-secondary)" }}>This month</p>
-              <p style={{ fontSize: "1.5rem", fontWeight: 600 }}>{streakQuery.data.thisMonthCount}</p>
+              <p style={{ fontSize: "1.5rem", fontWeight: 600 }}>{streakQuery.data.monthCount}</p>
             </div>
           </div>
           <p style={{ fontSize: "0.75rem", color: "var(--cds-text-secondary)" }}>
-            Last read: {formatDate(streakQuery.data.lastReadAt)}
+            Last read: {formatDate(streakQuery.data.lastActivityDate)}
           </p>
         </>
       )}
