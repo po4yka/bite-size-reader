@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from app.adapters.content.scraper.chain import ContentScraperChain
 from app.adapters.content.scraper.diagnostics import build_scraper_diagnostics
+from app.adapters.content.scraper.runtime_tuning import BROWSER_PROVIDERS
 from app.config.scraper import profile_retry_budget, profile_timeout_multiplier
 from app.core.logging_utils import get_logger
 
@@ -16,8 +17,6 @@ if TYPE_CHECKING:
     from app.config import AppConfig
 
 logger = get_logger(__name__)
-
-_BROWSER_PROVIDERS = {"playwright", "crawlee"}
 
 
 class ContentScraperFactory:
@@ -58,7 +57,7 @@ class ContentScraperFactory:
         }
 
         for name in provider_order:
-            if not scraper_cfg.browser_enabled and name in _BROWSER_PROVIDERS:
+            if not scraper_cfg.browser_enabled and name in BROWSER_PROVIDERS:
                 logger.info(
                     "scraper_provider_skipped_browser_disabled",
                     extra={"provider": name},
@@ -99,6 +98,7 @@ class ContentScraperFactory:
             providers,
             audit=audit,
             min_content_length=getattr(scraper_cfg, "min_content_length", 400),
+            js_heavy_hosts=getattr(scraper_cfg, "js_heavy_hosts", ()),
         )
 
 

@@ -1125,3 +1125,42 @@ class TestChainMinContentLength:
 
         assert result.status == "ok"
         assert result.content_markdown == "# OK"
+
+
+# ---------------------------------------------------------------------------
+# JS-heavy host reordering
+# ---------------------------------------------------------------------------
+
+
+class TestJsHeavyReordering:
+    """Chain should try browser providers first for JS-heavy hosts."""
+
+    @pytest.mark.asyncio
+    async def test_chain_reorders_for_js_heavy_url(self) -> None:
+        scrapling = _MockProvider(name="scrapling", result=_ok_result())
+        playwright = _MockProvider(name="playwright", result=_ok_result())
+
+        chain = ContentScraperChain(
+            [scrapling, playwright],
+            js_heavy_hosts=("techradar.com",),
+        )
+        result = await chain.scrape_markdown("https://www.techradar.com/article")
+
+        assert result.status == CallStatus.OK
+        assert len(playwright.calls) == 1
+        assert len(scrapling.calls) == 0  # never reached
+
+    @pytest.mark.asyncio
+    async def test_chain_keeps_order_for_normal_url(self) -> None:
+        scrapling = _MockProvider(name="scrapling", result=_ok_result())
+        playwright = _MockProvider(name="playwright", result=_ok_result())
+
+        chain = ContentScraperChain(
+            [scrapling, playwright],
+            js_heavy_hosts=("techradar.com",),
+        )
+        result = await chain.scrape_markdown("https://example.com/article")
+
+        assert result.status == CallStatus.OK
+        assert len(scrapling.calls) == 1
+        assert len(playwright.calls) == 0  # not reached, scrapling succeeded

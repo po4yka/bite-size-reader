@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
+BROWSER_PROVIDERS: frozenset[str] = frozenset({"playwright", "crawlee"})
+
 PROFILE_TIMEOUT_MULTIPLIERS: dict[str, float] = {
     "fast": 0.75,
     "balanced": 1.0,
