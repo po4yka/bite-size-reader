@@ -48,8 +48,9 @@ class SummaryFollowupPresenters:
         if correlation_id and not reader:
             header += f"\nCorrelation ID: {correlation_id}"
 
-        await self._context.response_sender.safe_reply(message, header)
-        await self._context.text_processor.send_long_text(message, cleaned)
+        await self._context.text_processor.send_long_text(
+            message, f"<b>{html.escape(header)}</b>\n\n{cleaned}", parse_mode="HTML"
+        )
 
     def _insights_cap_text(self, text: str, max_chars: int) -> str:
         cleaned = self._context.text_processor.sanitize_summary_text(text.strip())
