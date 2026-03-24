@@ -614,7 +614,8 @@ class TestFirecrawlProvider:
     async def test_delegates_to_client_scrape_markdown(self):
         """scrape_markdown forwards the call to the underlying client."""
         mock_client = AsyncMock()
-        expected = _ok_result(markdown="# From Firecrawl")
+        long_content = "A " * 300  # 600 chars, above default min_content_length
+        expected = _ok_result(markdown=long_content)
         mock_client.scrape_markdown.return_value = expected
 
         provider = FirecrawlProvider(mock_client, name="fc_test")
@@ -1071,3 +1072,56 @@ class TestDirectHTMLProvider:
 
         provider = DirectHTMLProvider()
         await provider.aclose()  # Should not raise
+
+
+# ===================================================================
+# Chain-level min_content_length tests
+# ===================================================================
+
+
+class TestChainMinContentLength:
+    """Tests for chain-level content length enforcement."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_chain_rejects_thin_content_and_falls_through(self):
+        """Chain with min_content_length rejects short OK result, tries next provider."""
+        thin = _ok_result(markdown="nav stub only")
+        good = _ok_result(markdown="A " * 300)  # 600 chars
+
+        p1 = _MockProvider(name="firecrawl", result=thin)
+        p2 = _MockProvider(name="playwright", result=good)
+
+        chain = ContentScraperChain([p1, p2], min_content_length=400)
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown == good.content_markdown
+        assert len(p1.calls) == 1
+        assert len(p2.calls) == 1
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_chain_accepts_sufficient_content(self):
+        """Chain with min_content_length accepts result meeting threshold."""
+        good = _ok_result(markdown="A " * 300)
+
+        p1 = _MockProvider(name="firecrawl", result=good)
+        p2 = _MockProvider(name="playwright", result=_ok_result())
+
+        chain = ContentScraperChain([p1, p2], min_content_length=400)
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown == good.content_markdown
+        assert len(p2.calls) == 0  # Not reached
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_chain_default_zero_accepts_any_content(self):
+        """Chain with default min_content_length=0 accepts any non-empty content."""
+        short = _ok_result(markdown="# OK")
+
+        p1 = _MockProvider(name="first", result=short)
+        chain = ContentScraperChain([p1])  # default min_content_length=0
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown == "# OK"

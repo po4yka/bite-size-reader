@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
+from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
@@ -23,12 +24,15 @@ class ContentScraperChain:
         self,
         providers: list[ContentScraperProtocol],
         audit: Callable[[str, str, dict], None] | None = None,
+        *,
+        min_content_length: int = 0,
     ) -> None:
         if not providers:
             msg = "ContentScraperChain requires at least one provider"
             raise ValueError(msg)
         self._providers = providers
         self._audit = audit
+        self._min_content_length = min_content_length
 
     @property
     def providers(self) -> list[ContentScraperProtocol]:
@@ -72,6 +76,31 @@ class ContentScraperChain:
                 bool(result.content_markdown and result.content_markdown.strip())
                 or bool(result.content_html and result.content_html.strip())
             )
+
+            if has_content and self._min_content_length > 0:
+                text = ""
+                if result.content_markdown:
+                    text = clean_markdown_article_text(result.content_markdown)
+                elif result.content_html:
+                    text = html_to_text(result.content_html)
+                if len(text) < self._min_content_length:
+                    error_msg = (
+                        f"{name}: content too short"
+                        f" ({len(text)} < {self._min_content_length} chars)"
+                    )
+                    errors.append(error_msg)
+                    last_result = result
+                    logger.info(
+                        "scraper_chain_thin_content",
+                        extra={
+                            "provider": name,
+                            "url": url,
+                            "content_len": len(text),
+                            "threshold": self._min_content_length,
+                            "request_id": request_id,
+                        },
+                    )
+                    continue
 
             if has_content:
                 logger.info(

@@ -124,9 +124,55 @@ async def test_low_value_content_triggers_failure() -> None:
     assert "insufficient_useful_content" in (call_kwargs.get("error") or "")
 
 
+def test_detect_nav_stub_content() -> None:
+    """Nav stub from TechRadar-like JS-rendered page triggers nav_stub_detected."""
+    nav_stub = (
+        "[Skip to main content](https://example.com#main)\n\n"
+        "Don't miss these\n\n"
+        "Close\n\n"
+        "Please login or signup to comment\n\n"
+        "Please wait...\n\n"
+        "Login\n\n"
+        "Sign Up"
+    )
+    result = _firecrawl_result(markdown=nav_stub, html=None)
+    issue = detect_low_value_content(result)
+    assert issue is not None
+    assert issue["reason"] == "nav_stub_detected"
+
+
+def test_detect_nav_stub_does_not_trigger_on_short_article() -> None:
+    """A short but substantive article excerpt should NOT trigger nav_stub_detected."""
+    short_article = (
+        "The new Sony WH-1000XM5 headphones deliver exceptional noise cancellation "
+        "and audio quality that rivals much more expensive alternatives on the market today. "
+        "After testing them extensively over three weeks in various environments including "
+        "offices, planes, and busy coffee shops, we found the comfort level to be outstanding "
+        "for extended listening sessions throughout the entire workday."
+    )
+    result = _firecrawl_result(markdown=short_article, html=None)
+    issue = detect_low_value_content(result)
+    assert issue is None
+
+
+def test_detect_nav_stub_does_not_trigger_on_long_content() -> None:
+    """Content with 100+ words should never trigger nav_stub_detected."""
+    long_content = " ".join(["word"] * 120) + "."
+    result = _firecrawl_result(markdown=long_content, html=None)
+    issue = detect_low_value_content(result)
+    # Should not trigger nav_stub (word_count >= 100)
+    # May or may not trigger other rules, but not nav_stub
+    if issue is not None:
+        assert issue["reason"] != "nav_stub_detected"
+
+
 def test_detect_low_value_content_allows_substantive_text() -> None:
     result = _firecrawl_result(
-        markdown="# Heading\n\nThis short article explains the basics of Obsidian vault design.",
+        markdown=(
+            "# Heading\n\n"
+            "This short article explains the basics of Obsidian vault design. "
+            "It covers folder structure, tagging strategies, and linking best practices for new users."
+        ),
         html=None,
     )
 

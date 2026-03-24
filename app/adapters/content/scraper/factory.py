@@ -95,7 +95,11 @@ class ContentScraperFactory:
                     )
                 )
 
-        return ContentScraperChain(providers, audit=audit)
+        return ContentScraperChain(
+            providers,
+            audit=audit,
+            min_content_length=getattr(scraper_cfg, "min_content_length", 400),
+        )
 
 
 def _build_scrapling(scraper_cfg: object) -> ContentScraperProtocol | None:
@@ -205,6 +209,7 @@ def _build_firecrawl(
             name="firecrawl_self_hosted",
             wait_for_ms=getattr(scraper_cfg, "firecrawl_wait_for_ms", 3000),
             js_heavy_hosts=getattr(scraper_cfg, "js_heavy_hosts", ()),
+            min_content_length=getattr(scraper_cfg, "min_content_length", 400),
         )
     except Exception as exc:
         logger.warning(

@@ -17,6 +17,7 @@ LowValueReason = Literal[
     "content_too_short",
     "content_low_variation",
     "content_high_repetition",
+    "nav_stub_detected",
 ]
 
 
@@ -57,6 +58,16 @@ def detect_low_value_content(crawl: FirecrawlResult) -> dict[str, Any] | None:
     }
     overlay_ratio = sum(1 for w in words if w in overlay_terms) / word_count if word_count else 0.0
 
+    # Count "substantive sentences" -- sequences of 10+ words ending
+    # with sentence-terminal punctuation (.!?) in the normalized text.
+    substantive_sentence_count = len(
+        [
+            s
+            for s in re.split(r"[.!?]+", normalized)
+            if len(re.findall(r"[0-9A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF']+", s)) >= 10
+        ]
+    )
+
     reason: LowValueReason | None = None
     if not normalized or word_count == 0:
         reason = "empty_after_cleaning"
@@ -70,6 +81,8 @@ def detect_low_value_content(crawl: FirecrawlResult) -> dict[str, Any] | None:
         reason = "content_low_variation"
     elif word_count >= 6 and top_ratio >= 0.92:
         reason = "content_high_repetition"
+    elif word_count < 100 and substantive_sentence_count < 2:
+        reason = "nav_stub_detected"
 
     if reason:
         return {
@@ -82,6 +95,7 @@ def detect_low_value_content(crawl: FirecrawlResult) -> dict[str, Any] | None:
                 "top_word": top_word,
                 "top_ratio": top_ratio,
                 "overlay_ratio": overlay_ratio,
+                "substantive_sentence_count": substantive_sentence_count,
             },
         }
     return None

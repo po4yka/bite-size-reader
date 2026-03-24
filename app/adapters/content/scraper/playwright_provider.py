@@ -6,7 +6,7 @@ import asyncio
 import time
 from typing import Any, cast
 
-from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
+from app.adapters.content.scraper.runtime_tuning import is_js_heavy_url, tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
 from app.core.html_utils import html_to_text
@@ -195,6 +195,20 @@ class PlaywrightProvider:
                         extra={"url": url},
                         exc_info=True,
                     )
+
+                # For JS-heavy hosts, wait for article content to hydrate
+                # before scrolling. Best-effort -- timeout is non-fatal.
+                if self._js_heavy_hosts and is_js_heavy_url(url, self._js_heavy_hosts):
+                    try:
+                        page.wait_for_selector(
+                            "article p, main p, [role='article'] p, .article-body p",
+                            timeout=8_000,
+                        )
+                    except (PlaywrightTimeoutError, PlaywrightError):
+                        logger.debug(
+                            "playwright_article_selector_wait_timeout",
+                            extra={"url": url},
+                        )
 
                 # Try to trigger lazy-loading content without over-delaying fallback chain.
                 for _ in range(4):

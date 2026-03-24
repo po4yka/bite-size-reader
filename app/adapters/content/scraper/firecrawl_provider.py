@@ -5,10 +5,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from app.adapters.content.scraper.runtime_tuning import tuned_firecrawl_wait_for_ms
+from app.adapters.external.firecrawl.models import FirecrawlResult
+from app.core.call_status import CallStatus
+from app.core.html_utils import clean_markdown_article_text, html_to_text
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.adapters.external.firecrawl.client import FirecrawlClient
-    from app.adapters.external.firecrawl.models import FirecrawlResult
+
+logger = get_logger(__name__)
 
 
 class FirecrawlProvider:
@@ -21,11 +26,13 @@ class FirecrawlProvider:
         name: str = "firecrawl",
         wait_for_ms: int = 3000,
         js_heavy_hosts: tuple[str, ...] = (),
+        min_content_length: int = 400,
     ) -> None:
         self._client = client
         self._name = name
         self._wait_for_ms = wait_for_ms
         self._js_heavy_hosts = js_heavy_hosts
+        self._min_content_length = min_content_length
 
     @property
     def provider_name(self) -> str:
@@ -43,12 +50,43 @@ class FirecrawlProvider:
             url=url,
             js_heavy_hosts=self._js_heavy_hosts,
         )
-        return await self._client.scrape_markdown(
+        result = await self._client.scrape_markdown(
             url,
             mobile=mobile,
             request_id=request_id,
             wait_for_ms_override=wait_for_ms,
         )
+
+        if result.status == CallStatus.OK:
+            text = ""
+            if result.content_markdown:
+                text = clean_markdown_article_text(result.content_markdown)
+            elif result.content_html:
+                text = html_to_text(result.content_html)
+
+            if len(text) < self._min_content_length:
+                logger.info(
+                    "firecrawl_thin_content",
+                    extra={
+                        "url": url,
+                        "content_len": len(text),
+                        "threshold": self._min_content_length,
+                        "request_id": request_id,
+                    },
+                )
+                return FirecrawlResult(
+                    status=CallStatus.ERROR,
+                    error_text=(
+                        f"Firecrawl: content too short"
+                        f" ({len(text)} < {self._min_content_length} chars)"
+                    ),
+                    content_html=result.content_html,
+                    latency_ms=result.latency_ms,
+                    source_url=result.source_url,
+                    endpoint=result.endpoint,
+                )
+
+        return result
 
     async def aclose(self) -> None:
         await self._client.aclose()
