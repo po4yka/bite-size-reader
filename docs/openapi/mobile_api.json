@@ -1555,94 +1555,6 @@
         }
       }
     },
-    "/v1/auth/apple-login": {
-      "post": {
-        "tags": [
-          "Authentication"
-        ],
-        "summary": "Apple Login",
-        "description": "Exchange Apple authentication data for JWT tokens.",
-        "operationId": "apple_login_v1_auth_apple_login_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AppleLoginRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Login success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthTokensResponseEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/UnauthorizedError"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "429": {
-            "$ref": "#/components/responses/TooManyRequestsError"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalServerError"
-          }
-        }
-      }
-    },
-    "/v1/auth/google-login": {
-      "post": {
-        "tags": [
-          "Authentication"
-        ],
-        "summary": "Google Login",
-        "description": "Exchange Google authentication data for JWT tokens.",
-        "operationId": "google_login_v1_auth_google_login_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GoogleLoginRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Login success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthTokensResponseEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/UnauthorizedError"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "429": {
-            "$ref": "#/components/responses/TooManyRequestsError"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalServerError"
-          }
-        }
-      }
-    },
     "/v1/auth/secret-login": {
       "post": {
         "tags": [
@@ -11358,36 +11270,6 @@
           }
         ]
       },
-      "AppleLoginRequest": {
-        "type": "object",
-        "required": [
-          "id_token",
-          "client_id"
-        ],
-        "properties": {
-          "id_token": {
-            "type": "string",
-            "description": "Identity token from Sign in with Apple"
-          },
-          "client_id": {
-            "type": "string",
-            "description": "Client App ID (Bundle ID)"
-          },
-          "authorization_code": {
-            "type": "string",
-            "nullable": true,
-            "description": "One-time authorization code"
-          },
-          "given_name": {
-            "type": "string",
-            "nullable": true
-          },
-          "family_name": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
       "Collection": {
         "type": "object",
         "required": [
@@ -12024,23 +11906,6 @@
             }
           }
         ]
-      },
-      "GoogleLoginRequest": {
-        "type": "object",
-        "required": [
-          "id_token",
-          "client_id"
-        ],
-        "properties": {
-          "id_token": {
-            "type": "string",
-            "description": "ID token from Google Sign-In"
-          },
-          "client_id": {
-            "type": "string",
-            "description": "Client App ID"
-          }
-        }
       },
       "Request": {
         "type": "object",

@@ -7,9 +7,7 @@ property names, required fields, and types stay in sync.
 """
 
 from app.api.models.auth import (
-    AppleLoginRequest,
     ClientSecretInfo,
-    GoogleLoginRequest,
     RefreshTokenRequest,
     SecretKeyActionResponse,
     SecretKeyCreateRequest,
@@ -51,8 +49,6 @@ from app.api.models.requests import (
 SCHEMA_REGISTRY: dict[str, type] = {
     # --- Authentication request models ---
     "TelegramLoginRequest": TelegramLoginRequest,
-    "AppleLoginRequest": AppleLoginRequest,
-    "GoogleLoginRequest": GoogleLoginRequest,
     "RefreshTokenRequest": RefreshTokenRequest,
     "SecretLoginRequest": SecretLoginRequest,
     "SecretKeyCreateRequest": SecretKeyCreateRequest,

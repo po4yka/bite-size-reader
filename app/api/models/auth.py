@@ -27,23 +27,6 @@ class TelegramLoginRequest(BaseModel):
     )
 
 
-class AppleLoginRequest(BaseModel):
-    """Request body for Apple login."""
-
-    id_token: str
-    client_id: str
-    authorization_code: str | None = None
-    given_name: str | None = None
-    family_name: str | None = None
-
-
-class GoogleLoginRequest(BaseModel):
-    """Request body for Google login."""
-
-    id_token: str
-    client_id: str
-
-
 class RefreshTokenRequest(BaseModel):
     """Request body for token refresh."""
 

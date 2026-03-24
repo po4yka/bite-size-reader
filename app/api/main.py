@@ -81,13 +81,6 @@ async def lifespan(app: FastAPI):
         set_current_api_runtime(runtime)
         logger.info("database_initialized", extra={"db_path": runtime.db.path})
 
-        # Warn about fail-open auth when OAuth endpoints are exposed
-        if not runtime.cfg.telegram.allowed_user_ids:
-            logger.warning(
-                "ALLOWED_USER_IDS is empty with OAuth enabled -- any user with a "
-                "Google/Apple account can register. Set ALLOWED_USER_IDS or "
-                "ALLOW_ALL_USERS=true to acknowledge."
-            )
         yield
     finally:
         await close_redis()

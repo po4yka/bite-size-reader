@@ -135,8 +135,6 @@ Current sync uses explicit sessions and chunked/full + delta + apply endpoints:
 ### Authentication
 
 - `POST /v1/auth/telegram-login`
-- `POST /v1/auth/google-login`
-- `POST /v1/auth/apple-login`
 - `POST /v1/auth/refresh`
 - `POST /v1/auth/logout`
 - `GET /v1/auth/me`

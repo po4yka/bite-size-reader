@@ -11,7 +11,6 @@ from app.api.routers.auth._fastapi import APIRouter
 
 from . import (
     endpoints_me,
-    endpoints_oauth,
     endpoints_secret_keys,
     endpoints_sessions,
     endpoints_telegram,
@@ -22,7 +21,6 @@ router = APIRouter()
 # Aggregate routers (route paths are defined in each sub-router)
 router.include_router(endpoints_telegram.router)
 router.include_router(endpoints_secret_keys.router)
-router.include_router(endpoints_oauth.router)
 router.include_router(endpoints_me.router)
 router.include_router(endpoints_sessions.router)
 
@@ -38,9 +36,6 @@ create_secret_key = endpoints_secret_keys.create_secret_key
 rotate_secret_key = endpoints_secret_keys.rotate_secret_key
 revoke_secret_key = endpoints_secret_keys.revoke_secret_key
 list_secret_keys = endpoints_secret_keys.list_secret_keys
-
-apple_login = endpoints_oauth.apple_login
-google_login = endpoints_oauth.google_login
 
 get_current_user_info = endpoints_me.get_current_user_info
 delete_account = endpoints_me.delete_account
