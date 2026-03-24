@@ -131,13 +131,6 @@ class SummaryBlocksPresenter:
 
         return self._trim_trailing_blank_lines(combined_lines)
 
-    async def send_combined_summary_lines(
-        self, message: Any, shaped: dict[str, Any], *, include_domain: bool
-    ) -> None:
-        combined_lines = self.build_combined_summary_lines(shaped, include_domain=include_domain)
-        if combined_lines:
-            await self._context.text_processor.send_long_text(message, "\n".join(combined_lines))
-
     @staticmethod
     def _summary_sort_key(field_name: str) -> int:
         if field_name == "tldr":
@@ -156,26 +149,6 @@ class SummaryBlocksPresenter:
             or (include_tldr and key == "tldr")
         ]
         return sorted(fields, key=self._summary_sort_key)
-
-    async def send_summary_fields(
-        self, message: Any, shaped: dict[str, Any], *, include_tldr: bool
-    ) -> None:
-        _l = self._context.lang
-        fields = self.summary_field_keys(shaped, include_tldr=include_tldr)
-        if not fields:
-            return
-        # Only send the longest field (last in sorted order, highest char count)
-        key = fields[-1]
-        content = str(shaped.get(key, "")).strip()
-        if not content:
-            return
-        content = self._context.text_processor.sanitize_summary_text(content)
-        label = (
-            f"🧾 {t('tldr', _l)}"
-            if key == "tldr"
-            else f"🧾 {t('summary_n', _l)} {key.split('_', 1)[1]}"
-        )
-        await self._context.text_processor.send_labelled_text(message, label, content)
 
     def build_summary_field_text(self, shaped: dict[str, Any], *, include_tldr: bool) -> str | None:
         """Return formatted text for the longest summary field, or None."""
@@ -232,29 +205,6 @@ class SummaryBlocksPresenter:
         # Filter None, join with double newline
         non_empty = [b for b in html_blocks if b]
         return "\n\n".join(non_empty) if non_empty else None
-
-    async def send_key_ideas(self, message: Any, shaped: dict[str, Any]) -> None:
-        ideas = self._clean_string_list(shaped.get("key_ideas") or [])
-        if not ideas:
-            return
-
-        chunk: list[str] = []
-        for idea in ideas:
-            chunk.append(f"• {idea}")
-            if sum(len(line) + 1 for line in chunk) > 3000:
-                await self._context.text_processor.send_long_text(
-                    message,
-                    f"<b>💡 {t('key_ideas', self._context.lang)}</b>\n" + "\n".join(chunk),
-                    parse_mode="HTML",
-                )
-                chunk = []
-
-        if chunk:
-            await self._context.text_processor.send_long_text(
-                message,
-                f"<b>💡 {t('key_ideas', self._context.lang)}</b>\n" + "\n".join(chunk),
-                parse_mode="HTML",
-            )
 
     def _build_extractive_quotes_message(self, shaped: dict[str, Any]) -> str | None:
         quotes = shaped.get("extractive_quotes") or []

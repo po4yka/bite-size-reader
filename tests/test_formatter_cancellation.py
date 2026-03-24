@@ -83,11 +83,14 @@ class TestSummaryPresenterCancellation(unittest.IsolatedAsyncioTestCase):
         data_formatter.format_readability = MagicMock(return_value="")
         return SummaryPresenterImpl(response_sender, text_processor, data_formatter)
 
-    async def test_send_structured_summary_header_propagates_cancelled_error(self) -> None:
-        """CancelledError from the header safe_reply in send_structured_summary_response
+    async def test_send_structured_summary_propagates_cancelled_error(self) -> None:
+        """CancelledError from send_long_text in send_structured_summary_response
         must propagate."""
-        reply = AsyncMock(side_effect=asyncio.CancelledError())
-        presenter = self._make_presenter(safe_reply=reply)
+        presenter = self._make_presenter()
+        # The main content is now sent via text_processor.send_long_text
+        presenter._blocks._context.text_processor.send_long_text = AsyncMock(
+            side_effect=asyncio.CancelledError()
+        )
 
         llm = MagicMock()
         llm.model = "test-model"

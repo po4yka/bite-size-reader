@@ -208,8 +208,7 @@ class CallbackActionIOHandlers:
         """Export summary as a JSON file attachment."""
         import io
         import json
-
-        from app.adapters.external.formatting._response_sender_shared import build_json_filename
+        from datetime import UTC, datetime
 
         payload = await self._store.load_summary_payload(summary_id, correlation_id=correlation_id)
         if not payload:
@@ -222,7 +221,8 @@ class CallbackActionIOHandlers:
         try:
             pretty = json.dumps(payload, ensure_ascii=False, indent=2)
             bio = io.BytesIO(pretty.encode("utf-8"))
-            bio.name = build_json_filename(payload)
+            ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+            bio.name = f"summary-{summary_id}-{ts}.json"
 
             if hasattr(message, "reply_document"):
                 await message.reply_document(bio, caption="Full Summary JSON")
@@ -232,6 +232,9 @@ class CallbackActionIOHandlers:
                     f"JSON ready but unable to send as document. Error ID: {correlation_id}",
                 )
         except Exception as exc:
+            from app.core.async_utils import raise_if_cancelled
+
+            raise_if_cancelled(exc)
             logger.exception(
                 "json_export_failed",
                 extra={"summary_id": summary_id, "error": str(exc), "cid": correlation_id},
@@ -240,6 +243,7 @@ class CallbackActionIOHandlers:
                 message,
                 f"Export failed: {type(exc).__name__}. Error ID: {correlation_id}",
             )
+            return True
 
         logger.info(
             "export_completed",
