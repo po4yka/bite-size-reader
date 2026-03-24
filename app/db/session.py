@@ -7,7 +7,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from playhouse.sqlite_ext import SqliteExtDatabase
+from peewee import SqliteDatabase as _BaseSqliteDatabase
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -40,7 +40,7 @@ class TopicSearchIndexRebuiltError(RuntimeError):
     """Raised to signal that the topic search index was rebuilt mid-operation."""
 
 
-class RowSqliteDatabase(SqliteExtDatabase):
+class RowSqliteDatabase(_BaseSqliteDatabase):
     """SQLite database subclass that configures the row factory for dict-like access."""
 
     def _connect(self) -> sqlite3.Connection:

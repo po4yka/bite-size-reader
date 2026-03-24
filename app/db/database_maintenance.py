@@ -16,7 +16,7 @@ from app.core.logging_utils import get_logger
 if TYPE_CHECKING:
     import logging
 
-    from playhouse.sqlite_ext import SqliteExtDatabase
+    from peewee import SqliteDatabase
 
 
 class DatabaseMaintenance:
@@ -28,7 +28,7 @@ class DatabaseMaintenance:
 
     def __init__(
         self,
-        database: SqliteExtDatabase,
+        database: SqliteDatabase,
         path: str,
         logger: logging.Logger | None = None,
     ) -> None:
