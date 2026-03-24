@@ -7,7 +7,7 @@ import json
 import unittest
 import zipfile
 
-from app.domain.services.backup_service import restore_from_archive
+from app.infrastructure.persistence.sqlite.backup_archive_service import restore_from_archive
 
 
 def _build_manifest(*, version: str = "1.0", user_id: int = 1) -> dict:

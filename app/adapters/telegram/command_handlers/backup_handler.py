@@ -5,7 +5,6 @@ Lets users create and list backups via Telegram commands.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -14,6 +13,7 @@ from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import UserBackup
+from app.infrastructure.persistence.sqlite.backup_archive_service import create_backup_archive
 
 if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
@@ -62,12 +62,7 @@ class BackupHandler(HandlerDependenciesMixin):
         )
 
         try:
-            # Resolve data directory from DB path
-            data_dir = str(os.path.dirname(self._db.path))
-
-            from app.domain.services.backup_service import create_backup_archive
-
-            create_backup_archive(user_id, backup.id, data_dir)
+            create_backup_archive(user_id=user_id, backup_id=backup.id, db=self._db)
 
             # Reload to get updated fields
             backup = UserBackup.get_by_id(backup.id)

@@ -4,12 +4,8 @@ User preferences, statistics, goals, and streaks endpoints.
 
 import asyncio
 import datetime as _dt
-import uuid
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
+from typing import Any
 
 from fastapi import APIRouter, Depends
 
@@ -17,8 +13,6 @@ from app.api.dependencies.database import get_summary_repository, get_user_repos
 from app.api.models.requests import CreateGoalRequest, UpdatePreferencesRequest
 from app.api.models.responses import (
     DomainStat,
-    GoalProgressResponse,
-    GoalResponse,
     PreferencesData,
     PreferencesUpdateResult,
     StreakResponse,
@@ -27,6 +21,7 @@ from app.api.models.responses import (
     success_response,
 )
 from app.api.routers.auth import get_current_user
+from app.api.services.user_goal_service import UserGoalService
 from app.application.services.topic_search_utils import ensure_mapping
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
@@ -249,82 +244,10 @@ async def get_user_stats(user: dict[str, Any] = Depends(get_current_user)):
     )
 
 
-# ---------------------------------------------------------------------------
-# Goals CRUD
-# ---------------------------------------------------------------------------
-
-
-def _resolve_scope_name(scope_type: str, scope_id: int | None) -> str | None:
-    """Resolve a human-readable name for a goal scope."""
-    if scope_type == "tag" and scope_id is not None:
-        from app.db.models import Tag
-
-        tag = Tag.get_or_none(Tag.id == scope_id)
-        return tag.name if tag else None
-    if scope_type == "collection" and scope_id is not None:
-        from app.db.models import Collection
-
-        col = Collection.get_or_none(Collection.id == scope_id)
-        return col.name if col else None
-    return None
-
-
-def _count_summaries_in_period(
-    user_id: int,
-    start: datetime,
-    end: datetime,
-    scope_type: str = "global",
-    scope_id: int | None = None,
-) -> int:
-    """Count summaries for a user in a time period, optionally scoped to tag/collection."""
-    from app.db.models import CollectionItem, Request, Summary, SummaryTag
-
-    query = (
-        Summary.select()
-        .join(Request, on=(Summary.request == Request.id))
-        .where(
-            (Request.user_id == user_id)
-            & (Summary.created_at >= start)
-            & (Summary.created_at < end)
-            & (~Summary.is_deleted)
-        )
-    )
-    if scope_type == "tag" and scope_id is not None:
-        query = query.switch(Summary).join(SummaryTag).where(SummaryTag.tag == scope_id)
-    elif scope_type == "collection" and scope_id is not None:
-        query = (
-            query.switch(Summary).join(CollectionItem).where(CollectionItem.collection == scope_id)
-        )
-    return query.count()
-
-
 @router.get("/goals")
 async def list_goals(user: dict[str, Any] = Depends(get_current_user)):
     """List all reading goals for the current user."""
-    from app.db.models import UserGoal
-
-    user_id = user["user_id"]
-
-    def _query() -> list[Any]:
-        goals = list(UserGoal.select().where(UserGoal.user == user_id))
-        result = []
-        for g in goals:
-            scope_name = _resolve_scope_name(g.scope_type, g.scope_id)
-            result.append(
-                GoalResponse(
-                    id=str(g.id),
-                    goal_type=g.goal_type,
-                    target_count=g.target_count,
-                    scope_type=g.scope_type,
-                    scope_id=g.scope_id,
-                    scope_name=scope_name,
-                    created_at=safe_isoformat(g.created_at) or "",
-                    updated_at=safe_isoformat(g.updated_at) or "",
-                ).model_dump(by_alias=True)
-            )
-        return result
-
-    goal_dicts: list[dict[str, Any]] = await asyncio.to_thread(_query)
+    goal_dicts = await UserGoalService().list_goals(user_id=user["user_id"])
     return success_response({"goals": goal_dicts})
 
 
@@ -334,60 +257,8 @@ async def upsert_goal(
     user: dict[str, Any] = Depends(get_current_user),
 ):
     """Create or update a reading goal (one per goal_type+scope per user)."""
-    from app.api.exceptions import ResourceNotFoundError
-    from app.db.models import UserGoal
-
-    user_id = user["user_id"]
-    goal_type = body.goal_type
-    target_count = body.target_count
-    scope_type = body.scope_type
-    scope_id = body.scope_id
-
-    # Validate scope entity exists and belongs to the user
-    def _validate_and_upsert() -> Any:
-        if scope_type == "tag":
-            from app.db.models import Tag
-
-            tag = Tag.get_or_none((Tag.id == scope_id) & (Tag.user == user_id) & (~Tag.is_deleted))
-            if not tag:
-                raise ResourceNotFoundError("Tag", str(scope_id))
-        elif scope_type == "collection":
-            from app.db.models import Collection
-
-            col = Collection.get_or_none(
-                (Collection.id == scope_id)
-                & (Collection.user == user_id)
-                & (~Collection.is_deleted)
-            )
-            if not col:
-                raise ResourceNotFoundError("Collection", str(scope_id))
-
-        g, created = UserGoal.get_or_create(
-            user=user_id,
-            goal_type=goal_type,
-            scope_type=scope_type,
-            scope_id=scope_id,
-            defaults={"id": uuid.uuid4(), "target_count": target_count},
-        )
-        if not created:
-            g.target_count = target_count
-            g.save()
-        return g
-
-    goal = await asyncio.to_thread(_validate_and_upsert)
-    scope_name = await asyncio.to_thread(_resolve_scope_name, goal.scope_type, goal.scope_id)
-    return success_response(
-        GoalResponse(
-            id=str(goal.id),
-            goal_type=goal.goal_type,
-            target_count=goal.target_count,
-            scope_type=goal.scope_type,
-            scope_id=goal.scope_id,
-            scope_name=scope_name,
-            created_at=safe_isoformat(goal.created_at) or "",
-            updated_at=safe_isoformat(goal.updated_at) or "",
-        )
-    )
+    payload = await UserGoalService().upsert_goal(user_id=user["user_id"], body=body)
+    return success_response(payload)
 
 
 @router.delete("/goals/{goal_type}")
@@ -396,27 +267,7 @@ async def delete_goal(
     user: dict[str, Any] = Depends(get_current_user),
 ):
     """Remove a global reading goal by type (legacy endpoint)."""
-    from app.db.models import UserGoal
-
-    user_id = user["user_id"]
-
-    def _delete() -> int:
-        return (
-            UserGoal.delete()
-            .where(
-                (UserGoal.user == user_id)
-                & (UserGoal.goal_type == goal_type)
-                & (UserGoal.scope_type == "global")
-            )
-            .execute()
-        )
-
-    deleted_count = await asyncio.to_thread(_delete)
-    if deleted_count == 0:
-        from app.api.exceptions import ResourceNotFoundError
-
-        raise ResourceNotFoundError("Goal", goal_type)
-
+    await UserGoalService().delete_global_goal(user_id=user["user_id"], goal_type=goal_type)
     return success_response({"deleted": True})
 
 
@@ -426,21 +277,7 @@ async def delete_goal_by_id(
     user: dict[str, Any] = Depends(get_current_user),
 ):
     """Remove a reading goal by its UUID."""
-    from app.db.models import UserGoal
-
-    user_id = user["user_id"]
-
-    def _delete() -> int:
-        return (
-            UserGoal.delete().where((UserGoal.user == user_id) & (UserGoal.id == goal_id)).execute()
-        )
-
-    deleted_count = await asyncio.to_thread(_delete)
-    if deleted_count == 0:
-        from app.api.exceptions import ResourceNotFoundError
-
-        raise ResourceNotFoundError("Goal", goal_id)
-
+    await UserGoalService().delete_goal_by_id(user_id=user["user_id"], goal_id=goal_id)
     return success_response({"deleted": True})
 
 
@@ -574,76 +411,5 @@ async def get_streak(user: dict[str, Any] = Depends(get_current_user)):
 @router.get("/goals/progress")
 async def get_goal_progress(user: dict[str, Any] = Depends(get_current_user)):
     """Return each goal with current progress."""
-    from app.db.models import UserGoal
-
-    user_id = user["user_id"]
-
-    def _query_goals() -> list[Any]:
-        return list(UserGoal.select().where(UserGoal.user == user_id))
-
-    goals: Sequence[UserGoal] = await asyncio.to_thread(_query_goals)
-    if not goals:
-        return success_response({"progress": []})
-
-    # Pre-compute global streak data (used for global-scoped goals)
-    streak_data = await asyncio.to_thread(_compute_streak_data, user_id)
-
-    def _build_progress() -> list[dict[str, Any]]:
-        now = datetime.now(UTC)
-        today = now.date()
-        progress_list: list[dict[str, Any]] = []
-
-        for g in goals:
-            scope_type = getattr(g, "scope_type", "global")
-            scope_id = getattr(g, "scope_id", None)
-
-            if scope_type == "global":
-                # Use pre-computed global counts
-                if g.goal_type == "daily":
-                    current = streak_data["today_count"]
-                elif g.goal_type == "weekly":
-                    current = streak_data["week_count"]
-                elif g.goal_type == "monthly":
-                    current = streak_data["month_count"]
-                else:
-                    current = 0
-            else:
-                # Compute scoped counts via _count_summaries_in_period
-                if g.goal_type == "daily":
-                    start = datetime(today.year, today.month, today.day, tzinfo=UTC)
-                    end = start + timedelta(days=1)
-                elif g.goal_type == "weekly":
-                    start_of_week = today - timedelta(days=today.weekday())
-                    start = datetime(
-                        start_of_week.year, start_of_week.month, start_of_week.day, tzinfo=UTC
-                    )
-                    end = start + timedelta(days=7)
-                elif g.goal_type == "monthly":
-                    start = datetime(today.year, today.month, 1, tzinfo=UTC)
-                    # Next month
-                    if today.month == 12:
-                        end = datetime(today.year + 1, 1, 1, tzinfo=UTC)
-                    else:
-                        end = datetime(today.year, today.month + 1, 1, tzinfo=UTC)
-                else:
-                    start = end = datetime.now(UTC)
-
-                current = _count_summaries_in_period(user_id, start, end, scope_type, scope_id)
-
-            scope_name = _resolve_scope_name(scope_type, scope_id)
-            progress_list.append(
-                GoalProgressResponse(
-                    goal_type=g.goal_type,
-                    target_count=g.target_count,
-                    current_count=current,
-                    achieved=current >= g.target_count,
-                    scope_type=scope_type,
-                    scope_id=scope_id,
-                    scope_name=scope_name,
-                ).model_dump(by_alias=True)
-            )
-
-        return progress_list
-
-    progress = await asyncio.to_thread(_build_progress)
+    progress = await UserGoalService().get_goal_progress(user_id=user["user_id"])
     return success_response({"progress": progress})

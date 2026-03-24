@@ -9,12 +9,17 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile
 from starlette.responses import FileResponse
 
+from app.api.dependencies.database import get_session_manager
 from app.api.exceptions import APIException, ErrorCode, ResourceNotFoundError
 from app.api.models.responses import BackupResponse, success_response
 from app.api.routers.auth import get_current_user
 from app.api.search_helpers import isotime
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
+from app.infrastructure.persistence.sqlite.backup_archive_service import (
+    create_backup_archive,
+    restore_from_archive,
+)
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -32,14 +37,6 @@ def _get_backup_repo():
     )
 
     return SqliteBackupRepositoryAdapter(runtime.db)
-
-
-def _get_data_dir() -> str:
-    """Resolve the data directory from the DB path."""
-    from app.di.api import get_current_api_runtime
-
-    runtime = get_current_api_runtime()
-    return str(os.path.dirname(runtime.db.path))
 
 
 def _backup_to_response(b: dict[str, Any]) -> BackupResponse:
@@ -92,11 +89,12 @@ async def create_backup(
         )
 
     backup = await repo.async_create_backup(user_id, type="manual")
-    data_dir = _get_data_dir()
-
-    from app.domain.services.backup_service import create_backup_archive
-
-    background_tasks.add_task(create_backup_archive, user_id, backup["id"], data_dir)
+    background_tasks.add_task(
+        create_backup_archive,
+        user_id=user_id,
+        backup_id=backup["id"],
+        db=get_session_manager(),
+    )
 
     return success_response(_backup_to_response(backup).model_dump(by_alias=True))
 
@@ -126,9 +124,7 @@ async def restore_backup(
             status_code=400,
         )
 
-    from app.domain.services.backup_service import restore_from_archive
-
-    summary = restore_from_archive(user["user_id"], content)
+    summary = restore_from_archive(user["user_id"], content, db=get_session_manager())
     return success_response(summary)
 
 
