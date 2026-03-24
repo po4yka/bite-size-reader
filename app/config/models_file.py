@@ -121,3 +121,69 @@ def load_models_yaml(path: str | Path | None = None) -> dict[str, str]:
         )
 
     return result
+
+
+# Reverse mapping: friendly name -> (yaml_section, yaml_key)
+_SECTION_MAP: dict[str, tuple[str, str]] = {
+    "primary": ("openrouter", "model"),
+    "flash": ("openrouter", "flash_model"),
+    "technical": ("model_routing", "technical_model"),
+    "sociopolitical": ("model_routing", "sociopolitical_model"),
+    "long_context": ("model_routing", "long_context_model"),
+    "default": ("model_routing", "default_model"),
+    "vision": ("attachment", "vision_model"),
+}
+
+
+def save_model_to_yaml(
+    section: str,
+    new_value: str,
+    path: str | Path | None = None,
+) -> tuple[str | None, str]:
+    """Update a single model field in models.yaml.
+
+    Args:
+        section: Friendly name (primary, flash, technical, etc.)
+        new_value: New model identifier string.
+        path: Override path to models.yaml.
+
+    Returns:
+        (old_value, new_value) on success.
+
+    Raises:
+        ValueError: If section is unknown.
+        FileNotFoundError: If models.yaml does not exist.
+    """
+    if section not in _SECTION_MAP:
+        msg = f"Unknown section '{section}'. Valid: {', '.join(sorted(_SECTION_MAP))}"
+        raise ValueError(msg)
+
+    yaml_section, yaml_key = _SECTION_MAP[section]
+
+    if path is None:
+        import os
+
+        path = os.environ.get("MODELS_CONFIG_PATH", _DEFAULT_PATH)
+
+    config_path = Path(path)
+    if not config_path.is_file():
+        msg = f"Models config not found: {config_path}"
+        raise FileNotFoundError(msg)
+
+    import yaml  # type: ignore[import-untyped]
+
+    raw = config_path.read_text(encoding="utf-8")
+    data = yaml.safe_load(raw) or {}
+
+    section_data = data.setdefault(yaml_section, {})
+    old_value = section_data.get(yaml_key)
+    section_data[yaml_key] = new_value
+
+    config_path.write_text(
+        yaml.dump(data, default_flow_style=False, sort_keys=False), encoding="utf-8"
+    )
+    logger.info(
+        "models_yaml_updated",
+        extra={"section": section, "old": old_value, "new": new_value},
+    )
+    return old_value, new_value

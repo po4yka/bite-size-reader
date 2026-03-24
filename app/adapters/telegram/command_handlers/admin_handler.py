@@ -42,8 +42,10 @@ class AdminHandler:
         response_formatter: ResponseFormatter,
         url_processor: URLProcessor,
         url_handler: URLHandler | None = None,
+        cfg: Any = None,
     ) -> None:
         self._db = db
+        self._cfg = cfg
         self._formatter = response_formatter
         self._url_processor = url_processor
         self._url_handler = url_handler
@@ -334,6 +336,93 @@ class AdminHandler:
                 response_type="dbverify",
                 start_time=ctx.start_time,
                 logger_=logger,
+            )
+
+    async def handle_setmodel(self, ctx: CommandExecutionContext) -> None:
+        """Handle /setmodel <section> <model_name> command."""
+        try:
+            parts = (ctx.text or "").strip().split(None, 2)
+            if len(parts) < 3:
+                from app.config.models_file import _SECTION_MAP
+
+                valid = ", ".join(sorted(_SECTION_MAP))
+                await ctx.response_formatter.safe_reply(
+                    ctx.message,
+                    f"Usage: /setmodel <section> <model>\nSections: {valid}",
+                )
+                return
+
+            _, section, new_model = parts
+
+            from app.config._validators import validate_model_name
+
+            try:
+                validate_model_name(new_model)
+            except ValueError as exc:
+                await ctx.response_formatter.safe_reply(ctx.message, f"Invalid model: {exc}")
+                return
+
+            from app.config.models_file import save_model_to_yaml
+
+            old_value, new_value = save_model_to_yaml(section, new_model)
+
+            # Trigger config reload
+            cfg_holder = self._cfg
+            if hasattr(cfg_holder, "_cfg"):
+                from app.config.config_holder import ConfigReloader
+
+                reloader = ConfigReloader(cfg_holder)
+                reloader.reload_now()
+
+            await ctx.response_formatter.safe_reply(
+                ctx.message,
+                f"Model updated:\n"
+                f"  Section: <code>{section}</code>\n"
+                f"  Old: <code>{old_value or 'unset'}</code>\n"
+                f"  New: <code>{new_value}</code>",
+                parse_mode="HTML",
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            await ctx.response_formatter.safe_reply(ctx.message, str(exc))
+        except Exception:
+            logger.exception("command_setmodel_failed", extra={"cid": ctx.correlation_id})
+            await ctx.response_formatter.safe_reply(ctx.message, "Failed to update model.")
+
+    async def handle_models(self, ctx: CommandExecutionContext) -> None:
+        """Handle /models command: show active model configuration."""
+        try:
+            cfg = self._cfg
+            or_cfg = cfg.openrouter
+            rt_cfg = cfg.model_routing
+            att_cfg = cfg.attachment
+
+            lines = [
+                "<b>Active Model Configuration</b>",
+                "",
+                "<b>OpenRouter</b>",
+                f"  Primary: <code>{or_cfg.model}</code>",
+                f"  Fallbacks: <code>{', '.join(or_cfg.fallback_models)}</code>",
+                f"  Flash: <code>{or_cfg.flash_model}</code>",
+                f"  Flash fallbacks: <code>{', '.join(or_cfg.flash_fallback_models)}</code>",
+                "",
+                "<b>Content Routing</b>",
+                f"  Enabled: {rt_cfg.enabled}",
+                f"  Default: <code>{rt_cfg.default_model}</code>",
+                f"  Technical: <code>{rt_cfg.technical_model}</code>",
+                f"  Sociopolitical: <code>{rt_cfg.sociopolitical_model}</code>",
+                f"  Long context: <code>{rt_cfg.long_context_model}</code>",
+                f"  Threshold: {rt_cfg.long_context_threshold:,} chars",
+                "",
+                "<b>Vision</b>",
+                f"  Model: <code>{att_cfg.vision_model}</code>",
+            ]
+            await ctx.response_formatter.safe_reply(
+                ctx.message, "\n".join(lines), parse_mode="HTML"
+            )
+        except Exception:
+            logger.exception("command_models_failed", extra={"cid": ctx.correlation_id})
+            await ctx.response_formatter.safe_reply(
+                ctx.message, "Failed to retrieve model configuration."
             )
 
     async def handle_clearcache(self, ctx: CommandExecutionContext) -> None:

@@ -5,6 +5,7 @@ from .adaptive_timeout import AdaptiveTimeoutConfig
 from .api import ApiLimitsConfig, AuthConfig, SyncConfig
 from .background import BackgroundProcessorConfig
 from .circuit_breaker import CircuitBreakerConfig
+from .config_holder import ConfigHolder, ConfigReloader
 from .content import ContentLimitsConfig
 from .database import DatabaseConfig
 from .firecrawl import FirecrawlConfig
@@ -33,6 +34,8 @@ __all__ = [
     "CircuitBreakerConfig",
     "Config",
     "ConfigHelper",
+    "ConfigHolder",
+    "ConfigReloader",
     "ContentLimitsConfig",
     "DatabaseConfig",
     "ElevenLabsConfig",

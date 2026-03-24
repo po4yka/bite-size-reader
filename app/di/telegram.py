@@ -443,6 +443,7 @@ def _build_command_dispatcher_deps(
         response_formatter=response_formatter,
         url_processor=url_processor,
         url_handler=url_handler,
+        cfg=cfg,
     )
     url_commands_handler = URLCommandsHandler(
         response_formatter=response_formatter,
@@ -574,6 +575,8 @@ def _build_command_dispatcher_deps(
             UidCommandRoute("/help", build_uid_handler(onboarding_handler.handle_help)),
             UidCommandRoute("/dbinfo", build_uid_handler(admin_handler.handle_dbinfo)),
             UidCommandRoute("/dbverify", build_uid_handler(admin_handler.handle_dbverify)),
+            UidCommandRoute("/models", build_uid_handler(admin_handler.handle_models)),
+            UidCommandRoute("/setmodel", build_uid_handler(admin_handler.handle_setmodel)),
             UidCommandRoute("/clearcache", build_uid_handler(admin_handler.handle_clearcache)),
         ),
         pre_alias_text=(
