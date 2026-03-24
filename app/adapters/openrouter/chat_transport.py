@@ -312,12 +312,17 @@ class ChatTransport:
                         sanitized_messages=sanitized_messages,
                     )
                     if status_code in {400, 404, 405, 422, 501}:
-                        outcome.retry = RetryDirective(
-                            rf_mode=payload.rf_mode_current,
-                            response_format=payload.response_format_current,
-                            backoff_needed=False,
-                            fallback_to_non_stream=True,
-                        )
+                        if outcome.retry is not None:
+                            # Preserve format downgrade decision, just add stream fallback
+                            outcome.retry.fallback_to_non_stream = True
+                            outcome.retry.backoff_needed = False
+                        else:
+                            outcome.retry = RetryDirective(
+                                rf_mode=payload.rf_mode_current,
+                                response_format=payload.response_format_current,
+                                backoff_needed=False,
+                                fallback_to_non_stream=True,
+                            )
                         outcome.structured_output_state = payload.structured_output_state
                     return outcome
 

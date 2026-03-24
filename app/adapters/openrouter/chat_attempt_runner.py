@@ -96,6 +96,8 @@ class ChatAttemptRunner:
                         },
                     )
                     state.request = self._copy_request_with_stream(state.request, False)
+                    rf_mode_current = outcome.retry.rf_mode
+                    response_format_current = outcome.retry.response_format
                     continue
 
                 rf_mode_current = outcome.retry.rf_mode

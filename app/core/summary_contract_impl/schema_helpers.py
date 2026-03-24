@@ -59,7 +59,6 @@ def get_summary_json_schema() -> dict[str, Any]:
     schema = SummaryModel.model_json_schema()
 
     if isinstance(schema, dict):
-        schema.setdefault("$schema", "http://json-schema.org/draft-07/schema#")
         schema.setdefault("type", "object")
         enforce_no_additional_props(schema)
         enforce_required_all(schema)
