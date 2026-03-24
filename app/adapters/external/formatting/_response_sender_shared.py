@@ -93,7 +93,7 @@ def build_message_kwargs(
     """Build optional kwargs for Telegram send/edit methods."""
     kwargs: dict[str, Any] = {}
     if parse_mode is not None:
-        kwargs["parse_mode"] = parse_mode
+        kwargs["parse_mode"] = normalize_parse_mode(parse_mode)
     if reply_markup is not None:
         kwargs["reply_markup"] = reply_markup
     if disable_web_page_preview is not None:
