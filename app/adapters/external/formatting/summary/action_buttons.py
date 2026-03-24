@@ -17,6 +17,7 @@ def create_action_buttons(summary_id: int | str, lang: str = "en") -> list[list[
         {"text": t("btn_pdf", lang), "callback_data": f"export:{summary_id_str}:pdf"},
         {"text": t("btn_md", lang), "callback_data": f"export:{summary_id_str}:md"},
         {"text": t("btn_html", lang), "callback_data": f"export:{summary_id_str}:html"},
+        {"text": t("btn_json", lang), "callback_data": f"export:{summary_id_str}:json"},
     ]
 
     action_row = [
@@ -58,6 +59,9 @@ def create_inline_keyboard(
                 ),
                 InlineKeyboardButton(
                     t("btn_html", lang), callback_data=f"export:{summary_id_str}:html"
+                ),
+                InlineKeyboardButton(
+                    t("btn_json", lang), callback_data=f"export:{summary_id_str}:json"
                 ),
             ],
             [

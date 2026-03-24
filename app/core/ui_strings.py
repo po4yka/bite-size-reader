@@ -329,6 +329,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     "btn_pdf": {"en": "PDF", "ru": "PDF"},
     "btn_md": {"en": "MD", "ru": "MD"},
     "btn_html": {"en": "HTML", "ru": "HTML"},
+    "btn_json": {"en": "JSON", "ru": "JSON"},
     "btn_save": {"en": "Save", "ru": "Сохранить"},
     "btn_similar": {"en": "Similar", "ru": "Похожие"},
     "btn_ask": {"en": "Ask", "ru": "Спросить"},

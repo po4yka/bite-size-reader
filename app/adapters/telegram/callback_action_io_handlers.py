@@ -136,12 +136,15 @@ class CallbackActionIOHandlers:
             )
             return False
 
-        if export_format not in ("pdf", "md", "html"):
+        if export_format not in ("pdf", "md", "html", "json"):
             await self._response_formatter.safe_reply(
                 message,
                 f"Unknown export format: {export_format}",
             )
             return True
+
+        if export_format == "json":
+            return await self._handle_json_export(message, summary_id, correlation_id)
 
         from app.adapters.external.formatting.export_formatter import ExportFormatter
 
@@ -196,6 +199,54 @@ class CallbackActionIOHandlers:
 
         return True
 
+    async def _handle_json_export(
+        self,
+        message: Any,
+        summary_id: str,
+        correlation_id: str,
+    ) -> bool:
+        """Export summary as a JSON file attachment."""
+        import io
+        import json
+
+        from app.adapters.external.formatting._response_sender_shared import build_json_filename
+
+        payload = await self._store.load_summary_payload(summary_id, correlation_id=correlation_id)
+        if not payload:
+            await self._response_formatter.safe_reply(
+                message,
+                t("cb_export_failed", self._lang).format(cid=correlation_id),
+            )
+            return True
+
+        try:
+            pretty = json.dumps(payload, ensure_ascii=False, indent=2)
+            bio = io.BytesIO(pretty.encode("utf-8"))
+            bio.name = build_json_filename(payload)
+
+            if hasattr(message, "reply_document"):
+                await message.reply_document(bio, caption="Full Summary JSON")
+            else:
+                await self._response_formatter.safe_reply(
+                    message,
+                    f"JSON ready but unable to send as document. Error ID: {correlation_id}",
+                )
+        except Exception as exc:
+            logger.exception(
+                "json_export_failed",
+                extra={"summary_id": summary_id, "error": str(exc), "cid": correlation_id},
+            )
+            await self._response_formatter.safe_reply(
+                message,
+                f"Export failed: {type(exc).__name__}. Error ID: {correlation_id}",
+            )
+
+        logger.info(
+            "export_completed",
+            extra={"format": "json", "summary_id": summary_id, "cid": correlation_id},
+        )
+        return True
+
     async def _send_file(
         self,
         message: Any,
@@ -214,6 +265,7 @@ class CallbackActionIOHandlers:
             "pdf": "PDF export",
             "md": "Markdown export",
             "html": "HTML export",
+            "json": "JSON export",
         }
         caption = caption_map.get(export_format, "Exported file")
 
