@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Button, Tag } from "@carbon/react";
+import { useNavigate } from "react-router-dom";
+import { Button, Tag, Tile } from "@carbon/react";
 import { useSummariesList, useToggleFavorite } from "../../hooks/useSummaries";
 import type { SummaryCompact } from "../../api/types";
 import { SummariesDataTable } from "../../components/SummariesDataTable";
@@ -23,6 +24,7 @@ const HEADERS: Array<{ key: string; header: string }> = [
 ];
 
 export default function LibraryPage() {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
@@ -43,12 +45,13 @@ export default function LibraryPage() {
     <section className="page-section">
       <h1>Library</h1>
 
-      <div className="filter-row">
+      <div className="filter-row" role="radiogroup" aria-label="Filter articles">
         {FILTERS.map((entry) => (
           <button
             key={entry.key}
             className="filter-chip"
-            aria-pressed={entry.key === filter}
+            role="radio"
+            aria-checked={entry.key === filter}
             onClick={() => {
               setFilter(entry.key);
               setPage(1);
@@ -60,49 +63,67 @@ export default function LibraryPage() {
         ))}
       </div>
 
-      <SummariesDataTable
-        summaries={summariesQuery.data?.summaries ?? []}
-        headers={HEADERS}
-        pagination={{
-          total: summariesQuery.data?.pagination.total ?? 0,
-          page,
-          pageSize,
-          pageSizes: [10, 20, 50],
-          onChange: (event) => {
-            setPage(event.page);
-            setPageSize(event.pageSize);
-          },
-        }}
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        isLoading={summariesQuery.isLoading && !summariesQuery.data}
-        error={summariesQuery.error}
-        title="Article summaries"
-        renderActions={(summary: SummaryCompact) => (
-          <div className="table-actions">
-            <Button
-              kind={summary.isFavorited ? "primary" : "ghost"}
-              size="sm"
-              onClick={(event) => {
-                event.stopPropagation();
-                favoriteMutation.mutate(summary.id);
-              }}
-            >
-              {summary.isFavorited ? "Favorited" : "Favorite"}
-            </Button>
-            <Button
-              kind="tertiary"
-              size="sm"
-              onClick={(event) => {
-                event.stopPropagation();
-                setCollectionModalSummaryId(summary.id);
-              }}
-            >
-              Add to collection
+      {!summariesQuery.isLoading &&
+      !summariesQuery.error &&
+      (summariesQuery.data?.summaries.length ?? 0) === 0 ? (
+        <Tile>
+          <div className="page-heading-group">
+            <h3>No articles yet</h3>
+            <p className="page-subtitle">
+              Submit a URL or forward a Telegram message to start building your library.
+            </p>
+          </div>
+          <div className="form-actions">
+            <Button kind="primary" size="sm" onClick={() => navigate("/submit")}>
+              Submit your first article
             </Button>
           </div>
-        )}
-      />
+        </Tile>
+      ) : (
+        <SummariesDataTable
+          summaries={summariesQuery.data?.summaries ?? []}
+          headers={HEADERS}
+          pagination={{
+            total: summariesQuery.data?.pagination.total ?? 0,
+            page,
+            pageSize,
+            pageSizes: [10, 20, 50],
+            onChange: (event) => {
+              setPage(event.page);
+              setPageSize(event.pageSize);
+            },
+          }}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          isLoading={summariesQuery.isLoading && !summariesQuery.data}
+          error={summariesQuery.error}
+          title="Article summaries"
+          renderActions={(summary: SummaryCompact) => (
+            <div className="table-actions">
+              <Button
+                kind={summary.isFavorited ? "primary" : "ghost"}
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  favoriteMutation.mutate(summary.id);
+                }}
+              >
+                {summary.isFavorited ? "Favorited" : "Favorite"}
+              </Button>
+              <Button
+                kind="tertiary"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setCollectionModalSummaryId(summary.id);
+                }}
+              >
+                Add to collection
+              </Button>
+            </div>
+          )}
+        />
+      )}
 
       <AddToCollectionModal
         open={collectionModalSummaryId != null}

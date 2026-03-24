@@ -10,6 +10,7 @@ import {
   HeaderName,
   InlineNotification,
   SideNav,
+  SideNavDivider,
   SideNavItems,
   SideNavLink,
   SkipToContent,
@@ -35,21 +36,37 @@ import {
 import { useAuth } from "../auth/AuthProvider";
 import { FEATURE_FLAGS } from "../routes/features";
 
-const NAV_ITEMS = [
-  { path: "/library", label: "Library", icon: Book },
-  { path: "/articles", label: "Articles", icon: Book },
-  { path: "/search", label: "Search", icon: SearchIcon },
-  { path: "/submit", label: "Submit", icon: Add },
-  { path: "/collections", label: "Collections", icon: Catalog },
-  { path: "/tags", label: "Tags", icon: Tag },
-  { path: "/feeds", label: "Feeds", icon: Rss },
-  { path: "/digest", label: "Digest", icon: Notification },
-  { path: "/webhooks", label: "Webhooks", icon: ConnectionSignal },
-  { path: "/rules", label: "Rules", icon: Lightning },
-  { path: "/import-export", label: "Import/Export", icon: DocumentImport },
-  { path: "/backups", label: "Backups", icon: DataBackup },
-  { path: "/preferences", label: "Preferences", icon: User },
-] as const;
+interface NavItem {
+  readonly path: string;
+  readonly label: string;
+  readonly icon: typeof Book;
+}
+
+const NAV_GROUPS: ReadonlyArray<ReadonlyArray<NavItem>> = [
+  [
+    { path: "/library", label: "Library", icon: Book },
+    { path: "/articles", label: "Articles", icon: Book },
+    { path: "/search", label: "Search", icon: SearchIcon },
+    { path: "/submit", label: "Submit", icon: Add },
+  ],
+  [
+    { path: "/collections", label: "Collections", icon: Catalog },
+    { path: "/tags", label: "Tags", icon: Tag },
+    { path: "/feeds", label: "Feeds", icon: Rss },
+  ],
+  [
+    { path: "/digest", label: "Digest", icon: Notification },
+    { path: "/webhooks", label: "Webhooks", icon: ConnectionSignal },
+    { path: "/rules", label: "Rules", icon: Lightning },
+  ],
+  [
+    { path: "/import-export", label: "Import/Export", icon: DocumentImport },
+    { path: "/backups", label: "Backups", icon: DataBackup },
+    { path: "/preferences", label: "Preferences", icon: User },
+  ],
+];
+
+const NAV_ITEMS = NAV_GROUPS.flat();
 
 const ADMIN_NAV_ITEM = { path: "/admin", label: "Admin", icon: Settings } as const;
 
@@ -183,34 +200,44 @@ export default function AppShell() {
           isFixedNav
         >
           <SideNavItems>
-            {NAV_ITEMS.map((item) => (
-              <SideNavLink
-                key={item.path}
-                href={`/web${item.path}`}
-                isActive={activePath === item.path}
-                renderIcon={item.icon}
-                onClick={(event) => {
-                  event.preventDefault();
-                  navigate(item.path);
-                  setExpanded(false);
-                }}
-              >
-                {item.label}
-              </SideNavLink>
+            {NAV_GROUPS.map((group, groupIndex) => (
+              <span key={groupIndex}>
+                {groupIndex > 0 && <SideNavDivider />}
+                {group.map((item) => (
+                  <SideNavLink
+                    key={item.path}
+                    href={`/web${item.path}`}
+                    isActive={activePath === item.path}
+                    aria-current={activePath === item.path ? "page" : undefined}
+                    renderIcon={item.icon}
+                    onClick={(event: React.MouseEvent) => {
+                      event.preventDefault();
+                      navigate(item.path);
+                      setExpanded(false);
+                    }}
+                  >
+                    {item.label}
+                  </SideNavLink>
+                ))}
+              </span>
             ))}
             {FEATURE_FLAGS.admin && (
-              <SideNavLink
-                href={`/web${ADMIN_NAV_ITEM.path}`}
-                isActive={activePath === ADMIN_NAV_ITEM.path}
-                renderIcon={ADMIN_NAV_ITEM.icon}
-                onClick={(event) => {
-                  event.preventDefault();
-                  navigate(ADMIN_NAV_ITEM.path);
-                  setExpanded(false);
-                }}
-              >
-                {ADMIN_NAV_ITEM.label}
-              </SideNavLink>
+              <>
+                <SideNavDivider />
+                <SideNavLink
+                  href={`/web${ADMIN_NAV_ITEM.path}`}
+                  isActive={activePath === ADMIN_NAV_ITEM.path}
+                  aria-current={activePath === ADMIN_NAV_ITEM.path ? "page" : undefined}
+                  renderIcon={ADMIN_NAV_ITEM.icon}
+                  onClick={(event: React.MouseEvent) => {
+                    event.preventDefault();
+                    navigate(ADMIN_NAV_ITEM.path);
+                    setExpanded(false);
+                  }}
+                >
+                  {ADMIN_NAV_ITEM.label}
+                </SideNavLink>
+              </>
             )}
           </SideNavItems>
         </SideNav>

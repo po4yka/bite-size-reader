@@ -108,7 +108,7 @@ export default function LoginPage() {
       <Tile className="login-card">
         <div className="login-header">
           <h2>Bite-Size Reader</h2>
-          <p style={{ color: "var(--cds-text-secondary)" }}>Sign in to access your summaries.</p>
+          <p className="page-subtitle">Sign in to access your summaries.</p>
         </div>
 
         <div className="login-hero">

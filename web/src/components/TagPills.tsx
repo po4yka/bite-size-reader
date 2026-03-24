@@ -16,7 +16,7 @@ export default function TagPills({ tags, onRemove }: TagPillsProps) {
   if (tags.length === 0) return null;
 
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+    <div className="tag-row">
       {tags.map((tag) => (
         <Tag
           key={tag.id}
@@ -26,7 +26,7 @@ export default function TagPills({ tags, onRemove }: TagPillsProps) {
           onClose={() => onRemove?.(tag.id)}
           style={
             tag.color
-              ? { backgroundColor: tag.color, color: "#fff", borderColor: tag.color }
+              ? { backgroundColor: tag.color, color: "var(--cds-text-on-color, #fff)", borderColor: tag.color }
               : undefined
           }
         >

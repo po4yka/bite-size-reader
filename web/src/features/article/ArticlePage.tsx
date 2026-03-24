@@ -86,7 +86,10 @@ export default function ArticlePage() {
   }, [summaryId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    let rafId: number | null = null;
+
     const updateProgress = () => {
+      rafId = null;
       const doc = document.documentElement;
       const scrollHeight = doc.scrollHeight - window.innerHeight;
       if (scrollHeight <= 0) {
@@ -97,12 +100,19 @@ export default function ArticlePage() {
       setReadProgress(Math.max(0, Math.min(100, nextProgress)));
     };
 
+    const onScroll = () => {
+      if (rafId === null) {
+        rafId = requestAnimationFrame(updateProgress);
+      }
+    };
+
     updateProgress();
-    window.addEventListener("scroll", updateProgress, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", updateProgress);
     return () => {
-      window.removeEventListener("scroll", updateProgress);
+      window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", updateProgress);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [showContent, summaryId]);
 
@@ -300,20 +310,23 @@ export default function ArticlePage() {
                 Stop
               </Button>
             )}
-            <Button kind="tertiary" onClick={() => window.open(detail.url, "_blank", "noopener,noreferrer")}>
+          </ButtonSet>
+
+          <div className="form-actions">
+            <Button kind="tertiary" size="sm" onClick={() => window.open(detail.url, "_blank", "noopener,noreferrer")}>
               Open original
             </Button>
-            <Button kind="ghost" onClick={() => setShowContent((prev) => !prev)}>
+            <Button kind="ghost" size="sm" onClick={() => setShowContent((prev) => !prev)}>
               {showContent ? "Hide full content" : "Show full content"}
             </Button>
             {exportPdfMutation.isPending ? (
               <InlineLoading description="Exporting PDF…" />
             ) : (
-              <Button kind="ghost" onClick={() => exportPdfMutation.mutate(summaryId)}>
+              <Button kind="ghost" size="sm" onClick={() => exportPdfMutation.mutate(summaryId)}>
                 Export PDF
               </Button>
             )}
-          </ButtonSet>
+          </div>
 
           {audioState === "error" && audioError && (
             <InlineNotification

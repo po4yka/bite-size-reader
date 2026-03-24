@@ -29,18 +29,29 @@ interface HighlightsPanelProps {
 }
 
 const COLOR_OPTIONS = [
-  { value: "#FEF3C7", label: "Yellow" },
-  { value: "#D1FAE5", label: "Green" },
-  { value: "#DBEAFE", label: "Blue" },
-  { value: "#FEE2E2", label: "Red" },
+  { value: "yellow", cssVar: "var(--bsr-highlight-yellow)", label: "Yellow" },
+  { value: "green", cssVar: "var(--bsr-highlight-green)", label: "Green" },
+  { value: "blue", cssVar: "var(--bsr-highlight-blue)", label: "Blue" },
+  { value: "red", cssVar: "var(--bsr-highlight-red)", label: "Red" },
 ] as const;
 
 type ColorValue = (typeof COLOR_OPTIONS)[number]["value"];
 
+/** Resolve a color value to its CSS variable. Falls back to yellow for legacy hex values. */
+function resolveColorCss(color: string | null): string {
+  const match = COLOR_OPTIONS.find((opt) => opt.value === color);
+  if (match) return match.cssVar;
+  // Legacy hex fallback
+  if (color === "#D1FAE5") return "var(--bsr-highlight-green)";
+  if (color === "#DBEAFE") return "var(--bsr-highlight-blue)";
+  if (color === "#FEE2E2") return "var(--bsr-highlight-red)";
+  return "var(--bsr-highlight-yellow)";
+}
+
 function colorTagType(color: string | null): "warm-gray" | "green" | "blue" | "red" {
-  if (color === "#D1FAE5") return "green";
-  if (color === "#DBEAFE") return "blue";
-  if (color === "#FEE2E2") return "red";
+  if (color === "green" || color === "#D1FAE5") return "green";
+  if (color === "blue" || color === "#DBEAFE") return "blue";
+  if (color === "red" || color === "#FEE2E2") return "red";
   return "warm-gray";
 }
 
@@ -69,7 +80,7 @@ interface HighlightRowProps {
 function HighlightRow({ highlight, summaryId }: HighlightRowProps) {
   const [editing, setEditing] = useState(false);
   const [editNote, setEditNote] = useState(highlight.note ?? "");
-  const [editColor, setEditColor] = useState<string>(highlight.color ?? "#FEF3C7");
+  const [editColor, setEditColor] = useState<string>(highlight.color ?? "yellow");
 
   const updateMutation = useUpdateHighlight(summaryId);
   const deleteMutation = useDeleteHighlight(summaryId);
@@ -91,23 +102,19 @@ function HighlightRow({ highlight, summaryId }: HighlightRowProps) {
 
   function handleCancel(): void {
     setEditNote(highlight.note ?? "");
-    setEditColor(highlight.color ?? "#FEF3C7");
+    setEditColor(highlight.color ?? "yellow");
     setEditing(false);
   }
 
   return (
     <div
       className="highlight-row"
-      style={{
-        borderLeft: `4px solid ${highlight.color ?? "#FEF3C7"}`,
-        paddingLeft: "0.75rem",
-        marginBottom: "1rem",
-      }}
+      style={{ borderLeftColor: resolveColorCss(highlight.color) }}
     >
-      <p style={{ margin: "0 0 0.25rem" }}>{truncate(highlight.text, 100)}</p>
+      <p className="highlight-text">{truncate(highlight.text, 100)}</p>
 
       {editing ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.5rem" }}>
+        <div className="highlight-edit-form">
           <TextInput
             id={`highlight-note-${highlight.id}`}
             labelText="Note"
@@ -115,14 +122,14 @@ function HighlightRow({ highlight, summaryId }: HighlightRowProps) {
             onChange={(e) => setEditNote(e.currentTarget.value)}
             size="sm"
           />
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div className="highlight-color-picker">
             {COLOR_OPTIONS.map((opt) => (
               <Tag
                 key={opt.value}
                 type={colorTagType(opt.value)}
                 style={{
                   cursor: "pointer",
-                  outline: editColor === opt.value ? "2px solid #0f62fe" : "none",
+                  outline: editColor === opt.value ? `2px solid var(--cds-focus)` : "none",
                 }}
                 onClick={() => setEditColor(opt.value as ColorValue)}
               >
@@ -130,7 +137,7 @@ function HighlightRow({ highlight, summaryId }: HighlightRowProps) {
               </Tag>
             ))}
           </div>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div className="highlight-actions">
             <IconButton
               label="Save"
               size="sm"
@@ -147,9 +154,9 @@ function HighlightRow({ highlight, summaryId }: HighlightRowProps) {
         </div>
       ) : (
         <>
-          {highlight.note && <p className="muted" style={{ margin: "0 0 0.25rem", fontSize: "0.875rem" }}>{highlight.note}</p>}
-          <p className="muted" style={{ margin: "0 0 0.25rem", fontSize: "0.75rem" }}>{formatDate(highlight.createdAt)}</p>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          {highlight.note && <p className="muted highlight-note">{highlight.note}</p>}
+          <p className="muted highlight-date">{formatDate(highlight.createdAt)}</p>
+          <div className="highlight-actions">
             <IconButton
               label="Edit"
               size="sm"
@@ -183,7 +190,7 @@ export default function HighlightsPanel({ summaryId }: HighlightsPanelProps) {
   const [newStartOffset, setNewStartOffset] = useState(0);
   const [newEndOffset, setNewEndOffset] = useState(0);
   const [newNote, setNewNote] = useState("");
-  const [newColor, setNewColor] = useState("#FEF3C7");
+  const [newColor, setNewColor] = useState("yellow");
 
   function handleSaveNew(): void {
     if (!newText.trim()) return;
@@ -201,7 +208,7 @@ export default function HighlightsPanel({ summaryId }: HighlightsPanelProps) {
           setNewStartOffset(0);
           setNewEndOffset(0);
           setNewNote("");
-          setNewColor("#FEF3C7");
+          setNewColor("yellow");
         },
       },
     );
@@ -209,7 +216,7 @@ export default function HighlightsPanel({ summaryId }: HighlightsPanelProps) {
 
   return (
     <Tile>
-      <h4 style={{ marginTop: 0, marginBottom: "1rem" }}>Highlights</h4>
+      <h4 className="highlight-heading">Highlights</h4>
 
       {highlightsQuery.isLoading && <SkeletonText paragraph lineCount={3} />}
       <QueryErrorNotification error={highlightsQuery.error} title="Failed to load highlights" />
@@ -231,10 +238,10 @@ export default function HighlightsPanel({ summaryId }: HighlightsPanelProps) {
             </div>
           )}
 
-          <div style={{ marginTop: "1rem" }}>
+          <div className="highlight-add-section">
           <Accordion>
             <AccordionItem title="Add Highlight">
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <div className="highlight-edit-form">
                 <TextArea
                   id="new-highlight-text"
                   labelText="Highlighted text"

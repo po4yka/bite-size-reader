@@ -128,7 +128,8 @@ export function SummariesDataTable({
                           className="clickable-row"
                         >
                           {row.cells.map((cell) => {
-                            if (cell.info.header === "Topics") {
+                            const headerKey = cell.id.split(":").pop();
+                            if (headerKey === "topicTags") {
                               return (
                                 <TableCell key={cell.id}>
                                   <div className="tag-row">
@@ -139,14 +140,14 @@ export function SummariesDataTable({
                                 </TableCell>
                               );
                             }
-                            if (cell.info.header === "Actions" && renderActions) {
+                            if (headerKey === "actions" && renderActions) {
                               return (
                                 <TableCell key={cell.id}>
                                   {renderActions(summary)}
                                 </TableCell>
                               );
                             }
-                            if (cell.info.header === "Status" && renderStatusColumn) {
+                            if (headerKey === "status" && renderStatusColumn) {
                               return (
                                 <TableCell key={cell.id}>
                                   {renderStatusColumn(summary)}

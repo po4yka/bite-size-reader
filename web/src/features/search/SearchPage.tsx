@@ -303,7 +303,7 @@ export default function SearchPage() {
           <div className="search-facet-grid">
             <div>
               <p className="muted">Top domains</p>
-              <div className="tag-row">
+              <div className="tag-row" role="group" aria-label="Filter by domain">
                 {(searchQuery.data.facets?.domains ?? []).slice(0, 10).map((facet) => (
                   <button
                     key={`domain-${facet.value}`}
@@ -325,7 +325,7 @@ export default function SearchPage() {
 
             <div>
               <p className="muted">Top tags</p>
-              <div className="tag-row">
+              <div className="tag-row" role="group" aria-label="Filter by topic tag">
                 {(searchQuery.data.facets?.tags ?? []).slice(0, 10).map((facet) => (
                   <button
                     key={`tag-${facet.value}`}
@@ -347,7 +347,7 @@ export default function SearchPage() {
 
             <div>
               <p className="muted">Language mix</p>
-              <div className="tag-row">
+              <div className="tag-row" role="group" aria-label="Filter by language">
                 {(searchQuery.data.facets?.languages ?? []).slice(0, 6).map((facet) => (
                   <button
                     key={`lang-${facet.value}`}
@@ -451,8 +451,17 @@ export default function SearchPage() {
 
       {searchQuery.data && searchQuery.data.results.length === 0 && (
         <Tile>
-          <h3>No matches found</h3>
-          <p className="muted">Try broadening filters, switching mode to Hybrid, or lowering similarity.</p>
+          <div className="page-heading-group">
+            <h3>No matches found</h3>
+            <p className="muted">Try broadening filters, switching mode to Hybrid, or lowering similarity.</p>
+          </div>
+          {activeFilterCount > 0 && (
+            <div className="form-actions">
+              <Button kind="ghost" size="sm" onClick={resetFilters}>
+                Clear all filters
+              </Button>
+            </div>
+          )}
         </Tile>
       )}
 

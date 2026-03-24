@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { InlineLoading, InlineNotification } from "@carbon/react";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Button, InlineLoading, InlineNotification, Tile } from "@carbon/react";
 import { useAuth } from "./auth/AuthProvider";
 import LoginPage from "./auth/LoginPage";
 import { sanitizeRedirectPath } from "./auth/redirect";
@@ -39,14 +39,19 @@ function HomeRedirect() {
 
 function NotFoundPage() {
   return (
-    <section className="page-section">
-      <InlineNotification
-        kind="warning"
-        title="Page not found"
-        subtitle="This route does not exist in Web V1."
-        hideCloseButton
-      />
-    </section>
+    <div className="login-page">
+      <Tile className="login-card">
+        <div className="page-heading-group">
+          <h2>Page not found</h2>
+          <p className="page-subtitle">This route does not exist.</p>
+        </div>
+        <div className="form-actions">
+          <Button kind="primary" size="sm" as={Link} to="/library">
+            Go to Library
+          </Button>
+        </div>
+      </Tile>
+    </div>
   );
 }
 
