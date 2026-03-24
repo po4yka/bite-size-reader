@@ -4,7 +4,7 @@ import { canAccessProtectedRoute } from "./guard";
 import { useAuth } from "./AuthProvider";
 
 interface RouteGuardProps {
-  children: JSX.Element;
+  children: React.ReactNode;
 }
 
 export default function RouteGuard({ children }: RouteGuardProps) {

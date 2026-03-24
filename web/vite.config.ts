@@ -9,9 +9,13 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ["react", "react-dom", "react-router-dom", "@tanstack/react-query"],
-          carbon: ["@carbon/react", "@carbon/icons-react"],
+        manualChunks(id: string) {
+          if (id.includes("node_modules/react-dom") || id.includes("node_modules/react/") || id.includes("node_modules/react-router") || id.includes("node_modules/@tanstack/react-query")) {
+            return "vendor";
+          }
+          if (id.includes("node_modules/@carbon/")) {
+            return "carbon";
+          }
         },
       },
     },
