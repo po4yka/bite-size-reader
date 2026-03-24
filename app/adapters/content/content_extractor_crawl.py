@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import urllib.parse
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -573,10 +574,23 @@ class ContentExtractorCrawlMixin:
             raise_if_cancelled(e)
             logger.debug("audit_failed", extra={"cid": correlation_id, "error": str(e)})
 
+    _IMAGE_EXTENSIONS = frozenset(
+        {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".avif"}
+    )
+
+    @staticmethod
+    def _is_image_url(url: str) -> bool:
+        """Check if URL path has a known image file extension."""
+        try:
+            path = urllib.parse.urlparse(url).path.lower()
+            return any(path.endswith(ext) for ext in ContentExtractorCrawlMixin._IMAGE_EXTENSIONS)
+        except Exception:
+            return False
+
     def _extract_images(self, crawl: FirecrawlResult) -> list[str]:
         """Extract image URLs from Firecrawl result metadata and markdown."""
         images: list[str] = []
-        seen = set()
+        seen: set[str] = set()
 
         if crawl.metadata_json and "screenshots" in crawl.metadata_json:
             shots = crawl.metadata_json["screenshots"]
@@ -595,6 +609,8 @@ class ContentExtractorCrawlMixin:
                 if any(
                     x in url.lower() for x in ["icon", "logo", "tracker", "pixel", ".svg", ".ico"]
                 ):
+                    continue
+                if not self._is_image_url(url):
                     continue
                 if url not in seen:
                     seen.add(url)
