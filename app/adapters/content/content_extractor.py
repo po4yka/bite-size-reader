@@ -37,6 +37,7 @@ from app.observability.failure_observability import (
 
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.llm.protocol import LLMClientProtocol
     from app.core.telegram_progress_message import TelegramProgressMessage
 
 logger = get_logger(__name__)
@@ -71,6 +72,7 @@ class ContentExtractor(
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],
+        quality_llm_client: LLMClientProtocol | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -78,6 +80,7 @@ class ContentExtractor(
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
+        self._quality_llm_client = quality_llm_client
         self._cache = RedisCache(cfg)
         self.message_persistence = MessagePersistence(db)
         self._platform_request_lifecycle = PlatformRequestLifecycle(

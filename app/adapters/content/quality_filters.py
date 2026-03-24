@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from collections import Counter
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from app.adapters.external.firecrawl.models import FirecrawlResult
+    from app.adapters.llm.protocol import LLMClientProtocol
+    from app.models.llm.llm_models import LLMCallResult
 
 from app.core.html_utils import clean_markdown_article_text, html_to_text
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 LowValueReason = Literal[
     "empty_after_cleaning",
@@ -99,3 +106,90 @@ def detect_low_value_content(crawl: FirecrawlResult) -> dict[str, Any] | None:
             },
         }
     return None
+
+
+def is_gray_zone_for_llm_check(reason: LowValueReason, metrics: dict[str, Any]) -> bool:
+    """Determine if the heuristic verdict is ambiguous enough to warrant LLM review."""
+    if reason != "nav_stub_detected":
+        return False
+    wc = metrics.get("word_count", 0)
+    ssc = metrics.get("substantive_sentence_count", 0)
+    return 15 <= wc <= 150 and ssc <= 3
+
+
+_QUALITY_PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "quality_check_system.txt"
+_quality_system_prompt: str | None = None
+
+
+def _load_quality_system_prompt() -> str:
+    global _quality_system_prompt
+    if _quality_system_prompt is None:
+        _quality_system_prompt = _QUALITY_PROMPT_PATH.read_text(encoding="utf-8").strip()
+    return _quality_system_prompt
+
+
+async def classify_content_quality_llm(
+    text_preview: str,
+    metrics: dict[str, Any],
+    llm_client: LLMClientProtocol,
+    *,
+    flash_model: str,
+    flash_fallback_models: tuple[str, ...] | list[str],
+    timeout_sec: float = 3.0,
+    confidence_threshold: float = 0.7,
+    request_id: int | None = None,
+) -> tuple[bool, LLMCallResult | None]:
+    """Ask LLM whether extracted text is real content or a stub.
+
+    Returns (is_stub, llm_result). On any failure, defers to the heuristic
+    verdict by returning (True, llm_result_or_None).
+    """
+    system_prompt = _load_quality_system_prompt()
+    user_message = (
+        f"Text (first 500 chars): {text_preview[:500]}\n"
+        f"Word count: {metrics.get('word_count', 0)}\n"
+        f"Substantive sentences: {metrics.get('substantive_sentence_count', 0)}"
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ]
+
+    llm_result: LLMCallResult | None = None
+    try:
+        llm_result = await asyncio.wait_for(
+            llm_client.chat(
+                messages,
+                temperature=0.0,
+                max_tokens=50,
+                model_override=flash_model,
+                fallback_models_override=flash_fallback_models,
+                request_id=request_id,
+                response_format={"type": "json_object"},
+            ),
+            timeout=timeout_sec,
+        )
+    except TimeoutError:
+        logger.warning("quality_llm_timeout", extra={"request_id": request_id})
+        return True, None
+    except Exception:
+        logger.warning("quality_llm_error", extra={"request_id": request_id}, exc_info=True)
+        return True, llm_result
+
+    try:
+        import json_repair
+
+        raw = json_repair.loads(llm_result.response_text or "{}")
+        parsed: dict[str, Any] = raw if isinstance(raw, dict) else {}
+        classification = parsed.get("classification", "stub")
+        confidence = float(parsed.get("confidence", 0.0))
+    except Exception:
+        logger.warning(
+            "quality_llm_parse_error",
+            extra={"request_id": request_id, "response": llm_result.response_text},
+        )
+        return True, llm_result
+
+    if classification == "real_content" and confidence >= confidence_threshold:
+        return False, llm_result
+    return True, llm_result

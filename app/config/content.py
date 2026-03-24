@@ -16,6 +16,22 @@ class ContentLimitsConfig(BaseModel):
         description="Maximum text length in kilobytes (for URL extraction, regex DoS prevention)",
     )
 
+    content_quality_llm_enabled: bool = Field(
+        default=False,
+        validation_alias="CONTENT_QUALITY_LLM_ENABLED",
+        description="Enable LLM-based content quality classification for ambiguous cases",
+    )
+    content_quality_llm_timeout_sec: float = Field(
+        default=3.0,
+        validation_alias="CONTENT_QUALITY_LLM_TIMEOUT_SEC",
+        description="Timeout in seconds for LLM content quality check",
+    )
+    content_quality_llm_confidence_threshold: float = Field(
+        default=0.7,
+        validation_alias="CONTENT_QUALITY_LLM_CONFIDENCE_THRESHOLD",
+        description="Minimum LLM confidence to override heuristic verdict",
+    )
+
     @field_validator("max_text_length_kb", mode="before")
     @classmethod
     def _validate_text_length(cls, value: Any) -> int:

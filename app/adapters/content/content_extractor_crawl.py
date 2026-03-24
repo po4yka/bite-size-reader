@@ -15,7 +15,11 @@ if TYPE_CHECKING:
     import asyncio
     from app.adapters.external.response_formatter import ResponseFormatter
 
-from app.adapters.content.quality_filters import detect_low_value_content
+from app.adapters.content.quality_filters import (
+    classify_content_quality_llm,
+    detect_low_value_content,
+    is_gray_zone_for_llm_check,
+)
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import clean_markdown_article_text, html_to_text, normalize_text
@@ -239,7 +243,7 @@ class ContentExtractorCrawlMixin:
         async with typing_indicator(self.response_formatter, message, action="typing"), self._sem():
             crawl = await self.firecrawl.scrape_markdown(url_text, request_id=req_id)
 
-        quality_issue = self._apply_low_value_guard(
+        quality_issue = await self._apply_low_value_guard(
             crawl=crawl,
             req_id=req_id,
             correlation_id=correlation_id,
@@ -302,7 +306,7 @@ class ContentExtractorCrawlMixin:
             raise_if_cancelled(e)
             logger.warning(event_name, extra={"cid": correlation_id, "error": str(e)})
 
-    def _apply_low_value_guard(
+    async def _apply_low_value_guard(
         self,
         *,
         crawl: FirecrawlResult,
@@ -312,6 +316,33 @@ class ContentExtractorCrawlMixin:
         quality_issue = detect_low_value_content(crawl)
         if not quality_issue:
             return None
+
+        # If in gray zone and LLM quality check enabled, ask LLM to confirm
+        content_limits = getattr(self.cfg, "content_limits", None)
+        if (
+            content_limits is not None
+            and content_limits.content_quality_llm_enabled
+            and is_gray_zone_for_llm_check(quality_issue["reason"], quality_issue["metrics"])
+            and getattr(self, "_quality_llm_client", None) is not None
+        ):
+            is_stub, llm_result = await classify_content_quality_llm(
+                text_preview=quality_issue["preview"],
+                metrics=quality_issue["metrics"],
+                llm_client=self._quality_llm_client,
+                flash_model=self.cfg.openrouter.flash_model,
+                flash_fallback_models=self.cfg.openrouter.flash_fallback_models,
+                timeout_sec=content_limits.content_quality_llm_timeout_sec,
+                confidence_threshold=content_limits.content_quality_llm_confidence_threshold,
+                request_id=req_id,
+            )
+            if llm_result is not None:
+                await self._persist_quality_check_llm_call(llm_result, req_id, correlation_id)
+            if not is_stub:
+                logger.info(
+                    "llm_quality_check_override",
+                    extra={"cid": correlation_id, "req_id": req_id},
+                )
+                return None
 
         metrics = quality_issue["metrics"]
         reason_label = quality_issue["reason"]
@@ -357,6 +388,34 @@ class ContentExtractorCrawlMixin:
             },
         )
         return quality_issue
+
+    async def _persist_quality_check_llm_call(
+        self,
+        llm_result: Any,
+        req_id: int,
+        correlation_id: str | None,
+    ) -> None:
+        """Persist an LLM quality-check call for cost tracking."""
+        try:
+            record = {
+                "request_id": req_id,
+                "provider": "openrouter",
+                "model": llm_result.model,
+                "endpoint": "/quality-check",
+                "response_text": llm_result.response_text,
+                "tokens_prompt": llm_result.tokens_prompt,
+                "tokens_completion": llm_result.tokens_completion,
+                "cost_usd": llm_result.cost_usd,
+                "latency_ms": llm_result.latency_ms,
+                "status": llm_result.status.value if llm_result.status else None,
+                "error_text": llm_result.error_text,
+            }
+            await self.message_persistence.llm_repo.async_insert_llm_call(record)
+        except Exception:
+            logger.warning(
+                "quality_check_persist_failed",
+                extra={"cid": correlation_id, "req_id": req_id},
+            )
 
     async def _recover_or_raise_crawl_failure(
         self,

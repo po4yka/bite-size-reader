@@ -88,6 +88,7 @@ class URLProcessor:
             response_formatter=response_formatter,
             audit_func=audit_func,
             sem=sem,
+            quality_llm_client=openrouter,
         )
         self.content_chunker = ContentChunker(
             cfg=cfg,
