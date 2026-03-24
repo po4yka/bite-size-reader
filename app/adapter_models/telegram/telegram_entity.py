@@ -1,0 +1,43 @@
+"""Telegram MessageEntity model."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator
+
+from app.adapter_models.telegram.telegram_enums import MessageEntityType
+from app.adapter_models.telegram.telegram_user import TelegramUser  # noqa: TC001
+
+
+class MessageEntity(BaseModel):
+    """Telegram MessageEntity object."""
+
+    type: MessageEntityType = MessageEntityType.MENTION
+    offset: int = Field(default=0, ge=0)
+    length: int = Field(default=0, ge=0)
+    url: str | None = None
+    user: TelegramUser | None = None
+    language: str | None = None
+    custom_emoji_id: str | None = None
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def _validate_type(cls, value: Any) -> MessageEntityType:
+        """Handle entity type conversion robustly."""
+        if isinstance(value, MessageEntityType):
+            return value
+
+        try:
+            if hasattr(value, "value"):
+                value = value.value
+            elif hasattr(value, "name"):
+                value = value.name.lower()
+            return MessageEntityType(str(value).lower())
+        except (ValueError, AttributeError):
+            return MessageEntityType.MENTION
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> MessageEntity:
+        """Create MessageEntity from dictionary."""
+        return cls.model_validate(data)

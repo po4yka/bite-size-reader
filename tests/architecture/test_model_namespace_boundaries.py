@@ -11,10 +11,18 @@ def test_production_code_uses_adapter_models_namespace_instead_of_legacy_app_mod
     violations = collect_forbidden_imports(
         app_root,
         forbidden_prefixes=("app.models",),
-        ignored_path_prefixes=(
-            "app/models/",
-            "app/adapter_models/",
-        ),
+        ignored_path_prefixes=("app/models/",),
+    )
+
+    assert violations == []
+
+
+def test_adapter_models_namespace_does_not_depend_on_legacy_app_models() -> None:
+    """Canonical adapter models should not import the deprecated namespace."""
+    adapter_models_root = Path(__file__).resolve().parents[2] / "app" / "adapter_models"
+    violations = collect_forbidden_imports(
+        adapter_models_root,
+        forbidden_prefixes=("app.models",),
     )
 
     assert violations == []
