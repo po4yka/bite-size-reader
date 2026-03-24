@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from fastapi import APIRouter, Depends, Query
 
+from app.api.dependencies.database import get_webhook_repository
 from app.api.exceptions import APIException, ErrorCode, ResourceNotFoundError
 from app.api.models.responses import (
     PaginationInfo,
@@ -43,18 +44,6 @@ VALID_EVENT_TYPES = [
 ]
 
 MAX_SUBSCRIPTIONS_PER_USER = 10
-
-
-def _get_webhook_repo():
-    """Lazily import and build the webhook repository adapter."""
-    from app.di.api import get_current_api_runtime
-
-    runtime = get_current_api_runtime()
-    from app.infrastructure.persistence.sqlite.repositories.webhook_repository import (
-        SqliteWebhookRepositoryAdapter,
-    )
-
-    return SqliteWebhookRepositoryAdapter(runtime.db)
 
 
 def _mask_secret(secret: str) -> str:
@@ -125,10 +114,10 @@ def _validate_events(events: list[str]) -> None:
 @router.get("/")
 async def list_subscriptions(
     user: dict[str, Any] = Depends(get_current_user),
+    webhook_repo: Any = Depends(get_webhook_repository),
 ) -> dict[str, Any]:
     """List user's webhook subscriptions."""
-    repo = _get_webhook_repo()
-    subs = await repo.async_get_user_subscriptions(user["user_id"], enabled_only=False)
+    subs = await webhook_repo.async_get_user_subscriptions(user["user_id"], enabled_only=False)
     items = [_sub_to_response(s) for s in subs]
     return success_response({"subscriptions": [i.model_dump(by_alias=True) for i in items]})
 
@@ -137,6 +126,7 @@ async def list_subscriptions(
 async def create_subscription(
     body: CreateWebhookRequest,
     user: dict[str, Any] = Depends(get_current_user),
+    webhook_repo: Any = Depends(get_webhook_repository),
 ) -> dict[str, Any]:
     """Create a new webhook subscription."""
     # Validate URL
@@ -151,10 +141,8 @@ async def create_subscription(
     # Validate events
     _validate_events(body.events)
 
-    repo = _get_webhook_repo()
-
     # Enforce max subscriptions per user
-    existing = await repo.async_get_user_subscriptions(user["user_id"], enabled_only=False)
+    existing = await webhook_repo.async_get_user_subscriptions(user["user_id"], enabled_only=False)
     if len(existing) >= MAX_SUBSCRIPTIONS_PER_USER:
         raise APIException(
             message=f"Maximum of {MAX_SUBSCRIPTIONS_PER_USER} webhook subscriptions per user",
@@ -163,7 +151,7 @@ async def create_subscription(
         )
 
     secret = generate_webhook_secret()
-    sub = await repo.async_create_subscription(
+    sub = await webhook_repo.async_create_subscription(
         user_id=user["user_id"],
         name=body.name,
         url=body.url,
@@ -182,10 +170,10 @@ async def create_subscription(
 async def get_subscription(
     webhook_id: int,
     user: dict[str, Any] = Depends(get_current_user),
+    webhook_repo: Any = Depends(get_webhook_repository),
 ) -> dict[str, Any]:
     """Get a webhook subscription's details."""
-    repo = _get_webhook_repo()
-    sub = await _verify_ownership(repo, webhook_id, user["user_id"])
+    sub = await _verify_ownership(webhook_repo, webhook_id, user["user_id"])
     return success_response(_sub_to_response(sub))
 
 
@@ -194,10 +182,10 @@ async def update_subscription(
     webhook_id: int,
     body: UpdateWebhookRequest,
     user: dict[str, Any] = Depends(get_current_user),
+    webhook_repo: Any = Depends(get_webhook_repository),
 ) -> dict[str, Any]:
     """Update a webhook subscription."""
-    repo = _get_webhook_repo()
-    await _verify_ownership(repo, webhook_id, user["user_id"])
+    await _verify_ownership(webhook_repo, webhook_id, user["user_id"])
 
     update_fields: dict[str, Any] = {}
     if body.name is not None:
@@ -226,7 +214,7 @@ async def update_subscription(
             status_code=400,
         )
 
-    updated = await repo.async_update_subscription(webhook_id, **update_fields)
+    updated = await webhook_repo.async_update_subscription(webhook_id, **update_fields)
     return success_response(_sub_to_response(updated))
 
 
@@ -234,11 +222,11 @@ async def update_subscription(
 async def delete_subscription(
     webhook_id: int,
     user: dict[str, Any] = Depends(get_current_user),
+    webhook_repo: Any = Depends(get_webhook_repository),
 ) -> dict[str, Any]:
     """Soft-delete a webhook subscription."""
-    repo = _get_webhook_repo()
-    await _verify_ownership(repo, webhook_id, user["user_id"])
-    await repo.async_delete_subscription(webhook_id)
+    await _verify_ownership(webhook_repo, webhook_id, user["user_id"])
+    await webhook_repo.async_delete_subscription(webhook_id)
     return success_response({"deleted": True, "id": webhook_id})
 
 
@@ -246,10 +234,10 @@ async def delete_subscription(
 async def send_test_webhook(
     webhook_id: int,
     user: dict[str, Any] = Depends(get_current_user),
+    webhook_repo: Any = Depends(get_webhook_repository),
 ) -> dict[str, Any]:
     """Send a test event to the webhook URL and return the delivery result."""
-    repo = _get_webhook_repo()
-    sub = await _verify_ownership(repo, webhook_id, user["user_id"])
+    sub = await _verify_ownership(webhook_repo, webhook_id, user["user_id"])
 
     payload = build_webhook_payload(
         event_type="test",
@@ -296,7 +284,7 @@ async def send_test_webhook(
 
     duration_ms = (time.monotonic_ns() // 1_000_000) - start_ms
 
-    delivery = await repo.async_log_delivery(
+    delivery = await webhook_repo.async_log_delivery(
         subscription_id=webhook_id,
         event_type="test",
         payload=payload,
@@ -317,12 +305,12 @@ async def list_deliveries(
     user: dict[str, Any] = Depends(get_current_user),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    webhook_repo: Any = Depends(get_webhook_repository),
 ) -> dict[str, Any]:
     """Return paginated delivery history for a webhook subscription."""
-    repo = _get_webhook_repo()
-    await _verify_ownership(repo, webhook_id, user["user_id"])
+    await _verify_ownership(webhook_repo, webhook_id, user["user_id"])
 
-    deliveries = await repo.async_get_deliveries(webhook_id, limit=limit, offset=offset)
+    deliveries = await webhook_repo.async_get_deliveries(webhook_id, limit=limit, offset=offset)
     items = [_delivery_to_response(d) for d in deliveries]
 
     return success_response(
@@ -340,12 +328,12 @@ async def list_deliveries(
 async def rotate_secret(
     webhook_id: int,
     user: dict[str, Any] = Depends(get_current_user),
+    webhook_repo: Any = Depends(get_webhook_repository),
 ) -> dict[str, Any]:
     """Generate a new secret for the subscription. Returns the new secret once."""
-    repo = _get_webhook_repo()
-    await _verify_ownership(repo, webhook_id, user["user_id"])
+    await _verify_ownership(webhook_repo, webhook_id, user["user_id"])
 
     new_secret = generate_webhook_secret()
-    await repo.async_rotate_secret(webhook_id, new_secret)
+    await webhook_repo.async_rotate_secret(webhook_id, new_secret)
 
     return success_response({"id": webhook_id, "secret": new_secret})

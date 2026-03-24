@@ -36,6 +36,13 @@ class SummaryRepositoryPort(Protocol):
     ) -> list[dict[str, Any]]:
         """Return summary rows used for insights/statistics."""
 
+    async def async_get_user_summary_activity_dates(
+        self,
+        user_id: int,
+        created_after: datetime,
+    ) -> list[Any]:
+        """Return summary activity timestamps for streak calculations."""
+
     async def async_get_unread_summaries(
         self,
         user_id: int | None,

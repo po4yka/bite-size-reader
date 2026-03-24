@@ -10,9 +10,6 @@ from app.api.exceptions import ResourceNotFoundError
 from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.repositories.device_repository import (  # noqa: TC001 - used at runtime by FastAPI
-    SqliteDeviceRepositoryAdapter,
-)
 
 logger = get_logger(__name__)
 
@@ -31,7 +28,7 @@ class DeviceRegistrationPayload(BaseModel):
 async def register_device(
     payload: DeviceRegistrationPayload,
     user_data: Annotated[dict, Depends(get_current_user)],
-    device_repo: SqliteDeviceRepositoryAdapter = Depends(get_device_repository),
+    device_repo: Any = Depends(get_device_repository),
 ) -> dict[str, Any]:
     """Register or update a device token for push notifications."""
     user_id = user_data["user_id"]

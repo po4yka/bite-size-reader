@@ -3,19 +3,21 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile
 from starlette.responses import FileResponse
 
-from app.api.dependencies.database import get_session_manager
+from app.api.dependencies.database import (
+    get_backup_repository,
+    get_session_manager,
+    get_user_repository,
+)
 from app.api.exceptions import APIException, ErrorCode, ResourceNotFoundError
 from app.api.models.responses import BackupResponse, success_response
 from app.api.routers.auth import get_current_user
 from app.api.search_helpers import isotime
 from app.core.logging_utils import get_logger
-from app.core.time_utils import UTC
 from app.infrastructure.persistence.sqlite.backup_archive_service import (
     create_backup_archive,
     restore_from_archive,
@@ -25,18 +27,6 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 MAX_BACKUPS_PER_HOUR = 3
-
-
-def _get_backup_repo():
-    """Lazily import and build the backup repository adapter."""
-    from app.di.api import get_current_api_runtime
-
-    runtime = get_current_api_runtime()
-    from app.infrastructure.persistence.sqlite.repositories.backup_repository import (
-        SqliteBackupRepositoryAdapter,
-    )
-
-    return SqliteBackupRepositoryAdapter(runtime.db)
 
 
 def _backup_to_response(b: dict[str, Any]) -> BackupResponse:
@@ -73,14 +63,13 @@ async def _verify_ownership(repo: Any, backup_id: int, user_id: int) -> dict[str
 async def create_backup(
     background_tasks: BackgroundTasks,
     user: dict[str, Any] = Depends(get_current_user),
+    backup_repo: Any = Depends(get_backup_repository),
 ) -> dict[str, Any]:
     """Create a new backup archive. Processing happens in the background."""
-    repo = _get_backup_repo()
     user_id: int = user["user_id"]
 
     # Rate limit: max N backups per hour
-    one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
-    recent_count = await repo.async_count_recent_backups(user_id, one_hour_ago)
+    recent_count = await backup_repo.async_count_recent_backups(user_id, since_hours=1)
     if recent_count >= MAX_BACKUPS_PER_HOUR:
         raise APIException(
             message=f"Rate limit exceeded: maximum {MAX_BACKUPS_PER_HOUR} backups per hour",
@@ -88,7 +77,7 @@ async def create_backup(
             status_code=429,
         )
 
-    backup = await repo.async_create_backup(user_id, type="manual")
+    backup = await backup_repo.async_create_backup(user_id, type="manual")
     background_tasks.add_task(
         create_backup_archive,
         user_id=user_id,
@@ -102,10 +91,10 @@ async def create_backup(
 @router.get("/")
 async def list_backups(
     user: dict[str, Any] = Depends(get_current_user),
+    backup_repo: Any = Depends(get_backup_repository),
 ) -> dict[str, Any]:
     """List user's backups."""
-    repo = _get_backup_repo()
-    backups = await repo.async_list_backups(user["user_id"])
+    backups = await backup_repo.async_list_backups(user["user_id"])
     items = [_backup_to_response(b).model_dump(by_alias=True) for b in backups]
     return success_response({"backups": items})
 
@@ -132,13 +121,9 @@ async def restore_backup(
 async def update_backup_schedule(
     body: dict[str, Any],
     user: dict[str, Any] = Depends(get_current_user),
+    user_repo: Any = Depends(get_user_repository),
 ) -> dict[str, Any]:
     """Update the user's backup schedule preferences."""
-    from app.db.models import User
-    from app.di.api import get_current_api_runtime
-
-    runtime = get_current_api_runtime()
-
     allowed_keys = {"backup_enabled", "backup_frequency", "backup_retention_count"}
     update_data = {k: v for k, v in body.items() if k in allowed_keys}
     if not update_data:
@@ -149,38 +134,30 @@ async def update_backup_schedule(
             status_code=400,
         )
 
-    def _update_prefs() -> dict[str, Any]:
-        user_row = User.get_by_id(user["user_id"])
-        prefs = user_row.preferences_json or {}
-        prefs.update(update_data)
-        user_row.preferences_json = prefs
-        user_row.save()
-        return {k: prefs.get(k) for k in allowed_keys}
-
-    result = await runtime.db.async_execute(_update_prefs, operation_name="update_backup_schedule")
+    user_record, _ = await user_repo.async_get_or_create_user(
+        user["user_id"],
+        username=user.get("username"),
+        is_owner=False,
+    )
+    prefs = user_record.get("preferences_json") or {}
+    prefs.update(update_data)
+    await user_repo.async_update_user_preferences(user["user_id"], prefs)
+    result = {key: prefs.get(key) for key in allowed_keys}
     return success_response({"schedule": result})
 
 
 @router.get("/schedule")
 async def get_backup_schedule(
     user: dict[str, Any] = Depends(get_current_user),
+    user_repo: Any = Depends(get_user_repository),
 ) -> dict[str, Any]:
     """Read the user's backup schedule preferences."""
-    from app.db.models import User
-    from app.di.api import get_current_api_runtime
-
-    runtime = get_current_api_runtime()
-
     allowed_keys = {"backup_enabled", "backup_frequency", "backup_retention_count"}
-
-    def _read_prefs() -> dict[str, Any]:
-        user_row = User.get_by_id(user["user_id"])
-        prefs = user_row.preferences_json or {}
-        return {k: prefs.get(k) for k in allowed_keys}
-
-    result = await runtime.db.async_execute(
-        _read_prefs, operation_name="get_backup_schedule", read_only=True
-    )
+    user_record = await user_repo.async_get_user_by_telegram_id(user["user_id"])
+    prefs = user_record.get("preferences_json") if user_record else {}
+    if not isinstance(prefs, dict):
+        prefs = {}
+    result = {key: prefs.get(key) for key in allowed_keys}
     return success_response({"schedule": result})
 
 
@@ -193,10 +170,10 @@ async def get_backup_schedule(
 async def get_backup(
     backup_id: int,
     user: dict[str, Any] = Depends(get_current_user),
+    backup_repo: Any = Depends(get_backup_repository),
 ) -> dict[str, Any]:
     """Get backup details."""
-    repo = _get_backup_repo()
-    backup = await _verify_ownership(repo, backup_id, user["user_id"])
+    backup = await _verify_ownership(backup_repo, backup_id, user["user_id"])
     return success_response(_backup_to_response(backup).model_dump(by_alias=True))
 
 
@@ -204,10 +181,10 @@ async def get_backup(
 async def download_backup(
     backup_id: int,
     user: dict[str, Any] = Depends(get_current_user),
+    backup_repo: Any = Depends(get_backup_repository),
 ) -> FileResponse:
     """Download the backup ZIP file."""
-    repo = _get_backup_repo()
-    backup = await _verify_ownership(repo, backup_id, user["user_id"])
+    backup = await _verify_ownership(backup_repo, backup_id, user["user_id"])
 
     if backup["status"] != "completed":
         raise APIException(
@@ -236,15 +213,15 @@ async def download_backup(
 async def delete_backup(
     backup_id: int,
     user: dict[str, Any] = Depends(get_current_user),
+    backup_repo: Any = Depends(get_backup_repository),
 ) -> dict[str, Any]:
     """Delete a backup record and its file from disk."""
-    repo = _get_backup_repo()
-    backup = await _verify_ownership(repo, backup_id, user["user_id"])
+    backup = await _verify_ownership(backup_repo, backup_id, user["user_id"])
 
     # Remove file from disk
     file_path = backup.get("file_path")
     if file_path and os.path.isfile(file_path):
         os.remove(file_path)
 
-    await repo.async_delete_backup(backup_id)
+    await backup_repo.async_delete_backup(backup_id)
     return success_response({"deleted": True, "id": backup_id})

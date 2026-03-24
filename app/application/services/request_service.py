@@ -265,6 +265,20 @@ class RequestService:
             correlation_id=request.get("correlation_id"),
         )
 
+    async def update_request_content_text(
+        self,
+        *,
+        user_id: int,
+        request_id: int,
+        content_text: str,
+    ) -> None:
+        """Persist selected content text for an owned request."""
+        request = await self._request_repo.async_get_request_by_id(request_id)
+        if not request or request.get("user_id") != user_id:
+            raise ResourceNotFoundError("Request", details={"request_id": request_id})
+
+        await self._request_repo.async_update_request_content_text(request_id, content_text)
+
     async def retry_failed_request(self, user_id: int, request_id: int) -> RequestCreatedDTO:
         """Create a new pending request by cloning a failed request."""
         original = await self._request_repo.async_get_request_by_id(request_id)

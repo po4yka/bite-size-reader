@@ -4,7 +4,7 @@ FastAPI authentication dependencies.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from app.core.logging_utils import get_logger
 
@@ -29,11 +29,6 @@ from app.api.dependencies.database import get_auth_repository as get_db_auth_rep
 from app.api.exceptions import AuthenticationError, AuthorizationError
 from app.api.routers.auth.tokens import decode_token, validate_client_id
 from app.config import Config
-
-if TYPE_CHECKING:
-    from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
-        SqliteAuthRepositoryAdapter,
-    )
 
 logger = get_logger(__name__)
 
@@ -75,11 +70,11 @@ def _get_auth_token_cache() -> Any:
         return None
 
 
-def get_auth_repository() -> SqliteAuthRepositoryAdapter:
+def get_auth_repository() -> Any:
     """Dependency to get auth repository with optional Redis caching.
 
     Returns:
-        SqliteAuthRepositoryAdapter with token cache if Redis is available.
+        Auth repository with token cache if Redis is available.
     """
     token_cache = _get_auth_token_cache()
     return get_db_auth_repository(token_cache=token_cache)

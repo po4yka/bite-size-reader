@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, Query
 
+from app.api.dependencies.database import get_rule_repository, get_summary_repository
 from app.api.exceptions import APIException, ErrorCode, ResourceNotFoundError, ValidationError
 
 if TYPE_CHECKING:
@@ -28,18 +29,6 @@ from app.domain.services.rule_engine import (
 logger = get_logger(__name__)
 
 router = APIRouter()
-
-
-def _get_rule_repo():
-    """Lazily obtain the rule repository from the current API runtime."""
-    from app.di.api import get_current_api_runtime
-
-    runtime = get_current_api_runtime()
-    from app.infrastructure.persistence.sqlite.repositories.rule_repository import (
-        SqliteRuleRepositoryAdapter,
-    )
-
-    return SqliteRuleRepositoryAdapter(runtime.db)
 
 
 def _rule_to_response(rule: dict[str, Any]) -> RuleResponse:
@@ -91,10 +80,10 @@ def _verify_rule_ownership(
 @router.get("/")
 async def list_rules(
     user: dict[str, Any] = Depends(get_current_user),
+    rule_repo: Any = Depends(get_rule_repository),
 ) -> dict[str, Any]:
     """List all automation rules for the current user."""
-    repo = _get_rule_repo()
-    rules = await repo.async_get_user_rules(user["user_id"])
+    rules = await rule_repo.async_get_user_rules(user["user_id"])
     items = [_rule_to_response(r) for r in rules]
     return success_response({"rules": [i.model_dump(by_alias=True) for i in items]})
 
@@ -103,15 +92,14 @@ async def list_rules(
 async def create_rule(
     body: CreateRuleRequest,
     user: dict[str, Any] = Depends(get_current_user),
+    rule_repo: Any = Depends(get_rule_repository),
 ) -> dict[str, Any]:
     """Create a new automation rule."""
     ok, err = validate_rule(body.event_type, body.conditions, body.actions, body.match_mode)
     if not ok:
         raise ValidationError(err or "Invalid rule definition")
 
-    repo = _get_rule_repo()
-
-    existing = await repo.async_get_user_rules(user["user_id"])
+    existing = await rule_repo.async_get_user_rules(user["user_id"])
     if len(existing) >= MAX_RULES_PER_USER:
         raise APIException(
             message=f"Maximum of {MAX_RULES_PER_USER} rules per user",
@@ -119,7 +107,7 @@ async def create_rule(
             status_code=400,
         )
 
-    rule = await repo.async_create_rule(
+    rule = await rule_repo.async_create_rule(
         user_id=user["user_id"],
         name=body.name,
         event_type=body.event_type,
@@ -136,10 +124,10 @@ async def create_rule(
 async def get_rule(
     rule_id: int,
     user: dict[str, Any] = Depends(get_current_user),
+    rule_repo: Any = Depends(get_rule_repository),
 ) -> dict[str, Any]:
     """Get rule details."""
-    repo = _get_rule_repo()
-    rule = await repo.async_get_rule_by_id(rule_id)
+    rule = await rule_repo.async_get_rule_by_id(rule_id)
     rule = _verify_rule_ownership(rule, rule_id, user["user_id"])
     return success_response(_rule_to_response(rule))
 
@@ -149,10 +137,10 @@ async def update_rule(
     rule_id: int,
     body: UpdateRuleRequest,
     user: dict[str, Any] = Depends(get_current_user),
+    rule_repo: Any = Depends(get_rule_repository),
 ) -> dict[str, Any]:
     """Update an automation rule."""
-    repo = _get_rule_repo()
-    rule = await repo.async_get_rule_by_id(rule_id)
+    rule = await rule_repo.async_get_rule_by_id(rule_id)
     rule = _verify_rule_ownership(rule, rule_id, user["user_id"])
 
     update_fields: dict[str, Any] = {}
@@ -190,7 +178,7 @@ async def update_rule(
     if not ok:
         raise ValidationError(err or "Invalid rule definition")
 
-    updated = await repo.async_update_rule(rule_id, **update_fields)
+    updated = await rule_repo.async_update_rule(rule_id, **update_fields)
     return success_response(_rule_to_response(updated))
 
 
@@ -198,13 +186,13 @@ async def update_rule(
 async def delete_rule(
     rule_id: int,
     user: dict[str, Any] = Depends(get_current_user),
+    rule_repo: Any = Depends(get_rule_repository),
 ) -> dict[str, Any]:
     """Soft-delete an automation rule."""
-    repo = _get_rule_repo()
-    rule = await repo.async_get_rule_by_id(rule_id)
+    rule = await rule_repo.async_get_rule_by_id(rule_id)
     _verify_rule_ownership(rule, rule_id, user["user_id"])
 
-    await repo.async_soft_delete_rule(rule_id)
+    await rule_repo.async_soft_delete_rule(rule_id)
     return success_response({"deleted": True, "id": rule_id})
 
 
@@ -213,36 +201,33 @@ async def dry_run_rule(
     rule_id: int,
     body: TestRuleRequest,
     user: dict[str, Any] = Depends(get_current_user),
+    rule_repo: Any = Depends(get_rule_repository),
+    summary_repo: Any = Depends(get_summary_repository),
 ) -> dict[str, Any]:
     """Dry-run a rule against a summary without side effects."""
-    repo = _get_rule_repo()
-    rule = await repo.async_get_rule_by_id(rule_id)
+    rule = await rule_repo.async_get_rule_by_id(rule_id)
     rule = _verify_rule_ownership(rule, rule_id, user["user_id"])
 
-    # Load summary and verify ownership
-    from app.db.models import Request, Summary
-
-    try:
-        summary = Summary.get_by_id(body.summary_id)
-    except Summary.DoesNotExist:
-        raise ResourceNotFoundError("Summary", body.summary_id) from None
-
-    request = Request.get_by_id(summary.request_id)
-    if request.user_id != user["user_id"]:
+    summary_context = await summary_repo.async_get_summary_context_by_id(body.summary_id)
+    if summary_context is None:
+        raise ResourceNotFoundError("Summary", body.summary_id)
+    summary = summary_context.get("summary") or {}
+    request = summary_context.get("request") or {}
+    if request.get("user_id") != user["user_id"]:
         raise ResourceNotFoundError("Summary", body.summary_id)
 
     # Build context from summary for condition evaluation
-    summary_json = summary.json_payload if hasattr(summary, "json_payload") else {}
+    summary_json = summary.get("json_payload") or {}
     if isinstance(summary_json, str):
         import json
 
         summary_json = json.loads(summary_json)
 
     context: dict[str, Any] = {
-        "url": getattr(request, "input_url", "") or "",
+        "url": request.get("input_url", "") or "",
         "title": summary_json.get("title", "") if isinstance(summary_json, dict) else "",
         "tags": summary_json.get("topic_tags", []) if isinstance(summary_json, dict) else [],
-        "language": getattr(summary, "lang", "") or "",
+        "language": summary.get("lang", "") or "",
         "reading_time": (
             summary_json.get("estimated_reading_time_min", 0)
             if isinstance(summary_json, dict)
@@ -277,13 +262,13 @@ async def list_execution_logs(
     user: dict[str, Any] = Depends(get_current_user),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    rule_repo: Any = Depends(get_rule_repository),
 ) -> dict[str, Any]:
     """Return paginated execution history for a rule."""
-    repo = _get_rule_repo()
-    rule = await repo.async_get_rule_by_id(rule_id)
+    rule = await rule_repo.async_get_rule_by_id(rule_id)
     _verify_rule_ownership(rule, rule_id, user["user_id"])
 
-    logs = await repo.async_get_execution_logs(rule_id, limit=limit, offset=offset)
+    logs = await rule_repo.async_get_execution_logs(rule_id, limit=limit, offset=offset)
     items = [_log_to_response(log) for log in logs]
 
     return success_response(

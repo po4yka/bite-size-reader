@@ -48,6 +48,32 @@ class SummaryRepositorySyncMixin(SqliteRepositoryMixinBase):
             read_only=True,
         )
 
+    async def async_get_user_summary_activity_dates(
+        self,
+        user_id: int,
+        created_after: datetime,
+    ) -> list[Any]:
+        """Return summary timestamps used for user streak calculations."""
+
+        def _query() -> list[Any]:
+            rows = (
+                Summary.select(Summary.created_at)
+                .join(Request)
+                .where(
+                    (Request.user_id == user_id)
+                    & (Summary.created_at >= created_after)
+                    & (~Summary.is_deleted)
+                )
+                .order_by(Summary.created_at.desc())
+            )
+            return [row.created_at for row in rows]
+
+        return await self._execute(
+            _query,
+            operation_name="get_user_summary_activity_dates",
+            read_only=True,
+        )
+
     async def async_get_max_server_version(self, user_id: int) -> int | None:
         """Return the maximum server_version across summaries owned by *user_id*."""
 

@@ -110,11 +110,11 @@ async def quick_save(
 
     # If selected_text was provided, update the request's content_text
     if body.selected_text:
-        from app.db.models import Request as RequestModel
-
-        RequestModel.update(content_text=body.selected_text).where(
-            RequestModel.id == new_request.id
-        ).execute()
+        await request_service.update_request_content_text(
+            user_id=user["user_id"],
+            request_id=new_request.id,
+            content_text=body.selected_text,
+        )
 
     # Find-or-create tags
     tags_attached: list[str] = []

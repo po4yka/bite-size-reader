@@ -8,7 +8,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse
 
-from app.api.dependencies.database import get_session_manager, get_summary_repository
+from app.api.dependencies.database import (
+    get_audio_generation_repository,
+    get_session_manager,
+    get_summary_repository,
+)
 from app.api.exceptions import FeatureDisabledError, ResourceNotFoundError
 from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
@@ -16,9 +20,6 @@ from app.application.services.tts_service import TTSService
 from app.config import load_config
 from app.infrastructure.audio.elevenlabs_provider import ElevenLabsTTSProviderAdapter
 from app.infrastructure.audio.filesystem_storage import FileSystemAudioStorageAdapter
-from app.infrastructure.persistence.sqlite.repositories.audio_generation_repository import (
-    SqliteAudioGenerationRepositoryAdapter,
-)
 
 router = APIRouter()
 
@@ -32,7 +33,7 @@ def _get_tts_service(request: Request) -> TTSService:
     db = get_session_manager(request)
     return TTSService(
         summary_repository=get_summary_repository(db, request),
-        audio_generation_repository=SqliteAudioGenerationRepositoryAdapter(db),
+        audio_generation_repository=get_audio_generation_repository(db, request),
         tts_provider=ElevenLabsTTSProviderAdapter(config),
         audio_storage=FileSystemAudioStorageAdapter(config.audio_storage_path),
         voice_id=config.voice_id,

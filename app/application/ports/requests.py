@@ -113,6 +113,13 @@ class RequestRepositoryPort(Protocol):
     ) -> None:
         """Update correlation ID."""
 
+    async def async_update_request_content_text(
+        self,
+        request_id: int,
+        content_text: str,
+    ) -> None:
+        """Update the extracted/requested content text."""
+
     async def async_update_request_error(
         self,
         request_id: int,

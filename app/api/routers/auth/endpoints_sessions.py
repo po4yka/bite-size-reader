@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from starlette.requests import Request  # noqa: TC002 - needed at runtime for FastAPI DI
 from starlette.responses import Response  # noqa: TC002 - needed at runtime for FastAPI DI
@@ -37,11 +37,6 @@ from app.api.routers.auth.tokens import (
 from app.core.logging_utils import get_logger, log_exception
 from app.core.time_utils import UTC
 
-if TYPE_CHECKING:
-    from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
-        SqliteAuthRepositoryAdapter,
-    )
-
 logger = get_logger(__name__)
 router = APIRouter()
 
@@ -60,7 +55,7 @@ async def refresh_access_token(
     request: Request,
     response: Response,
     refresh_data: RefreshTokenRequest,
-    auth_repo: SqliteAuthRepositoryAdapter = Depends(get_auth_repository),
+    auth_repo: Any = Depends(get_auth_repository),
 ):
     """Refresh an expired access token using a refresh token."""
     from app.api.exceptions import TokenInvalidError, TokenRevokedError
@@ -133,7 +128,7 @@ async def logout(
     response: Response,
     request: RefreshTokenRequest,
     current_user: dict = Depends(get_current_user),
-    auth_repo: SqliteAuthRepositoryAdapter = Depends(get_auth_repository),
+    auth_repo: Any = Depends(get_auth_repository),
 ):
     """Logout by revoking the specific refresh token."""
     token = request.refresh_token or http_request.cookies.get(REFRESH_COOKIE_NAME)
@@ -162,7 +157,7 @@ async def logout(
 @router.get("/sessions")
 async def list_sessions(
     current_user: dict = Depends(get_current_user),
-    auth_repo: SqliteAuthRepositoryAdapter = Depends(get_auth_repository),
+    auth_repo: Any = Depends(get_auth_repository),
 ) -> dict:
     """List active sessions for the current user."""
     user_id = current_user["user_id"]
@@ -190,7 +185,7 @@ async def list_sessions(
 async def revoke_session(
     session_id: int,
     current_user: dict = Depends(get_current_user),
-    auth_repo: SqliteAuthRepositoryAdapter = Depends(get_auth_repository),
+    auth_repo: Any = Depends(get_auth_repository),
 ) -> dict:
     """Revoke a specific session by ID. Cannot revoke the current session via this endpoint."""
     user_id = current_user["user_id"]

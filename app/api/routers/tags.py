@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
+from app.api.dependencies.database import get_summary_repository
 from app.api.exceptions import ResourceNotFoundError, ValidationError
 from app.api.models.requests import (
     AttachTagsRequest,
@@ -54,6 +55,13 @@ def _verify_tag_ownership(tag: dict[str, Any] | None, tag_id: int, user_id: int)
     if tag.get("user") != user_id and tag.get("user_id") != user_id:
         raise ResourceNotFoundError("Tag", tag_id)
     return tag
+
+
+async def _ensure_summary_owned(summary_id: int, user_id: int) -> None:
+    """Raise if the summary does not belong to the authenticated user."""
+    summary = await get_summary_repository().async_get_summary_by_id(summary_id)
+    if summary is None or summary.get("user_id") != user_id:
+        raise ResourceNotFoundError("Summary", summary_id)
 
 
 # --- Tag CRUD endpoints ---
@@ -190,17 +198,7 @@ async def attach_tags(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Attach tags to a summary by ID or name (auto-create if needed)."""
-    from app.db.models import Request, Summary
-
-    # Verify summary ownership
-    try:
-        summary = Summary.get_by_id(summary_id)
-    except Summary.DoesNotExist:
-        raise ResourceNotFoundError("Summary", summary_id) from None
-
-    request = Request.get_by_id(summary.request_id)
-    if request.user_id != user["user_id"]:
-        raise ResourceNotFoundError("Summary", summary_id)
+    await _ensure_summary_owned(summary_id, user["user_id"])
 
     repo = _get_tag_repo()
     attached: list[dict[str, Any]] = []
@@ -251,17 +249,7 @@ async def detach_tag(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Detach a tag from a summary."""
-    from app.db.models import Request, Summary
-
-    # Verify summary ownership
-    try:
-        summary = Summary.get_by_id(summary_id)
-    except Summary.DoesNotExist:
-        raise ResourceNotFoundError("Summary", summary_id) from None
-
-    request = Request.get_by_id(summary.request_id)
-    if request.user_id != user["user_id"]:
-        raise ResourceNotFoundError("Summary", summary_id)
+    await _ensure_summary_owned(summary_id, user["user_id"])
 
     repo = _get_tag_repo()
     await repo.async_detach_tag(summary_id, tag_id)

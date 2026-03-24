@@ -115,6 +115,16 @@ class RequestRepositoryWriteMixin(SqliteRepositoryMixinBase):
 
         await self._execute(_update, operation_name="update_request_correlation_id")
 
+    async def async_update_request_content_text(self, request_id: int, content_text: str) -> None:
+        """Update the request content text."""
+
+        def _update() -> None:
+            Request.update({Request.content_text: content_text}).where(
+                Request.id == request_id
+            ).execute()
+
+        await self._execute(_update, operation_name="update_request_content_text")
+
     async def async_update_request_lang_detected(self, request_id: int, lang: str) -> None:
         """Update the detected language of a request."""
 

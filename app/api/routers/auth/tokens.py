@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import Any
 
 import jwt
 
@@ -17,11 +17,6 @@ from app.api.exceptions import (
 from app.config import Config
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-
-if TYPE_CHECKING:
-    from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
-        SqliteAuthRepositoryAdapter,
-    )
 
 logger = get_logger(__name__)
 
@@ -120,7 +115,7 @@ async def create_refresh_token(
     client_id: str | None = None,
     device_info: str | None = None,
     ip_address: str | None = None,
-    auth_repo: SqliteAuthRepositoryAdapter | None = None,
+    auth_repo: Any | None = None,
 ) -> tuple[str, int]:
     """Create and persist JWT refresh token.
 

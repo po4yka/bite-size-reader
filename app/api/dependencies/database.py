@@ -11,8 +11,17 @@ from app.core.logging_utils import get_logger
 from app.db.models import database_proxy
 from app.di.api import clear_current_api_runtime, get_current_api_runtime, resolve_api_runtime
 from app.di.database import clear_cached_runtime_database, get_or_create_runtime_database_from_env
+from app.infrastructure.persistence.sqlite.repositories.audio_generation_repository import (
+    SqliteAudioGenerationRepositoryAdapter,
+)
 from app.infrastructure.persistence.sqlite.repositories.auth_repository import (
     SqliteAuthRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.backup_repository import (
+    SqliteBackupRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.bookmark_import_repository import (
+    SqliteBookmarkImportAdapter,
 )
 from app.infrastructure.persistence.sqlite.repositories.collection_repository import (
     SqliteCollectionRepositoryAdapter,
@@ -23,11 +32,17 @@ from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository 
 from app.infrastructure.persistence.sqlite.repositories.device_repository import (
     SqliteDeviceRepositoryAdapter,
 )
+from app.infrastructure.persistence.sqlite.repositories.import_job_repository import (
+    SqliteImportJobRepositoryAdapter,
+)
 from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
     SqliteLLMRepositoryAdapter,
 )
 from app.infrastructure.persistence.sqlite.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.rule_repository import (
+    SqliteRuleRepositoryAdapter,
 )
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
@@ -37,6 +52,9 @@ from app.infrastructure.persistence.sqlite.repositories.topic_search_repository 
 )
 from app.infrastructure.persistence.sqlite.repositories.user_repository import (
     SqliteUserRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.webhook_repository import (
+    SqliteWebhookRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -161,6 +179,56 @@ def get_device_repository(
 ) -> SqliteDeviceRepositoryAdapter:
     """Build a device repository bound to the shared session manager."""
     return SqliteDeviceRepositoryAdapter(resolve_repository_session(session_manager, request))
+
+
+def get_backup_repository(
+    session_manager: DatabaseSessionManager | None = None,
+    request: Any = None,
+) -> SqliteBackupRepositoryAdapter:
+    """Build a backup repository bound to the shared session manager."""
+    return SqliteBackupRepositoryAdapter(resolve_repository_session(session_manager, request))
+
+
+def get_rule_repository(
+    session_manager: DatabaseSessionManager | None = None,
+    request: Any = None,
+) -> SqliteRuleRepositoryAdapter:
+    """Build a rule repository bound to the shared session manager."""
+    return SqliteRuleRepositoryAdapter(resolve_repository_session(session_manager, request))
+
+
+def get_webhook_repository(
+    session_manager: DatabaseSessionManager | None = None,
+    request: Any = None,
+) -> SqliteWebhookRepositoryAdapter:
+    """Build a webhook repository bound to the shared session manager."""
+    return SqliteWebhookRepositoryAdapter(resolve_repository_session(session_manager, request))
+
+
+def get_import_job_repository(
+    session_manager: DatabaseSessionManager | None = None,
+    request: Any = None,
+) -> SqliteImportJobRepositoryAdapter:
+    """Build an import-job repository bound to the shared session manager."""
+    return SqliteImportJobRepositoryAdapter(resolve_repository_session(session_manager, request))
+
+
+def get_bookmark_import_repository(
+    session_manager: DatabaseSessionManager | None = None,
+    request: Any = None,
+) -> SqliteBookmarkImportAdapter:
+    """Build a bookmark-import repository bound to the shared session manager."""
+    return SqliteBookmarkImportAdapter(resolve_repository_session(session_manager, request))
+
+
+def get_audio_generation_repository(
+    session_manager: DatabaseSessionManager | None = None,
+    request: Any = None,
+) -> SqliteAudioGenerationRepositoryAdapter:
+    """Build an audio-generation repository bound to the shared session manager."""
+    return SqliteAudioGenerationRepositoryAdapter(
+        resolve_repository_session(session_manager, request)
+    )
 
 
 def get_topic_search_repository(

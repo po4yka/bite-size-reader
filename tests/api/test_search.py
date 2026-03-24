@@ -5,7 +5,7 @@ from enum import Enum
 
 # Python 3.10 compatibility shims (must be before app imports)
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -29,7 +29,9 @@ import typing
 enum.StrEnum = StrEnum  # type: ignore[misc,assignment]
 typing.NotRequired = NotRequired  # type: ignore[assignment]
 
+from app.api.models.responses import PaginationInfo, SearchResult, SearchResultsData
 from app.api.routers.auth.tokens import create_access_token
+from app.api.services.search_service import SearchService
 from app.core.time_utils import UTC
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.models import Request, Summary, TopicSearchIndex, User
@@ -158,71 +160,102 @@ def search_data(db, search_user):
     return data
 
 
+def _build_search_results(
+    *,
+    query: str,
+    results: list[SearchResult] | None = None,
+    total: int | None = None,
+    limit: int = 10,
+    offset: int = 0,
+    intent: str = "keyword",
+    mode: str = "keyword",
+    facets: dict[str, Any] | None = None,
+) -> SearchResultsData:
+    search_results = results or []
+    total_items = len(search_results) if total is None else total
+    return SearchResultsData(
+        results=search_results,
+        pagination=PaginationInfo(
+            total=total_items,
+            limit=limit,
+            offset=offset,
+            has_more=(offset + limit) < total_items,
+        ),
+        query=query,
+        intent=intent,
+        mode=mode,
+        facets=facets or {"domains": [], "tags": [], "languages": []},
+    )
+
+
+@pytest.fixture
+def mock_search_service_results():
+    """Patch the search service with a generic empty-result response."""
+
+    async def _search(**kwargs: Any) -> SearchResultsData:
+        resolved_mode = kwargs.get("mode", "keyword")
+        if resolved_mode == "auto":
+            resolved_mode = "keyword"
+        return _build_search_results(
+            query=kwargs["q"],
+            results=[],
+            total=0,
+            limit=kwargs["limit"],
+            offset=kwargs["offset"],
+            intent="keyword",
+            mode=resolved_mode,
+        )
+
+    with patch.object(SearchService, "search_summaries", AsyncMock(side_effect=_search)) as mock:
+        yield mock
+
+
 # ==================== FTS Search Tests ====================
 
 
-@patch("app.api.routers.search.SqliteTopicSearchRepositoryAdapter")
-@patch("app.api.routers.search.SqliteRequestRepositoryAdapter")
-@patch("app.api.routers.search.SqliteSummaryRepositoryAdapter")
-def test_search_summaries_success(
-    mock_summary_repo_class,
-    mock_request_repo_class,
-    mock_search_repo_class,
-    client,
-    search_data,
-    search_token,
-):
+def test_search_summaries_success(client, search_data, search_token):
     """Test successful FTS search with results."""
-    # Mock FTS search results
-    mock_search_repo = MagicMock()
-    mock_search_repo.async_fts_search_paginated = AsyncMock(
-        return_value=(
-            [
-                {
-                    "request_id": search_data[0]["request"].id,
-                    "title": "Introduction to AI",
-                    "snippet": "AI article snippet",
-                    "source": "example.com",
-                    "published_at": "2023-01-01",
-                }
-            ],
-            1,
+    mocked_result = _build_search_results(
+        query="artificial intelligence",
+        results=[
+            SearchResult(
+                request_id=search_data[0]["request"].id,
+                summary_id=search_data[0]["summary"].id,
+                url="https://example.com/ai-article",
+                title="Introduction to AI",
+                domain="example.com",
+                snippet="AI article snippet",
+                tldr="AI is transforming technology",
+                published_at="2023-01-01",
+                created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                relevance_score=0.95,
+                topic_tags=["#ai", "#technology"],
+                is_read=False,
+                match_signals=["keyword"],
+                match_explanation="Matched by keyword",
+                score_breakdown={
+                    "fts": 0.9,
+                    "semantic": 0.0,
+                    "freshness": 0.5,
+                    "popularity": 0.2,
+                    "lexical": 0.8,
+                },
+            )
+        ],
+        total=1,
+        limit=10,
+        offset=0,
+        intent="keyword",
+        mode="keyword",
+        facets={"domains": ["example.com"], "tags": ["#ai"], "languages": ["en"]},
+    )
+
+    with patch.object(SearchService, "search_summaries", AsyncMock(return_value=mocked_result)):
+        response = client.get(
+            "/v1/search",
+            params={"q": "artificial intelligence", "limit": 10, "offset": 0},
+            headers={"Authorization": f"Bearer {search_token}"},
         )
-    )
-    mock_search_repo_class.return_value = mock_search_repo
-
-    # Mock request repository
-    mock_request_repo = MagicMock()
-    mock_request_repo.async_get_requests_by_ids = AsyncMock(
-        return_value={
-            search_data[0]["request"].id: {
-                "id": search_data[0]["request"].id,
-                "input_url": "https://example.com/ai-article",
-                "normalized_url": "https://example.com/ai-article",
-                "created_at": datetime.now(UTC),
-            }
-        }
-    )
-    mock_request_repo_class.return_value = mock_request_repo
-
-    # Mock summary repository
-    mock_summary_repo = MagicMock()
-    mock_summary_repo.async_get_summaries_by_request_ids = AsyncMock(
-        return_value={
-            search_data[0]["request"].id: {
-                "id": search_data[0]["summary"].id,
-                "json_payload": search_data[0]["summary"].json_payload,
-                "is_read": False,
-            }
-        }
-    )
-    mock_summary_repo_class.return_value = mock_summary_repo
-
-    response = client.get(
-        "/v1/search",
-        params={"q": "artificial intelligence", "limit": 10, "offset": 0},
-        headers={"Authorization": f"Bearer {search_token}"},
-    )
 
     assert response.status_code == 200
     data = response.json()
@@ -235,7 +268,9 @@ def test_search_summaries_success(
     assert len(data["data"]["results"]) == 1
 
 
-def test_search_summaries_with_pagination(client, search_data, search_token, mock_fts_repos):
+def test_search_summaries_with_pagination(
+    client, search_data, search_token, mock_search_service_results
+):
     """Test search with pagination parameters."""
     response = client.get(
         "/v1/search",
@@ -250,7 +285,9 @@ def test_search_summaries_with_pagination(client, search_data, search_token, moc
     assert isinstance(data["pagination"]["hasMore"], bool)
 
 
-def test_search_summaries_no_results(client, search_data, search_token, mock_fts_repos):
+def test_search_summaries_no_results(
+    client, search_data, search_token, mock_search_service_results
+):
     """Test search with no matching results."""
     response = client.get(
         "/v1/search",
@@ -329,7 +366,9 @@ def test_search_summaries_unauthorized(client, search_data):
     assert response.status_code == 401
 
 
-def test_search_summaries_wildcard_syntax(client, search_data, search_token, mock_fts_repos):
+def test_search_summaries_wildcard_syntax(
+    client, search_data, search_token, mock_search_service_results
+):
     """Test FTS wildcard search syntax."""
     response = client.get(
         "/v1/search",
@@ -340,7 +379,9 @@ def test_search_summaries_wildcard_syntax(client, search_data, search_token, moc
     assert response.status_code == 200
 
 
-def test_search_summaries_phrase_syntax(client, search_data, search_token, mock_fts_repos):
+def test_search_summaries_phrase_syntax(
+    client, search_data, search_token, mock_search_service_results
+):
     """Test FTS phrase search syntax."""
     response = client.get(
         "/v1/search",
@@ -351,7 +392,9 @@ def test_search_summaries_phrase_syntax(client, search_data, search_token, mock_
     assert response.status_code == 200
 
 
-def test_search_summaries_boolean_syntax(client, search_data, search_token, mock_fts_repos):
+def test_search_summaries_boolean_syntax(
+    client, search_data, search_token, mock_search_service_results
+):
     """Test FTS boolean search syntax."""
     response = client.get(
         "/v1/search",
@@ -362,18 +405,16 @@ def test_search_summaries_boolean_syntax(client, search_data, search_token, mock
     assert response.status_code == 200
 
 
-@patch("app.api.routers.search.SqliteTopicSearchRepositoryAdapter")
-def test_search_summaries_error_handling(mock_repo_class, client, search_token):
+def test_search_summaries_error_handling(client, search_token):
     """Test search error handling."""
-    mock_repo = MagicMock()
-    mock_repo.async_fts_search_paginated = AsyncMock(side_effect=Exception("DB error"))
-    mock_repo_class.return_value = mock_repo
-
-    response = client.get(
-        "/v1/search",
-        params={"q": "test", "limit": 10, "offset": 0},
-        headers={"Authorization": f"Bearer {search_token}"},
-    )
+    with patch.object(
+        SearchService, "search_summaries", AsyncMock(side_effect=Exception("DB error"))
+    ):
+        response = client.get(
+            "/v1/search",
+            params={"q": "test", "limit": 10, "offset": 0},
+            headers={"Authorization": f"Bearer {search_token}"},
+        )
 
     assert response.status_code == 500
 
@@ -381,107 +422,46 @@ def test_search_summaries_error_handling(mock_repo_class, client, search_token):
 # ==================== Semantic Search Tests ====================
 
 
-@pytest.fixture
-def mock_chroma_service():
-    """Mock Chroma search service."""
-    service = MagicMock()
-    service.search = AsyncMock()
-    return service
-
-
-@pytest.fixture
-def mock_fts_repos():
-    """Mock repositories for FTS search tests."""
-    with (
-        patch(
-            "app.api.routers.search.SqliteTopicSearchRepositoryAdapter"
-        ) as mock_search_repo_class,
-        patch("app.api.routers.search.SqliteRequestRepositoryAdapter") as mock_request_repo_class,
-        patch("app.api.routers.search.SqliteSummaryRepositoryAdapter") as mock_summary_repo_class,
-    ):
-        # Configure search repo
-        mock_search_repo = MagicMock()
-        mock_search_repo.async_fts_search_paginated = AsyncMock(return_value=([], 0))
-        mock_search_repo_class.return_value = mock_search_repo
-
-        # Configure request repo
-        mock_request_repo = MagicMock()
-        mock_request_repo.async_get_requests_by_ids = AsyncMock(return_value={})
-        mock_request_repo_class.return_value = mock_request_repo
-
-        # Configure summary repo
-        mock_summary_repo = MagicMock()
-        mock_summary_repo.async_get_summaries_by_request_ids = AsyncMock(return_value={})
-        mock_summary_repo_class.return_value = mock_summary_repo
-
-        yield {
-            "search_repo": mock_search_repo,
-            "request_repo": mock_request_repo,
-            "summary_repo": mock_summary_repo,
-        }
-
-
-@patch("app.api.routers.search.SqliteRequestRepositoryAdapter")
-@patch("app.api.routers.search.SqliteSummaryRepositoryAdapter")
-def test_semantic_search_success(
-    mock_summary_repo_class, mock_request_repo_class, client, search_data, search_token
-):
+def test_semantic_search_success(client, search_data, search_token):
     """Test successful semantic search."""
-    from app.infrastructure.search.chroma_vector_search_service import (
-        ChromaVectorSearchResult,
-        ChromaVectorSearchResults,
+    mocked_result = _build_search_results(
+        query="machine learning",
+        results=[
+            SearchResult(
+                request_id=search_data[0]["request"].id,
+                summary_id=search_data[0]["summary"].id,
+                url="https://example.com/ai-article",
+                title="Introduction to AI",
+                domain="example.com",
+                snippet="AI article snippet",
+                tldr="AI is transforming technology",
+                published_at="2023-01-01",
+                created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                relevance_score=0.95,
+                topic_tags=["#ai", "#technology"],
+                is_read=False,
+                match_signals=["semantic"],
+                match_explanation="Matched semantically",
+                score_breakdown={
+                    "fts": 0.0,
+                    "semantic": 0.95,
+                    "freshness": 0.5,
+                    "popularity": 0.2,
+                    "lexical": 0.7,
+                },
+            )
+        ],
+        total=1,
+        limit=10,
+        offset=0,
+        intent="similarity",
+        mode="semantic",
+        facets={"domains": ["example.com"], "tags": ["#ai"], "languages": ["en"]},
     )
 
-    # Mock Chroma service
-    mock_service = MagicMock()
-    mock_service.search = AsyncMock(
-        return_value=ChromaVectorSearchResults(
-            results=[
-                ChromaVectorSearchResult(
-                    request_id=search_data[0]["request"].id,
-                    summary_id=search_data[0]["summary"].id,
-                    url="https://example.com/ai-article",
-                    title="Introduction to AI",
-                    snippet="AI article snippet",
-                    tags=["#ai", "#technology"],
-                    similarity_score=0.95,
-                )
-            ],
-            has_more=False,
-        )
-    )
-
-    # Mock request repository
-    mock_request_repo = MagicMock()
-    mock_request_repo.async_get_requests_by_ids = AsyncMock(
-        return_value={
-            search_data[0]["request"].id: {
-                "id": search_data[0]["request"].id,
-                "input_url": "https://example.com/ai-article",
-                "normalized_url": "https://example.com/ai-article",
-                "created_at": datetime.now(UTC),
-            }
-        }
-    )
-    mock_request_repo_class.return_value = mock_request_repo
-
-    # Mock summary repository
-    mock_summary_repo = MagicMock()
-    mock_summary_repo.async_get_summaries_by_request_ids = AsyncMock(
-        return_value={
-            search_data[0]["request"].id: {
-                "id": search_data[0]["summary"].id,
-                "json_payload": search_data[0]["summary"].json_payload,
-                "is_read": False,
-            }
-        }
-    )
-    mock_summary_repo_class.return_value = mock_summary_repo
-
-    async def mock_get_service():
-        return mock_service
-
-    with patch("app.api.routers.search.get_chroma_search_service", new=mock_get_service):
+    with patch.object(
+        SearchService, "semantic_search_summaries", AsyncMock(return_value=mocked_result)
+    ):
         response = client.get(
             "/v1/search/semantic",
             params={"q": "machine learning", "limit": 10, "offset": 0},
@@ -498,34 +478,21 @@ def test_semantic_search_success(
     assert isinstance(data["results"], list)
 
 
-async def async_get_mock_chroma_service():
-    """Async factory for mock service."""
-    service = MagicMock()
-    service.search = AsyncMock(return_value=None)
-    return service
-
-
 def test_semantic_search_with_filters(client, search_data, search_token):
     """Test semantic search with language and tag filters."""
-    from app.api.dependencies.search_resources import get_chroma_search_service
-    from app.api.main import app
-    from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchResults
-
-    mock_service = MagicMock()
-    mock_service.search = AsyncMock(
-        return_value=ChromaVectorSearchResults(
+    mock_method = AsyncMock(
+        return_value=_build_search_results(
+            query="AI",
             results=[],
-            has_more=False,
+            total=0,
+            limit=10,
+            offset=0,
+            intent="similarity",
+            mode="semantic",
         )
     )
 
-    async def mock_get_service():
-        return mock_service
-
-    # Override FastAPI dependency
-    app.dependency_overrides[get_chroma_search_service] = mock_get_service
-
-    try:
+    with patch.object(SearchService, "semantic_search_summaries", mock_method):
         response = client.get(
             "/v1/search/semantic",
             params={
@@ -540,32 +507,30 @@ def test_semantic_search_with_filters(client, search_data, search_token):
         )
 
         assert response.status_code == 200
-        mock_service.search.assert_called_once()
-        call_kwargs = mock_service.search.call_args[1]
-        assert call_kwargs["language"] == "en"
-        assert call_kwargs["tags"] == ["ai", "technology"]
+        mock_method.assert_awaited_once()
+        call_kwargs = mock_method.call_args.kwargs
+        assert call_kwargs["filters"].language == "en"
+        assert call_kwargs["filters"].tags == ["ai", "technology"]
         assert call_kwargs["user_scope"] == "test-scope"
-    finally:
-        # Clean up override
-        app.dependency_overrides.clear()
 
 
 def test_semantic_search_no_results(client, search_token):
     """Test semantic search with no results."""
-    from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchResults
-
-    mock_service = MagicMock()
-    mock_service.search = AsyncMock(
-        return_value=ChromaVectorSearchResults(
-            results=[],
-            has_more=False,
-        )
-    )
-
-    async def mock_get_service():
-        return mock_service
-
-    with patch("app.api.routers.search.get_chroma_search_service", new=mock_get_service):
+    with patch.object(
+        SearchService,
+        "semantic_search_summaries",
+        AsyncMock(
+            return_value=_build_search_results(
+                query="nonexistent topic",
+                results=[],
+                total=0,
+                limit=10,
+                offset=0,
+                intent="similarity",
+                mode="semantic",
+            )
+        ),
+    ):
         response = client.get(
             "/v1/search/semantic",
             params={"q": "nonexistent topic", "limit": 10, "offset": 0},
@@ -600,19 +565,11 @@ def test_semantic_search_invalid_language(client, search_token):
 
 def test_semantic_search_error_handling(client, search_token):
     """Test semantic search error handling."""
-    from app.api.dependencies.search_resources import get_chroma_search_service
-    from app.api.main import app
-
-    mock_service = MagicMock()
-    mock_service.search = AsyncMock(side_effect=Exception("Chroma error"))
-
-    async def mock_get_service():
-        return mock_service
-
-    # Override FastAPI dependency
-    app.dependency_overrides[get_chroma_search_service] = mock_get_service
-
-    try:
+    with patch.object(
+        SearchService,
+        "semantic_search_summaries",
+        AsyncMock(side_effect=Exception("Chroma error")),
+    ):
         response = client.get(
             "/v1/search/semantic",
             params={"q": "test", "limit": 10, "offset": 0},
@@ -620,9 +577,6 @@ def test_semantic_search_error_handling(client, search_token):
         )
 
         assert response.status_code == 500
-    finally:
-        # Clean up override
-        app.dependency_overrides.clear()
 
 
 # ==================== Trending Topics Tests ====================
@@ -809,18 +763,24 @@ def test_get_related_summaries_empty_tag(client, search_token):
 # ==================== Duplicate Check Tests ====================
 
 
-@patch("app.api.routers.search.SqliteRequestRepositoryAdapter")
-def test_check_duplicate_not_duplicate(mock_repo_class, client, search_user, search_token):
+def test_check_duplicate_not_duplicate(client, search_user, search_token):
     """Test URL that is not a duplicate."""
-    mock_repo = MagicMock()
-    mock_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=None)
-    mock_repo_class.return_value = mock_repo
-
-    response = client.get(
-        "/v1/urls/check-duplicate",
-        params={"url": "https://newsite.com/article", "include_summary": False},
-        headers={"Authorization": f"Bearer {search_token}"},
-    )
+    with patch.object(
+        SearchService,
+        "check_duplicate",
+        AsyncMock(
+            return_value={
+                "is_duplicate": False,
+                "normalized_url": "https://newsite.com/article",
+                "dedupe_hash": "abc123",
+            }
+        ),
+    ):
+        response = client.get(
+            "/v1/urls/check-duplicate",
+            params={"url": "https://newsite.com/article", "include_summary": False},
+            headers={"Authorization": f"Bearer {search_token}"},
+        )
 
     assert response.status_code == 200
     data = response.json()["data"]
@@ -829,41 +789,32 @@ def test_check_duplicate_not_duplicate(mock_repo_class, client, search_user, sea
     assert "dedupe_hash" in data
 
 
-@patch("app.api.routers.search.SqliteRequestRepositoryAdapter")
-@patch("app.api.routers.search.SqliteSummaryRepositoryAdapter")
 def test_check_duplicate_is_duplicate(
-    mock_summary_repo_class,
-    mock_request_repo_class,
     client,
     search_data,
     search_user,
     search_token,
 ):
     """Test URL that is a duplicate."""
-    # Mock request repository
-    existing = {
-        "id": search_data[0]["request"].id,
-        "user_id": search_user.telegram_user_id,
-        "created_at": datetime.now(UTC),
-    }
-    mock_request_repo = MagicMock()
-    mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=existing)
-    mock_request_repo_class.return_value = mock_request_repo
-
-    # Mock summary repository
-    mock_summary_repo = MagicMock()
-    mock_summary_repo.async_get_summary_by_request = AsyncMock(
-        return_value={"id": search_data[0]["summary"].id}
-    )
-    mock_summary_repo_class.return_value = mock_summary_repo
-
     existing_url = search_data[0]["request"].input_url
 
-    response = client.get(
-        "/v1/urls/check-duplicate",
-        params={"url": existing_url, "include_summary": False},
-        headers={"Authorization": f"Bearer {search_token}"},
-    )
+    with patch.object(
+        SearchService,
+        "check_duplicate",
+        AsyncMock(
+            return_value={
+                "is_duplicate": True,
+                "request_id": search_data[0]["request"].id,
+                "summary_id": search_data[0]["summary"].id,
+                "summarized_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            }
+        ),
+    ):
+        response = client.get(
+            "/v1/urls/check-duplicate",
+            params={"url": existing_url, "include_summary": False},
+            headers={"Authorization": f"Bearer {search_token}"},
+        )
 
     assert response.status_code == 200
     data = response.json()["data"]
@@ -873,46 +824,37 @@ def test_check_duplicate_is_duplicate(
     assert "summarized_at" in data
 
 
-@patch("app.api.routers.search.SqliteRequestRepositoryAdapter")
-@patch("app.api.routers.search.SqliteSummaryRepositoryAdapter")
 def test_check_duplicate_with_summary(
-    mock_summary_repo_class,
-    mock_request_repo_class,
     client,
     search_data,
     search_user,
     search_token,
 ):
     """Test duplicate check with summary details included."""
-    # Mock request repository
-    existing = {
-        "id": search_data[0]["request"].id,
-        "user_id": search_user.telegram_user_id,
-        "input_url": "https://example.com/ai-article",
-        "normalized_url": "https://example.com/ai-article",
-        "created_at": datetime.now(UTC),
-    }
-    mock_request_repo = MagicMock()
-    mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=existing)
-    mock_request_repo_class.return_value = mock_request_repo
-
-    # Mock summary repository
-    mock_summary_repo = MagicMock()
-    mock_summary_repo.async_get_summary_by_request = AsyncMock(
-        return_value={
-            "id": search_data[0]["summary"].id,
-            "json_payload": search_data[0]["summary"].json_payload,
-        }
-    )
-    mock_summary_repo_class.return_value = mock_summary_repo
-
     existing_url = search_data[0]["request"].input_url
 
-    response = client.get(
-        "/v1/urls/check-duplicate",
-        params={"url": existing_url, "include_summary": True},
-        headers={"Authorization": f"Bearer {search_token}"},
-    )
+    with patch.object(
+        SearchService,
+        "check_duplicate",
+        AsyncMock(
+            return_value={
+                "is_duplicate": True,
+                "request_id": search_data[0]["request"].id,
+                "summary_id": search_data[0]["summary"].id,
+                "summarized_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                "summary": {
+                    "title": "Introduction to AI",
+                    "tldr": "AI is transforming technology",
+                    "url": existing_url,
+                },
+            }
+        ),
+    ):
+        response = client.get(
+            "/v1/urls/check-duplicate",
+            params={"url": existing_url, "include_summary": True},
+            headers={"Authorization": f"Bearer {search_token}"},
+        )
 
     assert response.status_code == 200
     data = response.json()["data"]
@@ -980,10 +922,7 @@ def test_check_duplicate_short_url(client, search_token):
     assert response.status_code == 422
 
 
-@patch("app.api.routers.search.SqliteRequestRepositoryAdapter")
-def test_check_duplicate_different_user(
-    mock_request_repo_class, client, search_data, search_user, db, monkeypatch
-):
+def test_check_duplicate_different_user(client, search_data, search_user, db, monkeypatch):
     """Test that duplicate check respects user isolation."""
     # Create different user
     other_user = User.create(telegram_user_id=111222333, username="other_user")
@@ -995,24 +934,25 @@ def test_check_duplicate_different_user(
 
     other_token = create_access_token(other_user.telegram_user_id, client_id="test")
 
-    # Mock request with different user_id
-    existing = {
-        "id": search_data[0]["request"].id,
-        "user_id": search_user.telegram_user_id,  # Different from other_user
-        "created_at": datetime.now(UTC),
-    }
-    mock_request_repo = MagicMock()
-    mock_request_repo.async_get_request_by_dedupe_hash = AsyncMock(return_value=existing)
-    mock_request_repo_class.return_value = mock_request_repo
-
     # Check URL that exists for first user
     existing_url = search_data[0]["request"].input_url
 
-    response = client.get(
-        "/v1/urls/check-duplicate",
-        params={"url": existing_url, "include_summary": False},
-        headers={"Authorization": f"Bearer {other_token}"},
-    )
+    with patch.object(
+        SearchService,
+        "check_duplicate",
+        AsyncMock(
+            return_value={
+                "is_duplicate": False,
+                "normalized_url": existing_url,
+                "dedupe_hash": "other-user-hash",
+            }
+        ),
+    ):
+        response = client.get(
+            "/v1/urls/check-duplicate",
+            params={"url": existing_url, "include_summary": False},
+            headers={"Authorization": f"Bearer {other_token}"},
+        )
 
     assert response.status_code == 200
     data = response.json()["data"]
@@ -1035,7 +975,7 @@ def test_search_special_characters(client, search_data, search_token):
     assert response.status_code in [200, 500]
 
 
-def test_search_unicode_query(client, search_data, search_token, mock_fts_repos):
+def test_search_unicode_query(client, search_data, search_token, mock_search_service_results):
     """Test search with unicode characters."""
     response = client.get(
         "/v1/search",
@@ -1072,7 +1012,7 @@ def test_isotime_helper_string_value(client):
     assert result == "2023-01-01"
 
 
-def test_search_response_structure(client, search_data, search_token, mock_fts_repos):
+def test_search_response_structure(client, search_data, search_token, mock_search_service_results):
     """Test that search response includes all required fields."""
     response = client.get(
         "/v1/search",
@@ -1109,20 +1049,21 @@ def test_search_response_structure(client, search_data, search_token, mock_fts_r
 
 def test_semantic_search_response_structure(client, search_token):
     """Test semantic search response structure."""
-    from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchResults
-
-    mock_service = MagicMock()
-    mock_service.search = AsyncMock(
-        return_value=ChromaVectorSearchResults(
-            results=[],
-            has_more=False,
-        )
-    )
-
-    async def mock_get_service():
-        return mock_service
-
-    with patch("app.api.routers.search.get_chroma_search_service", new=mock_get_service):
+    with patch.object(
+        SearchService,
+        "semantic_search_summaries",
+        AsyncMock(
+            return_value=_build_search_results(
+                query="test",
+                results=[],
+                total=0,
+                limit=10,
+                offset=0,
+                intent="similarity",
+                mode="semantic",
+            )
+        ),
+    ):
         response = client.get(
             "/v1/search/semantic",
             params={"q": "test", "limit": 10, "offset": 0},
@@ -1143,7 +1084,7 @@ def test_semantic_search_response_structure(client, search_token):
 
 
 def test_search_response_includes_mode_intent_and_facets(
-    client, search_data, search_token, mock_fts_repos
+    client, search_data, search_token, mock_search_service_results
 ):
     """Search response should include intent/mode/facets metadata."""
     response = client.get(
@@ -1161,77 +1102,51 @@ def test_search_response_includes_mode_intent_and_facets(
 
 def test_semantic_search_response_includes_explanations(client, search_token):
     """Semantic results should include explainability fields."""
-    from app.infrastructure.search.chroma_vector_search_service import (
-        ChromaVectorSearchResult,
-        ChromaVectorSearchResults,
-    )
-
-    mock_service = MagicMock()
-    mock_service.search = AsyncMock(
-        return_value=ChromaVectorSearchResults(
-            results=[
-                ChromaVectorSearchResult(
-                    request_id=1,
-                    summary_id=1,
-                    similarity_score=0.9,
-                    url="https://example.com/a",
-                    title="A",
-                    snippet="about ai",
-                )
-            ],
-            has_more=False,
-        )
-    )
-
-    async def mock_get_service():
-        return mock_service
-
-    with patch("app.api.routers.search.get_chroma_search_service", new=mock_get_service):
-        with (
-            patch(
-                "app.api.routers.search.SqliteRequestRepositoryAdapter"
-            ) as mock_request_repo_class,
-            patch(
-                "app.api.routers.search.SqliteSummaryRepositoryAdapter"
-            ) as mock_summary_repo_class,
-        ):
-            mock_request_repo = MagicMock()
-            mock_request_repo.async_get_requests_by_ids = AsyncMock(
-                return_value={
-                    1: {
-                        "id": 1,
-                        "input_url": "https://example.com/a",
-                        "normalized_url": "https://example.com/a",
-                        "created_at": datetime.now(UTC),
-                    }
-                }
-            )
-            mock_request_repo_class.return_value = mock_request_repo
-
-            mock_summary_repo = MagicMock()
-            mock_summary_repo.async_get_summaries_by_request_ids = AsyncMock(
-                return_value={
-                    1: {
-                        "id": 1,
-                        "lang": "en",
-                        "json_payload": {
-                            "summary_250": "about ai",
-                            "tldr": "ai",
-                            "topic_tags": ["#ai"],
-                            "metadata": {"title": "A", "domain": "example.com"},
+    with patch.object(
+        SearchService,
+        "semantic_search_summaries",
+        AsyncMock(
+            return_value=_build_search_results(
+                query="ai",
+                results=[
+                    SearchResult(
+                        request_id=1,
+                        summary_id=1,
+                        url="https://example.com/a",
+                        title="A",
+                        domain="example.com",
+                        snippet="about ai",
+                        tldr="ai",
+                        published_at=None,
+                        created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                        relevance_score=0.9,
+                        topic_tags=["#ai"],
+                        is_read=False,
+                        match_signals=["semantic"],
+                        match_explanation="Matched semantically",
+                        score_breakdown={
+                            "fts": 0.0,
+                            "semantic": 0.9,
+                            "freshness": 0.5,
+                            "popularity": 0.1,
+                            "lexical": 0.6,
                         },
-                        "is_read": False,
-                        "is_favorited": False,
-                    }
-                }
+                    )
+                ],
+                total=1,
+                limit=10,
+                offset=0,
+                intent="similarity",
+                mode="semantic",
+                facets={"domains": ["example.com"], "tags": ["#ai"], "languages": ["en"]},
             )
-            mock_summary_repo_class.return_value = mock_summary_repo
-
-            response = client.get(
-                "/v1/search/semantic",
-                params={"q": "ai", "limit": 10, "offset": 0},
-                headers={"Authorization": f"Bearer {search_token}"},
-            )
+        ),
+    ):
+        response = client.get(
+            "/v1/search/semantic",
+            params={"q": "ai", "limit": 10, "offset": 0},
+            headers={"Authorization": f"Bearer {search_token}"},
+        )
 
     assert response.status_code == 200
     results = response.json()["data"]["results"]
