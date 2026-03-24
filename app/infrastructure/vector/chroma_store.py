@@ -78,15 +78,17 @@ class ChromaVectorStore:
             # Test connection with heartbeat
             self._client.heartbeat()
 
+            metadata = {
+                "hnsw:space": "cosine",
+                "environment": self._environment,
+                "user_scope": self._user_scope,
+                "version": self._collection_version,
+            }
+            if self._embedding_space is not None:
+                metadata["embedding_space"] = self._embedding_space
             self._collection = self._client.get_or_create_collection(
                 name=self._collection_name,
-                metadata={
-                    "hnsw:space": "cosine",
-                    "environment": self._environment,
-                    "user_scope": self._user_scope,
-                    "version": self._collection_version,
-                    "embedding_space": self._embedding_space,
-                },
+                metadata=metadata,
             )
             self._available = True
             logger.info(
@@ -491,15 +493,17 @@ class ChromaVectorStore:
         """Reset the collection (for testing purposes)."""
         try:
             self._client.delete_collection(self._collection_name)
+            metadata = {
+                "hnsw:space": "cosine",
+                "environment": self._environment,
+                "user_scope": self._user_scope,
+                "version": self._collection_version,
+            }
+            if self._embedding_space is not None:
+                metadata["embedding_space"] = self._embedding_space
             self._collection = self._client.get_or_create_collection(
                 name=self._collection_name,
-                metadata={
-                    "hnsw:space": "cosine",
-                    "environment": self._environment,
-                    "user_scope": self._user_scope,
-                    "version": self._collection_version,
-                    "embedding_space": self._embedding_space,
-                },
+                metadata=metadata,
             )
         except Exception as e:
             logger.error("chroma_reset_failed", extra={"error": str(e)})
