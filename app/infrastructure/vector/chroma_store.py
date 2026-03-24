@@ -55,8 +55,23 @@ class ChromaVectorStore:
             environment, user_scope, collection_version, embedding_space
         )
 
-        # Attempt initial connection
-        self._try_connect()
+        # Attempt initial connection with retry for Docker networking race
+        self._connect_with_retry()
+
+    def _connect_with_retry(self, max_attempts: int = 3, base_delay: float = 2.0) -> None:
+        """Try connecting with brief retries to handle Docker network startup race."""
+        import time
+
+        for attempt in range(1, max_attempts + 1):
+            if self._try_connect():
+                return
+            if attempt < max_attempts:
+                delay = base_delay * attempt
+                logger.info(
+                    "chroma_connect_retry",
+                    extra={"attempt": attempt, "next_delay_sec": delay, "host": self._host},
+                )
+                time.sleep(delay)
 
     def _try_connect(self) -> bool:
         """Attempt to connect to ChromaDB.
