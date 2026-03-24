@@ -119,20 +119,6 @@ class StructuredSummaryFlow:
             )
         return False, card_text
 
-    async def _send_structured_header(self, message: Any, llm: Any, chunks: int | None) -> None:
-        method = (
-            f"{t('chunked', self._context.lang)} ({chunks} parts)"
-            if chunks
-            else t("single_pass", self._context.lang)
-        )
-        model_name = getattr(llm, "model", None)
-        header = (
-            f"{t('summary_ready', self._context.lang)}\n"
-            f"{t('model', self._context.lang)}: {model_name or 'unknown'}\n"
-            f"Method: {method}"
-        )
-        await self._context.response_sender.safe_reply(message, header)
-
     async def send_structured_summary_response(
         self,
         message: Any,
@@ -156,26 +142,36 @@ class StructuredSummaryFlow:
             if reader and job_card_finalized:
                 return None
 
-            if not reader and not job_card_finalized:
-                try:
-                    await self._send_structured_header(message, llm, chunks)
-                except Exception as exc:
-                    raise_if_cancelled(exc)
+            # Build main content: combined lines + longest summary field + key ideas
+            main_parts: list[str] = []
 
             if not job_card_finalized:
-                await self._blocks.send_combined_summary_lines(
-                    message, summary_shaped, include_domain=True
+                combined_lines = self._blocks.build_combined_summary_lines(
+                    summary_shaped, include_domain=True
+                )
+                if combined_lines:
+                    main_parts.append("\n".join(combined_lines))
+
+            summary_text = self._blocks.build_summary_field_text(
+                summary_shaped, include_tldr=not job_card_finalized
+            )
+            if summary_text:
+                main_parts.append(summary_text)
+
+            ideas_text = self._blocks.build_key_ideas_text(summary_shaped)
+            if ideas_text:
+                main_parts.append(ideas_text)
+
+            # Send main content as one message (text_processor handles splitting if >3500 chars)
+            if main_parts:
+                await self._context.text_processor.send_long_text(
+                    message, "\n\n".join(main_parts), parse_mode="HTML"
                 )
 
-            await self._blocks.send_summary_fields(
-                message,
-                summary_shaped,
-                include_tldr=not job_card_finalized,
-            )
-            await self._blocks.send_key_ideas(message, summary_shaped)
+            # Send coalesced supplemental blocks
             await self._blocks.send_new_field_messages(message, summary_shaped)
-            await self._context.response_sender.reply_json(message, summary_shaped)
 
+            # Attach action buttons to a final message (or to the last sent message)
             bot_reply_id: int | None = None
             if summary_id and not job_card_finalized:
                 bot_reply_id = await self._send_action_buttons(message, summary_id, correlation_id)
@@ -199,7 +195,6 @@ class StructuredSummaryFlow:
             except Exception as exc2:
                 raise_if_cancelled(exc2)
 
-            await self._context.response_sender.reply_json(message, summary_shaped)
             if summary_id:
                 await self._send_action_buttons(message, summary_id, correlation_id)
             return None
@@ -223,16 +218,32 @@ class StructuredSummaryFlow:
                     message, t("forward_summary_ready", _l)
                 )
 
-            await self._blocks.send_combined_summary_lines(
-                message, forward_shaped, include_domain=False
+            # Build main content: combined lines + summary + key ideas
+            main_parts: list[str] = []
+            combined_lines = self._blocks.build_combined_summary_lines(
+                forward_shaped, include_domain=False
             )
-            await self._blocks.send_summary_fields(message, forward_shaped, include_tldr=False)
-            await self._blocks.send_key_ideas(message, forward_shaped)
+            if combined_lines:
+                main_parts.append("\n".join(combined_lines))
+
+            summary_text = self._blocks.build_summary_field_text(forward_shaped, include_tldr=False)
+            if summary_text:
+                main_parts.append(summary_text)
+
+            ideas_text = self._blocks.build_key_ideas_text(forward_shaped)
+            if ideas_text:
+                main_parts.append(ideas_text)
+
+            if main_parts:
+                await self._context.text_processor.send_long_text(
+                    message, "\n\n".join(main_parts), parse_mode="HTML"
+                )
+
+            # Coalesced supplemental blocks
             await self._blocks.send_new_field_messages(message, forward_shaped)
         except Exception as exc:
             raise_if_cancelled(exc)
 
-        await self._context.response_sender.reply_json(message, forward_shaped)
         if summary_id:
             await self._send_action_buttons(message, summary_id)
 

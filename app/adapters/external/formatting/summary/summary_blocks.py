@@ -161,15 +161,77 @@ class SummaryBlocksPresenter:
         self, message: Any, shaped: dict[str, Any], *, include_tldr: bool
     ) -> None:
         _l = self._context.lang
-        for key in self.summary_field_keys(shaped, include_tldr=include_tldr):
-            content = str(shaped.get(key, "")).strip()
-            if not content:
-                continue
-            content = self._context.text_processor.sanitize_summary_text(content)
-            label = f"🧾 {t('tldr', _l)}"
-            if key != "tldr":
-                label = f"🧾 {t('summary_n', _l)} {key.split('_', 1)[1]}"
-            await self._context.text_processor.send_labelled_text(message, label, content)
+        fields = self.summary_field_keys(shaped, include_tldr=include_tldr)
+        if not fields:
+            return
+        # Only send the longest field (last in sorted order, highest char count)
+        key = fields[-1]
+        content = str(shaped.get(key, "")).strip()
+        if not content:
+            return
+        content = self._context.text_processor.sanitize_summary_text(content)
+        label = (
+            f"🧾 {t('tldr', _l)}"
+            if key == "tldr"
+            else f"🧾 {t('summary_n', _l)} {key.split('_', 1)[1]}"
+        )
+        await self._context.text_processor.send_labelled_text(message, label, content)
+
+    def build_summary_field_text(self, shaped: dict[str, Any], *, include_tldr: bool) -> str | None:
+        """Return formatted text for the longest summary field, or None."""
+        _l = self._context.lang
+        fields = self.summary_field_keys(shaped, include_tldr=include_tldr)
+        if not fields:
+            return None
+        key = fields[-1]
+        content = str(shaped.get(key, "")).strip()
+        if not content:
+            return None
+        content = self._context.text_processor.sanitize_summary_text(content)
+        label = (
+            f"🧾 {t('tldr', _l)}"
+            if key == "tldr"
+            else f"🧾 {t('summary_n', _l)} {key.split('_', 1)[1]}"
+        )
+        return f"{label}:\n{content}"
+
+    def build_key_ideas_text(self, shaped: dict[str, Any]) -> str | None:
+        """Return formatted key ideas text, or None."""
+        ideas = self._clean_string_list(shaped.get("key_ideas") or [])
+        if not ideas:
+            return None
+        bullets = "\n".join(f"• {idea}" for idea in ideas)
+        return f"<b>💡 {t('key_ideas', self._context.lang)}</b>\n{bullets}"
+
+    def build_all_supplemental_blocks(self, shaped: dict[str, Any]) -> str | None:
+        """Build ALL supplemental blocks as a single concatenated string.
+
+        Coalesces: extractive quotes, highlights, questions answered,
+        key points, perspective quality, taxonomy, forward extras, insights.
+        """
+        html_blocks = [
+            self._build_extractive_quotes_message(shaped),
+            self._build_bullet_message(
+                f"<b>✨ {t('highlights', self._context.lang)}</b>",
+                self._clean_string_list(shaped.get("highlights") or []),
+                limit=10,
+            ),
+            self._build_questions_answered_message(shaped),
+            self._build_bullet_message(
+                f"<b>🎯 {t('key_points', self._context.lang)}</b>",
+                self._clean_string_list(shaped.get("key_points_to_remember") or []),
+                limit=10,
+            ),
+            self._build_quality_message(shaped),
+            self._build_taxonomy_message(shaped),
+            self._build_forward_extras_message(shaped),
+        ]
+        # Add insights blocks
+        html_blocks.extend(self._build_insights_messages(shaped))
+
+        # Filter None, join with double newline
+        non_empty = [b for b in html_blocks if b]
+        return "\n\n".join(non_empty) if non_empty else None
 
     async def send_key_ideas(self, message: Any, shaped: dict[str, Any]) -> None:
         ideas = self._clean_string_list(shaped.get("key_ideas") or [])
@@ -325,33 +387,12 @@ class SummaryBlocksPresenter:
         return f"<b>📤 {t('forward_info', _l)}</b>\n" + "\n".join(fwd_parts)
 
     async def send_new_field_messages(self, message: Any, shaped: dict[str, Any]) -> None:
+        """Send all supplemental blocks coalesced into minimal messages."""
         try:
-            _l = self._context.lang
-            html_blocks = [
-                self._build_extractive_quotes_message(shaped),
-                self._build_bullet_message(
-                    f"<b>✨ {t('highlights', _l)}</b>",
-                    self._clean_string_list(shaped.get("highlights") or []),
-                    limit=10,
-                ),
-                self._build_questions_answered_message(shaped),
-                self._build_bullet_message(
-                    f"<b>🎯 {t('key_points', _l)}</b>",
-                    self._clean_string_list(shaped.get("key_points_to_remember") or []),
-                    limit=10,
-                ),
-                self._build_quality_message(shaped),
-                self._build_taxonomy_message(shaped),
-                self._build_forward_extras_message(shaped),
-            ]
-
-            for block in html_blocks:
-                if block:
-                    await self._context.text_processor.send_long_text(
-                        message, block, parse_mode="HTML"
-                    )
-
-            for block in self._build_insights_messages(shaped):
-                await self._context.text_processor.send_long_text(message, block, parse_mode="HTML")
+            combined = self.build_all_supplemental_blocks(shaped)
+            if combined:
+                await self._context.text_processor.send_long_text(
+                    message, combined, parse_mode="HTML"
+                )
         except Exception as exc:
             raise_if_cancelled(exc)
