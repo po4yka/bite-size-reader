@@ -338,10 +338,16 @@ class SummaryRepository:
 
 ```python
 def create_url_processor() -> URLProcessor:
-    return URLProcessor(
-        content_extractor=create_content_extractor(),
-        llm_client=create_llm_client(),
-        summary_validator=create_summary_validator(),
+    return build_url_processor(
+        cfg=cfg,
+        db=db,
+        firecrawl=scraper_chain,
+        openrouter=llm_client,
+        response_formatter=response_formatter,
+        audit_func=audit_sink,
+        sem=semaphore_factory,
+        request_repo=build_request_repository(db),
+        summary_repo=build_summary_repository(db),
     )
 ```
 

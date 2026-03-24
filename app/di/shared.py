@@ -10,12 +10,17 @@ from app.adapters.external.firecrawl.client import FirecrawlClient
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.llm import LLMClientFactory
 from app.core.logging_utils import get_logger
-from app.di.repositories import build_audit_log_repository
+from app.di.repositories import (
+    build_audit_log_repository,
+    build_request_repository,
+    build_summary_repository,
+)
 from app.di.types import CoreDependencies
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from app.application.ports.requests import RequestRepositoryPort
     from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.services.related_reads_service import RelatedReadsService
     from app.application.services.topic_search import TopicSearchService
@@ -127,12 +132,16 @@ def build_url_processor(
     sem: Callable[[], asyncio.Semaphore],
     topic_search: TopicSearchService | None = None,
     db_write_queue: DbWriteQueue | None = None,
+    request_repo: RequestRepositoryPort | None = None,
     summary_repo: SummaryRepositoryPort | None = None,
     related_reads_service: RelatedReadsService | None = None,
 ) -> Any:
     """Build the shared URL processor graph for Telegram, API, and CLI runtimes."""
     from app.adapters.content.url_processor import URLProcessor
     from app.adapters.telegram.summary_draft_streaming import SummaryDraftStreamCoordinator
+
+    request_repository = request_repo or build_request_repository(db)
+    summary_repository = summary_repo or build_summary_repository(db)
 
     return URLProcessor(
         cfg=cfg,
@@ -144,7 +153,8 @@ def build_url_processor(
         sem=sem,
         topic_search=topic_search,
         db_write_queue=db_write_queue,
-        summary_repo=summary_repo,
+        request_repo=request_repository,
+        summary_repo=summary_repository,
         related_reads_service=related_reads_service,
         stream_coordinator_factory=SummaryDraftStreamCoordinator,
     )

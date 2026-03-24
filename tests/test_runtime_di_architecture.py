@@ -150,6 +150,23 @@ def test_formatter_private_modules_are_not_imported_outside_formatting_package()
         )
 
 
+def test_url_processor_keeps_repository_assembly_in_di_layer() -> None:
+    """URLProcessor should receive repositories from DI instead of composing SQLite adapters."""
+    path = APP_ROOT / "adapters" / "content" / "url_processor.py"
+    text = path.read_text()
+
+    forbidden_fragments = (
+        "MessagePersistence(",
+        "SqliteSummaryRepositoryAdapter(",
+        "from app.infrastructure.persistence.message_persistence import",
+        "from app.infrastructure.persistence.sqlite.repositories.summary_repository import",
+    )
+    offenders = [fragment for fragment in forbidden_fragments if fragment in text]
+    assert offenders == [], f"found forbidden repository assembly in {path}:\n" + "\n".join(
+        offenders
+    )
+
+
 def test_formatter_concrete_root_modules_remain_thin_shells() -> None:
     """Concrete formatter roots should only expose construction and public delegation."""
     module_expectations = {

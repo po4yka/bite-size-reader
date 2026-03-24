@@ -47,6 +47,8 @@ def test_command_dispatcher_routes_preserve_expected_precedence_order() -> None:
         "/help",
         "/dbinfo",
         "/dbverify",
+        "/models",
+        "/setmodel",
         "/clearcache",
     ]
     assert [route.prefix for route in deps.routes.pre_alias_text] == ["/admin"]

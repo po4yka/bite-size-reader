@@ -5,7 +5,45 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from app.application.dto.vector_search import VectorSearchHitDTO
+
+
+@runtime_checkable
+class TopicSearchResultItemPort(Protocol):
+    """Normalized topic-search item returned by an external search provider."""
+
+    title: str
+    url: str
+    snippet: str | None
+    source: str | None
+    published_at: str | None
+
+
+@runtime_checkable
+class TopicSearchResultPort(Protocol):
+    """Normalized topic-search response returned by an external search provider."""
+
+    status: str
+    http_status: int | None
+    results: Iterable[TopicSearchResultItemPort]
+    total_results: int | None
+    error_text: str | None
+
+
+@runtime_checkable
+class TopicSearchClientPort(Protocol):
+    """Port for topic-search providers used by application services."""
+
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        request_id: int | None = None,
+    ) -> TopicSearchResultPort:
+        """Search for topic-related articles."""
 
 
 @runtime_checkable

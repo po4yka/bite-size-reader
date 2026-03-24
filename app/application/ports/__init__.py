@@ -30,7 +30,10 @@ from .rules import (
 from .search import (
     EmbeddingProviderPort,
     EmbeddingRepositoryPort,
+    TopicSearchClientPort,
     TopicSearchRepositoryPort,
+    TopicSearchResultItemPort,
+    TopicSearchResultPort,
     VectorSearchPort,
 )
 from .summaries import SummaryRepositoryPort, TagRepositoryPort
@@ -57,7 +60,10 @@ __all__ = [
     "SummaryRepositoryPort",
     "TTSProviderPort",
     "TagRepositoryPort",
+    "TopicSearchClientPort",
     "TopicSearchRepositoryPort",
+    "TopicSearchResultItemPort",
+    "TopicSearchResultPort",
     "UserRepositoryPort",
     "VectorSearchPort",
     "VideoDownloadRepositoryPort",

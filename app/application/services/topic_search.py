@@ -11,9 +11,11 @@ from app.core.logging_utils import get_logger
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from app.adapters.external.firecrawl.client import FirecrawlClient
-    from app.adapters.external.firecrawl.models import FirecrawlSearchItem
-    from app.application.ports.search import TopicSearchRepositoryPort
+    from app.application.ports.search import (
+        TopicSearchClientPort,
+        TopicSearchRepositoryPort,
+        TopicSearchResultItemPort,
+    )
 
 logger = get_logger(__name__)
 
@@ -25,7 +27,7 @@ class TopicSearchService:
 
     def __init__(
         self,
-        firecrawl: FirecrawlClient,
+        firecrawl: TopicSearchClientPort,
         *,
         max_results: int,
         audit_func: Callable[[str, str, dict[str, Any]], None] | None = None,
@@ -96,8 +98,10 @@ class TopicSearchService:
 
         return articles
 
-    def _normalize_articles(self, raw_items: Iterable[FirecrawlSearchItem]) -> list[TopicArticle]:
-        """Normalize Firecrawl search items into ``TopicArticle`` objects."""
+    def _normalize_articles(
+        self, raw_items: Iterable[TopicSearchResultItemPort]
+    ) -> list[TopicArticle]:
+        """Normalize topic-search items into ``TopicArticle`` objects."""
         articles: list[TopicArticle] = []
         seen_urls: set[str] = set()
         for item in raw_items:

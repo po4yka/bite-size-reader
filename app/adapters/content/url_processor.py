@@ -26,10 +26,6 @@ from app.adapters.content.url_post_summary_task_service import URLPostSummaryTas
 from app.adapters.content.url_summary_delivery_service import URLSummaryDeliveryService
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.message_persistence import MessagePersistence
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -37,6 +33,7 @@ if TYPE_CHECKING:
     from app.adapters.content.scraper.protocol import ContentScraperProtocol
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
+    from app.application.ports.requests import RequestRepositoryPort
     from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.services.related_reads_service import RelatedReadsService
     from app.application.services.topic_search import TopicSearchService
@@ -68,6 +65,7 @@ class URLProcessor:
         sem: Callable[[], Any],
         topic_search: TopicSearchService | None = None,
         db_write_queue: DbWriteQueue | None = None,
+        request_repo: RequestRepositoryPort | None = None,
         summary_repo: SummaryRepositoryPort | None = None,
         related_reads_service: RelatedReadsService | None = None,
         stream_coordinator_factory: Callable[..., Any] | None = None,
@@ -77,8 +75,13 @@ class URLProcessor:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._db_write_queue = db_write_queue
+        if request_repo is None:
+            msg = "request_repo must be provided by the DI layer"
+            raise ValueError(msg)
         if summary_repo is None:
-            summary_repo = SqliteSummaryRepositoryAdapter(db)
+            msg = "summary_repo must be provided by the DI layer"
+            raise ValueError(msg)
+        self.request_repo = request_repo
         self.summary_repo = summary_repo
 
         self.content_extractor = ContentExtractor(
@@ -119,13 +122,11 @@ class URLProcessor:
             pure_summary_service=self.pure_summary_service,
         )
 
-        self.message_persistence = MessagePersistence(db=db)
-
         self.cached_summary_responder = CachedSummaryResponder(
             cfg=cfg,
             db=db,
             response_formatter=response_formatter,
-            request_repo=self.message_persistence.request_repo,
+            request_repo=self.request_repo,
             summary_repo=self.summary_repo,
         )
         self.context_builder = URLFlowContextBuilder(
@@ -140,7 +141,7 @@ class URLProcessor:
             response_formatter=response_formatter,
             summary_repo=self.summary_repo,
             audit_func=audit_func,
-            request_repo=self.message_persistence.request_repo,
+            request_repo=self.request_repo,
         )
         self.post_summary_tasks = URLPostSummaryTaskService(
             response_formatter=response_formatter,

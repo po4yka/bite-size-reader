@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from typing import cast
-
 import pytest
 
-from app.adapters.external.firecrawl.client import FirecrawlClient  # noqa: TC001
 from app.adapters.external.firecrawl.models import FirecrawlSearchItem, FirecrawlSearchResult
 from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
 from app.db.models import database_proxy
@@ -35,7 +32,13 @@ class DummyFirecrawl:
         self.result = result
         self.calls: list[tuple[str, int]] = []
 
-    async def search(self, query: str, *, limit: int = 5) -> FirecrawlSearchResult:
+    async def search(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        request_id: int | None = None,
+    ) -> FirecrawlSearchResult:
         self.calls.append((query, limit))
         return self.result
 
@@ -72,7 +75,7 @@ async def test_find_articles_normalizes_and_limits() -> None:
     )
 
     dummy = DummyFirecrawl(result)
-    service = TopicSearchService(cast("FirecrawlClient", dummy), max_results=2)
+    service = TopicSearchService(dummy, max_results=2)
 
     articles = await service.find_articles("Android System Design", correlation_id="cid-42")
 
@@ -94,7 +97,7 @@ async def test_find_articles_raises_on_error_status() -> None:
     )
 
     dummy = DummyFirecrawl(result)
-    service = TopicSearchService(cast("FirecrawlClient", dummy), max_results=3)
+    service = TopicSearchService(dummy, max_results=3)
 
     with pytest.raises(RuntimeError, match="quota exceeded"):
         await service.find_articles("Android System Design")

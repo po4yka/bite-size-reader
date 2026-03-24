@@ -1,0 +1,356 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from app.adapters.telegram.command_dispatch import (
+    AliasCommandRoute,
+    CommandContextFactory,
+    TelegramCommandRoutes,
+    TelegramCommandRuntimeState,
+    TextCommandRoute,
+    UidCommandRoute,
+)
+from app.adapters.telegram.command_handlers.admin_handler import AdminHandler
+from app.adapters.telegram.command_handlers.backup_handler import BackupHandler
+from app.adapters.telegram.command_handlers.content_handler import ContentHandler
+from app.adapters.telegram.command_handlers.digest_handler import DigestHandler
+from app.adapters.telegram.command_handlers.export_command import ExportHandler
+from app.adapters.telegram.command_handlers.init_session_handler import InitSessionHandler
+from app.adapters.telegram.command_handlers.listen_handler import ListenHandler
+from app.adapters.telegram.command_handlers.onboarding_handler import OnboardingHandler
+from app.adapters.telegram.command_handlers.rss_handler import RSSHandler
+from app.adapters.telegram.command_handlers.rules_handler import RulesHandler
+from app.adapters.telegram.command_handlers.search_handler import SearchHandler
+from app.adapters.telegram.command_handlers.settings_handler import SettingsHandler
+from app.adapters.telegram.command_handlers.tag_handler import TagHandler
+from app.adapters.telegram.command_handlers.url_commands_handler import URLCommandsHandler
+from app.di.types import TelegramCommandDispatcherDeps, TelegramRepositories
+
+if TYPE_CHECKING:
+    from app.adapters.content.url_processor import URLProcessor
+    from app.adapters.telegram.task_manager import UserTaskManager
+    from app.adapters.telegram.url_handler import URLHandler
+    from app.config import AppConfig
+    from app.db.session import DatabaseSessionManager
+
+
+def build_command_dispatcher_deps(
+    *,
+    cfg: AppConfig,
+    db: DatabaseSessionManager,
+    response_formatter: Any,
+    audit_func: Any,
+    url_processor: URLProcessor,
+    url_handler: URLHandler | None,
+    topic_searcher: Any | None,
+    local_searcher: Any | None,
+    task_manager: UserTaskManager | None,
+    hybrid_search: Any | None,
+    verbosity_resolver: Any | None,
+    application_services: Any | None,
+    repositories: TelegramRepositories,
+    tts_service_factory: Any | None,
+) -> TelegramCommandDispatcherDeps:
+    runtime_state = TelegramCommandRuntimeState(
+        url_processor=url_processor,
+        url_handler=url_handler,
+        topic_searcher=topic_searcher,
+        local_searcher=local_searcher,
+        _task_manager=task_manager,
+        hybrid_search=hybrid_search,
+    )
+    context_factory = CommandContextFactory(
+        user_repo=repositories.user_repository,
+        response_formatter=response_formatter,
+        audit_func=audit_func,
+    )
+
+    onboarding_handler = OnboardingHandler(response_formatter)
+    admin_handler = AdminHandler(
+        db=db,
+        response_formatter=response_formatter,
+        url_processor=url_processor,
+        url_handler=url_handler,
+        cfg=cfg,
+    )
+    url_commands_handler = URLCommandsHandler(
+        response_formatter=response_formatter,
+        processor_provider=runtime_state,
+    )
+    content_handler = ContentHandler(
+        response_formatter=response_formatter,
+        summary_repo=repositories.summary_repository,
+        llm_repo=repositories.llm_repository,
+        unread_summaries_use_case=getattr(application_services, "unread_summaries", None),
+        mark_summary_as_read_use_case=getattr(application_services, "mark_summary_as_read", None),
+        event_bus=getattr(application_services, "event_bus", None),
+    )
+    search_handler = SearchHandler(
+        response_formatter=response_formatter,
+        searcher_provider=runtime_state,
+        search_topics_use_case=getattr(application_services, "search_topics", None),
+    )
+    listen_handler = ListenHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+        tts_service_factory=tts_service_factory,
+    )
+    digest_handler = DigestHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
+    init_session_handler = InitSessionHandler(
+        cfg=cfg,
+        response_formatter=response_formatter,
+    )
+    settings_handler = SettingsHandler(
+        verbosity_resolver=verbosity_resolver,
+        cfg=cfg,
+    )
+    tag_handler = TagHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
+    rules_handler = RulesHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
+    export_handler = ExportHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
+    backup_handler = BackupHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
+    rss_handler = RSSHandler(
+        cfg=cfg,
+        db=db,
+        response_formatter=response_formatter,
+    )
+
+    routes = TelegramCommandRoutes(
+        pre_alias_uid=(
+            UidCommandRoute(
+                "/start", _build_uid_handler(context_factory, onboarding_handler.handle_start)
+            ),
+            UidCommandRoute(
+                "/help", _build_uid_handler(context_factory, onboarding_handler.handle_help)
+            ),
+            UidCommandRoute(
+                "/dbinfo", _build_uid_handler(context_factory, admin_handler.handle_dbinfo)
+            ),
+            UidCommandRoute(
+                "/dbverify",
+                _build_uid_handler(context_factory, admin_handler.handle_dbverify),
+            ),
+            UidCommandRoute(
+                "/models", _build_uid_handler(context_factory, admin_handler.handle_models)
+            ),
+            UidCommandRoute(
+                "/setmodel",
+                _build_uid_handler(context_factory, admin_handler.handle_setmodel),
+            ),
+            UidCommandRoute(
+                "/clearcache",
+                _build_uid_handler(context_factory, admin_handler.handle_clearcache),
+            ),
+        ),
+        pre_alias_text=(
+            TextCommandRoute(
+                "/admin", _build_text_handler(context_factory, admin_handler.handle_admin)
+            ),
+        ),
+        local_search_aliases=(
+            AliasCommandRoute(
+                ("/finddb", "/findlocal"),
+                _build_alias_handler(context_factory, search_handler.handle_find_local),
+            ),
+        ),
+        online_search_aliases=(
+            AliasCommandRoute(
+                ("/findweb", "/findonline", "/find"),
+                _build_alias_handler(context_factory, search_handler.handle_find_online),
+            ),
+        ),
+        pre_summarize_text=(
+            TextCommandRoute(
+                "/summarize_all",
+                _build_text_handler(context_factory, url_commands_handler.handle_summarize_all),
+            ),
+        ),
+        summarize_prefix="/summarize",
+        post_summarize_uid=(
+            UidCommandRoute(
+                "/cancel",
+                _build_uid_handler(context_factory, url_commands_handler.handle_cancel),
+            ),
+        ),
+        post_summarize_text=(
+            TextCommandRoute(
+                "/untag", _build_text_handler(context_factory, tag_handler.handle_untag)
+            ),
+            TextCommandRoute(
+                "/tags", _build_text_handler(context_factory, tag_handler.handle_tags)
+            ),
+            TextCommandRoute("/tag", _build_text_handler(context_factory, tag_handler.handle_tag)),
+            TextCommandRoute(
+                "/unread",
+                _build_text_handler(context_factory, content_handler.handle_unread),
+            ),
+            TextCommandRoute(
+                "/read", _build_text_handler(context_factory, content_handler.handle_read)
+            ),
+            TextCommandRoute(
+                "/search",
+                _build_text_handler(context_factory, search_handler.handle_search),
+            ),
+            TextCommandRoute(
+                "/listen",
+                _build_text_handler(context_factory, listen_handler.handle_listen),
+            ),
+            TextCommandRoute(
+                "/cdigest",
+                _build_text_handler(context_factory, digest_handler.handle_cdigest),
+            ),
+            TextCommandRoute(
+                "/digest",
+                _build_text_handler(context_factory, digest_handler.handle_digest),
+            ),
+            TextCommandRoute(
+                "/channels",
+                _build_text_handler(context_factory, digest_handler.handle_channels),
+            ),
+            TextCommandRoute(
+                "/subscribe",
+                _build_text_handler(context_factory, digest_handler.handle_subscribe),
+            ),
+            TextCommandRoute(
+                "/unsubscribe",
+                _build_text_handler(context_factory, digest_handler.handle_unsubscribe),
+            ),
+            TextCommandRoute(
+                "/init_session",
+                _build_text_handler(context_factory, init_session_handler.handle_init_session),
+            ),
+            TextCommandRoute(
+                "/settings",
+                _build_text_handler(context_factory, settings_handler.handle_settings),
+            ),
+            TextCommandRoute(
+                "/rules", _build_text_handler(context_factory, rules_handler.handle_rules)
+            ),
+            TextCommandRoute(
+                "/export",
+                _build_text_handler(context_factory, export_handler.handle_export),
+            ),
+            TextCommandRoute(
+                "/backups",
+                _build_text_handler(context_factory, backup_handler.handle_backups),
+            ),
+            TextCommandRoute(
+                "/backup",
+                _build_text_handler(context_factory, backup_handler.handle_backup),
+            ),
+            TextCommandRoute(
+                "/substack",
+                _build_text_handler(context_factory, rss_handler.handle_substack),
+            ),
+            TextCommandRoute("/rss", _build_text_handler(context_factory, rss_handler.handle_rss)),
+        ),
+        tail_uid=(
+            UidCommandRoute(
+                "/debug", _build_uid_handler(context_factory, settings_handler.handle_debug)
+            ),
+        ),
+    )
+
+    return TelegramCommandDispatcherDeps(
+        routes=routes,
+        runtime_state=runtime_state,
+        context_factory=context_factory,
+        onboarding_handler=onboarding_handler,
+        admin_handler=admin_handler,
+        url_commands_handler=url_commands_handler,
+        content_handler=content_handler,
+        search_handler=search_handler,
+        listen_handler=listen_handler,
+        digest_handler=digest_handler,
+        init_session_handler=init_session_handler,
+        settings_handler=settings_handler,
+        tag_handler=tag_handler,
+        rules_handler=rules_handler,
+        export_handler=export_handler,
+        backup_handler=backup_handler,
+    )
+
+
+def _build_uid_handler(context_factory: CommandContextFactory, handler_method: Any) -> Any:
+    async def _handler(
+        message: Any,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        ctx = context_factory.build(
+            message=message,
+            uid=uid,
+            correlation_id=correlation_id,
+            interaction_id=interaction_id,
+            start_time=start_time,
+        )
+        await handler_method(ctx)
+
+    return _handler
+
+
+def _build_text_handler(context_factory: CommandContextFactory, handler_method: Any) -> Any:
+    async def _handler(
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+    ) -> None:
+        ctx = context_factory.build(
+            message=message,
+            text=text,
+            uid=uid,
+            correlation_id=correlation_id,
+            interaction_id=interaction_id,
+            start_time=start_time,
+        )
+        await handler_method(ctx)
+
+    return _handler
+
+
+def _build_alias_handler(context_factory: CommandContextFactory, handler_method: Any) -> Any:
+    async def _handler(
+        message: Any,
+        text: str,
+        uid: int,
+        correlation_id: str,
+        interaction_id: int,
+        start_time: float,
+        command: str,
+    ) -> None:
+        ctx = context_factory.build(
+            message=message,
+            text=text,
+            uid=uid,
+            correlation_id=correlation_id,
+            interaction_id=interaction_id,
+            start_time=start_time,
+        )
+        await handler_method(ctx, command=command)
+
+    return _handler

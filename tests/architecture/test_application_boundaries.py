@@ -8,6 +8,7 @@ def test_application_layer_has_no_outer_layer_imports() -> None:
     app_root = Path(__file__).resolve().parents[2] / "app" / "application"
     forbidden_prefixes = (
         "app.api",
+        "app.adapters",
         "app.db",
         "app.infrastructure",
         "app.di",
