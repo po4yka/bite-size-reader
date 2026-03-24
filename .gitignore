@@ -37,6 +37,7 @@ venv.bak/
 htmlcov/
 coverage.json
 coverage.xml
+web/coverage/
 
 # Hypothesis test database
 .hypothesis/
