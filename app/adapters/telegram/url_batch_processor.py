@@ -84,6 +84,8 @@ class _BatchRunState:
     domain_events: dict[str, asyncio.Event] = field(default_factory=dict)
     delivery_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     edit_consecutive_failures: int = 0
+    circuit_breaker_opened_at: float = 0.0
+    rate_limited_until: float = 0.0
     initial_message_id: int | None = None
     progress_tracker: ProgressTracker | None = None
 
@@ -118,9 +120,12 @@ class URLBatchProcessor:
         if not batch_request.urls:
             return None
 
+        batch_status = URLBatchStatus.from_urls(batch_request.urls)
+        batch_status.concurrency = batch_request.max_concurrent
+
         state = _BatchRunState(
             request=batch_request,
-            batch_status=URLBatchStatus.from_urls(batch_request.urls),
+            batch_status=batch_status,
             url_to_request_id={},
             cached_summaries=[],
             semaphore=asyncio.Semaphore(batch_request.max_concurrent),
@@ -151,7 +156,11 @@ class URLBatchProcessor:
                 logger.debug("progress_task_wait_failed", extra={"error": str(exc)})
                 progress_task.cancel()
 
-        await asyncio.sleep(0.8)
+        # Force one last progress edit showing final state before completion message
+        if state.progress_tracker is not None:
+            state.progress_tracker.force_update()
+            await asyncio.sleep(0.3)
+
         await self._send_completion_message(state)
         await self._update_interaction(state)
 
@@ -313,6 +322,8 @@ class URLBatchProcessor:
             progress_threshold_percentage=25.0,
         )
 
+    _CIRCUIT_BREAKER_RECOVERY_SEC = 15.0
+
     async def _format_progress_message(
         self,
         state: _BatchRunState,
@@ -321,8 +332,19 @@ class URLBatchProcessor:
         message_id: int | None,
     ) -> int | None:
         _ = current, total_count
-        if state.edit_consecutive_failures >= self._EDIT_CIRCUIT_BREAKER_THRESHOLD:
+        now = time.time()
+
+        # Rate-limit backoff: skip if we're still in a cooldown window
+        if now < state.rate_limited_until:
             return message_id
+
+        # Circuit breaker: half-open recovery after cooldown
+        if state.edit_consecutive_failures >= self._EDIT_CIRCUIT_BREAKER_THRESHOLD:
+            if (now - state.circuit_breaker_opened_at) < self._CIRCUIT_BREAKER_RECOVERY_SEC:
+                return message_id
+            # Half-open: allow one probe attempt
+            logger.debug("progress_circuit_breaker_half_open")
+
         try:
             progress_text = BatchProgressFormatter.format_progress_message(state.batch_status)
             draft_ok = await _send_message_draft_safe(
@@ -348,14 +370,26 @@ class URLBatchProcessor:
                     return message_id
                 state.edit_consecutive_failures += 1
                 if state.edit_consecutive_failures >= self._EDIT_CIRCUIT_BREAKER_THRESHOLD:
+                    state.circuit_breaker_opened_at = time.time()
                     logger.warning(
                         "progress_edit_circuit_breaker_open",
                         extra={"consecutive_failures": state.edit_consecutive_failures},
                     )
             return message_id
         except Exception as exc:
+            # Detect Telegram FloodWait / rate-limit errors
+            flood_wait = getattr(exc, "value", None) or getattr(exc, "retry_after", None)
+            if flood_wait and isinstance(flood_wait, (int, float)):
+                state.rate_limited_until = time.time() + float(flood_wait)
+                logger.info(
+                    "progress_edit_rate_limited",
+                    extra={"wait_sec": flood_wait},
+                )
+                return message_id
+
             state.edit_consecutive_failures += 1
             if state.edit_consecutive_failures >= self._EDIT_CIRCUIT_BREAKER_THRESHOLD:
+                state.circuit_breaker_opened_at = time.time()
                 logger.warning(
                     "progress_edit_circuit_breaker_open",
                     extra={
@@ -365,10 +399,16 @@ class URLBatchProcessor:
                 )
             return message_id
 
+    _HEARTBEAT_INTERVAL_SEC = 5.0
+    _HEARTBEAT_SKIP_SEC = 3.0
+
     async def _progress_heartbeat(self, progress_tracker: ProgressTracker) -> None:
         while not progress_tracker.is_complete:
             try:
-                await asyncio.sleep(3)
+                await asyncio.sleep(self._HEARTBEAT_INTERVAL_SEC)
+                # Skip if a regular update was queued recently
+                if (time.time() - progress_tracker.last_queue_time) < self._HEARTBEAT_SKIP_SEC:
+                    continue
                 progress_tracker.force_update()
             except asyncio.CancelledError:
                 break
@@ -478,6 +518,11 @@ class URLBatchProcessor:
                     error_type = "timeout"
                     last_error = f"Timed out after {int(current_timeout)}s (ID: {per_link_cid[:8]})"
                     if attempt < state.request.max_retries:
+                        state.batch_status.mark_retrying(
+                            url,
+                            attempt=attempt + 1,
+                            max_retries=state.request.max_retries,
+                        )
                         state.batch_status.mark_retry_waiting(url)
                         state.progress_tracker.force_update()
                         await asyncio.sleep(min(3.0 * (2**attempt), 60.0))
@@ -487,6 +532,12 @@ class URLBatchProcessor:
                     last_error = str(exc)
                     error_type, is_transient = self._classify_processing_error(last_error)
                     if is_transient and attempt < state.request.max_retries:
+                        state.batch_status.mark_retrying(
+                            url,
+                            attempt=attempt + 1,
+                            max_retries=state.request.max_retries,
+                        )
+                        state.progress_tracker.force_update()
                         await asyncio.sleep(min(3.0 * (2**attempt), 60.0))
                         continue
                     break
@@ -531,7 +582,8 @@ class URLBatchProcessor:
             state.batch_status.mark_retrying(url)
         elif phase == "waiting":
             state.batch_status.mark_retry_waiting(url)
-        state.progress_tracker.force_update()
+        if state.progress_tracker is not None:
+            state.progress_tracker.force_update()
 
     async def _compute_timeout(
         self,

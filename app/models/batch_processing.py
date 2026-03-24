@@ -160,6 +160,8 @@ class URLStatusEntry:
     start_time: float | None = None
     content_length: int | None = None
     model: str | None = None
+    retry_count: int = 0
+    max_retries: int = 0
 
     def __post_init__(self) -> None:
         """Extract domain and display label from URL on creation."""
@@ -239,20 +241,27 @@ class URLBatchStatus:
     entries: list[URLStatusEntry] = field(default_factory=list)
     batch_start_time: float = field(default_factory=time.time)
     last_updated: float = field(default_factory=time.time)
+    concurrency: int = 1
     _processing_times: list[float] = field(default_factory=list, repr=False)
+    _url_index: dict[str, int] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_urls(cls, urls: list[str]) -> URLBatchStatus:
         """Create a batch status tracker from a list of URLs."""
         entries = [URLStatusEntry(url=url) for url in urls]
-        return cls(entries=entries)
+        url_index = {url: i for i, url in enumerate(urls)}
+        return cls(entries=entries, _url_index=url_index)
 
     def _update_timestamp(self) -> None:
         """Update last_updated timestamp."""
         self.last_updated = time.time()
 
     def _find_entry(self, url: str) -> URLStatusEntry | None:
-        """Find entry by URL."""
+        """Find entry by URL using O(1) index lookup."""
+        idx = self._url_index.get(url)
+        if idx is not None and idx < len(self.entries):
+            return self.entries[idx]
+        # Fallback for entries added without index
         for entry in self.entries:
             if entry.url == url:
                 return entry
@@ -294,11 +303,21 @@ class URLBatchStatus:
                 entry.model = model
             self._update_timestamp()
 
-    def mark_retrying(self, url: str) -> None:
+    def mark_retrying(
+        self,
+        url: str,
+        *,
+        attempt: int | None = None,
+        max_retries: int | None = None,
+    ) -> None:
         """Mark a URL as being retried."""
         entry = self._find_entry(url)
         if entry:
             entry.status = URLStatus.RETRYING
+            if attempt is not None:
+                entry.retry_count = attempt
+            if max_retries is not None:
+                entry.max_retries = max_retries
             self._update_timestamp()
 
     def mark_retry_waiting(self, url: str) -> None:
@@ -419,6 +438,8 @@ class URLBatchStatus:
     def estimate_remaining_time_sec(self) -> float | None:
         """Estimate remaining time in seconds based on average processing time.
 
+        Accounts for parallel processing: remaining batches = ceil(remaining / concurrency).
+
         Returns:
             Estimated seconds remaining, or None if insufficient data
         """
@@ -430,8 +451,10 @@ class URLBatchStatus:
         if avg_ms <= 0:
             return None
 
-        # Estimate remaining time
-        return (remaining * avg_ms) / 1000.0
+        # Account for parallelism: URLs process in batches of `concurrency`
+        effective_concurrency = max(1, self.concurrency)
+        parallel_batches = -(-remaining // effective_concurrency)  # ceil division
+        return (parallel_batches * avg_ms) / 1000.0
 
     def total_elapsed_time_sec(self) -> float:
         """Calculate total elapsed time since batch started."""

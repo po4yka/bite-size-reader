@@ -83,6 +83,7 @@ class ProgressTracker:
         self._lock = asyncio.Lock()
         self._last_update_time = 0.0
         self._last_displayed = 0
+        self._last_queue_time = 0.0
         self.update_interval = update_interval
         self.small_batch_threshold = small_batch_threshold
         self.progress_threshold_percentage = progress_threshold_percentage
@@ -128,6 +129,7 @@ class ProgressTracker:
             if should_update:
                 self._last_update_time = current_time
                 self._last_displayed = self._completed
+                self._last_queue_time = current_time
 
             completed = self._completed
 
@@ -167,18 +169,20 @@ class ProgressTracker:
         """Queue a progress update without incrementing the counter.
 
         Useful for phase changes that affect the display without completing items.
+        Uses drain-and-replace to avoid TOCTOU race on the single-slot queue.
         """
-        # Drop stale update if present
-        if not self._update_queue.empty():
+        self._last_queue_time = time.time()
+        # Drain any existing item, then put the fresh one
+        try:
             self._update_queue.get_nowait()
             self._update_queue.task_done()
-        else:
-            logger.debug("progress_force_update_queue_empty")
+        except asyncio.QueueEmpty:
+            pass
 
-        if self._update_queue.full():
-            logger.debug("progress_force_update_queue_full")  # Best effort
-            return
-        self._update_queue.put_nowait((self._completed, self.total))
+        try:
+            self._update_queue.put_nowait((self._completed, self.total))
+        except asyncio.QueueFull:
+            logger.debug("progress_force_update_queue_full")
 
     async def process_update_queue(self) -> None:
         """Process queued progress updates in the background.
@@ -229,6 +233,11 @@ class ProgressTracker:
         the queue processor to exit gracefully.
         """
         self._shutdown_event.set()
+
+    @property
+    def last_queue_time(self) -> float:
+        """Get the last time an update was queued (for heartbeat coordination)."""
+        return self._last_queue_time
 
     @property
     def completed(self) -> int:

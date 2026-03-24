@@ -205,14 +205,27 @@ class TestURLBatchStatus(unittest.TestCase):
         assert batch.average_processing_time_ms() == 0.0
 
     def test_estimate_remaining_time(self):
-        """Test remaining time estimation."""
+        """Test remaining time estimation (default concurrency=1)."""
         batch = URLBatchStatus.from_urls(["https://a.com", "https://b.com", "https://c.com"])
         batch.mark_complete("https://a.com", processing_time_ms=1000.0)  # 1 second
 
         remaining = batch.estimate_remaining_time_sec()
-        # 2 remaining URLs at 1s each = ~2 seconds
+        # 2 remaining URLs at 1s each, concurrency=1 -> 2 batches * 1s = 2s
         assert remaining is not None
         assert remaining == 2.0
+
+    def test_estimate_remaining_time_with_concurrency(self):
+        """Test that ETA accounts for parallel processing."""
+        urls = [f"https://example{i}.com" for i in range(9)]
+        batch = URLBatchStatus.from_urls(urls)
+        batch.concurrency = 4
+        # Complete first URL in 10 seconds
+        batch.mark_complete("https://example0.com", processing_time_ms=10000.0)
+
+        remaining = batch.estimate_remaining_time_sec()
+        # 8 remaining, concurrency=4 -> ceil(8/4)=2 batches * 10s = 20s
+        assert remaining is not None
+        assert remaining == 20.0
 
     def test_estimate_remaining_time_no_data(self):
         """Test remaining time returns None with no timing data."""
@@ -242,9 +255,8 @@ class TestBatchProgressFormatter(unittest.TestCase):
 
         assert "Processing 2 links..." in message
         assert "elapsed" in message
-        assert '<a href="https://a.com">a.com</a>  💤 Pending' in message
-        assert '<a href="https://b.com">b.com</a>  💤 Pending' in message
-        assert "Progress:" in message
+        assert '<a href="https://a.com">a.com</a>  Pending' in message
+        assert '<a href="https://b.com">b.com</a>  Pending' in message
         assert "0/2" in message
         assert "Elapsed:" in message
 
@@ -255,9 +267,8 @@ class TestBatchProgressFormatter(unittest.TestCase):
 
         message = BatchProgressFormatter.format_progress_message(batch)
 
-        assert '<a href="https://techcrunch.com/a">techcrunch.com/a</a>  ✅ Done (1s)' in message
-        assert '<a href="https://arxiv.org/b">arxiv.org/b</a>  💤 Pending' in message
-        assert "Progress:" in message
+        assert '<a href="https://techcrunch.com/a">techcrunch.com/a</a>  Done (1s)' in message
+        assert '<a href="https://arxiv.org/b">arxiv.org/b</a>  Pending' in message
         assert "1/2" in message
 
     def test_format_progress_with_processing(self):
@@ -268,7 +279,7 @@ class TestBatchProgressFormatter(unittest.TestCase):
         message = BatchProgressFormatter.format_progress_message(batch)
 
         assert (
-            '<a href="https://example.com/article">example.com/article</a>  ⏳ Processing...'
+            '<a href="https://example.com/article">example.com/article</a>  Processing...'
             in message
         )
 
@@ -281,25 +292,26 @@ class TestBatchProgressFormatter(unittest.TestCase):
         first_line = message.split("\n")[0]
         assert "elapsed" in first_line
 
-    def test_format_progress_shows_retrying_in_active_section(self):
-        """Test progress message includes retrying entries in active work section."""
+    def test_format_progress_shows_retrying_in_status_line(self):
+        """Test progress message includes retrying entries with attempt info."""
         batch = URLBatchStatus.from_urls(["https://a.com", "https://b.com"])
         batch.mark_processing("https://a.com")
-        batch.mark_retrying("https://a.com")
+        batch.mark_retrying("https://a.com", attempt=1, max_retries=2)
 
         message = BatchProgressFormatter.format_progress_message(batch)
 
-        assert "Retrying:" in message
+        assert "Retrying (1/2)..." in message
 
-    def test_format_progress_shows_retry_waiting_in_active_section(self):
-        """Test progress message includes retry-waiting entries in active work section."""
+    def test_format_progress_shows_retry_waiting_in_status_line(self):
+        """Test progress message includes retry-waiting entries."""
         batch = URLBatchStatus.from_urls(["https://a.com", "https://b.com"])
         batch.mark_processing("https://a.com")
+        batch.mark_retrying("https://a.com", attempt=1, max_retries=3)
         batch.mark_retry_waiting("https://a.com")
 
         message = BatchProgressFormatter.format_progress_message(batch)
 
-        assert "Waiting to retry:" in message
+        assert "Waiting to retry (1/3)..." in message
 
     def test_format_progress_with_eta(self):
         """Test progress message shows ETA."""
@@ -412,6 +424,91 @@ class TestBatchProgressFormatter(unittest.TestCase):
 
         batch.mark_processing("https://example.com/article")
         assert BatchProgressFormatter.get_current_processing_domain(batch) == "example.com"
+
+
+class TestURLBatchStatusIndex(unittest.TestCase):
+    """Test suite for URLBatchStatus URL index optimization."""
+
+    def test_url_index_populated_on_creation(self):
+        """Test that URL index is built by from_urls."""
+        urls = ["https://a.com", "https://b.com", "https://c.com"]
+        batch = URLBatchStatus.from_urls(urls)
+
+        assert batch._url_index == {"https://a.com": 0, "https://b.com": 1, "https://c.com": 2}
+
+    def test_find_entry_uses_index(self):
+        """Test that _find_entry returns correct entry via index."""
+        batch = URLBatchStatus.from_urls(["https://a.com", "https://b.com"])
+        entry = batch._find_entry("https://b.com")
+        assert entry is not None
+        assert entry.url == "https://b.com"
+
+    def test_find_entry_missing_url(self):
+        """Test that _find_entry returns None for unknown URL."""
+        batch = URLBatchStatus.from_urls(["https://a.com"])
+        assert batch._find_entry("https://missing.com") is None
+
+
+class TestProgressBar(unittest.TestCase):
+    """Test suite for progress bar formatting."""
+
+    def test_progress_bar_empty(self):
+        assert BatchProgressFormatter._format_progress_bar(0, 5) == "[----------] 0/5 (0%)"
+
+    def test_progress_bar_half(self):
+        assert BatchProgressFormatter._format_progress_bar(3, 5) == "[======----] 3/5 (60%)"
+
+    def test_progress_bar_full(self):
+        assert BatchProgressFormatter._format_progress_bar(5, 5) == "[==========] 5/5 (100%)"
+
+    def test_progress_bar_zero_total(self):
+        result = BatchProgressFormatter._format_progress_bar(0, 0)
+        assert "0/0" in result
+
+    def test_progress_bar_in_progress_message(self):
+        """Test that progress message contains the text progress bar."""
+        batch = URLBatchStatus.from_urls(["https://a.com", "https://b.com"])
+        batch.mark_complete("https://a.com", title="A", processing_time_ms=1000)
+        message = BatchProgressFormatter.format_progress_message(batch)
+        assert "[=====-----] 1/2 (50%)" in message
+
+
+class TestContentSizeInCompletion(unittest.TestCase):
+    """Test content size display in completion message."""
+
+    def test_completion_shows_content_size(self):
+        batch = URLBatchStatus.from_urls(["https://a.com"])
+        batch.mark_analyzing("https://a.com", content_length=15432)
+        batch.mark_complete("https://a.com", title="Article", processing_time_ms=5000)
+        message = BatchProgressFormatter.format_completion_message(batch)
+        assert "15k chars" in message
+
+    def test_completion_omits_size_when_missing(self):
+        batch = URLBatchStatus.from_urls(["https://a.com"])
+        batch.mark_complete("https://a.com", title="Article", processing_time_ms=5000)
+        message = BatchProgressFormatter.format_completion_message(batch)
+        assert "chars" not in message
+
+
+class TestCompactProgress(unittest.TestCase):
+    """Test compact progress format."""
+
+    def test_compact_progress_shows_status_counts(self):
+        urls = [f"https://ex{i}.com" for i in range(20)]
+        batch = URLBatchStatus.from_urls(urls)
+        batch.concurrency = 4
+        for url in urls[:5]:
+            batch.mark_complete(url, title="T", processing_time_ms=1000)
+        for url in urls[5:8]:
+            batch.mark_extracting(url)
+        for url in urls[8:10]:
+            batch.mark_analyzing(url)
+
+        message = BatchProgressFormatter._format_compact_progress(batch)
+        assert "<b>5</b> done" in message
+        assert "3 extracting" in message
+        assert "2 analyzing" in message
+        assert "10 pending" in message
 
 
 class TestURLProcessingResult(unittest.TestCase):
