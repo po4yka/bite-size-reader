@@ -70,7 +70,7 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 ### Key Components
 
 - **Telegram Layer** (`app/adapters/telegram/`) -- Bot orchestration, message routing, access control, persistence, command processing, URL/forward handling
-- **Content Pipeline** (`app/adapters/content/`) -- Multi-provider scraper chain (Scrapling -> Defuddle -> self-hosted Firecrawl -> Playwright -> Crawlee -> direct HTTP/trafilatura), content chunking, LLM summarization, web search context. Scraper protocol, chain, factory, and providers in `app/adapters/content/scraper/`
+- **Content Pipeline** (`app/adapters/content/`) -- Multi-provider scraper chain (Scrapling -> Defuddle -> self-hosted Firecrawl -> Playwright -> Crawlee -> direct HTTP/trafilatura), content chunking, LLM summarization, web search context. Scraper protocol, chain, factory, and providers in `app/adapters/content/scraper/`. For JS-heavy sites (configured via `SCRAPER_JS_HEAVY_HOSTS`), browser providers are automatically tried first. **Note:** after a no-cache Docker rebuild, Playwright's Chromium binary may need reinstalling (`playwright install chromium` inside the container) if the Playwright package version changed
 - **YouTube Adapter** (`app/adapters/youtube/`) -- yt-dlp video download, transcript extraction, storage management
 - **Twitter/X Adapter** (`app/adapters/twitter/`) -- Two-tier extraction: Firecrawl (public) + Playwright (authenticated). GraphQL interception for tweets/threads, DOM scraping for X Articles
 - **LLM Abstraction** (`app/adapters/llm/`) -- Provider-agnostic LLM interface (OpenRouter, OpenAI, Anthropic)
@@ -182,8 +182,16 @@ cd web && npm run test
 make lock-uv               # Lock dependencies with uv (recommended)
 
 # Docker
-docker build -t bite-size-reader .
-docker run --env-file .env -v $(pwd)/data:/data --name bsr bite-size-reader
+# IMPORTANT: `make docker-deploy` builds `bsr:latest` via `docker build`,
+# but `docker compose up` uses image `bite-size-reader-bsr`.
+# To deploy code changes, always use `docker compose build`:
+docker compose build bsr              # Build with compose (picks up code changes)
+docker compose build --no-cache bsr   # Full rebuild (after Dockerfile/dependency changes)
+docker compose down && docker compose up -d  # Restart with new image
+
+# Legacy standalone build (NOT used by docker compose):
+docker build -t bsr:latest .
+docker run --env-file .env -v $(pwd)/data:/data --name bsr bsr:latest
 
 # CLI Summary Runner
 python -m app.cli.summary --url https://example.com/article
