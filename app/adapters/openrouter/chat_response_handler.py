@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.adapter_models.llm.llm_models import LLMCallResult
 from app.adapters.openrouter.chat_models import (
     AttemptOutcome,
     AttemptRequestPayload,
@@ -12,7 +13,6 @@ from app.adapters.openrouter.chat_models import (
 )
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
-from app.models.llm.llm_models import LLMCallResult
 
 logger = get_logger(__name__)
 

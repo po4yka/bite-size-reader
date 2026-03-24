@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
     from app.adapters.external.response_formatter import ResponseFormatter
 
+from app.adapter_models.batch_processing import URLBatchStatus, URLStatus
 from app.adapters.external.formatting import BatchProgressFormatter
 from app.adapters.telegram.batch_sender_utils import (
     is_draft_streaming_enabled as _is_draft_streaming_enabled,
@@ -28,7 +29,6 @@ from app.core.logging_utils import generate_correlation_id
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.domain.models.request import RequestStatus
-from app.models.batch_processing import URLBatchStatus, URLStatus
 from app.utils.progress_tracker import ProgressTracker
 
 logger = get_logger(__name__)

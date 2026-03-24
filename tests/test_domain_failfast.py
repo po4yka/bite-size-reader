@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.adapter_models.batch_processing import URLBatchStatus
 from app.adapters.telegram.url_batch_policy_service import URLBatchPolicyService
 from app.adapters.telegram.url_handler import URLHandler
-from app.models.batch_processing import URLBatchStatus
 
 
 class TestDomainFailFast(unittest.IsolatedAsyncioTestCase):

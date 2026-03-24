@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from app.adapter_models.llm.llm_models import LLMCallResult
 from app.adapters.llm.base_client import BaseLLMClient
 from app.adapters.llm.openai.request_builder import (
     OpenAIRequestBuilder,
@@ -22,7 +23,6 @@ from app.adapters.llm.openai.request_builder import (
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
-from app.models.llm.llm_models import LLMCallResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable

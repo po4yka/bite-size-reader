@@ -131,12 +131,12 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
 
     async def test_relationship_agent_detects_series(self):
         """Test that RelationshipAnalysisAgent correctly detects a series."""
-        from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
-        from app.models.batch_analysis import (
+        from app.adapter_models.batch_analysis import (
             ArticleMetadata,
             RelationshipAnalysisInput,
             RelationshipType,
         )
+        from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
 
         # Build article metadata from test data
         articles = []
@@ -176,12 +176,12 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
 
     async def test_relationship_agent_detects_unrelated(self):
         """Test that RelationshipAnalysisAgent correctly identifies unrelated articles."""
-        from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
-        from app.models.batch_analysis import (
+        from app.adapter_models.batch_analysis import (
             ArticleMetadata,
             RelationshipAnalysisInput,
             RelationshipType,
         )
+        from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
 
         # Build article metadata from test data
         articles = []
@@ -217,14 +217,14 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
 
     async def test_combined_summary_agent_generates_synthesis(self):
         """Test that CombinedSummaryAgent generates a combined summary."""
-        from app.agents.combined_summary_agent import CombinedSummaryAgent
-        from app.models.batch_analysis import (
+        from app.adapter_models.batch_analysis import (
             ArticleMetadata,
             CombinedSummaryInput,
             RelationshipAnalysisOutput,
             RelationshipType,
             SeriesInfo,
         )
+        from app.agents.combined_summary_agent import CombinedSummaryAgent
 
         # Build article metadata
         articles = []
@@ -394,14 +394,14 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
         """Test the complete flow from articles to combined summary."""
         import json
 
-        from app.agents.combined_summary_agent import CombinedSummaryAgent
-        from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
-        from app.models.batch_analysis import (
+        from app.adapter_models.batch_analysis import (
             ArticleMetadata,
             CombinedSummaryInput,
             RelationshipAnalysisInput,
             RelationshipType,
         )
+        from app.agents.combined_summary_agent import CombinedSummaryAgent
+        from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
 
         # Step 1: Build article metadata
         articles = []

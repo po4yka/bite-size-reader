@@ -3,8 +3,7 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.agents.combined_summary_agent import CombinedSummaryAgent
-from app.models.batch_analysis import (
+from app.adapter_models.batch_analysis import (
     ArticleMetadata,
     ClusterInfo,
     CombinedSummaryInput,
@@ -12,6 +11,7 @@ from app.models.batch_analysis import (
     RelationshipType,
     SeriesInfo,
 )
+from app.agents.combined_summary_agent import CombinedSummaryAgent
 
 
 class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):

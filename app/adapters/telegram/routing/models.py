@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from app.models.telegram.telegram_message import TelegramMessage
+    from app.adapter_models.telegram.telegram_message import TelegramMessage
 
 
 @dataclass(frozen=True, slots=True)

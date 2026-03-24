@@ -3,7 +3,7 @@
 import unittest
 from datetime import datetime
 
-from app.models.telegram.telegram_models import (
+from app.adapter_models.telegram.telegram_models import (
     ChatType,
     MediaType,
     MessageEntity,

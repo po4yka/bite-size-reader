@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from app.models.llm.llm_models import LLMCallResult
+    from app.adapter_models.llm.llm_models import LLMCallResult
 
 
 @runtime_checkable

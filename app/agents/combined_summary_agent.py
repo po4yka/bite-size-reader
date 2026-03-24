@@ -5,15 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from app.agents.base_agent import AgentResult, BaseAgent
-from app.core.call_status import CallStatus
-from app.core.json_utils import extract_json
-from app.core.logging_utils import get_logger
-from app.models.batch_analysis import (
+from app.adapter_models.batch_analysis import (
     CombinedSummaryInput,
     CombinedSummaryOutput,
     RelationshipType,
 )
+from app.agents.base_agent import AgentResult, BaseAgent
+from app.core.call_status import CallStatus
+from app.core.json_utils import extract_json
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

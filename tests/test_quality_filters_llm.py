@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.adapter_models.llm.llm_models import LLMCallResult
 from app.adapters.content.quality_filters import (
     classify_content_quality_llm,
     is_gray_zone_for_llm_check,
 )
 from app.core.call_status import CallStatus
-from app.models.llm.llm_models import LLMCallResult
 
 # ---------------------------------------------------------------------------
 # is_gray_zone_for_llm_check tests

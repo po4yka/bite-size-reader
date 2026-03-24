@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from app.adapter_models.llm.llm_models import ChatRequest, LLMCallResult
 from app.adapters.openrouter.chat_models import (
     ModelRunState,
     OpenRouterChatClient,
@@ -10,7 +11,6 @@ from app.adapters.openrouter.chat_models import (
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
-from app.models.llm.llm_models import ChatRequest, LLMCallResult
 
 if TYPE_CHECKING:
     import httpx

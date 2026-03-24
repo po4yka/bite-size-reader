@@ -979,7 +979,7 @@ class TestTelegramMessageIsForwarded(unittest.TestCase):
 
     def test_regular_message_not_forwarded(self) -> None:
         """Message with no forward fields is not forwarded."""
-        from app.models.telegram.telegram_message import TelegramMessage
+        from app.adapter_models.telegram.telegram_message import TelegramMessage
 
         msg = self._make_mock_message()
         tm = TelegramMessage.from_pyrogram_message(msg)
@@ -987,7 +987,7 @@ class TestTelegramMessageIsForwarded(unittest.TestCase):
 
     def test_forward_from_user_detected(self) -> None:
         """Forward from a user sets is_forwarded."""
-        from app.models.telegram.telegram_message import TelegramMessage
+        from app.adapter_models.telegram.telegram_message import TelegramMessage
 
         msg = self._make_mock_message(
             forward_from=SimpleNamespace(
@@ -1004,7 +1004,7 @@ class TestTelegramMessageIsForwarded(unittest.TestCase):
 
     def test_forward_from_chat_detected(self) -> None:
         """Forward from a channel sets is_forwarded."""
-        from app.models.telegram.telegram_message import TelegramMessage
+        from app.adapter_models.telegram.telegram_message import TelegramMessage
 
         msg = self._make_mock_message(
             forward_from_chat=SimpleNamespace(id=-100, type="channel", title="Ch"),
@@ -1015,7 +1015,7 @@ class TestTelegramMessageIsForwarded(unittest.TestCase):
 
     def test_forward_sender_name_only_detected(self) -> None:
         """Privacy-protected forward (sender_name only) sets is_forwarded."""
-        from app.models.telegram.telegram_message import TelegramMessage
+        from app.adapter_models.telegram.telegram_message import TelegramMessage
 
         msg = self._make_mock_message(forward_sender_name="Hidden")
         tm = TelegramMessage.from_pyrogram_message(msg)
@@ -1025,7 +1025,7 @@ class TestTelegramMessageIsForwarded(unittest.TestCase):
         """Forward with only forward_date set still detects as forwarded."""
         from datetime import datetime
 
-        from app.models.telegram.telegram_message import TelegramMessage
+        from app.adapter_models.telegram.telegram_message import TelegramMessage
 
         msg = self._make_mock_message(forward_date=datetime(2024, 1, 1))
         tm = TelegramMessage.from_pyrogram_message(msg)

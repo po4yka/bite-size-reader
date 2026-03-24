@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.adapter_models.llm.llm_models import ChatRequest
 from app.adapters.openrouter.chat_models import (
     AttemptOutcome,
     AttemptRequestPayload,
@@ -12,7 +13,6 @@ from app.adapters.openrouter.chat_models import (
     StructuredOutputState,
 )
 from app.adapters.openrouter.chat_streaming import ChatStreamingHandler
-from app.models.llm.llm_models import ChatRequest
 
 
 class _StreamResponse:

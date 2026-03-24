@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.adapter_models.batch_processing import URLBatchStatus
 from app.adapters.telegram.url_batch_processor import (
     BatchProcessRequest,
     URLBatchProcessor,
     _BatchRunState,
 )
-from app.models.batch_processing import URLBatchStatus
 
 
 def _make_processor(

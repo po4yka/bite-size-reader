@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.models.telegram.telegram_models import (
+from app.adapter_models.telegram.telegram_models import (
     ChatType,
     MessageEntity,
     MessageEntityType,

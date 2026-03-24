@@ -1,33 +1,21 @@
 from __future__ import annotations
 
-import ast
 from pathlib import Path
+
+from tests.architecture._import_rules import collect_forbidden_imports
 
 
 def test_application_layer_has_no_outer_layer_imports() -> None:
     app_root = Path(__file__).resolve().parents[2] / "app" / "application"
-    forbidden_prefixes = (
-        "app.api",
-        "app.adapters",
-        "app.db",
-        "app.infrastructure",
-        "app.di",
+    violations = collect_forbidden_imports(
+        app_root,
+        forbidden_prefixes=(
+            "app.api",
+            "app.adapters",
+            "app.db",
+            "app.infrastructure",
+            "app.di",
+        ),
     )
-
-    violations: list[str] = []
-    for path in app_root.rglob("*.py"):
-        module = ast.parse(path.read_text())
-        for node in ast.walk(module):
-            if isinstance(node, ast.ImportFrom) and node.module:
-                if node.module.startswith(forbidden_prefixes):
-                    violations.append(
-                        f"{path.relative_to(app_root.parent)}:{node.lineno} {node.module}"
-                    )
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name.startswith(forbidden_prefixes):
-                        violations.append(
-                            f"{path.relative_to(app_root.parent)}:{node.lineno} {alias.name}"
-                        )
 
     assert violations == []

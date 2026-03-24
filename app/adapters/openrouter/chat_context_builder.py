@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.adapter_models.llm.llm_models import ChatRequest
 from app.adapters.openrouter.chat_models import (
     OpenRouterChatClient,
     PreparedChatContext,
@@ -10,7 +11,6 @@ from app.adapters.openrouter.chat_models import (
 from app.adapters.openrouter.exceptions import ValidationError
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
-from app.models.llm.llm_models import ChatRequest
 
 logger = get_logger(__name__)
 

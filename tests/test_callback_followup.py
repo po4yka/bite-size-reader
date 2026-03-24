@@ -4,13 +4,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.adapter_models.llm.llm_models import LLMCallResult
 from app.adapters.external.formatting.summary.action_buttons import create_action_buttons
 from app.adapters.telegram.callback_handler import CallbackHandler
 from app.adapters.telegram.routing.content_router import MessageContentRouter
 from app.adapters.telegram.routing.interactions import MessageInteractionRecorder
 from app.adapters.telegram.routing.models import PreparedRouteContext
 from app.core.call_status import CallStatus
-from app.models.llm.llm_models import LLMCallResult
 
 
 class _ResponseFormatterStub:

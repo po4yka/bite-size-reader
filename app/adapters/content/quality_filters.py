@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from app.adapters.external.firecrawl.models import FirecrawlResult
     from app.adapters.llm.protocol import LLMClientProtocol
-    from app.models.llm.llm_models import LLMCallResult
+    from app.adapter_models.llm.llm_models import LLMCallResult
 
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import get_logger

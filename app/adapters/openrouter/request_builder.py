@@ -14,7 +14,7 @@ from app.adapters.openrouter.model_capabilities import (
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
-    from app.models.llm.llm_models import ChatRequest
+    from app.adapter_models.llm.llm_models import ChatRequest
 
 logger = get_logger(__name__)
 

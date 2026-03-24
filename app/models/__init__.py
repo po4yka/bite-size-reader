@@ -1,11 +1,9 @@
-"""Infrastructure and adapter data models for the bite-size-reader application.
+"""Deprecated compatibility facade for adapter/infrastructure data models.
 
-Boundary rule: this package contains Pydantic/dataclass models used as data
-transfer objects for infrastructure concerns — Telegram message types, LLM
-configuration, batch processing payloads, and API data shapes.
+Canonical import path: ``app.adapter_models``.
 
-These models may reference external library types (Pydantic, StrEnum) and can
-depend on adapter-layer types. They are NOT pure domain entities.
-
-For pure domain entities (Request, Summary, User identity), use app/domain/models/.
+This package remains only to avoid breaking older imports while the codebase
+finishes migrating away from the ambiguous ``app.models`` namespace. New
+production code should import boundary-facing models from ``app.adapter_models``
+and pure business entities from ``app.domain.models``.
 """

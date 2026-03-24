@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
     from typing import Self
 
-    from app.models.llm.llm_models import LLMCallResult
+    from app.adapter_models.llm.llm_models import LLMCallResult
     from app.utils.circuit_breaker import CircuitBreaker
 
 import httpx

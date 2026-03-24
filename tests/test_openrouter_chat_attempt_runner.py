@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.adapter_models.llm.llm_models import ChatRequest, LLMCallResult
 from app.adapters.openrouter.chat_attempt_runner import ChatAttemptRunner
 from app.adapters.openrouter.chat_models import (
     AttemptOutcome,
@@ -13,7 +14,6 @@ from app.adapters.openrouter.chat_models import (
 )
 from app.adapters.openrouter.openrouter_client import OpenRouterClient, OpenRouterClientConfig
 from app.core.call_status import CallStatus
-from app.models.llm.llm_models import ChatRequest, LLMCallResult
 
 
 def _make_client() -> OpenRouterClient:

@@ -14,8 +14,8 @@ from app.core.logging_utils import get_logger
 from app.observability.metrics import record_draft_stream_event, record_stream_latency_ms
 
 if TYPE_CHECKING:
+    from app.adapter_models.llm.llm_models import ChatRequest
     from app.adapters.openrouter.chat_response_handler import ChatResponseHandler
-    from app.models.llm.llm_models import ChatRequest
 
 logger = get_logger(__name__)
 

@@ -72,7 +72,7 @@ class BatchRelationshipAnalysisService:
         if not self.is_configured:
             return
 
-        from app.models.batch_analysis import RelationshipType
+        from app.adapter_models.batch_analysis import RelationshipType
 
         batch_status = batch_result.batch_status
         correlation_id = batch_result.correlation_id
@@ -307,7 +307,7 @@ class BatchRelationshipAnalysisService:
         batch_status: Any,
         url_to_request_id: dict[str, int],
     ) -> list[int]:
-        from app.models.batch_processing import URLStatus
+        from app.adapter_models.batch_processing import URLStatus
 
         successful_request_ids: list[int] = []
         for url, request_id in url_to_request_id.items():
@@ -324,7 +324,7 @@ class BatchRelationshipAnalysisService:
         summaries: dict[int, dict[str, Any]],
         url_to_request_id: dict[str, int],
     ) -> tuple[list[Any], list[dict[str, Any]]]:
-        from app.models.batch_analysis import ArticleMetadata
+        from app.adapter_models.batch_analysis import ArticleMetadata
 
         articles: list[Any] = []
         full_summaries: list[dict[str, Any]] = []
@@ -396,8 +396,8 @@ class BatchRelationshipAnalysisService:
         articles: list[Any],
         language: str,
     ) -> Any | None:
+        from app.adapter_models.batch_analysis import RelationshipAnalysisInput
         from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
-        from app.models.batch_analysis import RelationshipAnalysisInput
 
         await self._batch_session_repo.async_update_batch_session_status(
             session_id,
@@ -492,8 +492,8 @@ class BatchRelationshipAnalysisService:
         if not (self._batch_config.combined_summary_enabled and self._llm_client):
             return None
 
+        from app.adapter_models.batch_analysis import CombinedSummaryInput
         from app.agents.combined_summary_agent import CombinedSummaryAgent
-        from app.models.batch_analysis import CombinedSummaryInput
 
         combined_agent = CombinedSummaryAgent(
             llm_client=self._llm_client,
@@ -522,7 +522,7 @@ class BatchRelationshipAnalysisService:
         articles: list[Any],
         language: str,
     ) -> None:
-        from app.models.batch_analysis import RelationshipType
+        from app.adapter_models.batch_analysis import RelationshipType
 
         _ = articles
         type_labels = {

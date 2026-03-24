@@ -3,15 +3,15 @@
 import time
 import unittest
 
-from app.adapters.external.formatting.batch_progress_formatter import (
-    MAX_MESSAGE_LENGTH,
-    BatchProgressFormatter,
-)
-from app.models.batch_processing import (
+from app.adapter_models.batch_processing import (
     URLBatchStatus,
     URLProcessingResult,
     URLStatus,
     URLStatusEntry,
+)
+from app.adapters.external.formatting.batch_progress_formatter import (
+    MAX_MESSAGE_LENGTH,
+    BatchProgressFormatter,
 )
 
 

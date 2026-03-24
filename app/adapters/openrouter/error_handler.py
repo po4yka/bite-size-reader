@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from app.adapter_models.llm.llm_models import LLMCallResult
 from app.core.backoff import sleep_backoff as _sleep_backoff
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
-from app.models.llm.llm_models import LLMCallResult
 from app.utils.retry_utils import is_retryable_status_code
 
 if TYPE_CHECKING:

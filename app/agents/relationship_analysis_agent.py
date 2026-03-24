@@ -9,11 +9,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.agents.base_agent import AgentResult, BaseAgent
-from app.core.call_status import CallStatus
-from app.core.json_utils import extract_json
-from app.core.logging_utils import get_logger
-from app.models.batch_analysis import (
+from app.adapter_models.batch_analysis import (
     ArticleMetadata,
     ClusterInfo,
     RelationshipAnalysisInput,
@@ -21,6 +17,10 @@ from app.models.batch_analysis import (
     RelationshipType,
     SeriesInfo,
 )
+from app.agents.base_agent import AgentResult, BaseAgent
+from app.core.call_status import CallStatus
+from app.core.json_utils import extract_json
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.adapters.llm import LLMClientProtocol

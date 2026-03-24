@@ -6,11 +6,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.adapter_models.batch_analysis import RelationshipType
+from app.adapter_models.batch_processing import URLBatchStatus
 from app.adapters.telegram.batch_relationship_analysis_service import (
     BatchRelationshipAnalysisService,
 )
-from app.models.batch_analysis import RelationshipType
-from app.models.batch_processing import URLBatchStatus
 
 
 def _make_batch_result() -> Any:

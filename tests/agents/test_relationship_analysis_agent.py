@@ -3,14 +3,14 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.agents.relationship_analysis_agent import (
-    MetadataSignals,
-    RelationshipAnalysisAgent,
-)
-from app.models.batch_analysis import (
+from app.adapter_models.batch_analysis import (
     ArticleMetadata,
     RelationshipAnalysisInput,
     RelationshipType,
+)
+from app.agents.relationship_analysis_agent import (
+    MetadataSignals,
+    RelationshipAnalysisAgent,
 )
 
 

@@ -74,7 +74,7 @@ def _make_stub_scraper():
 
 
 def _make_stub_llm():
-    from app.models.llm.llm_models import LLMCallResult
+    from app.adapter_models.llm.llm_models import LLMCallResult
 
     llm = MagicMock()
     llm.provider_name = "stub"
@@ -203,7 +203,7 @@ class TestUrlPipelineIntegration(unittest.IsolatedAsyncioTestCase):
 
 def _make_error_llm():
     """LLM stub that always returns an error result."""
-    from app.models.llm.llm_models import LLMCallResult
+    from app.adapter_models.llm.llm_models import LLMCallResult
 
     llm = MagicMock()
     llm.provider_name = "stub-error"

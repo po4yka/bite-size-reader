@@ -9,11 +9,11 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from app.adapter_models.batch_processing import URLStatus
 from app.adapters.external.formatting.error_types import ErrorNotificationType
-from app.models.batch_processing import URLStatus
 
 if TYPE_CHECKING:
-    from app.models.batch_processing import URLBatchStatus, URLStatusEntry
+    from app.adapter_models.batch_processing import URLBatchStatus, URLStatusEntry
 
 
 # Telegram message limit with safety margin

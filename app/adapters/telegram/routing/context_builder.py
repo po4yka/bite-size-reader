@@ -6,8 +6,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from app.adapter_models.telegram.telegram_message import TelegramMessage
 from app.core.url_utils import extract_all_urls, looks_like_url
-from app.models.telegram.telegram_message import TelegramMessage
 
 from .models import PreparedRouteContext
 
