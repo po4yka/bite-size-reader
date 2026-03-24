@@ -13,12 +13,10 @@ import * as apiSocialAuth from "../api/socialAuth";
 import { detectAuthMode } from "./mode";
 import { getStoredTokens, setStoredTokens, subscribeTokenChanges } from "./storage";
 import type {
-  AppleAuthPayload,
   AuthMode,
   AuthStatus,
   AuthTokens,
   AuthUser,
-  GoogleAuthPayload,
   SecretAuthPayload,
   TelegramAuthPayload,
 } from "./types";
@@ -30,8 +28,6 @@ interface AuthContextValue {
   user: AuthUser | null;
   error: string | null;
   login: (payload: TelegramAuthPayload) => Promise<void>;
-  loginWithApple: (payload: AppleAuthPayload) => Promise<void>;
-  loginWithGoogle: (payload: GoogleAuthPayload) => Promise<void>;
   loginWithSecret: (payload: SecretAuthPayload) => Promise<void>;
   logout: () => void;
   reloadUser: () => Promise<void>;
@@ -159,60 +155,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, [syncApiSession]);
 
-  const loginWithApple = useCallback(
-    async (payload: AppleAuthPayload) => {
-      setStatus("loading");
-      setError(null);
-      try {
-        const nextTokens = await apiSocialAuth.loginWithApple(
-          payload.idToken,
-          payload.clientId,
-          payload.authCode,
-          payload.givenName,
-          payload.familyName,
-        );
-        setStoredTokens(nextTokens);
-        setTokens(nextTokens);
-        setStatus("authenticated");
-        syncApiSession(nextTokens);
-        const current = await fetchCurrentUser();
-        setUser(current);
-      } catch (err) {
-        setStatus("unauthenticated");
-        setTokens(null);
-        setStoredTokens(null);
-        setUser(null);
-        setError(err instanceof Error ? err.message : "Apple sign-in failed.");
-        throw err;
-      }
-    },
-    [syncApiSession],
-  );
-
-  const loginWithGoogle = useCallback(
-    async (payload: GoogleAuthPayload) => {
-      setStatus("loading");
-      setError(null);
-      try {
-        const nextTokens = await apiSocialAuth.loginWithGoogle(payload.idToken, payload.clientId);
-        setStoredTokens(nextTokens);
-        setTokens(nextTokens);
-        setStatus("authenticated");
-        syncApiSession(nextTokens);
-        const current = await fetchCurrentUser();
-        setUser(current);
-      } catch (err) {
-        setStatus("unauthenticated");
-        setTokens(null);
-        setStoredTokens(null);
-        setUser(null);
-        setError(err instanceof Error ? err.message : "Google sign-in failed.");
-        throw err;
-      }
-    },
-    [syncApiSession],
-  );
-
   const loginWithSecret = useCallback(
     async (payload: SecretAuthPayload) => {
       setStatus("loading");
@@ -258,14 +200,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
       user,
       error,
       login,
-      loginWithApple,
-      loginWithGoogle,
       loginWithSecret,
       logout,
       reloadUser,
       dismissError,
     }),
-    [dismissError, error, login, loginWithApple, loginWithGoogle, loginWithSecret, logout, mode, reloadUser, status, tokens, user],
+    [dismissError, error, login, loginWithSecret, logout, mode, reloadUser, status, tokens, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

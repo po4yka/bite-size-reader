@@ -25,6 +25,7 @@ export default function SecretLoginForm() {
       await loginWithSecret({ secretKey: secretKey.trim(), clientId: WEB_CLIENT_ID });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Secret login failed.");
+      setSecretKey("");
     } finally {
       setLoading(false);
     }
@@ -50,12 +51,18 @@ export default function SecretLoginForm() {
         value={secretKey}
         onChange={(e) => setSecretKey(e.target.value)}
         disabled={loading}
+        autoComplete="off"
       />
 
       {loading ? (
         <InlineLoading description="Authenticating..." style={{ marginTop: "1rem" }} />
       ) : (
-        <Button type="submit" kind="primary" style={{ marginTop: "1rem", width: "100%" }}>
+        <Button
+          type="submit"
+          kind="primary"
+          disabled={!secretKey.trim()}
+          style={{ marginTop: "1rem", width: "100%" }}
+        >
           Login with Secret Key
         </Button>
       )}
