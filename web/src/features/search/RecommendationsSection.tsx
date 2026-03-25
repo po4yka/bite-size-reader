@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { InlineLoading, Tag, Tile } from "@carbon/react";
 import { useRecommendations } from "../../hooks/useSummaries";
@@ -5,6 +6,12 @@ import { useRecommendations } from "../../hooks/useSummaries";
 export function RecommendationsSection() {
   const navigate = useNavigate();
   const { data, isLoading } = useRecommendations();
+
+  function handleTileKeyDown(event: KeyboardEvent<HTMLDivElement>, id: number): void {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    navigate(`/library/${id}`);
+  }
 
   if (isLoading) {
     return <InlineLoading description="Loading recommendations..." />;
@@ -24,6 +31,9 @@ export function RecommendationsSection() {
             key={item.id}
             style={{ cursor: "pointer" }}
             onClick={() => navigate(`/library/${item.id}`)}
+            onKeyDown={(event) => handleTileKeyDown(event, item.id)}
+            role="link"
+            tabIndex={0}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ flex: 1, minWidth: 0 }}>

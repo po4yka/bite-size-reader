@@ -9,7 +9,6 @@ import {
   Select,
   SelectItem,
   SkeletonText,
-  Tag,
   TextArea,
   TextInput,
   Tile,
@@ -46,13 +45,6 @@ function resolveColorCss(color: string | null): string {
   if (color === "#DBEAFE") return "var(--bsr-highlight-blue)";
   if (color === "#FEE2E2") return "var(--bsr-highlight-red)";
   return "var(--bsr-highlight-yellow)";
-}
-
-function colorTagType(color: string | null): "warm-gray" | "green" | "blue" | "red" {
-  if (color === "green" || color === "#D1FAE5") return "green";
-  if (color === "blue" || color === "#DBEAFE") return "blue";
-  if (color === "red" || color === "#FEE2E2") return "red";
-  return "warm-gray";
 }
 
 function truncate(text: string, maxLen: number): string {
@@ -121,22 +113,23 @@ function ColorPicker({ selected, onChange }: ColorPickerProps) {
       onKeyDown={handleKeyDown}
     >
       {COLOR_OPTIONS.map((opt) => (
-        <Tag
+        <button
           key={opt.value}
-          type={colorTagType(opt.value)}
+          type="button"
+          className={`highlight-color-swatch${selected === opt.value ? " highlight-color-swatch--selected" : ""}`}
           role="radio"
           aria-checked={selected === opt.value}
           aria-label={opt.label}
           data-color={opt.value}
           tabIndex={selected === opt.value ? 0 : -1}
-          style={{
-            cursor: "pointer",
-            outline: selected === opt.value ? "2px solid var(--cds-focus)" : "none",
-          }}
           onClick={() => onChange(opt.value as ColorValue)}
         >
+          <span
+            className="highlight-color-swatch__circle"
+            style={{ backgroundColor: opt.cssVar }}
+          />
           {opt.label}
-        </Tag>
+        </button>
       ))}
     </div>
   );

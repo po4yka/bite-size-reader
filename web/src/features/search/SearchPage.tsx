@@ -305,9 +305,10 @@ export default function SearchPage() {
               <p className="muted">Top domains</p>
               <div className="tag-row" role="group" aria-label="Filter by domain">
                 {(searchQuery.data.facets?.domains ?? []).slice(0, 10).map((facet) => (
-                  <button
+                  <Button
                     key={`domain-${facet.value}`}
-                    type="button"
+                    kind="ghost"
+                    size="sm"
                     className="filter-chip"
                     aria-pressed={selectedDomains.includes(facet.value)}
                     onClick={() => {
@@ -318,7 +319,7 @@ export default function SearchPage() {
                     <Tag type={selectedDomains.includes(facet.value) ? "blue" : "gray"}>
                       {facet.value} ({facet.count})
                     </Tag>
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -327,9 +328,10 @@ export default function SearchPage() {
               <p className="muted">Top tags</p>
               <div className="tag-row" role="group" aria-label="Filter by topic tag">
                 {(searchQuery.data.facets?.tags ?? []).slice(0, 10).map((facet) => (
-                  <button
+                  <Button
                     key={`tag-${facet.value}`}
-                    type="button"
+                    kind="ghost"
+                    size="sm"
                     className="filter-chip"
                     aria-pressed={selectedTags.includes(facet.value)}
                     onClick={() => {
@@ -340,7 +342,7 @@ export default function SearchPage() {
                     <Tag type={selectedTags.includes(facet.value) ? "teal" : "gray"}>
                       {facet.value} ({facet.count})
                     </Tag>
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -349,9 +351,10 @@ export default function SearchPage() {
               <p className="muted">Language mix</p>
               <div className="tag-row" role="group" aria-label="Filter by language">
                 {(searchQuery.data.facets?.languages ?? []).slice(0, 6).map((facet) => (
-                  <button
+                  <Button
                     key={`lang-${facet.value}`}
-                    type="button"
+                    kind="ghost"
+                    size="sm"
                     className="filter-chip"
                     aria-pressed={language === facet.value}
                     onClick={() => {
@@ -362,7 +365,7 @@ export default function SearchPage() {
                     <Tag type={language === facet.value ? "cyan" : "gray"}>
                       {facet.value} ({facet.count})
                     </Tag>
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -375,9 +378,10 @@ export default function SearchPage() {
           <h3>Trending topics</h3>
           <div className="tag-row">
             {(trendingQuery.data ?? []).map((topic) => (
-              <button
+              <Button
                 key={topic.tag}
-                type="button"
+                kind="ghost"
+                size="sm"
                 className="filter-chip"
                 onClick={() => {
                   setQuery(topic.tag.replace(/^#/, ""));
@@ -385,7 +389,7 @@ export default function SearchPage() {
                 }}
               >
                 <Tag type="teal">{topic.tag} ({topic.count})</Tag>
-              </button>
+              </Button>
             ))}
           </div>
         </Tile>

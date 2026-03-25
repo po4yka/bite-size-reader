@@ -47,8 +47,10 @@ export default function LibraryPage() {
 
       <div className="filter-row" role="radiogroup" aria-label="Filter articles">
         {FILTERS.map((entry) => (
-          <button
+          <Button
             key={entry.key}
+            kind="ghost"
+            size="sm"
             className="filter-chip"
             role="radio"
             aria-checked={entry.key === filter}
@@ -56,10 +58,9 @@ export default function LibraryPage() {
               setFilter(entry.key);
               setPage(1);
             }}
-            type="button"
           >
             <Tag type={entry.key === filter ? "blue" : "gray"}>{entry.label}</Tag>
-          </button>
+          </Button>
         ))}
       </div>
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Button,
+  Checkbox,
   DataTable,
   DataTableSkeleton,
   InlineNotification,
@@ -365,18 +366,13 @@ export default function TagManagementPage() {
         <div style={{ marginBottom: "1rem" }}>
           <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Source tags (select one or more):</p>
           {tags.map((tag) => (
-            <label
+            <Checkbox
               key={tag.id}
-              style={{ display: "block", marginBottom: "0.25rem", cursor: "pointer" }}
-            >
-              <input
-                type="checkbox"
-                checked={mergeSourceIds.has(tag.id)}
-                onChange={() => handleToggleMergeSource(tag.id)}
-                style={{ marginRight: "0.5rem" }}
-              />
-              {tag.name} ({tag.summaryCount})
-            </label>
+              id={`merge-source-${tag.id}`}
+              labelText={`${tag.name} (${tag.summaryCount})`}
+              checked={mergeSourceIds.has(tag.id)}
+              onChange={() => handleToggleMergeSource(tag.id)}
+            />
           ))}
         </div>
         <Select
