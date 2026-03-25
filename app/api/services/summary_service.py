@@ -1,21 +1,11 @@
 """Summary service - business logic for summary operations."""
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from app.api.dependencies.database import get_summary_read_model_use_case
 from app.api.exceptions import ResourceNotFoundError
 from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 from app.core.logging_utils import get_logger
-
-if TYPE_CHECKING:
-    from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-        SqliteSummaryRepositoryAdapter,
-    )
-else:
-
-    class SqliteSummaryRepositoryAdapter:
-        pass
-
 
 logger = get_logger(__name__)
 
