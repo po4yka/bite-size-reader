@@ -203,16 +203,14 @@ async def _check_scraper() -> dict[str, Any]:
         }
 
 
-def _get_circuit_breaker_states() -> dict[str, Any]:
-    """Get circuit breaker states for all services."""
-    states = {}
+def _get_circuit_breaker_states() -> dict[str, str]:
+    """Get circuit breaker summary.
 
-    # Circuit breaker states would be integrated with actual client instances
-    # For now, return placeholder indicating integration is needed
-    states["firecrawl"] = {"state": "unknown", "info": "Not integrated"}
-    states["openrouter"] = {"state": "unknown", "info": "Not integrated"}
-
-    return states
+    Circuit breakers are managed internally by LLM and scraper clients
+    (see ``app/utils/circuit_breaker.py``).  Exposing per-client state
+    requires DI wiring that is not yet available in the health router.
+    """
+    return {"status": "managed_by_clients"}
 
 
 @router.get("/health/detailed")
