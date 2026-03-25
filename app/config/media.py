@@ -109,6 +109,12 @@ class AttachmentConfig(BaseModel):
         description="Enable attachment processing (images, PDFs)",
     )
 
+    article_vision_enabled: bool = Field(
+        default=False,
+        validation_alias="ARTICLE_VISION_ENABLED",
+        description="Send extracted article images to a vision model for richer summaries",
+    )
+
     vision_model: str = Field(
         default="qwen/qwen3-vl-32b-instruct",
         validation_alias="ATTACHMENT_VISION_MODEL",

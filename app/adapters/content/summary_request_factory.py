@@ -210,14 +210,15 @@ class SummaryRequestFactory:
         images: list[str] | None,
     ) -> list[dict[str, Any]]:
         """Build multimodal chat messages for the summary request."""
-        if not images:
+        valid_images = [url for url in (images or []) if url.startswith("https://")]
+        if not valid_images:
             return [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ]
 
         content_parts: list[dict[str, Any]] = [{"type": "text", "text": user_content}]
-        for uri in images:
+        for uri in valid_images:
             content_parts.append({"type": "image_url", "image_url": {"url": uri}})
 
         return [
@@ -259,7 +260,11 @@ class SummaryRequestFactory:
     ) -> tuple[str, str | None, str | None]:
         """Choose truncation/model strategy and return (cleaned_content, model_override, content_tier)."""
         content_for_summary = content_text
-        model_override = self._runtime.cfg.attachment.vision_model if images else None
+        attachment_cfg = self._runtime.cfg.attachment
+        use_vision = images and attachment_cfg.article_vision_enabled
+        model_override = attachment_cfg.vision_model if use_vision else None
+        if not use_vision:
+            images = None
         content_tier: str | None = None
 
         if len(content_text) > max_chars:
