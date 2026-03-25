@@ -77,8 +77,8 @@ class ContentChunker:
                 return int(tokens * 4 * 0.75)
 
             # Explicit capacities (user-provided):
-            # - Gemini 2.5 Pro: 1,000,000 tokens
-            if "gemini-2.5" in name or "2.5-pro" in name or "gemini-2-5" in name:
+            # - Gemini 3.1 Pro: 1,000,000 tokens
+            if "gemini-3.1" in name or "3.1-pro" in name or "gemini-3-1" in name:
                 return max(base_default, tok(1_000_000))  # ≈ 3,000,000 chars
 
             # Other generous defaults for known large-context families

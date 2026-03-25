@@ -59,7 +59,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
         self.client = OpenRouterClient(
             api_key="sk-or-test-key",
             model="qwen/qwen3-max",
-            fallback_models=["google/gemini-2.5-pro"],
+            fallback_models=["google/gemini-3.1-pro-preview"],
             http_referer="https://github.com/test-repo",
             x_title="Test Bot",
             config=OpenRouterClientConfig(
@@ -436,7 +436,10 @@ class TestOpenRouterCompliance(unittest.TestCase):
                     json_data={
                         "data": [
                             {"id": "deepseek/deepseek-v3.2", "name": "DeepSeek V3"},
-                            {"id": "google/gemini-2.5-pro", "name": "Gemini 2.5 Pro"},
+                            {
+                                "id": "google/gemini-3.1-pro-preview",
+                                "name": "Gemini 3.1 Pro Preview",
+                            },
                         ]
                     },
                 )
@@ -470,7 +473,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
                         json_data={
                             "choices": [{"message": {"content": "Fallback response"}}],
                             "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-                            "model": "google/gemini-2.5-pro",
+                            "model": "google/gemini-3.1-pro-preview",
                         },
                     ),
                 ]
@@ -481,7 +484,7 @@ class TestOpenRouterCompliance(unittest.TestCase):
 
                     assert result.status == "ok"
                     assert result.response_text == "Fallback response"
-                    assert result.model == "google/gemini-2.5-pro"
+                    assert result.model == "google/gemini-3.1-pro-preview"
 
         asyncio.run(_test())
 

@@ -79,4 +79,4 @@ model_routing:
 
 # --- Attachment processing ---
 # attachment:
-#   vision_model: "google/gemini-2.5-flash"
+#   vision_model: "google/gemini-3.1-flash-lite-preview"

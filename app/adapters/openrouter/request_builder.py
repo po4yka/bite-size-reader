@@ -349,7 +349,7 @@ class RequestBuilder:
         total_content_length = sum(len(msg.get("content", "")) for msg in messages)
         model_lower = model.lower()
 
-        compression_threshold = 1200000 if "gemini-2.5" in model_lower else 200000
+        compression_threshold = 1200000 if "gemini-3.1" in model_lower else 200000
 
         if total_content_length > compression_threshold:
             return True, "middle-out"

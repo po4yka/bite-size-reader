@@ -177,9 +177,12 @@ class Settings(BaseSettings):
 
         yaml_data = load_models_yaml()
 
-        # Merge: YAML < env vars < constructor args (constructor takes precedence)
+        # Merge: YAML < .env / constructor args < os.environ
+        # ``data`` includes .env file values loaded by pydantic-settings, so
+        # os.environ must come last to preserve the standard precedence
+        # (env vars override .env file).
         env_data: dict[str, Any] = dict(os.environ)
-        merged_source = {**yaml_data, **env_data, **data}
+        merged_source = {**yaml_data, **data, **env_data}
         cls._fail_on_deprecated_scraper_envs(merged_source)
 
         for field_name, field_info in cls.model_fields.items():

@@ -166,7 +166,6 @@ class ModelCapabilities:
             "google/gemini-3.1-pro-preview",
             "google/gemini-3-pro-preview",
             "google/gemini-3-flash-preview",
-            "google/gemini-2.5-pro",  # keep for backward compat
             # DeepSeek models (JSON mode support)
             "deepseek/deepseek-v3.2:free",
             "deepseek/deepseek-v3.2",

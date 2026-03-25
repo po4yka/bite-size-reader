@@ -47,7 +47,7 @@ class TestModelValidation(unittest.TestCase):
             "ALLOWED_USER_IDS": "123456789",
             "OPENROUTER_MODEL": "qwen/qwen3-max",
             # fallback/model is valid (no invalid chars), invalid|name has pipe which is invalid
-            "OPENROUTER_FALLBACK_MODELS": "fallback/model,google/gemini-2.5-pro, invalid|name",
+            "OPENROUTER_FALLBACK_MODELS": "fallback/model,google/gemini-3.1-pro-preview, invalid|name",
         }
 
         with patch.dict(os.environ, test_env, clear=True):
@@ -56,7 +56,10 @@ class TestModelValidation(unittest.TestCase):
 
             # fallback/model is a valid model name (alphanumeric + slash)
             # invalid|name is filtered out (pipe is not in allowed chars)
-            assert cfg.openrouter.fallback_models == ("fallback/model", "google/gemini-2.5-pro")
+            assert cfg.openrouter.fallback_models == (
+                "fallback/model",
+                "google/gemini-3.1-pro-preview",
+            )
 
     def test_load_config_respects_env_overrides(self) -> None:
         from app.config import Settings
