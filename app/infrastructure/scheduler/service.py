@@ -169,7 +169,7 @@ class SchedulerService:
         logger.info("rss_poll_starting", extra={"cid": correlation_id})
 
         try:
-            stats = await poll_all_feeds()
+            stats = await poll_all_feeds(self.db)
             new_item_ids: list[int] = stats.get("new_item_ids", [])
             logger.info(
                 "rss_poll_fetched",

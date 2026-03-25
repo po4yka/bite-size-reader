@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import datetime as _dt
-import uuid
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from app.api.dependencies.database import get_session_manager
+from app.api.dependencies.database import get_session_manager, get_summary_repository
 from app.api.exceptions import ResourceNotFoundError
 from app.api.models.responses import GoalProgressResponse, GoalResponse
 from app.core.time_utils import UTC
+from app.infrastructure.persistence.sqlite.repositories.user_content_repository import (
+    SqliteUserContentRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.api.models.requests import CreateGoalRequest
@@ -36,189 +38,132 @@ class UserGoalService:
 
     def __init__(self, session_manager: DatabaseSessionManager | None = None) -> None:
         self._db = session_manager or get_session_manager()
+        self._user_content_repo = SqliteUserContentRepositoryAdapter(self._db)
+        self._summary_repo = get_summary_repository(self._db)
 
     async def list_goals(self, *, user_id: int) -> list[dict[str, Any]]:
         """List all goals for a user."""
-
-        def _query() -> list[dict[str, Any]]:
-            from app.db.models import UserGoal
-
-            goals = UserGoal.select().where(UserGoal.user == user_id)
-            return [self._goal_to_payload(goal, user_id=user_id) for goal in goals]
-
-        return await self._db.async_execute(
-            _query, operation_name="list_user_goals", read_only=True
-        )
+        goals = await self._user_content_repo.async_list_goals(user_id)
+        return [await self._goal_to_payload(goal, user_id=user_id) for goal in goals]
 
     async def upsert_goal(self, *, user_id: int, body: CreateGoalRequest) -> dict[str, Any]:
         """Create or update a scoped reading goal."""
-
-        def _upsert() -> dict[str, Any]:
-            from app.db.models import UserGoal
-
-            self._validate_scope_ownership(
-                user_id=user_id,
-                scope_type=body.scope_type,
-                scope_id=body.scope_id,
-            )
-            goal, created = UserGoal.get_or_create(
-                user=user_id,
-                goal_type=body.goal_type,
-                scope_type=body.scope_type,
-                scope_id=body.scope_id,
-                defaults={"id": uuid.uuid4(), "target_count": body.target_count},
-            )
-            if not created:
-                goal.target_count = body.target_count
-                goal.save()
-            return self._goal_to_payload(goal, user_id=user_id)
-
-        return await self._db.async_execute(_upsert, operation_name="upsert_user_goal")
+        await self._validate_scope_ownership(
+            user_id=user_id,
+            scope_type=body.scope_type,
+            scope_id=body.scope_id,
+        )
+        goal = await self._user_content_repo.async_upsert_goal(
+            user_id=user_id,
+            goal_type=body.goal_type,
+            scope_type=body.scope_type,
+            scope_id=body.scope_id,
+            target_count=body.target_count,
+        )
+        return await self._goal_to_payload(goal, user_id=user_id)
 
     async def delete_global_goal(self, *, user_id: int, goal_type: str) -> None:
         """Delete a global goal by type."""
-
-        def _delete() -> None:
-            from app.db.models import UserGoal
-
-            deleted_count = (
-                UserGoal.delete()
-                .where(
-                    (UserGoal.user == user_id)
-                    & (UserGoal.goal_type == goal_type)
-                    & (UserGoal.scope_type == "global")
-                )
-                .execute()
-            )
-            if deleted_count == 0:
-                raise ResourceNotFoundError("Goal", goal_type)
-
-        await self._db.async_execute(_delete, operation_name="delete_global_user_goal")
+        deleted_count = await self._user_content_repo.async_delete_global_goal(
+            user_id=user_id, goal_type=goal_type
+        )
+        if deleted_count == 0:
+            raise ResourceNotFoundError("Goal", goal_type)
 
     async def delete_goal_by_id(self, *, user_id: int, goal_id: str) -> None:
         """Delete a goal by its UUID."""
-
-        def _delete() -> None:
-            from app.db.models import UserGoal
-
-            deleted_count = (
-                UserGoal.delete()
-                .where((UserGoal.user == user_id) & (UserGoal.id == goal_id))
-                .execute()
-            )
-            if deleted_count == 0:
-                raise ResourceNotFoundError("Goal", goal_id)
-
-        await self._db.async_execute(_delete, operation_name="delete_user_goal_by_id")
+        deleted_count = await self._user_content_repo.async_delete_goal_by_id(
+            user_id=user_id, goal_id=goal_id
+        )
+        if deleted_count == 0:
+            raise ResourceNotFoundError("Goal", goal_id)
 
     async def get_goal_progress(self, *, user_id: int) -> list[dict[str, Any]]:
         """Return progress for each goal."""
+        goals = await self._user_content_repo.async_list_goals(user_id)
+        if not goals:
+            return []
 
-        def _build_progress() -> list[dict[str, Any]]:
-            from app.db.models import UserGoal
+        streak_data = await self._compute_streak_data(user_id=user_id)
+        now = datetime.now(UTC)
+        today = now.date()
+        progress_list: list[dict[str, Any]] = []
 
-            goals = list(UserGoal.select().where(UserGoal.user == user_id))
-            if not goals:
-                return []
+        for goal in goals:
+            scope_type = str(goal.get("scope_type") or "global")
+            scope_id = goal.get("scope_id")
+            goal_type = str(goal.get("goal_type") or "daily")
+            target_count = int(goal.get("target_count") or 0)
 
-            streak_data = self._compute_streak_data(user_id=user_id)
-            now = datetime.now(UTC)
-            today = now.date()
-            progress_list: list[dict[str, Any]] = []
-
-            for goal in goals:
-                scope_type = getattr(goal, "scope_type", "global")
-                scope_id = getattr(goal, "scope_id", None)
-
-                if scope_type == "global":
-                    current_count = self._global_goal_count(
-                        goal_type=goal.goal_type, streak_data=streak_data
-                    )
-                else:
-                    start, end = self._goal_period_bounds(goal_type=goal.goal_type, today=today)
-                    current_count = self._count_summaries_in_period(
+            if scope_type == "global":
+                current_count = self._global_goal_count(
+                    goal_type=goal_type, streak_data=streak_data
+                )
+            else:
+                start, end = self._goal_period_bounds(goal_type=goal_type, today=today)
+                current_count = (
+                    await self._user_content_repo.async_count_scoped_summaries_in_period(
                         user_id=user_id,
                         start=start,
                         end=end,
                         scope_type=scope_type,
                         scope_id=scope_id,
                     )
-
-                progress_list.append(
-                    GoalProgressResponse(
-                        goal_type=goal.goal_type,
-                        target_count=goal.target_count,
-                        current_count=current_count,
-                        achieved=current_count >= goal.target_count,
-                        scope_type=scope_type,
-                        scope_id=scope_id,
-                        scope_name=self._resolve_scope_name(
-                            user_id=user_id,
-                            scope_type=scope_type,
-                            scope_id=scope_id,
-                        ),
-                    ).model_dump(by_alias=True)
                 )
 
-            return progress_list
+            progress_list.append(
+                GoalProgressResponse(
+                    goal_type=goal_type,
+                    target_count=target_count,
+                    current_count=current_count,
+                    achieved=current_count >= target_count,
+                    scope_type=scope_type,
+                    scope_id=scope_id,
+                    scope_name=await self._resolve_scope_name(
+                        user_id=user_id,
+                        scope_type=scope_type,
+                        scope_id=scope_id,
+                    ),
+                ).model_dump(by_alias=True)
+            )
 
-        return await self._db.async_execute(
-            _build_progress,
-            operation_name="get_user_goal_progress",
-            read_only=True,
+        return progress_list
+
+    async def _validate_scope_ownership(
+        self, *, user_id: int, scope_type: str, scope_id: int | None
+    ) -> None:
+        if scope_type in {"tag", "collection"} and scope_id is not None:
+            scope_name = await self._user_content_repo.async_get_scope_name(
+                user_id=user_id,
+                scope_type=scope_type,
+                scope_id=scope_id,
+            )
+            if scope_name is None:
+                raise ResourceNotFoundError(scope_type.title(), str(scope_id))
+
+    async def _resolve_scope_name(
+        self, *, user_id: int, scope_type: str, scope_id: int | None
+    ) -> str | None:
+        return await self._user_content_repo.async_get_scope_name(
+            user_id=user_id,
+            scope_type=scope_type,
+            scope_id=scope_id,
         )
 
-    @staticmethod
-    def _validate_scope_ownership(*, user_id: int, scope_type: str, scope_id: int | None) -> None:
-        if scope_type == "tag" and scope_id is not None:
-            from app.db.models import Tag
-
-            tag = Tag.get_or_none((Tag.id == scope_id) & (Tag.user == user_id) & (~Tag.is_deleted))
-            if not tag:
-                raise ResourceNotFoundError("Tag", str(scope_id))
-        elif scope_type == "collection" and scope_id is not None:
-            from app.db.models import Collection
-
-            collection = Collection.get_or_none(
-                (Collection.id == scope_id)
-                & (Collection.user == user_id)
-                & (~Collection.is_deleted)
-            )
-            if not collection:
-                raise ResourceNotFoundError("Collection", str(scope_id))
-
-    @staticmethod
-    def _resolve_scope_name(*, user_id: int, scope_type: str, scope_id: int | None) -> str | None:
-        if scope_type == "tag" and scope_id is not None:
-            from app.db.models import Tag
-
-            tag = Tag.get_or_none((Tag.id == scope_id) & (Tag.user == user_id) & (~Tag.is_deleted))
-            return tag.name if tag else None
-        if scope_type == "collection" and scope_id is not None:
-            from app.db.models import Collection
-
-            collection = Collection.get_or_none(
-                (Collection.id == scope_id)
-                & (Collection.user == user_id)
-                & (~Collection.is_deleted)
-            )
-            return collection.name if collection else None
-        return None
-
-    def _goal_to_payload(self, goal: Any, *, user_id: int) -> dict[str, Any]:
+    async def _goal_to_payload(self, goal: Any, *, user_id: int) -> dict[str, Any]:
         return GoalResponse(
-            id=str(goal.id),
-            goal_type=goal.goal_type,
-            target_count=goal.target_count,
-            scope_type=goal.scope_type,
-            scope_id=goal.scope_id,
-            scope_name=self._resolve_scope_name(
+            id=str(goal.get("id")),
+            goal_type=str(goal.get("goal_type") or ""),
+            target_count=int(goal.get("target_count") or 0),
+            scope_type=str(goal.get("scope_type") or "global"),
+            scope_id=goal.get("scope_id"),
+            scope_name=await self._resolve_scope_name(
                 user_id=user_id,
-                scope_type=goal.scope_type,
-                scope_id=goal.scope_id,
+                scope_type=str(goal.get("scope_type") or "global"),
+                scope_id=goal.get("scope_id"),
             ),
-            created_at=_safe_isoformat(goal.created_at) or "",
-            updated_at=_safe_isoformat(goal.updated_at) or "",
+            created_at=_safe_isoformat(goal.get("created_at")) or "",
+            updated_at=_safe_isoformat(goal.get("updated_at")) or "",
         ).model_dump(by_alias=True)
 
     @staticmethod
@@ -248,55 +193,11 @@ class UserGoalService:
             return int(streak_data["month_count"])
         return 0
 
-    @staticmethod
-    def _count_summaries_in_period(
-        *,
-        user_id: int,
-        start: datetime,
-        end: datetime,
-        scope_type: str,
-        scope_id: int | None,
-    ) -> int:
-        from app.db.models import CollectionItem, Request, Summary, SummaryTag
-
-        query = (
-            Summary.select()
-            .join(Request, on=(Summary.request == Request.id))
-            .where(
-                (Request.user_id == user_id)
-                & (Summary.created_at >= start)
-                & (Summary.created_at < end)
-                & (~Summary.is_deleted)
-            )
-        )
-        if scope_type == "tag" and scope_id is not None:
-            query = query.switch(Summary).join(SummaryTag).where(SummaryTag.tag == scope_id)
-        elif scope_type == "collection" and scope_id is not None:
-            query = (
-                query.switch(Summary)
-                .join(CollectionItem)
-                .where(CollectionItem.collection == scope_id)
-            )
-        return query.count()
-
-    @staticmethod
-    def _compute_streak_data(*, user_id: int) -> dict[str, Any]:
-        from app.db.models import Request, Summary
-
+    async def _compute_streak_data(self, *, user_id: int) -> dict[str, Any]:
         now = datetime.now(UTC)
         today = now.date()
         cutoff = now - timedelta(days=365)
-
-        rows = (
-            Summary.select(Summary.created_at)
-            .join(Request)
-            .where(
-                (Request.user_id == user_id)
-                & (Summary.created_at >= cutoff)
-                & (~Summary.is_deleted)
-            )
-            .order_by(Summary.created_at.desc())
-        )
+        rows = await self._summary_repo.async_get_user_summary_activity_dates(user_id, cutoff)
 
         active_dates: set[_dt.date] = set()
         today_count = 0
@@ -305,8 +206,7 @@ class UserGoalService:
         start_of_month = today.replace(day=1)
         month_count = 0
 
-        for row in rows:
-            created = row.created_at
+        for created in rows:
             if isinstance(created, str):
                 created = datetime.fromisoformat(created.replace("Z", "+00:00"))
             if not hasattr(created, "date"):

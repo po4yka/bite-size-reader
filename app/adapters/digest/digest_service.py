@@ -7,8 +7,7 @@ from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
-from app.core.time_utils import utc_now
-from app.db.models import Channel, ChannelSubscription, DigestDelivery
+from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
 
 if TYPE_CHECKING:
     from app.adapters.digest.analyzer import DigestAnalyzer
@@ -48,6 +47,7 @@ class DigestService:
         self._analyzer = analyzer
         self._formatter = formatter
         self._send = send_message_func
+        self._store = SqliteDigestStore()
 
     async def generate_digest(
         self,
@@ -99,7 +99,7 @@ class DigestService:
     async def generate_channel_digest(
         self,
         user_id: int,
-        channel: Channel,
+        channel: Any,
         correlation_id: str,
         lang: str = "en",
     ) -> DigestResult:
@@ -259,14 +259,13 @@ class DigestService:
         # 5. Persist delivery record
         post_ids = [p.get("message_id") for p in analyzed]
         try:
-            DigestDelivery.create(
-                user=user_id,
-                delivered_at=utc_now(),
+            self._store.create_delivery(
+                user_id=user_id,
                 post_count=result.post_count,
                 channel_count=result.channel_count,
                 digest_type=result.digest_type,
                 correlation_id=correlation_id,
-                posts_json=post_ids,
+                post_ids=post_ids,
             )
         except Exception as exc:
             logger.error(
@@ -311,15 +310,10 @@ class DigestService:
             )
             result.errors.append(f"Send failed: {e}")
 
-    @staticmethod
-    def get_users_with_subscriptions() -> list[int]:
+    @classmethod
+    def get_users_with_subscriptions(cls) -> list[int]:
         """Return user IDs that have at least one active subscription."""
-        rows = (
-            ChannelSubscription.select(ChannelSubscription.user)
-            .where(ChannelSubscription.is_active == True)  # noqa: E712
-            .distinct()
-        )
-        return [row.user_id for row in rows]
+        return SqliteDigestStore().get_users_with_subscriptions()
 
 
 def _deduplicate_posts(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:

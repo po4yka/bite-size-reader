@@ -56,7 +56,7 @@ def _prepare_json_payload(value: Any, *, default: Any | None = None) -> Any | No
 
 def _migrate_openrouter_payloads(db_instance: peewee.SqliteDatabase) -> int:
     """Move OpenRouter response data to provider-specific columns."""
-    from app.db.models import LLMCall
+    from app.infrastructure.persistence.sqlite.orm_exports import LLMCall
 
     if "llm_calls" not in db_instance.get_tables():
         return 0
@@ -96,7 +96,7 @@ def _migrate_openrouter_payloads(db_instance: peewee.SqliteDatabase) -> int:
 
 def _migrate_firecrawl_payloads(db_instance: peewee.SqliteDatabase) -> int:
     """Extract structured fields from raw_response_json into dedicated columns."""
-    from app.db.models import CrawlResult
+    from app.infrastructure.persistence.sqlite.orm_exports import CrawlResult
 
     if "crawl_results" not in db_instance.get_tables():
         return 0

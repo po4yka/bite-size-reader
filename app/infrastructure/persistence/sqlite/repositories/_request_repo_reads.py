@@ -79,6 +79,26 @@ class RequestRepositoryReadMixin(SqliteRepositoryMixinBase):
             _get, operation_name="get_request_by_dedupe_hash", read_only=True
         )
 
+    async def async_get_latest_request_by_correlation_id(
+        self, correlation_id: str
+    ) -> dict[str, Any] | None:
+        """Get the latest request by correlation ID."""
+
+        def _get() -> dict[str, Any] | None:
+            request = (
+                Request.select()
+                .where(Request.correlation_id == correlation_id)
+                .order_by(Request.created_at.desc())
+                .first()
+            )
+            return model_to_dict(request)
+
+        return await self._execute(
+            _get,
+            operation_name="get_latest_request_by_correlation_id",
+            read_only=True,
+        )
+
     async def async_get_requests_by_ids(
         self, request_ids: list[int], user_id: int | None = None
     ) -> dict[int, dict[str, Any]]:

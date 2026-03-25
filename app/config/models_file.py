@@ -170,7 +170,7 @@ def save_model_to_yaml(
         msg = f"Models config not found: {config_path}"
         raise FileNotFoundError(msg)
 
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 
     raw = config_path.read_text(encoding="utf-8")
     data = yaml.safe_load(raw) or {}

@@ -9,7 +9,7 @@ from app.api.exceptions import ValidationError
 from app.api.models.digest import TriggerDigestResponse
 from app.api.services._digest_api_shared import logger, require_enabled
 from app.core.channel_utils import parse_channel_input
-from app.db.models import Channel, ChannelSubscription
+from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -22,17 +22,11 @@ class DigestTriggerService:
 
     def __init__(self, cfg: ChannelDigestConfig) -> None:
         self._cfg = cfg
+        self._store = SqliteDigestStore()
 
     def trigger_digest(self, user_id: int) -> TriggerDigestResponse:
         require_enabled(self._cfg)
-        active = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.user == user_id,
-                ChannelSubscription.is_active == True,  # noqa: E712
-            )
-            .count()
-        )
+        active = self._store.count_active_subscriptions(user_id)
         if active == 0:
             raise ValidationError("No active channel subscriptions. Subscribe to channels first.")
 
@@ -189,9 +183,8 @@ class DigestTriggerService:
                         lang="ru",
                     )
 
-                channel, _ = Channel.get_or_create(
-                    username=channel_username,
-                    defaults={"title": channel_username, "is_active": True},
+                channel = self._store.get_or_create_channel(
+                    channel_username, title=channel_username
                 )
                 return await service.generate_channel_digest(
                     user_id=user_id,

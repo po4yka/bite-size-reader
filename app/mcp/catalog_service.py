@@ -17,7 +17,7 @@ class CatalogReadService:
         self.context = context
 
     def list_collections(self, limit: int = 20, offset: int = 0) -> dict[str, Any] | McpErrorResult:
-        from app.db.models import Collection, CollectionItem
+        from app.infrastructure.persistence.sqlite.orm_exports import Collection, CollectionItem
 
         limit = max(1, min(50, limit))
         offset = max(0, offset)
@@ -73,7 +73,12 @@ class CatalogReadService:
         include_items: bool = True,
         limit: int = 50,
     ) -> dict[str, Any]:
-        from app.db.models import Collection, CollectionItem, Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import (
+            Collection,
+            CollectionItem,
+            Request,
+            Summary,
+        )
 
         limit = max(1, min(100, limit))
 
@@ -140,7 +145,7 @@ class CatalogReadService:
         offset: int = 0,
         status: str | None = None,
     ) -> dict[str, Any]:
-        from app.db.models import Request, VideoDownload
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, VideoDownload
 
         limit = max(1, min(50, limit))
         offset = max(0, offset)
@@ -189,7 +194,7 @@ class CatalogReadService:
             return {"error": str(exc)}
 
     def get_video_transcript(self, video_id: str) -> dict[str, Any]:
-        from app.db.models import Request, VideoDownload
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, VideoDownload
 
         try:
             video = (
@@ -228,7 +233,11 @@ class CatalogReadService:
     def processing_stats(self) -> dict[str, Any]:
         from peewee import fn
 
-        from app.db.models import LLMCall, Request, VideoDownload
+        from app.infrastructure.persistence.sqlite.orm_exports import (
+            LLMCall,
+            Request,
+            VideoDownload,
+        )
 
         try:
             llm_scope_filters = [

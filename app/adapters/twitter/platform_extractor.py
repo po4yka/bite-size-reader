@@ -17,7 +17,9 @@ if TYPE_CHECKING:
         PlatformExtractionRequest,
         PlatformExtractionResult,
     )
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
 
 
 class TwitterPlatformExtractor(PlatformExtractor):

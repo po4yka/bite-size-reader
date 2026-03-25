@@ -12,7 +12,9 @@ if TYPE_CHECKING:
     from app.adapters.content.llm_summarizer_articles import LLMArticleGenerator
     from app.adapters.content.llm_summarizer_insights import LLMInsightsGenerator
     from app.adapters.content.url_summary_delivery_service import URLSummaryDeliveryService
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.services.related_reads_service import RelatedReadsService
 

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from app.application.use_cases.search_read_model import SearchReadModelUseCase
 from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 from app.core.logging_utils import get_logger
-from app.db.models import database_proxy
+from app.db._models_base import database_proxy
 from app.di.api import clear_current_api_runtime, get_current_api_runtime, resolve_api_runtime
 from app.di.database import clear_cached_runtime_database, get_or_create_runtime_database_from_env
 from app.infrastructure.persistence.sqlite.repositories.audio_generation_repository import (

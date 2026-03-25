@@ -24,7 +24,11 @@ class ArticleReadService:
 
     def search_articles(self, query: str, limit: int = 10) -> dict[str, Any] | McpErrorResult:
         """Search stored article summaries by keyword, topic, or entity."""
-        from app.db.models import Request, Summary, TopicSearchIndex
+        from app.infrastructure.persistence.sqlite.orm_exports import (
+            Request,
+            Summary,
+            TopicSearchIndex,
+        )
 
         limit = max(1, min(25, limit))
 
@@ -92,7 +96,7 @@ class ArticleReadService:
             return {"error": str(exc), "query": query}
 
     def _fallback_search(self, query: str, limit: int) -> dict[str, Any]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         query_lower = query.lower()
         terms = query_lower.split()
@@ -128,7 +132,7 @@ class ArticleReadService:
         return {"results": results, "total": len(results), "query": query}
 
     def get_article(self, summary_id: int) -> dict[str, Any] | McpErrorResult:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         try:
             summary = (
@@ -156,7 +160,7 @@ class ArticleReadService:
         lang: str | None = None,
         tag: str | None = None,
     ) -> dict[str, Any]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         limit = max(1, min(100, limit))
         offset = max(0, offset)
@@ -204,7 +208,7 @@ class ArticleReadService:
             return {"error": str(exc)}
 
     def get_article_content(self, summary_id: int) -> dict[str, Any]:
-        from app.db.models import CrawlResult, Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import CrawlResult, Request, Summary
 
         try:
             summary = (
@@ -248,7 +252,7 @@ class ArticleReadService:
             return {"error": str(exc)}
 
     def get_stats(self) -> dict[str, Any]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         try:
             scoped_summaries = (
@@ -309,7 +313,7 @@ class ArticleReadService:
         entity_type: str | None = None,
         limit: int = 10,
     ) -> dict[str, Any]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         limit = max(1, min(25, limit))
         name_lower = entity_name.lower()
@@ -362,7 +366,7 @@ class ArticleReadService:
 
     def check_url(self, url: str) -> dict[str, Any]:
         from app.core.url_utils import compute_dedupe_hash, normalize_url
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         try:
             normalized = normalize_url(url)
@@ -410,7 +414,7 @@ class ArticleReadService:
             return {"error": str(exc), "url": url}
 
     def unread_articles(self, limit: int = 20) -> dict[str, Any]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         try:
             summaries = (
@@ -431,7 +435,7 @@ class ArticleReadService:
             return {"error": str(exc)}
 
     def tag_counts(self) -> dict[str, Any]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         try:
             counts: dict[str, int] = {}
@@ -459,7 +463,7 @@ class ArticleReadService:
             return {"error": str(exc)}
 
     def entity_counts(self) -> dict[str, Any]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         try:
             people: dict[str, int] = {}
@@ -503,7 +507,7 @@ class ArticleReadService:
             return {"error": str(exc)}
 
     def domain_counts(self) -> dict[str, Any]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         try:
             counts: dict[str, int] = {}

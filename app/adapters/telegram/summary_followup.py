@@ -11,6 +11,9 @@ from typing import TYPE_CHECKING, Any, TypedDict
 
 from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
+from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+    SqliteCrawlResultRepositoryAdapter,
+)
 
 logger = get_logger(__name__)
 
@@ -18,6 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.db.session import DatabaseSessionManager
 
 
 class _FollowupSession(TypedDict):
@@ -41,11 +45,13 @@ class SummaryFollowupManager:
     def __init__(
         self,
         *,
+        db: DatabaseSessionManager,
         response_formatter: ResponseFormatter,
         url_handler: Any | None,
         lang: str,
         load_summary_payload: Callable[..., Awaitable[dict[str, Any] | None]],
     ) -> None:
+        self._crawl_result_repo = SqliteCrawlResultRepositoryAdapter(db)
         self._response_formatter = response_formatter
         self._url_handler = url_handler
         self._lang = lang
@@ -237,17 +243,17 @@ class SummaryFollowupManager:
         if not isinstance(request_id, int):
             return ""
         try:
-            from app.db.models import CrawlResult
-
-            crawl = CrawlResult.get_or_none(CrawlResult.request_id == request_id)
+            crawl = asyncio.run(
+                self._crawl_result_repo.async_get_crawl_result_by_request(request_id)
+            )
             if not crawl:
                 return ""
 
-            markdown = str(crawl.content_markdown or "").strip()
+            markdown = str(crawl.get("content_markdown") or "").strip()
             if markdown:
                 return self._truncate_for_prompt(markdown, max_chars=_FOLLOWUP_MAX_SOURCE_CHARS)
 
-            content_html = str(crawl.content_html or "").strip()
+            content_html = str(crawl.get("content_html") or "").strip()
             if content_html:
                 plain_html = self._normalize_source_text(content_html)
                 if plain_html:
@@ -255,7 +261,7 @@ class SummaryFollowupManager:
                         plain_html, max_chars=_FOLLOWUP_MAX_SOURCE_CHARS
                     )
 
-            structured = crawl.structured_json
+            structured = crawl.get("structured_json")
             if isinstance(structured, (dict, list)):
                 structured_text = json.dumps(structured, ensure_ascii=False, sort_keys=True)
                 return self._truncate_for_prompt(

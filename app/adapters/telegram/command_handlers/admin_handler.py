@@ -9,12 +9,10 @@ from __future__ import annotations
 import datetime as _dt
 from typing import TYPE_CHECKING, Any
 
-import peewee
-
 from app.adapters.telegram.command_handlers.decorators import audit_command
+from app.api.services.admin_read_service import AdminReadService
 from app.core.logging_utils import generate_correlation_id, get_logger
 from app.core.time_utils import UTC
-from app.db.models import ImportJob, Request, Summary, User
 from app.db.user_interactions import async_safe_update_user_interaction
 
 if TYPE_CHECKING:
@@ -66,11 +64,11 @@ class AdminHandler:
 
         try:
             if subcommand == "jobs":
-                reply = self._build_jobs_reply()
+                reply = await self._build_jobs_reply()
             elif subcommand == "errors":
-                reply = self._build_errors_reply()
+                reply = await self._build_errors_reply()
             else:
-                reply = self._build_overview_reply()
+                reply = await self._build_overview_reply()
         except Exception as exc:
             logger.exception("command_admin_failed", extra={"cid": ctx.correlation_id})
             await ctx.response_formatter.safe_reply(
@@ -120,125 +118,62 @@ class AdminHandler:
             return sub
         return None
 
-    @staticmethod
-    def _build_overview_reply() -> str:
+    async def _build_overview_reply(self) -> str:
         """Build the default /admin overview message."""
-        user_count = User.select().count()
-        summary_count = Summary.select().count()
-        total_requests = Request.select().count()
-        pending_requests = Request.select().where(Request.status == "pending").count()
-
         now = _dt.datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        failed_today = (
-            Request.select()
-            .where(
-                (Request.status == "error") & (Request.created_at >= today_start),
-            )
-            .count()
-        )
+        admin = AdminReadService(self._db)
+        users = await admin.list_users()
+        health = await admin.content_health()
+        jobs = await admin.job_status(today=today_start)
 
         return (
             "Admin Overview:\n"
-            f"Users: {user_count:,}\n"
-            f"Total summaries: {summary_count:,}\n"
-            f"Total requests: {total_requests:,}\n"
-            f"Pending requests: {pending_requests:,}\n"
-            f"Failed today: {failed_today:,}"
+            f"Users: {int(users.get('total_users') or 0):,}\n"
+            f"Total summaries: {int(health.get('total_summaries') or 0):,}\n"
+            f"Total requests: {int(health.get('total_requests') or 0):,}\n"
+            f"Pending requests: {int(jobs.get('pipeline', {}).get('pending') or 0):,}\n"
+            f"Failed today: {int(jobs.get('pipeline', {}).get('failed_today') or 0):,}"
         )
 
-    @staticmethod
-    def _build_jobs_reply() -> str:
+    async def _build_jobs_reply(self) -> str:
         """Build the /admin jobs message."""
         now = _dt.datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        # Pipeline (Request) stats
-        pending = Request.select().where(Request.status == "pending").count()
-        processing = Request.select().where(Request.status == "processing").count()
-        completed_today = (
-            Request.select()
-            .where(
-                (Request.status == "completed") & (Request.created_at >= today_start),
-            )
-            .count()
-        )
-        failed_today = (
-            Request.select()
-            .where(
-                (Request.status == "error") & (Request.created_at >= today_start),
-            )
-            .count()
-        )
-
-        # ImportJob stats
-        import_active = (
-            ImportJob.select().where(ImportJob.status.in_(["pending", "processing"])).count()
-        )
-        import_completed_today = (
-            ImportJob.select()
-            .where(
-                (ImportJob.status == "completed") & (ImportJob.created_at >= today_start),
-            )
-            .count()
-        )
+        data = await AdminReadService(self._db).job_status(today=today_start)
+        pipeline = data.get("pipeline", {})
+        imports = data.get("imports", {})
 
         return (
             "Pipeline Status:\n"
-            f"Pending: {pending} | Processing: {processing}\n"
-            f"Completed today: {completed_today} | Failed: {failed_today}\n"
+            f"Pending: {int(pipeline.get('pending') or 0)} | "
+            f"Processing: {int(pipeline.get('processing') or 0)}\n"
+            f"Completed today: {int(pipeline.get('completed_today') or 0)} | "
+            f"Failed: {int(pipeline.get('failed_today') or 0)}\n"
             "\n"
             "Import Jobs:\n"
-            f"Active: {import_active} | Completed today: {import_completed_today}"
+            f"Active: {int(imports.get('active') or 0)} | "
+            f"Completed today: {int(imports.get('completed_today') or 0)}"
         )
 
-    @staticmethod
-    def _build_errors_reply() -> str:
+    async def _build_errors_reply(self) -> str:
         """Build the /admin errors message."""
-        now = _dt.datetime.now(UTC)
-        cutoff = now - _dt.timedelta(hours=24)
-
-        error_rows = (
-            Request.select(Request.error_type, peewee.fn.COUNT(Request.id).alias("cnt"))
-            .where(
-                (Request.status == "error") & (Request.created_at >= cutoff),
-            )
-            .group_by(Request.error_type)
-            .order_by(peewee.fn.COUNT(Request.id).desc())
-            .dicts()
-        )
-
+        health = await AdminReadService(self._db).content_health()
+        error_rows = health.get("failed_by_error_type", {})
         if not error_rows:
             return "Recent Errors (last 24h):\nNo errors recorded."
 
         lines = ["Recent Errors (last 24h):"]
-        for row in error_rows:
-            label = row.get("error_type") or "unknown"
-            lines.append(f"{label}: {row['cnt']}")
+        for label, count in sorted(error_rows.items(), key=lambda item: item[1], reverse=True):
+            lines.append(f"{label}: {count}")
 
-        # Latest failure
-        latest = (
-            Request.select()
-            .where(
-                (Request.status == "error") & (Request.created_at >= cutoff),
-            )
-            .order_by(Request.created_at.desc())
-            .first()
-        )
-
-        if latest is not None:
-            url = latest.input_url or latest.normalized_url or "N/A"
-            error_msg = latest.error_message or "N/A"
-            # Compute relative time
-            delta = now - latest.created_at.replace(tzinfo=UTC)
-            if delta.total_seconds() < 3600:
-                ago = f"{int(delta.total_seconds() / 60)}m ago"
-            else:
-                ago = f"{int(delta.total_seconds() / 3600)}h ago"
+        failures = health.get("recent_failures", [])
+        latest = failures[0] if isinstance(failures, list) and failures else None
+        if isinstance(latest, dict):
             lines.append("")
             lines.append("Latest failure:")
-            lines.append(f"URL: {url}")
-            lines.append(f"Error: {error_msg} ({ago})")
+            lines.append(f"URL: {latest.get('url') or 'N/A'}")
+            lines.append(f"Error: {latest.get('error_message') or 'N/A'}")
 
         return "\n".join(lines)
 

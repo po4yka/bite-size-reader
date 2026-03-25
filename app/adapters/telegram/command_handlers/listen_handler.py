@@ -6,12 +6,17 @@ User replies to a summary message with /listen to trigger generation.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.core.logging_utils import get_logger
-from app.db.models import Request, Summary
 from app.db.user_interactions import async_safe_update_user_interaction
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -36,6 +41,8 @@ class ListenHandler(HandlerDependenciesMixin):
     ) -> None:
         super().__init__(cfg, db, response_formatter)
         self._tts_service_factory = tts_service_factory
+        self._request_repo = SqliteRequestRepositoryAdapter(db)
+        self._summary_repo = SqliteSummaryRepositoryAdapter(db)
 
     def _create_tts_service(self) -> TTSService:
         if self._tts_service_factory is not None:
@@ -86,7 +93,7 @@ class ListenHandler(HandlerDependenciesMixin):
             return
 
         # Look up summary by the replied message's input_message_id
-        summary = self._find_summary_for_message(reply_msg_id, ctx.uid)
+        summary = await self._find_summary_for_message(reply_msg_id, ctx.uid)
         if summary is None:
             await self._formatter.safe_reply(
                 ctx.message,
@@ -99,7 +106,7 @@ class ListenHandler(HandlerDependenciesMixin):
 
         service = self._create_tts_service()
         try:
-            result = await service.generate_audio(summary.id)
+            result = await service.generate_audio(int(summary["id"]))
         finally:
             await service.close()
 
@@ -129,38 +136,31 @@ class ListenHandler(HandlerDependenciesMixin):
                 logger_=logger,
             )
 
-    @staticmethod
-    def _find_summary_for_message(message_id: int, user_id: int) -> Summary | None:
+    async def _find_summary_for_message(
+        self, message_id: int, user_id: int
+    ) -> dict[str, Any] | None:
         """Find a summary associated with a Telegram message ID for a given user.
 
         Queries by bot_reply_message_id first (the ID of the bot's outbound summary
         message), then falls back to input_message_id for rows created before this
         field was introduced.
         """
-        try:
-            result = (
-                Summary.select()
-                .join(Request)
-                .where((Request.bot_reply_message_id == message_id) & (Request.user_id == user_id))
-                .first()
-            )
-            if result:
-                return result
-            # Fallback for rows created before bot_reply_message_id was added
-            return (
-                Summary.select()
-                .join(Request)
-                .where((Request.input_message_id == message_id) & (Request.user_id == user_id))
-                .first()
-            )
-        except Exception:
+        request = await self._request_repo.async_get_request_by_telegram_message(
+            user_id=user_id,
+            message_id=message_id,
+        )
+        if request is None:
             return None
+        request_id = request.get("id")
+        if request_id is None:
+            return None
+        return await self._summary_repo.async_get_summary_by_request(int(request_id))
 
     async def _send_audio(
         self,
         ctx: CommandExecutionContext,
         file_path: str,
-        summary: Summary,
+        summary: dict[str, Any],
     ) -> None:
         """Send audio file via Telegram."""
         try:
@@ -172,7 +172,7 @@ class ListenHandler(HandlerDependenciesMixin):
                     client = getattr(getattr(sender, "_telegram_client", None), "client", None)
 
             if client is not None and hasattr(client, "send_audio"):
-                payload = summary.json_payload or {}
+                payload = summary.get("json_payload") or {}
                 title = str(payload.get("title", "Summary"))[:64]
                 chat_id = getattr(getattr(ctx.message, "chat", None), "id", None)
                 if chat_id:

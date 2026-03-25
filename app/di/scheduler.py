@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.di.repositories import (
     build_crawl_result_repository,
@@ -15,6 +15,9 @@ from app.di.types import SchedulerDependencies
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
@@ -100,10 +103,15 @@ def _create_digest_service(
 def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
     from app.adapters.content.pure_summary_service import PureSummaryService
     from app.adapters.content.summarization_runtime import SummarizationRuntime
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.response_formatter import (
+        ResponseFormatter as TelegramResponseFormatter,
+    )
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
     from app.adapters.rss.rss_delivery_service import RSSDeliveryService
     from app.di.shared import LazySemaphoreFactory
+    from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
+        SqliteRSSFeedRepositoryAdapter,
+    )
     from app.prompts.manager import get_prompt_manager
 
     llm_client = OpenRouterClient(
@@ -111,9 +119,12 @@ def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> 
         model=cfg.openrouter.model,
         fallback_models=cfg.openrouter.fallback_models,
     )
-    response_formatter = ResponseFormatter(
-        telegram_limits=cfg.telegram_limits,
-        telegram_config=cfg.telegram,
+    response_formatter = cast(
+        "ResponseFormatter",
+        TelegramResponseFormatter(
+            telegram_limits=cfg.telegram_limits,
+            telegram_config=cfg.telegram,
+        ),
     )
     sem_factory = LazySemaphoreFactory(cfg.runtime.max_concurrent_calls)
     runtime = SummarizationRuntime(
@@ -138,4 +149,5 @@ def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> 
         system_prompt_loader=lambda lang: prompt_mgr.get_system_prompt(
             lang, include_examples=True, num_examples=2
         ),
+        rss_repository=SqliteRSSFeedRepositoryAdapter(db),
     )

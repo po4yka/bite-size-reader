@@ -7,9 +7,18 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
+from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from app.db.session import DatabaseSessionManager
 
 logger = get_logger(__name__)
 
@@ -20,11 +29,15 @@ class CallbackActionStore:
     def __init__(
         self,
         *,
+        db: DatabaseSessionManager,
         asyncio_module: Any = asyncio,
         time_module: Any = time,
         summary_cache_ttl: float = 30.0,
         summary_cache_max: int = 50,
     ) -> None:
+        self._request_repo = SqliteRequestRepositoryAdapter(db)
+        self._summary_repo = SqliteSummaryRepositoryAdapter(db)
+        self._digest_store = SqliteDigestStore()
         self._asyncio = asyncio_module
         self._time = time_module
         self._summary_cache_ttl = summary_cache_ttl
@@ -32,53 +45,31 @@ class CallbackActionStore:
         self._summary_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
     async def get_digest_post(self, channel_id: int, message_id: int) -> Any:
-        return await self._asyncio.to_thread(self._load_digest_post_sync, channel_id, message_id)
-
-    @staticmethod
-    def _load_digest_post_sync(channel_id: int, message_id: int) -> Any:
-        from app.db.models import Channel, ChannelPost
-
-        return (
-            ChannelPost.select()
-            .join(Channel)
-            .where(Channel.id == channel_id, ChannelPost.message_id == message_id)
-            .first()
+        return await self._asyncio.to_thread(
+            self._digest_store.get_channel_post,
+            channel_id=channel_id,
+            message_id=message_id,
         )
 
     async def toggle_save(self, summary_id: str) -> bool | None:
-        new_state = await self._asyncio.to_thread(self._toggle_save_sync, summary_id)
+        if summary_id.startswith("req:"):
+            summary = await self._summary_repo.async_get_summary_by_request(int(summary_id[4:]))
+            if summary is None:
+                return None
+            summary_id_int = int(summary["id"])
+        else:
+            summary_id_int = int(summary_id)
+        new_state = await self._summary_repo.async_toggle_favorite(summary_id_int)
         self._summary_cache.pop(summary_id, None)
         return new_state
 
-    @staticmethod
-    def _toggle_save_sync(summary_id: str) -> bool | None:
-        from app.db.models import Summary
-
-        if summary_id.startswith("req:"):
-            request_id = int(summary_id[4:])
-            summary = Summary.get_or_none(Summary.request_id == request_id)
-        else:
-            summary = Summary.get_or_none(Summary.id == int(summary_id))
-        if not summary:
-            return None
-        summary.is_favorited = not summary.is_favorited
-        summary.save()
-        return summary.is_favorited
-
     async def lookup_retry_url(self, correlation_id: str) -> str | None:
-        return await self._asyncio.to_thread(self._lookup_retry_url_sync, correlation_id)
-
-    @staticmethod
-    def _lookup_retry_url_sync(correlation_id: str) -> str | None:
-        from app.db.models import Request
-
-        request = (
-            Request.select(Request.input_url)
-            .where(Request.correlation_id == correlation_id)
-            .order_by(Request.created_at.desc())
-            .first()
+        request = await self._request_repo.async_get_latest_request_by_correlation_id(
+            correlation_id
         )
-        return request.input_url if request else None
+        if request is None:
+            return None
+        return str(request.get("input_url") or "") or None
 
     async def load_summary_payload(
         self,
@@ -100,7 +91,10 @@ class CallbackActionStore:
                 return cached_payload
 
         try:
-            result = await self._asyncio.to_thread(active_loader, summary_id)
+            if loader is None:
+                result = await self._load_summary_payload(summary_id)
+            else:
+                result = await self._asyncio.to_thread(active_loader, summary_id)
             if result is not None:
                 if len(active_cache) >= self._summary_cache_max:
                     oldest_key = min(active_cache, key=lambda key: active_cache[key][0])
@@ -114,31 +108,39 @@ class CallbackActionStore:
             )
             return None
 
-    @staticmethod
-    def _load_summary_payload_sync(summary_id: str) -> dict[str, Any] | None:
-        from app.db.models import Request, Summary
-
+    async def _load_summary_payload(self, summary_id: str) -> dict[str, Any] | None:
         if summary_id.startswith("req:"):
             request_id = int(summary_id[4:])
-            summary = Summary.get_or_none(Summary.request_id == request_id)
+            summary = await self._summary_repo.async_get_summary_by_request(request_id)
+            if summary is None:
+                return None
+            request = await self._request_repo.async_get_request_by_id(request_id)
         else:
-            summary = Summary.get_or_none(Summary.id == int(summary_id))
+            context = await self._summary_repo.async_get_summary_context_by_id(int(summary_id))
+            if context is None:
+                return None
+            summary = context.get("summary") if isinstance(context, dict) else None
+            request = context.get("request") if isinstance(context, dict) else None
 
-        if not summary:
+        if not isinstance(summary, dict):
             return None
 
-        request = Request.get_or_none(Request.id == summary.request_id)
-        url = request.normalized_url if request else None
+        url = request.get("normalized_url") if isinstance(request, dict) else None
 
-        payload = summary.json_payload or {}
+        payload = summary.get("json_payload") or {}
         if not isinstance(payload, dict):
             payload = {}
 
         return {
-            "id": str(summary.id),
-            "request_id": summary.request_id,
+            "id": str(summary.get("id")),
+            "request_id": summary.get("request"),
             "url": url,
-            "lang": summary.lang,
-            "insights": summary.insights_json if isinstance(summary.insights_json, dict) else None,
+            "lang": summary.get("lang"),
+            "insights": summary.get("insights_json")
+            if isinstance(summary.get("insights_json"), dict)
+            else None,
             **payload,
         }
+
+    def _load_summary_payload_sync(self, summary_id: str) -> dict[str, Any] | None:
+        raise RuntimeError("Synchronous summary loading requires an explicit test loader")

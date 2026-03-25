@@ -11,11 +11,13 @@ from typing import TYPE_CHECKING
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
-from app.db.models import Request, Summary, SummaryTag, Tag
 from app.domain.services.import_export.export_serializers import (
     CsvExporter,
     JsonExporter,
     NetscapeHtmlExporter,
+)
+from app.infrastructure.persistence.sqlite.repositories.user_content_repository import (
+    SqliteUserContentRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -49,7 +51,12 @@ class ExportHandler(HandlerDependenciesMixin):
         """Handle /export [json|csv|html] -- export all summaries as a file."""
         fmt = _parse_format(ctx.text)
 
-        summaries = _query_user_summaries(ctx.uid)
+        repo = SqliteUserContentRepositoryAdapter(self._db)
+        summaries = await repo.async_export_summaries(
+            user_id=ctx.uid,
+            tag=None,
+            collection_id=None,
+        )
 
         if not summaries:
             await ctx.response_formatter.safe_reply(
@@ -98,39 +105,17 @@ def _parse_format(text: str) -> str:
     return _DEFAULT_FORMAT
 
 
-def _query_user_summaries(uid: int) -> list:
-    """Query all summaries for a user, ordered by creation date."""
-    return list(
-        Summary.select(Summary, Request)
-        .join(Request)
-        .where(Request.user_id == uid)
-        .order_by(Summary.created_at.desc())
-    )
-
-
-def _summary_to_dict(summary: Summary) -> dict:
-    """Convert a Summary ORM object to a dict suitable for exporters."""
-    payload = summary.json_payload or {}
-    url = ""
-    if hasattr(summary, "request"):
-        url = summary.request.input_url or summary.request.normalized_url or ""
-
-    tags: list[str] = []
-    try:
-        tag_rows = (
-            Tag.select(Tag.normalized_name).join(SummaryTag).where(SummaryTag.summary == summary)
-        )
-        tags = [t.normalized_name for t in tag_rows]
-    except Exception:
-        pass
-
+def _summary_to_dict(summary: dict) -> dict:
+    """Convert an exported summary row to the serializer payload shape."""
+    payload = summary.get("json_payload") if isinstance(summary.get("json_payload"), dict) else {}
+    tags = [str(tag.get("name")) for tag in summary.get("tags", []) if isinstance(tag, dict)]
     return {
-        "url": url,
+        "url": summary.get("url", ""),
         "title": payload.get("title", "Untitled"),
         "tags": tags,
         "language": payload.get("language", ""),
-        "created_at": str(summary.created_at) if summary.created_at else "",
-        "is_read": getattr(summary, "is_read", False),
-        "is_favorited": getattr(summary, "is_favorited", False),
+        "created_at": str(summary.get("created_at") or ""),
+        "is_read": bool(summary.get("is_read", False)),
+        "is_favorited": bool(summary.get("is_favorited", False)),
         "summary_json": payload,
     }

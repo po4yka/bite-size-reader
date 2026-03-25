@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from app.api.exceptions import ValidationError
 from app.api.models.digest import DigestDeliveryResponse, DigestPreferenceResponse
 from app.api.services._digest_api_shared import require_enabled
-from app.db.models import DigestDelivery, UserDigestPreference, _utcnow
+from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
 
 if TYPE_CHECKING:
     from app.config.digest import ChannelDigestConfig
@@ -18,10 +18,11 @@ class DigestPreferenceService:
 
     def __init__(self, cfg: ChannelDigestConfig) -> None:
         self._cfg = cfg
+        self._store = SqliteDigestStore()
 
     def get_preferences(self, user_id: int) -> DigestPreferenceResponse:
         require_enabled(self._cfg)
-        preference = UserDigestPreference.get_or_none(UserDigestPreference.user == user_id)
+        preference = self._store.get_user_preference(user_id)
 
         def _value(user_value: Any, global_value: Any) -> tuple[Any, str]:
             if user_value is not None:
@@ -76,9 +77,9 @@ class DigestPreferenceService:
             if not (0 <= hour <= 23 and 0 <= minute <= 59):
                 raise ValidationError("Invalid hour/minute in delivery_time")
 
-        preference, created = UserDigestPreference.get_or_create(
-            user=user_id,
-            defaults={
+        preference, created = self._store.get_or_create_user_preference(
+            user_id,
+            {
                 "delivery_time": fields.get("delivery_time"),
                 "timezone": fields.get("timezone"),
                 "hours_lookback": fields.get("hours_lookback"),
@@ -100,21 +101,14 @@ class DigestPreferenceService:
                     setattr(preference, key, value)
                     changed = True
             if changed:
-                preference.updated_at = _utcnow()
-                preference.save()
+                self._store.touch_preference(preference)
 
         return self.get_preferences(user_id)
 
     def list_deliveries(self, user_id: int, limit: int = 20, offset: int = 0) -> dict[str, object]:
         require_enabled(self._cfg)
-        total = DigestDelivery.select().where(DigestDelivery.user == user_id).count()
-        deliveries = (
-            DigestDelivery.select()
-            .where(DigestDelivery.user == user_id)
-            .order_by(DigestDelivery.delivered_at.desc())
-            .offset(offset)
-            .limit(limit)
-        )
+        total = self._store.count_deliveries(user_id)
+        deliveries = self._store.list_deliveries(user_id=user_id, limit=limit, offset=offset)
         items = [
             DigestDeliveryResponse(
                 id=delivery.id,

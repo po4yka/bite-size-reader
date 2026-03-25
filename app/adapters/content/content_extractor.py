@@ -36,7 +36,9 @@ from app.observability.failure_observability import (
 )
 
 if TYPE_CHECKING:
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.core.telegram_progress_message import TelegramProgressMessage
 

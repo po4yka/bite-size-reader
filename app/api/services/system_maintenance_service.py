@@ -22,7 +22,7 @@ from app.api.exceptions import ProcessingError, ResourceNotFoundError
 from app.config import Config
 from app.config.settings import load_config
 from app.core.logging_utils import get_logger
-from app.db.models import ALL_MODELS
+from app.db.model_registry import ALL_MODELS
 from app.infrastructure.cache.redis_cache import RedisCache
 
 logger = get_logger(__name__)

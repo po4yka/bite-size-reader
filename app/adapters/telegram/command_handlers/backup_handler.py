@@ -5,15 +5,17 @@ Lets users create and list backups via Telegram commands.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import UserBackup
 from app.infrastructure.persistence.sqlite.backup_archive_service import create_backup_archive
+from app.infrastructure.persistence.sqlite.repositories.backup_repository import (
+    SqliteBackupRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
@@ -29,18 +31,17 @@ _MAX_LIST_COUNT = 5
 class BackupHandler(HandlerDependenciesMixin):
     """Handle /backup and /backups commands."""
 
+    @property
+    def _backup_repo(self) -> SqliteBackupRepositoryAdapter:
+        return SqliteBackupRepositoryAdapter(self._db)
+
     @combined_handler("command_backup", "backup")
     async def handle_backup(self, ctx: CommandExecutionContext) -> None:
         """Handle /backup -- create a backup and send it as a document."""
         user_id = ctx.uid
 
         # Rate limit check
-        one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
-        recent_count = (
-            UserBackup.select()
-            .where((UserBackup.user == user_id) & (UserBackup.created_at >= one_hour_ago))
-            .count()
-        )
+        recent_count = await self._backup_repo.async_count_recent_backups(user_id, since_hours=1)
         if recent_count >= _MAX_BACKUPS_PER_HOUR:
             await ctx.response_formatter.safe_reply(
                 ctx.message,
@@ -50,11 +51,7 @@ class BackupHandler(HandlerDependenciesMixin):
             return
 
         # Create backup record
-        backup = UserBackup.create(
-            user=user_id,
-            type="manual",
-            status="processing",
-        )
+        backup = await self._backup_repo.async_create_backup(user_id, type="manual")
 
         await ctx.response_formatter.safe_reply(
             ctx.message,
@@ -62,13 +59,15 @@ class BackupHandler(HandlerDependenciesMixin):
         )
 
         try:
-            create_backup_archive(user_id=user_id, backup_id=backup.id, db=self._db)
+            create_backup_archive(user_id=user_id, backup_id=int(backup["id"]), db=self._db)
 
             # Reload to get updated fields
-            backup = UserBackup.get_by_id(backup.id)
+            backup = await self._backup_repo.async_get_backup(int(backup["id"]))
+            if backup is None:
+                raise RuntimeError("Backup record not found after archive creation")
 
-            if backup.status != "completed" or not backup.file_path:
-                error_msg = backup.error or "Unknown error"
+            if backup.get("status") != "completed" or not backup.get("file_path"):
+                error_msg = backup.get("error") or "Unknown error"
                 await ctx.response_formatter.safe_reply(
                     ctx.message,
                     f"Backup failed: {error_msg}",
@@ -76,26 +75,25 @@ class BackupHandler(HandlerDependenciesMixin):
                 return
 
             # Send the ZIP file as a document
-            file_size_mb = (backup.file_size_bytes or 0) / (1024 * 1024)
-            caption = (
-                f"Backup completed\nItems: {backup.items_count or 0}\nSize: {file_size_mb:.1f} MB"
-            )
+            file_size_mb = (int(backup.get("file_size_bytes") or 0)) / (1024 * 1024)
+            caption = f"Backup completed\nItems: {backup.get('items_count') or 0}\nSize: {file_size_mb:.1f} MB"
             await ctx.message.reply_document(
-                document=backup.file_path,
+                document=str(backup["file_path"]),
                 caption=caption,
             )
 
         except Exception as exc:
             logger.exception(
                 "telegram_backup_failed",
-                extra={"uid": user_id, "backup_id": backup.id, "error": str(exc)},
+                extra={"uid": user_id, "backup_id": backup.get("id"), "error": str(exc)},
             )
             # Mark as failed if not already
             try:
-                UserBackup.update(
+                await self._backup_repo.async_update_backup(
+                    int(backup["id"]),
                     status="failed",
                     error=str(exc)[:1000],
-                ).where((UserBackup.id == backup.id) & (UserBackup.status != "completed")).execute()
+                )
             except Exception:
                 pass
             await ctx.response_formatter.safe_reply(
@@ -108,12 +106,7 @@ class BackupHandler(HandlerDependenciesMixin):
         """Handle /backups -- list recent backups."""
         user_id = ctx.uid
 
-        backups = list(
-            UserBackup.select()
-            .where(UserBackup.user == user_id)
-            .order_by(UserBackup.created_at.desc())
-            .limit(_MAX_LIST_COUNT)
-        )
+        backups = (await self._backup_repo.async_list_backups(user_id))[:_MAX_LIST_COUNT]
 
         if not backups:
             await ctx.response_formatter.safe_reply(
@@ -124,9 +117,9 @@ class BackupHandler(HandlerDependenciesMixin):
 
         lines: list[str] = ["Your recent backups:"]
         for i, b in enumerate(backups, 1):
-            size_str = _format_size(b.file_size_bytes)
-            age_str = _format_age(b.created_at)
-            lines.append(f"{i}. {b.type} - {size_str} - {b.status} - {age_str}")
+            size_str = _format_size(b.get("file_size_bytes"))
+            age_str = _format_age(b.get("created_at"))
+            lines.append(f"{i}. {b.get('type')} - {size_str} - {b.get('status')} - {age_str}")
 
         await ctx.response_formatter.safe_reply(
             ctx.message,

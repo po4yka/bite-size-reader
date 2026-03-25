@@ -13,6 +13,7 @@ from app.core.embedding_space import resolve_embedding_space_identifier
 from app.core.logging_utils import get_logger
 from app.db.session import DatabaseSessionManager
 from app.infrastructure.embedding.embedding_factory import create_embedding_service
+from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary, model_to_dict
 from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
     SqliteEmbeddingRepositoryAdapter,
 )
@@ -29,8 +30,6 @@ logger = get_logger(__name__)
 
 
 def _fetch_summaries(db: DatabaseSessionManager, limit: int | None) -> list[dict[str, Any]]:
-    from app.db.models import Request, Summary, model_to_dict
-
     def _query() -> list[dict[str, Any]]:
         query = Summary.select(Summary, Request).join(Request).order_by(Summary.created_at.desc())
         if limit:

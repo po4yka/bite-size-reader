@@ -50,6 +50,7 @@ class CallbackHandler:
         self._register_default_actions()
 
         self._followup = SummaryFollowupManager(
+            db=db,
             response_formatter=response_formatter,
             url_handler=url_handler,
             lang=lang,

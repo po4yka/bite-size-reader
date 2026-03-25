@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.attachment._attachment_shared import coerce_int
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.domain.models.request import RequestStatus
+from app.infrastructure.persistence.sqlite.repositories.attachment_processing_repository import (
+    SqliteAttachmentProcessingRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.adapters.attachment._attachment_shared import AttachmentProcessorContext
@@ -18,6 +20,7 @@ class AttachmentPersistenceService:
 
     def __init__(self, context: AttachmentProcessorContext) -> None:
         self._context = context
+        self._attachment_repo = SqliteAttachmentProcessingRepositoryAdapter(context.db)
 
     async def create_request(
         self,
@@ -52,19 +55,14 @@ class AttachmentPersistenceService:
         file_size: int | None,
     ) -> None:
         """Create an attachment processing record."""
-        from app.db.models import AttachmentProcessing
-
-        def _create() -> None:
-            AttachmentProcessing.create(
-                request=req_id,
-                file_type=file_type,
-                mime_type=mime_type,
-                file_name=file_name,
-                file_size_bytes=file_size,
-                status="processing",
-            )
-
-        await asyncio.to_thread(_create)
+        await self._attachment_repo.async_create_processing(
+            request_id=req_id,
+            file_type=file_type,
+            mime_type=mime_type,
+            file_name=file_name,
+            file_size_bytes=file_size,
+            status="processing",
+        )
 
     async def update_attachment_status(
         self,
@@ -73,61 +71,48 @@ class AttachmentPersistenceService:
         result: dict[str, Any] | None = None,
     ) -> None:
         """Update the attachment processing status."""
-        from app.db.models import AttachmentProcessing
-
-        def _update() -> None:
-            try:
-                record = AttachmentProcessing.get(AttachmentProcessing.request == req_id)
-                record.status = status
-                if result:
-                    record.extracted_text_length = len(result.get("tldr", ""))
-                record.save()
-            except AttachmentProcessing.DoesNotExist:
-                self._context.logger.debug(
-                    "attachment_record_not_found",
-                    extra={"request_id": req_id},
-                )
-                AttachmentProcessing.create(
-                    request=req_id,
-                    status=status,
-                    extracted_text_length=len(result.get("tldr", "")) if result else None,
-                )
-
-        await asyncio.to_thread(_update)
+        updated = await self._attachment_repo.async_update_processing(
+            req_id,
+            status=status,
+            extracted_text_length=len(result.get("tldr", "")) if result else None,
+        )
+        if not updated:
+            self._context.logger.debug(
+                "attachment_record_not_found",
+                extra={"request_id": req_id},
+            )
+            await self._attachment_repo.async_create_processing(
+                request_id=req_id,
+                status=status,
+                extracted_text_length=len(result.get("tldr", "")) if result else None,
+            )
 
     async def update_pdf_metadata(self, req_id: int, pdf_content: Any) -> None:
         """Update attachment metadata after PDF extraction."""
-        from app.db.models import AttachmentProcessing
-
-        def _update() -> None:
-            try:
-                record = AttachmentProcessing.get(AttachmentProcessing.request == req_id)
-                record.page_count = pdf_content.page_count
-                record.extracted_text_length = len(pdf_content.text)
-                record.vision_used = bool(pdf_content.image_pages)
-                record.vision_pages_count = (
-                    len(pdf_content.image_pages) if pdf_content.image_pages else None
-                )
-                record.processing_method = _determine_processing_method(pdf_content)
-                record.save()
-            except AttachmentProcessing.DoesNotExist:
-                self._context.logger.debug(
-                    "attachment_record_not_found_pdf",
-                    extra={"request_id": req_id},
-                )
-                AttachmentProcessing.create(
-                    request=req_id,
-                    status="processing",
-                    page_count=pdf_content.page_count,
-                    extracted_text_length=len(pdf_content.text),
-                    vision_used=bool(pdf_content.image_pages),
-                    vision_pages_count=len(pdf_content.image_pages)
-                    if pdf_content.image_pages
-                    else None,
-                    processing_method=_determine_processing_method(pdf_content),
-                )
-
-        await asyncio.to_thread(_update)
+        updated = await self._attachment_repo.async_update_processing(
+            req_id,
+            page_count=pdf_content.page_count,
+            extracted_text_length=len(pdf_content.text),
+            vision_used=bool(pdf_content.image_pages),
+            vision_pages_count=len(pdf_content.image_pages) if pdf_content.image_pages else None,
+            processing_method=_determine_processing_method(pdf_content),
+        )
+        if not updated:
+            self._context.logger.debug(
+                "attachment_record_not_found_pdf",
+                extra={"request_id": req_id},
+            )
+            await self._attachment_repo.async_create_processing(
+                request_id=req_id,
+                status="processing",
+                page_count=pdf_content.page_count,
+                extracted_text_length=len(pdf_content.text),
+                vision_used=bool(pdf_content.image_pages),
+                vision_pages_count=len(pdf_content.image_pages)
+                if pdf_content.image_pages
+                else None,
+                processing_method=_determine_processing_method(pdf_content),
+            )
 
     async def send_attachment_result(
         self,

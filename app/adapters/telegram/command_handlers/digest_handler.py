@@ -10,7 +10,7 @@ import peewee
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.core.channel_utils import parse_channel_input
 from app.core.logging_utils import get_logger
-from app.db.models import Channel, ChannelSubscription
+from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
 from app.infrastructure.persistence.sqlite.digest_subscription_ops import (
     subscribe_channel_atomic,
     unsubscribe_channel_atomic,
@@ -29,6 +29,8 @@ logger = get_logger(__name__)
 
 class DigestHandler(HandlerDependenciesMixin):
     """Implementation of channel digest commands."""
+
+    _store = SqliteDigestStore()
 
     @asynccontextmanager
     async def _digest_context(self, ctx: CommandExecutionContext) -> AsyncIterator[DigestService]:
@@ -130,10 +132,7 @@ class DigestHandler(HandlerDependenciesMixin):
             return
 
         # Get or create channel record (no subscription required)
-        channel, _ = Channel.get_or_create(
-            username=username,
-            defaults={"title": username, "is_active": True},
-        )
+        channel = self._store.get_or_create_channel(username, title=username)
 
         await self._formatter.safe_reply(ctx.message, f"Generating digest for @{username}...")
 
@@ -169,14 +168,7 @@ class DigestHandler(HandlerDependenciesMixin):
             )
             return
 
-        subs = list(
-            ChannelSubscription.select()
-            .join(Channel)
-            .where(
-                ChannelSubscription.user == ctx.uid,
-                ChannelSubscription.is_active == True,  # noqa: E712
-            )
-        )
+        subs = self._store.list_active_subscriptions(ctx.uid)
 
         if not subs:
             await self._formatter.safe_reply(
@@ -187,7 +179,7 @@ class DigestHandler(HandlerDependenciesMixin):
 
         lines = ["**Subscribed Channels:**\n"]
         for sub in subs:
-            ch: Channel = sub.channel
+            ch = sub.channel
             status = "active" if ch.is_active else "paused"
             error_info = f" (errors: {ch.fetch_error_count})" if ch.fetch_error_count else ""
             lines.append(f"  @{ch.username} [{status}]{error_info}")
@@ -199,7 +191,7 @@ class DigestHandler(HandlerDependenciesMixin):
         if disabled:
             lines.append("\n**Disabled channels** (too many fetch errors):")
             for dsub in disabled:
-                dch: Channel = dsub.channel
+                dch = dsub.channel
                 lines.append(
                     f"  @{dch.username} -- {dch.fetch_error_count} errors. "
                     "Use `/unsubscribe` then `/subscribe` to re-enable."

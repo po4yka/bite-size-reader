@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import os
 import tempfile
@@ -10,6 +11,12 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
+from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+    SqliteRequestRepositoryAdapter,
+)
+from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    SqliteSummaryRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
@@ -22,6 +29,8 @@ class ExportFormatter:
 
     def __init__(self, db: DatabaseSessionManager) -> None:
         self.db = db
+        self._request_repo = SqliteRequestRepositoryAdapter(db)
+        self._summary_repo = SqliteSummaryRepositoryAdapter(db)
 
     def export_summary(
         self,
@@ -70,34 +79,36 @@ class ExportFormatter:
         - A Request.id prefixed with 'req:' (lookup via request)
         """
         try:
-            from app.db.models import Request, Summary
-
-            # Check if it's a request ID lookup
             if summary_id.startswith("req:"):
                 request_id = int(summary_id[4:])
-                summary = Summary.get_or_none(Summary.request_id == request_id)
+                summary = asyncio.run(self._summary_repo.async_get_summary_by_request(request_id))
+                if summary is None:
+                    return None
+                request = asyncio.run(self._request_repo.async_get_request_by_id(request_id))
             else:
-                summary = Summary.get_or_none(Summary.id == int(summary_id))
-
-            if not summary:
-                logger.debug(
-                    "summary_not_found",
-                    extra={"summary_id": summary_id},
+                context = asyncio.run(
+                    self._summary_repo.async_get_summary_context_by_id(int(summary_id))
                 )
+                if context is None:
+                    return None
+                summary = context.get("summary") if isinstance(context, dict) else None
+                request = context.get("request") if isinstance(context, dict) else None
+
+            if not isinstance(summary, dict):
+                logger.debug("summary_not_found", extra={"summary_id": summary_id})
                 return None
 
-            # Get associated request for URL info
-            request = Request.get_or_none(Request.id == summary.request_id)
-            url = request.normalized_url if request else None
-
-            payload = summary.json_payload or {}
+            url = request.get("normalized_url") if isinstance(request, dict) else None
+            payload = summary.get("json_payload") or {}
+            if not isinstance(payload, dict):
+                payload = {}
 
             return {
-                "id": str(summary.id),
-                "request_id": summary.request_id,
+                "id": str(summary.get("id")),
+                "request_id": summary.get("request"),
                 "url": url,
-                "created_at": summary.created_at,
-                "lang": summary.lang,
+                "created_at": summary.get("created_at"),
+                "lang": summary.get("lang"),
                 **payload,
             }
         except Exception as e:

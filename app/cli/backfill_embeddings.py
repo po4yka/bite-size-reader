@@ -7,9 +7,14 @@ from pathlib import Path
 from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
 from app.config import load_config
 from app.core.logging_utils import get_logger
-from app.db.models import Summary, SummaryEmbedding
 from app.db.session import DatabaseSessionManager
 from app.infrastructure.embedding.embedding_factory import create_embedding_service
+from app.infrastructure.persistence.sqlite.orm_exports import (
+    Request,
+    Summary,
+    SummaryEmbedding,
+    model_to_dict,
+)
 from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
     SqliteEmbeddingRepositoryAdapter,
 )
@@ -30,7 +35,6 @@ def get_summaries_for_embedding_backfill(
     force: bool = False,
 ) -> list[dict]:
     """Fetch summaries that need embeddings, or all summaries when force=True."""
-    from app.db.models import Request, model_to_dict
 
     def _query() -> list[dict]:
         query = Summary.select(Summary, Request).join(Request).order_by(Summary.created_at.desc())

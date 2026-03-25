@@ -9,8 +9,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.call_status import CallStatus
 from app.core.json_utils import extract_json
 from app.core.logging_utils import get_logger
-from app.core.time_utils import utc_now
-from app.db.models import ChannelPost, ChannelPostAnalysis
+from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
 
 if TYPE_CHECKING:
     from app.adapters.llm.protocol import LLMClientProtocol
@@ -30,6 +29,7 @@ class DigestAnalyzer:
         self._cfg = cfg
         self._llm = llm_client
         self._semaphore = asyncio.Semaphore(cfg.digest.concurrency)
+        self._store = SqliteDigestStore()
 
     async def analyze_posts(
         self,
@@ -75,32 +75,9 @@ class DigestAnalyzer:
         )
         return analyzed
 
-    @staticmethod
-    def _cached_analysis(post: dict[str, Any]) -> dict[str, Any] | None:
+    def _cached_analysis(self, post: dict[str, Any]) -> dict[str, Any] | None:
         """Return existing analysis from DB if the post was already analyzed."""
-        channel_post = (
-            ChannelPost.select()
-            .where(
-                ChannelPost.channel == post.get("_channel_id"),
-                ChannelPost.message_id == post["message_id"],
-            )
-            .first()
-        )
-        if channel_post and channel_post.analyzed_at:
-            existing = (
-                ChannelPostAnalysis.select().where(ChannelPostAnalysis.post == channel_post).first()
-            )
-            if existing:
-                return {
-                    **post,
-                    "real_topic": existing.real_topic,
-                    "tldr": existing.tldr,
-                    "key_insights": existing.key_insights or [],
-                    "relevance_score": existing.relevance_score,
-                    "content_type": existing.content_type,
-                    "is_ad": False,
-                }
-        return None
+        return self._store.find_cached_analysis(post)
 
     @staticmethod
     def _parse_and_validate_llm_response(
@@ -153,31 +130,9 @@ class DigestAnalyzer:
             "is_ad": is_ad,
         }
 
-    @staticmethod
-    def _persist_analysis(post: dict[str, Any], fields: dict[str, Any]) -> None:
+    def _persist_analysis(self, post: dict[str, Any], fields: dict[str, Any]) -> None:
         """Persist LLM analysis results to the DB for the given post."""
-        channel_post = (
-            ChannelPost.select()
-            .where(
-                ChannelPost.channel == post.get("_channel_id"),
-                ChannelPost.message_id == post["message_id"],
-            )
-            .first()
-        )
-        if channel_post:
-            ChannelPostAnalysis.get_or_create(
-                post=channel_post,
-                defaults={
-                    "real_topic": fields["real_topic"],
-                    "tldr": fields["tldr"],
-                    "key_insights": fields["key_insights"],
-                    "relevance_score": fields["relevance_score"],
-                    "content_type": fields["content_type"],
-                },
-            )
-            ChannelPost.update(analyzed_at=utc_now()).where(
-                ChannelPost.id == channel_post.id
-            ).execute()
+        self._store.persist_analysis(post, fields)
 
     async def _analyze_single(
         self,

@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
-from app.db.models import AutomationRule
+from app.infrastructure.persistence.sqlite.repositories.rule_repository import (
+    SqliteRuleRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
@@ -24,6 +26,10 @@ logger = get_logger(__name__)
 
 class RulesHandler(HandlerDependenciesMixin):
     """Handle /rules command -- list automation rules (read-only)."""
+
+    @property
+    def _rule_repo(self) -> SqliteRuleRepositoryAdapter:
+        return SqliteRuleRepositoryAdapter(self._db)
 
     @combined_handler("command_rules", "rules", include_text=True)
     async def handle_rules(self, ctx: CommandExecutionContext) -> None:
@@ -41,21 +47,13 @@ class RulesHandler(HandlerDependenciesMixin):
 
     async def _list_rules(self, ctx: CommandExecutionContext) -> None:
         """List all enabled rules for the user."""
-        rules = (
-            AutomationRule.select()
-            .where(
-                (AutomationRule.user == ctx.uid)
-                & (AutomationRule.is_deleted == False)  # noqa: E712
-                & (AutomationRule.enabled == True)  # noqa: E712
-            )
-            .order_by(AutomationRule.priority.desc(), AutomationRule.created_at)
-        )
+        rules = await self._rule_repo.async_get_user_rules(ctx.uid, enabled_only=True)
 
         lines: list[str] = []
         for rule in rules:
-            event = rule.event_type or "unknown"
-            runs = rule.run_count or 0
-            lines.append(f"{rule.id}. {rule.name} ({event}) - {runs} runs")
+            event = rule.get("event_type") or "unknown"
+            runs = rule.get("run_count") or 0
+            lines.append(f"{rule.get('id')}. {rule.get('name')} ({event}) - {runs} runs")
 
         if not lines:
             await ctx.response_formatter.safe_reply(
@@ -78,17 +76,9 @@ class RulesHandler(HandlerDependenciesMixin):
             )
             return
 
-        rule = (
-            AutomationRule.select()
-            .where(
-                (AutomationRule.id == rule_id)
-                & (AutomationRule.user == ctx.uid)
-                & (AutomationRule.is_deleted == False)  # noqa: E712
-            )
-            .first()
-        )
+        rule = await self._rule_repo.async_get_rule_by_id(rule_id)
 
-        if rule is None:
+        if rule is None or int(rule.get("user") or 0) != ctx.uid or bool(rule.get("is_deleted")):
             await ctx.response_formatter.safe_reply(
                 ctx.message,
                 f"Rule #{rule_id} not found.",
@@ -96,18 +86,18 @@ class RulesHandler(HandlerDependenciesMixin):
             return
 
         # Build detail text
-        status = "enabled" if rule.enabled else "disabled"
-        runs = rule.run_count or 0
-        match_mode = rule.match_mode or "all"
+        status = "enabled" if rule.get("enabled") else "disabled"
+        runs = rule.get("run_count") or 0
+        match_mode = rule.get("match_mode") or "all"
 
         parts: list[str] = [
-            f"Rule #{rule.id}: {rule.name}",
-            f"Event: {rule.event_type}",
+            f"Rule #{rule.get('id')}: {rule.get('name')}",
+            f"Event: {rule.get('event_type')}",
             f"Match: {match_mode} conditions",
         ]
 
         # Conditions
-        conditions = rule.conditions_json or []
+        conditions = rule.get("conditions_json") or []
         if conditions:
             parts.append("Conditions:")
             for cond in conditions:
@@ -117,7 +107,7 @@ class RulesHandler(HandlerDependenciesMixin):
                 parts.append(f"  - {field} {op} {_quote_value(value)}")
 
         # Actions
-        actions = rule.actions_json or []
+        actions = rule.get("actions_json") or []
         if actions:
             parts.append("Actions:")
             for action in actions:
@@ -129,7 +119,7 @@ class RulesHandler(HandlerDependenciesMixin):
                     parts.append(f"  - {action_type}")
 
         # Status line
-        last_triggered = _format_relative_time(rule.last_triggered_at)
+        last_triggered = _format_relative_time(rule.get("last_triggered_at"))
         status_parts = [status, f"{runs} runs"]
         if last_triggered:
             status_parts.append(f"Last: {last_triggered}")

@@ -17,6 +17,7 @@ from app.db.models import (
     RSSFeed,
     RSSFeedItem,
     RSSFeedSubscription,
+    RSSItemDelivery,
     model_to_dict,
 )
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
@@ -157,6 +158,114 @@ class SqliteRSSFeedRepositoryAdapter(SqliteBaseRepository):
 
         return await self._execute(_query, operation_name="list_user_subscriptions", read_only=True)
 
+    async def async_list_user_active_subscriptions(
+        self,
+        user_id: int,
+        *,
+        substack_only: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Return active subscriptions for a user, optionally filtered to Substack."""
+
+        def _query() -> list[dict[str, Any]]:
+            query = (
+                RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed, ChannelCategory)
+                .join(RSSFeed)
+                .switch(RSSFeedSubscription)
+                .join(
+                    ChannelCategory,
+                    peewee.JOIN.LEFT_OUTER,
+                    on=(RSSFeedSubscription.category == ChannelCategory.id),
+                )
+                .where(
+                    (RSSFeedSubscription.user == user_id) & (RSSFeedSubscription.is_active == True)  # noqa: E712
+                )
+                .order_by(RSSFeedSubscription.created_at.desc())
+            )
+            if substack_only:
+                query = query.where(RSSFeed.url.contains("substack.com"))
+
+            result: list[dict[str, Any]] = []
+            for row in query:
+                item = model_to_dict(row) or {}
+                feed = model_to_dict(row.feed) or {}
+                item["feed"] = feed
+                item["category_name"] = (
+                    row.category.name if getattr(row, "category", None) else None
+                )
+                result.append(item)
+            return result
+
+        return await self._execute(
+            _query,
+            operation_name="list_user_active_rss_subscriptions",
+            read_only=True,
+        )
+
+    async def async_get_subscription_by_feed(
+        self, *, user_id: int, feed_id: int
+    ) -> dict[str, Any] | None:
+        """Return a user's subscription for a feed."""
+
+        def _query() -> dict[str, Any] | None:
+            row = (
+                RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed)
+                .join(RSSFeed)
+                .where(
+                    (RSSFeedSubscription.user == user_id) & (RSSFeedSubscription.feed == feed_id)
+                )
+                .first()
+            )
+            if row is None:
+                return None
+            item = model_to_dict(row) or {}
+            item["feed"] = model_to_dict(row.feed) or {}
+            return item
+
+        return await self._execute(
+            _query, operation_name="get_rss_subscription_by_feed", read_only=True
+        )
+
+    async def async_get_subscription(
+        self, *, user_id: int, subscription_id: int
+    ) -> dict[str, Any] | None:
+        """Return a user's subscription by subscription ID."""
+
+        def _query() -> dict[str, Any] | None:
+            row = (
+                RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed, ChannelCategory)
+                .join(RSSFeed)
+                .switch(RSSFeedSubscription)
+                .join(
+                    ChannelCategory,
+                    peewee.JOIN.LEFT_OUTER,
+                    on=(RSSFeedSubscription.category == ChannelCategory.id),
+                )
+                .where(
+                    (RSSFeedSubscription.id == subscription_id)
+                    & (RSSFeedSubscription.user == user_id)
+                )
+                .first()
+            )
+            if row is None:
+                return None
+            item = model_to_dict(row) or {}
+            item["feed"] = model_to_dict(row.feed) or {}
+            item["category_name"] = row.category.name if getattr(row, "category", None) else None
+            return item
+
+        return await self._execute(_query, operation_name="get_rss_subscription", read_only=True)
+
+    async def async_set_subscription_active(self, subscription_id: int, *, is_active: bool) -> None:
+        """Update subscription active state."""
+
+        def _update() -> None:
+            RSSFeedSubscription.update(
+                is_active=is_active,
+                updated_at=datetime.now(UTC),
+            ).where(RSSFeedSubscription.id == subscription_id).execute()
+
+        await self._execute(_update, operation_name="set_rss_subscription_active")
+
     # --- Feed items ---
 
     async def async_create_feed_item(
@@ -212,3 +321,102 @@ class SqliteRSSFeedRepositoryAdapter(SqliteBaseRepository):
             return result
 
         return await self._execute(_query, operation_name="list_feed_items", read_only=True)
+
+    async def async_list_delivery_targets(
+        self,
+        new_item_ids: list[int] | None,
+    ) -> list[dict[str, Any]]:
+        """Return undelivered item rows with subscriber IDs."""
+
+        def _query() -> list[dict[str, Any]]:
+            query = RSSFeedItem.select()
+            if new_item_ids:
+                query = query.where(RSSFeedItem.id.in_(new_item_ids))
+
+            result: list[dict[str, Any]] = []
+            for item in query.order_by(RSSFeedItem.published_at.desc()):
+                subs = RSSFeedSubscription.select(RSSFeedSubscription.user).where(
+                    (RSSFeedSubscription.feed == item.feed_id)
+                    & (RSSFeedSubscription.is_active == True)  # noqa: E712
+                )
+                subscriber_ids: list[int] = []
+                for sub in subs:
+                    already = (
+                        RSSItemDelivery.select()
+                        .where(
+                            (RSSItemDelivery.user == sub.user_id)
+                            & (RSSItemDelivery.item == item.id)
+                        )
+                        .exists()
+                    )
+                    if not already:
+                        subscriber_ids.append(sub.user_id)
+
+                if not subscriber_ids:
+                    continue
+                item_dict = model_to_dict(item) or {}
+                item_dict["subscriber_ids"] = subscriber_ids
+                result.append(item_dict)
+            return result
+
+        return await self._execute(
+            _query, operation_name="list_rss_delivery_targets", read_only=True
+        )
+
+    async def async_mark_item_delivered(self, *, user_id: int, item_id: int) -> None:
+        """Create an RSS delivery record for a user and item."""
+
+        def _insert() -> None:
+            RSSItemDelivery.create(user=user_id, item=item_id)
+
+        await self._execute(_insert, operation_name="mark_rss_item_delivered")
+
+    async def async_update_feed_fetch_success(
+        self,
+        *,
+        feed_id: int,
+        title: str | None,
+        description: str | None,
+        site_url: str | None,
+        etag: str | None,
+        last_modified: str | None,
+    ) -> None:
+        """Update feed metadata after a successful poll."""
+
+        def _update() -> None:
+            now = datetime.now(UTC)
+            RSSFeed.update(
+                title=title,
+                description=description,
+                site_url=site_url,
+                last_fetched_at=now,
+                last_successful_at=now,
+                etag=etag,
+                last_modified=last_modified,
+                fetch_error_count=0,
+                last_error=None,
+            ).where(RSSFeed.id == feed_id).execute()
+
+        await self._execute(_update, operation_name="update_rss_feed_fetch_success")
+
+    async def async_record_feed_fetch_error(
+        self,
+        *,
+        feed_id: int,
+        error: str,
+        max_fetch_errors: int,
+    ) -> None:
+        """Increment RSS feed error counters and disable on threshold."""
+
+        def _update() -> None:
+            feed = RSSFeed.get_by_id(feed_id)
+            error_count = feed.fetch_error_count + 1
+            update_fields = {
+                RSSFeed.fetch_error_count: error_count,
+                RSSFeed.last_error: error[:500],
+            }
+            if error_count >= max_fetch_errors:
+                update_fields[RSSFeed.is_active] = False
+            RSSFeed.update(update_fields).where(RSSFeed.id == feed_id).execute()
+
+        await self._execute(_update, operation_name="record_rss_feed_fetch_error")

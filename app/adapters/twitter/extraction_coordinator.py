@@ -32,7 +32,9 @@ from app.observability.metrics import record_twitter_article_resolution
 
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.lifecycle import PlatformRequestLifecycle
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.adapters.twitter.firecrawl_extractor import TwitterFirecrawlExtractor
     from app.adapters.twitter.playwright_extractor import TwitterPlaywrightExtractor
     from app.adapters.twitter.tier_policy import TwitterTierPolicy

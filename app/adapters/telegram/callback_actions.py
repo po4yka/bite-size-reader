@@ -50,6 +50,7 @@ class CallbackActionService:
 
         self._presenters = CallbackActionPresenters(lang=lang)
         self._store = CallbackActionStore(
+            db=db,
             asyncio_module=asyncio,
             time_module=time,
             summary_cache_ttl=_SUMMARY_CACHE_TTL,

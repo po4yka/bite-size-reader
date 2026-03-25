@@ -15,13 +15,7 @@ from app.api.models.digest import (
 )
 from app.api.services._digest_api_shared import require_enabled
 from app.core.channel_utils import parse_channel_input
-from app.db.models import (
-    Channel,
-    ChannelCategory,
-    ChannelPost,
-    ChannelPostAnalysis,
-    ChannelSubscription,
-)
+from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
 from app.infrastructure.persistence.sqlite.digest_subscription_ops import (
     subscribe_channel_atomic,
     unsubscribe_channel_atomic,
@@ -36,30 +30,22 @@ class DigestChannelService:
 
     _subscribe_atomic = staticmethod(subscribe_channel_atomic)
     _unsubscribe_atomic = staticmethod(unsubscribe_channel_atomic)
+    _store = SqliteDigestStore()
 
     def __init__(self, cfg: ChannelDigestConfig) -> None:
         self._cfg = cfg
 
     def list_subscriptions(self, user_id: int) -> dict[str, object]:
         require_enabled(self._cfg)
-
-        subscriptions = (
-            ChannelSubscription.select(ChannelSubscription, Channel)
-            .join(Channel)
-            .where(
-                ChannelSubscription.user == user_id,
-                ChannelSubscription.is_active == True,  # noqa: E712
-            )
-            .order_by(ChannelSubscription.created_at.desc())
-        )
+        subscriptions = self._store.list_active_subscriptions(user_id)
 
         items: list[ChannelSubscriptionResponse] = []
         for subscription in subscriptions:
-            channel: Channel = subscription.channel
+            channel = subscription.channel
             category_id = subscription.category_id
             category_name = None
             if category_id is not None:
-                category = ChannelCategory.get_or_none(ChannelCategory.id == category_id)
+                category = self._store.get_category_for_user(user_id, category_id)
                 category_name = category.name if category else None
             items.append(
                 ChannelSubscriptionResponse(
@@ -126,28 +112,9 @@ class DigestChannelService:
         finally:
             await userbot.stop()
 
-        channel, _ = Channel.get_or_create(
-            username=username,
-            defaults={"title": metadata.get("title"), "is_active": True},
-        )
-        changed = False
-        for field in ("title", "description", "member_count"):
-            value = metadata.get(field)
-            if value is not None and getattr(channel, field) != value:
-                setattr(channel, field, value)
-                changed = True
-        if changed:
-            channel.save()
-
-        is_subscribed = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.user == user_id,
-                ChannelSubscription.channel == channel,
-                ChannelSubscription.is_active == True,  # noqa: E712
-            )
-            .exists()
-        )
+        channel = self._store.get_or_create_channel(username, title=metadata.get("title"))
+        self._store.update_channel_metadata(channel, metadata)
+        is_subscribed = self._store.is_user_subscribed(user_id=user_id, channel=channel)
 
         return ResolveChannelResponse(
             username=metadata.get("username", username),
@@ -170,34 +137,20 @@ class DigestChannelService:
         if error:
             raise ValidationError(error)
 
-        channel = Channel.get_or_none(Channel.username == username)
+        channel = self._store.get_channel_by_username(username)
         if channel is None:
             raise ValidationError(f"Channel @{username} not found.")
 
-        subscription_exists = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.user == user_id,
-                ChannelSubscription.channel == channel,
-                ChannelSubscription.is_active == True,  # noqa: E712
-            )
-            .exists()
-        )
+        subscription_exists = self._store.is_user_subscribed(user_id=user_id, channel=channel)
         if not subscription_exists:
             raise ValidationError(f"Not subscribed to @{username}.")
 
-        total = ChannelPost.select().where(ChannelPost.channel == channel).count()
-        posts = (
-            ChannelPost.select()
-            .where(ChannelPost.channel == channel)
-            .order_by(ChannelPost.date.desc())
-            .offset(offset)
-            .limit(limit)
-        )
+        total = self._store.count_channel_posts(channel)
+        posts = self._store.list_channel_posts(channel, limit=limit, offset=offset)
 
         items: list[ChannelPostResponse] = []
         for post in posts:
-            analysis_row = ChannelPostAnalysis.get_or_none(ChannelPostAnalysis.post == post)
+            analysis_row = self._store.get_post_analysis(post)
             analysis = None
             if analysis_row:
                 analysis = PostAnalysisResponse(

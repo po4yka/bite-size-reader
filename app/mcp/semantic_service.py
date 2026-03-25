@@ -99,7 +99,7 @@ class SemanticSearchService:
         return " ".join(pieces).strip()
 
     def _fetch_summaries_by_ids(self, summary_ids: list[int]) -> dict[int, tuple[Any, Any]]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         if not summary_ids:
             return {}
@@ -252,7 +252,11 @@ class SemanticSearchService:
         limit: int,
         min_similarity: float,
     ) -> list[dict[str, Any]]:
-        from app.db.models import Request, Summary, SummaryEmbedding
+        from app.infrastructure.persistence.sqlite.orm_exports import (
+            Request,
+            Summary,
+            SummaryEmbedding,
+        )
 
         embedding_service = await self.context.init_local_vector_service()
         if embedding_service is None:
@@ -578,7 +582,7 @@ class SemanticSearchService:
         rerank: bool = False,
         include_chunks: bool = True,
     ) -> dict[str, Any]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         limit = clamp_limit(limit)
 
@@ -674,7 +678,7 @@ class SemanticSearchService:
             return {"error": str(exc)}
 
     async def chroma_index_stats(self, scan_limit: int = 5000) -> dict[str, Any]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         scan_limit = max(100, min(50000, int(scan_limit)))
 
@@ -731,7 +735,7 @@ class SemanticSearchService:
             return {"error": str(exc)}
 
     async def chroma_sync_gap(self, max_scan: int = 5000, sample_size: int = 20) -> dict[str, Any]:
-        from app.db.models import Request, Summary
+        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         max_scan = max(100, min(50000, int(max_scan)))
         sample_size = max(1, min(100, int(sample_size)))

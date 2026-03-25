@@ -14,6 +14,9 @@ from app.api.models.responses import ImportJobResponse
 from app.api.search_helpers import isotime
 from app.application.dto.import_bookmarks import ImportBookmarksCommand
 from app.application.use_cases.import_pipeline import ImportBookmarksUseCase
+from app.infrastructure.persistence.sqlite.repositories.user_content_repository import (
+    SqliteUserContentRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
@@ -26,6 +29,7 @@ class ImportExportService:
         self._db = session_manager or get_session_manager()
         self._import_job_repo = get_import_job_repository(self._db)
         self._bookmark_import_repo = get_bookmark_import_repository(self._db)
+        self._user_content_repo = SqliteUserContentRepositoryAdapter(self._db)
 
     async def create_import_job(
         self,
@@ -86,91 +90,11 @@ class ImportExportService:
         collection_id: int | None,
     ) -> list[dict[str, Any]]:
         """Return serialized summary rows for bookmark export."""
-
-        def _query() -> list[dict[str, Any]]:
-            from app.db.models import (
-                Collection,
-                CollectionItem,
-                Request,
-                Summary,
-                SummaryTag,
-                Tag,
-                model_to_dict,
-            )
-
-            query = (
-                Summary.select(Summary, Request)
-                .join(Request, on=(Summary.request == Request.id))
-                .where(
-                    (Request.user == user_id) & (Summary.is_deleted == False)  # noqa: E712
-                )
-            )
-
-            if tag:
-                tag_obj = (
-                    Tag.select()
-                    .where(
-                        (Tag.user == user_id) & (Tag.name == tag) & (Tag.is_deleted == False)  # noqa: E712
-                    )
-                    .first()
-                )
-                if tag_obj:
-                    tagged_summary_ids = [
-                        summary_tag.summary_id
-                        for summary_tag in SummaryTag.select(SummaryTag.summary).where(
-                            SummaryTag.tag == tag_obj.id
-                        )
-                    ]
-                    query = query.where(Summary.id.in_(tagged_summary_ids))
-                else:
-                    return []
-
-            if collection_id is not None:
-                collection_summary_ids = [
-                    item.summary_id
-                    for item in CollectionItem.select(CollectionItem.summary).where(
-                        CollectionItem.collection == collection_id
-                    )
-                ]
-                query = query.where(Summary.id.in_(collection_summary_ids))
-
-            summaries: list[dict[str, Any]] = []
-            for row in query:
-                summary_dict = model_to_dict(row)
-                if summary_dict is None:
-                    continue
-
-                req = row.request
-                summary_dict["url"] = req.input_url or req.normalized_url or ""
-                summary_dict["title"] = ""
-                json_payload = summary_dict.get("json_payload")
-                if isinstance(json_payload, dict):
-                    summary_dict["title"] = json_payload.get("title", "")
-
-                tag_rows = (
-                    Tag.select(Tag.name)
-                    .join(SummaryTag, on=(SummaryTag.tag == Tag.id))
-                    .where(
-                        (SummaryTag.summary == row.id) & (Tag.is_deleted == False)  # noqa: E712
-                    )
-                )
-                summary_dict["tags"] = [{"name": tag_row.name} for tag_row in tag_rows]
-
-                collection_rows = (
-                    Collection.select(Collection.name)
-                    .join(CollectionItem, on=(CollectionItem.collection == Collection.id))
-                    .where(
-                        (CollectionItem.summary == row.id) & (Collection.is_deleted == False)  # noqa: E712
-                    )
-                )
-                summary_dict["collections"] = [
-                    {"name": collection.name} for collection in collection_rows
-                ]
-                summaries.append(summary_dict)
-
-            return summaries
-
-        return await self._db.async_execute(_query, operation_name="export_query", read_only=True)
+        return await self._user_content_repo.async_export_summaries(
+            user_id=user_id,
+            tag=tag,
+            collection_id=collection_id,
+        )
 
     async def _verify_job_ownership(self, *, job_id: int, user_id: int) -> dict[str, Any]:
         job = await self._import_job_repo.async_get_job(job_id)

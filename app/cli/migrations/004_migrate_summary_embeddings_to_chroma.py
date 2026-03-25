@@ -129,7 +129,7 @@ def downgrade(db: DatabaseSessionManager) -> None:
 def _fetch_summary_embeddings(
     db: DatabaseSessionManager, *, environment: str, user_scope: str
 ) -> Iterable[dict[str, Any]]:
-    from app.db.models import Request, Summary, SummaryEmbedding
+    from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary, SummaryEmbedding
     from app.infrastructure.vector.metadata_builder import MetadataBuilder
 
     with db._database.atomic():  # Use atomic transaction for proper management

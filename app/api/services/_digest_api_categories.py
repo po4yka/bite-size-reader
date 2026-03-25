@@ -10,7 +10,7 @@ from app.api.exceptions import ValidationError
 from app.api.models.digest import CategoryResponse
 from app.api.services._digest_api_shared import require_enabled
 from app.core.channel_utils import parse_channel_input
-from app.db.models import ChannelCategory, ChannelSubscription
+from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
 from app.infrastructure.persistence.sqlite.digest_subscription_ops import unsubscribe_channel_atomic
 
 if TYPE_CHECKING:
@@ -21,28 +21,18 @@ class DigestCategoryService:
     """Category CRUD and bulk operations for digest API callers."""
 
     _unsubscribe_atomic = staticmethod(unsubscribe_channel_atomic)
+    _store = SqliteDigestStore()
 
     def __init__(self, cfg: ChannelDigestConfig) -> None:
         self._cfg = cfg
 
     def list_categories(self, user_id: int) -> list[CategoryResponse]:
         require_enabled(self._cfg)
-        categories = (
-            ChannelCategory.select()
-            .where(ChannelCategory.user == user_id)
-            .order_by(ChannelCategory.position, ChannelCategory.name)
-        )
+        categories = self._store.list_categories(user_id)
 
         items: list[CategoryResponse] = []
         for category in categories:
-            count = (
-                ChannelSubscription.select()
-                .where(
-                    ChannelSubscription.category == category,
-                    ChannelSubscription.is_active == True,  # noqa: E712
-                )
-                .count()
-            )
+            count = self._store.count_active_subscriptions_for_category(category)
             items.append(
                 CategoryResponse(
                     id=category.id,
@@ -55,15 +45,10 @@ class DigestCategoryService:
 
     def create_category(self, user_id: int, name: str) -> CategoryResponse:
         require_enabled(self._cfg)
-        max_pos = (
-            ChannelCategory.select(peewee.fn.MAX(ChannelCategory.position))
-            .where(ChannelCategory.user == user_id)
-            .scalar()
-        )
-        position = (max_pos or 0) + 1
+        position = self._store.next_category_position(user_id)
 
         try:
-            category = ChannelCategory.create(user=user_id, name=name, position=position)
+            category = self._store.create_category(user_id=user_id, name=name, position=position)
         except peewee.IntegrityError as exc:
             raise ValidationError(f"Category '{name}' already exists.") from exc
 
@@ -76,10 +61,7 @@ class DigestCategoryService:
 
     def update_category(self, user_id: int, category_id: int, **fields: Any) -> CategoryResponse:
         require_enabled(self._cfg)
-        category = ChannelCategory.get_or_none(
-            ChannelCategory.id == category_id,
-            ChannelCategory.user == user_id,
-        )
+        category = self._store.get_category_for_user(user_id, category_id)
         if category is None:
             raise ValidationError("Category not found.")
 
@@ -92,18 +74,11 @@ class DigestCategoryService:
 
         if changed:
             try:
-                category.save()
+                self._store.save_model(category)
             except peewee.IntegrityError as exc:
                 raise ValidationError(f"Category '{fields.get('name')}' already exists.") from exc
 
-        count = (
-            ChannelSubscription.select()
-            .where(
-                ChannelSubscription.category == category,
-                ChannelSubscription.is_active == True,  # noqa: E712
-            )
-            .count()
-        )
+        count = self._store.count_active_subscriptions_for_category(category)
         return CategoryResponse(
             id=category.id,
             name=category.name,
@@ -113,13 +88,10 @@ class DigestCategoryService:
 
     def delete_category(self, user_id: int, category_id: int) -> dict[str, str]:
         require_enabled(self._cfg)
-        category = ChannelCategory.get_or_none(
-            ChannelCategory.id == category_id,
-            ChannelCategory.user == user_id,
-        )
+        category = self._store.get_category_for_user(user_id, category_id)
         if category is None:
             raise ValidationError("Category not found.")
-        category.delete_instance()
+        self._store.delete_model(category)
         return {"status": "deleted"}
 
     def assign_category(
@@ -129,23 +101,19 @@ class DigestCategoryService:
         category_id: int | None,
     ) -> dict[str, str]:
         require_enabled(self._cfg)
-        subscription = ChannelSubscription.get_or_none(
-            ChannelSubscription.id == subscription_id,
-            ChannelSubscription.user == user_id,
+        subscription = self._store.get_subscription_for_user(
+            user_id=user_id, subscription_id=subscription_id
         )
         if subscription is None:
             raise ValidationError("Subscription not found.")
 
         if category_id is not None:
-            category = ChannelCategory.get_or_none(
-                ChannelCategory.id == category_id,
-                ChannelCategory.user == user_id,
-            )
+            category = self._store.get_category_for_user(user_id, category_id)
             if category is None:
                 raise ValidationError("Category not found.")
 
         subscription.category_id = category_id
-        subscription.save()
+        self._store.save_model(subscription)
         return {"status": "updated"}
 
     def bulk_unsubscribe(self, user_id: int, usernames: list[str]) -> dict[str, Any]:
@@ -183,10 +151,7 @@ class DigestCategoryService:
     ) -> dict[str, Any]:
         require_enabled(self._cfg)
         if category_id is not None:
-            category = ChannelCategory.get_or_none(
-                ChannelCategory.id == category_id,
-                ChannelCategory.user == user_id,
-            )
+            category = self._store.get_category_for_user(user_id, category_id)
             if category is None:
                 raise ValidationError("Category not found.")
 
@@ -194,9 +159,8 @@ class DigestCategoryService:
         success_count = 0
         error_count = 0
         for subscription_id in subscription_ids:
-            subscription = ChannelSubscription.get_or_none(
-                ChannelSubscription.id == subscription_id,
-                ChannelSubscription.user == user_id,
+            subscription = self._store.get_subscription_for_user(
+                user_id=user_id, subscription_id=subscription_id
             )
             if subscription is None:
                 results.append(
@@ -206,7 +170,7 @@ class DigestCategoryService:
                 continue
 
             subscription.category_id = category_id
-            subscription.save()
+            self._store.save_model(subscription)
             results.append({"id": str(subscription_id), "status": "updated"})
             success_count += 1
 

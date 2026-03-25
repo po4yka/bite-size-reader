@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
-from app.core.time_utils import utc_now
-from app.db.models import Channel, ChannelPost, ChannelSubscription, DigestDelivery
+from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
 
 if TYPE_CHECKING:
     from app.config import AppConfig
@@ -23,6 +21,7 @@ class ChannelReader:
     def __init__(self, cfg: AppConfig, userbot: UserbotClient) -> None:
         self._cfg = cfg
         self._userbot = userbot
+        self._store = SqliteDigestStore()
 
     async def fetch_posts_for_user(
         self, user_id: int, max_posts: int | None = None
@@ -41,15 +40,7 @@ class ChannelReader:
         """
         max_total = max_posts or self._cfg.digest.max_posts_per_digest
 
-        subscriptions = list(
-            ChannelSubscription.select()
-            .join(Channel)
-            .where(
-                ChannelSubscription.user == user_id,
-                ChannelSubscription.is_active == True,  # noqa: E712
-                Channel.is_active == True,  # noqa: E712
-            )
-        )
+        subscriptions = self._store.list_active_feed_subscriptions_with_channels(user_id)
 
         if not subscriptions:
             logger.info("digest_no_subscriptions", extra={"uid": user_id})
@@ -58,7 +49,7 @@ class ChannelReader:
         # Fetch posts per channel
         channel_posts: dict[int, list[dict[str, Any]]] = {}
         for sub in subscriptions:
-            channel: Channel = sub.channel
+            channel = sub.channel
             try:
                 posts = await self._userbot.fetch_channel_posts(
                     channel.username,
@@ -68,31 +59,26 @@ class ChannelReader:
                 for p in posts:
                     p["_channel_id"] = channel.channel_id or channel.id
                     p["_channel_username"] = channel.username
-                self._persist_posts(channel, posts)
-                self._update_channel_fetch_time(channel)
+                self._store.persist_posts(channel, posts)
+                self._store.update_channel_fetch_success(channel)
                 channel_posts[channel.id] = posts
             except Exception:
                 logger.exception(
                     "digest_channel_fetch_error",
                     extra={"channel": channel.username, "uid": user_id},
                 )
-                new_count = channel.fetch_error_count + 1
                 max_errors = self._cfg.digest.max_fetch_errors
-                disable = new_count >= max_errors
-                update_fields: dict[str, object] = {
-                    "fetch_error_count": Channel.fetch_error_count + 1,
-                    "last_error": "fetch_failed",
-                    "updated_at": utc_now(),
-                }
-                if disable:
-                    update_fields["is_active"] = False
-                Channel.update(**update_fields).where(Channel.id == channel.id).execute()
+                disable = self._store.record_channel_fetch_error(
+                    channel,
+                    "fetch_failed",
+                    max_errors=max_errors,
+                )
                 if disable:
                     logger.warning(
                         "digest_channel_auto_disabled",
                         extra={
                             "channel": channel.username,
-                            "error_count": new_count,
+                            "error_count": channel.fetch_error_count + 1,
                             "threshold": max_errors,
                         },
                     )
@@ -102,7 +88,7 @@ class ChannelReader:
             return []
 
         # Filter out already-delivered posts
-        delivered_ids = _get_delivered_message_ids(user_id)
+        delivered_ids = self._store.list_delivered_message_ids(user_id)
         if delivered_ids:
             channel_posts = {
                 ch_id: [p for p in posts if p["message_id"] not in delivered_ids]
@@ -120,7 +106,7 @@ class ChannelReader:
 
     async def fetch_posts_for_channel(
         self,
-        channel: Channel,
+        channel: Any,
         user_id: int,
         max_posts: int | None = None,
     ) -> list[dict[str, Any]]:
@@ -154,11 +140,11 @@ class ChannelReader:
         for p in posts:
             p["_channel_id"] = channel.channel_id or channel.id
             p["_channel_username"] = channel.username
-        self._persist_posts(channel, posts)
-        self._update_channel_fetch_time(channel)
+        self._store.persist_posts(channel, posts)
+        self._store.update_channel_fetch_success(channel)
 
         # Filter out already-delivered posts
-        delivered_ids = _get_delivered_message_ids(user_id)
+        delivered_ids = self._store.list_delivered_message_ids(user_id)
         unread = [p for p in posts if p["message_id"] not in delivered_ids]
 
         # Sort by date desc, cap
@@ -203,47 +189,3 @@ class ChannelReader:
             result.extend(overflow[:remaining])
 
         return result
-
-    @staticmethod
-    def _persist_posts(channel: Channel, posts: list[dict[str, Any]]) -> None:
-        """Persist fetched posts using get_or_create for idempotency."""
-        for post in posts:
-            ChannelPost.get_or_create(
-                channel=channel,
-                message_id=post["message_id"],
-                defaults={
-                    "text": post["text"],
-                    "media_type": post.get("media_type"),
-                    "date": post["date"],
-                    "views": post.get("views"),
-                    "forwards": post.get("forwards"),
-                    "url": post.get("url"),
-                },
-            )
-
-    @staticmethod
-    def _update_channel_fetch_time(channel: Channel) -> None:
-        """Update channel last_fetched_at and reset error count."""
-        Channel.update(
-            last_fetched_at=utc_now(),
-            fetch_error_count=0,
-            last_error=None,
-            updated_at=utc_now(),
-        ).where(Channel.id == channel.id).execute()
-
-
-def _get_delivered_message_ids(user_id: int) -> set[int]:
-    """Collect all message_ids from past digest deliveries for a user.
-
-    Only looks back 30 days to prevent unbounded growth (4x the max
-    hours_lookback of 168h = 7d).
-    """
-    cutoff = utc_now() - timedelta(days=30)
-    delivered: set[int] = set()
-    for dd in DigestDelivery.select(DigestDelivery.posts_json).where(
-        DigestDelivery.user == user_id,
-        DigestDelivery.delivered_at >= cutoff,
-    ):
-        if dd.posts_json and isinstance(dd.posts_json, list):
-            delivered.update(dd.posts_json)
-    return delivered

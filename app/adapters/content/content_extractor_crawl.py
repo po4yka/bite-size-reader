@@ -14,7 +14,10 @@ from app.core.call_status import CallStatus
 
 if TYPE_CHECKING:
     import asyncio
-    from app.adapters.external.response_formatter import ResponseFormatter
+
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
 
 from app.adapters.content.quality_filters import (
     classify_content_quality_llm,

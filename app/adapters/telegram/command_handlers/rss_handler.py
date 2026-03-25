@@ -11,8 +11,10 @@ from app.adapters.rss.substack import is_substack_url, resolve_substack_feed_url
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
-from app.db.models import ChannelCategory, RSSFeed, RSSFeedSubscription
 from app.domain.services.import_export.opml_exporter import OPMLExporter
+from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
+    SqliteRSSFeedRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
@@ -26,6 +28,10 @@ _MAX_ITEMS_PREVIEW = 5
 
 class RSSHandler(HandlerDependenciesMixin):
     """Handle /rss commands for RSS feed management."""
+
+    @property
+    def _rss_repo(self) -> SqliteRSSFeedRepositoryAdapter:
+        return SqliteRSSFeedRepositoryAdapter(self._db)
 
     @combined_handler("command_substack", "substack")
     async def handle_substack(self, ctx: CommandExecutionContext) -> None:
@@ -60,22 +66,16 @@ class RSSHandler(HandlerDependenciesMixin):
 
     async def _handle_substack_list(self, ctx: CommandExecutionContext) -> None:
         """List only Substack RSS subscriptions."""
-        subs = (
-            RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed)
-            .join(RSSFeed)
-            .where(
-                (RSSFeedSubscription.user == ctx.uid)
-                & (RSSFeedSubscription.is_active == True)  # noqa: E712
-                & (RSSFeed.url.contains("substack.com"))
-            )
-            .order_by(RSSFeedSubscription.created_at.desc())
+        subs = await self._rss_repo.async_list_user_active_subscriptions(
+            ctx.uid,
+            substack_only=True,
         )
 
         lines: list[str] = []
         for sub in subs:
-            feed: RSSFeed = sub.feed
-            title = feed.title or feed.url
-            lines.append(f"[{sub.id}] {title}\n  {feed.url}")
+            feed = sub.get("feed") if isinstance(sub.get("feed"), dict) else {}
+            title = feed.get("title") or feed.get("url")
+            lines.append(f"[{sub.get('id')}] {title}\n  {feed.get('url')}")
 
         if not lines:
             await ctx.response_formatter.safe_reply(
@@ -111,22 +111,16 @@ class RSSHandler(HandlerDependenciesMixin):
 
     async def _handle_list(self, ctx: CommandExecutionContext) -> None:
         """List all RSS subscriptions for the user."""
-        subs = (
-            RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed)
-            .join(RSSFeed)
-            .where(
-                (RSSFeedSubscription.user == ctx.uid) & (RSSFeedSubscription.is_active == True)  # noqa: E712
-            )
-            .order_by(RSSFeedSubscription.created_at.desc())
-        )
+        subs = await self._rss_repo.async_list_user_active_subscriptions(ctx.uid)
 
         lines: list[str] = []
         for sub in subs:
-            feed: RSSFeed = sub.feed
-            status = "active" if feed.is_active else "paused"
-            title = feed.title or feed.url
-            errors_part = f" ({feed.fetch_error_count} errors)" if feed.fetch_error_count else ""
-            lines.append(f"[{sub.id}] {title}\n  {feed.url} [{status}]{errors_part}")
+            feed = sub.get("feed") if isinstance(sub.get("feed"), dict) else {}
+            status = "active" if feed.get("is_active") else "paused"
+            title = feed.get("title") or feed.get("url")
+            errors = int(feed.get("fetch_error_count") or 0)
+            errors_part = f" ({errors} errors)" if errors else ""
+            lines.append(f"[{sub.get('id')}] {title}\n  {feed.get('url')} [{status}]{errors_part}")
 
         if not lines:
             await ctx.response_formatter.safe_reply(
@@ -157,39 +151,35 @@ class RSSHandler(HandlerDependenciesMixin):
             url = resolve_substack_feed_url(url)
 
         # Find or create the feed
-        feed, _created = RSSFeed.get_or_create(
-            url=url,
-            defaults={"title": None, "is_active": True},
-        )
+        feed = await self._rss_repo.async_get_or_create_feed(url)
 
         # Check if already subscribed
-        existing = (
-            RSSFeedSubscription.select()
-            .where((RSSFeedSubscription.user == ctx.uid) & (RSSFeedSubscription.feed == feed))
-            .first()
+        existing = await self._rss_repo.async_get_subscription_by_feed(
+            user_id=ctx.uid,
+            feed_id=int(feed["id"]),
         )
         if existing:
-            if not existing.is_active:
-                existing.is_active = True
-                existing.save()
+            if not existing.get("is_active"):
+                await self._rss_repo.async_set_subscription_active(
+                    int(existing["id"]), is_active=True
+                )
                 await ctx.response_formatter.safe_reply(
                     ctx.message,
-                    f"Re-activated subscription to {feed.title or feed.url}",
+                    f"Re-activated subscription to {feed.get('title') or feed.get('url')}",
                 )
                 return
             await ctx.response_formatter.safe_reply(
                 ctx.message,
-                f"Already subscribed to {feed.title or feed.url}",
+                f"Already subscribed to {feed.get('title') or feed.get('url')}",
             )
             return
 
-        RSSFeedSubscription.create(
-            user=ctx.uid,
-            feed=feed,
-            is_active=True,
+        await self._rss_repo.async_create_subscription(
+            user_id=ctx.uid,
+            feed_id=int(feed["id"]),
         )
 
-        title_display = feed.title or url
+        title_display = feed.get("title") or url
         await ctx.response_formatter.safe_reply(
             ctx.message,
             f"Subscribed to {title_display}\nThe feed will be fetched on the next polling cycle.",
@@ -206,12 +196,7 @@ class RSSHandler(HandlerDependenciesMixin):
             )
             return
 
-        sub = (
-            RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed)
-            .join(RSSFeed)
-            .where((RSSFeedSubscription.id == sub_id) & (RSSFeedSubscription.user == ctx.uid))
-            .first()
-        )
+        sub = await self._rss_repo.async_get_subscription(user_id=ctx.uid, subscription_id=sub_id)
         if sub is None:
             await ctx.response_formatter.safe_reply(
                 ctx.message,
@@ -219,9 +204,9 @@ class RSSHandler(HandlerDependenciesMixin):
             )
             return
 
-        feed_title = sub.feed.title or sub.feed.url
-        sub.is_active = False
-        sub.save()
+        feed = sub.get("feed") if isinstance(sub.get("feed"), dict) else {}
+        feed_title = feed.get("title") or feed.get("url")
+        await self._rss_repo.async_set_subscription_active(sub_id, is_active=False)
 
         await ctx.response_formatter.safe_reply(
             ctx.message,
@@ -230,34 +215,17 @@ class RSSHandler(HandlerDependenciesMixin):
 
     async def _handle_export(self, ctx: CommandExecutionContext) -> None:
         """Export subscriptions as OPML and send as a document."""
-        subs = (
-            RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed, ChannelCategory)
-            .join(RSSFeed)
-            .switch(RSSFeedSubscription)
-            .join(
-                ChannelCategory,
-                on=(RSSFeedSubscription.category == ChannelCategory.id),
-                join_type="LEFT OUTER",
-            )
-            .where(
-                (RSSFeedSubscription.user == ctx.uid) & (RSSFeedSubscription.is_active == True)  # noqa: E712
-            )
-        )
+        subs = await self._rss_repo.async_list_user_active_subscriptions(ctx.uid)
 
         feeds_data: list[dict] = []
         for sub in subs:
-            feed: RSSFeed = sub.feed
-            cat_name = None
-            try:
-                cat_name = sub.category.name if sub.category else None
-            except Exception:
-                pass
+            feed = sub.get("feed") if isinstance(sub.get("feed"), dict) else {}
             feeds_data.append(
                 {
-                    "url": feed.url,
-                    "title": feed.title,
-                    "site_url": feed.site_url,
-                    "category_name": cat_name,
+                    "url": feed.get("url"),
+                    "title": feed.get("title"),
+                    "site_url": feed.get("site_url"),
+                    "category_name": sub.get("category_name"),
                 }
             )
 

@@ -9,13 +9,15 @@ from typing import TYPE_CHECKING, Any
 from app.core.content_cleaner import clean_content_for_llm
 from app.core.lang import detect_language
 from app.core.logging_utils import get_logger
-from app.db.models import RSSFeedItem, RSSFeedSubscription, RSSItemDelivery
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from app.adapters.content.pure_summary_service import PureSummaryService
     from app.config.rss import RSSConfig
+    from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
+        SqliteRSSFeedRepositoryAdapter,
+    )
 
 logger = get_logger(__name__)
 
@@ -61,10 +63,12 @@ class RSSDeliveryService:
         cfg: RSSConfig,
         pure_summary_service: PureSummaryService,
         system_prompt_loader: Callable[[str], str],
+        rss_repository: SqliteRSSFeedRepositoryAdapter,
     ) -> None:
         self._cfg = cfg
         self._pure = pure_summary_service
         self._load_prompt = system_prompt_loader
+        self._rss_repo = rss_repository
 
     async def deliver_new_items(
         self,
@@ -85,14 +89,15 @@ class RSSDeliveryService:
         sem = asyncio.Semaphore(self._cfg.concurrency)
 
         # Find items that need delivery
-        items = self._query_undelivered_items(new_item_ids)
+        items = await self._query_undelivered_items(new_item_ids)
         if not items:
             return stats
 
         # Cap per cycle
         items = items[: self._cfg.max_items_per_poll]
 
-        for item, subscriber_ids in items:
+        for item in items:
+            subscriber_ids = list(item.get("subscriber_ids") or [])
             for user_id in subscriber_ids:
                 try:
                     await self._deliver_one(item, user_id, send_func, sem)
@@ -100,72 +105,52 @@ class RSSDeliveryService:
                 except Exception:
                     logger.exception(
                         "rss_delivery_item_failed",
-                        extra={"item_id": item.id, "user_id": user_id},
+                        extra={"item_id": item.get("id"), "user_id": user_id},
                     )
                     stats["errors"] += 1
 
         logger.info("rss_delivery_complete", extra=stats)
         return stats
 
-    def _query_undelivered_items(
+    async def _query_undelivered_items(
         self,
         new_item_ids: list[int] | None,
-    ) -> list[tuple[Any, list[int]]]:
+    ) -> list[dict[str, Any]]:
         """Return (item, [subscriber_user_ids]) pairs that haven't been delivered yet."""
-        query = RSSFeedItem.select()
-        if new_item_ids:
-            query = query.where(RSSFeedItem.id.in_(new_item_ids))
-
-        result: list[tuple[Any, list[int]]] = []
-        for item in query.order_by(RSSFeedItem.published_at.desc()):
-            # Find active subscribers for this item's feed
-            subs = RSSFeedSubscription.select(RSSFeedSubscription.user).where(
-                (RSSFeedSubscription.feed == item.feed_id) & (RSSFeedSubscription.is_active == True)  # noqa: E712
-            )
-            subscriber_ids: list[int] = []
-            for sub in subs:
-                # Check not already delivered
-                already = (
-                    RSSItemDelivery.select()
-                    .where(
-                        (RSSItemDelivery.user == sub.user_id) & (RSSItemDelivery.item == item.id)
-                    )
-                    .exists()
-                )
-                if not already:
-                    subscriber_ids.append(sub.user_id)
-
-            if subscriber_ids:
-                result.append((item, subscriber_ids))
-
-        return result
+        return await self._rss_repo.async_list_delivery_targets(new_item_ids)
 
     async def _deliver_one(
         self,
-        item: Any,
+        item: dict[str, Any],
         user_id: int,
         send_func: Callable[[int, str], Awaitable[None]],
         sem: asyncio.Semaphore,
     ) -> None:
         """Summarize a single RSS item and deliver to one user."""
         correlation_id = f"rss_{uuid.uuid4().hex[:12]}"
-        content = item.content or ""
+        content = str(item.get("content") or "")
 
         if len(content) < self._cfg.min_content_length:
-            if not item.url:
+            if not item.get("url"):
                 logger.info(
                     "rss_delivery_skip_no_content",
-                    extra={"item_id": item.id, "cid": correlation_id},
+                    extra={"item_id": item.get("id"), "cid": correlation_id},
                 )
-                RSSItemDelivery.create(user=user_id, item=item.id)
+                await self._rss_repo.async_mark_item_delivered(
+                    user_id=user_id, item_id=int(item["id"])
+                )
                 return
             # TODO(po4yka): scrape item.url via scraper chain for short/empty content
             # For now, skip items without enough inline content
             logger.info(
                 "rss_delivery_skip_short_content",
-                extra={"item_id": item.id, "content_len": len(content), "cid": correlation_id},
+                extra={
+                    "item_id": item.get("id"),
+                    "content_len": len(content),
+                    "cid": correlation_id,
+                },
             )
-            RSSItemDelivery.create(user=user_id, item=item.id)
+            await self._rss_repo.async_mark_item_delivered(user_id=user_id, item_id=int(item["id"]))
             return
 
         cleaned = clean_content_for_llm(content)
@@ -184,14 +169,14 @@ class RSSDeliveryService:
         async with sem:
             summary = await self._pure.summarize(request)
 
-        text = _format_rss_summary(summary, item.title, item.url)
+        text = _format_rss_summary(summary, item.get("title"), item.get("url"))
         await send_func(user_id, text)
 
-        RSSItemDelivery.create(user=user_id, item=item.id)
+        await self._rss_repo.async_mark_item_delivered(user_id=user_id, item_id=int(item["id"]))
         logger.info(
             "rss_delivery_sent",
             extra={
-                "item_id": item.id,
+                "item_id": item.get("id"),
                 "user_id": user_id,
                 "cid": correlation_id,
             },
