@@ -119,9 +119,9 @@ colorama==0.4.6 ; sys_platform == 'win32' \
     #   loguru
     #   tqdm
     #   wasabi
-confection==1.3.2 \
-    --hash=sha256:6590efa4e6ee5465ead06f563ae147a6c8059f42852427aa436744951caf8839 \
-    --hash=sha256:92272c41baba5bbfd00aa13321f3b7392e4af47bd915121791318eda1ab7678a
+confection==1.3.3 \
+    --hash=sha256:b9fef9ee84b237ef4611ec3eb5797b70e13063e6310ad9f15536373f5e313c82 \
+    --hash=sha256:f0f6810d567ff73993fe74d218ca5e1ffb6a44fb03f391257fc5d033546cbfaa
     # via
     #   spacy
     #   thinc
