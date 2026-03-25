@@ -54,6 +54,8 @@ export interface SummaryDetail {
   confidence: number;
   hallucinationRisk: string;
   keyStats: Array<{ label: string; value: string; sourceExcerpt?: string }>;
+  readingProgress?: number;
+  lastReadOffset?: number;
 }
 
 // ---------------------------------------------------------------------------

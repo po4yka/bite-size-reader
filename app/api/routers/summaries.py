@@ -403,6 +403,8 @@ async def get_summary(
             request=SummaryDetailRequest(**request_detail),
             source=SummaryDetailSource(**source_detail),
             processing=SummaryDetailProcessing(**processing_detail),
+            reading_progress=summary.get("reading_progress"),
+            last_read_offset=summary.get("last_read_offset"),
         )
     )
 

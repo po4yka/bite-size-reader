@@ -112,6 +112,8 @@ class SummaryDetail(BaseModel):
     request: SummaryDetailRequest
     source: SummaryDetailSource
     processing: SummaryDetailProcessing
+    reading_progress: float | None = Field(default=None, serialization_alias="readingProgress")
+    last_read_offset: int | None = Field(default=None, serialization_alias="lastReadOffset")
 
 
 class SummaryContent(BaseModel):

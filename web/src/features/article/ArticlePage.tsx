@@ -8,6 +8,7 @@ import {
   ProgressBar,
   Select,
   SelectItem,
+  SkeletonText,
   Tab,
   TabList,
   TabPanel,
@@ -116,9 +117,17 @@ export default function ArticlePage() {
     };
   }, [showContent, summaryId]);
 
+  // Restore scroll position from the last saved offset on initial load.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    const offset = summaryQuery.data?.lastReadOffset;
+    if (!restoredRef.current && offset && offset > 100) {
+      restoredRef.current = true;
+      window.scrollTo({ top: offset, behavior: "instant" });
+    }
+  }, [summaryQuery.data?.lastReadOffset]);
+
   // Debounce-save reading position 500ms after scroll stops.
-  // TODO: on mount, restore scroll position from summaryQuery.data.readingProgress once
-  // the API returns that field.
   useEffect(() => {
     if (summaryId <= 0) return;
     const timer = setTimeout(() => {
@@ -217,7 +226,14 @@ export default function ArticlePage() {
 
   return (
     <section className="page-section article-reader-shell">
-      {summaryQuery.isLoading && <InlineLoading description="Loading article…" />}
+      {summaryQuery.isPending && (
+        <div className="article-skeleton">
+          <SkeletonText heading width="60%" />
+          <SkeletonText paragraph lineCount={1} width="40%" />
+          <SkeletonText paragraph lineCount={5} />
+          <SkeletonText paragraph lineCount={5} />
+        </div>
+      )}
       <QueryErrorNotification error={summaryQuery.error} title="Failed to load article" />
 
       {detail && (
