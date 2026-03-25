@@ -10,7 +10,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.adapters.content.llm_response_workflow import LLMResponseWorkflow
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.application.ports.requests import RequestRepositoryPort
     from app.application.ports.users import UserRepositoryPort

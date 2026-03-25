@@ -24,7 +24,9 @@ from app.domain.models.request import RequestStatus
 
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.lifecycle import PlatformRequestLifecycle
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.application.ports.requests import RequestRepositoryPort, VideoDownloadRepositoryPort
 
 logger = get_logger(__name__)

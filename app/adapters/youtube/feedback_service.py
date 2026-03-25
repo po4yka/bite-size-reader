@@ -15,7 +15,9 @@ from app.utils.typing_indicator import typing_indicator
 
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.models import PlatformExtractionRequest
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
 
 logger = get_logger(__name__)
 

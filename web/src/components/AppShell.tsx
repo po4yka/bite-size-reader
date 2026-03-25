@@ -16,61 +16,9 @@ import {
   SkipToContent,
   Theme,
 } from "@carbon/react";
-import {
-  Book,
-  Catalog,
-  Search as SearchIcon,
-  Add,
-  Tag,
-  Notification,
-  Rss,
-  Settings,
-  User,
-  Logout,
-  Renew,
-  ConnectionSignal,
-  DataBackup,
-  DocumentImport,
-  Lightning,
-} from "@carbon/icons-react";
+import { Logout, Renew } from "@carbon/icons-react";
 import { useAuth } from "../auth/AuthProvider";
-import { FEATURE_FLAGS } from "../routes/features";
-
-interface NavItem {
-  readonly path: string;
-  readonly label: string;
-  readonly icon: typeof Book;
-}
-
-const NAV_GROUPS: ReadonlyArray<ReadonlyArray<NavItem>> = [
-  [
-    { path: "/library", label: "Library", icon: Book },
-    { path: "/articles", label: "Articles", icon: Book },
-    { path: "/search", label: "Search", icon: SearchIcon },
-    { path: "/submit", label: "Submit", icon: Add },
-  ],
-  [
-    { path: "/collections", label: "Collections", icon: Catalog },
-    { path: "/tags", label: "Tags", icon: Tag },
-    { path: "/feeds", label: "Feeds", icon: Rss },
-  ],
-  [
-    { path: "/digest", label: "Digest", icon: Notification },
-    { path: "/webhooks", label: "Webhooks", icon: ConnectionSignal },
-    { path: "/rules", label: "Rules", icon: Lightning },
-  ],
-  [
-    { path: "/import-export", label: "Import/Export", icon: DocumentImport },
-    { path: "/backups", label: "Backups", icon: DataBackup },
-    { path: "/preferences", label: "Preferences", icon: User },
-  ],
-];
-
-const NAV_ITEMS = NAV_GROUPS.flat();
-
-const ADMIN_NAV_ITEM = { path: "/admin", label: "Admin", icon: Settings } as const;
-
-const NAV_ROOT_PATHS: ReadonlySet<string> = new Set(NAV_ITEMS.map((item) => item.path));
+import { HOME_PATH, NAV_GROUPS, NAV_ROOT_PATHS } from "../routes/manifest";
 
 type CarbonTheme = "white" | "g100";
 
@@ -152,7 +100,7 @@ export default function AppShell() {
         navigate(-1);
         return;
       }
-      navigate("/library", { replace: true });
+      navigate(HOME_PATH, { replace: true });
     };
 
     backButton.show?.();
@@ -174,7 +122,7 @@ export default function AppShell() {
             onClick={() => setExpanded((prev) => !prev)}
             isActive={expanded}
           />
-          <HeaderName as={Link} to="/library" prefix="Bite-Size">
+          <HeaderName as={Link} to={HOME_PATH} prefix="Bite-Size">
             Reader
           </HeaderName>
           <HeaderGlobalBar>
@@ -221,24 +169,6 @@ export default function AppShell() {
                 ))}
               </span>
             ))}
-            {FEATURE_FLAGS.admin && (
-              <>
-                <SideNavDivider />
-                <SideNavLink
-                  href={`/web${ADMIN_NAV_ITEM.path}`}
-                  isActive={activePath === ADMIN_NAV_ITEM.path}
-                  aria-current={activePath === ADMIN_NAV_ITEM.path ? "page" : undefined}
-                  renderIcon={ADMIN_NAV_ITEM.icon}
-                  onClick={(event: React.MouseEvent) => {
-                    event.preventDefault();
-                    navigate(ADMIN_NAV_ITEM.path);
-                    setExpanded(false);
-                  }}
-                >
-                  {ADMIN_NAV_ITEM.label}
-                </SideNavLink>
-              </>
-            )}
           </SideNavItems>
         </SideNav>
 

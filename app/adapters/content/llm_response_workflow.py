@@ -17,7 +17,9 @@ from .llm_response_workflow_storage import LLMWorkflowStorageMixin
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.application.ports.requests import LLMRepositoryPort, RequestRepositoryPort
     from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.ports.users import UserRepositoryPort

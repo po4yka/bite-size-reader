@@ -19,7 +19,9 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Coroutine
 
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
 
 
 class URLSummaryDeliveryService:

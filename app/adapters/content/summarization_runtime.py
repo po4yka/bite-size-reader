@@ -20,7 +20,9 @@ from app.infrastructure.cache.redis_cache import RedisCache
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.adapters.llm.protocol import LLMClientProtocol
     from app.application.ports.requests import (
         CrawlResultRepositoryPort,

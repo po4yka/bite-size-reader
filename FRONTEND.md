@@ -29,7 +29,7 @@ web/
     auth/           # Hybrid auth provider, guards, storage, redirects
     components/     # App shell + shared UI
     features/       # Route-level pages (library/search/submit/collections/...)
-    routes/         # Feature flags
+    routes/         # Route manifest + feature flags
   vite.config.ts    # base=/static/web, outDir=../app/static/web
 ```
 
@@ -64,6 +64,7 @@ Build output contract:
 - `/web/login`
 
 Route-level feature flags live in `web/src/routes/features.ts`.
+The canonical route and side-nav manifest lives in `web/src/routes/manifest.tsx`.
 
 ---
 
