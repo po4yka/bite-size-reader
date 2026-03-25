@@ -41,7 +41,6 @@ class LLMClientProtocol(Protocol):
         temperature: float = 0.2,
         max_tokens: int | None = None,
         top_p: float | None = None,
-        stream: bool = False,
         request_id: int | None = None,
         response_format: dict[str, Any] | None = None,
         model_override: str | None = None,
@@ -59,8 +58,6 @@ class LLMClientProtocol(Protocol):
                        provider defaults.
             top_p: Nucleus sampling parameter (0.0 to 1.0). If None, uses
                   provider defaults.
-            stream: Whether to stream the response. Currently not implemented
-                   for most providers.
             request_id: Optional internal request ID for tracing and persistence.
             response_format: Optional structured output format specification.
                            Provider-specific handling applies.

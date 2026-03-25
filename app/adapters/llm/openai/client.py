@@ -171,7 +171,6 @@ class OpenAIClient:
         temperature: float = 0.2,
         max_tokens: int | None = None,
         top_p: float | None = None,
-        stream: bool = False,
         request_id: int | None = None,
         response_format: dict[str, Any] | None = None,
         model_override: str | None = None,
@@ -185,7 +184,6 @@ class OpenAIClient:
             temperature: Sampling temperature.
             max_tokens: Maximum tokens to generate.
             top_p: Nucleus sampling parameter.
-            stream: Whether to stream (not implemented).
             request_id: Optional request ID for tracing.
             response_format: Optional structured output format.
             model_override: Optional model override.
@@ -219,10 +217,10 @@ class OpenAIClient:
             msg = "Messages cannot be empty"
             raise ValueError(msg)
 
-        if stream or on_stream_delta is not None:
+        if on_stream_delta is not None:
             logger.debug(
-                "openai_stream_ignored",
-                extra={"request_id": request_id, "stream": stream},
+                "openai_stream_callback_ignored",
+                extra={"request_id": request_id},
             )
 
         # Build model list to try
