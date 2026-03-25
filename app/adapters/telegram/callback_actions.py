@@ -14,7 +14,9 @@ from app.adapters.telegram.callback_action_summary_handlers import (
 )
 
 if TYPE_CHECKING:
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.adapters.telegram.url_handler import URLHandler
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.search.hybrid_search_service import HybridSearchService

@@ -9,7 +9,9 @@ from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
 
 if TYPE_CHECKING:
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.adapters.telegram.callback_action_presenters import CallbackActionPresenters
     from app.adapters.telegram.callback_action_store import CallbackActionStore
     from app.adapters.telegram.url_handler import URLHandler

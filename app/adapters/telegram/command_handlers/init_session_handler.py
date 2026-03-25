@@ -21,7 +21,9 @@ from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
     )

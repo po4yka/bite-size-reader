@@ -24,7 +24,9 @@ from app.security.file_validation import FileValidationError, SecureFileValidato
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.application.ports.requests import RequestRepositoryPort
     from app.application.ports.users import UserRepositoryPort
     from app.application.services.adaptive_timeout import AdaptiveTimeoutService

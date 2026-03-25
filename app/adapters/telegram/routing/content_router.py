@@ -10,7 +10,9 @@ from app.core.url_utils import looks_like_url
 
 if TYPE_CHECKING:
     from app.adapters.attachment.attachment_processor import AttachmentProcessor
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.adapters.telegram.callback_handler import CallbackHandler
     from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
     from app.adapters.telegram.forward_processor import ForwardProcessor

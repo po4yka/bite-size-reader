@@ -11,7 +11,9 @@ from app.adapters.telegram.summary_followup import SummaryFollowupManager
 from app.core.logging_utils import generate_correlation_id, get_logger
 
 if TYPE_CHECKING:
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.adapters.telegram.url_handler import URLHandler
     from app.db.session import DatabaseSessionManager
     from app.infrastructure.search.hybrid_search_service import HybridSearchService

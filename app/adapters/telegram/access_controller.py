@@ -11,7 +11,9 @@ from app.db.user_interactions import async_safe_update_user_interaction
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.application.ports.users import UserRepositoryPort
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager

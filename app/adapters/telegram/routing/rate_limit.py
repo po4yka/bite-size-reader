@@ -11,7 +11,9 @@ from app.infrastructure.redis import get_redis
 from app.security.rate_limiter import RateLimitConfig, RedisUserRateLimiter, UserRateLimiter
 
 if TYPE_CHECKING:
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.config import AppConfig
 
     from .interactions import MessageInteractionRecorder
