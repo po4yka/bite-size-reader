@@ -27,10 +27,12 @@ services:
       - MAX_CONCURRENT_CALLS=${MAX_CONCURRENT_CALLS:-4}
       - REQUEST_TIMEOUT_SEC=${REQUEST_TIMEOUT_SEC:-60}
       - FIRECRAWL_SELF_HOSTED_ENABLED=${FIRECRAWL_SELF_HOSTED_ENABLED:-0}
-      - FIRECRAWL_SELF_HOSTED_URL=http://firecrawl-api:3002
+      - FIRECRAWL_SELF_HOSTED_URL=http://firecrawl-api:3003
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    extra_hosts:
+      - "firecrawl-api:host-gateway"
     restart: unless-stopped
     deploy:
       resources:
@@ -57,10 +59,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks:
-      - default
-      - karakeep
-      - firecrawl_net
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 30s
@@ -72,6 +70,8 @@ services:
         VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME:-}
     container_name: bsr-mobile-api
     init: true
+    tmpfs:
+      - /tmp
     env_file:
       - .env
     environment:
@@ -100,7 +100,7 @@ services:
         required: false # Allow API to start without ChromaDB (graceful degradation)
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -110,9 +110,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks:
-      - default
-      - karakeep
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 30s
@@ -168,9 +165,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks:
-      - default
-      - karakeep
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 30s
@@ -245,8 +239,8 @@ services:
           memory: 512M
           cpus: "0.25"
         reservations:
-          memory: 512M
-          cpus: "0.25"
+          memory: 256M
+          cpus: "0.10"
     healthcheck:
       test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8000"]
       interval: 30s
@@ -261,12 +255,5 @@ services:
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 30s
-networks:
-  karakeep:
-    name: karakeep_default
-    external: true
-  firecrawl_net:
-    name: firecrawl_net
-    external: true
 volumes:
   redis_data:
