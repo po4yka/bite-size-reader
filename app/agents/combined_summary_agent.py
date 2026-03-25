@@ -106,7 +106,6 @@ class CombinedSummaryAgent(BaseAgent[CombinedSummaryInput, CombinedSummaryOutput
             max_tokens=2000,
             temperature=0.3,  # Slightly higher for creative synthesis
             request_id=None,
-            stream=self._stream,
             on_stream_delta=self._on_stream_delta,
         )
 
