@@ -23,7 +23,7 @@ identify==2.6.18
 iniconfig==2.3.0
     # via pytest
 isort==8.0.1
-jsonschema==4.26.0
+jsonschema==4.24.1
     # via
     #   openapi-schema-validator
     #   openapi-spec-validator
@@ -65,7 +65,7 @@ pydantic==2.12.5
     #   openapi-schema-validator
     #   openapi-spec-validator
     #   pydantic-settings
-pydantic-core==2.42.0
+pydantic-core==2.41.5
     # via pydantic
 pydantic-settings==2.13.1
     # via
@@ -87,7 +87,7 @@ pyyaml==6.0.3
     # via
     #   jsonschema-path
     #   pre-commit
-redis==7.3.0
+redis==7.4.0
     # via fakeredis
 referencing==0.37.0
     # via

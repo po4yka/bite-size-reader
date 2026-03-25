@@ -239,6 +239,9 @@ dev = [
     "ruff>=0.14.14",
 ]
 
+[tool.uv]
+override-dependencies = ["protobuf>=7.34.1"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
