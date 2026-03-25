@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Accordion,
   AccordionItem,
@@ -72,6 +72,76 @@ function formatDate(isoString: string): string {
   }
 }
 
+interface ColorPickerProps {
+  selected: string;
+  onChange: (value: ColorValue) => void;
+}
+
+function ColorPicker({ selected, onChange }: ColorPickerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
+    const items = containerRef.current?.querySelectorAll<HTMLElement>("[role='radio']");
+    if (!items || items.length === 0) return;
+
+    const currentIndex = Array.from(items).findIndex(
+      (el) => el.getAttribute("data-color") === selected,
+    );
+
+    let nextIndex = currentIndex;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault();
+      nextIndex = (currentIndex + 1) % items.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault();
+      nextIndex = (currentIndex - 1 + items.length) % items.length;
+    } else if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      const target = event.target as HTMLElement;
+      const color = target.getAttribute("data-color") as ColorValue | null;
+      if (color) onChange(color);
+      return;
+    } else {
+      return;
+    }
+
+    const nextColor = items[nextIndex].getAttribute("data-color") as ColorValue | null;
+    if (nextColor) {
+      onChange(nextColor);
+      items[nextIndex].focus();
+    }
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="highlight-color-picker"
+      role="radiogroup"
+      aria-label="Highlight color"
+      onKeyDown={handleKeyDown}
+    >
+      {COLOR_OPTIONS.map((opt) => (
+        <Tag
+          key={opt.value}
+          type={colorTagType(opt.value)}
+          role="radio"
+          aria-checked={selected === opt.value}
+          aria-label={opt.label}
+          data-color={opt.value}
+          tabIndex={selected === opt.value ? 0 : -1}
+          style={{
+            cursor: "pointer",
+            outline: selected === opt.value ? "2px solid var(--cds-focus)" : "none",
+          }}
+          onClick={() => onChange(opt.value as ColorValue)}
+        >
+          {opt.label}
+        </Tag>
+      ))}
+    </div>
+  );
+}
+
 interface HighlightRowProps {
   highlight: Highlight;
   summaryId: number;
@@ -122,21 +192,7 @@ function HighlightRow({ highlight, summaryId }: HighlightRowProps) {
             onChange={(e) => setEditNote(e.currentTarget.value)}
             size="sm"
           />
-          <div className="highlight-color-picker">
-            {COLOR_OPTIONS.map((opt) => (
-              <Tag
-                key={opt.value}
-                type={colorTagType(opt.value)}
-                style={{
-                  cursor: "pointer",
-                  outline: editColor === opt.value ? `2px solid var(--cds-focus)` : "none",
-                }}
-                onClick={() => setEditColor(opt.value as ColorValue)}
-              >
-                {opt.label}
-              </Tag>
-            ))}
-          </div>
+          <ColorPicker selected={editColor} onChange={setEditColor} />
           <div className="highlight-actions">
             <IconButton
               label="Save"

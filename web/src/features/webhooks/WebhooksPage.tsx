@@ -16,6 +16,7 @@ import {
   TableRow,
   TextInput,
   Tag,
+  Tile,
 } from "@carbon/react";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import {
@@ -353,7 +354,19 @@ export default function WebhooksPage() {
       <QueryErrorNotification error={webhooksQuery.error} title="Failed to load webhooks" />
 
       {!webhooksQuery.isLoading && webhooks.length === 0 && !webhooksQuery.error && (
-        <p>No webhook subscriptions yet. Create one to get started.</p>
+        <Tile>
+          <div className="page-heading-group">
+            <h3>No webhooks configured</h3>
+            <p className="page-subtitle">
+              Webhooks let external services receive notifications when events occur, such as a new summary being created.
+            </p>
+          </div>
+          <div className="form-actions">
+            <Button kind="primary" size="sm" onClick={openCreate}>
+              Create your first webhook
+            </Button>
+          </div>
+        </Tile>
       )}
 
       {webhooks.length > 0 && (

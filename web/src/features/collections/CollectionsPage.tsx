@@ -19,6 +19,7 @@ import {
   TableRow,
   Tag,
   TextInput,
+  Tile,
   TreeNode,
   TreeView,
 } from "@carbon/react";
@@ -398,17 +399,30 @@ export default function CollectionsPage() {
           </div>
         )}
 
-        <TreeView
-          label="Collections"
-          hideLabel
-          active={selectedCollectionId != null ? String(selectedCollectionId) : undefined}
-        >
-          {(treeQuery.data ?? []).map((collection) => (
-            <Fragment key={collection.id}>
-              <RenderTree collection={collection} onSelect={handleCollectionSelect} />
-            </Fragment>
-          ))}
-        </TreeView>
+        {treeQuery.isSuccess && (treeQuery.data ?? []).length === 0 && (
+          <Tile>
+            <div className="page-heading-group">
+              <h3>No collections yet</h3>
+              <p className="page-subtitle">
+                Collections let you organise your saved articles into named groups. Create your first one above.
+              </p>
+            </div>
+          </Tile>
+        )}
+
+        {(treeQuery.data ?? []).length > 0 && (
+          <TreeView
+            label="Collections"
+            hideLabel
+            active={selectedCollectionId != null ? String(selectedCollectionId) : undefined}
+          >
+            {(treeQuery.data ?? []).map((collection) => (
+              <Fragment key={collection.id}>
+                <RenderTree collection={collection} onSelect={handleCollectionSelect} />
+              </Fragment>
+            ))}
+          </TreeView>
+        )}
       </div>
 
       <div className="collections-items">
@@ -466,7 +480,18 @@ export default function CollectionsPage() {
         )}
         <QueryErrorNotification error={itemsQuery.error} title="Failed to load collection items" />
 
-        {selectedCollectionId && (
+        {selectedCollectionId && !itemsQuery.isLoading && rows.length === 0 && !itemsQuery.error && (
+          <Tile>
+            <div className="page-heading-group">
+              <h3>This collection is empty</h3>
+              <p className="page-subtitle">
+                Add articles to this collection from the Library using the &#34;Add to collection&#34; action.
+              </p>
+            </div>
+          </Tile>
+        )}
+
+        {selectedCollectionId && rows.length > 0 && (
           <DataTable rows={rows} headers={headers}>
             {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
               <TableContainer title="Collection items">

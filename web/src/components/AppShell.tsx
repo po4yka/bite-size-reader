@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import ErrorBoundary from "./ErrorBoundary";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Button,
@@ -196,7 +197,9 @@ export default function AppShell() {
               </div>
             </section>
           )}
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </Content>
       </div>
     </Theme>

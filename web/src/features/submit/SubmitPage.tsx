@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Button,
@@ -31,6 +31,83 @@ interface DuplicateState {
 
 type SubmitMode = "url" | "forward";
 
+// ---------------------------------------------------------------------------
+// Submission state machine
+// ---------------------------------------------------------------------------
+
+type SubmissionPhase = "idle" | "submitting" | "polling" | "completed" | "error";
+
+interface SubmissionState {
+  phase: SubmissionPhase;
+  requestId: string | null;
+  pollingPaused: boolean;
+  pollingStartedAt: number | null;
+  submitDuplicate: DuplicateState | null;
+}
+
+type SubmissionAction =
+  | { type: "SUBMIT_START" }
+  | { type: "SUBMIT_SUCCESS"; requestId: string; pollingStartedAt: number }
+  | {
+      type: "SUBMIT_DUPLICATE";
+      duplicate: DuplicateState;
+      requestId: string | null;
+      pollingStartedAt: number | null;
+    }
+  | { type: "POLL_PAUSE" }
+  | { type: "POLL_RESUME" }
+  | { type: "PROCESSING_COMPLETE" }
+  | { type: "SUBMIT_ERROR" }
+  | { type: "RESET" };
+
+const initialSubmissionState: SubmissionState = {
+  phase: "idle",
+  requestId: null,
+  pollingPaused: false,
+  pollingStartedAt: null,
+  submitDuplicate: null,
+};
+
+function submissionReducer(state: SubmissionState, action: SubmissionAction): SubmissionState {
+  switch (action.type) {
+    case "SUBMIT_START":
+      return {
+        ...initialSubmissionState,
+        phase: "submitting",
+      };
+    case "SUBMIT_SUCCESS":
+      return {
+        ...state,
+        phase: "polling",
+        requestId: action.requestId,
+        pollingPaused: false,
+        pollingStartedAt: action.pollingStartedAt,
+        submitDuplicate: null,
+      };
+    case "SUBMIT_DUPLICATE":
+      return {
+        ...state,
+        phase: action.requestId != null ? "polling" : "completed",
+        requestId: action.requestId,
+        pollingPaused: false,
+        pollingStartedAt: action.pollingStartedAt,
+        submitDuplicate: action.duplicate,
+      };
+    case "POLL_PAUSE":
+      return { ...state, pollingPaused: true };
+    case "POLL_RESUME":
+      return { ...state, pollingPaused: false };
+    case "PROCESSING_COMPLETE":
+      return { ...state, phase: "completed" };
+    case "SUBMIT_ERROR":
+      return { ...state, phase: "error" };
+    case "RESET":
+      return { ...initialSubmissionState };
+    default:
+      return state;
+  }
+}
+
 export default function SubmitPage() {
   const navigate = useNavigate();
 
@@ -39,10 +116,8 @@ export default function SubmitPage() {
   const [langPreference, setLangPreference] = useState<"auto" | "en" | "ru">("auto");
   const [urlTouched, setUrlTouched] = useState(false);
   const [duplicateProbeUrl, setDuplicateProbeUrl] = useState("");
-  const [requestId, setRequestId] = useState<string | null>(null);
-  const [pollingPaused, setPollingPaused] = useState(false);
-  const [pollingStartedAt, setPollingStartedAt] = useState<number | null>(null);
-  const [submitDuplicate, setSubmitDuplicate] = useState<DuplicateState | null>(null);
+  const [submission, dispatchSubmission] = useReducer(submissionReducer, initialSubmissionState);
+  const { requestId, pollingPaused, pollingStartedAt, submitDuplicate } = submission;
 
   const urlValidation = useMemo(() => validateSubmitUrl(url), [url]);
 
@@ -70,12 +145,12 @@ export default function SubmitPage() {
 
     const remaining = MAX_POLL_DURATION_MS - (Date.now() - pollingStartedAt);
     if (remaining <= 0) {
-      setPollingPaused(true);
+      dispatchSubmission({ type: "POLL_PAUSE" });
       return;
     }
 
     const timer = window.setTimeout(() => {
-      setPollingPaused(true);
+      dispatchSubmission({ type: "POLL_PAUSE" });
     }, remaining);
     return () => window.clearTimeout(timer);
   }, [requestId, pollingPaused, pollingStartedAt, statusQuery.data?.status]);
@@ -113,19 +188,17 @@ export default function SubmitPage() {
 
   const handleSubmit = useCallback(() => {
     if (!canSubmit) return;
-    setRequestId(null);
-    setPollingPaused(false);
-    setPollingStartedAt(null);
-    setSubmitDuplicate(null);
+    dispatchSubmission({ type: "SUBMIT_START" });
     submitMutation.mutate(
       { inputUrl: urlValidation.normalizedUrl, langPreference },
       {
         onSuccess: (result) => {
           if (result.kind === "queued") {
-            setRequestId(result.requestId);
-            setPollingPaused(false);
-            setPollingStartedAt(Date.now());
-            setSubmitDuplicate(null);
+            dispatchSubmission({
+              type: "SUBMIT_SUCCESS",
+              requestId: result.requestId,
+              pollingStartedAt: Date.now(),
+            });
             return;
           }
           const duplicateState: DuplicateState = {
@@ -134,13 +207,20 @@ export default function SubmitPage() {
             requestId: result.existingRequestId,
             summarizedAt: result.summarizedAt,
           };
-          setSubmitDuplicate(duplicateState);
           if (!result.existingSummaryId && result.existingRequestId) {
-            setRequestId(result.existingRequestId);
-            setPollingPaused(false);
-            setPollingStartedAt(Date.now());
+            dispatchSubmission({
+              type: "SUBMIT_DUPLICATE",
+              duplicate: duplicateState,
+              requestId: result.existingRequestId,
+              pollingStartedAt: Date.now(),
+            });
           } else {
-            setRequestId(null);
+            dispatchSubmission({
+              type: "SUBMIT_DUPLICATE",
+              duplicate: duplicateState,
+              requestId: null,
+              pollingStartedAt: null,
+            });
           }
         },
       },
@@ -156,10 +236,11 @@ export default function SubmitPage() {
     if (!canRetryStatus || retryMutation.isPending || !requestId) return;
     retryMutation.mutate(requestId, {
       onSuccess: (result) => {
-        setRequestId(result.requestId);
-        setSubmitDuplicate(null);
-        setPollingPaused(false);
-        setPollingStartedAt(Date.now());
+        dispatchSubmission({
+          type: "SUBMIT_SUCCESS",
+          requestId: result.requestId,
+          pollingStartedAt: Date.now(),
+        });
       },
     });
   }, [canRetryStatus, retryMutation, requestId]);
@@ -179,16 +260,15 @@ export default function SubmitPage() {
 
   function startTrackingExistingRequest(): void {
     if (!duplicateRequestId) return;
-    setRequestId(duplicateRequestId);
-    setPollingPaused(false);
-    setPollingStartedAt(Date.now());
+    dispatchSubmission({
+      type: "SUBMIT_SUCCESS",
+      requestId: duplicateRequestId,
+      pollingStartedAt: Date.now(),
+    });
   }
 
   function resetSubmitFlow(): void {
-    setRequestId(null);
-    setPollingPaused(false);
-    setPollingStartedAt(null);
-    setSubmitDuplicate(null);
+    dispatchSubmission({ type: "RESET" });
   }
 
   return (
@@ -200,10 +280,7 @@ export default function SubmitPage() {
           selectedIndex={submitMode === "url" ? 0 : 1}
           onChange={({ index }) => {
             setSubmitMode(index === 0 ? "url" : "forward");
-            setRequestId(null);
-            setPollingPaused(false);
-            setPollingStartedAt(null);
-            setSubmitDuplicate(null);
+            dispatchSubmission({ type: "RESET" });
           }}
         >
           <Switch name="url" text="URL" />
@@ -215,9 +292,11 @@ export default function SubmitPage() {
         <>
           <ForwardForm
             onRequestCreated={(id) => {
-              setRequestId(id);
-              setPollingPaused(false);
-              setPollingStartedAt(Date.now());
+              dispatchSubmission({
+                type: "SUBMIT_SUCCESS",
+                requestId: id,
+                pollingStartedAt: Date.now(),
+              });
             }}
           />
           {requestId && statusQuery.data && (
@@ -233,7 +312,7 @@ export default function SubmitPage() {
                   </Button>
                 )}
                 {pollingPaused && (
-                  <Button kind="tertiary" onClick={() => setPollingPaused(false)}>
+                  <Button kind="tertiary" onClick={() => dispatchSubmission({ type: "POLL_RESUME" })}>
                     Resume polling
                   </Button>
                 )}
@@ -281,7 +360,7 @@ export default function SubmitPage() {
               setUrl(event.currentTarget.value);
               setUrlTouched(true);
               if (!requestId) {
-                setSubmitDuplicate(null);
+                dispatchSubmission({ type: "RESET" });
               }
             }}
           />
@@ -376,7 +455,7 @@ export default function SubmitPage() {
               )}
 
               {pollingPaused && (
-                <Button kind="tertiary" onClick={() => setPollingPaused(false)}>
+                <Button kind="tertiary" onClick={() => dispatchSubmission({ type: "POLL_RESUME" })}>
                   Resume polling
                 </Button>
               )}

@@ -511,3 +511,57 @@ body {
     transition: none;
   }
 }
+
+/* Skeleton shimmer animation */
+@keyframes bsr-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.cds--skeleton {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 40%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.08) 60%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: bsr-shimmer 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cds--skeleton {
+    animation: none;
+    background-image: none;
+  }
+}
+
+/* Entrance animation for list and grid items */
+@keyframes bsr-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bsr-fade-in {
+  animation: bsr-fade-in 200ms var(--bsr-transition-normal) both;
+  animation-delay: calc(var(--bsr-stagger-index, 0) * 50ms);
+  animation-fill-mode: both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bsr-fade-in {
+    animation: none;
+  }
+}

@@ -12,6 +12,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tile,
   Toggle,
 } from "@carbon/react";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
@@ -190,7 +191,19 @@ export default function RulesPage() {
       <QueryErrorNotification error={rulesQuery.error} title="Failed to load rules" />
 
       {!rulesQuery.isLoading && rules.length === 0 && !rulesQuery.error && (
-        <p>No rules yet. Create one to get started.</p>
+        <Tile>
+          <div className="page-heading-group">
+            <h3>No automation rules</h3>
+            <p className="page-subtitle">
+              Rules run automatically when events occur and can trigger actions such as tagging or forwarding summaries.
+            </p>
+          </div>
+          <div className="form-actions">
+            <Button kind="primary" size="sm" onClick={openCreate}>
+              Create your first rule
+            </Button>
+          </div>
+        </Tile>
       )}
 
       {rules.length > 0 && (

@@ -260,7 +260,13 @@ export function RSSFeedsTab() {
           <DataTableSkeleton columnCount={headers.length} rowCount={4} showToolbar={false} />
         )}
 
-        {!isInitialLoading && (
+        {!isInitialLoading && subscriptions.length === 0 && !subscriptionsQuery.error && (
+          <p className="page-subtitle" style={{ marginTop: "1rem" }}>
+            No feed subscriptions yet. Add a Substack or RSS feed URL above to get started.
+          </p>
+        )}
+
+        {!isInitialLoading && subscriptions.length > 0 && (
           <DataTable rows={rows} headers={headers} isSortable={false}>
             {({ rows, headers, getHeaderProps, getRowProps, getTableProps, getTableContainerProps }) => (
               <TableContainer title="Subscribed feeds" {...getTableContainerProps()}>
