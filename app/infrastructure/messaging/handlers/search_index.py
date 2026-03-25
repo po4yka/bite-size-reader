@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
-    SqliteTopicSearchRepositoryAdapter,
-)
 
 if TYPE_CHECKING:
+    from app.application.ports.search import TopicSearchRepositoryPort
     from app.domain.events.summary_events import SummaryCreated
     from app.domain.events.tag_events import TagAttached, TagDetached
 
@@ -19,11 +17,8 @@ logger = get_logger(__name__)
 class SearchIndexEventHandler:
     """Update the full-text search index when summary data changes."""
 
-    def __init__(self, database: Any) -> None:
-        if isinstance(database, SqliteTopicSearchRepositoryAdapter):
-            self._repo = database
-        else:
-            self._repo = SqliteTopicSearchRepositoryAdapter(database)
+    def __init__(self, repository: TopicSearchRepositoryPort) -> None:
+        self._repo = repository
 
     async def on_summary_created(self, event: SummaryCreated) -> None:
         logger.info(

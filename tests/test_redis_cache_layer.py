@@ -69,6 +69,16 @@ def _dummy_cfg() -> SimpleNamespace:
     )
 
 
+def _runtime_repo_kwargs() -> dict[str, AsyncMock]:
+    return {
+        "summary_repo": AsyncMock(),
+        "request_repo": AsyncMock(),
+        "crawl_result_repo": AsyncMock(),
+        "llm_repo": AsyncMock(),
+        "user_repo": AsyncMock(),
+    }
+
+
 @pytest.mark.asyncio
 async def test_redis_cache_set_get_roundtrip():
     cfg = _dummy_cfg()
@@ -178,6 +188,7 @@ async def test_interactive_summary_service_uses_cached_summary(monkeypatch):
         response_formatter=response_formatter,
         audit_func=lambda *args, **kwargs: None,
         sem=lambda: asyncio.Semaphore(1),
+        **_runtime_repo_kwargs(),
     )
     pure_service = PureSummaryService(runtime=runtime)
     request_factory = SummaryRequestFactory(

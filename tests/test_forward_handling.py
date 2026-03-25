@@ -66,6 +66,25 @@ def _make_forward_message(
     )
 
 
+def _forward_workflow_repo_kwargs() -> dict[str, MagicMock]:
+    return {
+        "summary_repo": MagicMock(),
+        "request_repo": MagicMock(),
+        "llm_repo": MagicMock(),
+        "user_repo": MagicMock(),
+    }
+
+
+def _forward_processor_repo_kwargs() -> dict[str, MagicMock]:
+    return {
+        "summary_repo": MagicMock(),
+        "request_repo": MagicMock(),
+        "crawl_result_repo": MagicMock(),
+        "llm_repo": MagicMock(),
+        "user_repo": MagicMock(),
+    }
+
+
 def _make_processor(db_path: str):
     """Create a ForwardContentProcessor with real DB and mock formatter."""
     from app.adapters.external.response_formatter import ResponseFormatter
@@ -319,9 +338,7 @@ class TestForwardProcessorCachedSummary(unittest.IsolatedAsyncioTestCase):
             response_formatter=response_formatter,
             audit_func=lambda *a, **kw: audit_calls.append(a),
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
-            summary_repo=MagicMock(),
-            request_repo=MagicMock(),
-            user_repo=MagicMock(),
+            **_forward_processor_repo_kwargs(),
         )
         return processor, response_formatter, audit_calls
 
@@ -425,9 +442,7 @@ class TestForwardProcessorExceptionHandling(unittest.IsolatedAsyncioTestCase):
             response_formatter=MagicMock(),
             audit_func=lambda *a, **kw: None,
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
-            summary_repo=MagicMock(),
-            request_repo=MagicMock(),
-            user_repo=MagicMock(),
+            **_forward_processor_repo_kwargs(),
         )
 
         processor.content_processor.process_forward_content = AsyncMock(  # type: ignore[method-assign]
@@ -455,9 +470,7 @@ class TestForwardProcessorExceptionHandling(unittest.IsolatedAsyncioTestCase):
             response_formatter=MagicMock(),
             audit_func=lambda *a, **kw: None,
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
-            summary_repo=MagicMock(),
-            request_repo=MagicMock(),
-            user_repo=MagicMock(),
+            **_forward_processor_repo_kwargs(),
         )
 
         processor.content_processor.process_forward_content = AsyncMock(  # type: ignore[method-assign]
@@ -548,6 +561,7 @@ class TestForwardSummarizerTruncation(unittest.IsolatedAsyncioTestCase):
             response_formatter=MagicMock(),
             audit_func=lambda *a, **kw: None,
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
+            **_forward_workflow_repo_kwargs(),
         )
 
         long_prompt = "A" * 50000
@@ -581,6 +595,7 @@ class TestForwardSummarizerTruncation(unittest.IsolatedAsyncioTestCase):
             response_formatter=MagicMock(),
             audit_func=lambda *a, **kw: None,
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
+            **_forward_workflow_repo_kwargs(),
         )
 
         short_prompt = "Short message"
@@ -614,6 +629,7 @@ class TestForwardSummarizerTruncation(unittest.IsolatedAsyncioTestCase):
             response_formatter=MagicMock(),
             audit_func=lambda *a, **kw: None,
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
+            **_forward_workflow_repo_kwargs(),
         )
 
         mock_workflow = AsyncMock(return_value={"summary_250": "ok"})
@@ -646,6 +662,7 @@ class TestForwardSummarizerTruncation(unittest.IsolatedAsyncioTestCase):
             response_formatter=MagicMock(),
             audit_func=lambda *a, **kw: None,
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
+            **_forward_workflow_repo_kwargs(),
         )
 
         mock_workflow = AsyncMock(return_value={"summary_250": "ok"})
@@ -678,6 +695,7 @@ class TestForwardSummarizerTruncation(unittest.IsolatedAsyncioTestCase):
             response_formatter=MagicMock(),
             audit_func=lambda *a, **kw: None,
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
+            **_forward_workflow_repo_kwargs(),
         )
 
         # Test with short prompt (should clamp to 2048)

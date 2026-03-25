@@ -12,7 +12,7 @@ import peewee
 
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.models import SummaryTag, Tag, model_to_dict
+from app.db.models import Request, Summary, SummaryTag, Tag, model_to_dict
 from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
 logger = get_logger(__name__)
@@ -148,6 +148,22 @@ class SqliteTagRepositoryAdapter(SqliteBaseRepository):
 
         await self._execute(_detach, operation_name="detach_tag")
 
+    async def async_restore_tag(self, tag_id: int, *, name: str | None = None) -> dict[str, Any]:
+        """Restore a previously soft-deleted tag."""
+
+        def _restore() -> dict[str, Any]:
+            tag = Tag.get_by_id(tag_id)
+            tag.is_deleted = False
+            tag.deleted_at = None
+            if name is not None:
+                tag.name = name
+            tag.save()
+            d = model_to_dict(tag)
+            assert d is not None
+            return d
+
+        return await self._execute(_restore, operation_name="restore_tag")
+
     async def async_get_tags_for_summary(self, summary_id: int) -> list[dict[str, Any]]:
         """Return all tags attached to a summary with source info."""
 
@@ -170,6 +186,38 @@ class SqliteTagRepositoryAdapter(SqliteBaseRepository):
             return result
 
         return await self._execute(_query, operation_name="get_tags_for_summary", read_only=True)
+
+    async def async_get_tagged_summaries(
+        self,
+        *,
+        user_id: int,
+        tag_id: int,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Return recent summaries for a tag owned by the user."""
+
+        def _query() -> list[dict[str, Any]]:
+            rows = (
+                Summary.select(Summary, Request)
+                .join(SummaryTag)
+                .where(SummaryTag.tag == tag_id)
+                .switch(Summary)
+                .join(Request)
+                .where(
+                    (Request.user_id == user_id) & (Summary.is_deleted == False)  # noqa: E712
+                )
+                .order_by(Summary.created_at.desc())
+                .limit(limit)
+            )
+            result: list[dict[str, Any]] = []
+            for row in rows:
+                data = model_to_dict(row) or {}
+                if hasattr(row, "request") and row.request is not None:
+                    data["request"] = model_to_dict(row.request)
+                result.append(data)
+            return result
+
+        return await self._execute(_query, operation_name="get_tagged_summaries", read_only=True)
 
     async def async_merge_tags(self, source_tag_ids: list[int], target_tag_id: int) -> None:
         """Merge source tags into target: re-point associations, soft-delete sources."""
@@ -201,17 +249,19 @@ class SqliteTagRepositoryAdapter(SqliteBaseRepository):
         self,
         user_id: int,
         normalized_name: str,
+        *,
+        include_deleted: bool = False,
     ) -> dict[str, Any] | None:
         """Return tag by normalized name within a user scope."""
 
         def _query() -> dict[str, Any] | None:
-            try:
-                tag = Tag.get(
-                    (Tag.user == user_id)
-                    & (Tag.normalized_name == normalized_name)
-                    & (Tag.is_deleted == False)  # noqa: E712
-                )
-            except Tag.DoesNotExist:
+            query = Tag.select().where(
+                (Tag.user == user_id) & (Tag.normalized_name == normalized_name)
+            )
+            if not include_deleted:
+                query = query.where(Tag.is_deleted == False)  # noqa: E712
+            tag = query.first()
+            if tag is None:
                 return None
             return model_to_dict(tag)
 

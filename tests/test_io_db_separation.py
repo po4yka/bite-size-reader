@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from types import MethodType, SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -35,6 +36,15 @@ class _NoopFormatter:
 
     async def send_html_fallback_notification(self, *args, **kwargs) -> None:
         return None
+
+
+def _workflow_repo_kwargs() -> dict[str, Any]:
+    return {
+        "summary_repo": MagicMock(),
+        "request_repo": MagicMock(),
+        "llm_repo": MagicMock(),
+        "user_repo": MagicMock(),
+    }
 
 
 @pytest.mark.asyncio
@@ -134,6 +144,7 @@ async def test_summary_persistence_deferred_from_llm_flow() -> None:
         response_formatter=None,
         audit_func=lambda *args, **kwargs: None,
         sem=lambda: _DummySemaphore(),
+        **_workflow_repo_kwargs(),
     )
     # Override repositories with slow mocks
     workflow.summary_repo = _SlowSummaryRepo()

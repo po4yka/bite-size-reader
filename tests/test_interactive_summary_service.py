@@ -21,6 +21,16 @@ class _DummySemaphore:
         return None
 
 
+def _runtime_repo_kwargs() -> dict[str, Any]:
+    return {
+        "summary_repo": MagicMock(),
+        "request_repo": MagicMock(),
+        "crawl_result_repo": MagicMock(),
+        "llm_repo": MagicMock(),
+        "user_repo": MagicMock(),
+    }
+
+
 class InteractiveSummaryServiceRequestTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.cfg = SimpleNamespace(
@@ -84,6 +94,7 @@ class InteractiveSummaryServiceRequestTests(unittest.IsolatedAsyncioTestCase):
             response_formatter=self.response_formatter,
             audit_func=lambda *args, **kwargs: None,
             sem=lambda: _DummySemaphore(),
+            **_runtime_repo_kwargs(),
         )
         pure_service = PureSummaryService(runtime=runtime)
         request_factory = SummaryRequestFactory(

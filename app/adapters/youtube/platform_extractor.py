@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         PlatformExtractionResult,
     )
     from app.adapters.external.response_formatter import ResponseFormatter
+    from app.application.ports.requests import RequestRepositoryPort, VideoDownloadRepositoryPort
 
 logger = get_logger(__name__)
 
@@ -34,6 +35,8 @@ class YouTubePlatformExtractor(PlatformExtractor):
         response_formatter: ResponseFormatter,
         audit_func: Any,
         lifecycle: PlatformRequestLifecycle,
+        request_repo: RequestRepositoryPort,
+        video_repo: VideoDownloadRepositoryPort,
     ) -> None:
         self._cfg = cfg
         self._feedback_service = YouTubeFeedbackService(response_formatter=response_formatter)
@@ -43,6 +46,8 @@ class YouTubePlatformExtractor(PlatformExtractor):
             response_formatter=response_formatter,
             audit_func=audit_func,
             lifecycle=lifecycle,
+            request_repo=request_repo,
+            video_repo=video_repo,
         )
         self._pipeline = YouTubeDownloadPipeline(
             cfg=cfg,

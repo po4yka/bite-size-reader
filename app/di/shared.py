@@ -12,8 +12,11 @@ from app.adapters.llm import LLMClientFactory
 from app.core.logging_utils import get_logger
 from app.di.repositories import (
     build_audit_log_repository,
+    build_crawl_result_repository,
+    build_llm_repository,
     build_request_repository,
     build_summary_repository,
+    build_user_repository,
 )
 from app.di.types import CoreDependencies
 
@@ -134,6 +137,9 @@ def build_url_processor(
     db_write_queue: DbWriteQueue | None = None,
     request_repo: RequestRepositoryPort | None = None,
     summary_repo: SummaryRepositoryPort | None = None,
+    crawl_result_repo: Any | None = None,
+    llm_repo: Any | None = None,
+    user_repo: Any | None = None,
     related_reads_service: RelatedReadsService | None = None,
 ) -> Any:
     """Build the shared URL processor graph for Telegram, API, and CLI runtimes."""
@@ -142,6 +148,9 @@ def build_url_processor(
 
     request_repository = request_repo or build_request_repository(db)
     summary_repository = summary_repo or build_summary_repository(db)
+    crawl_repository = crawl_result_repo or build_crawl_result_repository(db)
+    llm_repository = llm_repo or build_llm_repository(db)
+    user_repository = user_repo or build_user_repository(db)
 
     return URLProcessor(
         cfg=cfg,
@@ -155,6 +164,9 @@ def build_url_processor(
         db_write_queue=db_write_queue,
         request_repo=request_repository,
         summary_repo=summary_repository,
+        crawl_result_repo=crawl_repository,
+        llm_repo=llm_repository,
+        user_repo=user_repository,
         related_reads_service=related_reads_service,
         stream_coordinator_factory=SummaryDraftStreamCoordinator,
     )

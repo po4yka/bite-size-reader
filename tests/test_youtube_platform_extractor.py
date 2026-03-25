@@ -127,6 +127,13 @@ def _make_request(
     )
 
 
+def _youtube_repo_kwargs() -> dict[str, MagicMock]:
+    return {
+        "request_repo": MagicMock(),
+        "video_repo": MagicMock(),
+    }
+
+
 def _make_platform_extractor(tmp_path: Path) -> YouTubePlatformExtractor:
     return YouTubePlatformExtractor(
         cfg=_make_cfg(tmp_path),
@@ -134,6 +141,7 @@ def _make_platform_extractor(tmp_path: Path) -> YouTubePlatformExtractor:
         response_formatter=_make_response_formatter(),
         audit_func=lambda *_args, **_kwargs: None,
         lifecycle=_make_lifecycle(),
+        **_youtube_repo_kwargs(),
     )
 
 
@@ -317,6 +325,7 @@ async def test_session_service_rejects_when_storage_limit_still_exceeded(tmp_pat
         response_formatter=_make_response_formatter(),
         audit_func=lambda *_args, **_kwargs: None,
         lifecycle=_make_lifecycle(),
+        **_youtube_repo_kwargs(),
     )
     session.calculate_storage_usage = MagicMock(return_value=1024 * 1024)
 
@@ -332,6 +341,7 @@ async def test_session_service_uses_request_id_override_in_pure_mode(tmp_path: P
         response_formatter=_make_response_formatter(),
         audit_func=lambda *_args, **_kwargs: None,
         lifecycle=_make_lifecycle(),
+        **_youtube_repo_kwargs(),
     )
     session.video_repo.async_get_video_download_by_request = AsyncMock(return_value=None)
     session.video_repo.async_create_video_download = AsyncMock(return_value=901)

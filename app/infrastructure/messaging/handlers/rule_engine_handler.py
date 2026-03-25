@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from app.core.logging_utils import get_logger
-from app.db.models import Request
 
 if TYPE_CHECKING:
+    from app.application.ports.requests import RequestRepositoryPort
     from app.application.use_cases.rule_execution import RuleExecutionUseCase
     from app.domain.events.request_events import RequestCompleted, RequestFailed
     from app.domain.events.summary_events import SummaryCreated
@@ -19,18 +19,24 @@ logger = get_logger(__name__)
 class RuleEngineHandler:
     """EventBus subscriber that triggers rule evaluation on domain events."""
 
-    def __init__(self, rule_execution_use_case: RuleExecutionUseCase) -> None:
+    def __init__(
+        self,
+        rule_execution_use_case: RuleExecutionUseCase,
+        request_repository: RequestRepositoryPort,
+    ) -> None:
         self._rule_execution = rule_execution_use_case
+        self._request_repository = request_repository
 
-    def _user_id_from_request(self, request_id: int) -> int | None:
-        try:
-            return Request.get_by_id(request_id).user_id
-        except Request.DoesNotExist:
+    async def _user_id_from_request(self, request_id: int) -> int | None:
+        request = await self._request_repository.async_get_request_by_id(request_id)
+        if request is None:
             logger.warning("rule_engine_request_not_found", extra={"request_id": request_id})
             return None
+        user_id = request.get("user_id")
+        return int(user_id) if user_id is not None else None
 
     async def on_summary_created(self, event: SummaryCreated) -> None:
-        user_id = self._user_id_from_request(event.request_id)
+        user_id = await self._user_id_from_request(event.request_id)
         if user_id is None:
             return
         await self._safe_execute(
@@ -45,7 +51,7 @@ class RuleEngineHandler:
         )
 
     async def on_request_completed(self, event: RequestCompleted) -> None:
-        user_id = self._user_id_from_request(event.request_id)
+        user_id = await self._user_id_from_request(event.request_id)
         if user_id is None:
             return
         await self._safe_execute(
@@ -55,7 +61,7 @@ class RuleEngineHandler:
         )
 
     async def on_request_failed(self, event: RequestFailed) -> None:
-        user_id = self._user_id_from_request(event.request_id)
+        user_id = await self._user_id_from_request(event.request_id)
         if user_id is None:
             return
         await self._safe_execute(

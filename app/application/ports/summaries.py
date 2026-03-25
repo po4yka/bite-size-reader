@@ -198,8 +198,20 @@ class TagRepositoryPort(Protocol):
     async def async_detach_tag(self, summary_id: int, tag_id: int) -> None:
         """Detach a tag from a summary."""
 
+    async def async_restore_tag(self, tag_id: int, *, name: str | None = None) -> dict[str, Any]:
+        """Restore a previously soft-deleted tag."""
+
     async def async_get_tags_for_summary(self, summary_id: int) -> list[dict[str, Any]]:
         """Return all tags attached to a summary."""
+
+    async def async_get_tagged_summaries(
+        self,
+        *,
+        user_id: int,
+        tag_id: int,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Return recent summaries for a tag owned by the user."""
 
     async def async_merge_tags(self, source_tag_ids: list[int], target_tag_id: int) -> None:
         """Merge source tags into target tag, reassigning all associations."""
@@ -208,5 +220,7 @@ class TagRepositoryPort(Protocol):
         self,
         user_id: int,
         normalized_name: str,
+        *,
+        include_deleted: bool = False,
     ) -> dict[str, Any] | None:
         """Return tag by normalized name within a user scope."""

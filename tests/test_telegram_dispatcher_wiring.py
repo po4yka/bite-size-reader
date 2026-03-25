@@ -14,7 +14,9 @@ def test_command_dispatcher_routes_preserve_expected_precedence_order() -> None:
         user_repository=MagicMock(),
         summary_repository=MagicMock(),
         request_repository=MagicMock(),
+        crawl_result_repository=MagicMock(),
         llm_repository=MagicMock(),
+        tag_repository=MagicMock(),
         audit_log_repository=MagicMock(),
         batch_session_repository=MagicMock(),
     )

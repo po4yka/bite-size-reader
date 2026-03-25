@@ -33,8 +33,13 @@ if TYPE_CHECKING:
     from app.adapters.content.scraper.protocol import ContentScraperProtocol
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
-    from app.application.ports.requests import RequestRepositoryPort
+    from app.application.ports.requests import (
+        CrawlResultRepositoryPort,
+        LLMRepositoryPort,
+        RequestRepositoryPort,
+    )
     from app.application.ports.summaries import SummaryRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
     from app.application.services.related_reads_service import RelatedReadsService
     from app.application.services.topic_search import TopicSearchService
     from app.config import AppConfig
@@ -67,6 +72,9 @@ class URLProcessor:
         db_write_queue: DbWriteQueue | None = None,
         request_repo: RequestRepositoryPort | None = None,
         summary_repo: SummaryRepositoryPort | None = None,
+        crawl_result_repo: CrawlResultRepositoryPort | None = None,
+        llm_repo: LLMRepositoryPort | None = None,
+        user_repo: UserRepositoryPort | None = None,
         related_reads_service: RelatedReadsService | None = None,
         stream_coordinator_factory: Callable[..., Any] | None = None,
     ) -> None:
@@ -80,6 +88,15 @@ class URLProcessor:
             raise ValueError(msg)
         if summary_repo is None:
             msg = "summary_repo must be provided by the DI layer"
+            raise ValueError(msg)
+        if crawl_result_repo is None:
+            msg = "crawl_result_repo must be provided by the DI layer"
+            raise ValueError(msg)
+        if llm_repo is None:
+            msg = "llm_repo must be provided by the DI layer"
+            raise ValueError(msg)
+        if user_repo is None:
+            msg = "user_repo must be provided by the DI layer"
             raise ValueError(msg)
         self.request_repo = request_repo
         self.summary_repo = summary_repo
@@ -109,6 +126,11 @@ class URLProcessor:
             sem=sem,
             topic_search=topic_search,
             db_write_queue=db_write_queue,
+            summary_repo=summary_repo,
+            request_repo=request_repo,
+            crawl_result_repo=crawl_result_repo,
+            llm_repo=llm_repo,
+            user_repo=user_repo,
         )
         self.pure_summary_service = PureSummaryService(runtime=self.summarization_runtime)
         self.summary_request_factory = SummaryRequestFactory(

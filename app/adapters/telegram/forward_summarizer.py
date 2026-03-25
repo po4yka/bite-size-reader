@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
+    from app.application.ports.requests import LLMRepositoryPort, RequestRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
@@ -45,6 +48,11 @@ class ForwardSummarizer:
         audit_func: Callable[[str, str, dict], None],
         sem: Callable[[], Any],
         db_write_queue: DbWriteQueue | None = None,
+        *,
+        summary_repo: SummaryRepositoryPort | None = None,
+        request_repo: RequestRepositoryPort | None = None,
+        llm_repo: LLMRepositoryPort | None = None,
+        user_repo: UserRepositoryPort | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -60,6 +68,10 @@ class ForwardSummarizer:
             audit_func=audit_func,
             sem=sem,
             db_write_queue=db_write_queue,
+            summary_repo=summary_repo,
+            request_repo=request_repo,
+            llm_repo=llm_repo,
+            user_repo=user_repo,
         )
 
     async def summarize_forward(

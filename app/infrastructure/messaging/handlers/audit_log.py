@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
+    from app.application.ports.audit import AuditLogRepositoryPort
     from app.domain.events.request_events import RequestCompleted, RequestFailed
     from app.domain.events.summary_events import SummaryCreated
-
-from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
-    SqliteAuditLogRepositoryAdapter,
-)
 
 logger = get_logger(__name__)
 
@@ -20,11 +17,8 @@ logger = get_logger(__name__)
 class AuditLogEventHandler:
     """Persist audit logs for important domain events."""
 
-    def __init__(self, database: Any) -> None:
-        if isinstance(database, SqliteAuditLogRepositoryAdapter):
-            self._repo = database
-        else:
-            self._repo = SqliteAuditLogRepositoryAdapter(database)
+    def __init__(self, repository: AuditLogRepositoryPort) -> None:
+        self._repo = repository
 
     async def on_summary_created(self, event: SummaryCreated) -> None:
         try:

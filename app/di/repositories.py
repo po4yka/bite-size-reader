@@ -44,6 +44,9 @@ from app.infrastructure.persistence.sqlite.repositories.user_repository import (
 from app.infrastructure.persistence.sqlite.repositories.video_download_repository import (
     SqliteVideoDownloadRepositoryAdapter,
 )
+from app.infrastructure.persistence.sqlite.repositories.webhook_repository import (
+    SqliteWebhookRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.application.ports.audit import AuditLogRepositoryPort
@@ -56,7 +59,7 @@ if TYPE_CHECKING:
         RequestRepositoryPort,
         VideoDownloadRepositoryPort,
     )
-    from app.application.ports.rules import RuleRepositoryPort
+    from app.application.ports.rules import RuleRepositoryPort, WebhookRepositoryPort
     from app.application.ports.search import EmbeddingRepositoryPort, TopicSearchRepositoryPort
     from app.application.ports.summaries import SummaryRepositoryPort, TagRepositoryPort
     from app.application.ports.users import UserRepositoryPort
@@ -113,6 +116,10 @@ def build_import_job_repository(db: DatabaseSessionManager) -> ImportJobReposito
 
 def build_rule_repository(db: DatabaseSessionManager) -> RuleRepositoryPort:
     return SqliteRuleRepositoryAdapter(db)
+
+
+def build_webhook_repository(db: DatabaseSessionManager) -> WebhookRepositoryPort:
+    return SqliteWebhookRepositoryAdapter(db)
 
 
 def build_backup_repository(db: DatabaseSessionManager) -> BackupRepositoryPort:

@@ -5,18 +5,19 @@ Lets users manage tags on summaries via Telegram reply commands.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
-from app.db.models import Request, Summary, SummaryTag, Tag
 from app.domain.services.tag_service import normalize_tag_name, validate_tag_name
 
 if TYPE_CHECKING:
     from app.adapters.telegram.command_handlers.execution_context import (
         CommandExecutionContext,
     )
+    from app.application.ports.requests import RequestRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort, TagRepositoryPort
 
 logger = get_logger(__name__)
 
@@ -25,6 +26,21 @@ _MAX_TAG_SUMMARIES = 10
 
 class TagHandler(HandlerDependenciesMixin):
     """Handle /tag, /untag, and /tags commands."""
+
+    def __init__(
+        self,
+        *,
+        cfg: Any,
+        db: Any,
+        response_formatter: Any,
+        tag_repo: TagRepositoryPort,
+        request_repo: RequestRepositoryPort,
+        summary_repo: SummaryRepositoryPort,
+    ) -> None:
+        super().__init__(cfg=cfg, db=db, response_formatter=response_formatter)
+        self._tag_repo = tag_repo
+        self._request_repo = request_repo
+        self._summary_repo = summary_repo
 
     @combined_handler("command_tag", "tag")
     async def handle_tag(self, ctx: CommandExecutionContext) -> None:
@@ -42,30 +58,32 @@ class TagHandler(HandlerDependenciesMixin):
             await ctx.response_formatter.safe_reply(ctx.message, f"Invalid tag: {error}")
             return
 
-        summary = await _find_summary_from_reply(ctx)
+        summary = await _find_summary_from_reply(
+            ctx,
+            request_repo=self._request_repo,
+            summary_repo=self._summary_repo,
+        )
         if summary is None:
             return  # helper already replied with an error
 
         normalized = normalize_tag_name(tag_name)
 
-        # Find or create the tag for this user
-        tag, _created = Tag.get_or_create(
-            user=ctx.uid,
-            normalized_name=normalized,
-            defaults={"name": tag_name.strip()},
+        tag = await self._tag_repo.async_get_tag_by_normalized_name(
+            ctx.uid,
+            normalized,
+            include_deleted=True,
         )
-        # Restore soft-deleted tag if re-used
-        if tag.is_deleted:
-            tag.is_deleted = False
-            tag.deleted_at = None
-            tag.save()
+        if tag is None:
+            tag = await self._tag_repo.async_create_tag(
+                user_id=ctx.uid,
+                name=tag_name.strip(),
+                normalized_name=normalized,
+                color=None,
+            )
+        elif tag.get("is_deleted"):
+            tag = await self._tag_repo.async_restore_tag(tag["id"], name=tag_name.strip())
 
-        # Create association (ignore if already exists)
-        SummaryTag.get_or_create(
-            summary=summary,
-            tag=tag,
-            defaults={"source": "manual"},
-        )
+        await self._tag_repo.async_attach_tag(summary["id"], tag["id"], "manual")
 
         await ctx.response_formatter.safe_reply(
             ctx.message,
@@ -83,21 +101,17 @@ class TagHandler(HandlerDependenciesMixin):
             )
             return
 
-        summary = await _find_summary_from_reply(ctx)
+        summary = await _find_summary_from_reply(
+            ctx,
+            request_repo=self._request_repo,
+            summary_repo=self._summary_repo,
+        )
         if summary is None:
             return
 
         normalized = normalize_tag_name(tag_name)
 
-        tag = (
-            Tag.select()
-            .where(
-                (Tag.user == ctx.uid)
-                & (Tag.normalized_name == normalized)
-                & (Tag.is_deleted == False)  # noqa: E712
-            )
-            .first()
-        )
+        tag = await self._tag_repo.async_get_tag_by_normalized_name(ctx.uid, normalized)
         if tag is None:
             await ctx.response_formatter.safe_reply(
                 ctx.message,
@@ -105,19 +119,15 @@ class TagHandler(HandlerDependenciesMixin):
             )
             return
 
-        deleted_count = (
-            SummaryTag.delete()
-            .where((SummaryTag.summary == summary) & (SummaryTag.tag == tag))
-            .execute()
-        )
-
-        if deleted_count == 0:
+        tags_for_summary = await self._tag_repo.async_get_tags_for_summary(summary["id"])
+        if not any(item.get("id") == tag["id"] for item in tags_for_summary):
             await ctx.response_formatter.safe_reply(
                 ctx.message,
                 f"This summary is not tagged with #{normalized}.",
             )
             return
 
+        await self._tag_repo.async_detach_tag(summary["id"], tag["id"])
         await ctx.response_formatter.safe_reply(
             ctx.message,
             f"Removed tag #{normalized}",
@@ -139,24 +149,11 @@ class TagHandler(HandlerDependenciesMixin):
 
     async def _list_all_tags(self, ctx: CommandExecutionContext) -> None:
         """List all user tags with summary counts."""
-        import peewee
-
-        tags = (
-            Tag.select(
-                Tag.normalized_name,
-                peewee.fn.COUNT(SummaryTag.id).alias("cnt"),
-            )
-            .join(SummaryTag, peewee.JOIN.LEFT_OUTER)
-            .where(
-                (Tag.user == ctx.uid) & (Tag.is_deleted == False)  # noqa: E712
-            )
-            .group_by(Tag.id)
-            .order_by(peewee.fn.COUNT(SummaryTag.id).desc())
-        )
+        tags = await self._tag_repo.async_get_user_tags(ctx.uid)
 
         lines: list[str] = []
         for row in tags:
-            lines.append(f"#{row.normalized_name} ({row.cnt})")
+            lines.append(f"#{row['normalized_name']} ({row.get('summary_count', 0)})")
 
         if not lines:
             await ctx.response_formatter.safe_reply(
@@ -172,15 +169,7 @@ class TagHandler(HandlerDependenciesMixin):
         """List summaries for a specific tag."""
         normalized = normalize_tag_name(tag_name)
 
-        tag = (
-            Tag.select()
-            .where(
-                (Tag.user == ctx.uid)
-                & (Tag.normalized_name == normalized)
-                & (Tag.is_deleted == False)  # noqa: E712
-            )
-            .first()
-        )
+        tag = await self._tag_repo.async_get_tag_by_normalized_name(ctx.uid, normalized)
         if tag is None:
             await ctx.response_formatter.safe_reply(
                 ctx.message,
@@ -188,21 +177,18 @@ class TagHandler(HandlerDependenciesMixin):
             )
             return
 
-        summaries = (
-            Summary.select(Summary, Request)
-            .join(SummaryTag)
-            .where(SummaryTag.tag == tag)
-            .switch(Summary)
-            .join(Request)
-            .order_by(Summary.created_at.desc())
-            .limit(_MAX_TAG_SUMMARIES)
+        summaries = await self._tag_repo.async_get_tagged_summaries(
+            user_id=ctx.uid,
+            tag_id=tag["id"],
+            limit=_MAX_TAG_SUMMARIES,
         )
 
         lines: list[str] = []
         for s in summaries:
-            payload = s.json_payload or {}
+            payload = s.get("json_payload") or {}
             title = payload.get("title", "Untitled")
-            url = s.request.input_url or s.request.normalized_url or ""
+            request = s.get("request") or {}
+            url = request.get("input_url") or request.get("normalized_url") or ""
             if url:
                 lines.append(f"- {title}\n  {url}")
             else:
@@ -225,7 +211,12 @@ def _parse_tag_arg(text: str, command: str) -> str | None:
     return rest if rest else None
 
 
-async def _find_summary_from_reply(ctx: CommandExecutionContext) -> Summary | None:
+async def _find_summary_from_reply(
+    ctx: CommandExecutionContext,
+    *,
+    request_repo: RequestRepositoryPort,
+    summary_repo: SummaryRepositoryPort,
+) -> dict[str, Any] | None:
     """Look up the summary from the message the user replied to.
 
     Returns None and sends an error reply if no summary is found.
@@ -246,23 +237,15 @@ async def _find_summary_from_reply(ctx: CommandExecutionContext) -> Summary | No
         )
         return None
 
-    # Look up by bot_reply_message_id first, then fallback to input_message_id
-    try:
-        summary = (
-            Summary.select()
-            .join(Request)
-            .where((Request.bot_reply_message_id == reply_msg_id) & (Request.user_id == ctx.uid))
-            .first()
-        )
-        if summary is None:
-            summary = (
-                Summary.select()
-                .join(Request)
-                .where((Request.input_message_id == reply_msg_id) & (Request.user_id == ctx.uid))
-                .first()
-            )
-    except Exception:
-        summary = None
+    request = await request_repo.async_get_request_by_telegram_message(
+        user_id=ctx.uid,
+        message_id=reply_msg_id,
+    )
+    summary = (
+        await summary_repo.async_get_summary_by_request(int(request["id"]))
+        if request is not None
+        else None
+    )
 
     if summary is None:
         await ctx.response_formatter.safe_reply(

@@ -17,7 +17,11 @@ from app.domain.models.request import RequestStatus
 if TYPE_CHECKING:
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
-    from app.application.ports.requests import RequestRepositoryPort
+    from app.application.ports.requests import (
+        CrawlResultRepositoryPort,
+        LLMRepositoryPort,
+        RequestRepositoryPort,
+    )
     from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.ports.users import UserRepositoryPort
     from app.application.services.related_reads_service import RelatedReadsService
@@ -47,6 +51,8 @@ class ForwardProcessor:
         *,
         summary_repo: SummaryRepositoryPort,
         request_repo: RequestRepositoryPort,
+        crawl_result_repo: CrawlResultRepositoryPort,
+        llm_repo: LLMRepositoryPort,
         user_repo: UserRepositoryPort,
         related_reads_service: RelatedReadsService | None = None,
     ) -> None:
@@ -54,6 +60,8 @@ class ForwardProcessor:
         self.db = db
         self.summary_repo = summary_repo
         self.request_repo = request_repo
+        self.crawl_result_repo = crawl_result_repo
+        self.llm_repo = llm_repo
         self.user_repo = user_repo
         self.response_formatter = response_formatter
         self._audit = audit_func
@@ -78,6 +86,10 @@ class ForwardProcessor:
             audit_func=audit_func,
             sem=sem,
             db_write_queue=db_write_queue,
+            summary_repo=summary_repo,
+            request_repo=request_repo,
+            llm_repo=llm_repo,
+            user_repo=user_repo,
         )
 
     async def handle_forward_flow(
@@ -330,6 +342,9 @@ class ForwardProcessor:
                 db_write_queue=self._db_write_queue,
                 summary_repo=self.summary_repo,
                 request_repo=self.request_repo,
+                crawl_result_repo=self.crawl_result_repo,
+                llm_repo=self.llm_repo,
+                user_repo=self.user_repo,
             )
         return self._summarization_runtime
 

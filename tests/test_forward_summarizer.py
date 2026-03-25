@@ -11,6 +11,15 @@ sys.modules.setdefault("playhouse.sqlite_ext", MagicMock())
 from app.adapters.telegram.forward_summarizer import ForwardSummarizer
 
 
+def _workflow_repo_kwargs() -> dict[str, MagicMock]:
+    return {
+        "summary_repo": MagicMock(),
+        "request_repo": MagicMock(),
+        "llm_repo": MagicMock(),
+        "user_repo": MagicMock(),
+    }
+
+
 class ForwardSummarizerTests(unittest.IsolatedAsyncioTestCase):
     class _Sem:
         async def __aenter__(self) -> None:
@@ -41,6 +50,7 @@ class ForwardSummarizerTests(unittest.IsolatedAsyncioTestCase):
             response_formatter,
             lambda *a, **k: None,
             lambda: self._Sem(),
+            **_workflow_repo_kwargs(),
         )
 
         mock_workflow = AsyncMock(return_value={"summary_250": "ok", "tldr": "fine"})

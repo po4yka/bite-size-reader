@@ -16,23 +16,19 @@ from app.adapters.content.llm_summarizer_semantic import LLMSemanticHelper
 from app.adapters.content.llm_summarizer_text import coerce_string_list, truncate_content_text
 from app.adapters.content.search_context_enricher import SearchContextEnricher
 from app.infrastructure.cache.redis_cache import RedisCache
-from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
-    SqliteCrawlResultRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
-    from app.application.ports.requests import CrawlResultRepositoryPort, RequestRepositoryPort
+    from app.application.ports.requests import (
+        CrawlResultRepositoryPort,
+        LLMRepositoryPort,
+        RequestRepositoryPort,
+    )
     from app.application.ports.summaries import SummaryRepositoryPort
+    from app.application.ports.users import UserRepositoryPort
     from app.application.services.topic_search import TopicSearchService
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
@@ -56,6 +52,8 @@ class SummarizationRuntime:
         summary_repo: SummaryRepositoryPort | None = None,
         request_repo: RequestRepositoryPort | None = None,
         crawl_result_repo: CrawlResultRepositoryPort | None = None,
+        llm_repo: LLMRepositoryPort | None = None,
+        user_repo: UserRepositoryPort | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -67,11 +65,20 @@ class SummarizationRuntime:
         self.db_write_queue = db_write_queue
 
         if summary_repo is None:
-            summary_repo = SqliteSummaryRepositoryAdapter(db)
+            msg = "summary_repo must be provided by the DI layer"
+            raise ValueError(msg)
         if request_repo is None:
-            request_repo = SqliteRequestRepositoryAdapter(db)
+            msg = "request_repo must be provided by the DI layer"
+            raise ValueError(msg)
         if crawl_result_repo is None:
-            crawl_result_repo = SqliteCrawlResultRepositoryAdapter(db)
+            msg = "crawl_result_repo must be provided by the DI layer"
+            raise ValueError(msg)
+        if llm_repo is None:
+            msg = "llm_repo must be provided by the DI layer"
+            raise ValueError(msg)
+        if user_repo is None:
+            msg = "user_repo must be provided by the DI layer"
+            raise ValueError(msg)
         self.summary_repo = summary_repo
         self.request_repo = request_repo
         self.crawl_result_repo = crawl_result_repo
@@ -84,6 +91,10 @@ class SummarizationRuntime:
             audit_func=audit_func,
             sem=sem,
             db_write_queue=db_write_queue,
+            summary_repo=summary_repo,
+            request_repo=request_repo,
+            llm_repo=llm_repo,
+            user_repo=user_repo,
         )
         self.cache = RedisCache(cfg)
         self.prompt_version = cfg.runtime.summary_prompt_version

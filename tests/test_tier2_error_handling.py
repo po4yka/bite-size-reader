@@ -39,6 +39,10 @@ class TestSetFailureContextCancelledError:
             response_formatter=MagicMock(),
             audit_func=MagicMock(),
             sem=MagicMock(),
+            summary_repo=MagicMock(),
+            request_repo=MagicMock(),
+            llm_repo=MagicMock(),
+            user_repo=MagicMock(),
         )
 
     def test_propagates_cancelled_on_error_text(self) -> None:
@@ -137,6 +141,10 @@ class TestSummaryWorkflowLoopCancelledError:
             response_formatter=MagicMock(),
             audit_func=MagicMock(),
             sem=MagicMock(return_value=sem_ctx),
+            summary_repo=MagicMock(),
+            request_repo=MagicMock(),
+            llm_repo=MagicMock(),
+            user_repo=MagicMock(),
         )
 
         class CancellingLLM:

@@ -45,6 +45,16 @@ def _dummy_cfg() -> SimpleNamespace:
     )
 
 
+def _runtime_repo_kwargs() -> dict[str, Any]:
+    return {
+        "summary_repo": MagicMock(),
+        "request_repo": MagicMock(),
+        "crawl_result_repo": MagicMock(),
+        "llm_repo": MagicMock(),
+        "user_repo": MagicMock(),
+    }
+
+
 def _ok_result(payload: dict[str, Any], *, model: str = "primary-model") -> SimpleNamespace:
     text = json.dumps(payload)
     return SimpleNamespace(
@@ -69,6 +79,7 @@ async def test_empty_content_rejected(redis_cache_mock: MagicMock) -> None:
         response_formatter=MagicMock(),
         audit_func=lambda *args, **kwargs: None,
         sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
+        **_runtime_repo_kwargs(),
     )
     service = PureSummaryService(runtime=runtime)
 
@@ -101,6 +112,7 @@ async def test_long_context_model_selected(redis_cache_mock: MagicMock) -> None:
         response_formatter=MagicMock(),
         audit_func=lambda *args, **kwargs: None,
         sem=lambda: MagicMock(__aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock()),
+        **_runtime_repo_kwargs(),
     )
     service = PureSummaryService(runtime=runtime)
 
@@ -133,6 +145,7 @@ async def test_feedback_instructions_included(redis_cache_mock: MagicMock) -> No
         response_formatter=MagicMock(),
         audit_func=lambda *args, **kwargs: None,
         sem=lambda: MagicMock(__aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock()),
+        **_runtime_repo_kwargs(),
     )
     service = PureSummaryService(runtime=runtime)
 
@@ -173,6 +186,7 @@ async def test_parse_failure_raises(redis_cache_mock: MagicMock) -> None:
         response_formatter=MagicMock(),
         audit_func=lambda *args, **kwargs: None,
         sem=lambda: MagicMock(__aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock()),
+        **_runtime_repo_kwargs(),
     )
     service = PureSummaryService(runtime=runtime)
 
@@ -199,6 +213,7 @@ async def test_ensure_summary_payload_enriches_metadata(redis_cache_mock: MagicM
         response_formatter=MagicMock(),
         audit_func=lambda *args, **kwargs: None,
         sem=lambda: MagicMock(__aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock()),
+        **_runtime_repo_kwargs(),
     )
     ensure_summary_metadata = AsyncMock(
         return_value={"summary_250": "ok", "summary_1000": "ok", "tldr": "ok", "metadata": {}}

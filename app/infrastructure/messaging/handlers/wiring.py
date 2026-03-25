@@ -22,26 +22,23 @@ from app.infrastructure.messaging.handlers.search_index import SearchIndexEventH
 from app.infrastructure.messaging.handlers.smart_collection_handler import SmartCollectionHandler
 from app.infrastructure.messaging.handlers.webhook import WebhookEventHandler
 from app.infrastructure.messaging.handlers.webhook_dispatcher import WebhookDispatcher
-from app.infrastructure.persistence.sqlite.repositories.rule_repository import (
-    SqliteRuleRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.tag_repository import (
-    SqliteTagRepositoryAdapter,
-)
-from app.infrastructure.rules.collection_membership import SqliteCollectionMembershipAdapter
-from app.infrastructure.rules.context import SqliteRuleContextAdapter
-from app.infrastructure.rules.http_webhook_dispatcher import HttpWebhookDispatchAdapter
-from app.infrastructure.rules.in_memory_rate_limiter import InMemoryRuleRateLimiter
 
 logger = get_logger(__name__)
 
 
 def wire_event_handlers(
     event_bus: Any,
-    database: Any,
+    *,
+    search_index_repository: Any,
+    audit_log_repository: Any,
+    request_repository: Any,
+    summary_repository: Any,
+    rule_repository: Any,
+    tag_repository: Any,
+    collection_membership: Any,
+    rule_context: Any,
+    webhook_dispatch_port: Any,
+    rule_rate_limiter: Any,
     analytics_service: Any | None = None,
     telegram_client: Any | None = None,
     notification_service: Any | None = None,
@@ -50,14 +47,12 @@ def wire_event_handlers(
     webhook_url: str | None = None,
     embedding_generator: Any | None = None,
     vector_store: Any | None = None,
-    summary_repository: Any | None = None,
     push_notification_service: Any | None = None,
-    request_repository: Any | None = None,
     webhook_repository: Any | None = None,
 ) -> None:
-    search_index_handler = SearchIndexEventHandler(database)
+    search_index_handler = SearchIndexEventHandler(search_index_repository)
     analytics_handler = AnalyticsEventHandler(analytics_service)
-    audit_log_handler = AuditLogEventHandler(database)
+    audit_log_handler = AuditLogEventHandler(audit_log_repository)
 
     notification_handler = NotificationEventHandler(telegram_client, notification_service)
     cache_handler = CacheInvalidationEventHandler(cache_service)
@@ -102,14 +97,15 @@ def wire_event_handlers(
 
     rule_handler = RuleEngineHandler(
         RuleExecutionUseCase(
-            rule_repository=SqliteRuleRepositoryAdapter(database),
-            tag_repository=SqliteTagRepositoryAdapter(database),
-            summary_repository=summary_repository or SqliteSummaryRepositoryAdapter(database),
-            collection_membership=SqliteCollectionMembershipAdapter(database),
-            rule_context=SqliteRuleContextAdapter(database),
-            webhook_dispatcher=HttpWebhookDispatchAdapter(),
-            rate_limiter=InMemoryRuleRateLimiter(),
-        )
+            rule_repository=rule_repository,
+            tag_repository=tag_repository,
+            summary_repository=summary_repository,
+            collection_membership=collection_membership,
+            rule_context=rule_context,
+            webhook_dispatcher=webhook_dispatch_port,
+            rate_limiter=rule_rate_limiter,
+        ),
+        request_repository=request_repository,
     )
     event_bus.subscribe(SummaryCreated, rule_handler.on_summary_created)
     event_bus.subscribe(RequestCompleted, rule_handler.on_request_completed)
@@ -124,7 +120,10 @@ def wire_event_handlers(
     # Per-user webhook dispatcher (additive alongside system-wide WebhookEventHandler)
     webhook_dispatcher: WebhookDispatcher | None = None
     if webhook_repository is not None:
-        webhook_dispatcher = WebhookDispatcher(webhook_repository)
+        webhook_dispatcher = WebhookDispatcher(
+            webhook_repository=webhook_repository,
+            request_repository=request_repository,
+        )
         event_bus.subscribe(SummaryCreated, webhook_dispatcher.on_summary_created)
         event_bus.subscribe(RequestCompleted, webhook_dispatcher.on_request_completed)
         event_bus.subscribe(RequestFailed, webhook_dispatcher.on_request_failed)

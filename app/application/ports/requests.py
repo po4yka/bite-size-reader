@@ -42,6 +42,14 @@ class RequestRepositoryPort(Protocol):
     async def async_get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
         """Return request by ID."""
 
+    async def async_get_request_by_telegram_message(
+        self,
+        *,
+        user_id: int,
+        message_id: int,
+    ) -> dict[str, Any] | None:
+        """Return a user's request matched by bot reply or input Telegram message ID."""
+
     async def async_get_request_context(self, request_id: int) -> dict[str, Any] | None:
         """Return request joined with its crawl result and summary."""
 

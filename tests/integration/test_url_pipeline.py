@@ -140,7 +140,13 @@ class TestUrlPipelineIntegration(unittest.IsolatedAsyncioTestCase):
         from app.adapters.content.url_flow_models import URLFlowRequest
         from app.adapters.content.url_processor import URLProcessor
         from app.db.models import Summary
-        from app.di.repositories import build_request_repository, build_summary_repository
+        from app.di.repositories import (
+            build_crawl_result_repository,
+            build_llm_repository,
+            build_request_repository,
+            build_summary_repository,
+            build_user_repository,
+        )
 
         with temp_db() as db:
             cfg = make_test_app_config(
@@ -174,6 +180,9 @@ class TestUrlPipelineIntegration(unittest.IsolatedAsyncioTestCase):
                     sem=sem,
                     request_repo=build_request_repository(db),
                     summary_repo=build_summary_repository(db),
+                    crawl_result_repo=build_crawl_result_repository(db),
+                    llm_repo=build_llm_repository(db),
+                    user_repo=build_user_repository(db),
                 )
 
             url = "https://example.com/test-article"
@@ -249,7 +258,13 @@ def _build_processor(cfg, db, scraper, llm, fmt):
         mock_redis_cls.return_value = mock_redis
 
         from app.adapters.content.url_processor import URLProcessor
-        from app.di.repositories import build_request_repository, build_summary_repository
+        from app.di.repositories import (
+            build_crawl_result_repository,
+            build_llm_repository,
+            build_request_repository,
+            build_summary_repository,
+            build_user_repository,
+        )
 
         sem_lock = asyncio.Semaphore(1)
 
@@ -266,6 +281,9 @@ def _build_processor(cfg, db, scraper, llm, fmt):
             sem=sem,
             request_repo=build_request_repository(db),
             summary_repo=build_summary_repository(db),
+            crawl_result_repo=build_crawl_result_repository(db),
+            llm_repo=build_llm_repository(db),
+            user_repo=build_user_repository(db),
         )
 
 

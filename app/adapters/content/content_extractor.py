@@ -118,6 +118,9 @@ class ContentExtractor(
 
     def _build_youtube_platform_extractor(self) -> Any:
         from app.adapters.youtube.platform_extractor import YouTubePlatformExtractor
+        from app.infrastructure.persistence.sqlite.repositories.video_download_repository import (
+            SqliteVideoDownloadRepositoryAdapter,
+        )
 
         return YouTubePlatformExtractor(
             cfg=self.cfg,
@@ -125,6 +128,8 @@ class ContentExtractor(
             response_formatter=self.response_formatter,
             audit_func=self._audit,
             lifecycle=self._platform_request_lifecycle,
+            request_repo=self.message_persistence.request_repo,
+            video_repo=SqliteVideoDownloadRepositoryAdapter(self.db),
         )
 
     def _build_twitter_platform_extractor(self) -> Any:

@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from app.core.logging_utils import get_logger
-from app.db.models import Request
 from app.domain.services.webhook_service import (
     build_webhook_payload,
     is_webhook_url_safe,
@@ -22,12 +21,11 @@ from app.domain.services.webhook_service import (
 )
 
 if TYPE_CHECKING:
+    from app.application.ports.requests import RequestRepositoryPort
+    from app.application.ports.rules import WebhookRepositoryPort
     from app.domain.events.request_events import RequestCompleted, RequestFailed
     from app.domain.events.summary_events import SummaryCreated
     from app.domain.events.tag_events import TagAttached, TagDetached
-    from app.infrastructure.persistence.sqlite.repositories.webhook_repository import (
-        SqliteWebhookRepositoryAdapter,
-    )
 
 logger = get_logger(__name__)
 
@@ -41,10 +39,12 @@ class WebhookDispatcher:
 
     def __init__(
         self,
-        webhook_repository: SqliteWebhookRepositoryAdapter,
+        webhook_repository: WebhookRepositoryPort,
+        request_repository: RequestRepositoryPort,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._repo = webhook_repository
+        self._request_repository = request_repository
         self._http_client = http_client
         self._owns_client = False
 
@@ -196,20 +196,20 @@ class WebhookDispatcher:
     # Event handler methods
     # ------------------------------------------------------------------
 
-    def _user_id_from_request(self, request_id: int) -> int | None:
-        """Look up user_id from the Request table (sync, runs inside event handler)."""
-        try:
-            req = Request.get_by_id(request_id)
-            return req.user_id
-        except Request.DoesNotExist:
+    async def _user_id_from_request(self, request_id: int) -> int | None:
+        """Look up user_id from the request repository."""
+        request = await self._request_repository.async_get_request_by_id(request_id)
+        if request is None:
             logger.warning(
                 "webhook_dispatcher_request_not_found",
                 extra={"request_id": request_id},
             )
             return None
+        user_id = request.get("user_id")
+        return int(user_id) if user_id is not None else None
 
     async def on_summary_created(self, event: SummaryCreated) -> None:
-        user_id = self._user_id_from_request(event.request_id)
+        user_id = await self._user_id_from_request(event.request_id)
         if user_id is None:
             return
         await self.dispatch(
@@ -224,7 +224,7 @@ class WebhookDispatcher:
         )
 
     async def on_request_completed(self, event: RequestCompleted) -> None:
-        user_id = self._user_id_from_request(event.request_id)
+        user_id = await self._user_id_from_request(event.request_id)
         if user_id is None:
             return
         await self.dispatch(
@@ -237,7 +237,7 @@ class WebhookDispatcher:
         )
 
     async def on_request_failed(self, event: RequestFailed) -> None:
-        user_id = self._user_id_from_request(event.request_id)
+        user_id = await self._user_id_from_request(event.request_id)
         if user_id is None:
             return
         await self.dispatch(

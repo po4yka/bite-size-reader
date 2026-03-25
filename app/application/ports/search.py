@@ -77,6 +77,12 @@ class TopicSearchRepositoryPort(Protocol):
     ) -> list[Any]:
         """Return fallback-scanned topic-search documents."""
 
+    async def async_refresh_index(self, request_id: int) -> None:
+        """Refresh the search index for the supplied request."""
+
+    async def async_update_tags_for_summary(self, summary_id: int) -> None:
+        """Refresh indexed tag metadata for the supplied summary."""
+
 
 @runtime_checkable
 class EmbeddingRepositoryPort(Protocol):

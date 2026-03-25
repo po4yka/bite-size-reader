@@ -7,13 +7,42 @@ from typing import Any
 import peewee
 
 from app.db.json_utils import prepare_json_payload
-from app.db.models import Request, TelegramMessage
+from app.db.models import Request, TelegramMessage, model_to_dict
 
 from ._repository_mixin_base import SqliteRepositoryMixinBase
 
 
 class RequestRepositoryTelegramMixin(SqliteRepositoryMixinBase):
     """Telegram-specific request persistence methods."""
+
+    async def async_get_request_by_telegram_message(
+        self,
+        *,
+        user_id: int,
+        message_id: int,
+    ) -> dict[str, Any] | None:
+        """Return a user's request matched by bot reply or input message ID."""
+
+        def _query() -> dict[str, Any] | None:
+            request = (
+                Request.select()
+                .where(
+                    (Request.user_id == user_id)
+                    & (
+                        (Request.bot_reply_message_id == message_id)
+                        | (Request.input_message_id == message_id)
+                    )
+                )
+                .order_by(Request.created_at.desc())
+                .first()
+            )
+            return model_to_dict(request)
+
+        return await self._execute(
+            _query,
+            operation_name="get_request_by_telegram_message",
+            read_only=True,
+        )
 
     async def async_insert_telegram_message(
         self,

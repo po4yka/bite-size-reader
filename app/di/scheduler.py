@@ -3,6 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app.di.repositories import (
+    build_crawl_result_repository,
+    build_llm_repository,
+    build_request_repository,
+    build_summary_repository,
+    build_user_repository,
+)
 from app.di.types import SchedulerDependencies
 
 if TYPE_CHECKING:
@@ -116,6 +123,11 @@ def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> 
         response_formatter=response_formatter,
         audit_func=lambda *_a, **_kw: None,
         sem=sem_factory,
+        summary_repo=build_summary_repository(db),
+        request_repo=build_request_repository(db),
+        crawl_result_repo=build_crawl_result_repository(db),
+        llm_repo=build_llm_repository(db),
+        user_repo=build_user_repository(db),
     )
     pure_service = PureSummaryService(runtime=runtime)
     prompt_mgr = get_prompt_manager()

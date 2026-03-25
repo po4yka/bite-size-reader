@@ -22,10 +22,12 @@ from app.di.application import build_application_services
 from app.di.repositories import (
     build_audit_log_repository,
     build_batch_session_repository,
+    build_crawl_result_repository,
     build_embedding_repository,
     build_llm_repository,
     build_request_repository,
     build_summary_repository,
+    build_tag_repository,
     build_topic_search_repository,
     build_user_repository,
 )
@@ -51,7 +53,6 @@ from app.infrastructure.search.vector_search_service import VectorSearchService
 from app.security.file_validation import SecureFileValidator
 
 if TYPE_CHECKING:
-    from app.adapters.content.url_processor import URLProcessor
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
@@ -186,6 +187,9 @@ def build_summary_cli_runtime(
         topic_search=search.topic_searcher if cfg.web_search.enabled else None,
         request_repo=repositories.request_repository,
         summary_repo=repositories.summary_repository,
+        crawl_result_repo=repositories.crawl_result_repository,
+        llm_repo=repositories.llm_repository,
+        user_repo=repositories.user_repository,
     )
     application_services = build_application_services(
         db,
@@ -235,7 +239,9 @@ def _build_telegram_repositories(db: DatabaseSessionManager) -> TelegramReposito
         user_repository=build_user_repository(db),
         summary_repository=build_summary_repository(db),
         request_repository=build_request_repository(db),
+        crawl_result_repository=build_crawl_result_repository(db),
         llm_repository=build_llm_repository(db),
+        tag_repository=build_tag_repository(db),
         audit_log_repository=build_audit_log_repository(db),
         batch_session_repository=build_batch_session_repository(db),
     )
@@ -269,6 +275,7 @@ def _build_processing_stack(
     repositories: TelegramRepositories,
     db_write_queue: DbWriteQueue | None,
 ) -> _TelegramProcessingStack:
+    related_reads_service = _build_related_reads_service(cfg=cfg, db=db, search=search)
     url_processor = build_url_processor(
         cfg=cfg,
         db=db,
@@ -281,6 +288,10 @@ def _build_processing_stack(
         db_write_queue=db_write_queue,
         request_repo=repositories.request_repository,
         summary_repo=repositories.summary_repository,
+        crawl_result_repo=repositories.crawl_result_repository,
+        llm_repo=repositories.llm_repository,
+        user_repo=repositories.user_repository,
+        related_reads_service=related_reads_service,
     )
     forward_processor = ForwardProcessor(
         cfg=cfg,
@@ -292,7 +303,10 @@ def _build_processing_stack(
         db_write_queue=db_write_queue,
         summary_repo=repositories.summary_repository,
         request_repo=repositories.request_repository,
+        crawl_result_repo=repositories.crawl_result_repository,
+        llm_repo=repositories.llm_repository,
         user_repo=repositories.user_repository,
+        related_reads_service=related_reads_service,
     )
     attachment_processor = AttachmentProcessor(
         cfg=cfg,
@@ -303,14 +317,9 @@ def _build_processing_stack(
         sem=core.semaphore_factory,
         db_write_queue=db_write_queue,
         request_repo=repositories.request_repository,
+        summary_repo=repositories.summary_repository,
+        llm_repo=repositories.llm_repository,
         user_repo=repositories.user_repository,
-    )
-    _wire_related_reads(
-        cfg=cfg,
-        db=db,
-        search=search,
-        url_processor=url_processor,
-        forward_processor=forward_processor,
     )
     return _TelegramProcessingStack(
         url_processor=url_processor,
@@ -516,16 +525,14 @@ def _create_adaptive_timeout_service(
         return None
 
 
-def _wire_related_reads(
+def _build_related_reads_service(
     *,
     cfg: AppConfig,
     db: DatabaseSessionManager,
     search: Any,
-    url_processor: URLProcessor,
-    forward_processor: ForwardProcessor,
-) -> None:
+) -> RelatedReadsService | None:
     if not cfg.runtime.related_reads_enabled:
-        return
+        return None
     try:
         vector_search_service = VectorSearchService(
             embedding_repository=build_embedding_repository(db),
@@ -538,12 +545,12 @@ def _wire_related_reads(
             VectorSearchPortAdapter(vector_search_service),
             min_similarity=cfg.runtime.related_reads_min_similarity,
         )
-        url_processor.post_summary_tasks._related_reads_service = related_reads_service
-        forward_processor._related_reads_service = related_reads_service
         logger.info("related_reads_service_initialized")
+        return related_reads_service
     except Exception as exc:
         logger.warning(
             "related_reads_service_init_failed",
             extra={"error": str(exc), "error_type": type(exc).__name__},
             exc_info=True,
         )
+        return None

@@ -113,6 +113,9 @@ def build_command_dispatcher_deps(
         cfg=cfg,
         db=db,
         response_formatter=response_formatter,
+        tag_repo=repositories.tag_repository,
+        request_repo=repositories.request_repository,
+        summary_repo=repositories.summary_repository,
     )
     rules_handler = RulesHandler(
         cfg=cfg,

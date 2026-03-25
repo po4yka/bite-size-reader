@@ -97,6 +97,8 @@ async def test_characterization_youtube_uses_vtt_fallback_when_api_transcript_em
         response_formatter=rf,
         audit_func=lambda *_a, **_k: None,
         lifecycle=lifecycle,
+        request_repo=MagicMock(),
+        video_repo=MagicMock(),
     )
 
     downloader._session_service.check_storage_limits = AsyncMock()

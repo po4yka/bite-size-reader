@@ -13,19 +13,14 @@ from app.adapters.attachment._attachment_persistence import AttachmentPersistenc
 from app.adapters.attachment._attachment_shared import AttachmentProcessorContext
 from app.adapters.content.llm_response_workflow import LLMResponseWorkflow
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.adapters.external.response_formatter import ResponseFormatter
     from app.adapters.llm.protocol import LLMClientProtocol
-    from app.application.ports.requests import RequestRepositoryPort
+    from app.application.ports.requests import LLMRepositoryPort, RequestRepositoryPort
+    from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.ports.users import UserRepositoryPort
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
@@ -47,6 +42,8 @@ class AttachmentProcessor:
         sem: Callable[[], Any],
         db_write_queue: DbWriteQueue | None = None,
         request_repo: RequestRepositoryPort | None = None,
+        summary_repo: SummaryRepositoryPort | None = None,
+        llm_repo: LLMRepositoryPort | None = None,
         user_repo: UserRepositoryPort | None = None,
     ) -> None:
         self.cfg = cfg
@@ -55,8 +52,20 @@ class AttachmentProcessor:
         self.response_formatter = response_formatter
         self._audit = audit_func
         self._sem = sem
-        self.request_repo = request_repo or SqliteRequestRepositoryAdapter(db)
-        self.user_repo = user_repo or SqliteUserRepositoryAdapter(db)
+        if request_repo is None:
+            msg = "request_repo must be provided by the DI layer"
+            raise ValueError(msg)
+        if summary_repo is None:
+            msg = "summary_repo must be provided by the DI layer"
+            raise ValueError(msg)
+        if llm_repo is None:
+            msg = "llm_repo must be provided by the DI layer"
+            raise ValueError(msg)
+        if user_repo is None:
+            msg = "user_repo must be provided by the DI layer"
+            raise ValueError(msg)
+        self.request_repo = request_repo
+        self.user_repo = user_repo
         self._workflow = LLMResponseWorkflow(
             cfg=cfg,
             db=db,
@@ -65,6 +74,10 @@ class AttachmentProcessor:
             audit_func=audit_func,
             sem=sem,
             db_write_queue=db_write_queue,
+            summary_repo=summary_repo,
+            request_repo=request_repo,
+            llm_repo=llm_repo,
+            user_repo=user_repo,
         )
         self._context = AttachmentProcessorContext(
             cfg=cfg,

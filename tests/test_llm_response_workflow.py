@@ -25,6 +25,15 @@ class _DummySemaphore:
         return None
 
 
+def _workflow_repo_kwargs() -> dict[str, MagicMock]:
+    return {
+        "summary_repo": MagicMock(),
+        "request_repo": MagicMock(),
+        "llm_repo": MagicMock(),
+        "user_repo": MagicMock(),
+    }
+
+
 class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.cfg = MagicMock()
@@ -51,6 +60,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             response_formatter=self.response_formatter,
             audit_func=lambda *args, **kwargs: None,
             sem=lambda: _DummySemaphore(),
+            **_workflow_repo_kwargs(),
         )
 
         # Mock repositories directly to avoid model/proxy issues
@@ -338,6 +348,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             response_formatter=self.response_formatter,
             audit_func=lambda *args, **kwargs: None,
             sem=lambda: _DummySemaphore(),
+            **_workflow_repo_kwargs(),
         )
 
         async def slow_chat(*args, **kwargs):
@@ -367,6 +378,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             response_formatter=self.response_formatter,
             audit_func=lambda *args, **kwargs: None,
             sem=lambda: _BlockingSemaphore(),
+            **_workflow_repo_kwargs(),
         )
 
         self.openrouter.chat = AsyncMock(return_value=self._llm_response({"tldr": "ok"}))
@@ -387,6 +399,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             response_formatter=self.response_formatter,
             audit_func=lambda *args, **kwargs: None,
             sem=lambda: _DummySemaphore(),
+            **_workflow_repo_kwargs(),
         )
 
         retry_callback = AsyncMock()

@@ -7,18 +7,6 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict
 
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
-    SqliteLLMRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
-)
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
-)
 from app.utils.json_validation import parse_summary_response  # noqa: F401
 
 from .llm_response_workflow_attempts import LLMWorkflowAttemptsMixin
@@ -164,13 +152,17 @@ class LLMResponseWorkflow(
         self._db_write_queue = db_write_queue
         self._adaptive_timeout = adaptive_timeout_service
         if summary_repo is None:
-            summary_repo = SqliteSummaryRepositoryAdapter(db)
+            msg = "summary_repo must be provided by the DI layer"
+            raise ValueError(msg)
         if request_repo is None:
-            request_repo = SqliteRequestRepositoryAdapter(db)
+            msg = "request_repo must be provided by the DI layer"
+            raise ValueError(msg)
         if llm_repo is None:
-            llm_repo = SqliteLLMRepositoryAdapter(db)
+            msg = "llm_repo must be provided by the DI layer"
+            raise ValueError(msg)
         if user_repo is None:
-            user_repo = SqliteUserRepositoryAdapter(db)
+            msg = "user_repo must be provided by the DI layer"
+            raise ValueError(msg)
         self.summary_repo = summary_repo
         self.request_repo = request_repo
         self.llm_repo = llm_repo

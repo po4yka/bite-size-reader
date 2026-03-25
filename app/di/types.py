@@ -39,7 +39,9 @@ class TelegramRepositories:
     user_repository: Any
     summary_repository: Any
     request_repository: Any
+    crawl_result_repository: Any
     llm_repository: Any
+    tag_repository: Any
     audit_log_repository: Any
     batch_session_repository: Any
 
