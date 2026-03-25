@@ -33,7 +33,7 @@ from app.api.models.responses import (
 )
 from app.api.routers.auth import get_current_user
 from app.api.search_helpers import isotime
-from app.api.services.collection_service import CollectionService
+from app.application.services.collection_service import CollectionService
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)

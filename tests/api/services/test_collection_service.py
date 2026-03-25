@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.api.exceptions import ResourceNotFoundError
-from app.api.services.collection_service import CollectionService
+from app.application.services.collection_service import CollectionService
 from app.db.models import Collection, CollectionCollaborator, CollectionItem
 
 
@@ -52,7 +52,7 @@ async def test_collection_service_creates_lists_builds_tree_and_reorders(db, use
     assert authorized["id"] == root["id"]
 
     with patch(
-        "app.api.services.collection_service.SqliteCollectionRepositoryAdapter.async_reorder_collections",
+        "app.application.services.collection_service.SqliteCollectionRepositoryAdapter.async_reorder_collections",
         new=AsyncMock(),
     ) as reorder:
         await CollectionService.reorder_collections(
@@ -167,7 +167,7 @@ async def test_collection_service_item_operations_cover_add_list_reorder_move_an
     assert len(items) == 2
 
     with patch(
-        "app.api.services.collection_service.SqliteCollectionRepositoryAdapter.async_reorder_items",
+        "app.application.services.collection_service.SqliteCollectionRepositoryAdapter.async_reorder_items",
         new=AsyncMock(),
     ) as reorder:
         await CollectionService.reorder_items(

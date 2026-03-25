@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.api.exceptions import ProcessingError, ResourceNotFoundError
-from app.api.services.system_maintenance_service import SystemMaintenanceService
+from app.application.services.system_maintenance_service import SystemMaintenanceService
 from app.db.models import User
 
 
@@ -62,7 +62,7 @@ def test_get_db_info_handles_sqlite_failures(tmp_path) -> None:
     service = SystemMaintenanceService(db_path=str(tmp_path / "broken.sqlite"))
 
     with patch(
-        "app.api.services.system_maintenance_service.sqlite3.connect",
+        "app.application.services.system_maintenance_service.sqlite3.connect",
         side_effect=sqlite3.Error("boom"),
     ):
         info = service.get_db_info()
@@ -79,8 +79,10 @@ async def test_clear_url_cache_success_and_failure() -> None:
     cache.clear_prefix = AsyncMock(return_value=5)
 
     with (
-        patch("app.api.services.system_maintenance_service.load_config", return_value=fake_cfg),
-        patch("app.api.services.system_maintenance_service.RedisCache", return_value=cache),
+        patch(
+            "app.application.services.system_maintenance_service.load_config", return_value=fake_cfg
+        ),
+        patch("app.application.services.system_maintenance_service.RedisCache", return_value=cache),
     ):
         cleared = await service.clear_url_cache()
 
@@ -90,8 +92,13 @@ async def test_clear_url_cache_success_and_failure() -> None:
     failing_cache = MagicMock()
     failing_cache.clear_prefix = AsyncMock(side_effect=RuntimeError("redis down"))
     with (
-        patch("app.api.services.system_maintenance_service.load_config", return_value=fake_cfg),
-        patch("app.api.services.system_maintenance_service.RedisCache", return_value=failing_cache),
+        patch(
+            "app.application.services.system_maintenance_service.load_config", return_value=fake_cfg
+        ),
+        patch(
+            "app.application.services.system_maintenance_service.RedisCache",
+            return_value=failing_cache,
+        ),
     ):
         with pytest.raises(ProcessingError, match="Cache clear failed"):
             await service.clear_url_cache()
@@ -109,15 +116,15 @@ def test_create_backup_raises_processing_error_when_backup_and_cleanup_fail(tmp_
 
     with (
         patch(
-            "app.api.services.system_maintenance_service.sqlite3.connect",
+            "app.application.services.system_maintenance_service.sqlite3.connect",
             side_effect=sqlite3.Error("backup failed"),
         ),
         patch(
-            "app.api.services.system_maintenance_service.os.path.exists",
+            "app.application.services.system_maintenance_service.os.path.exists",
             side_effect=[False, True],
         ),
         patch(
-            "app.api.services.system_maintenance_service.os.remove",
+            "app.application.services.system_maintenance_service.os.remove",
             side_effect=OSError("cleanup failed"),
         ),
     ):

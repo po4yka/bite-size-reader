@@ -22,7 +22,7 @@ from app.api.models.digest import (  # noqa: TC001 - used at runtime by FastAPI
 from app.api.models.responses import success_response
 from app.api.routers.auth.dependencies import get_webapp_user
 from app.api.services.auth_service import AuthService
-from app.api.services.digest_facade import DigestFacade, get_digest_facade
+from app.application.services.digest_facade import DigestFacade, get_digest_facade
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
