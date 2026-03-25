@@ -15,7 +15,9 @@ from app.prompts.manager import get_prompt_manager
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
