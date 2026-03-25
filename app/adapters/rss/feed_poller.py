@@ -55,7 +55,11 @@ async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
                         new_count += 1
                         new_item_ids.append(int(item["id"]))
                 except Exception:
-                    pass
+                    logger.warning(
+                        "rss_item_create_failed",
+                        extra={"feed_id": feed["id"], "guid": entry.guid},
+                        exc_info=True,
+                    )
 
             # Update feed metadata
             await repo.async_update_feed_fetch_success(

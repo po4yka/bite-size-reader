@@ -245,7 +245,7 @@ class PushNotificationService:
                 self._background_tasks.add(task)
                 task.add_done_callback(self._background_tasks.discard)
             except RuntimeError:
-                pass
+                logger.debug("push_device_deactivate_no_event_loop", extra={"token": token[:8]})
 
 
 def create_push_notification_service(

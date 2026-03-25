@@ -95,7 +95,11 @@ class BackupHandler(HandlerDependenciesMixin):
                     error=str(exc)[:1000],
                 )
             except Exception:
-                pass
+                logger.debug(
+                    "backup_status_update_failed",
+                    extra={"backup_id": backup.get("id")},
+                    exc_info=True,
+                )
             await ctx.response_formatter.safe_reply(
                 ctx.message,
                 f"Backup failed: {exc}",

@@ -88,7 +88,10 @@ def fetch_feed(
 
                 pub_date = datetime.fromtimestamp(time.mktime(entry.published_parsed), tz=UTC)
             except (ValueError, OverflowError, TypeError):
-                pass
+                logger.debug(
+                    "rss_date_parse_failed",
+                    extra={"guid": guid, "raw": str(entry.published_parsed)},
+                )
 
         content_text = ""
         if entry.get("content"):
