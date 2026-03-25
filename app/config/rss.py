@@ -44,3 +44,8 @@ class RSSConfig(BaseModel):
         le=10,
         description="Parallel LLM summarization calls",
     )
+    scrape_short_content: bool = Field(
+        default=False,
+        validation_alias="RSS_SCRAPE_SHORT_CONTENT",
+        description="Scrape full article via scraper chain when inline content is too short",
+    )

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from app.adapters.content.pure_summary_service import PureSummaryService
+    from app.adapters.content.scraper.chain import ContentScraperChain
     from app.config.rss import RSSConfig
     from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
         SqliteRSSFeedRepositoryAdapter,
@@ -64,11 +65,13 @@ class RSSDeliveryService:
         pure_summary_service: PureSummaryService,
         system_prompt_loader: Callable[[str], str],
         rss_repository: SqliteRSSFeedRepositoryAdapter,
+        scraper_chain: ContentScraperChain | None = None,
     ) -> None:
         self._cfg = cfg
         self._pure = pure_summary_service
         self._load_prompt = system_prompt_loader
         self._rss_repo = rss_repository
+        self._scraper_chain = scraper_chain
 
     async def deliver_new_items(
         self,
@@ -140,18 +143,23 @@ class RSSDeliveryService:
                     user_id=user_id, item_id=int(item["id"])
                 )
                 return
-            # TODO(po4yka): scrape item.url via scraper chain for short/empty content
-            # For now, skip items without enough inline content
-            logger.info(
-                "rss_delivery_skip_short_content",
-                extra={
-                    "item_id": item.get("id"),
-                    "content_len": len(content),
-                    "cid": correlation_id,
-                },
-            )
-            await self._rss_repo.async_mark_item_delivered(user_id=user_id, item_id=int(item["id"]))
-            return
+            scraped_content = await self._try_scrape_url(item["url"], correlation_id)
+            if scraped_content and len(scraped_content) >= self._cfg.min_content_length:
+                content = scraped_content
+            else:
+                logger.info(
+                    "rss_delivery_skip_short_content",
+                    extra={
+                        "item_id": item.get("id"),
+                        "content_len": len(content),
+                        "scraped": scraped_content is not None,
+                        "cid": correlation_id,
+                    },
+                )
+                await self._rss_repo.async_mark_item_delivered(
+                    user_id=user_id, item_id=int(item["id"])
+                )
+                return
 
         cleaned = clean_content_for_llm(content)
         lang = detect_language(cleaned)
@@ -181,3 +189,33 @@ class RSSDeliveryService:
                 "cid": correlation_id,
             },
         )
+
+    async def _try_scrape_url(self, url: str, correlation_id: str) -> str | None:
+        """Attempt to scrape full article content when RSS inline content is too short.
+
+        Returns scraped markdown text on success, None on failure or if disabled.
+        """
+        if not self._cfg.scrape_short_content or self._scraper_chain is None:
+            return None
+
+        try:
+            from app.core.call_status import CallStatus
+
+            result = await self._scraper_chain.scrape_markdown(url)
+            if result.status == CallStatus.OK and result.content_markdown:
+                logger.info(
+                    "rss_scrape_success",
+                    extra={
+                        "url": url,
+                        "content_len": len(result.content_markdown),
+                        "cid": correlation_id,
+                    },
+                )
+                return result.content_markdown
+        except Exception:
+            logger.warning(
+                "rss_scrape_failed",
+                extra={"url": url, "cid": correlation_id},
+                exc_info=True,
+            )
+        return None

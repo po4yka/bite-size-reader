@@ -102,6 +102,7 @@ def _create_digest_service(
 
 def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
     from app.adapters.content.pure_summary_service import PureSummaryService
+    from app.adapters.content.scraper.factory import ContentScraperFactory
     from app.adapters.content.summarization_runtime import SummarizationRuntime
     from app.adapters.external.response_formatter import (
         ResponseFormatter as TelegramResponseFormatter,
@@ -143,6 +144,11 @@ def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> 
     pure_service = PureSummaryService(runtime=runtime)
     prompt_mgr = get_prompt_manager()
 
+    scraper_chain = None
+    if cfg.rss.scrape_short_content:
+        audit = lambda *_a, **_kw: None  # noqa: E731
+        scraper_chain = ContentScraperFactory.create_from_config(cfg, audit=audit)
+
     return RSSDeliveryService(
         cfg=cfg.rss,
         pure_summary_service=pure_service,
@@ -150,4 +156,5 @@ def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> 
             lang, include_examples=True, num_examples=2
         ),
         rss_repository=SqliteRSSFeedRepositoryAdapter(db),
+        scraper_chain=scraper_chain,
     )
