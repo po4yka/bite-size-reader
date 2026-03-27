@@ -546,7 +546,17 @@ class TelegramBot:
             if hasattr(message, "reply_text"):
                 kwargs: dict[str, Any] = {}
                 if parse_mode is not None:
-                    kwargs["parse_mode"] = parse_mode
+                    # Pyrogram requires enums.ParseMode, not plain strings
+                    try:
+                        from pyrogram import enums as _enums
+
+                        _pm_map = {
+                            "html": _enums.ParseMode.HTML,
+                            "markdown": _enums.ParseMode.MARKDOWN,
+                        }
+                        kwargs["parse_mode"] = _pm_map.get(parse_mode.lower(), parse_mode)
+                    except Exception:
+                        kwargs["parse_mode"] = parse_mode
                 if reply_markup is not None:
                     kwargs["reply_markup"] = reply_markup
                 if extra_kwargs:
