@@ -140,6 +140,7 @@ app/static/digest/
 # Local Claude Code settings (user-specific)
 .claude/settings.local.json
 .claude/worktrees/
+.claude/skills/redeploy-raspi/
 .agents/
 
 # --- Desloppify ---

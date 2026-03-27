@@ -120,6 +120,16 @@ class StructuredSummaryFlow:
             header_section = sections[0]
             remaining_sections = sections[1:]
 
+            logger.debug(
+                "card_sections_built",
+                extra={
+                    "section_count": len(sections),
+                    "header_len": len(header_section),
+                    "remaining_count": len(remaining_sections),
+                    "remaining_lens": [len(s) for s in remaining_sections],
+                },
+            )
+
             # If header fits in one Telegram message, finalize with it
             _telegram_limit = 4096
             if len(header_section) <= _telegram_limit:
@@ -152,19 +162,42 @@ class StructuredSummaryFlow:
                     message, header_section, parse_mode="HTML"
                 )
 
-            # Send remaining sections as separate messages
+            # Send remaining sections as separate messages.
+            # Use send_long_text for all sections (handles splitting and is more
+            # robust than safe_reply for potentially long HTML content).
+            # Isolate each section send so one failure doesn't block the rest.
             for i, section in enumerate(remaining_sections):
-                is_last = i == len(remaining_sections) - 1
-                if is_last and summary_id:
-                    # Attach keyboard to last section message
-                    keyboard = self._create_inline_keyboard(summary_id)
-                    await self._context.response_sender.safe_reply(
-                        message, section, parse_mode="HTML", reply_markup=keyboard
-                    )
-                else:
+                try:
                     await self._context.text_processor.send_long_text(
                         message, section, parse_mode="HTML"
                     )
+                except Exception as sec_exc:
+                    raise_if_cancelled(sec_exc)
+                    logger.warning(
+                        "card_section_send_failed",
+                        extra={
+                            "section_index": i + 1,
+                            "section_len": len(section),
+                            "error": str(sec_exc),
+                        },
+                    )
+
+            # Send keyboard as a separate action buttons message
+            if summary_id and remaining_sections:
+                keyboard = self._create_inline_keyboard(summary_id)
+                if keyboard:
+                    try:
+                        await self._context.response_sender.safe_reply(
+                            message,
+                            t("quick_actions", self._context.lang),
+                            reply_markup=keyboard,
+                        )
+                    except Exception as kb_exc:
+                        raise_if_cancelled(kb_exc)
+                        logger.warning(
+                            "card_keyboard_send_failed",
+                            extra={"error": str(kb_exc)},
+                        )
 
             return True, card_text
         except Exception as exc:
