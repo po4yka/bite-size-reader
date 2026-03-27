@@ -192,7 +192,6 @@ class CallbackActionService:
             summary_id,
             correlation_id=correlation_id,
             cache=self._summary_cache,
-            loader=self._load_summary_payload_sync,
         )
 
     async def handle_retry(

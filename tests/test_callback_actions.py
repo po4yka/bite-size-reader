@@ -580,12 +580,12 @@ class TestSummaryPayloadCache:
         service, _ = _make_service()
         calls: list[str] = []
 
-        def _fake_load(summary_id: str) -> dict[str, Any] | None:
+        async def _fake_load(summary_id: str) -> dict[str, Any] | None:
             calls.append(summary_id)
             return {"id": summary_id}
 
         times = iter([100.0, 100.5])
-        monkeypatch.setattr(service, "_load_summary_payload_sync", _fake_load)
+        monkeypatch.setattr(service._store, "_load_summary_payload", _fake_load)
         monkeypatch.setattr(callback_actions_module.time, "time", lambda: next(times))
 
         first = await service.load_summary_payload("42", correlation_id="cid")
@@ -600,12 +600,12 @@ class TestSummaryPayloadCache:
         service, _ = _make_service()
         calls: list[str] = []
 
-        def _fake_load(summary_id: str) -> dict[str, Any] | None:
+        async def _fake_load(summary_id: str) -> dict[str, Any] | None:
             calls.append(summary_id)
             return {"id": f"{summary_id}:{len(calls)}"}
 
         times = iter([100.0, 131.0])
-        monkeypatch.setattr(service, "_load_summary_payload_sync", _fake_load)
+        monkeypatch.setattr(service._store, "_load_summary_payload", _fake_load)
         monkeypatch.setattr(callback_actions_module.time, "time", lambda: next(times))
 
         first = await service.load_summary_payload("42", correlation_id="cid")
