@@ -54,6 +54,9 @@ class DraftSendResult:
     reason: str | None = None
 
 
+_TRANSPORT_CIRCUIT_BREAKER_THRESHOLD: int = 3
+
+
 class DraftStreamSender:
     """Sends Telegram draft updates via raw SendCustomRequest transport."""
 
@@ -66,6 +69,8 @@ class DraftStreamSender:
         self._telegram_client = telegram_client
         self._settings = settings
         self._states: dict[tuple[int, int], DraftStreamState] = {}
+        self._transport_disabled: bool = False
+        self._transport_consecutive_failures: int = 0
 
     def set_telegram_client(self, telegram_client: Any) -> None:
         """Update Telegram client reference (used by ResponseFormatter rewiring)."""
@@ -117,6 +122,11 @@ class DraftStreamSender:
         if not self._settings.enabled:
             return DraftSendResult(ok=False, sent=False, fallback=True, reason="disabled")
 
+        if self._transport_disabled:
+            return DraftSendResult(
+                ok=False, sent=False, fallback=True, reason="transport_circuit_open"
+            )
+
         key = self.request_key(message)
         if key is None:
             return DraftSendResult(
@@ -160,6 +170,7 @@ class DraftStreamSender:
             state.last_sent_monotonic = time.monotonic()
             state.consecutive_failures = 0
             state.fallback_until = 0.0
+            self._transport_consecutive_failures = 0
             record_draft_stream_event("draft_send_success")
             logger.debug(
                 "draft_send_success",
@@ -175,10 +186,25 @@ class DraftStreamSender:
                 state.fallback = True
             else:
                 state.fallback_until = time.time() + 10
+
+            self._transport_consecutive_failures += 1
+            if (
+                not self._transport_disabled
+                and self._transport_consecutive_failures >= _TRANSPORT_CIRCUIT_BREAKER_THRESHOLD
+            ):
+                self._transport_disabled = True
+                logger.warning(
+                    "draft_transport_circuit_open",
+                    extra={
+                        "failures": self._transport_consecutive_failures,
+                        "last_error": str(exc),
+                    },
+                )
+
             record_draft_stream_event("draft_send_fallback")
             if reason == "policy_reject":
                 record_draft_stream_event("draft_send_policy_reject")
-            logger.warning(
+            logger.debug(
                 "draft_send_fallback",
                 extra={
                     "chat_id": chat_id,

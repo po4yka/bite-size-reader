@@ -8,6 +8,7 @@ import unicodedata
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.external.formatting.html_repair import repair_html_chunk
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -28,8 +29,13 @@ class TextProcessorImpl:
         self._response_sender = response_sender
         self._max_message_chars = max_message_chars
 
-    def chunk_text(self, text: str, *, max_len: int) -> list[str]:
-        """Split text into chunks respecting Telegram's message length limit."""
+    def chunk_text(self, text: str, *, max_len: int, html_aware: bool = False) -> list[str]:
+        """Split text into chunks respecting Telegram's message length limit.
+
+        When *html_aware* is True, each chunk is repaired so that HTML tags
+        broken by the split are properly closed/reopened.  This prevents
+        Telegram 400 errors when sending HTML-parsed messages.
+        """
         text = text.strip()
         if not text:
             return []
@@ -47,6 +53,10 @@ class TextProcessorImpl:
             remaining = remaining.lstrip(" \n\r")
         if remaining:
             chunks.append(remaining)
+
+        if html_aware:
+            chunks = [repair_html_chunk(c) for c in chunks]
+
         return chunks
 
     def _find_split_index(self, text: str, limit: int) -> int:
@@ -228,7 +238,8 @@ class TextProcessorImpl:
         self, message: Any, text: str, *, parse_mode: str | None = None
     ) -> None:
         """Send text, splitting into multiple messages if too long for Telegram."""
-        for chunk in self.chunk_text(text, max_len=self._max_message_chars):
+        is_html = isinstance(parse_mode, str) and parse_mode.upper() == "HTML"
+        for chunk in self.chunk_text(text, max_len=self._max_message_chars, html_aware=is_html):
             if chunk:
                 await self._response_sender.safe_reply(message, chunk, parse_mode=parse_mode)
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.external.formatting.html_repair import repair_html_chunk
 from app.adapters.external.formatting.summary.action_buttons import create_inline_keyboard
 from app.adapters.external.formatting.summary.card_renderer import (
     build_card_sections,
@@ -155,7 +156,7 @@ class StructuredSummaryFlow:
                 # send full TLDR separately
                 await self._context.progress_tracker.finalize(
                     message,
-                    header_section[:_telegram_limit],
+                    repair_html_chunk(header_section[:_telegram_limit]),
                     parse_mode="HTML",
                 )
                 # Send overflow as a new message via send_long_text

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.external.formatting.html_repair import repair_html_chunk
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
@@ -81,6 +82,8 @@ def validate_and_truncate(
             extra={"length": len(text), "max": state.max_message_chars},
         )
         text = text[: state.max_message_chars - 10] + "..."
+        # Repair HTML tags that may have been cut by truncation.
+        text = repair_html_chunk(text)
     return text
 
 

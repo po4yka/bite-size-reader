@@ -45,7 +45,7 @@ class ResponseSenderReplyFlow:
         text = prepared
 
         if not await self._state.validator.check_rate_limit():
-            logger.warning("safe_reply_rate_limited", extra={"text_length": len(text)})
+            logger.debug("safe_reply_rate_limited", extra={"text_length": len(text)})
 
         if self._state.safe_reply_func is not None:
             kwargs: dict[str, Any] = {}
@@ -110,7 +110,7 @@ class ResponseSenderReplyFlow:
         text = prepared_text
 
         if not await self._state.validator.check_rate_limit():
-            logger.warning("safe_reply_with_id_rate_limited", extra={"text_length": len(text)})
+            logger.debug("safe_reply_with_id_rate_limited", extra={"text_length": len(text)})
 
         if self._state.safe_reply_func is not None:
             try:
