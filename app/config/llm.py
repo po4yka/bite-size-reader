@@ -21,9 +21,9 @@ class OpenRouterConfig(BaseModel):
     model: str = Field(default="deepseek/deepseek-v3.2", validation_alias="OPENROUTER_MODEL")
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: (
+            "qwen/qwen3.5-plus",
+            "google/gemini-3.1-flash-lite-preview",
             "moonshotai/kimi-k2.5",
-            "qwen/qwen3-max",
-            "deepseek/deepseek-r1",
         ),
         validation_alias="OPENROUTER_FALLBACK_MODELS",
     )
@@ -37,13 +37,14 @@ class OpenRouterConfig(BaseModel):
     )
     enable_stats: bool = Field(default=False, validation_alias="OPENROUTER_ENABLE_STATS")
     long_context_model: str | None = Field(
-        default="google/gemini-3-flash-preview", validation_alias="OPENROUTER_LONG_CONTEXT_MODEL"
+        default="google/gemini-3.1-flash-lite-preview",
+        validation_alias="OPENROUTER_LONG_CONTEXT_MODEL",
     )
     flash_model: str = Field(
-        default="google/gemini-3-flash-preview", validation_alias="OPENROUTER_FLASH_MODEL"
+        default="qwen/qwen3.5-flash", validation_alias="OPENROUTER_FLASH_MODEL"
     )
     flash_fallback_models: tuple[str, ...] = Field(
-        default_factory=lambda: ("anthropic/claude-haiku-4.5",),
+        default_factory=lambda: ("qwen/qwen3.5-plus",),
         validation_alias="OPENROUTER_FLASH_FALLBACK_MODELS",
     )
     summary_temperature_relaxed: float | None = Field(
@@ -297,8 +298,8 @@ class ModelRoutingConfig(BaseModel):
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: (
             "deepseek/deepseek-v3.2",
-            "anthropic/claude-opus-4.6",
-            "openai/gpt-5.4",
+            "qwen/qwen3.5-plus",
+            "google/gemini-3.1-flash-lite-preview",
         ),
         validation_alias="MODEL_ROUTING_FALLBACK_MODELS",
     )
