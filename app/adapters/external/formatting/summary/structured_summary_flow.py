@@ -8,6 +8,7 @@ from app.adapters.external.formatting.summary.action_buttons import create_inlin
 from app.adapters.external.formatting.summary.card_renderer import (
     build_card_sections,
     build_compact_card_html,
+    truncate_plain_text,
 )
 from app.adapters.external.formatting.summary.crosspost_publisher import crosspost_to_topic
 from app.core.async_utils import raise_if_cancelled
@@ -182,14 +183,22 @@ class StructuredSummaryFlow:
                         },
                     )
 
-            # Send keyboard as a separate action buttons message
+            # Send keyboard as a separate action buttons message.
+            # Use article title as text so the chat list preview is meaningful.
             if summary_id and remaining_sections:
                 keyboard = self._create_inline_keyboard(summary_id)
                 if keyboard:
                     try:
+                        meta = summary_shaped.get("metadata") or {}
+                        _title = ""
+                        if isinstance(meta, dict):
+                            _title = str(meta.get("title") or "").strip()
+                        kb_text = truncate_plain_text(_title, 60) or t(
+                            "quick_actions", self._context.lang
+                        )
                         await self._context.response_sender.safe_reply(
                             message,
-                            t("quick_actions", self._context.lang),
+                            kb_text,
                             reply_markup=keyboard,
                         )
                     except Exception as kb_exc:
