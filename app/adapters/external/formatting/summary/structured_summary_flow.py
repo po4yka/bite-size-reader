@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.external.formatting.summary.action_buttons import create_inline_keyboard
-from app.adapters.external.formatting.summary.card_renderer import build_compact_card_html
+from app.adapters.external.formatting.summary.card_renderer import (
+    build_card_sections,
+    build_compact_card_html,
+)
 from app.adapters.external.formatting.summary.crosspost_publisher import crosspost_to_topic
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
@@ -78,6 +81,19 @@ class StructuredSummaryFlow:
             await self._context.verbosity_resolver.get_verbosity(message)
         ) == VerbosityLevel.READER
 
+    def _build_card_sections(
+        self, summary_shaped: dict[str, Any], llm: Any, chunks: int | None, *, reader: bool
+    ) -> list[str]:
+        return build_card_sections(
+            summary_shaped,
+            llm,
+            chunks,
+            reader=reader,
+            text_processor=self._context.text_processor,
+            data_formatter=self._context.data_formatter,
+            lang=self._context.lang,
+        )
+
     async def _finalize_compact_card(
         self,
         message: Any,
@@ -88,25 +104,69 @@ class StructuredSummaryFlow:
         *,
         reader: bool,
     ) -> tuple[bool, str | None]:
+        """Finalize progress message with header section, send remaining sections separately."""
         card_text: str | None = None
         try:
-            card_text = self._build_compact_card_html(summary_shaped, llm, chunks, reader=reader)
+            sections = self._build_card_sections(summary_shaped, llm, chunks, reader=reader)
+            # card_text = full joined card for crosspost / fallback
+            card_text = "\n\n".join(sections).strip() or None
+
+            if not sections:
+                return False, card_text
+
             if self._context.progress_tracker is None:
                 return False, card_text
 
-            keyboard = self._create_inline_keyboard(summary_id) if summary_id else None
-            result = await self._context.progress_tracker.finalize(
-                message,
-                card_text,
-                parse_mode="HTML",
-                reply_markup=keyboard,
-            )
-            if result is not None:
-                return True, card_text
-            logger.warning(
-                "progress_finalize_failed_fallback",
-                extra={"request_message_id": getattr(message, "id", None)},
-            )
+            header_section = sections[0]
+            remaining_sections = sections[1:]
+
+            # If header fits in one Telegram message, finalize with it
+            _telegram_limit = 4096
+            if len(header_section) <= _telegram_limit:
+                # Attach keyboard to header only if no remaining sections
+                keyboard = None
+                if not remaining_sections and summary_id:
+                    keyboard = self._create_inline_keyboard(summary_id)
+                result = await self._context.progress_tracker.finalize(
+                    message,
+                    header_section,
+                    parse_mode="HTML",
+                    reply_markup=keyboard,
+                )
+                if result is None:
+                    logger.warning(
+                        "progress_finalize_failed_fallback",
+                        extra={"request_message_id": getattr(message, "id", None)},
+                    )
+                    return False, card_text
+            else:
+                # Header too long (very long TLDR): finalize with just title,
+                # send full TLDR separately
+                await self._context.progress_tracker.finalize(
+                    message,
+                    header_section[:_telegram_limit],
+                    parse_mode="HTML",
+                )
+                # Send overflow as a new message via send_long_text
+                await self._context.text_processor.send_long_text(
+                    message, header_section, parse_mode="HTML"
+                )
+
+            # Send remaining sections as separate messages
+            for i, section in enumerate(remaining_sections):
+                is_last = i == len(remaining_sections) - 1
+                if is_last and summary_id:
+                    # Attach keyboard to last section message
+                    keyboard = self._create_inline_keyboard(summary_id)
+                    await self._context.response_sender.safe_reply(
+                        message, section, parse_mode="HTML", reply_markup=keyboard
+                    )
+                else:
+                    await self._context.text_processor.send_long_text(
+                        message, section, parse_mode="HTML"
+                    )
+
+            return True, card_text
         except Exception as exc:
             raise_if_cancelled(exc)
             logger.warning(

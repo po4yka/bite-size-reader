@@ -36,24 +36,17 @@ def extract_domain_from_url(url: str) -> str | None:
         return None
 
 
-def compact_tldr(
+def sanitize_tldr(
     text: str,
     *,
     text_processor: Any,
-    max_sentences: int = 3,
-    max_chars: int = 520,
 ) -> str:
-    cleaned = text_processor.sanitize_summary_text(text) if text else ""
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    if not cleaned:
-        return ""
-
-    sentences = [s.strip() for s in re.split(r"(?<=[.!?\u2026])\s+", cleaned) if s.strip()]
-    compact = " ".join(sentences[:max_sentences]).strip() if sentences else cleaned
-    return truncate_plain_text(compact, max_chars)
+    """Sanitize TLDR text without truncation."""
+    sanitized = text_processor.sanitize_summary_text(text) if text else ""
+    return re.sub(r"\s+", " ", sanitized).strip()
 
 
-def build_compact_card_html(
+def build_card_sections(
     summary_shaped: dict[str, Any],
     llm: Any,
     chunks: int | None,
@@ -62,7 +55,15 @@ def build_compact_card_html(
     text_processor: Any,
     data_formatter: Any,
     lang: str = "en",
-) -> str:
+) -> list[str]:
+    """Return logical card sections, each safe for a single Telegram message.
+
+    Sections:
+      [0] Header: title + meta + full TLDR (no truncation)
+      [1] TLDR RU (only for non-Russian lang when field is present)
+      [2] Details: key takeaways + key stats + metadata + model info
+    """
+
     def capped(items: list[str], cap: int, *, sep: str) -> tuple[str, int]:
         clean = [str(x).strip() for x in items if str(x).strip()]
         shown = clean[:cap]
@@ -106,11 +107,30 @@ def build_compact_card_html(
         meta_parts.append(html.escape(reading_time_str))
     meta_line = " \u00b7 ".join(meta_parts)
 
+    # --- Section 0: Header + TLDR ---
+    header_lines: list[str] = [title_line]
+    if meta_line:
+        header_lines.append(f"<i>{meta_line}</i>")
+
     tldr_raw = (
         str(summary_shaped.get("tldr") or "").strip()
         or str(summary_shaped.get("summary_250") or "").strip()
     )
-    tldr_compact = compact_tldr(tldr_raw, text_processor=text_processor)
+    tldr_clean = sanitize_tldr(tldr_raw, text_processor=text_processor)
+    if tldr_clean:
+        header_lines.extend(["", f"<b>{t('tldr', lang)}</b>", html.escape(tldr_clean)])
+
+    sections: list[str] = ["\n".join(header_lines).strip()]
+
+    # --- Section 1: TLDR RU (optional) ---
+    tldr_ru_raw = str(summary_shaped.get("tldr_ru") or "").strip()
+    if tldr_ru_raw and lang != "ru":
+        tldr_ru_clean = sanitize_tldr(tldr_ru_raw, text_processor=text_processor)
+        if tldr_ru_clean:
+            sections.append(f"<b>{t('tldr_ru', lang)}</b>\n{html.escape(tldr_ru_clean)}")
+
+    # --- Section 2: Details (takeaways + stats + metadata + model) ---
+    detail_lines: list[str] = []
 
     takeaways = summary_shaped.get("key_ideas") or []
     if not isinstance(takeaways, list):
@@ -126,10 +146,20 @@ def build_compact_card_html(
         if len(takeaways_clean) >= 5:
             break
 
+    if takeaways_clean:
+        detail_lines.append(f"<b>{t('key_takeaways', lang)}</b>")
+        detail_lines.extend([f"\u2022 {item}" for item in takeaways_clean])
+
     key_stats = summary_shaped.get("key_stats") or []
     stats_lines: list[str] = []
     if isinstance(key_stats, list) and key_stats:
         stats_lines = data_formatter.format_key_stats_compact(key_stats[:5])
+
+    if stats_lines:
+        if detail_lines:
+            detail_lines.append("")
+        detail_lines.append(f"<b>{t('key_stats', lang)}</b>")
+        detail_lines.extend(stats_lines[:5])
 
     tags_raw = summary_shaped.get("topic_tags") or []
     tags: list[str] = tags_raw if isinstance(tags_raw, list) else []
@@ -148,21 +178,6 @@ def build_compact_card_html(
     orgs_shown, orgs_hidden = capped(orgs, 5, sep=", ")
     places_shown, places_hidden = capped(places, 5, sep=", ")
 
-    lines: list[str] = [title_line]
-    if meta_line:
-        lines.append(f"<i>{meta_line}</i>")
-
-    if tldr_compact:
-        lines.extend(["", f"<b>{t('tldr', lang)}</b>", html.escape(tldr_compact)])
-
-    if takeaways_clean:
-        lines.extend(["", f"<b>{t('key_takeaways', lang)}</b>"])
-        lines.extend([f"\u2022 {item}" for item in takeaways_clean])
-
-    if stats_lines:
-        lines.extend(["", f"<b>{t('key_stats', lang)}</b>"])
-        lines.extend(stats_lines[:5])
-
     meta_lines: list[str] = []
     if tags_shown:
         tag_tail = f" (+{tags_hidden})" if tags_hidden else ""
@@ -178,17 +193,44 @@ def build_compact_card_html(
         meta_lines.append(t("places", lang) + ": " + html.escape(places_shown + tail))
 
     if meta_lines:
-        lines.extend(["", f"<b>{t('metadata', lang)}</b>"])
-        lines.extend(meta_lines)
+        if detail_lines:
+            detail_lines.append("")
+        detail_lines.append(f"<b>{t('metadata', lang)}</b>")
+        detail_lines.extend(meta_lines)
 
     if not reader:
         method = f"{t('chunked', lang)} ({chunks} parts)" if chunks else t("single_pass", lang)
         model_name = getattr(llm, "model", None) or "unknown"
-        lines.extend(
-            [
-                "",
-                f"<i>{t('model', lang)}: {html.escape(str(model_name))} \u00b7 {html.escape(method)}</i>",
-            ]
+        if detail_lines:
+            detail_lines.append("")
+        detail_lines.append(
+            f"<i>{t('model', lang)}: {html.escape(str(model_name))} \u00b7 {html.escape(method)}</i>"
         )
 
-    return "\n".join(lines).strip() or f"\u2705 {t('summary_ready', lang)}"
+    if detail_lines:
+        sections.append("\n".join(detail_lines).strip())
+
+    return sections
+
+
+def build_compact_card_html(
+    summary_shaped: dict[str, Any],
+    llm: Any,
+    chunks: int | None,
+    *,
+    reader: bool,
+    text_processor: Any,
+    data_formatter: Any,
+    lang: str = "en",
+) -> str:
+    """Build a single HTML string from all card sections (for crosspost / fallback)."""
+    sections = build_card_sections(
+        summary_shaped,
+        llm,
+        chunks,
+        reader=reader,
+        text_processor=text_processor,
+        data_formatter=data_formatter,
+        lang=lang,
+    )
+    return "\n\n".join(sections).strip() or f"\u2705 {t('summary_ready', lang)}"

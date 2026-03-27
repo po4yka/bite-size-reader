@@ -141,6 +141,7 @@ class SummaryModel(BaseModel):
     summary_250: str = Field(default="", max_length=250)
     summary_1000: str = Field(default="", max_length=1000)
     tldr: str = Field(default="")
+    tldr_ru: str = Field(default="")
     key_ideas: list[str] = Field(default_factory=list)
     topic_tags: list[str] = Field(default_factory=list)
     entities: Entities = Field(default_factory=Entities)
@@ -213,6 +214,15 @@ class SummaryModel(BaseModel):
         data["summary_250"] = s250
         data["summary_1000"] = s1000
         data["tldr"] = tldr
+
+        # --- 3. Backfill tldr_ru for Russian sources ---
+        tldr_ru = str(data.get("tldr_ru") or "").strip()
+        if not tldr_ru and tldr:
+            import re as _re
+
+            if _re.search(r"[\u0400-\u04FF]", tldr):
+                tldr_ru = tldr
+        data["tldr_ru"] = tldr_ru
 
         return data
 

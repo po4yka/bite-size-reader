@@ -38,6 +38,8 @@ FIELD_NAME_MAPPING: dict[str, str] = {
     "forwardedPostExtras": "forwarded_post_extras",
     "keypointstoremember": "key_points_to_remember",
     "keyPointsToRemember": "key_points_to_remember",
+    "tldrRu": "tldr_ru",
+    "tldr_ru": "tldr_ru",
 }
 
 

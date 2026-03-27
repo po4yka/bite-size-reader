@@ -20,6 +20,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     # Summary card labels (card.py)
     # ------------------------------------------------------------------
     "tldr": {"en": "TL;DR", "ru": "TL;DR"},
+    "tldr_ru": {"en": "TL;DR (RU)", "ru": "TL;DR"},
     "key_takeaways": {"en": "Key takeaways", "ru": "Ключевые выводы"},
     "key_stats": {"en": "Key stats", "ru": "Ключевые цифры"},
     "metadata": {"en": "Metadata", "ru": "Метаданные"},
