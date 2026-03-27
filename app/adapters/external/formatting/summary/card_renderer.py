@@ -105,6 +105,14 @@ def build_card_sections(
         meta_parts.append(html.escape(domain))
     if reading_time_str:
         meta_parts.append(html.escape(reading_time_str))
+
+    source_type = str(summary_shaped.get("source_type") or "").strip().lower()
+    freshness = str(summary_shaped.get("temporal_freshness") or "").strip().lower()
+    if source_type and source_type != "blog":
+        meta_parts.append(html.escape(source_type.capitalize()))
+    if freshness and freshness not in ("evergreen", ""):
+        meta_parts.append(html.escape(freshness.capitalize()))
+
     meta_line = " \u00b7 ".join(meta_parts)
 
     # --- Section 0: Header + TLDR ---
@@ -192,6 +200,50 @@ def build_card_sections(
         tail = f" (+{places_hidden})" if places_hidden else ""
         meta_lines.append(t("places", lang) + ": " + html.escape(places_shown + tail))
 
+    # --- Key interesting facts (from insights.new_facts) ---
+    insights = summary_shaped.get("insights") or {}
+    if isinstance(insights, dict):
+        new_facts_raw = insights.get("new_facts") or []
+        if isinstance(new_facts_raw, list):
+            facts_clean: list[str] = []
+            for fact_entry in new_facts_raw:
+                fact_text = ""
+                if isinstance(fact_entry, dict):
+                    fact_text = str(fact_entry.get("fact") or "").strip()
+                elif isinstance(fact_entry, str):
+                    fact_text = fact_entry.strip()
+                if not fact_text:
+                    continue
+                fact_text = text_processor.sanitize_summary_text(fact_text)
+                facts_clean.append(html.escape(truncate_plain_text(fact_text, 200)))
+                if len(facts_clean) >= 3:
+                    break
+            if facts_clean:
+                if detail_lines:
+                    detail_lines.append("")
+                detail_lines.append(f"<b>{t('interesting_facts', lang)}</b>")
+                detail_lines.extend([f"\u2022 {f}" for f in facts_clean])
+
+        # --- Questionable statements (insights.caution + insights.critique) ---
+        caution = str(insights.get("caution") or "").strip()
+        critique_raw = insights.get("critique") or []
+        critique_items: list[str] = []
+        if isinstance(critique_raw, list):
+            for c in critique_raw[:3]:
+                cs = str(c or "").strip()
+                if cs:
+                    cs = text_processor.sanitize_summary_text(cs)
+                    critique_items.append(html.escape(truncate_plain_text(cs, 200)))
+
+        if caution or critique_items:
+            if detail_lines:
+                detail_lines.append("")
+            detail_lines.append(f"<b>{t('questionable', lang)}</b>")
+            if caution:
+                caution_clean = text_processor.sanitize_summary_text(caution)
+                detail_lines.append(html.escape(truncate_plain_text(caution_clean, 300)))
+            detail_lines.extend([f"\u2022 {c}" for c in critique_items])
+
     if meta_lines:
         if detail_lines:
             detail_lines.append("")
@@ -201,11 +253,27 @@ def build_card_sections(
     if not reader:
         method = f"{t('chunked', lang)} ({chunks} parts)" if chunks else t("single_pass", lang)
         model_name = getattr(llm, "model", None) or "unknown"
+        model_parts = [
+            f"{t('model', lang)}: {html.escape(str(model_name))}",
+            html.escape(method),
+        ]
+
+        confidence = summary_shaped.get("confidence")
+        try:
+            conf_val = float(confidence) if confidence is not None else 1.0
+        except (ValueError, TypeError):
+            conf_val = 1.0
+        if conf_val < 1.0:
+            model_parts.append(f"{int(conf_val * 100)}%")
+
+        h_risk = str(summary_shaped.get("hallucination_risk") or "").strip().lower()
+        if h_risk and h_risk != "low":
+            model_parts.append(f"{t('hallucination_risk', lang)}: {html.escape(h_risk)}")
+
         if detail_lines:
             detail_lines.append("")
-        detail_lines.append(
-            f"<i>{t('model', lang)}: {html.escape(str(model_name))} \u00b7 {html.escape(method)}</i>"
-        )
+        model_info = " \u00b7 ".join(model_parts)
+        detail_lines.append(f"<i>{model_info}</i>")
 
     if detail_lines:
         sections.append("\n".join(detail_lines).strip())

@@ -37,6 +37,8 @@ _STRINGS: dict[str, dict[str, str]] = {
     "single_pass": {"en": "Single-pass", "ru": "Один проход"},
     "chunked": {"en": "Chunked", "ru": "По частям"},
     "article": {"en": "Article", "ru": "Статья"},
+    "interesting_facts": {"en": "Key facts", "ru": "Ключевые факты"},
+    "questionable": {"en": "Questionable", "ru": "Спорные утверждения"},
     # ------------------------------------------------------------------
     # Summary section headers (summary_presenter.py)
     # ------------------------------------------------------------------
