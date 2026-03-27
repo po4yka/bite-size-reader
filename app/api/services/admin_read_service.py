@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.api.dependencies.database import get_session_manager
-from app.application.services.system_maintenance_service import SystemMaintenanceService
+from app.api.services.system_maintenance_service import SystemMaintenanceService
 from app.infrastructure.persistence.sqlite.repositories.admin_read_repository import (
     SqliteAdminReadRepositoryAdapter,
 )

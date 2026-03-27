@@ -706,7 +706,10 @@ class TelegramBot:
 
     async def _persist_message_snapshot(self, request_id: int, message: Any) -> None:
         """Persist a Telegram message snapshot for legacy tests."""
-        await self.url_processor.message_persistence.persist_message_snapshot(request_id, message)
+        from app.infrastructure.persistence.message_persistence import MessagePersistence
+
+        mp = MessagePersistence(self.db)
+        await mp.persist_message_snapshot(request_id, message)
 
     async def _on_message(self, message: Any) -> None:
         """Entry point used by tests; delegate to message handler."""

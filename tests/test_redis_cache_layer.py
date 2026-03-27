@@ -59,6 +59,7 @@ def _dummy_cfg() -> SimpleNamespace:
     firecrawl_cfg = SimpleNamespace()
     web_search_cfg = SimpleNamespace(enabled=False)
     model_routing_cfg = SimpleNamespace(enabled=False, fallback_models=())
+    attachment_cfg = SimpleNamespace(article_vision_enabled=False, vision_model=None)
     return SimpleNamespace(
         redis=redis_cfg,
         runtime=runtime_cfg,
@@ -66,6 +67,7 @@ def _dummy_cfg() -> SimpleNamespace:
         firecrawl=firecrawl_cfg,
         web_search=web_search_cfg,
         model_routing=model_routing_cfg,
+        attachment=attachment_cfg,
     )
 
 

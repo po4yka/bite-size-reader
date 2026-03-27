@@ -4,13 +4,15 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.api.exceptions import ResourceNotFoundError
-from app.application.services.collection_service import CollectionService
+from app.api.services.collection_service import CollectionService
 from app.db.models import Collection, CollectionCollaborator, CollectionItem
+from app.domain.exceptions.domain_exceptions import ResourceNotFoundError
 
 
 @pytest.mark.asyncio
-async def test_collection_service_creates_lists_builds_tree_and_reorders(db, user_factory) -> None:
+async def test_collection_service_creates_lists_builds_tree_and_reorders(
+    db, user_factory, collection_service
+) -> None:
     owner = user_factory(username="collection-owner", telegram_user_id=6001)
 
     root = await CollectionService.create_collection(
@@ -52,7 +54,7 @@ async def test_collection_service_creates_lists_builds_tree_and_reorders(db, use
     assert authorized["id"] == root["id"]
 
     with patch(
-        "app.application.services.collection_service.SqliteCollectionRepositoryAdapter.async_reorder_collections",
+        "app.infrastructure.persistence.sqlite.repositories.collection_repository.SqliteCollectionRepositoryAdapter.async_reorder_collections",
         new=AsyncMock(),
     ) as reorder:
         await CollectionService.reorder_collections(
@@ -74,7 +76,9 @@ async def test_collection_service_creates_lists_builds_tree_and_reorders(db, use
 
 
 @pytest.mark.asyncio
-async def test_collection_service_updates_moves_and_soft_deletes(db, user_factory) -> None:
+async def test_collection_service_updates_moves_and_soft_deletes(
+    db, user_factory, collection_service
+) -> None:
     owner = user_factory(username="collection-editor", telegram_user_id=6002)
     parent_a = await CollectionService.create_collection(
         user_id=owner.telegram_user_id,
@@ -167,7 +171,7 @@ async def test_collection_service_item_operations_cover_add_list_reorder_move_an
     assert len(items) == 2
 
     with patch(
-        "app.application.services.collection_service.SqliteCollectionRepositoryAdapter.async_reorder_items",
+        "app.infrastructure.persistence.sqlite.repositories.collection_repository.SqliteCollectionRepositoryAdapter.async_reorder_items",
         new=AsyncMock(),
     ) as reorder:
         await CollectionService.reorder_items(
@@ -216,7 +220,9 @@ async def test_collection_service_item_operations_cover_add_list_reorder_move_an
 
 
 @pytest.mark.asyncio
-async def test_collection_service_collaborators_acl_and_invites(db, user_factory) -> None:
+async def test_collection_service_collaborators_acl_and_invites(
+    db, user_factory, collection_service
+) -> None:
     owner = user_factory(username="collection-owner-acl", telegram_user_id=6004)
     collaborator = user_factory(username="collection-editor-acl", telegram_user_id=6005)
     invitee = user_factory(username="collection-invitee-acl", telegram_user_id=6006)

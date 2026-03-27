@@ -44,3 +44,11 @@ class DuplicateResourceError(DomainException):
 
 class ValidationError(DomainException):
     """Raised when domain validation fails."""
+
+
+class AuthorizationError(DomainException):
+    """Raised when a user lacks sufficient permissions."""
+
+
+class ProcessingError(DomainException):
+    """Raised when a processing operation fails."""

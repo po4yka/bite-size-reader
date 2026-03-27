@@ -79,6 +79,13 @@ async def lifespan(app: FastAPI):
         setup_json_logging(runtime.cfg.runtime.log_level)
         app.state.runtime = runtime
         set_current_api_runtime(runtime)
+
+        # Wire application-layer services that need runtime dependencies.
+        from app.api.dependencies.database import get_collection_repository
+        from app.api.services.collection_service import CollectionService
+
+        CollectionService.configure(get_collection_repository)
+
         logger.info("database_initialized", extra={"db_path": runtime.db.path})
 
         yield

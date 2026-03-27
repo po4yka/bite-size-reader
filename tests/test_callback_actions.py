@@ -445,10 +445,7 @@ class TestSaveAndRate:
     async def test_save_not_found_reply(self, monkeypatch: pytest.MonkeyPatch) -> None:
         service, formatter = _make_service()
 
-        async def _fake_to_thread(fn: Any, *args: Any, **kwargs: Any) -> Any:
-            return None
-
-        monkeypatch.setattr(callback_actions_module.asyncio, "to_thread", _fake_to_thread)
+        monkeypatch.setattr(service._store, "toggle_save", AsyncMock(return_value=None))
 
         handled = await service.handle_toggle_save(
             SimpleNamespace(),
@@ -534,10 +531,7 @@ class TestDigestAndRetry:
     ) -> None:
         service, formatter = _make_service()
 
-        async def _fake_to_thread(fn: Any, *args: Any, **kwargs: Any) -> Any:
-            return None
-
-        monkeypatch.setattr(callback_actions_module.asyncio, "to_thread", _fake_to_thread)
+        monkeypatch.setattr(service._store, "lookup_retry_url", AsyncMock(return_value=None))
 
         handled = await service.handle_retry(
             SimpleNamespace(),
@@ -558,10 +552,11 @@ class TestDigestAndRetry:
         service, formatter = _make_service(url_handler=url_handler)
         message = SimpleNamespace()
 
-        async def _fake_to_thread(fn: Any, *args: Any, **kwargs: Any) -> Any:
-            return "https://example.com/retry"
-
-        monkeypatch.setattr(callback_actions_module.asyncio, "to_thread", _fake_to_thread)
+        monkeypatch.setattr(
+            service._store,
+            "lookup_retry_url",
+            AsyncMock(return_value="https://example.com/retry"),
+        )
 
         handled = await service.handle_retry(
             message,

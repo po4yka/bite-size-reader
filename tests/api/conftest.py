@@ -79,6 +79,16 @@ def db(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def collection_service(db):
+    """Configure CollectionService repo factory. Request this fixture in collection tests."""
+    from app.api.dependencies.database import get_collection_repository
+    from app.api.services.collection_service import CollectionService
+
+    CollectionService.configure(get_collection_repository)
+    return CollectionService
+
+
+@pytest.fixture
 def client(db):
     try:
         from fastapi.testclient import TestClient

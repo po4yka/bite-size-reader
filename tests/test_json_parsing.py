@@ -153,6 +153,15 @@ def _setup_openrouter_mock(bot: TelegramBot, mock_instance: MagicMock) -> None:
                 fp.summarizer._insights_helper._openrouter = mock_instance
 
 
+def _get_safe_reply_texts(mock_safe_reply: MagicMock) -> list[str]:
+    """Extract all text arguments passed to _safe_reply."""
+    texts: list[str] = []
+    for call in mock_safe_reply.call_args_list:
+        if len(call.args) >= 2 and isinstance(call.args[1], str):
+            texts.append(call.args[1])
+    return texts
+
+
 class TestJsonParsing(unittest.TestCase):
     def setUp(self) -> None:
         self.cfg = make_test_app_config(db_path=":memory:")
@@ -242,9 +251,12 @@ class TestJsonParsing(unittest.TestCase):
             # After summary flow completes, the LLM is called for:
             # 1. Summary generation
             # 2-N. Background tasks (insights, custom article, etc.)
-            # The key test is that the flow completes successfully and reply_json is called
+            # The summary flow now sends formatted text via _safe_reply.
             assert mock_openrouter_instance.chat.await_count >= 1  # At least summary call
-            bot._reply_json.assert_called_once()
+            texts = _get_safe_reply_texts(bot._safe_reply)
+            assert any("TL;DR" in t or "truncated summary" in t.lower() for t in texts), (
+                f"Expected summary content in safe_reply texts: {texts}"
+            )
 
         asyncio.run(run_test())
 
@@ -332,14 +344,13 @@ class TestJsonParsing(unittest.TestCase):
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
-            # The key test is that parsing extracts JSON from extra text
+            # The key test is that parsing extracts JSON from extra text.
+            # The summary flow now sends formatted text via _safe_reply.
             assert mock_openrouter_instance.chat.await_count >= 1  # At least summary call
-            bot._reply_json.assert_called_once()
-            response_payload = bot._reply_json.call_args[0][1]
-            # Response is wrapped in success_response envelope with 'data' key
-            summary_json = response_payload.get("data", response_payload)
-            assert summary_json["summary_250"] == "Summary."
-            assert "summary_1000" in summary_json
+            texts = _get_safe_reply_texts(bot._safe_reply)
+            assert any("Summary." in t for t in texts), (
+                f"Expected 'Summary.' in safe_reply texts: {texts}"
+            )
 
         asyncio.run(run_test())
 
@@ -393,18 +404,17 @@ class TestJsonParsing(unittest.TestCase):
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
-            # The key test is that we can salvage from structured_output_parse_error
+            # The key test is that we can salvage from structured_output_parse_error.
+            # The summary flow now sends formatted text via _safe_reply.
             assert mock_openrouter_instance.chat.await_count >= 1  # At least summary call
-            bot._reply_json.assert_called_once()
-            response_payload = bot._reply_json.call_args[0][1]
-            # Response is wrapped in success_response envelope with 'data' key
-            summary_json = response_payload.get("data", response_payload)
-            assert summary_json["summary_250"] == "Fixed."
-            assert "summary_1000" in summary_json
+            texts = _get_safe_reply_texts(bot._safe_reply)
+            assert any("Fixed." in t for t in texts), (
+                f"Expected 'Fixed.' in safe_reply texts: {texts}"
+            )
             # Ensure we did not send the invalid summary format error
-            for call_args in bot._safe_reply.await_args_list:
-                if len(call_args.args) >= 2 and isinstance(call_args.args[1], str):
-                    assert "Invalid summary format" not in call_args.args[1]
+            assert not any("Invalid summary format" in t for t in texts), (
+                "Unexpected 'Invalid summary format' in safe_reply texts"
+            )
 
         asyncio.run(run_test())
 
@@ -464,13 +474,13 @@ class TestJsonParsing(unittest.TestCase):
 
             await bot._handle_forward_flow(message, correlation_id="cid", interaction_id=None)
 
-            # The key test is that forward flow can salvage from structured_output_parse_error
+            # The key test is that forward flow can salvage from structured_output_parse_error.
+            # The summary flow now sends formatted text via _safe_reply.
             assert mock_openrouter_instance.chat.await_count >= 1  # At least summary call
-            bot._reply_json.assert_called_once()
-            response_payload = bot._reply_json.call_args[0][1]
-            # Response is wrapped in success_response envelope with 'data' key
-            summary_json = response_payload.get("data", response_payload)
-            assert summary_json["summary_250"] == "Forward."
+            texts = _get_safe_reply_texts(bot._safe_reply)
+            assert any("Forward." in t for t in texts), (
+                f"Expected 'Forward.' in safe_reply texts: {texts}"
+            )
 
         asyncio.run(run_test())
 

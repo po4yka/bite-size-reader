@@ -12,7 +12,7 @@ from app.api.dependencies.database import get_session_manager
 from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
 from app.api.services.auth_service import AuthService
-from app.application.services.system_maintenance_service import SystemMaintenanceService
+from app.api.services.system_maintenance_service import SystemMaintenanceService
 from app.core.logging_utils import get_logger
 from app.di.shared import build_async_audit_sink
 

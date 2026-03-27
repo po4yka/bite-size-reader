@@ -168,6 +168,15 @@ def _make_insights_response() -> MagicMock:
     return mock
 
 
+def _get_safe_reply_texts(mock_safe_reply: MagicMock) -> list[str]:
+    """Extract all text arguments passed to _safe_reply."""
+    texts: list[str] = []
+    for call in mock_safe_reply.call_args_list:
+        if len(call.args) >= 2 and isinstance(call.args[1], str):
+            texts.append(call.args[1])
+    return texts
+
+
 class TestJsonRepair(unittest.TestCase):
     def setUp(self):
         self.cfg = make_test_app_config(db_path=":memory:")
@@ -247,13 +256,13 @@ class TestJsonRepair(unittest.TestCase):
                 message = MagicMock()
                 await bot._handle_url_flow(message, "http://example.com")
 
-            # Assert that the repair was successful and the final summary is correct
-            bot._reply_json.assert_called_once()
-            response_payload = bot._reply_json.call_args[0][1]
-            # Response is wrapped in success_response envelope with 'data' key
-            summary_json = response_payload.get("data", response_payload)
-            assert "summary_1000" in summary_json
-            assert summary_json["tldr"] == "Full summary."
+            # The summary flow now sends formatted text via _safe_reply
+            # instead of JSON via _reply_json. Verify the repair succeeded
+            # by checking the TL;DR text appears in the formatted output.
+            texts = _get_safe_reply_texts(bot._safe_reply)
+            assert any("Full summary." in t for t in texts), (
+                f"Expected 'Full summary.' in safe_reply texts: {texts}"
+            )
 
         asyncio.run(run_test())
 
@@ -371,11 +380,12 @@ class TestJsonRepair(unittest.TestCase):
             message = MagicMock()
             await bot._handle_url_flow(message, "http://example.com")
 
-            bot._reply_json.assert_called_once()
-            response_payload = bot._reply_json.call_args[0][1]
-            # Response is wrapped in success_response envelope with 'data' key
-            summary_json = response_payload.get("data", response_payload)
-            assert summary_json["summary_250"] == "Summary."
+            # The summary flow now sends formatted text via _safe_reply.
+            # Verify the extracted summary text appears in the output.
+            texts = _get_safe_reply_texts(bot._safe_reply)
+            assert any("Summary." in t for t in texts), (
+                f"Expected 'Summary.' in safe_reply texts: {texts}"
+            )
 
         asyncio.run(run_test())
 
@@ -449,13 +459,13 @@ class TestJsonRepair(unittest.TestCase):
             # The test should verify that the summary was processed successfully despite broken JSON
             assert mock_openrouter_instance.chat.await_count >= 1  # At least summary call
 
-            # Verify that the summary was processed successfully with local JSON repair
-            bot._reply_json.assert_called_once()
-            response_payload = bot._reply_json.call_args[0][1]
-            # Response is wrapped in success_response envelope with 'data' key
-            summary_json = response_payload.get("data", response_payload)
+            # The summary flow now sends formatted text via _safe_reply.
             # Local repair should extract "Truncated..." from broken JSON
-            assert summary_json["summary_250"] == "Truncated..."
+            # and include it in the formatted output.
+            texts = _get_safe_reply_texts(bot._safe_reply)
+            assert any("Truncated..." in t for t in texts), (
+                f"Expected 'Truncated...' in safe_reply texts: {texts}"
+            )
 
         asyncio.run(run_test())
 
@@ -515,9 +525,12 @@ class TestJsonRepair(unittest.TestCase):
                 message = MagicMock()
                 await bot._handle_url_flow(message, "http://example.com")
 
-            bot._reply_json.assert_called_once()
-            # The flow completed successfully, which means local repair worked
+            # The flow completed successfully via _safe_reply, which means local repair worked
             assert mock_openrouter_instance.chat.await_count >= 1  # At least summary call
+            texts = _get_safe_reply_texts(bot._safe_reply)
+            assert any("TL;DR" in t or "Summary" in t for t in texts), (
+                f"Expected summary content in safe_reply texts: {texts}"
+            )
 
         asyncio.run(run_test())
 

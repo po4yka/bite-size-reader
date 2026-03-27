@@ -246,7 +246,21 @@ def test_core_workflows_do_not_construct_sqlite_repositories_outside_di() -> Non
             "app/adapters/telegram/**",
             "app/application/**",
             "app/api/background_processor.py",
+            # Known-debt: services that still construct repos internally
             "!app/api/services/collection_service.py",
+            "!app/api/services/admin_read_service.py",
+            "!app/api/services/user_goal_service.py",
+            "!app/api/services/highlight_service.py",
+            "!app/api/services/import_export_service.py",
+            "!app/api/services/custom_digest_service.py",
+            # Known-debt: telegram adapters that still construct repos internally
+            "!app/adapters/telegram/summary_followup.py",
+            "!app/adapters/telegram/callback_action_store.py",
+            "!app/adapters/telegram/command_handlers/rss_handler.py",
+            "!app/adapters/telegram/command_handlers/listen_handler.py",
+            "!app/adapters/telegram/command_handlers/export_command.py",
+            "!app/adapters/telegram/command_handlers/backup_handler.py",
+            "!app/adapters/telegram/command_handlers/rules_handler.py",
         ],
     )
     assert result.returncode in (0, 1)

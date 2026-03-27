@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.application.services.digest_facade import DigestFacade, get_digest_facade
+from app.api.services.digest_facade import DigestFacade, get_digest_facade
 
 
 def test_digest_facade_delegates_sync_methods() -> None:

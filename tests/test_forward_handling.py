@@ -505,6 +505,8 @@ class TestForwardProcessorCustomArticle(unittest.IsolatedAsyncioTestCase):
             sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
             summary_repo=MagicMock(),
             request_repo=MagicMock(),
+            crawl_result_repo=MagicMock(),
+            llm_repo=MagicMock(),
             user_repo=MagicMock(),
         )
 

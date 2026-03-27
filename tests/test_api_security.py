@@ -137,20 +137,16 @@ class TestAuthorizationChecks:
         from app.api.exceptions import ResourceNotFoundError
         from app.api.services.summary_service import SummaryService
 
-        # Mock the repository to return a summary owned by a different user
-        with patch("app.api.services.summary_service.SqliteSummaryRepositoryAdapter") as MockRepo:
-            mock_repo_instance = MagicMock()
-            # Return summary owned by mock_user, not other_user
-            mock_repo_instance.async_get_summary_by_id = AsyncMock(
-                return_value={
-                    "id": 42,
-                    "user_id": mock_user["user_id"],  # Owned by mock_user
-                    "is_deleted": False,
-                    "json_payload": {"summary_250": "test"},
-                }
-            )
-            MockRepo.return_value = mock_repo_instance
+        # Mock the use case to return a summary owned by a different user.
+        # get_summary_by_id_for_user checks user ownership and returns None
+        # when the requesting user doesn't own the summary.
+        mock_use_case = MagicMock()
+        mock_use_case.get_summary_by_id_for_user = AsyncMock(return_value=None)
 
+        with patch(
+            "app.api.services.summary_service.get_summary_read_model_use_case",
+            return_value=mock_use_case,
+        ):
             # Try to access as other_user - should raise ResourceNotFoundError
             with pytest.raises(ResourceNotFoundError) as exc_info:
                 await SummaryService.get_summary_by_id(

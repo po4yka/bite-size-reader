@@ -6,8 +6,11 @@ import datetime as dt
 import json
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from app.api.dependencies.database import get_collection_repository
-from app.api.exceptions import AuthorizationError, ResourceNotFoundError, ValidationError
+from app.api.exceptions import (
+    AuthorizationError,
+    ResourceNotFoundError,
+    ValidationError,
+)
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.domain.services.smart_collection import (
@@ -16,12 +19,9 @@ from app.domain.services.smart_collection import (
     validate_smart_conditions,
 )
 from app.domain.services.summary_context import build_summary_context
-from app.infrastructure.persistence.sqlite.repositories.collection_repository import (  # noqa: TC001
-    SqliteCollectionRepositoryAdapter,
-)
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
     from datetime import datetime
 
 logger = get_logger(__name__)
@@ -29,20 +29,32 @@ logger = get_logger(__name__)
 Role = Literal["owner", "editor", "viewer"]
 ROLE_RANK = {"owner": 3, "editor": 2, "viewer": 1}
 
+# Module-level repo factory; set once at startup via ``CollectionService.configure()``.
+_repo_factory: Callable[[], Any] | None = None
+
 
 class CollectionService:
     """Business logic for collections and folders."""
 
+    @classmethod
+    def configure(cls, repo_factory: Callable[[], Any]) -> None:
+        """Set the repository factory used by all class methods.
+
+        Must be called once during application bootstrap (e.g. in the DI layer).
+        """
+        global _repo_factory
+        _repo_factory = repo_factory
+
     @staticmethod
-    def _repo() -> SqliteCollectionRepositoryAdapter:
+    def _repo() -> Any:
         """Get a collection repository bound to the shared session manager."""
-        return get_collection_repository()
+        if _repo_factory is None:
+            raise RuntimeError("CollectionService.configure() must be called before use")
+        return _repo_factory()
 
     # ---- access helpers ----
     @staticmethod
-    async def _get_role(
-        repo: SqliteCollectionRepositoryAdapter, collection_id: int, user_id: int
-    ) -> Role | None:
+    async def _get_role(repo: Any, collection_id: int, user_id: int) -> Role | None:
         """Get user's role for a collection."""
         role = await repo.async_get_role(collection_id, user_id)
         if role in ("owner", "editor", "viewer"):
@@ -52,7 +64,7 @@ class CollectionService:
     @classmethod
     async def _require_role(
         cls,
-        repo: SqliteCollectionRepositoryAdapter,
+        repo: Any,
         collection_id: int,
         user_id: int,
         minimum: Role,
@@ -65,7 +77,7 @@ class CollectionService:
 
     @staticmethod
     async def _get_collection_or_raise(
-        repo: SqliteCollectionRepositoryAdapter,
+        repo: Any,
         collection_id: int,
     ) -> dict[str, Any]:
         """Get collection or raise ResourceNotFoundError."""
@@ -136,9 +148,7 @@ class CollectionService:
 
     # ---- helpers ----
     @staticmethod
-    async def _guard_smart_collection(
-        repo: SqliteCollectionRepositoryAdapter, collection_id: int
-    ) -> None:
+    async def _guard_smart_collection(repo: Any, collection_id: int) -> None:
         """Raise ValidationError if the collection is a smart collection."""
         collection = await repo.async_get_collection(collection_id)
         if collection and collection.get("collection_type") == "smart":

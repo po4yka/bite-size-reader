@@ -36,7 +36,7 @@ class FakeMessage:
         self.id = 123
         self.message_id = 123
 
-    async def reply_text(self, text: str) -> None:
+    async def reply_text(self, text: str, **kwargs: object) -> None:
         self._replies.append(text)
 
 
