@@ -191,11 +191,43 @@ class StructuredSummaryFlow:
                     try:
                         meta = summary_shaped.get("metadata") or {}
                         _title = ""
+                        _domain = ""
                         if isinstance(meta, dict):
                             _title = str(meta.get("title") or "").strip()
-                        kb_text = truncate_plain_text(_title, 60) or t(
-                            "quick_actions", self._context.lang
+                            _domain = str(meta.get("domain") or "").strip()
+
+                        # Build a compact summary receipt for the chat list preview
+                        _kb_lines: list[str] = []
+                        if _title:
+                            _kb_lines.append(
+                                f'"{truncate_plain_text(_title, 80)}" -- summary created.'
+                            )
+
+                        _meta_parts: list[str] = []
+                        if _domain:
+                            _meta_parts.append(_domain)
+                        _rt = summary_shaped.get("estimated_reading_time_min")
+                        try:
+                            _rt_val = int(_rt) if _rt is not None else 0
+                            if _rt_val > 0:
+                                _meta_parts.append(f"~{_rt_val} min")
+                        except (ValueError, TypeError):
+                            pass
+                        _st = str(summary_shaped.get("source_type") or "").strip().lower()
+                        if _st and _st != "blog":
+                            _meta_parts.append(_st.capitalize())
+                        if _meta_parts:
+                            _kb_lines.append(" \u00b7 ".join(_meta_parts))
+
+                        _body = (
+                            str(summary_shaped.get("summary_1000") or "").strip()
+                            or str(summary_shaped.get("tldr") or "").strip()
+                            or str(summary_shaped.get("summary_250") or "").strip()
                         )
+                        if _body:
+                            _kb_lines.append(_body)
+
+                        kb_text = "\n".join(_kb_lines) or t("quick_actions", self._context.lang)
                         await self._context.response_sender.safe_reply(
                             message,
                             kb_text,
