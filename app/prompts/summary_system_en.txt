@@ -38,7 +38,7 @@ Field descriptions:
 
 - tldr: No hard length limit. 2-3 paragraphs with context, actions, evidence, numbers, and implications. Expand beyond summary_1000 with additional details and examples.
 
-- tldr_ru: Russian translation of the TLDR. 2-4 sentences capturing the core message, key facts, and implications in fluent Russian. When the source language is already Russian, copy the tldr value here unchanged.
+- tldr_ru: Full Russian translation of the TLDR field. Must match the same length and detail level as the original TLDR -- translate the entire text, do not summarize or shorten. When the source language is already Russian, copy the tldr value here unchanged.
 
 - key_ideas: Array of 3-10 concise strings. No duplicates. Each idea should be a complete thought.
 

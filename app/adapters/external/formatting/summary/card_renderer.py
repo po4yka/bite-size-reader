@@ -128,17 +128,16 @@ def build_card_sections(
     if tldr_clean:
         header_lines.extend(["", f"<b>{t('tldr', lang)}</b>", html.escape(tldr_clean)])
 
-    sections: list[str] = ["\n".join(header_lines).strip()]
-
-    # --- Section 1: TLDR RU (only for non-Russian TLDR, when translation adds value) ---
-    # Skip if the main TLDR is already in Russian (detected by Cyrillic ratio)
+    # Append TLDR RU inline (only for non-Russian TLDR, when translation adds value)
     _cyrillic_chars = sum(1 for ch in tldr_clean if "\u0400" <= ch <= "\u04ff") if tldr_clean else 0
     _tldr_is_russian = _cyrillic_chars > len(tldr_clean) * 0.3 if tldr_clean else False
     tldr_ru_raw = str(summary_shaped.get("tldr_ru") or "").strip()
     if tldr_ru_raw and lang != "ru" and not _tldr_is_russian:
         tldr_ru_clean_ru = sanitize_tldr(tldr_ru_raw, text_processor=text_processor)
         if tldr_ru_clean_ru:
-            sections.append(f"<b>{t('tldr_ru', lang)}</b>\n{html.escape(tldr_ru_clean_ru)}")
+            header_lines.extend(["", f"<b>{t('tldr_ru', lang)}</b>", html.escape(tldr_ru_clean_ru)])
+
+    sections: list[str] = ["\n".join(header_lines).strip()]
 
     # --- Section 2: Details (takeaways + stats + metadata + model) ---
     detail_lines: list[str] = []

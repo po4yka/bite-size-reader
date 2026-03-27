@@ -70,7 +70,9 @@ class URLPostSummaryTaskService:
         silent: bool,
         url_hash: str | None,
     ) -> None:
-        if needs_ru_translation:
+        # Skip separate translation if tldr_ru is already in the summary (inline in card)
+        _has_inline_ru = bool(str(summary.get("tldr_ru") or "").strip())
+        if needs_ru_translation and not _has_inline_ru:
             self._schedule_task(
                 self._maybe_send_russian_translation(
                     message,
