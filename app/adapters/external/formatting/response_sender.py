@@ -169,6 +169,7 @@ class ResponseSenderImpl:
         return self._draft_flow.is_draft_streaming_enabled()
 
     def set_telegram_client(self, telegram_client: Any) -> None:
+        self._state.telegram_client = telegram_client
         self._draft_flow.set_telegram_client(telegram_client)
 
     def set_reply_callbacks(
