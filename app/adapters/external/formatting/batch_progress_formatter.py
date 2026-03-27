@@ -198,6 +198,16 @@ class BatchProgressFormatter:
                 detail = f" [{m}]"
             return f"{prefix} {link}  Analyzing{detail}...{live} {spinner}"
 
+        if entry.status == URLStatus.SUMMARIZING:
+            live = cls._format_live_elapsed(entry.start_time)
+            label = entry.title or label
+            link = cls._make_link(entry.url, label)
+            detail = ""
+            if entry.model:
+                m = entry.model.split("/")[-1]
+                detail = f" [{m}]"
+            return f"{prefix} {link}  Summarizing{detail}...{live} {spinner}"
+
         if entry.status == URLStatus.RETRYING:
             live = cls._format_live_elapsed(entry.start_time)
             retry_info = ""
@@ -363,6 +373,7 @@ class BatchProgressFormatter:
         done = batch.done_count
         extracting = sum(1 for e in batch.entries if e.status == URLStatus.EXTRACTING)
         analyzing = sum(1 for e in batch.entries if e.status == URLStatus.ANALYZING)
+        summarizing = sum(1 for e in batch.entries if e.status == URLStatus.SUMMARIZING)
         retrying = sum(
             1 for e in batch.entries if e.status in {URLStatus.RETRYING, URLStatus.RETRY_WAITING}
         )
@@ -374,6 +385,8 @@ class BatchProgressFormatter:
             counts.append(f"{extracting} extracting")
         if analyzing > 0:
             counts.append(f"{analyzing} analyzing")
+        if summarizing > 0:
+            counts.append(f"{summarizing} summarizing")
         if retrying > 0:
             counts.append(f"{retrying} retrying")
         if pending > 0:

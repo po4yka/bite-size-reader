@@ -136,34 +136,37 @@ class URLBatchProcessor:
             initial_message_id=batch_request.initial_message_id,
         )
 
-        await self._pre_register_urls(state)
-        await asyncio.sleep(0.5)
-        await self._ensure_initial_progress_message(state)
-        await self._deliver_cached_summaries(state)
+        from app.utils.typing_indicator import typing_indicator
 
-        state.progress_tracker = self._build_progress_tracker(state)
-        progress_task = asyncio.create_task(state.progress_tracker.process_update_queue())
-        heartbeat_task = asyncio.create_task(self._progress_heartbeat(state.progress_tracker))
+        async with typing_indicator(self._response_formatter, batch_request.message):
+            await self._pre_register_urls(state)
+            await asyncio.sleep(0.5)
+            await self._ensure_initial_progress_message(state)
+            await self._deliver_cached_summaries(state)
 
-        try:
-            await self._process_all_urls(state)
-        finally:
-            heartbeat_task.cancel()
-            state.progress_tracker.mark_complete()
+            state.progress_tracker = self._build_progress_tracker(state)
+            progress_task = asyncio.create_task(state.progress_tracker.process_update_queue())
+            heartbeat_task = asyncio.create_task(self._progress_heartbeat(state.progress_tracker))
+
             try:
-                async with asyncio.timeout(10.0):
-                    await progress_task
-            except Exception as exc:
-                raise_if_cancelled(exc)
-                logger.debug("progress_task_wait_failed", extra={"error": str(exc)})
-                progress_task.cancel()
+                await self._process_all_urls(state)
+            finally:
+                heartbeat_task.cancel()
+                state.progress_tracker.mark_complete()
+                try:
+                    async with asyncio.timeout(10.0):
+                        await progress_task
+                except Exception as exc:
+                    raise_if_cancelled(exc)
+                    logger.debug("progress_task_wait_failed", extra={"error": str(exc)})
+                    progress_task.cancel()
 
-        # Force one last progress edit showing final state before completion message
-        if state.progress_tracker is not None:
-            state.progress_tracker.force_update()
-            await asyncio.sleep(0.3)
+            # Force one last progress edit showing final state before completion message
+            if state.progress_tracker is not None:
+                state.progress_tracker.force_update()
+                await asyncio.sleep(0.3)
 
-        await self._send_completion_message(state)
+            await self._send_completion_message(state)
         await self._update_interaction(state)
 
         result = BatchProcessingResult(
@@ -580,6 +583,8 @@ class URLBatchProcessor:
                 content_length=content_length,
                 model=model,
             )
+        elif phase == "summarizing":
+            state.batch_status.mark_summarizing(url, model=model)
         elif phase == "retrying":
             state.batch_status.mark_retrying(url)
         elif phase == "waiting":

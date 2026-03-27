@@ -124,7 +124,8 @@ class URLStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
     EXTRACTING = "extracting"  # Firecrawl content extraction phase
-    ANALYZING = "analyzing"  # LLM summarization phase
+    ANALYZING = "analyzing"  # Content analysis and model routing phase
+    SUMMARIZING = "summarizing"  # LLM summary generation phase
     RETRYING = "retrying"  # Actively retrying
     RETRY_WAITING = "retry_waiting"  # Waiting for backoff cooldown
     COMPLETE = "complete"
@@ -293,6 +294,19 @@ class URLBatchStatus:
                 entry.title = title
             if content_length:
                 entry.content_length = content_length
+            if model:
+                entry.model = model
+            self._update_timestamp()
+
+    def mark_summarizing(
+        self,
+        url: str,
+        model: str | None = None,
+    ) -> None:
+        """Mark a URL as in the LLM summary generation phase."""
+        entry = self._find_entry(url)
+        if entry:
+            entry.status = URLStatus.SUMMARIZING
             if model:
                 entry.model = model
             self._update_timestamp()

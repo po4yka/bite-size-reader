@@ -202,6 +202,16 @@ class URLProcessor:
         if cached_result is not None:
             return cached_result
 
+        from app.utils.typing_indicator import typing_indicator
+
+        async with typing_indicator(self.response_formatter, request.message):
+            return await self._run_url_flow(request)
+
+    async def _run_url_flow(
+        self,
+        request: URLFlowRequest,
+    ) -> URLProcessingFlowResult:
+        """Execute the URL processing pipeline (extraction -> summarization -> delivery)."""
         try:
             context = await self.context_builder.build(request)
 
@@ -224,6 +234,14 @@ class URLProcessor:
             if request.on_phase_change:
                 await request.on_phase_change(
                     "analyzing",
+                    context.title,
+                    len(context.content_text),
+                    display_model,
+                )
+
+            if request.on_phase_change:
+                await request.on_phase_change(
+                    "summarizing",
                     context.title,
                     len(context.content_text),
                     display_model,

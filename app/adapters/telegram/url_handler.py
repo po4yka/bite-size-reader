@@ -186,6 +186,10 @@ class URLHandler:
         start_time: float,
     ) -> None:
         """Handle URL sent after /summarize command."""
+        from app.utils.typing_indicator import send_typing_once
+
+        await send_typing_once(self.response_formatter, message)
+
         urls = extract_all_urls(text)
         await self._awaiting_state.consume(uid)
 
@@ -227,6 +231,10 @@ class URLHandler:
         start_time: float,
     ) -> None:
         """Handle direct URL message with security validation."""
+        from app.utils.typing_indicator import send_typing_once
+
+        await send_typing_once(self.response_formatter, message)
+
         urls = extract_all_urls(text)
         urls = await self.apply_url_security_checks(message, urls, uid, correlation_id)
         if not urls:
