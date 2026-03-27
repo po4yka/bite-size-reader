@@ -122,11 +122,11 @@ def build_card_sections(
 
     sections: list[str] = ["\n".join(header_lines).strip()]
 
-    # --- Section 1: TLDR RU (optional) ---
+    # --- Section 1: TLDR RU (optional, only when different from TLDR) ---
     tldr_ru_raw = str(summary_shaped.get("tldr_ru") or "").strip()
-    if tldr_ru_raw and lang != "ru":
+    if tldr_ru_raw and lang != "ru" and tldr_ru_raw != tldr_raw:
         tldr_ru_clean = sanitize_tldr(tldr_ru_raw, text_processor=text_processor)
-        if tldr_ru_clean:
+        if tldr_ru_clean and tldr_ru_clean != tldr_clean:
             sections.append(f"<b>{t('tldr_ru', lang)}</b>\n{html.escape(tldr_ru_clean)}")
 
     # --- Section 2: Details (takeaways + stats + metadata + model) ---
