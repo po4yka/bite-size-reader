@@ -40,7 +40,7 @@ def detect_low_value_content(crawl: FirecrawlResult) -> dict[str, Any] | None:
     primary_text = next((t for t in text_candidates if t and t.strip()), "")
     normalized = re.sub(r"\s+", " ", primary_text).strip()
 
-    words_raw = re.findall(r"[0-9A-Za-zÀ-ÖØ-öø-ÿ']+", normalized)
+    words_raw = re.findall(r"[\w']+", normalized)
     words = [w.lower() for w in words_raw if w]
     word_count = len(words)
     unique_word_count = len(set(words))
@@ -68,11 +68,7 @@ def detect_low_value_content(crawl: FirecrawlResult) -> dict[str, Any] | None:
     # Count "substantive sentences" -- sequences of 10+ words ending
     # with sentence-terminal punctuation (.!?) in the normalized text.
     substantive_sentence_count = len(
-        [
-            s
-            for s in re.split(r"[.!?]+", normalized)
-            if len(re.findall(r"[0-9A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF']+", s)) >= 10
-        ]
+        [s for s in re.split(r"[.!?]+", normalized) if len(re.findall(r"[\w']+", s)) >= 10]
     )
 
     reason: LowValueReason | None = None
