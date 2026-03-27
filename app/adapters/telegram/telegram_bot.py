@@ -559,7 +559,34 @@ class TelegramBot:
             )
         except Exception as exc:
             raise_if_cancelled(exc)
-            # Swallow in tests; production response path logs and continues.
+            logger.warning(
+                "safe_reply_send_failed",
+                extra={
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "text_length": len(text),
+                    "parse_mode": parse_mode,
+                },
+            )
+            # Retry without parse_mode if HTML/Markdown caused the failure
+            if parse_mode is not None and hasattr(message, "reply_text"):
+                try:
+                    retry_kwargs: dict[str, Any] = {}
+                    if reply_markup is not None:
+                        retry_kwargs["reply_markup"] = reply_markup
+                    await asyncio.wait_for(
+                        message.reply_text(text, **retry_kwargs), timeout=_timeout
+                    )
+                    logger.info(
+                        "safe_reply_plain_text_fallback_ok",
+                        extra={"text_length": len(text)},
+                    )
+                except Exception as retry_exc:
+                    raise_if_cancelled(retry_exc)
+                    logger.warning(
+                        "safe_reply_plain_text_fallback_failed",
+                        extra={"error": str(retry_exc)},
+                    )
 
     async def _reply_json(
         self,
