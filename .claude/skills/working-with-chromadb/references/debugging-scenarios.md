@@ -22,7 +22,7 @@ lsof -i :8000
 
 **Fixes:**
 
-- Start Chroma container: `docker compose up -d chromadb`
+- Start Chroma container: `docker compose -f ops/docker/docker-compose.yml up -d chroma`
 - Fix `CHROMA_HOST` in `.env` (must include scheme: `http://...`)
 - If auth enabled, verify `CHROMA_AUTH_TOKEN` is correct
 - Check `CHROMA_CONNECTION_TIMEOUT` if network is slow (default: 10s)

@@ -1,6 +1,6 @@
 # Web Frontend Route Map
 
-Synced with `web/src/App.tsx`. Update this file when routes change.
+Synced with `clients/web/src/App.tsx` and `clients/web/src/routes/manifest.tsx`. Update this file when routes change.
 
 ## Route Table
 
@@ -22,27 +22,27 @@ Synced with `web/src/App.tsx`. Update this file when routes change.
 
 ## Component File Paths
 
-- `web/src/features/library/LibraryPage.tsx`
-- `web/src/features/article/ArticlePage.tsx`
-- `web/src/features/articles/ArticlesPage.tsx`
-- `web/src/features/search/SearchPage.tsx`
-- `web/src/features/submit/SubmitPage.tsx`
-- `web/src/features/collections/CollectionsPage.tsx`
-- `web/src/features/digest/DigestPage.tsx`
-- `web/src/features/preferences/PreferencesPage.tsx`
+- `clients/web/src/features/library/LibraryPage.tsx`
+- `clients/web/src/features/article/ArticlePage.tsx`
+- `clients/web/src/features/articles/ArticlesPage.tsx`
+- `clients/web/src/features/search/SearchPage.tsx`
+- `clients/web/src/features/submit/SubmitPage.tsx`
+- `clients/web/src/features/collections/CollectionsPage.tsx`
+- `clients/web/src/features/digest/DigestPage.tsx`
+- `clients/web/src/features/preferences/PreferencesPage.tsx`
 
 ## Auth Guard
 
 All routes except `/web/login` and the catch-all are wrapped in `RouteGuard`
-(`web/src/auth/RouteGuard.tsx`), which:
+(`clients/web/src/auth/RouteGuard.tsx`), which:
 
 1. Shows `InlineLoading` while auth status is `"loading"`
 2. Redirects to `/login` (with `from` state) if `canAccessProtectedRoute` returns false
 3. Renders children (inside `AppShell`) when authenticated
 
-Guard logic: `web/src/auth/guard.ts` (`canAccessProtectedRoute`)
+Guard logic: `clients/web/src/auth/guard.ts` (`canAccessProtectedRoute`)
 
 ## Feature Flags
 
-Experimental routes are gated by `FEATURE_FLAGS` from `web/src/routes/features.ts`.
+Experimental routes are gated by `FEATURE_FLAGS` from `clients/web/src/routes/features.ts`.
 Currently only `admin` is feature-flagged.

@@ -6,17 +6,17 @@ description: >
   tokens, and accessibility. Triggers: Carbon component, Carbon theme,
   Carbon layout, Carbon grid, Carbon tokens, design system, UI component,
   @carbon/react, cds tokens, dark mode, g100, white theme.
-version: 1.0.0
+version: 1.1.0
 allowed-tools: Bash, Read, Grep
 ---
 
 # Carbon Design System
 
-Use IBM Carbon correctly in the `web/` frontend. This skill covers component selection, theming, layout, motion rules, and accessibility patterns specific to this project.
+Use IBM Carbon correctly in the `clients/web/` frontend. This skill covers component selection, theming, layout, motion rules, and accessibility patterns specific to this project.
 
 ## Dynamic Context
 
-!cd web && node -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));console.log('@carbon/react:',p.dependencies['@carbon/react'],'| @carbon/styles:',p.dependencies['@carbon/styles'],'| @carbon/icons-react:',p.dependencies['@carbon/icons-react'])"
+!cd clients/web && node -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8'));console.log('@carbon/react:',p.dependencies['@carbon/react'],'| @carbon/styles:',p.dependencies['@carbon/styles'],'| @carbon/icons-react:',p.dependencies['@carbon/icons-react'])"
 
 See also: [references/component-catalog.md](references/component-catalog.md)
 
@@ -30,7 +30,7 @@ When `emil-design-eng` and this skill conflict, **this skill wins for any `@carb
 |---|---|---|
 | UI components | `@carbon/react` | Named imports only, no defaults |
 | Icons | `@carbon/icons-react` | Named imports; icons accept `size` prop (16/20/24/32) |
-| Global styles | `@carbon/styles/css/styles.css` | Imported once in `web/src/main.tsx`; must precede project `styles.css` |
+| Global styles | `@carbon/styles/css/styles.css` | Imported once in `clients/web/src/main.tsx`; must precede project `styles.css` |
 
 ```tsx
 import { Button, DataTable, Tile } from "@carbon/react";
@@ -41,7 +41,7 @@ import { Add, TrashCan } from "@carbon/icons-react";
 
 Two themes are in use: `white` (light) and `g100` (dark Carbon gray-100).
 
-**Runtime selection** in `web/src/components/AppShell.tsx`:
+**Runtime selection** in `clients/web/src/components/AppShell.tsx`:
 
 - In `telegram-webapp` mode: follows `window.Telegram.WebApp.colorScheme` (`"dark"` -> `g100`, `"light"` -> `white`)
 - In `jwt` mode: always `white`
@@ -70,7 +70,7 @@ Token values differ between `white` and `g100` themes. Don't hardcode values.
 
 ## Layout System
 
-- Page structure: `<Header>` + `<SideNav>` + `<Content>` — all wired in `web/src/components/AppShell.tsx`
+- Page structure: `<Header>` + `<SideNav>` + `<Content>` — all wired in `clients/web/src/components/AppShell.tsx`
 - Use `<Grid>` + `<Column>` from `@carbon/react` for multi-column page layouts
 - Existing project pattern for feature pages: `<section className="page-section">` with CSS grid — maintain this
 - Don't mix Carbon `<Grid>/<Column>` with CSS grid at the same layout level
@@ -140,7 +140,7 @@ Carbon owns animation for its components. Do not override it.
 ## Common Pitfalls
 
 - `DataTable` **requires a render prop** — it doesn't accept direct children
-- `@carbon/styles/css/styles.css` must be imported **before** `web/src/styles.css`
+- `@carbon/styles/css/styles.css` must be imported **before** `clients/web/src/styles.css`
 - Carbon tokens are theme-dependent — they resolve differently under `white` vs `g100`
 - `Tag` type controls color; `type="blue"` for informational, `type="red"` for errors — never override with custom CSS backgrounds
 - `VITE_` prefix required for env vars exposed to client code
@@ -150,11 +150,11 @@ Carbon owns animation for its components. Do not override it.
 
 | File | Role |
 |---|---|
-| `web/src/main.tsx` | Global Carbon styles import, Telegram theme sync bootstrap |
-| `web/src/components/AppShell.tsx` | Shell layout, theme switching, nav, BackButton |
-| `web/src/styles.css` | Custom CSS using `--cds-*` tokens and Telegram safe area vars |
-| `web/src/features/library/LibraryPage.tsx` | Reference: DataTable, Pagination, Tag, filter chips |
-| `web/src/features/article/ArticlePage.tsx` | Reference: Tabs, Tile, ProgressBar, Select, ButtonSet |
-| `web/src/features/digest/DigestPage.tsx` | Reference: ComposedModal, TableExpand, TableSelect, Dropdown |
-| `web/src/features/collections/CollectionsPage.tsx` | Reference: TreeView, TreeNode, Modal |
-| `web/src/features/admin/AdminPage.tsx` | Reference: StructuredList |
+| `clients/web/src/main.tsx` | Global Carbon styles import, Telegram theme sync bootstrap |
+| `clients/web/src/components/AppShell.tsx` | Shell layout, theme switching, nav, BackButton |
+| `clients/web/src/styles.css` | Custom CSS using `--cds-*` tokens and Telegram safe area vars |
+| `clients/web/src/features/library/LibraryPage.tsx` | Reference: DataTable, Pagination, Tag, filter chips |
+| `clients/web/src/features/article/ArticlePage.tsx` | Reference: Tabs, Tile, ProgressBar, Select, ButtonSet |
+| `clients/web/src/features/digest/DigestPage.tsx` | Reference: ComposedModal, TableExpand, TableSelect, Dropdown |
+| `clients/web/src/features/collections/CollectionsPage.tsx` | Reference: TreeView, TreeNode, Modal |
+| `clients/web/src/features/admin/AdminPage.tsx` | Reference: StructuredList |

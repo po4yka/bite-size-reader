@@ -4,7 +4,7 @@ description: >
   Validate summary JSON contracts against strict schema requirements.
   Trigger keywords: summary validation, summary contract, JSON schema,
   character limits, summary fields, validate summary.
-version: 2.0.0
+version: 2.0.1
 allowed-tools: Bash, Read
 ---
 
@@ -68,8 +68,8 @@ The CLI automatically validates summaries using `validate_summary_json()`.
 - **LLM prompts**: `app/prompts/summary_system_en.txt`, `app/prompts/summary_system_ru.txt`
 - **JSON utilities**: `app/core/json_utils.py` (includes repair logic)
 - **Validation rules**: `references/validation-rules.md`
-- **Standalone script**: `scripts/validate-summary.py`
-- **Project script**: `scripts/validate-with-project.py`
+- **Standalone script**: `.claude/skills/validating-summaries/scripts/validate-summary.py`
+- **Project script**: `.claude/skills/validating-summaries/scripts/validate-with-project.py`
 
 ## Important Notes
 

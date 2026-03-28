@@ -5,7 +5,7 @@ description: >
   embedding coverage, collection management, and debugging. Trigger keywords:
   ChromaDB, Chroma, vector store, embeddings, semantic search, backfill,
   embedding coverage, vector search, collection, similarity search.
-version: 2.0.0
+version: 2.1.0
 allowed-tools: Bash, Read, Grep
 ---
 
@@ -207,12 +207,12 @@ Query text -> detect_language() -> EmbeddingService.generate_embedding(task_type
 
 ### Key Service Boundaries
 
-- **EmbeddingService** (`app/services/embedding_service.py`) -- model loading, language-based model selection, vector generation
-- **EmbeddingFactory** (`app/services/embedding_factory.py`) -- creates local or Gemini embedding service based on config
-- **SummaryEmbeddingGenerator** (`app/services/summary_embedding_generator.py`) -- orchestrates embedding generation for summaries
-- **MetadataBuilder** (`app/services/metadata_builder.py`) -- builds Chroma metadata dicts and chunk windows
+- **EmbeddingService** (`app/infrastructure/embedding/embedding_service.py`) -- model loading, language-based model selection, vector generation
+- **EmbeddingFactory** (`app/infrastructure/embedding/embedding_factory.py`) -- creates local or Gemini embedding service based on config
+- **SummaryEmbeddingGenerator** (`app/application/services/summary_embedding_generator.py`) -- orchestrates embedding generation for summaries
+- **MetadataBuilder** (`app/infrastructure/vector/metadata_builder.py`) -- builds Chroma metadata dicts and chunk windows
 - **ChromaVectorStore** (`app/infrastructure/vector/chroma_store.py`) -- Chroma client wrapper with graceful degradation
-- **ChromaVectorSearchService** (`app/services/chroma_vector_search_service.py`) -- high-level search API
+- **ChromaVectorSearchService** (`app/infrastructure/search/chroma_vector_search_service.py`) -- high-level search API
 
 ## Key Project Files
 
@@ -220,13 +220,13 @@ Query text -> detect_language() -> EmbeddingService.generate_embedding(task_type
 |---|---|
 | `app/infrastructure/vector/chroma_store.py` | ChromaVectorStore -- client wrapper, upsert/query/delete |
 | `app/infrastructure/vector/chroma_schemas.py` | ChromaMetadata, ChromaQueryFilters (Pydantic models) |
-| `app/services/chroma_vector_search_service.py` | ChromaVectorSearchService -- semantic search API |
-| `app/services/embedding_service.py` | EmbeddingService -- local sentence-transformers |
-| `app/services/gemini_embedding_service.py` | GeminiEmbeddingService -- cloud Gemini provider |
-| `app/services/embedding_factory.py` | create_embedding_service() -- provider factory |
-| `app/services/embedding_protocol.py` | EmbeddingServiceProtocol -- interface |
-| `app/services/summary_embedding_generator.py` | SummaryEmbeddingGenerator -- embedding orchestrator |
-| `app/services/metadata_builder.py` | MetadataBuilder -- Chroma metadata construction |
+| `app/infrastructure/search/chroma_vector_search_service.py` | ChromaVectorSearchService -- semantic search API |
+| `app/infrastructure/embedding/embedding_service.py` | EmbeddingService -- local sentence-transformers |
+| `app/infrastructure/embedding/gemini_embedding_service.py` | GeminiEmbeddingService -- cloud Gemini provider |
+| `app/infrastructure/embedding/embedding_factory.py` | create_embedding_service() -- provider factory |
+| `app/infrastructure/embedding/embedding_protocol.py` | EmbeddingServiceProtocol -- interface |
+| `app/application/services/summary_embedding_generator.py` | SummaryEmbeddingGenerator -- embedding orchestrator |
+| `app/infrastructure/vector/metadata_builder.py` | MetadataBuilder -- Chroma metadata construction |
 | `app/config/integrations.py` | ChromaConfig, EmbeddingConfig (Pydantic settings) |
 | `app/cli/backfill_chroma_store.py` | CLI tool: sync embeddings into Chroma |
 | `app/cli/search_compare.py` | CLI tool: compare FTS5 vs vector search |

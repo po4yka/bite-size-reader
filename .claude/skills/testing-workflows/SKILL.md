@@ -1,7 +1,7 @@
 ---
 name: testing-workflows
 description: Test bot functionality locally using CLI runner, message simulation, and workflow validation. Trigger on "test", "CLI runner", "message simulation", "bot testing", "workflow validation", "pytest".
-version: 2.0.0
+version: 2.0.1
 allowed-tools: Bash, Read, Write
 ---
 
@@ -45,7 +45,7 @@ python -m app.cli.summary "/summarize https://example.com/article"
 
 ## Testing Specific Workflows
 
-Standalone test scripts live in `scripts/`. Run them directly:
+Standalone test scripts are bundled with this skill in `./scripts/`. Run them directly:
 
 ```bash
 python .claude/skills/testing-workflows/scripts/test-url-normalization.py
