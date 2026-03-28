@@ -266,7 +266,7 @@ Useful URLs during local development:
 - API host (when running `uvicorn app.api.main:app --reload`): `http://localhost:8000`
 - Same-host SPA route (when web is built to `app/static/web`): `http://localhost:8000/web/library`
 
-JWT login mode requires `VITE_TELEGRAM_BOT_USERNAME` in the `web` environment (for Telegram Login Widget).
+JWT login mode requires `VITE_TELEGRAM_BOT_USERNAME` in the `clients/web` environment (for Telegram Login Widget).
 
 ---
 
@@ -655,4 +655,4 @@ You now have a fully functional local development environment. Happy coding!
 
 ---
 
-**Last Updated**: 2026-03-07
+**Last Updated**: 2026-03-28

@@ -1,7 +1,7 @@
 # Mobile API Specification (Bite-Size Reader)
 
 - Version: 1.1
-- Last Updated: 2026-03-07
+- Last Updated: 2026-03-28
 - Canonical machine-readable contract: `docs/openapi/mobile_api.yaml` and `docs/openapi/mobile_api.json`
 
 ## Overview

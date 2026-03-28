@@ -6,10 +6,12 @@ Welcome to the Bite-Size Reader documentation. This guide helps you find the rig
 
 ## Documentation freshness
 
-- Last documentation refresh: **2026-03-13**
+- Last documentation refresh: **2026-03-28**
 - This refresh aligns docs with:
+  - Root namespace reorganization: `clients/`, `integrations/`, `ops/`, and `tools/`
   - Carbon web interface architecture in `clients/web/` (routing, auth modes, deploy/static namespaces)
   - Web static check workflow (`npm run check:static`) and CI jobs (`web-build`, `web-test`, `web-static-check`)
+  - Docker and compose assets relocated under `ops/docker/`
   - FastAPI SPA serving contract (`/web`, `/web/*`) alongside Telegram Mini App static assets
 
 ## Documentation by Audience
@@ -333,6 +335,6 @@ Found a typo? Documentation unclear? Want to add a tutorial?
 
 ---
 
-**Last Updated**: 2026-03-13
+**Last Updated**: 2026-03-28
 
 **Questions?** Check [FAQ](FAQ.md) or open an [issue](https://github.com/po4yka/bite-size-reader/issues).

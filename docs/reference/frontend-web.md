@@ -228,4 +228,4 @@ Clear stored tokens (login page has "Clear local session") and sign in again.
 
 ---
 
-**Last Updated:** 2026-03-17
+**Last Updated:** 2026-03-28

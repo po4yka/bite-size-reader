@@ -341,4 +341,4 @@ You now have a working Bite-Size Reader setup. Try summarizing a few articles to
 
 ---
 
-**Last Updated**: 2026-03-07
+**Last Updated**: 2026-03-28

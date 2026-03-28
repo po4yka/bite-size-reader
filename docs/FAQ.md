@@ -622,7 +622,7 @@ See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
 3. **Cache aggressively**:
 
    ```bash
-   ENABLE_REDIS=true
+   REDIS_ENABLED=true
    REDIS_LLM_TTL_SECONDS=86400  # 24 hours
    ```
 
@@ -692,7 +692,7 @@ Yes, but requires setup:
 **Enable caching**:
 
 ```bash
-ENABLE_REDIS=true
+REDIS_ENABLED=true
 REDIS_LLM_TTL_SECONDS=604800  # 7 days
 ```
 
@@ -709,6 +709,6 @@ REDIS_LLM_TTL_SECONDS=604800  # 7 days
 
 ---
 
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-03-28
 
 **Have a question not answered here?** [Open an issue](https://github.com/po4yka/bite-size-reader/issues) or check [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

@@ -1,7 +1,7 @@
 # Bite‑Size Reader — Technical Specification
 
 **Version:** 3.0
-**Last Updated:** 2026-03-13
+**Last Updated:** 2026-03-28
 
 ---
 

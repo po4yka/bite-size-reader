@@ -3,7 +3,7 @@
 Complete reference for all Bite-Size Reader configuration. Source of truth: `app/config/` (entrypoint `app/config/settings.py`).
 
 **Total Variables**: 250+
-**Last Updated**: 2026-03-13
+**Last Updated**: 2026-03-28
 
 ---
 
@@ -655,6 +655,6 @@ curl "$CHROMA_HOST/api/v2/heartbeat"
 
 ---
 
-**Last Updated**: 2026-03-13
+**Last Updated**: 2026-03-28
 
 **Found an error or have a question?** [Open an issue](https://github.com/po4yka/bite-size-reader/issues) or check [FAQ](FAQ.md).

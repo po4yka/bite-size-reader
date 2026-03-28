@@ -645,7 +645,7 @@ docker restart bite-size-reader
 - **If Redis not needed**: Disable it entirely
 
   ```bash
-  echo "ENABLE_REDIS=false" >> .env
+  echo "REDIS_ENABLED=false" >> .env
   ```
 
 - **If needed**: Fix connection (see above)
@@ -1103,4 +1103,4 @@ If you're still stuck after trying these steps:
 
 ---
 
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-03-28

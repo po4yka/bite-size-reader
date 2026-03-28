@@ -195,12 +195,12 @@ make lock-uv               # Lock dependencies with uv (recommended)
 # IMPORTANT: `make docker-deploy` builds `bsr:latest` via `docker build`,
 # but `docker compose up` uses image `bite-size-reader-bsr`.
 # To deploy code changes, always use `docker compose build`:
-docker compose build bsr              # Build with compose (picks up code changes)
-docker compose build --no-cache bsr   # Full rebuild (after Dockerfile/dependency changes)
-docker compose down && docker compose up -d  # Restart with new image
+docker compose -f ops/docker/docker-compose.yml build bsr            # Build with compose (picks up code changes)
+docker compose -f ops/docker/docker-compose.yml build --no-cache bsr # Full rebuild (after Dockerfile/dependency changes)
+docker compose -f ops/docker/docker-compose.yml down && docker compose -f ops/docker/docker-compose.yml up -d  # Restart with new image
 
 # Legacy standalone build (NOT used by docker compose):
-docker build -t bsr:latest .
+docker build -f ops/docker/Dockerfile -t bsr:latest .
 docker run --env-file .env -v $(pwd)/data:/data --name bsr bsr:latest
 
 # CLI Summary Runner
@@ -223,7 +223,7 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 - Lockfile freshness (rebuilds from `pyproject.toml`)
 - Lint (ruff), format check (ruff format, isort), type check (mypy)
 - Unit tests with coverage (pytest, 80% threshold)
-- Frontend jobs: `frontend-build`, `web-build`, `web-test`, `web-static-check`
+- Frontend jobs: `web-build`, `web-test`, `web-static-check`
 - Docker image build
 - OpenAPI spec validation, code complexity (radon)
 - Codecov coverage reporting
@@ -471,7 +471,7 @@ Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-03-22
+**Last Updated:** 2026-03-28
 
 For questions about the codebase, always refer to:
 
