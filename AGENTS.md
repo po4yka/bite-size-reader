@@ -217,6 +217,22 @@ When desloppify itself appears wrong or inconsistent:
 
 <!-- desloppify-end -->
 
+## Impeccable Design Skills
+
+Curated UI/UX design skills from [impeccable](https://github.com/pbakaus/impeccable) for the Carbon web frontend. Codex skills in `.codex/skills/i-*/`.
+
+| Command | Purpose |
+|---------|---------|
+| `i-frontend-design` | Core design framework -- run first |
+| `i-audit` | Accessibility, performance, responsive checks |
+| `i-polish` | Final refinement pass |
+| `i-normalize` | Align to design system tokens |
+| `i-typeset` | Typography improvements |
+| `i-colorize` | Strategic color usage |
+| `i-clarify` | UX copy improvements |
+| `i-harden` | i18n, error handling, edge cases |
+| `i-optimize` | Performance (Core Web Vitals) |
+
 ## Codex Overlay
 
 This is the canonical Codex overlay used by the README install command.

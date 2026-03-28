@@ -410,6 +410,24 @@ When making changes, these are the most critical files to understand:
 - **`bot.py`** -- Entrypoint (wires everything together)
 - **`docs/SPEC.md`** -- Full technical specification (canonical reference)
 
+## Impeccable Design Skills
+
+Curated UI/UX design skills from [impeccable](https://github.com/pbakaus/impeccable) (Apache 2.0). Available as `/i-*` commands for the Carbon web frontend.
+
+| Command | Purpose |
+|---------|---------|
+| `/i-frontend-design` | Core design framework -- run first to establish design context |
+| `/i-audit` | Technical quality checks (accessibility, performance, responsive, anti-patterns) |
+| `/i-polish` | Final refinement across alignment, typography, color, interactions |
+| `/i-normalize` | Align UI to Carbon design system tokens, spacing, patterns |
+| `/i-typeset` | Typography hierarchy, font choices, readability |
+| `/i-colorize` | Strategic color usage with 60-30-10 distribution |
+| `/i-clarify` | Improve UX copy, error messages, labels |
+| `/i-harden` | i18n, error handling, edge cases, text overflow resilience |
+| `/i-optimize` | Core Web Vitals, rendering, bundle size performance |
+
+Most skills require `/i-frontend-design` context first. Skills are in `.claude/skills/i-*/` (Claude Code) and `.codex/skills/i-*/` (Codex CLI).
+
 ## Best Practices
 
 1. **Always read docs/SPEC.md first** -- it's the authoritative source of truth
