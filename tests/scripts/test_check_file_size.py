@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from scripts.check_file_size import main
+from tools.scripts.check_file_size import main
 
 
 def _write_lines(path, count: int) -> None:

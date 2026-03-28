@@ -3,13 +3,15 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo "=== Running Tests with Coverage ==="
 echo ""
 
 # Install lightweight test dependencies if needed
 if ! python3 -c "import pytest" 2>/dev/null || ! python3 -c "import coverage" 2>/dev/null; then
-    echo "Installing minimal test dependencies from requirements-tests.txt..."
-    pip install -r requirements-tests.txt
+    echo "Installing test dependencies from requirements-dev.txt..."
+    pip install -r requirements-dev.txt
 fi
 
 # Run tests with coverage
@@ -22,7 +24,7 @@ python3 -m coverage combine || true
 # Generate coverage report focused on the heavily tested components
 echo ""
 echo "=== Coverage Report (focused components) ==="
-INCLUDE_FILE="${INCLUDE_FILE:-scripts/coverage_includes.txt}"
+INCLUDE_FILE="${INCLUDE_FILE:-${SCRIPT_DIR}/coverage_includes.txt}"
 if [[ ! -f "${INCLUDE_FILE}" ]]; then
     echo "Include file not found: ${INCLUDE_FILE}" >&2
     exit 1

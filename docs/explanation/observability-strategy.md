@@ -683,7 +683,7 @@ ORDER BY total_calls DESC;
 **Loki + Grafana:**
 
 ```yaml
-# docker-compose.yml
+# ops/docker/docker-compose.yml
 services:
   loki:
     image: grafana/loki:latest

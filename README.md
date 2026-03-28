@@ -143,7 +143,7 @@ For the mobile API, routers are transport-focused and delegate infrastructure or
 | **Get real-time context** | Enable web search enrichment | [Enable Web Search](docs/how-to/enable-web-search.md) |
 | **Speed up responses** | Enable Redis caching | [Setup Redis](docs/how-to/setup-redis-caching.md) |
 | **Build mobile app** | Use Mobile API (JWT auth) | [MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md) |
-| **Use web interface** | Open Carbon web UI on `/web` | [Frontend Web Guide](FRONTEND.md) |
+| **Use web interface** | Open Carbon web UI on `/web` | [Frontend Web Guide](docs/reference/frontend-web.md) |
 | **Integrate with AI agents** | Use MCP server | [MCP Server Guide](docs/mcp_server.md) |
 | **Reduce API costs** | Use free models, caching | [FAQ § Cost Optimization](docs/FAQ.md#cost-optimization) |
 | **Self-host privately** | Docker deployment | [DEPLOYMENT.md](docs/DEPLOYMENT.md) |
@@ -153,7 +153,7 @@ For the mobile API, routers are transport-focused and delegate infrastructure or
 ## Docker
 
 - If you updated dependencies in `pyproject.toml`, generate lock files first: `make lock-uv`.
-- Build: `docker build -t bite-size-reader .`
+- Build: `docker build -f ops/docker/Dockerfile -t bite-size-reader .`
 - Run: `docker run --env-file .env -v $(pwd)/data:/data --name bsr bite-size-reader`
 
 ## Commands and usage
@@ -301,7 +301,6 @@ app/
     routers/     -- Route handlers (auth, summaries, sync, collections, health, system)
     services/    -- API business logic
   application/   -- Application layer (DTOs, use cases)
-  cli/           -- CLI tools (summary runner, search, MCP server, migrations, Chroma backfill)
   config/        -- Configuration modules
   core/          -- URL normalization, JSON contract, logging, language helpers
   db/            -- SQLite schema, migrations, audit logging helpers
@@ -317,9 +316,22 @@ app/
   security/      -- Security utilities
   types/         -- Type definitions
   utils/         -- Validation and helper utilities
+clients/
+  cli/           -- Standalone CLI client package
+  browser-extension/ -- Chrome/Firefox browser extension
+  web/           -- Carbon web interface (React + TypeScript + Vite)
+integrations/
+  openclaw-skill/ -- OpenClaw MCP skill bundle
+ops/
+  config/        -- Versioned example config assets
+  docker/        -- Dockerfiles and compose definitions
+  monitoring/    -- Prometheus/Grafana/Loki/Promtail assets
+tools/
+  scripts/       -- Development and maintenance scripts
+tests/           -- Pytest suites and helper utilities
+docs/            -- Specs, tutorials, guides, ADRs, and reports
 bot.py           -- Entrypoint wiring config, DB, and Telegram bot
-web/             -- Carbon web interface (React + TypeScript + Vite)
-SPEC.md          -- Full technical specification
+docs/SPEC.md     -- Full technical specification
 ```
 
 ## YouTube video support
@@ -359,7 +371,7 @@ FastAPI-based REST API for mobile clients with Telegram-based JWT authentication
 
 ## Carbon Web Interface (V1)
 
-Standalone React + IBM Carbon web UI is available in `web/` and served by FastAPI on:
+Standalone React + IBM Carbon web UI is available in `clients/web/` and served by FastAPI on:
 
 - `/web`
 - `/web/*` (SPA routes)
@@ -381,7 +393,7 @@ Core routes:
 ### Local development
 
 ```bash
-cd web
+cd clients/web
 npm install
 npm run dev
 npm run check:static
@@ -393,7 +405,7 @@ Optional web env vars:
 - `VITE_TELEGRAM_BOT_USERNAME` (required for Telegram Login Widget in JWT mode)
 - `VITE_ROUTER_BASENAME` (default: `/web`)
 
-Frontend architecture and auth details: [FRONTEND.md](FRONTEND.md).
+Frontend architecture and auth details: [Frontend Web Guide](docs/reference/frontend-web.md).
 
 ## MCP Server
 
@@ -425,8 +437,8 @@ All user-visible errors include `Error ID: <cid>` to correlate with logs and DB 
 - Format: `make format` (ruff format + isort)
 - Lint: `make lint` (ruff)
 - Type-check: `make type` (mypy)
-- Web static checks: `cd web && npm run check:static`
-- Web unit tests: `cd web && npm run test`
+- Web static checks: `cd clients/web && npm run check:static`
+- Web unit tests: `cd clients/web && npm run test`
 - Pre-commit: `pre-commit install` then commits will auto-run hooks
 - Optional: `pip install loguru` to enable Loguru-based JSON logging with stdlib bridging
 
@@ -436,7 +448,7 @@ Hooks run in this order to minimize churn: Ruff (check with `--fix`, format), is
 
 ## Local environment
 
-- Create venv: `make venv` (or run `scripts/create_venv.sh`)
+- Create venv: `make venv` (or run `tools/scripts/create_venv.sh`)
 - Activate: `source .venv/bin/activate`
 - Install deps: `pip install -r requirements.txt -r requirements-dev.txt`
 
@@ -498,7 +510,7 @@ GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 
 | Document | Description | Audience |
 | -------- | ----------- | -------- |
-| [SPEC.md](docs/SPEC.md) | Full technical specification (canonical) | **Developers** |
+| [docs/SPEC.md](docs/SPEC.md) | Full technical specification (canonical) | **Developers** |
 | [CLAUDE.md](CLAUDE.md) | AI assistant codebase guide | **AI Assistants, Developers** |
 | [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](docs/HEXAGONAL_ARCHITECTURE_QUICKSTART.md) | Architecture patterns | **Developers** |
 | [multi_agent_architecture.md](docs/multi_agent_architecture.md) | Multi-agent LLM pipeline | **Developers** |
@@ -509,7 +521,7 @@ GitHub Actions workflow `.github/workflows/ci.yml` enforces:
 | Document | Description | Audience |
 | -------- | ----------- | -------- |
 | [MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md) | REST API specification | **Integrators** |
-| [FRONTEND.md](FRONTEND.md) | Carbon web architecture and workflows | **Frontend Developers, Integrators** |
+| [Frontend Web Guide](docs/reference/frontend-web.md) | Carbon web architecture and workflows | **Frontend Developers, Integrators** |
 | [mcp_server.md](docs/mcp_server.md) | MCP server (AI agents) | **Integrators** |
 | [claude_code_hooks.md](docs/claude_code_hooks.md) | Development safety hooks | **Developers** |
 

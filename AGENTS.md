@@ -30,7 +30,7 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 | Core | `app/core/` | URL normalization, JSON parsing, summary contract, logging |
 | Database | `app/db/` | Peewee ORM models (31 classes), `DatabaseSessionManager` (`session.py`) is sole DB entry point |
 | API | `app/api/` | FastAPI REST API with JWT auth |
-| Web | `web/` | Carbon web interface (React + TypeScript + Vite) |
+| Web | `clients/web/` | Carbon web interface (React + TypeScript + Vite) |
 | Search | `app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/` | Search workflows, vector search, and embedding services |
 | MCP | `app/mcp/` | Model Context Protocol server |
 
@@ -45,8 +45,8 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 - `app/config/settings.py` -- Configuration loading
 - `app/config/scraper.py` -- Scraper chain configuration
 - `bot.py` -- Entrypoint
-- `SPEC.md` -- Full technical specification (canonical reference)
-- `FRONTEND.md` -- Carbon web frontend contracts
+- `docs/SPEC.md` -- Full technical specification (canonical reference)
+- `docs/reference/frontend-web.md` -- Carbon web frontend contracts
 
 ## Development Commands
 
@@ -55,7 +55,7 @@ source .venv/bin/activate
 make format          # ruff format + isort
 make lint            # ruff
 make type            # mypy
-cd web && npm run check:static && npm run test  # Web frontend
+cd clients/web && npm run check:static && npm run test  # Web frontend
 python -m app.cli.summary --url <URL>           # CLI test runner
 ```
 
@@ -76,8 +76,8 @@ python -m app.cli.summary --url <URL>           # CLI test runner
 4. Always redact `Authorization` headers before logging
 5. Update both `en/` and `ru/` prompts when changing LLM behavior
 6. Validate summary JSON with `app/core/summary_contract.py`
-7. Database changes require migration via `app/cli/migrate_db.py` + SPEC.md update
-8. Web frontend changes: read `FRONTEND.md` first, run `npm run check:static` before finalizing
+7. Database changes require migration via `app/cli/migrate_db.py` + docs/SPEC.md update
+8. Web frontend changes: read `docs/reference/frontend-web.md` first, run `npm run check:static` before finalizing
 
 ## Database
 
@@ -85,7 +85,7 @@ python -m app.cli.summary --url <URL>           # CLI test runner
 
 ## Summary JSON Contract
 
-Defined in `app/core/summary_contract.py` (validation) and `app/core/summary_schema.py` (Pydantic model). Core fields: `summary_250`, `summary_1000`, `tldr`, `key_ideas`, `topic_tags`, `entities`, `estimated_reading_time_min`. Full contract has 35+ fields. See `SPEC.md`.
+Defined in `app/core/summary_contract.py` (validation) and `app/core/summary_schema.py` (Pydantic model). Core fields: `summary_250`, `summary_1000`, `tldr`, `key_ideas`, `topic_tags`, `entities`, `estimated_reading_time_min`. Full contract has 35+ fields. See `docs/SPEC.md`.
 
 ---
 
@@ -256,7 +256,7 @@ This is the canonical Codex overlay used by the README install command.
 9. Assessment scores are auto-applied from trusted internal run-batches imports, or via Claude cloud session imports (`desloppify review --external-start --external-runner claude` then printed `--external-submit`). Legacy attested external import via `--attested-external` remains supported.
 10. Manual override is safety-scoped: you cannot combine it with `--allow-partial`, and provisional manual scores expire on the next `scan` unless replaced by trusted internal or attested-external imports.
 11. If a batch fails, retry only that slice with `desloppify review --run-batches --packet <packet.json> --only-batches <idxs>`.
-12. For Carbon web frontend tasks, consult `FRONTEND.md` and run `cd web && npm run check:static` before completion.
+12. For Carbon web frontend tasks, consult `docs/reference/frontend-web.md` and run `cd clients/web && npm run check:static` before completion.
 
 <!-- desloppify-overlay: codex -->
 <!-- desloppify-end -->

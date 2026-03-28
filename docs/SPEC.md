@@ -45,7 +45,7 @@
   - [Rate Limiting & Redis](#rate-limiting--redis)
   - [Data Model Notes (API-Specific Fields)](#data-model-notes-api-specific-fields)
   - [Background Processing (Requests → Summaries)](#background-processing-requests--summaries)
-- [Web Interface (web/)](#web-interface-web)
+- [Web Interface (clients/web/)](#web-interface-web)
   - [Serving Contract](#serving-contract)
   - [Web Routes (V1)](#web-routes-v1)
   - [Authentication Modes](#authentication-modes)
@@ -842,10 +842,10 @@ CHROMA_COLLECTION_VERSION=v1
   /prompts
   /services
   /utils
-/docker
+/ops/docker
 .env.example
 README.md
-SPEC.md
+docs/SPEC.md
 ```
 
 ## Mobile API (app/api)
@@ -911,9 +911,9 @@ sequenceDiagram
 - Retries: exponential backoff (`BACKGROUND_RETRY_ATTEMPTS` default 3, `BACKGROUND_RETRY_BASE_DELAY_MS` 500, `BACKGROUND_RETRY_MAX_DELAY_MS` 5000, jitter 0.2).
 - Errors: structured logs `{error_type,error_code,error_stage,correlation_id}`; request status set to `error`; lock fallback to local if Redis down and not required.
 
-## Web Interface (web/)
+## Web Interface (clients/web/)
 
-Carbon-based web client implemented in `web/` (React + TypeScript + Vite + `@carbon/react`) and deployed as static files under `app/static/web`.
+Carbon-based web client implemented in `clients/web/` (React + TypeScript + Vite + `@carbon/react`) and deployed as static files under `app/static/web`.
 
 ### Serving contract
 
@@ -941,10 +941,10 @@ Carbon-based web client implemented in `web/` (React + TypeScript + Vite + `@car
 
 ### Frontend tooling
 
-- Build: `cd web && npm run build` (outputs to `app/static/web`)
-- Static checks: `cd web && npm run check:static`
-- Unit tests: `cd web && npm run test`
-- E2E tests: `cd web && npm run test:e2e`
+- Build: `cd clients/web && npm run build` (outputs to `app/static/web`)
+- Static checks: `cd clients/web && npm run check:static`
+- Unit tests: `cd clients/web && npm run test`
+- E2E tests: `cd clients/web && npm run test:e2e`
 
 ## Future work
 

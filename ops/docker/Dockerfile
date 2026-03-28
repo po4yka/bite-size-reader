@@ -48,9 +48,9 @@ ARG VITE_TELEGRAM_BOT_USERNAME=""
 ENV VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
 
 WORKDIR /app/web
-COPY web/package*.json ./
+COPY clients/web/package*.json ./
 RUN npm ci
-COPY web/ ./
+COPY clients/web/ ./
 RUN npm run build
 # Output: /app/app/static/web/
 

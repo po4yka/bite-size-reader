@@ -11,7 +11,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - Accepts forwarded channel posts and summarizes them directly
 - Returns structured JSON summaries with a strict contract
 - Stores all artifacts (Telegram messages, crawl results, video downloads, LLM calls, summaries) in SQLite
-- Exposes a Carbon web frontend (`web/`) served by FastAPI on `/web/*`
+- Exposes a Carbon web frontend (`clients/web/`) served by FastAPI on `/web/*`
 - Runs as a single Docker container with owner-only access control
 
 **Tech Stack:**
@@ -86,7 +86,7 @@ Telegram Message -> MessageHandler -> AccessController -> MessageRouter
 - **Dependency Injection** (`app/di/`) -- Runtime composition only; production code outside `app/di/` should not assemble concrete dependency graphs
 - **CLI Tools** (`app/cli/`) -- Summary runner, search, migrations, MCP server, embedding backfill, Chroma backfill, search comparison, performance indexes
 - **Mobile API** (`app/api/`) -- FastAPI REST API with JWT auth, sync, background processing
-- **Web Frontend** (`web/`) -- Carbon web interface (library/article/search/submit/collections/digest/preferences/admin), hybrid auth (Telegram WebApp + JWT), React Query data layer
+- **Web Frontend** (`clients/web/`) -- Carbon web interface (library/article/search/submit/collections/digest/preferences/admin), hybrid auth (Telegram WebApp + JWT), React Query data layer
 - **Multi-Agent System** (`app/agents/`) -- Content extraction, summarization with self-correction, validation, web search agents. See `docs/multi_agent_architecture.md`
 - **Search Services** (`app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/`) -- Topic search workflows, vector/hybrid search, embeddings (local/Gemini via protocol+factory), reranking, query expansion
 - **MCP Server** (`app/mcp/`) -- Model Context Protocol server for AI agent access. See `docs/mcp_server.md`
@@ -118,7 +118,6 @@ app/
 +-- application/        # Application layer (DDD)
 |   +-- dto/            # Data transfer objects
 |   +-- use_cases/      # Use case orchestrators
-+-- cli/                # CLI tools (summary runner, search, MCP server, migrations, Chroma backfill)
 +-- config/             # Configuration modules
 +-- core/               # Shared utilities (URL, JSON, logging, lang)
 +-- db/                 # Database schema and models
@@ -136,7 +135,18 @@ app/
 +-- security/           # Security utilities
 +-- types/              # Type definitions
 +-- utils/              # Helper utilities (progress, formatting, validation)
-web/                    # Carbon web interface (React + TypeScript + Vite)
+clients/
++-- cli/                # CLI tools (summary runner, search, MCP server, migrations, Chroma backfill)
++-- browser-extension/  # Browser extension assets and docs
++-- web/                # Carbon web interface (React + TypeScript + Vite)
+integrations/
++-- openclaw-skill/     # OpenClaw MCP skill bundle
+ops/
++-- config/             # Versioned example config assets
++-- docker/             # Dockerfiles and compose definitions
++-- monitoring/         # Prometheus/Grafana/Loki/Promtail assets
+tools/
++-- scripts/            # Development and maintenance scripts
 ```
 
 ## Database Models
@@ -147,7 +157,7 @@ web/                    # Carbon web interface (React + TypeScript + Vite)
 
 ## Summary JSON Contract
 
-Defined in `app/core/summary_contract.py` (validation) and `app/core/summary_schema.py` (Pydantic model), documented in SPEC.md. Core fields: `summary_250`, `summary_1000`, `tldr`, `key_ideas`, `topic_tags`, `entities`, `estimated_reading_time_min`, `key_stats`, `answered_questions`, `readability`, `seo_keywords`. The full contract includes 35+ fields with nested structures (`source_type`, `temporal_freshness`, `metadata`, `extractive_quotes`, `topic_taxonomy`, `hallucination_risk`, `confidence`, `insights`, `semantic_chunks`, etc.).
+Defined in `app/core/summary_contract.py` (validation) and `app/core/summary_schema.py` (Pydantic model), documented in docs/SPEC.md. Core fields: `summary_250`, `summary_1000`, `tldr`, `key_ideas`, `topic_tags`, `entities`, `estimated_reading_time_min`, `key_stats`, `answered_questions`, `readability`, `seo_keywords`. The full contract includes 35+ fields with nested structures (`source_type`, `temporal_freshness`, `metadata`, `extractive_quotes`, `topic_taxonomy`, `hallucination_risk`, `confidence`, `insights`, `semantic_chunks`, etc.).
 
 ## Development Workflow
 
@@ -173,10 +183,10 @@ make lint                  # Lint code (ruff)
 make type                  # Type-check code (mypy)
 
 # Web frontend (Carbon)
-cd web && npm ci
-cd web && npm run dev
-cd web && npm run check:static
-cd web && npm run test
+cd clients/web && npm ci
+cd clients/web && npm run dev
+cd clients/web && npm run check:static
+cd clients/web && npm run test
 
 # Dependencies
 make lock-uv               # Lock dependencies with uv (recommended)
@@ -241,13 +251,13 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 2. **Summary Contract Changes:**
    - Update `app/core/summary_contract.py` validation functions
    - Update LLM prompts in `app/prompts/` (both `en/` and `ru/` versions)
-   - Update SPEC.md to document new fields
+   - Update docs/SPEC.md to document new fields
    - Ensure backward compatibility with existing DB summaries
 
 3. **Database Schema Changes:**
    - Use `app/cli/migrate_db.py` for migrations
    - Update `app/db/models.py` (Peewee ORM models)
-   - Document in SPEC.md data model section
+   - Document in docs/SPEC.md data model section
    - Consider migration path for existing data
 
 4. **Telegram Message Handling:**
@@ -273,11 +283,11 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
    - Async/await throughout (Pyrogram, httpx, SQLite via peewee-async patterns)
    - Optional `uvloop` for async performance
 
-8. **Web Frontend Changes (`web/`):**
-   - Read `FRONTEND.md` before changing web architecture, routing, auth, or data layer behavior
+8. **Web Frontend Changes (`clients/web/`):**
+   - Read `docs/reference/frontend-web.md` before changing web architecture, routing, auth, or data layer behavior
    - Keep same-host serving contract intact (`/web`, `/web/*`, `/static/web/*`)
    - Preserve hybrid auth behavior (Telegram WebApp header mode and JWT mode with refresh)
-   - Run `cd web && npm run check:static && npm run test` before finalizing
+   - Run `cd clients/web && npm run check:static && npm run test` before finalizing
 
 ### Security Considerations
 
@@ -351,7 +361,7 @@ Claude Code hooks provide automatic safety checks. See `docs/claude_code_hooks.m
 
 1. Update `app/core/summary_contract.py` with new validation logic
 2. Update `app/prompts/summary_system_en.txt` and `app/prompts/summary_system_ru.txt` with new field instructions
-3. Update SPEC.md Summary JSON contract section
+3. Update docs/SPEC.md Summary JSON contract section
 4. Test with CLI runner: `python -m app.cli.summary --url <test-url>`
 
 ### Adding a New External Service
@@ -393,22 +403,22 @@ When making changes, these are the most critical files to understand:
 - **`app/config/scraper.py`** -- Scraper chain configuration (`ScraperConfig`)
 - **`app/adapters/content/scraper/`** -- `ContentScraperProtocol`, `ContentScraperChain`, `ContentScraperFactory`, providers
 - **`app/api/main.py`** -- Mobile API entry point
-- **`FRONTEND.md`** -- Carbon web frontend architecture, auth, and local workflow
-- **`web/src/App.tsx`** -- Carbon web route map and route guards
-- **`web/src/auth/AuthProvider.tsx`** -- Hybrid auth mode selection and session handling
+- **`docs/reference/frontend-web.md`** -- Carbon web frontend architecture, auth, and local workflow
+- **`clients/web/src/App.tsx`** -- Carbon web route map and route guards
+- **`clients/web/src/auth/AuthProvider.tsx`** -- Hybrid auth mode selection and session handling
 - **`app/mcp/server.py`** -- MCP server for AI agents
 - **`bot.py`** -- Entrypoint (wires everything together)
-- **`SPEC.md`** -- Full technical specification (canonical reference)
+- **`docs/SPEC.md`** -- Full technical specification (canonical reference)
 
 ## Best Practices
 
-1. **Always read SPEC.md first** -- it's the authoritative source of truth
+1. **Always read docs/SPEC.md first** -- it's the authoritative source of truth
 2. **Preserve correlation IDs** -- they're essential for debugging
 3. **Validate summary JSON** -- use `app/core/summary_contract.py` functions
 4. **Test with CLI runner** -- faster iteration than full bot testing
 5. **Follow pre-commit hooks** -- run `make format` before committing
 6. **Update both en/ and ru/ prompts** -- when changing LLM behavior
-7. **Document DB schema changes** -- update SPEC.md data model section
+7. **Document DB schema changes** -- update docs/SPEC.md data model section
 8. **Persist everything** -- Firecrawl responses, LLM calls, Telegram messages (observability is key)
 9. **Use structured logging** -- include correlation IDs and context in all logs
 10. **Respect async patterns** -- use `await` properly, don't block the event loop
@@ -466,7 +476,7 @@ Full reference: `docs/environment_variables.md`
 For questions about the codebase, always refer to:
 
 1. This file (CLAUDE.md) for AI assistant guidance
-2. SPEC.md for technical specification
-3. FRONTEND.md for Carbon web frontend contracts and workflows
+2. docs/SPEC.md for technical specification
+3. docs/reference/frontend-web.md for Carbon web frontend contracts and workflows
 4. README.md for user-facing documentation
 5. Code comments and docstrings for implementation details

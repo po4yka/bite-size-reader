@@ -9,7 +9,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 - OpenRouter API key
 - Firecrawl API key (optional -- Scrapling and self-hosted Firecrawl are free alternatives)
 - Docker (for containerized deployment)
-- Node.js 20+ (optional; needed for local `web/` frontend development)
+- Node.js 20+ (optional; needed for local `clients/web/` frontend development)
 - (Optional) Redis for API rate limits/sync locks
 
 ## Telegram Setup
@@ -50,7 +50,7 @@ Copy `.env.example` to `.env` and fill:
 - Runtime: `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO| DEBUG`, `REQUEST_TIMEOUT_SEC=60`, `PREFERRED_LANG=auto | en | ru`, `DEBUG_PAYLOADS=0 |1` (keep 0 in prod)
 - YouTube: `YOUTUBE_DOWNLOAD_ENABLED=true`, `YOUTUBE_PREFERRED_QUALITY=1080p`, `YOUTUBE_STORAGE_PATH=/data/videos`, size/retention knobs as needed
 - API (mobile): `JWT_SECRET_KEY` (>=32 chars), `API_HOST`, `API_PORT` (default 8000), optional `ALLOWED_CLIENT_IDS`
-- Web frontend (JWT mode login widget, optional for `web/` local build/dev): `VITE_TELEGRAM_BOT_USERNAME`
+- Web frontend (JWT mode login widget, optional for `clients/web/` local build/dev): `VITE_TELEGRAM_BOT_USERNAME`
 - Redis (rate limit/sync, optional): `REDIS_ENABLED`, `REDIS_URL` or host/port/db, `REDIS_PREFIX=bsr`, `REDIS_REQUIRED=false`, `API_RATE_LIMIT_*` caps, `SYNC_DEFAULT_CHUNK_SIZE`, `SYNC_EXPIRY_HOURS`
 
 ## Local Development
@@ -61,7 +61,7 @@ Copy `.env.example` to `.env` and fill:
 4) Run Telegram bot: `python bot.py`
 5) Run API host (serves `/v1/*`, `/static/*`, and `/web/*`): `uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000`
 6) Optional Carbon web frontend local loop:
-   - `cd web && npm ci`
+   - `cd clients/web && npm ci`
    - `npm run dev` (Vite dev server)
    - `npm run check:static` (lint + typecheck)
 
@@ -75,7 +75,7 @@ The FastAPI service serves the Carbon web frontend from a static bundle:
 If `/web` returns `404 "Web interface is not built"`, rebuild static assets with:
 
 ```bash
-cd web
+cd clients/web
 npm ci
 npm run build
 ```
@@ -91,7 +91,7 @@ How to use (no commands needed)
 ## Docker Deployment
 
 1) Lock deps: `make lock-uv`.
-2) Build: `docker build -t bite-size-reader .`
+2) Build: `docker build -f ops/docker/Dockerfile -t bite-size-reader .`
 3) Run:
 
 ```
@@ -106,11 +106,11 @@ Notes
 - SQLite at `/data/app.db`; backups under `/data/backups`. Mount `/data` for durability.
 - Set `ALLOWED_USER_IDS`; keep `DEBUG_PAYLOADS=0` in prod.
 - If using mobile API, ensure `JWT_SECRET_KEY` is set and port 8000 exposed.
-- Docker build includes the `web/` bundle and publishes it under `/static/web/*`.
+- Docker build includes the `clients/web/` bundle and publishes it under `/static/web/*`.
 
 ## Docker Compose (recommended)
 
-The production `docker-compose.yml` defines a 5-service stack:
+The production `ops/docker/docker-compose.yml` defines a 5-service stack:
 
 ```yaml
 services:
@@ -122,7 +122,7 @@ services:
     healthcheck: SQLite SELECT 1 every 30s
 
   mobile-api:       # FastAPI REST API
-    build: {dockerfile: Dockerfile.api}
+    build: {context: ../.., dockerfile: ops/docker/Dockerfile.api}
     env_file: .env
     ports: ["127.0.0.1:18000:8000"]
     depends_on: [redis, chroma (optional)]
@@ -143,12 +143,12 @@ services:
 
   chroma:           # Vector search (ChromaDB)
     image: bsr-chroma:1.5.2
-    build: {dockerfile: Dockerfile.chroma}
+    build: {context: ../.., dockerfile: ops/docker/Dockerfile.chroma}
     ports: ["127.0.0.1:8001:8000"]
     healthcheck: HTTP /api/v2/heartbeat every 30s
 ```
 
-Run: `docker compose up -d --build`
+Run: `docker compose -f ops/docker/docker-compose.yml up -d --build`
 
 ## Optional Subsystems
 
@@ -218,12 +218,12 @@ make lock-uv
 
 ```bash
 # Compose (recommended)
-docker compose down
-docker compose up -d --build
+docker compose -f ops/docker/docker-compose.yml down
+docker compose -f ops/docker/docker-compose.yml up -d --build
 
 # Or manual
 docker stop bsr && docker rm bsr
-docker build -t bite-size-reader:latest .
+docker build -f ops/docker/Dockerfile -t bite-size-reader:latest .
 docker run -d --env-file .env -v $(pwd)/data:/data \
   -p 8000:8000 --name bsr --restart unless-stopped bite-size-reader:latest
 ```
@@ -243,7 +243,7 @@ Stop the container, restore the backup tarball, and restart the previous image:
 
 ```bash
 git checkout <previous-commit-sha>
-docker compose up -d --build
+docker compose -f ops/docker/docker-compose.yml up -d --build
 ```
 
 ## Troubleshooting
@@ -256,4 +256,4 @@ docker compose up -d --build
 - Telegram auth: verify `API_ID`, `API_HASH`, `BOT_TOKEN`; ensure bot not banned.
 - DB permissions: ensure host `data/` is writable by the Docker user.
 - Large summaries: The bot returns JSON in a message; if too large, consider implementing file replies.
-- `/web` returns 404: web bundle is missing; build `web/` (`npm run build`) or redeploy an image that includes the web build stage.
+- `/web` returns 404: web bundle is missing; build `clients/web/` (`npm run build`) or redeploy an image that includes the web build stage.

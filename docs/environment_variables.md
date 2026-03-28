@@ -277,7 +277,7 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 **Manual live smoke (non-CI)**: Validate real article links with redirect-aware routing and stage-level diagnostics:
 
 ```bash
-uv run python scripts/twitter_article_live_smoke.py \
+uv run python tools/scripts/twitter_article_live_smoke.py \
   --url "https://t.co/..." \
   --url "https://x.com/i/article/1234567890"
 ```

@@ -1038,7 +1038,7 @@ pip list | grep -i firecrawl
 
 # Rollback to last working version
 git checkout <commit_hash>
-docker build -t bite-size-reader .
+docker build -f ops/docker/Dockerfile -t bite-size-reader .
 docker run bite-size-reader
 ```
 

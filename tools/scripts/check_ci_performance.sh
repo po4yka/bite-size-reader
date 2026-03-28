@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Check CI performance metrics after Phase 1 optimization
-# Usage: ./scripts/check_ci_performance.sh
+# Usage: ./tools/scripts/check_ci_performance.sh
 
 set -euo pipefail
 

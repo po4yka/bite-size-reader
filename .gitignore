@@ -37,7 +37,7 @@ venv.bak/
 htmlcov/
 coverage.json
 coverage.xml
-web/coverage/
+clients/web/coverage/
 
 # Hypothesis test database
 .hypothesis/
@@ -50,7 +50,7 @@ web/coverage/
 .env
 *.env
 
-# Model configuration (deployment-specific; track config/models.yaml.example instead)
+# Model configuration (deployment-specific; track ops/config/models.yaml.example instead)
 config/models.yaml
 
 # --- Database ---
@@ -127,12 +127,12 @@ Desktop.ini
 .actrc
 
 # --- Frontend ---
-frontend/node_modules/
-frontend/tsconfig.tsbuildinfo
-web/node_modules/
-web/tsconfig.tsbuildinfo
-web/test-results/
-web/playwright-report/
+# Legacy local workspace; the maintained frontend lives in clients/web/
+frontend/
+clients/web/node_modules/
+clients/web/tsconfig.tsbuildinfo
+clients/web/test-results/
+clients/web/playwright-report/
 app/static/web/
 app/static/digest/
 

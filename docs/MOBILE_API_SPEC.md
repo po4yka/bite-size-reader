@@ -9,7 +9,7 @@
 This document is a developer-facing summary of the mobile API implemented by the FastAPI app.
 
 - Base API prefix: `/v1`
-- Primary clients: mobile apps (Android/iOS/KMP), Telegram Mini App, Carbon web interface (`web/`)
+- Primary clients: mobile apps (Android/iOS/KMP), Telegram Mini App, Carbon web interface (`clients/web/`)
 - Envelope contract: all JSON business responses use `success`, `data`, `meta`, and standardized `error`
 - OpenAPI source of truth: `docs/openapi/mobile_api.yaml`
 

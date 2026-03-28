@@ -38,12 +38,12 @@ SSE safety defaults:
 
 ## Docker Deployment (SSE)
 
-The `docker-compose.yml` includes an opt-in `mcp` profile so the SSE server is not started by a plain `docker compose up`.
+The `ops/docker/docker-compose.yml` file includes an opt-in `mcp` profile so the SSE server is not started by a plain `docker compose up`.
 
 Start it explicitly:
 
 ```bash
-MCP_USER_ID=12345 docker compose --profile mcp up -d mcp
+MCP_USER_ID=12345 docker compose -f ops/docker/docker-compose.yml --profile mcp up -d mcp
 ```
 
 Service definition:
@@ -51,7 +51,7 @@ Service definition:
 ```yaml
 mcp:
   profiles: ["mcp"]
-  build: {context: ., dockerfile: Dockerfile}
+  build: {context: ../.., dockerfile: ops/docker/Dockerfile}
   container_name: bsr-mcp
   command: ["python", "-m", "app.cli.mcp_server"]
   environment:
@@ -62,7 +62,7 @@ mcp:
     - MCP_USER_ID=${MCP_USER_ID:-}
     - MCP_ALLOW_REMOTE_SSE=true
   volumes:
-    - ./data:/data:ro          # read-only DB access
+    - ../../data:/data:ro      # read-only DB access
   ports:
     - "127.0.0.1:8200:8200"   # loopback only from host
 ```

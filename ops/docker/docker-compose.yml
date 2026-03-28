@@ -1,17 +1,17 @@
 services:
   bsr:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
       args:
         VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME:-}
     container_name: bsr-bot
     init: true
     env_file:
-      - .env
+      - ../../.env
     volumes:
-      - ./data:/data
-      - ./config:/app/config:ro
+      - ../../data:/data
+      - ../../config:/app/config:ro
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
       - /tmp
@@ -64,8 +64,8 @@ services:
     stop_grace_period: 30s
   mobile-api:
     build:
-      context: .
-      dockerfile: Dockerfile.api
+      context: ../..
+      dockerfile: ops/docker/Dockerfile.api
       args:
         VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME:-}
     container_name: bsr-mobile-api
@@ -73,7 +73,7 @@ services:
     tmpfs:
       - /tmp
     env_file:
-      - .env
+      - ../../.env
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -87,8 +87,8 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
     volumes:
-      - ./data:/data
-      - ./config:/app/config:ro
+      - ../../data:/data
+      - ../../config:/app/config:ro
       - /etc/localtime:/etc/localtime:ro
     ports:
       - "127.0.0.1:18000:8000"
@@ -122,12 +122,12 @@ services:
     profiles:
       - mcp
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
     container_name: bsr-mcp
     init: true
     env_file:
-      - .env
+      - ../../.env
     environment:
       - MCP_ENABLED=true
       - MCP_TRANSPORT=sse
@@ -141,8 +141,8 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
     volumes:
-      - ./data:/data:ro
-      - ./config:/app/config:ro
+      - ../../data:/data:ro
+      - ../../config:/app/config:ro
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
       - /tmp
@@ -210,12 +210,12 @@ services:
   chroma:
     image: bsr-chroma:1.5.2
     build:
-      context: .
-      dockerfile: Dockerfile.chroma
+      context: ../..
+      dockerfile: ops/docker/Dockerfile.chroma
     container_name: bsr-chroma
     init: true
     volumes:
-      - ./chroma_data:/data
+      - ../../chroma_data:/data
     ports:
       - "127.0.0.1:8001:8000" # Bind to localhost only - internal service
     environment:

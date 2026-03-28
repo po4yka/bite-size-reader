@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "generate:api": "openapi-typescript ../docs/openapi/mobile_api.yaml -o src/api/generated.ts"
+    "generate:api": "openapi-typescript ../../docs/openapi/mobile_api.yaml -o src/api/generated.ts"
   },
   "dependencies": {
     "@carbon/icons-react": "^11.76.0",

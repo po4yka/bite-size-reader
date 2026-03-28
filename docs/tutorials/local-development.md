@@ -243,11 +243,11 @@ tests/test_summary_contract.py ......................                    [100%]
 
 ## Step 7.5: Run Carbon Web Interface (Optional, 3 minutes)
 
-Use this when you work on `web/` (React + TypeScript + IBM Carbon).
+Use this when you work on `clients/web/` (React + TypeScript + IBM Carbon).
 
 ```bash
 # In a new terminal from project root
-cd web
+cd clients/web
 npm ci
 
 # Start Vite dev server
@@ -429,7 +429,7 @@ make type
 make format lint type
 
 # Web static checks
-cd web && npm run check:static
+cd clients/web && npm run check:static
 ```
 
 ### Debugging Tips
@@ -500,7 +500,7 @@ open http://localhost:8000/docs
 
 ```bash
 # Build web bundle into app/static/web
-cd web
+cd clients/web
 npm run build
 cd ..
 

@@ -44,7 +44,7 @@ updates:
 
   # Frontend dependencies
   - package-ecosystem: "npm"
-    directory: "/frontend"
+    directory: "/clients/web"
     schedule:
       interval: "weekly"
       day: "monday"

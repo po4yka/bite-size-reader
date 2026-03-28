@@ -143,7 +143,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: web
+        working-directory: clients/web
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -153,7 +153,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: clients/web/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -167,7 +167,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: web
+        working-directory: clients/web
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -177,7 +177,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: clients/web/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -191,7 +191,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: web
+        working-directory: clients/web
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -201,14 +201,14 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: clients/web/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Verify generated API types are fresh
         run: |
-          npx openapi-typescript ../docs/openapi/mobile_api.yaml -o src/api/generated.check.ts
+          npx openapi-typescript ../../docs/openapi/mobile_api.yaml -o src/api/generated.check.ts
           diff src/api/generated.ts src/api/generated.check.ts
           rm src/api/generated.check.ts
 
@@ -277,10 +277,10 @@ jobs:
         run: isort --check-only .
 
       - name: Enforce class size limit
-        run: python scripts/check_class_size.py --max-loc 1000 --baseline scripts/class_size_baseline.json
+        run: python tools/scripts/check_class_size.py --max-loc 1000 --baseline tools/scripts/class_size_baseline.json
 
       - name: Enforce file size limit
-        run: python scripts/check_file_size.py --max-loc 1500 --baseline scripts/file_size_baseline.json
+        run: python tools/scripts/check_file_size.py --max-loc 1500 --baseline tools/scripts/file_size_baseline.json
 
       - name: Check code complexity
         run: |
@@ -458,7 +458,7 @@ jobs:
 
       - name: Check coverage threshold
         run: |
-          INCLUDE_PATHS=$(grep -v '^#' scripts/coverage_includes.txt | grep -v '^$' | paste -sd, -)
+          INCLUDE_PATHS=$(grep -v '^#' tools/scripts/coverage_includes.txt | grep -v '^$' | paste -sd, -)
           coverage report --include="$INCLUDE_PATHS" --fail-under=80 --show-missing
 
       - name: Surface lockfile drift status

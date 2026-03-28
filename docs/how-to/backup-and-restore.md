@@ -71,7 +71,7 @@ ls -lh backups/$(date +%Y%m%d)/
 
 ### Daily Backup Script
 
-Create `scripts/backup.sh`:
+Create `tools/scripts/backup.sh`:
 
 ```bash
 #!/bin/bash
@@ -115,8 +115,8 @@ echo "Backup complete: $BACKUP_PATH"
 Make executable and test:
 
 ```bash
-chmod +x scripts/backup.sh
-./scripts/backup.sh
+chmod +x tools/scripts/backup.sh
+./tools/scripts/backup.sh
 ```
 
 ### Schedule with Cron
@@ -126,7 +126,7 @@ chmod +x scripts/backup.sh
 crontab -e
 
 # Add daily backup at 2 AM
-0 2 * * * cd /path/to/bite-size-reader && ./scripts/backup.sh >> /var/log/bsr-backup.log 2>&1
+0 2 * * * cd /path/to/bite-size-reader && ./tools/scripts/backup.sh >> /var/log/bsr-backup.log 2>&1
 ```
 
 ### Docker Volume Backup

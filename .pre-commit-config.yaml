@@ -49,10 +49,10 @@ repos:
     hooks:
       - id: class-loc-limit
         name: Disallow classes > 1000 LOC
-        entry: python scripts/check_class_size.py --max-loc 1000 --baseline scripts/class_size_baseline.json
+        entry: python tools/scripts/check_class_size.py --max-loc 1000 --baseline tools/scripts/class_size_baseline.json
         language: python
         types: [python]
       - id: file-loc-limit
         name: Disallow files > 1500 LOC
-        entry: python scripts/check_file_size.py --max-loc 1500 --baseline scripts/file_size_baseline.json
+        entry: python tools/scripts/check_file_size.py --max-loc 1500 --baseline tools/scripts/file_size_baseline.json
         language: python

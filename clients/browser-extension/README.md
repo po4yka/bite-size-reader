@@ -44,14 +44,14 @@ If you already have a JWT token (from the web UI session or Telegram WebApp), yo
 1. Open `chrome://extensions/`
 2. Enable "Developer mode" (top right toggle)
 3. Click "Load unpacked"
-4. Select this `extension/` directory
+4. Select this `clients/browser-extension/` directory
 5. The extension icon appears in the toolbar
 
 #### Firefox
 
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click "Load Temporary Add-on"
-3. Select `extension/manifest.json`
+3. Select `clients/browser-extension/manifest.json`
 
 ### 3. Configure the Extension
 
@@ -109,7 +109,7 @@ Requires `cairosvg` (`pip install cairosvg`) or use any SVG-to-PNG converter at 
 ## Project Structure
 
 ```
-extension/
+clients/browser-extension/
   background/       Service worker for API calls, shortcuts, context menus
   content/          Content script for text selection
   icons/            Extension icons (SVG source + PNG outputs)

@@ -1,10 +1,10 @@
 # Carbon Web Frontend Guide
 
-Reference for the Carbon-based web interface implemented in `web/`.
+Reference for the Carbon-based web interface implemented in `clients/web/`.
 
 **Audience:** Frontend developers, integrators, operators
 **Type:** Reference
-**Related:** [README.md § Carbon Web Interface](README.md#carbon-web-interface-v1), [docs/MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+**Related:** [README.md § Carbon Web Interface](../../README.md#carbon-web-interface-v1), [Mobile API Spec](../MOBILE_API_SPEC.md), [Deployment Guide](../DEPLOYMENT.md)
 
 ---
 
@@ -23,14 +23,14 @@ It is built into `app/static/web` and served by FastAPI on `/web` and `/web/*`.
 ## Directory Layout
 
 ```text
-web/
+clients/web/
   src/
     api/            # Typed API gateway + envelope normalization
     auth/           # Hybrid auth provider, guards, storage, redirects
     components/     # App shell + shared UI
     features/       # Route-level pages (library/search/submit/collections/...)
     routes/         # Route manifest + feature flags
-  vite.config.ts    # base=/static/web, outDir=../app/static/web
+  vite.config.ts    # base=/static/web, outDir=../../app/static/web
 ```
 
 ---
@@ -44,7 +44,7 @@ web/
 
 Build output contract:
 
-- Vite `outDir`: `../app/static/web`
+- Vite `outDir`: `../../app/static/web`
 - Vite `base`: `/static/web/`
 
 ---
@@ -63,8 +63,8 @@ Build output contract:
 - `/web/admin`
 - `/web/login`
 
-Route-level feature flags live in `web/src/routes/features.ts`.
-The canonical route and side-nav manifest lives in `web/src/routes/manifest.tsx`.
+Route-level feature flags live in `clients/web/src/routes/features.ts`.
+The canonical route and side-nav manifest lives in `clients/web/src/routes/manifest.tsx`.
 
 ---
 
@@ -83,13 +83,13 @@ Auth is hybrid and selected at runtime in `detectAuthMode`:
    - Client id: `web-carbon-v1`
    - Session: bearer token storage + auto refresh via `POST /v1/auth/refresh`
 
-Auth provider implementation: `web/src/auth/AuthProvider.tsx`.
+Auth provider implementation: `clients/web/src/auth/AuthProvider.tsx`.
 
 ---
 
 ## API Layer Conventions
 
-The frontend API gateway (`web/src/api/client.ts`) provides:
+The frontend API gateway (`clients/web/src/api/client.ts`) provides:
 
 - Envelope handling (`success/data/meta/error`)
 - Mixed key-style normalization (`snake_case` + `camelCase`)
@@ -97,7 +97,7 @@ The frontend API gateway (`web/src/api/client.ts`) provides:
 - JWT refresh retry on `401` in JWT mode
 - Automatic auth header injection based on active auth mode
 
-Submission flow (`web/src/features/submit`) includes:
+Submission flow (`clients/web/src/features/submit`) includes:
 
 - URL validation + duplicate pre-check
 - Status polling lifecycle (`pending` -> `crawling|processing` -> `completed|failed`)
@@ -133,7 +133,7 @@ Admin page (`/web/admin`) includes:
 
 ## UI Architecture
 
-- Global shell: Carbon `Header` + `SideNav` (`web/src/components/AppShell.tsx`)
+- Global shell: Carbon `Header` + `SideNav` (`clients/web/src/components/AppShell.tsx`)
 - Session UX:
   - in-app session status label
   - manual "Verify session" action
@@ -149,7 +149,7 @@ Admin page (`/web/admin`) includes:
 ## Local Development
 
 ```bash
-cd web
+cd clients/web
 npm ci
 npm run dev
 ```
@@ -163,7 +163,7 @@ Optional environment variables:
 When testing same-host serving (instead of Vite proxy):
 
 ```bash
-cd web
+cd clients/web
 npm run build
 cd ..
 uvicorn app.api.main:app --reload
@@ -177,7 +177,7 @@ uvicorn app.api.main:app --reload
 Web commands:
 
 ```bash
-cd web
+cd clients/web
 npm run lint
 npm run typecheck
 npm run check:static
@@ -196,7 +196,7 @@ CI jobs in `.github/workflows/ci.yml`:
 
 ## Deployment Notes
 
-- `Dockerfile` and `Dockerfile.api` both build `web/`.
+- `ops/docker/Dockerfile` and `ops/docker/Dockerfile.api` both build `clients/web/`.
 - Runtime image ships the static bundle at `/app/app/static/web`.
 - Same-host deployment avoids CORS complexity.
 
@@ -209,7 +209,7 @@ CI jobs in `.github/workflows/ci.yml`:
 Web bundle is not built into `app/static/web`.
 
 ```bash
-cd web
+cd clients/web
 npm ci
 npm run build
 ```

@@ -1,4 +1,8 @@
-.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate check-file-loc
+.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate check-file-loc check-layout clean-generated
+
+COMPOSE_FILE := ops/docker/docker-compose.yml
+DOCKERFILE_BOT := ops/docker/Dockerfile
+DOCKERFILE_API := ops/docker/Dockerfile.api
 
 format:
 	ruff format .
@@ -6,10 +10,10 @@ format:
 
 lint:
 	ruff check .
-	python scripts/check_file_size.py --max-loc 1500 --baseline scripts/file_size_baseline.json
+	python tools/scripts/check_file_size.py --max-loc 1500 --baseline tools/scripts/file_size_baseline.json
 
 check-file-loc:
-	python scripts/check_file_size.py --max-loc 1500 --baseline scripts/file_size_baseline.json
+	python tools/scripts/check_file_size.py --max-loc 1500 --baseline tools/scripts/file_size_baseline.json
 
 type:
 	uv run --frozen mypy app tests
@@ -36,7 +40,17 @@ setup-dev:
 	pre-commit install
 
 venv:
-	bash scripts/create_venv.sh
+	bash tools/scripts/create_venv.sh
+
+check-layout:
+	python tools/scripts/check_root_hygiene.py
+
+clean-generated:
+	rm -rf htmlcov
+	rm -f .coverage coverage.json coverage.xml debug_fav.log error.log traceback.log
+	rm -rf clients/web/coverage clients/web/test-results clients/web/playwright-report
+	find clients/web -name '*.tsbuildinfo' -delete
+	rm -rf frontend
 
 .PHONY: pre-commit-install
 pre-commit-install:
@@ -76,54 +90,54 @@ check-openapi-validate: ## Validate OpenAPI spec syntax
 .PHONY: docker-rebuild-mobile-api docker-logs-mobile-api docker-shell-mobile-api
 
 docker-build:
-	DOCKER_BUILDKIT=1 docker build --tag bsr:latest --progress=plain .
+	DOCKER_BUILDKIT=1 docker build -f $(DOCKERFILE_BOT) --tag bsr:latest --progress=plain .
 
 docker-build-no-cache:
-	DOCKER_BUILDKIT=1 docker build --no-cache --tag bsr:latest --progress=plain .
+	DOCKER_BUILDKIT=1 docker build -f $(DOCKERFILE_BOT) --no-cache --tag bsr:latest --progress=plain .
 
 docker-build-mobile-api:
-	DOCKER_BUILDKIT=1 docker compose build mobile-api
+	DOCKER_BUILDKIT=1 docker compose -f $(COMPOSE_FILE) build mobile-api
 
 docker-build-mobile-api-no-cache:
-	DOCKER_BUILDKIT=1 docker compose build --no-cache mobile-api
+	DOCKER_BUILDKIT=1 docker compose -f $(COMPOSE_FILE) build --no-cache mobile-api
 
 docker-run:
-	docker compose up -d
+	docker compose -f $(COMPOSE_FILE) up -d
 
 docker-stop:
-	docker compose down
+	docker compose -f $(COMPOSE_FILE) down
 
 docker-restart: docker-stop docker-run
 
 docker-logs:
-	docker compose logs -f bsr
+	docker compose -f $(COMPOSE_FILE) logs -f bsr
 
 docker-logs-tail:
-	docker compose logs --tail=100 -f bsr
+	docker compose -f $(COMPOSE_FILE) logs --tail=100 -f bsr
 
 docker-logs-mobile-api:
-	docker compose logs -f mobile-api
+	docker compose -f $(COMPOSE_FILE) logs -f mobile-api
 
 docker-shell:
-	docker compose exec bsr sh
+	docker compose -f $(COMPOSE_FILE) exec bsr sh
 
 docker-shell-root:
-	docker compose exec -u root bsr sh
+	docker compose -f $(COMPOSE_FILE) exec -u root bsr sh
 
 docker-shell-mobile-api:
-	docker compose exec mobile-api sh
+	docker compose -f $(COMPOSE_FILE) exec mobile-api sh
 
 docker-restart-mobile-api:
-	docker compose up -d mobile-api
+	docker compose -f $(COMPOSE_FILE) up -d mobile-api
 
 docker-rebuild-mobile-api: docker-build-mobile-api docker-restart-mobile-api
 
 docker-test:
-	DOCKER_BUILDKIT=1 docker build --target builder --tag bsr:test .
+	DOCKER_BUILDKIT=1 docker build -f $(DOCKERFILE_BOT) --target builder --tag bsr:test .
 	docker run --rm bsr:test uv run pytest
 
 docker-clean:
-	docker compose down -v
+	docker compose -f $(COMPOSE_FILE) down -v
 	docker rmi bsr:latest bsr:test 2>/dev/null || true
 	docker builder prune -f
 
@@ -139,6 +153,6 @@ docker-deploy: docker-build docker-stop docker-run
 	@echo "Check logs with: make docker-logs"
 
 docker-health:
-	@docker compose ps
+	@docker compose -f $(COMPOSE_FILE) ps
 	@echo ""
 	@docker inspect --format='{{json .State.Health}}' bsr-bot 2>/dev/null | python -m json.tool || echo "Container not running or no health check configured"

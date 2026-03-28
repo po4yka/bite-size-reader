@@ -55,7 +55,7 @@
 **Required for new features or API changes:**
 
 - [ ] Updated README.md (if user-facing changes)
-- [ ] Updated SPEC.md (if data model or API contract changes)
+- [ ] Updated docs/SPEC.md (if data model or API contract changes)
 - [ ] Updated environment_variables.md (if new env vars added)
 - [ ] Added/updated how-to guide in `docs/how-to/` (for new features)
 - [ ] Updated relevant reference docs in `docs/reference/`
