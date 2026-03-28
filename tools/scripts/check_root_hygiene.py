@@ -59,6 +59,11 @@ BANNED_ROOT_PATHS = {
     "traceback.log",
 }
 
+DOC_BANNED_PATHS = {
+    "docs/plans",
+    "docs/reports",
+}
+
 
 def _tracked_root_entries() -> set[str]:
     result = subprocess.run(
@@ -78,9 +83,12 @@ def _tracked_root_entries() -> set[str]:
     return entries
 
 
-def _find_banned_root_paths() -> list[str]:
+def _find_banned_paths() -> list[str]:
     found: list[str] = []
     for name in sorted(BANNED_ROOT_PATHS):
+        if (ROOT / name).exists():
+            found.append(name)
+    for name in sorted(DOC_BANNED_PATHS):
         if (ROOT / name).exists():
             found.append(name)
     return found
@@ -118,10 +126,6 @@ def _scan_outdated_paths() -> list[str]:
         "-g",
         "!tools/scripts/check_root_hygiene.py",
         "-g",
-        "!docs/plans/**",
-        "-g",
-        "!docs/reports/**",
-        "-g",
         "!.claude/**",
     ]
     result = subprocess.run(
@@ -142,7 +146,7 @@ def main() -> int:
     tracked = _tracked_root_entries()
     unexpected = sorted(tracked - TRACKED_ROOT_ALLOWLIST)
     missing = sorted(TRACKED_ROOT_ALLOWLIST - tracked)
-    banned = _find_banned_root_paths()
+    banned = _find_banned_paths()
     stale = _scan_outdated_paths()
 
     errors: list[str] = []
