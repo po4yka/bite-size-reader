@@ -141,7 +141,10 @@ class SummaryModel(BaseModel):
     summary_250: str = Field(default="", max_length=250)
     summary_1000: str = Field(default="", max_length=1000)
     tldr: str = Field(default="")
-    tldr_ru: str = Field(default="")
+    tldr_ru: str = Field(
+        default="",
+        description="Full Russian translation of the tldr field. Must be written entirely in Russian (Cyrillic script).",
+    )
     key_ideas: list[str] = Field(default_factory=list)
     topic_tags: list[str] = Field(default_factory=list)
     entities: Entities = Field(default_factory=Entities)
