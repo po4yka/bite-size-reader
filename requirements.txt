@@ -154,7 +154,7 @@ rich==14.3.3
     # via typer
 scrapling==0.4.2
     # via bite-size-reader (pyproject.toml)
-setuptools==81.0.0
+setuptools==82.0.1
     # via
     #   spacy
     #   thinc
