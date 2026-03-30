@@ -52,7 +52,7 @@ COPY clients/web/package*.json ./
 RUN npm ci
 COPY clients/web/ ./
 RUN npm run build
-# Output: /app/app/static/web/
+# Output: /app/static/web/
 
 # =============================================================================
 # Stage 3: Runtime - Minimal production image
@@ -94,7 +94,7 @@ COPY app ./app
 COPY bot.py ./
 
 # Copy built Carbon web assets
-COPY --from=web-builder /app/app/static/web /app/app/static/web
+COPY --from=web-builder /app/static/web /app/app/static/web
 
 # Create non-root user for security
 RUN useradd -r -u 1000 -m -d /home/appuser -s /sbin/nologin appuser \

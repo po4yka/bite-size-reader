@@ -72,7 +72,7 @@ RUN if [ "${WITH_PLAYWRIGHT}" = "1" ]; then playwright install --with-deps chrom
 COPY app ./app
 
 # Copy built Carbon web static assets
-COPY --from=web-builder /app/app/static/web /app/app/static/web
+COPY --from=web-builder /app/static/web /app/app/static/web
 
 # Create non-root user and data directory
 RUN useradd -r -u 1000 -m -d /home/appuser -s /sbin/nologin appuser \
