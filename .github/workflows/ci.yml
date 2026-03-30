@@ -105,7 +105,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Lint Markdown files
-        uses: DavidAnson/markdownlint-cli2-action@v22
+        uses: DavidAnson/markdownlint-cli2-action@v23
         with:
           globs: |
             **/*.md
@@ -449,7 +449,7 @@ jobs:
           paths: "junit-*.xml"
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           file: ./coverage.xml
           flags: unittests
