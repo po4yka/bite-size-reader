@@ -13,10 +13,10 @@ from app.core.model_router import resolve_fallback_models, resolve_model_for_con
 def routing_config() -> ModelRoutingConfig:
     return ModelRoutingConfig(
         enabled=True,
-        default_model="anthropic/claude-sonnet-4.6",
+        default_model="anthropic/claude-4.6-sonnet-20260217",
         technical_model="google/gemini-3.1-pro-preview",
         sociopolitical_model="x-ai/grok-4.20-beta",
-        long_context_model="anthropic/claude-sonnet-4.6",
+        long_context_model="anthropic/claude-4.6-sonnet-20260217",
         long_context_threshold=50000,
     )
 
@@ -42,7 +42,7 @@ class TestResolveModelForContent:
             routing_config=routing_config,
             openrouter_config=openrouter_config,
         )
-        assert result == "anthropic/claude-sonnet-4.6"
+        assert result == "anthropic/claude-4.6-sonnet-20260217"
 
     def test_technical_tier(
         self,
@@ -85,7 +85,7 @@ class TestResolveModelForContent:
             routing_config=routing_config,
             openrouter_config=openrouter_config,
         )
-        assert result == "anthropic/claude-sonnet-4.6"
+        assert result == "anthropic/claude-4.6-sonnet-20260217"
 
     def test_below_long_context_threshold(
         self,

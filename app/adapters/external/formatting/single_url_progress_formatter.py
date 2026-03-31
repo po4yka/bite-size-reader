@@ -56,7 +56,7 @@ class SingleURLProgressFormatter:
 
     @staticmethod
     def _short_model(model: str) -> str:
-        """Strip provider prefix from model name (e.g. 'anthropic/claude-sonnet-4.6' -> 'claude-sonnet-4.6')."""
+        """Strip provider prefix from model name (e.g. 'anthropic/claude-4.6-sonnet-20260217' -> 'claude-sonnet-4.6')."""
         return model.split("/", 1)[-1] if "/" in model else model
 
     @staticmethod
@@ -123,7 +123,7 @@ class SingleURLProgressFormatter:
 
         Args:
             content_length: Number of characters in content
-            model: LLM model name (e.g., "anthropic/claude-sonnet-4.6")
+            model: LLM model name (e.g., "anthropic/claude-4.6-sonnet-20260217")
             elapsed_sec: Elapsed time in seconds
             phase: Current phase ("analyzing", "retrying", "enriching")
             lang: UI language code ("en" or "ru").

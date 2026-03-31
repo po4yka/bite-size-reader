@@ -196,7 +196,7 @@ class ModelCapabilities:
         """Get list of models known to support structured outputs reliably."""
         return [
             "google/gemini-3-flash-preview",  # near-Pro, 1M ctx, low cost
-            "anthropic/claude-sonnet-4.6",  # best structured-output reliability
+            "anthropic/claude-4.6-sonnet-20260217",  # best structured-output reliability
             "deepseek/deepseek-v3.2:free",  # free fallback
             "deepseek/deepseek-v3.2",  # paid fallback
         ]
