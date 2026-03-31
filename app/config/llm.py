@@ -21,7 +21,7 @@ class OpenRouterConfig(BaseModel):
     model: str = Field(default="deepseek/deepseek-v3.2", validation_alias="OPENROUTER_MODEL")
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: (
-            "qwen/qwen3.5-plus",
+            "qwen/qwen3.5-plus-02-15",
             "google/gemini-3.1-flash-lite-preview",
             "moonshotai/kimi-k2.5",
         ),
@@ -41,10 +41,10 @@ class OpenRouterConfig(BaseModel):
         validation_alias="OPENROUTER_LONG_CONTEXT_MODEL",
     )
     flash_model: str = Field(
-        default="qwen/qwen3.5-flash", validation_alias="OPENROUTER_FLASH_MODEL"
+        default="qwen/qwen3.5-flash-02-23", validation_alias="OPENROUTER_FLASH_MODEL"
     )
     flash_fallback_models: tuple[str, ...] = Field(
-        default_factory=lambda: ("qwen/qwen3.5-plus",),
+        default_factory=lambda: ("qwen/qwen3.5-plus-02-15",),
         validation_alias="OPENROUTER_FLASH_FALLBACK_MODELS",
     )
     summary_temperature_relaxed: float | None = Field(
@@ -280,7 +280,7 @@ class ModelRoutingConfig(BaseModel):
 
     enabled: bool = Field(default=False, validation_alias="MODEL_ROUTING_ENABLED")
     default_model: str = Field(
-        default="anthropic/claude-4.6-sonnet-20260217",
+        default="anthropic/claude-sonnet-4.6",
         validation_alias="MODEL_ROUTING_DEFAULT",
     )
     technical_model: str = Field(
@@ -292,13 +292,13 @@ class ModelRoutingConfig(BaseModel):
         validation_alias="MODEL_ROUTING_SOCIOPOLITICAL",
     )
     long_context_model: str = Field(
-        default="anthropic/claude-4.6-sonnet-20260217",
+        default="anthropic/claude-sonnet-4.6",
         validation_alias="MODEL_ROUTING_LONG_CONTEXT",
     )
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: (
             "deepseek/deepseek-v3.2",
-            "qwen/qwen3.5-plus",
+            "qwen/qwen3.5-plus-02-15",
             "google/gemini-3.1-flash-lite-preview",
         ),
         validation_alias="MODEL_ROUTING_FALLBACK_MODELS",

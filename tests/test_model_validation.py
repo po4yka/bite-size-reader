@@ -111,7 +111,7 @@ class TestModelValidation(unittest.TestCase):
             assert cfg.openrouter.model == "deepseek/deepseek-v3.2"
             # Default fallback models from config.py
             assert cfg.openrouter.fallback_models == (
-                "qwen/qwen3.5-plus",
+                "qwen/qwen3.5-plus-02-15",
                 "google/gemini-3.1-flash-lite-preview",
                 "moonshotai/kimi-k2.5",
             )

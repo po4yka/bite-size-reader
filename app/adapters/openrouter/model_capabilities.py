@@ -164,26 +164,21 @@ class ModelCapabilities:
         self._known_structured_models = {
             # Google models
             "google/gemini-3.1-pro-preview",
-            "google/gemini-3-pro-preview",
             "google/gemini-3-flash-preview",
             # DeepSeek models (JSON mode support)
-            "deepseek/deepseek-v3.2:free",
             "deepseek/deepseek-v3.2",
-            "deepseek/deepseek-r1:free",
             "deepseek/deepseek-r1",
             # Moonshot AI (Kimi) models
-            "moonshotai/kimi-k2:free",
             "moonshotai/kimi-k2",
             "moonshotai/kimi-k2.5",
             # Qwen models
             "qwen/qwen3-max",
-            "qwen/qwen3-235b-a22b-instruct-2507",
+            "qwen/qwen3-235b-a22b-2507",
             "qwen/qwen3-next-80b-a3b-thinking",
-            "qwen/qwen3-coder-480b-a35b",
+            "qwen/qwen3-coder-plus",
             "qwen/qwen3-coder:free",
             # MiniMax models
             "minimax/minimax-m2",
-            "minimax/minimax-m2:free",
         }
 
     def is_reasoning_heavy_model(self, model: str) -> bool:
@@ -196,8 +191,7 @@ class ModelCapabilities:
         """Get list of models known to support structured outputs reliably."""
         return [
             "google/gemini-3-flash-preview",  # near-Pro, 1M ctx, low cost
-            "anthropic/claude-4.6-sonnet-20260217",  # best structured-output reliability
-            "deepseek/deepseek-v3.2:free",  # free fallback
+            "anthropic/claude-sonnet-4.6",  # best structured-output reliability
             "deepseek/deepseek-v3.2",  # paid fallback
         ]
 

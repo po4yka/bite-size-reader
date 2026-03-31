@@ -28,11 +28,11 @@ class TestLoadModelsYaml:
         cfg.write_text(
             dedent("""\
                 openrouter:
-                  model: "anthropic/claude-4.6-sonnet-20260217"
+                  model: "anthropic/claude-sonnet-4.6"
             """)
         )
         result = load_models_yaml(cfg)
-        assert result["OPENROUTER_MODEL"] == "anthropic/claude-4.6-sonnet-20260217"
+        assert result["OPENROUTER_MODEL"] == "anthropic/claude-sonnet-4.6"
 
     def test_loads_fallback_models_as_csv(self, yaml_dir: Path) -> None:
         cfg = yaml_dir / "models.yaml"

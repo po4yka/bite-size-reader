@@ -45,7 +45,7 @@ model_routing:
   enabled: false
 
   # Model for general content (blogs, tutorials, news)
-  default_model: "anthropic/claude-4.6-sonnet-20260217"
+  default_model: "anthropic/claude-sonnet-4.6"
 
   # Model for technical/research content (papers, code, deep technical)
   technical_model: "google/gemini-3.1-pro-preview"
@@ -54,7 +54,7 @@ model_routing:
   sociopolitical_model: "x-ai/grok-4.20-beta"
 
   # Model for long documents (>50K chars)
-  long_context_model: "anthropic/claude-4.6-sonnet-20260217"
+  long_context_model: "anthropic/claude-sonnet-4.6"
 
   # Shared fallback chain (used when routing is enabled)
   fallback_models:

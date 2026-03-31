@@ -95,7 +95,7 @@ class ErrorHandler:
             import json
 
             err_dump = json.dumps(data).lower()
-            if "response_format" in err_dump:
+            if "response_format" in err_dump or "output_config.format.schema" in err_dump:
                 # Try downgrading from json_schema to json_object
                 if rf_mode_current == "json_schema":
                     return True, "json_object"
