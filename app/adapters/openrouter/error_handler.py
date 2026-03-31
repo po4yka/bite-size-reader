@@ -47,18 +47,23 @@ class ErrorHandler:
         """Check if error is non-retryable."""
         return status_code in (400, 401, 402, 403)
 
-    def is_provider_content_policy_error(self, data: dict) -> bool:
-        """Check if error is a provider-specific content policy rejection.
+    def is_provider_specific_rejection(self, data: dict) -> bool:
+        """Check if a 400 error is from an upstream provider, not OpenRouter.
 
-        These are 400 errors where the provider (not OpenRouter) rejects the
-        request content -- e.g. Anthropic blocking URLs via robots.txt.
-        Other providers may accept the same content, so model fallback is
-        appropriate.
+        Provider-specific rejections (content policy, format incompatibility,
+        resource limits) should trigger model fallback since other providers
+        may accept the same request.
+
+        OpenRouter wraps these with metadata.provider_name set to the upstream
+        provider (e.g. "Azure", "Anthropic", "Alibaba").
         """
-        import json
-
-        err_dump = json.dumps(data).lower()
-        return "robots.txt" in err_dump
+        err = data.get("error")
+        if not isinstance(err, dict):
+            return False
+        metadata = err.get("metadata")
+        if not isinstance(metadata, dict):
+            return False
+        return bool(metadata.get("provider_name"))
 
     def should_try_next_model(
         self,

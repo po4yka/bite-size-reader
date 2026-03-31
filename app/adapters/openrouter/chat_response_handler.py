@@ -211,7 +211,7 @@ class ChatResponseHandler:
             error_message = self._client._get_error_message(status_code, data)
             # Provider-specific content policy errors (e.g. Anthropic robots.txt
             # blocking) should trigger model fallback, not a terminal failure.
-            if self._client.error_handler.is_provider_content_policy_error(data):
+            if self._client.error_handler.is_provider_specific_rejection(data):
                 self._client.error_handler.log_error(
                     attempt, model, status_code, error_message, request_id, "WARN"
                 )
