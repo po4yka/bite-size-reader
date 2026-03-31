@@ -209,6 +209,21 @@ class ChatResponseHandler:
 
         if self._client.error_handler.is_non_retryable_error(status_code):
             error_message = self._client._get_error_message(status_code, data)
+            # Provider-specific content policy errors (e.g. Anthropic robots.txt
+            # blocking) should trigger model fallback, not a terminal failure.
+            if self._client.error_handler.is_provider_content_policy_error(data):
+                self._client.error_handler.log_error(
+                    attempt, model, status_code, error_message, request_id, "WARN"
+                )
+                return AttemptOutcome(
+                    error_text=error_message,
+                    data=data,
+                    latency=latency,
+                    model_reported=model_reported,
+                    error_context=error_context,
+                    should_try_next_model=True,
+                    structured_output_state=payload.structured_output_state,
+                )
             return AttemptOutcome(
                 error_result=self._client.error_handler.build_error_result(
                     model_reported,

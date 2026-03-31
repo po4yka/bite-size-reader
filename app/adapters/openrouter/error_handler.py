@@ -47,6 +47,19 @@ class ErrorHandler:
         """Check if error is non-retryable."""
         return status_code in (400, 401, 402, 403)
 
+    def is_provider_content_policy_error(self, data: dict) -> bool:
+        """Check if error is a provider-specific content policy rejection.
+
+        These are 400 errors where the provider (not OpenRouter) rejects the
+        request content -- e.g. Anthropic blocking URLs via robots.txt.
+        Other providers may accept the same content, so model fallback is
+        appropriate.
+        """
+        import json
+
+        err_dump = json.dumps(data).lower()
+        return "robots.txt" in err_dump
+
     def should_try_next_model(
         self,
         status_code: int,
