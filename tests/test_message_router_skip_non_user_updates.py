@@ -10,7 +10,9 @@ from app.adapters.telegram.message_router import MessageRouter
 from tests.conftest import make_test_app_config
 
 if TYPE_CHECKING:
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.adapters.telegram.access_controller import AccessController
     from app.adapters.telegram.url_handler import URLHandler
 

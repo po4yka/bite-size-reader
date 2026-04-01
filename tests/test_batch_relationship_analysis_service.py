@@ -58,7 +58,7 @@ def _make_service() -> BatchRelationshipAnalysisService:
         batch_session_repo=batch_session_repo,
         llm_client=SimpleNamespace(),
         batch_config=cast("Any", batch_config),
-        response_formatter=response_formatter,  # type: ignore[arg-type]
+        response_formatter=response_formatter,
     )
 
 

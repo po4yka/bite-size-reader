@@ -27,7 +27,7 @@ def _make_responder(
     responder = CachedSummaryResponder(
         cfg=cfg,
         db=MagicMock(),
-        response_formatter=response_formatter,  # type: ignore[arg-type]
+        response_formatter=response_formatter,
         request_repo=request_repo,
         summary_repo=summary_repo,
     )

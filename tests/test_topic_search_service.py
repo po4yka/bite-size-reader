@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
 import pytest
 
 from app.adapters.external.firecrawl.models import FirecrawlSearchItem, FirecrawlSearchResult
 from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
+
+if TYPE_CHECKING:
+    from app.application.ports.search import TopicSearchResultPort
 from app.db.models import database_proxy
 from app.db.session import DatabaseSessionManager
 from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
@@ -38,9 +43,9 @@ class DummyFirecrawl:
         *,
         limit: int = 5,
         request_id: int | None = None,
-    ) -> FirecrawlSearchResult:
+    ) -> TopicSearchResultPort:
         self.calls.append((query, limit))
-        return self.result
+        return cast("TopicSearchResultPort", self.result)
 
 
 @pytest.mark.asyncio

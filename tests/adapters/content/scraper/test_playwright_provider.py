@@ -113,7 +113,7 @@ async def test_skips_selector_wait_for_normal_urls() -> None:
 async def test_selector_timeout_does_not_fail_provider() -> None:
     """If wait_for_selector times out, provider still returns content."""
     mock_module, page_mock = _setup_playwright_mocks()
-    page_mock.wait_for_selector.side_effect = mock_module.TimeoutError("timeout")  # type: ignore[attr-defined]
+    page_mock.wait_for_selector.side_effect = mock_module.TimeoutError("timeout")
 
     Provider = _import_provider(mock_module)
 

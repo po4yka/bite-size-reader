@@ -12,7 +12,9 @@ from app.adapters.content.platform_extraction.models import PlatformExtractionRe
 
 if TYPE_CHECKING:
     from app.adapters.external.firecrawl.client import FirecrawlClient
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 

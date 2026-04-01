@@ -27,7 +27,7 @@ def _make_processor(
         sender=None,
     )
     return URLBatchProcessor(
-        response_formatter=response_formatter,  # type: ignore[arg-type]
+        response_formatter=response_formatter,
         request_repo=request_repo
         or SimpleNamespace(
             async_get_request_by_dedupe_hash=AsyncMock(return_value=None),

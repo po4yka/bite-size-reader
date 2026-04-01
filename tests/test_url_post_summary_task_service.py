@@ -46,7 +46,7 @@ def _make_service() -> tuple[URLPostSummaryTaskService, Any, list[str]]:
     )
     related_reads_service = SimpleNamespace(find_related=AsyncMock(return_value=["item"]))
     service = URLPostSummaryTaskService(
-        response_formatter=formatter,  # type: ignore[arg-type]
+        response_formatter=formatter,
         summary_repo=summary_repo,
         article_generator=article_generator,  # type: ignore[arg-type]
         insights_generator=insights_generator,  # type: ignore[arg-type]

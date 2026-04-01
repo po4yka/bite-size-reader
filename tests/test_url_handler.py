@@ -9,7 +9,9 @@ from app.adapters.telegram.url_handler import URLHandler
 
 if TYPE_CHECKING:
     from app.adapters.content.url_processor import URLProcessor
-    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.external.formatting.protocols import (
+        ResponseFormatterFacade as ResponseFormatter,
+    )
     from app.db.session import DatabaseSessionManager
 else:  # pragma: no cover - runtime fallback for typing-only imports
     URLProcessor = ResponseFormatter = DatabaseSessionManager = Any  # type: ignore[assignment]
