@@ -212,6 +212,7 @@ class URLProcessor:
         request: URLFlowRequest,
     ) -> URLProcessingFlowResult:
         """Execute the URL processing pipeline (extraction -> summarization -> delivery)."""
+        context: URLFlowContext | None = None
         try:
             context = await self.context_builder.build(request)
 
@@ -330,6 +331,18 @@ class URLProcessor:
                 "url_processing_failed",
                 extra={"cid": request.correlation_id, "url": request.url_text, "error": str(exc)},
             )
+            # Safety-net: ensure request is marked as failed in DB
+            req_id = context.req_id if context is not None else None
+            if req_id is not None:
+                try:
+                    from app.domain.models.request import RequestStatus
+
+                    await self.request_repo.async_update_request_status(req_id, RequestStatus.ERROR)
+                except Exception:
+                    logger.warning(
+                        "failed_to_update_request_status_on_error",
+                        extra={"cid": request.correlation_id, "req_id": req_id},
+                    )
             if not request.silent and not request.batch_mode:
                 await self.response_formatter.send_error_notification(
                     request.message,
