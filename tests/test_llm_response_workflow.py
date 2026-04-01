@@ -415,6 +415,82 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         # Should have retried 2 times -> called callback 2 times
         assert retry_callback.await_count == 2
 
+    async def test_timeout_on_first_attempt_tries_next(self) -> None:
+        """TimeoutError on first attempt must not escape; second attempt should succeed.
+
+        llm_call_max_retries=0 ensures _invoke_llm raises on the first timeout
+        without internal retries, so the outer except branch is exercised.
+        """
+        self.cfg.runtime.llm_call_max_retries = 0
+
+        summary_payload = {"summary_250": "From fallback", "tldr": "Fallback TLDR"}
+        llm_response = self._llm_response(summary_payload)
+
+        self.openrouter.chat = AsyncMock(side_effect=[TimeoutError("LLM timeout"), llm_response])
+
+        req_primary = LLMRequestConfig(
+            messages=self.base_messages,
+            response_format={"type": "json_object"},
+            max_tokens=256,
+            temperature=0.1,
+            top_p=1.0,
+            model_override="primary-model",
+        )
+        req_fallback = LLMRequestConfig(
+            messages=self.base_messages,
+            response_format={"type": "json_object"},
+            max_tokens=256,
+            temperature=0.1,
+            top_p=1.0,
+            model_override="fallback-model",
+        )
+
+        with unittest.mock.patch(
+            "app.adapters.content.llm_response_workflow.parse_summary_response",
+            return_value=SimpleNamespace(
+                shaped=summary_payload,
+                errors=[],
+                used_local_fix=False,
+            ),
+        ):
+            summary = await self.workflow.execute_summary_workflow(
+                message=MagicMock(),
+                req_id=601,
+                correlation_id="timeout-fallback",
+                interaction_config=self.interaction,
+                persistence=self.persistence,
+                repair_context=self.repair_context,
+                requests=[req_primary, req_fallback],
+                notifications=self.notifications,
+            )
+
+        assert summary is not None
+        assert self.openrouter.chat.await_count == 2
+        assert self.insert_llm_call_mock.await_count == 2
+
+    async def test_timeout_on_all_attempts_updates_status(self) -> None:
+        """TimeoutError on every attempt must call _handle_all_attempts_failed.
+
+        llm_call_max_retries=0 ensures _invoke_llm raises on the first timeout
+        so the outer loop catches it and continues to _handle_all_attempts_failed.
+        """
+        self.cfg.runtime.llm_call_max_retries = 0
+        self.openrouter.chat = AsyncMock(side_effect=TimeoutError("LLM timeout"))
+
+        summary = await self.workflow.execute_summary_workflow(
+            message=MagicMock(),
+            req_id=602,
+            correlation_id="timeout-all",
+            interaction_config=self.interaction,
+            persistence=self.persistence,
+            repair_context=self.repair_context,
+            requests=[self.request],
+            notifications=self.notifications,
+        )
+
+        assert summary is None
+        self.update_status_mock.assert_awaited_with(602, "error")
+
     @staticmethod
     def _to_json(payload: dict[str, str]) -> str:
         items = ", ".join(f'"{k}": "{v}"' for k, v in payload.items())

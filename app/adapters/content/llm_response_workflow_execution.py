@@ -107,7 +107,27 @@ class LLMWorkflowExecutionMixin:
             is_last_attempt = attempt_index == total_attempts - 1
 
             on_retry = notifications.retry if notifications else None
-            llm = await self._invoke_llm(attempt, req_id, on_retry=on_retry)
+            try:
+                llm = await self._invoke_llm(attempt, req_id, on_retry=on_retry)
+            except TimeoutError:
+                logger.error(
+                    "llm_invoke_timeout_skipping_attempt",
+                    extra={
+                        "req_id": req_id,
+                        "cid": correlation_id,
+                        "attempt_index": attempt_index,
+                        "preset": attempt.preset_name,
+                        "model": attempt.model_override,
+                    },
+                )
+                from app.adapter_models.llm.llm_models import LLMCallResult
+
+                llm = LLMCallResult(
+                    status=CallStatus.ERROR,
+                    model=attempt.model_override,
+                    error_text=f"LLM call timed out for model {attempt.model_override}",
+                    error_context={"message": "timeout", "timeout": True},
+                )
 
             if on_attempt is not None:
                 await on_attempt(llm)
