@@ -129,6 +129,7 @@ Desktop.ini
 # --- Frontend ---
 # Legacy local workspace; the maintained frontend lives in clients/web/
 frontend/
+web/
 clients/web/node_modules/
 clients/web/tsconfig.tsbuildinfo
 clients/web/test-results/
