@@ -23,7 +23,7 @@ identify==2.6.18
 iniconfig==2.3.0
     # via pytest
 isort==8.0.1
-jsonschema==4.26.0
+jsonschema==4.24.1
     # via
     #   openapi-schema-validator
     #   openapi-spec-validator
@@ -37,7 +37,7 @@ lazy-object-proxy==1.12.0
     # via openapi-spec-validator
 librt==0.8.1 ; platform_python_implementation != 'PyPy'
     # via mypy
-mypy==1.19.1
+mypy==1.20.0
 mypy-extensions==1.1.0
     # via mypy
 nodeenv==1.10.0
@@ -65,7 +65,7 @@ pydantic==2.12.5
     #   openapi-schema-validator
     #   openapi-spec-validator
     #   pydantic-settings
-pydantic-core==2.44.0
+pydantic-core==2.41.5
     # via pydantic
 pydantic-settings==2.13.1
     # via
@@ -101,7 +101,7 @@ rpds-py==0.30.0
     # via
     #   jsonschema
     #   referencing
-ruff==0.15.8
+ruff==0.15.9
 six==1.17.0
     # via rfc3339-validator
 sortedcontainers==2.4.0

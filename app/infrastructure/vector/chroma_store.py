@@ -85,7 +85,7 @@ class ChromaVectorStore:
                 host=self._host,
                 headers=headers,
                 settings=chromadb.Settings(
-                    chroma_query_request_timeout_seconds=self._connection_timeout,
+                    chroma_query_request_timeout_seconds=int(self._connection_timeout),
                     anonymized_telemetry=False,
                 ),
             )

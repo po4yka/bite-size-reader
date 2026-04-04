@@ -80,7 +80,7 @@ function ColorPicker({ selected, onChange }: ColorPickerProps) {
       (el) => el.getAttribute("data-color") === selected,
     );
 
-    let nextIndex = currentIndex;
+    let nextIndex: number;
     if (event.key === "ArrowRight" || event.key === "ArrowDown") {
       event.preventDefault();
       nextIndex = (currentIndex + 1) % items.length;

@@ -13,7 +13,7 @@ anyio==4.13.0
     #   sse-starlette
     #   starlette
     #   watchfiles
-apify-fingerprint-datapoints==0.11.0
+apify-fingerprint-datapoints==0.12.0
     # via
     #   browserforge
     #   crawlee
@@ -60,7 +60,7 @@ cffi==2.0.0
     #   brotlicffi
     #   cryptography
     #   weasyprint
-charset-normalizer==3.4.6
+charset-normalizer==3.4.7
     # via
     #   htmldate
     #   requests
@@ -90,7 +90,7 @@ confection==1.3.3
     #   weasel
 courlan==1.3.2
     # via trafilatura
-crawlee==1.6.0
+crawlee==1.6.1
     # via bite-size-reader
 cryptography==46.0.6
     # via pyjwt
@@ -102,7 +102,7 @@ cuda-bindings==13.2.0 ; sys_platform == 'linux'
     # via torch
 cuda-pathfinder==1.5.0 ; sys_platform == 'linux'
     # via cuda-bindings
-cuda-toolkit==13.2.0 ; sys_platform == 'linux'
+cuda-toolkit==13.0.2 ; sys_platform == 'linux'
     # via torch
 cymem==2.0.13
     # via
@@ -117,7 +117,7 @@ defusedxml==0.7.1
     #   youtube-transcript-api
 durationpy==0.10
     # via kubernetes
-fastapi==0.135.2
+fastapi==0.135.3
     # via bite-size-reader
 filelock==3.25.2
     # via
@@ -132,7 +132,7 @@ fsspec==2026.3.0
     # via
     #   huggingface-hub
     #   torch
-googleapis-common-protos==1.73.1
+googleapis-common-protos==1.74.0
     # via opentelemetry-exporter-otlp-proto-grpc
 greenlet==3.3.2
     # via playwright
@@ -146,7 +146,7 @@ h11==0.16.0
     #   uvicorn
 h2==4.3.0
     # via httpx
-hf-xet==1.4.2 ; platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
+hf-xet==1.4.3 ; platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
     # via huggingface-hub
 hpack==4.1.0
     # via h2
@@ -167,7 +167,7 @@ httpx==0.28.1
     #   weasel
 httpx-sse==0.4.3
     # via mcp
-huggingface-hub==1.8.0
+huggingface-hub==1.9.0
     # via
     #   sentence-transformers
     #   tokenizers
@@ -183,7 +183,7 @@ idna==3.11
     #   yarl
 impit==0.12.0
     # via crawlee
-importlib-metadata==9.0.0
+importlib-metadata==8.7.1
     # via opentelemetry-api
 importlib-resources==6.5.2
     # via chromadb
@@ -195,7 +195,7 @@ joblib==1.5.3
     # via scikit-learn
 json-repair==0.58.7
     # via bite-size-reader
-jsonschema==4.26.0
+jsonschema==4.24.1
     # via
     #   chromadb
     #   mcp
@@ -221,15 +221,15 @@ markdown-it-py==4.0.0
     # via rich
 markupsafe==3.0.3
     # via jinja2
-mcp==1.26.0
+mcp==1.27.0
     # via bite-size-reader
 mdurl==0.1.2
     # via markdown-it-py
 mmh3==5.2.1
     # via chromadb
-more-itertools==10.8.0
+more-itertools==11.0.1
     # via crawlee
-mpmath==1.4.1
+mpmath==1.3.0
     # via sympy
 multidict==6.7.1
     # via yarl
@@ -251,44 +251,44 @@ numpy==2.4.4
     #   spacy
     #   thinc
     #   transformers
-nvidia-cublas==13.3.0.5 ; sys_platform == 'linux'
+nvidia-cublas==13.1.0.3 ; sys_platform == 'linux'
     # via
     #   cuda-toolkit
     #   nvidia-cudnn-cu13
     #   nvidia-cusolver
-nvidia-cuda-cupti==13.2.23 ; sys_platform == 'linux'
+nvidia-cuda-cupti==13.0.85 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cuda-nvrtc==13.2.51 ; sys_platform == 'linux'
+nvidia-cuda-nvrtc==13.0.88 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cuda-runtime==13.2.51 ; sys_platform == 'linux'
+nvidia-cuda-runtime==13.0.96 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cudnn-cu13==9.20.0.48 ; sys_platform == 'linux'
+nvidia-cudnn-cu13==9.19.0.56 ; sys_platform == 'linux'
     # via torch
-nvidia-cufft==12.2.0.37 ; sys_platform == 'linux'
+nvidia-cufft==12.0.0.61 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cufile==1.17.0.44 ; sys_platform == 'linux'
+nvidia-cufile==1.15.1.6 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-curand==10.4.2.51 ; sys_platform == 'linux'
+nvidia-curand==10.4.0.35 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cusolver==12.1.0.51 ; sys_platform == 'linux'
+nvidia-cusolver==12.0.4.66 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cusparse==12.7.9.17 ; sys_platform == 'linux'
+nvidia-cusparse==12.6.3.3 ; sys_platform == 'linux'
     # via
     #   cuda-toolkit
     #   nvidia-cusolver
-nvidia-cusparselt-cu13==0.9.0 ; sys_platform == 'linux'
+nvidia-cusparselt-cu13==0.8.0 ; sys_platform == 'linux'
     # via torch
-nvidia-nccl-cu13==2.29.7 ; sys_platform == 'linux'
+nvidia-nccl-cu13==2.28.9 ; sys_platform == 'linux'
     # via torch
-nvidia-nvjitlink==13.2.51 ; sys_platform == 'linux'
+nvidia-nvjitlink==13.0.88 ; sys_platform == 'linux'
     # via
     #   cuda-toolkit
     #   nvidia-cufft
     #   nvidia-cusolver
     #   nvidia-cusparse
-nvidia-nvshmem-cu13==3.6.5 ; sys_platform == 'linux'
+nvidia-nvshmem-cu13==3.4.5 ; sys_platform == 'linux'
     # via torch
-nvidia-nvtx==13.2.20 ; sys_platform == 'linux'
+nvidia-nvtx==13.0.85 ; sys_platform == 'linux'
     # via cuda-toolkit
 oauthlib==3.3.1
     # via requests-oauthlib
@@ -316,7 +316,7 @@ opentelemetry-sdk==1.40.0
     #   opentelemetry-exporter-otlp-proto-grpc
 opentelemetry-semantic-conventions==0.61b0
     # via opentelemetry-sdk
-orjson==3.11.7
+orjson==3.11.8
     # via
     #   bite-size-reader
     #   chromadb
@@ -332,9 +332,9 @@ packaging==26.0
     #   thinc
     #   transformers
     #   weasel
-peewee==4.0.3
+peewee==4.0.4
     # via bite-size-reader
-pillow==12.1.1
+pillow==12.2.0
     # via weasyprint
 playwright==1.58.0
     # via
@@ -372,7 +372,7 @@ pydantic==2.12.5
     #   spacy
     #   thinc
     #   weasel
-pydantic-core==2.44.0
+pydantic-core==2.41.5
     # via pydantic
 pydantic-settings==2.13.1
     # via
@@ -438,7 +438,7 @@ regex==2026.3.32
     # via
     #   dateparser
     #   transformers
-requests==2.33.0
+requests==2.33.1
     # via
     #   kubernetes
     #   requests-file
@@ -472,7 +472,7 @@ scrapling==0.4.3
     # via bite-size-reader
 sentence-transformers==5.3.0
     # via bite-size-reader
-setuptools==82.0.1
+setuptools==81.0.0
     # via
     #   spacy
     #   thinc
@@ -546,7 +546,7 @@ tqdm==4.67.3
     #   transformers
 trafilatura==2.0.0
     # via bite-size-reader
-transformers==5.4.0
+transformers==5.5.0
     # via
     #   bite-size-reader
     #   sentence-transformers
@@ -585,7 +585,7 @@ typing-inspection==0.4.2
     #   mcp
     #   pydantic
     #   pydantic-settings
-tzdata==2025.3 ; sys_platform == 'win32'
+tzdata==2026.1 ; sys_platform == 'win32'
     # via tzlocal
 tzlocal==5.3.1
     # via

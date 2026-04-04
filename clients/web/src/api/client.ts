@@ -159,7 +159,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     if (!refreshed) {
       setStoredTokens(null);
       setApiSession({ ...session, accessToken: null, refreshToken: null });
-      throw new Error("Session expired. Please sign in again.");
+      throw new Error("Session expired. Please sign in again.", { cause: error });
     }
 
     return requestOnce<T>(path, { ...options, _skipRefresh: true });
