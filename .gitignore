@@ -144,6 +144,9 @@ app/static/digest/
 .claude/skills/redeploy-raspi/
 .agents/
 
+# --- oh-my-claudecode ---
+.omc/
+
 # --- Desloppify ---
 .desloppify/
 .desloppify/*
