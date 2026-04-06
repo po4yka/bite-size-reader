@@ -319,7 +319,7 @@ def _build_fallback_message_kwargs(message: Any) -> dict[str, Any]:
         "chat": None,
         "text": getattr(message, "text", None),
         "caption": getattr(message, "caption", None),
-        "photo": photo_raw,
+        "photo": _serialize_photo(photo_raw),
         "photo_list": _serialize_photo(photo_raw),
         "video": media_objects.get("video"),
         "audio": media_objects.get("audio"),

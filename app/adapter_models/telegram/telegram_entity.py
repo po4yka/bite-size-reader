@@ -21,6 +21,13 @@ class MessageEntity(BaseModel):
     language: str | None = None
     custom_emoji_id: str | None = None
 
+    @field_validator("custom_emoji_id", mode="before")
+    @classmethod
+    def _coerce_custom_emoji_id(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        return str(value)
+
     @field_validator("type", mode="before")
     @classmethod
     def _validate_type(cls, value: Any) -> MessageEntityType:
