@@ -17,13 +17,13 @@ filelock==3.25.2
     # via
     #   python-discovery
     #   virtualenv
-hypothesis==6.151.10
+hypothesis==6.151.11
 identify==2.6.18
     # via pre-commit
 iniconfig==2.3.0
     # via pytest
 isort==8.0.1
-jsonschema==4.24.1
+jsonschema==4.26.0
     # via
     #   openapi-schema-validator
     #   openapi-spec-validator
@@ -65,7 +65,7 @@ pydantic==2.12.5
     #   openapi-schema-validator
     #   openapi-spec-validator
     #   pydantic-settings
-pydantic-core==2.41.5
+pydantic-core==2.45.0
     # via pydantic
 pydantic-settings==2.13.1
     # via
