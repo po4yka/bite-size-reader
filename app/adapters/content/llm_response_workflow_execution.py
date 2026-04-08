@@ -8,7 +8,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.core.async_utils import raise_if_cancelled
-from app.core.backoff import sleep_backoff
 from app.core.call_status import CallStatus
 
 if TYPE_CHECKING:
@@ -245,7 +244,13 @@ class LLMWorkflowExecutionMixin:
 
         sem_timeout = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
         llm_timeout, timeout_source = await self._resolve_llm_timeout(request.model_override)
-        max_retries = getattr(self.cfg.runtime, "llm_call_max_retries", 2)
+
+        # Compute per-model timeout: divide total budget among models in fallback chain
+        fallback_models = request.fallback_models_override or getattr(
+            self.openrouter, "_fallback_models", ()
+        )
+        num_models = 1 + len(fallback_models or ())
+        per_model_timeout = llm_timeout / max(num_models, 1)
 
         logger.debug(
             "llm_timeout_resolved",
@@ -253,76 +258,54 @@ class LLMWorkflowExecutionMixin:
                 "req_id": req_id,
                 "model": request.model_override,
                 "llm_timeout_sec": llm_timeout,
+                "per_model_timeout_sec": per_model_timeout,
+                "num_models": num_models,
                 "timeout_source": timeout_source,
             },
         )
 
-        for attempt in range(max_retries + 1):
-            sem_cm = self._sem()
-            try:
-                async with asyncio.timeout(sem_timeout):
-                    await sem_cm.__aenter__()
-            except TimeoutError:
-                logger.error(
-                    "llm_semaphore_acquire_timeout",
-                    extra={"req_id": req_id, "timeout_sec": sem_timeout, "attempt": attempt},
-                )
-                msg = f"Failed to acquire processing slot within {sem_timeout}s"
-                raise ConcurrencyTimeoutError(msg) from None
+        sem_cm = self._sem()
+        try:
+            async with asyncio.timeout(sem_timeout):
+                await sem_cm.__aenter__()
+        except TimeoutError:
+            logger.error(
+                "llm_semaphore_acquire_timeout",
+                extra={"req_id": req_id, "timeout_sec": sem_timeout},
+            )
+            msg = f"Failed to acquire processing slot within {sem_timeout}s"
+            raise ConcurrencyTimeoutError(msg) from None
 
-            try:
-                logger.debug(
-                    "llm_semaphore_acquired",
-                    extra={"req_id": req_id, "model": request.model_override},
+        try:
+            logger.debug(
+                "llm_semaphore_acquired",
+                extra={"req_id": req_id, "model": request.model_override},
+            )
+            async with asyncio.timeout(llm_timeout):
+                return await self.openrouter.chat(
+                    request.messages,
+                    temperature=request.temperature,
+                    max_tokens=request.max_tokens,
+                    top_p=request.top_p,
+                    stream=bool(getattr(request, "stream", False)),
+                    request_id=req_id,
+                    response_format=request.response_format,
+                    model_override=request.model_override,
+                    fallback_models_override=request.fallback_models_override,
+                    on_stream_delta=getattr(request, "on_stream_delta", None),
+                    per_model_timeout_sec=per_model_timeout,
                 )
-                async with asyncio.timeout(llm_timeout):
-                    return await self.openrouter.chat(
-                        request.messages,
-                        temperature=request.temperature,
-                        max_tokens=request.max_tokens,
-                        top_p=request.top_p,
-                        stream=bool(getattr(request, "stream", False)),
-                        request_id=req_id,
-                        response_format=request.response_format,
-                        model_override=request.model_override,
-                        fallback_models_override=request.fallback_models_override,
-                        on_stream_delta=getattr(request, "on_stream_delta", None),
-                    )
-            except TimeoutError:
-                if attempt < max_retries:
-                    logger.warning(
-                        "llm_call_timeout_retrying",
-                        extra={
-                            "req_id": req_id,
-                            "llm_timeout_sec": llm_timeout,
-                            "timeout_source": timeout_source,
-                            "model": request.model_override,
-                            "attempt": attempt + 1,
-                            "max_retries": max_retries,
-                        },
-                    )
-                    if on_retry:
-                        try:
-                            await on_retry()
-                        except Exception as exc:
-                            raise_if_cancelled(exc)
-                            logger.exception("llm_on_retry_callback_failed")
-
-                    await sleep_backoff(attempt, backoff_base=2.0, max_delay=30.0)
-                    continue
-                logger.error(
-                    "llm_call_timeout",
-                    extra={
-                        "req_id": req_id,
-                        "llm_timeout_sec": llm_timeout,
-                        "timeout_source": timeout_source,
-                        "model": request.model_override,
-                        "attempts_exhausted": max_retries + 1,
-                    },
-                )
-                raise
-            finally:
-                await sem_cm.__aexit__(None, None, None)
-
-        msg = "LLM invoke loop exited unexpectedly"
-        raise RuntimeError(msg)
+        except TimeoutError:
+            logger.error(
+                "llm_call_timeout",
+                extra={
+                    "req_id": req_id,
+                    "llm_timeout_sec": llm_timeout,
+                    "per_model_timeout_sec": per_model_timeout,
+                    "timeout_source": timeout_source,
+                    "model": request.model_override,
+                },
+            )
+            raise
+        finally:
+            await sem_cm.__aexit__(None, None, None)

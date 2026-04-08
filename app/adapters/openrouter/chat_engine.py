@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
+import asyncio
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 from app.adapter_models.llm.llm_models import LLMCallResult
 from app.adapters.openrouter.chat_attempt_runner import ChatAttemptRunner
@@ -14,6 +19,12 @@ from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def _noop_timeout() -> AsyncIterator[None]:
+    """No-op async context manager used when per_model_timeout_sec is None."""
+    yield
 
 
 class OpenRouterChatEngine:
@@ -38,6 +49,7 @@ class OpenRouterChatEngine:
         model_override: str | None = None,
         fallback_models_override: tuple[str, ...] | list[str] | None = None,
         on_stream_delta: Any | None = None,
+        per_model_timeout_sec: float | None = None,
     ) -> LLMCallResult:
         if self._client._closed:
             msg = "Client has been closed"
@@ -70,33 +82,65 @@ class OpenRouterChatEngine:
         try:
             async with self._client._request_context() as http_client:
                 for model_index, model in enumerate(context.models_to_try):
-                    (
-                        skip_model,
-                        structured_output_state,
-                    ) = await self._context_builder.maybe_skip_unsupported_structured_model(
-                        model=model,
-                        primary_model=context.primary_model,
-                        response_format=response_format,
-                        request_id=request_id,
-                        structured_output_state=structured_output_state,
-                    )
-                    if skip_model:
-                        continue
+                    try:
+                        model_timeout_cm = (
+                            asyncio.timeout(per_model_timeout_sec)
+                            if per_model_timeout_sec is not None
+                            else _noop_timeout()
+                        )
+                        async with model_timeout_cm:
+                            (
+                                skip_model,
+                                structured_output_state,
+                            ) = await self._context_builder.maybe_skip_unsupported_structured_model(
+                                model=model,
+                                primary_model=context.primary_model,
+                                response_format=response_format,
+                                request_id=request_id,
+                                structured_output_state=structured_output_state,
+                            )
+                            if skip_model:
+                                continue
 
-                    model_state = await self._attempt_runner.run_attempts_for_model(
-                        client=http_client,
-                        model=model,
-                        request=current_request,
-                        sanitized_messages=context.sanitized_messages,
-                        message_lengths=context.message_lengths,
-                        message_roles=context.message_roles,
-                        total_chars=context.total_chars,
-                        request_id=request_id,
-                        initial_rf_mode=context.initial_rf_mode,
-                        response_format_initial=context.response_format_initial,
-                        structured_output_state=structured_output_state,
-                        on_stream_delta=on_stream_delta,
-                    )
+                            model_state = await self._attempt_runner.run_attempts_for_model(
+                                client=http_client,
+                                model=model,
+                                request=current_request,
+                                sanitized_messages=context.sanitized_messages,
+                                message_lengths=context.message_lengths,
+                                message_roles=context.message_roles,
+                                total_chars=context.total_chars,
+                                request_id=request_id,
+                                initial_rf_mode=context.initial_rf_mode,
+                                response_format_initial=context.response_format_initial,
+                                structured_output_state=structured_output_state,
+                                on_stream_delta=on_stream_delta,
+                            )
+                    except TimeoutError:
+                        last_error_text = f"Model {model} timed out after {per_model_timeout_sec}s"
+                        last_error_context = {
+                            "status_code": None,
+                            "message": "Per-model timeout",
+                            "timeout": True,
+                            "model": model,
+                            "timeout_sec": per_model_timeout_sec,
+                        }
+                        logger.warning(
+                            "per_model_timeout",
+                            extra={
+                                "model": model,
+                                "request_id": request_id,
+                                "timeout_sec": per_model_timeout_sec,
+                                "models_remaining": len(context.models_to_try) - model_index - 1,
+                            },
+                        )
+                        if model_index < len(context.models_to_try) - 1:
+                            self._client.error_handler.log_fallback(
+                                model,
+                                context.models_to_try[model_index + 1],
+                                request_id,
+                            )
+                        continue
 
                     current_request = model_state.request
                     structured_output_state = model_state.structured_output_state

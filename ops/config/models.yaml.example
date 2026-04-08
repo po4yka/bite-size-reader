@@ -23,7 +23,7 @@ openrouter:
   # Fast model for structured-output fallback attempts
   flash_model: "google/gemini-3-flash-preview"
   flash_fallback_models:
-    - "anthropic/claude-haiku-4.5"
+    - "qwen/qwen3.5-plus-02-15"
 
   # Sampling parameters
   temperature: 0.2
@@ -45,7 +45,7 @@ model_routing:
   enabled: false
 
   # Model for general content (blogs, tutorials, news)
-  default_model: "anthropic/claude-sonnet-4.6"
+  default_model: "deepseek/deepseek-v3.2"
 
   # Model for technical/research content (papers, code, deep technical)
   technical_model: "google/gemini-3.1-pro-preview"
@@ -54,13 +54,13 @@ model_routing:
   sociopolitical_model: "x-ai/grok-4.20-beta"
 
   # Model for long documents (>50K chars)
-  long_context_model: "anthropic/claude-sonnet-4.6"
+  long_context_model: "qwen/qwen3.5-plus-02-15"
 
   # Shared fallback chain (used when routing is enabled)
   fallback_models:
     - "deepseek/deepseek-v3.2"
-    - "anthropic/claude-opus-4.6"
-    - "openai/gpt-5.4"
+    - "qwen/qwen3.5-plus-02-15"
+    - "google/gemini-3.1-flash-lite-preview"
 
   # Character threshold for long-context model selection
   long_context_threshold: 50000

@@ -138,6 +138,7 @@ class LLMWorkflowRepairMixin:
                         request_id=req_id,
                         response_format=repair_context.repair_response_format,
                         model_override=request_config.model_override,
+                        per_model_timeout_sec=llm_timeout,
                     )
             except TimeoutError:
                 logger.error(

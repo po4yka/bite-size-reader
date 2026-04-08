@@ -461,6 +461,7 @@ class OpenRouterClient:
         model_override: str | None = None,
         fallback_models_override: tuple[str, ...] | list[str] | None = None,
         on_stream_delta: Callable[[str], Any] | None = None,
+        per_model_timeout_sec: float | None = None,
     ) -> LLMCallResult:
         return await self.chat_engine.chat(
             messages,
@@ -473,6 +474,7 @@ class OpenRouterClient:
             model_override=model_override,
             fallback_models_override=fallback_models_override,
             on_stream_delta=on_stream_delta,
+            per_model_timeout_sec=per_model_timeout_sec,
         )
 
     async def get_models(self) -> dict[str, Any]:

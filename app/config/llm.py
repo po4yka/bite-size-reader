@@ -280,7 +280,7 @@ class ModelRoutingConfig(BaseModel):
 
     enabled: bool = Field(default=False, validation_alias="MODEL_ROUTING_ENABLED")
     default_model: str = Field(
-        default="anthropic/claude-sonnet-4.6",
+        default="deepseek/deepseek-v3.2",
         validation_alias="MODEL_ROUTING_DEFAULT",
     )
     technical_model: str = Field(
@@ -292,7 +292,7 @@ class ModelRoutingConfig(BaseModel):
         validation_alias="MODEL_ROUTING_SOCIOPOLITICAL",
     )
     long_context_model: str = Field(
-        default="anthropic/claude-sonnet-4.6",
+        default="qwen/qwen3.5-plus-02-15",
         validation_alias="MODEL_ROUTING_LONG_CONTEXT",
     )
     fallback_models: tuple[str, ...] = Field(
