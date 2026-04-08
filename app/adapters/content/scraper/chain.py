@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
@@ -15,6 +16,32 @@ if TYPE_CHECKING:
     from app.adapters.content.scraper.protocol import ContentScraperProtocol
 
 logger = get_logger(__name__)
+
+# Short content containing these patterns is likely an error page, not an article.
+_ERROR_PAGE_PATTERNS = re.compile(
+    r"\b("
+    r"403\s*(forbidden|запрещен|материал\s+снят|доступ\s+запрещ)"
+    r"|404\s*(not\s+found|не\s+найден|страница\s+не\s+найдена)"
+    r"|401\s*(unauthorized|неавторизован)"
+    r"|access\s+denied"
+    r"|error\s+\d{3}"
+    r"|page\s+not\s+found"
+    r"|снят\s+с\s+публикации"
+    r"|удалена?\s+автором"
+    r"|заблокирован"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Only flag as error page if content is suspiciously short.
+_ERROR_PAGE_MAX_LENGTH = 1500
+
+
+def _is_error_page(text: str) -> bool:
+    """Detect if extracted text is an HTTP error page rather than article content."""
+    if not text or len(text) > _ERROR_PAGE_MAX_LENGTH:
+        return False
+    return bool(_ERROR_PAGE_PATTERNS.search(text))
 
 
 class ContentScraperChain:
@@ -96,13 +123,30 @@ class ContentScraperChain:
                 or bool(result.content_html and result.content_html.strip())
             )
 
-            if has_content and self._min_content_length > 0:
+            if has_content:
                 text = ""
                 if result.content_markdown:
                     text = clean_markdown_article_text(result.content_markdown)
                 elif result.content_html:
                     text = html_to_text(result.content_html)
-                if len(text) < self._min_content_length:
+
+                if _is_error_page(text):
+                    error_msg = f"{name}: error page detected ({len(text)} chars)"
+                    errors.append(error_msg)
+                    last_result = result
+                    logger.info(
+                        "scraper_chain_error_page",
+                        extra={
+                            "provider": name,
+                            "url": url,
+                            "content_len": len(text),
+                            "preview": text[:200],
+                            "request_id": request_id,
+                        },
+                    )
+                    continue
+
+                if self._min_content_length > 0 and len(text) < self._min_content_length:
                     error_msg = (
                         f"{name}: content too short"
                         f" ({len(text)} < {self._min_content_length} chars)"
