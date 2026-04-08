@@ -14,7 +14,7 @@ def routing_config() -> ModelRoutingConfig:
     return ModelRoutingConfig(
         enabled=True,
         default_model="deepseek/deepseek-v3.2",
-        technical_model="google/gemini-3.1-pro-preview",
+        technical_model="deepseek/deepseek-v3.2",
         sociopolitical_model="x-ai/grok-4.20-beta",
         long_context_model="qwen/qwen3.5-plus-02-15",
         long_context_threshold=50000,
@@ -56,7 +56,7 @@ class TestResolveModelForContent:
             routing_config=routing_config,
             openrouter_config=openrouter_config,
         )
-        assert result == "google/gemini-3.1-pro-preview"
+        assert result == "deepseek/deepseek-v3.2"
 
     def test_sociopolitical_tier(
         self,
@@ -100,7 +100,7 @@ class TestResolveModelForContent:
             routing_config=routing_config,
             openrouter_config=openrouter_config,
         )
-        assert result == "google/gemini-3.1-pro-preview"
+        assert result == "deepseek/deepseek-v3.2"
 
 
 class TestResolveFallbackModels:

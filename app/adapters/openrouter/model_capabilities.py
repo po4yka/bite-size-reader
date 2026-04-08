@@ -162,9 +162,6 @@ class ModelCapabilities:
 
         # Known models that support structured outputs (fallback list)
         self._known_structured_models = {
-            # Google models
-            "google/gemini-3.1-pro-preview",
-            "google/gemini-3-flash-preview",
             # DeepSeek models (JSON mode support)
             "deepseek/deepseek-v3.2",
             "deepseek/deepseek-r1",
@@ -190,7 +187,7 @@ class ModelCapabilities:
     def get_safe_structured_fallbacks(self) -> list[str]:
         """Get list of models known to support structured outputs reliably."""
         return [
-            "google/gemini-3-flash-preview",  # near-Pro, 1M ctx, low cost
+            "minimax/minimax-m1",  # 1M ctx, low cost
             "qwen/qwen3.5-plus-02-15",  # strong structured-output support
             "deepseek/deepseek-v3.2",  # paid fallback
         ]

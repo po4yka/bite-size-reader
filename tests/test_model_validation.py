@@ -112,8 +112,8 @@ class TestModelValidation(unittest.TestCase):
             # Default fallback models from config.py
             assert cfg.openrouter.fallback_models == (
                 "qwen/qwen3.5-plus-02-15",
-                "google/gemini-3.1-flash-lite-preview",
                 "moonshotai/kimi-k2.5",
+                "minimax/minimax-m1",
             )
 
     def test_load_config_allows_stub_credentials(self) -> None:

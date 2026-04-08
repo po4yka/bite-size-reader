@@ -18,10 +18,10 @@ openrouter:
     - "deepseek/deepseek-r1"
 
   # Model for content exceeding long_context_threshold
-  long_context_model: "google/gemini-3-flash-preview"
+  long_context_model: "minimax/minimax-m1"
 
   # Fast model for structured-output fallback attempts
-  flash_model: "google/gemini-3-flash-preview"
+  flash_model: "minimax/minimax-m1"
   flash_fallback_models:
     - "qwen/qwen3.5-plus-02-15"
 
@@ -48,7 +48,7 @@ model_routing:
   default_model: "deepseek/deepseek-v3.2"
 
   # Model for technical/research content (papers, code, deep technical)
-  technical_model: "google/gemini-3.1-pro-preview"
+  technical_model: "deepseek/deepseek-v3.2"
 
   # Model for political/historical/opinion content
   sociopolitical_model: "x-ai/grok-4.20-beta"
@@ -60,7 +60,7 @@ model_routing:
   fallback_models:
     - "deepseek/deepseek-v3.2"
     - "qwen/qwen3.5-plus-02-15"
-    - "google/gemini-3.1-flash-lite-preview"
+    - "minimax/minimax-m1"
 
   # Character threshold for long-context model selection
   long_context_threshold: 50000
@@ -79,4 +79,4 @@ model_routing:
 
 # --- Attachment processing ---
 # attachment:
-#   vision_model: "google/gemini-3.1-flash-lite-preview"
+#   vision_model: "minimax/minimax-m1"
