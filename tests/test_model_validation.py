@@ -112,9 +112,32 @@ class TestModelValidation(unittest.TestCase):
             # Default fallback models from config.py
             assert cfg.openrouter.fallback_models == (
                 "qwen/qwen3.5-plus-02-15",
-                "moonshotai/kimi-k2.5",
-                "minimax/minimax-m1",
+                "moonshotai/kimi-k2-0905",
+                "minimax/minimax-m2",
             )
+
+    def test_default_fallback_models_are_known_structured_capable(self) -> None:
+        """Drift guard: every model in the default OpenRouter fallback chain must be
+        listed in ModelCapabilities._known_structured_models. Otherwise the chain
+        engine's maybe_skip_unsupported_structured_model will silently drop it when
+        response_format=json_schema, leaving a dead last-resort fallback (regression
+        of incident 640f444f2bcc, where minimax/minimax-m1 was the config default but
+        missing from the whitelist).
+        """
+        from app.adapters.openrouter.model_capabilities import ModelCapabilities
+        from app.config.llm import OpenRouterConfig
+
+        cfg = OpenRouterConfig(api_key="or_" + "z" * 20)
+        caps = ModelCapabilities(api_key="or_" + "z" * 20, base_url="https://example")
+
+        fallback_models = cfg.fallback_models
+        missing = [m for m in fallback_models if m not in caps._known_structured_models]
+        assert missing == [], (
+            f"Default OpenRouter fallback models missing from "
+            f"ModelCapabilities._known_structured_models: {missing}. "
+            f"Either add them to _known_structured_models or pick a different "
+            f"default in OpenRouterConfig.fallback_models."
+        )
 
     def test_load_config_allows_stub_credentials(self) -> None:
         from app.config import Settings

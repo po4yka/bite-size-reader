@@ -117,6 +117,7 @@ class OpenRouterChatEngine:
                                 on_stream_delta=on_stream_delta,
                             )
                     except TimeoutError:
+                        last_model_reported = model
                         last_error_text = f"Model {model} timed out after {per_model_timeout_sec}s"
                         last_error_context = {
                             "status_code": None,
