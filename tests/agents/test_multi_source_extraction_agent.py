@@ -9,7 +9,13 @@ from app.agents.multi_source_extraction_agent import (
     MultiSourceExtractionAgent,
     MultiSourceExtractionInput,
 )
-from app.application.dto.aggregation import SourceSubmission
+from app.application.dto.aggregation import (
+    NormalizedSourceDocument,
+    SourceMediaAsset,
+    SourceMediaKind,
+    SourceProvenance,
+    SourceSubmission,
+)
 from app.domain.models.source import SourceKind
 from app.infrastructure.persistence.sqlite.repositories.aggregation_session_repository import (
     SqliteAggregationSessionRepositoryAdapter,
@@ -165,3 +171,69 @@ async def test_multi_source_extraction_agent_skips_duplicates_and_extracts_teleg
         assert telegram_item.normalized_document is not None
         assert telegram_item.normalized_document.media[0].url == "telegram://file/photo-1"
         assert telegram_item.normalized_document.title == "Forwarded Channel"
+
+
+@pytest.mark.asyncio
+async def test_multi_source_extraction_agent_preserves_platform_normalized_documents() -> None:
+    with temp_db() as db:
+        user, repo = _make_user_and_repo(db)
+        content_extractor = MagicMock()
+        platform_document = NormalizedSourceDocument(
+            source_item_id="src_instagram",
+            source_kind=SourceKind.INSTAGRAM_CAROUSEL,
+            title="Carousel title",
+            text="Carousel caption",
+            detected_language="en",
+            media=[
+                SourceMediaAsset(
+                    kind=SourceMediaKind.IMAGE,
+                    url="https://cdn.example.com/slide-1.jpg",
+                    position=0,
+                ),
+                SourceMediaAsset(
+                    kind=SourceMediaKind.IMAGE,
+                    url="https://cdn.example.com/slide-2.jpg",
+                    position=1,
+                ),
+            ],
+            provenance=SourceProvenance(
+                source_item_id="src_instagram",
+                source_kind=SourceKind.INSTAGRAM_CAROUSEL,
+                original_value="https://www.instagram.com/p/DApost123/",
+                normalized_value="https://www.instagram.com/p/DApost123",
+                external_id="DApost123",
+                request_id=None,
+                extraction_source="markdown",
+            ),
+        )
+        content_extractor.extract_content_pure = AsyncMock(
+            return_value=(
+                "ignored plain text",
+                "markdown",
+                {
+                    "detected_lang": "en",
+                    "normalized_source_document": platform_document.model_dump(mode="json"),
+                },
+            )
+        )
+        agent = MultiSourceExtractionAgent(
+            content_extractor=content_extractor,
+            aggregation_session_repo=repo,
+        )
+
+        result = await agent.execute(
+            MultiSourceExtractionInput(
+                correlation_id="agg-phase3-platform-doc",
+                user_id=user.telegram_user_id,
+                items=[SourceSubmission.from_url("https://www.instagram.com/p/DApost123/")],
+            )
+        )
+
+        assert result.success is True
+        assert result.output is not None
+        assert result.output.items[0].source_kind == SourceKind.INSTAGRAM_CAROUSEL
+        assert result.output.items[0].normalized_document is not None
+        assert (
+            result.output.items[0].normalized_document.source_kind == SourceKind.INSTAGRAM_CAROUSEL
+        )
+        assert len(result.output.items[0].normalized_document.media) == 2

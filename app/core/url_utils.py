@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 from app.core.urls.extraction import extract_all_urls, looks_like_url
+from app.core.urls.meta import (
+    extract_instagram_shortcode,
+    extract_threads_post_id,
+    is_instagram_post_url,
+    is_instagram_reel_url,
+    is_instagram_url,
+    is_threads_url,
+)
 from app.core.urls.normalization import (
     TRACKING_PARAMS,
     compute_dedupe_hash,
@@ -29,11 +37,17 @@ __all__ = [
     "dns_cache_scope",
     "extract_all_urls",
     "extract_domain",
+    "extract_instagram_shortcode",
+    "extract_threads_post_id",
     "extract_tweet_id",
     "extract_twitter_article_id",
     "extract_twitter_status_id",
     "extract_twitter_status_parts",
     "extract_youtube_video_id",
+    "is_instagram_post_url",
+    "is_instagram_reel_url",
+    "is_instagram_url",
+    "is_threads_url",
     "is_twitter_article_url",
     "is_twitter_url",
     "is_youtube_url",

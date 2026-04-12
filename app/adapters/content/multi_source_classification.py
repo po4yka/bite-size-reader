@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urlparse
 
 from app.application.dto.aggregation import SourceSubmission, SourceSubmissionKind
-from app.core.url_utils import normalize_url
+from app.core.url_utils import (
+    is_instagram_post_url,
+    is_instagram_reel_url,
+    is_threads_url,
+    normalize_url,
+)
 from app.core.urls.twitter import is_twitter_article_url, is_twitter_url
 from app.core.urls.youtube import is_youtube_url
 from app.domain.models.source import SourceItem, SourceKind
-
-_THREADS_HOSTS = frozenset({"threads.net", "www.threads.net"})
-_INSTAGRAM_HOSTS = frozenset({"instagram.com", "www.instagram.com"})
 
 
 def classify_url_source_kind(url: str, *, hint: str | None = None) -> SourceKind:
@@ -32,19 +33,12 @@ def classify_url_source_kind(url: str, *, hint: str | None = None) -> SourceKind
     if is_twitter_url(normalized_url):
         return SourceKind.X_POST
 
-    parsed = urlparse(normalized_url)
-    host = parsed.netloc.lower()
-    path = parsed.path.lower()
-
-    if host in _THREADS_HOSTS:
+    if is_threads_url(normalized_url):
         return SourceKind.THREADS_POST
-    if host in _INSTAGRAM_HOSTS:
-        if "/reel/" in path or path.startswith(("/reels/", "/tv/")):
-            return SourceKind.INSTAGRAM_REEL
-        if "/carousel/" in path:
-            return SourceKind.INSTAGRAM_CAROUSEL
-        if "/p/" in path:
-            return SourceKind.INSTAGRAM_POST
+    if is_instagram_reel_url(normalized_url):
+        return SourceKind.INSTAGRAM_REEL
+    if is_instagram_post_url(normalized_url):
+        return SourceKind.INSTAGRAM_POST
 
     return SourceKind.WEB_ARTICLE
 

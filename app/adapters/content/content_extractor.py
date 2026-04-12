@@ -103,6 +103,7 @@ class ContentExtractor(
         if self._platform_router is not None:
             return self._platform_router
 
+        from app.core.urls.meta import is_instagram_url, is_threads_url
         from app.core.urls.twitter import is_twitter_url
         from app.core.urls.youtube import is_youtube_url
 
@@ -116,6 +117,12 @@ class ContentExtractor(
                 bool(self.cfg.twitter.enabled) and is_twitter_url(normalized_url)
             ),
             factory=self._build_twitter_platform_extractor,
+        )
+        router.register(
+            predicate=lambda normalized_url: (
+                is_threads_url(normalized_url) or is_instagram_url(normalized_url)
+            ),
+            factory=self._build_meta_platform_extractor,
         )
         self._platform_router = router
         return router
@@ -147,6 +154,15 @@ class ContentExtractor(
             message_persistence=self.message_persistence,
             firecrawl_sem=self._sem,
             schedule_crawl_persistence=self._schedule_crawl_persistence,
+            lifecycle=self._platform_request_lifecycle,
+        )
+
+    def _build_meta_platform_extractor(self) -> Any:
+        from app.adapters.meta.platform_extractor import MetaPlatformExtractor
+
+        return MetaPlatformExtractor(
+            scraper=self.firecrawl,
+            firecrawl_sem=self._sem,
             lifecycle=self._platform_request_lifecycle,
         )
 

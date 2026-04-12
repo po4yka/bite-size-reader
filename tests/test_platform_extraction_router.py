@@ -145,6 +145,37 @@ async def test_extract_content_pure_routes_twitter_urls_through_platform_router(
 
 
 @pytest.mark.asyncio
+async def test_extract_content_pure_routes_meta_urls_through_platform_router() -> None:
+    extractor = cast("Any", _make_extractor())
+    meta_extractor = MagicMock()
+    meta_extractor.supports.return_value = True
+    meta_extractor.extract = AsyncMock(
+        return_value=PlatformExtractionResult(
+            platform="meta",
+            request_id=77,
+            content_text="threads body",
+            content_source="markdown",
+            detected_lang="en",
+            title="Threads",
+            metadata={"source": "meta", "platform_surface": "threads_post"},
+        )
+    )
+    extractor._build_meta_platform_extractor = MagicMock(return_value=meta_extractor)
+
+    content_text, content_source, metadata = await extractor.extract_content_pure(
+        "https://www.threads.net/@user/post/C8abc123",
+        correlation_id="cid",
+        request_id=77,
+    )
+
+    assert content_text == "threads body"
+    assert content_source == "markdown"
+    assert metadata["source"] == "meta"
+    assert metadata["platform_surface"] == "threads_post"
+    extractor._build_meta_platform_extractor.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_extract_and_process_content_routes_platform_urls_before_generic_scrape() -> None:
     extractor = _make_extractor()
     router = MagicMock()

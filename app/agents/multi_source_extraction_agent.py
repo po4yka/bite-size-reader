@@ -167,7 +167,7 @@ class MultiSourceExtractionAgent(
                         position=position,
                         item_id=item_id,
                         source_item_id=source_item.stable_id,
-                        source_kind=source_item.kind,
+                        source_kind=normalized_document.source_kind,
                         status=AggregationItemStatus.EXTRACTED.value,
                         request_id=request_id,
                         normalized_document=normalized_document,
@@ -294,6 +294,12 @@ class MultiSourceExtractionAgent(
             request_id=source_item.request_id,
         )
         request_id = _coerce_int(metadata.get("request_id"))
+        platform_document_payload = metadata.get("normalized_source_document")
+        if isinstance(platform_document_payload, dict):
+            normalized_document = NormalizedSourceDocument.model_validate(platform_document_payload)
+            request_id = request_id or normalized_document.provenance.request_id
+            return request_id, normalized_document, metadata
+
         title = _extract_title_from_metadata(metadata)
         normalized_document = NormalizedSourceDocument.from_extracted_content(
             source_item=SourceItem.create(
