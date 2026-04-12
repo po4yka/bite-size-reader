@@ -157,6 +157,43 @@ class AttachmentContentService:
             )
         return req_id, result
 
+    async def process_downloaded_attachment_bundle(
+        self,
+        *,
+        message: Any,
+        file_paths: list[str],
+        caption: str | None,
+        correlation_id: str | None,
+        interaction_id: int | None,
+        status_updater: Callable[[str], Awaitable[None]] | None = None,
+    ) -> tuple[int, dict[str, Any] | None]:
+        """Create records and dispatch multimodal analysis for an image bundle."""
+
+        req_id = await self._persistence.create_request(message, correlation_id, "image")
+        chosen_lang = self.choose_attachment_language(caption, message)
+        total_size = (
+            sum(os.path.getsize(path) for path in file_paths if path and os.path.exists(path))
+            or None
+        )
+        await self._persistence.create_attachment_record(
+            req_id=req_id,
+            file_type="image_bundle",
+            mime_type="image/*",
+            file_name=None,
+            file_size=total_size,
+        )
+        result = await self.process_image_bundle(
+            file_paths=file_paths,
+            caption=caption,
+            chosen_lang=chosen_lang,
+            req_id=req_id,
+            correlation_id=correlation_id,
+            interaction_id=interaction_id,
+            message=message,
+            status_updater=status_updater,
+        )
+        return req_id, result
+
     async def process_image(
         self,
         *,
@@ -200,6 +237,74 @@ class AttachmentContentService:
             user_text = f"{caption}\n\nRespond in {lang_label}."
 
         messages = build_vision_messages(system_prompt, image_content.data_uri, caption=user_text)
+        return await self._workflow.run_summary_workflow(
+            messages=messages,
+            req_id=req_id,
+            correlation_id=correlation_id,
+            interaction_id=interaction_id,
+            chosen_lang=chosen_lang,
+            message=message,
+            model_override=attachment_cfg.vision_model,
+            status_updater=status_updater,
+        )
+
+    async def process_image_bundle(
+        self,
+        *,
+        file_paths: list[str],
+        caption: str | None,
+        chosen_lang: str,
+        req_id: int,
+        correlation_id: str | None,
+        interaction_id: int | None,
+        message: Any,
+        status_updater: Callable[[str], Awaitable[None]] | None = None,
+    ) -> dict[str, Any] | None:
+        """Process multiple Telegram images as one multimodal source."""
+
+        attachment_cfg = self._context.cfg.attachment
+        if status_updater:
+            await status_updater("🖼 <b>Processing image bundle...</b>")
+
+        image_contents = []
+        for file_path in file_paths:
+            try:
+                image_contents.append(
+                    ImageExtractor.extract(
+                        file_path,
+                        max_dimension=attachment_cfg.image_max_dimension,
+                    )
+                )
+            except ValueError as exc:
+                self._context.logger.warning(
+                    "image_bundle_extraction_failed",
+                    extra={"error": str(exc), "cid": correlation_id, "path": file_path},
+                )
+        if not image_contents:
+            await self._context.response_formatter.safe_reply(
+                message,
+                "Could not process images from this album.",
+            )
+            return None
+
+        system_prompt = load_prompt("image_analysis", chosen_lang)
+        lang_label = "Russian" if chosen_lang == LANG_RU else "English"
+        user_text = (
+            caption
+            or f"Analyze these related Telegram images and provide a structured summary. Respond in {lang_label}."
+        )
+        if caption:
+            user_text = f"{caption}\n\nRespond in {lang_label}."
+
+        image_uris = [image.data_uri for image in image_contents]
+        if len(image_uris) == 1:
+            messages = build_vision_messages(system_prompt, image_uris[0], caption=user_text)
+        else:
+            messages = build_multi_image_vision_messages(
+                system_prompt,
+                image_uris,
+                caption=user_text,
+            )
         return await self._workflow.run_summary_workflow(
             messages=messages,
             req_id=req_id,

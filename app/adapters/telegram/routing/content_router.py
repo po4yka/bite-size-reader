@@ -184,8 +184,18 @@ class MessageContentRouter:
         fwd_text = (
             getattr(message, "text", None) or getattr(message, "caption", None) or ""
         ).strip()
+        has_supported_attachment = self.attachment_processor and self._should_handle_attachment(
+            message
+        )
 
         if fwd_chat is not None and fwd_msg_id is not None:
+            if has_supported_attachment:
+                await self.attachment_processor.handle_attachment_flow(
+                    message,
+                    correlation_id=context.correlation_id,
+                    interaction_id=interaction_id,
+                )
+                return
             await self.forward_processor.handle_forward_flow(
                 message,
                 correlation_id=context.correlation_id,
@@ -194,15 +204,15 @@ class MessageContentRouter:
             return
 
         if fwd_from_user is not None or fwd_sender_name:
-            if fwd_text:
-                await self.forward_processor.handle_forward_flow(
+            if has_supported_attachment:
+                await self.attachment_processor.handle_attachment_flow(
                     message,
                     correlation_id=context.correlation_id,
                     interaction_id=interaction_id,
                 )
                 return
-            if self.attachment_processor and self._should_handle_attachment(message):
-                await self.attachment_processor.handle_attachment_flow(
+            if fwd_text:
+                await self.forward_processor.handle_forward_flow(
                     message,
                     correlation_id=context.correlation_id,
                     interaction_id=interaction_id,
@@ -211,16 +221,16 @@ class MessageContentRouter:
             await self._reply_forward_no_text(context, interaction_id, start_time)
             return
 
-        if fwd_text:
-            await self.forward_processor.handle_forward_flow(
+        if has_supported_attachment:
+            await self.attachment_processor.handle_attachment_flow(
                 message,
                 correlation_id=context.correlation_id,
                 interaction_id=interaction_id,
             )
             return
 
-        if self.attachment_processor and self._should_handle_attachment(message):
-            await self.attachment_processor.handle_attachment_flow(
+        if fwd_text:
+            await self.forward_processor.handle_forward_flow(
                 message,
                 correlation_id=context.correlation_id,
                 interaction_id=interaction_id,

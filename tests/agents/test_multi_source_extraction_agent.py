@@ -237,3 +237,65 @@ async def test_multi_source_extraction_agent_preserves_platform_normalized_docum
             result.output.items[0].normalized_document.source_kind == SourceKind.INSTAGRAM_CAROUSEL
         )
         assert len(result.output.items[0].normalized_document.media) == 2
+
+
+@pytest.mark.asyncio
+async def test_multi_source_extraction_agent_extracts_telegram_album_as_one_item() -> None:
+    with temp_db() as db:
+        user, repo = _make_user_and_repo(db)
+        content_extractor = MagicMock()
+        content_extractor.extract_content_pure = AsyncMock()
+        agent = MultiSourceExtractionAgent(
+            content_extractor=content_extractor,
+            aggregation_session_repo=repo,
+        )
+
+        album_messages = [
+            SimpleNamespace(
+                id=601,
+                message_id=601,
+                text=None,
+                caption="Album caption",
+                chat=SimpleNamespace(id=-100777),
+                media_group_id="album-1",
+                photo=[SimpleNamespace(file_id="photo-1", width=1280, height=720)],
+                document=None,
+                video=None,
+                animation=None,
+                forward_from_chat=SimpleNamespace(id=-10042, title="Forwarded Channel"),
+                forward_from_message_id=88,
+                forward_from=None,
+                forward_sender_name=None,
+            ),
+            SimpleNamespace(
+                id=602,
+                message_id=602,
+                text=None,
+                caption=None,
+                chat=SimpleNamespace(id=-100777),
+                media_group_id="album-1",
+                photo=[SimpleNamespace(file_id="photo-2", width=1280, height=720)],
+                document=None,
+                video=None,
+                animation=None,
+                forward_from_chat=SimpleNamespace(id=-10042, title="Forwarded Channel"),
+                forward_from_message_id=88,
+                forward_from=None,
+                forward_sender_name=None,
+            ),
+        ]
+
+        result = await agent.execute(
+            MultiSourceExtractionInput(
+                correlation_id="agg-phase4-album",
+                user_id=user.telegram_user_id,
+                items=[SourceSubmission.from_telegram_messages(album_messages)],
+            )
+        )
+
+        assert result.success is True
+        assert result.output is not None
+        assert result.output.items[0].source_kind == SourceKind.TELEGRAM_ALBUM
+        assert result.output.items[0].normalized_document is not None
+        assert len(result.output.items[0].normalized_document.media) == 2
+        assert result.output.items[0].normalized_document.metadata["message_ids"] == [601, 602]

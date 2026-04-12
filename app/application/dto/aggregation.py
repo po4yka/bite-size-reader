@@ -92,6 +92,19 @@ class SourceSubmission(BaseModel):
             metadata=dict(metadata or {}),
         )
 
+    @classmethod
+    def from_telegram_messages(
+        cls,
+        telegram_messages: list[Any] | tuple[Any, ...],
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> SourceSubmission:
+        return cls(
+            submission_kind=SourceSubmissionKind.TELEGRAM_MESSAGE,
+            telegram_message=list(telegram_messages),
+            metadata=dict(metadata or {}),
+        )
+
 
 class AggregationFailure(BaseModel):
     """Shared failure payload for bundle-level and item-level errors."""

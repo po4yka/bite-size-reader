@@ -40,6 +40,7 @@ def _make_router(tmp_path):
         add_awaiting_user=AsyncMock(),
     )
     forward_processor: Any = SimpleNamespace(handle_forward_flow=AsyncMock())
+    attachment_processor: Any = SimpleNamespace(handle_attachment_flow=AsyncMock())
     response_formatter: Any = SimpleNamespace(
         safe_reply=AsyncMock(),
         send_error_notification=AsyncMock(),
@@ -52,10 +53,11 @@ def _make_router(tmp_path):
         command_processor=command_processor,
         url_handler=url_handler,
         forward_processor=forward_processor,
+        attachment_processor=attachment_processor,
         response_formatter=response_formatter,
         audit_func=lambda *_args, **_kwargs: None,
     )
-    return router, forward_processor, response_formatter, url_handler
+    return router, forward_processor, attachment_processor, response_formatter, url_handler
 
 
 def _base_message(**overrides: Any) -> SimpleNamespace:
@@ -85,7 +87,9 @@ async def test_forward_message_with_url_prefers_forward_flow(
     tmp_path, tmp_path_factory, request
 ) -> None:
     del tmp_path_factory, request
-    router, forward_processor, _response_formatter, url_handler = _make_router(tmp_path)
+    router, forward_processor, _attachment_processor, _response_formatter, url_handler = (
+        _make_router(tmp_path)
+    )
 
     message = _base_message(
         text="https://example.com/article",
@@ -110,7 +114,9 @@ async def test_forward_from_user_with_text_routes_to_forward_flow(
     tmp_path, tmp_path_factory, request
 ) -> None:
     del tmp_path_factory, request
-    router, forward_processor, _response_formatter, url_handler = _make_router(tmp_path)
+    router, forward_processor, _attachment_processor, _response_formatter, url_handler = (
+        _make_router(tmp_path)
+    )
 
     message = _base_message(
         text="Some interesting article content",
@@ -129,7 +135,9 @@ async def test_forward_privacy_protected_with_text_routes_to_forward_flow(
     tmp_path, tmp_path_factory, request
 ) -> None:
     del tmp_path_factory, request
-    router, forward_processor, _response_formatter, url_handler = _make_router(tmp_path)
+    router, forward_processor, _attachment_processor, _response_formatter, url_handler = (
+        _make_router(tmp_path)
+    )
 
     message = _base_message(
         text="Privacy protected forward content",
@@ -146,7 +154,9 @@ async def test_forward_privacy_protected_with_text_routes_to_forward_flow(
 @pytest.mark.asyncio
 async def test_forward_from_user_no_text_shows_error(tmp_path, tmp_path_factory, request) -> None:
     del tmp_path_factory, request
-    router, forward_processor, response_formatter, _url_handler = _make_router(tmp_path)
+    router, forward_processor, _attachment_processor, response_formatter, _url_handler = (
+        _make_router(tmp_path)
+    )
 
     message = _base_message(
         text=None,
@@ -160,3 +170,48 @@ async def test_forward_from_user_no_text_shows_error(tmp_path, tmp_path_factory,
     response_formatter.safe_reply.assert_awaited_once()
     reply_text = response_formatter.safe_reply.call_args[0][1]
     assert "no text content" in reply_text.lower()
+
+
+@pytest.mark.asyncio
+async def test_forwarded_channel_photo_with_caption_prefers_attachment_flow(
+    tmp_path, tmp_path_factory, request
+) -> None:
+    del tmp_path_factory, request
+    router, forward_processor, attachment_processor, _response_formatter, _url_handler = (
+        _make_router(tmp_path)
+    )
+
+    message = _base_message(
+        caption="Forwarded photo caption",
+        photo=[SimpleNamespace(file_id="photo-1")],
+        forward_from_chat=SimpleNamespace(id=-100200300, title="Forwarded Channel"),
+        forward_from_message_id=123,
+        forward_date=1700000000,
+    )
+
+    await router.route_message(message)
+
+    attachment_processor.handle_attachment_flow.assert_awaited_once()
+    forward_processor.handle_forward_flow.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_forward_from_user_photo_with_caption_prefers_attachment_flow(
+    tmp_path, tmp_path_factory, request
+) -> None:
+    del tmp_path_factory, request
+    router, forward_processor, attachment_processor, _response_formatter, _url_handler = (
+        _make_router(tmp_path)
+    )
+
+    message = _base_message(
+        caption="Forwarded photo caption",
+        photo=[SimpleNamespace(file_id="photo-1")],
+        forward_from=SimpleNamespace(id=12345, first_name="John", last_name="Doe"),
+        forward_date=1700000000,
+    )
+
+    await router.route_message(message)
+
+    attachment_processor.handle_attachment_flow.assert_awaited_once()
+    forward_processor.handle_forward_flow.assert_not_awaited()

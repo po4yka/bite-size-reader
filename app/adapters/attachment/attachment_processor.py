@@ -11,7 +11,9 @@ from app.adapters.attachment._attachment_content import AttachmentContentService
 from app.adapters.attachment._attachment_llm import AttachmentLLMWorkflowService
 from app.adapters.attachment._attachment_persistence import AttachmentPersistenceService
 from app.adapters.attachment._attachment_shared import AttachmentProcessorContext
+from app.adapters.attachment.media_group_collector import MediaGroupCollector
 from app.adapters.content.llm_response_workflow import LLMResponseWorkflow
+from app.adapters.telegram.multimodal_extractor import build_telegram_summary_context
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
@@ -29,6 +31,7 @@ if TYPE_CHECKING:
     from app.db.write_queue import DbWriteQueue
 
 logger = get_logger(__name__)
+_IMAGE_BUNDLE_TYPES = frozenset({"image"})
 
 
 class AttachmentProcessor:
@@ -100,6 +103,7 @@ class AttachmentProcessor:
             persistence=self._persistence,
             workflow=self._llm,
         )
+        self._media_group_collector: MediaGroupCollector[Any] = MediaGroupCollector()
 
     async def handle_attachment_flow(
         self,
@@ -112,6 +116,7 @@ class AttachmentProcessor:
         from app.utils.progress_tracker import ProgressTracker
 
         file_path: str | None = None
+        file_paths: list[str] = []
         progress_tracker: ProgressTracker | None = None
         progress_task: asyncio.Task[Any] | None = None
         current_status_text = ""
@@ -132,6 +137,10 @@ class AttachmentProcessor:
             return msg_id
 
         try:
+            media_group_messages = await self._collect_media_group_messages(message)
+            if media_group_messages is None:
+                return
+
             file_type, mime_type, file_name = self._content.classify_attachment(message)
             if not file_type:
                 await self.response_formatter.safe_reply(
@@ -180,18 +189,33 @@ class AttachmentProcessor:
                 )
                 return
 
-            caption = (getattr(message, "caption", None) or "").strip() or None
-            req_id, result = await self._content.process_downloaded_attachment(
-                message=message,
-                file_path=file_path,
-                file_type=file_type,
-                mime_type=mime_type,
-                file_name=file_name,
-                caption=caption,
-                correlation_id=correlation_id,
-                interaction_id=interaction_id,
-                status_updater=status_updater,
-            )
+            caption = self._build_summary_caption(media_group_messages)
+            if len(media_group_messages) > 1 and file_type in _IMAGE_BUNDLE_TYPES:
+                file_paths.append(file_path)
+                for extra_message in media_group_messages[1:]:
+                    extra_path = await self._content.download_attachment(extra_message)
+                    if extra_path:
+                        file_paths.append(extra_path)
+                req_id, result = await self._content.process_downloaded_attachment_bundle(
+                    message=message,
+                    file_paths=file_paths,
+                    caption=caption,
+                    correlation_id=correlation_id,
+                    interaction_id=interaction_id,
+                    status_updater=status_updater,
+                )
+            else:
+                req_id, result = await self._content.process_downloaded_attachment(
+                    message=message,
+                    file_path=file_path,
+                    file_type=file_type,
+                    mime_type=mime_type,
+                    file_name=file_name,
+                    caption=caption,
+                    correlation_id=correlation_id,
+                    interaction_id=interaction_id,
+                    status_updater=status_updater,
+                )
 
             if result:
                 await self._persistence.update_attachment_status(req_id, "completed", result)
@@ -223,14 +247,27 @@ class AttachmentProcessor:
                 progress_task,
                 suppress_task_errors=True,
             )
-            if file_path and os.path.exists(file_path):
-                try:
-                    os.unlink(file_path)
-                except OSError as exc:
-                    logger.warning(
-                        "attachment_cleanup_failed",
-                        extra={"path": file_path, "error": str(exc)},
-                    )
+            cleanup_paths = [path for path in {file_path, *file_paths} if path]
+            for path in cleanup_paths:
+                if path and os.path.exists(path):
+                    try:
+                        os.unlink(path)
+                    except OSError as exc:
+                        logger.warning(
+                            "attachment_cleanup_failed",
+                            extra={"path": path, "error": str(exc)},
+                        )
+
+    async def _collect_media_group_messages(self, message: Any) -> list[Any] | None:
+        media_group_id = getattr(message, "media_group_id", None)
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        if not media_group_id or chat_id is None:
+            return [message]
+        return await self._media_group_collector.collect((chat_id, str(media_group_id)), message)
+
+    @staticmethod
+    def _build_summary_caption(messages: list[Any]) -> str | None:
+        return build_telegram_summary_context(messages)
 
     async def _complete_progress(
         self,

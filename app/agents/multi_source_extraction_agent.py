@@ -8,18 +8,14 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.adapters.content.multi_source_classification import build_source_item_from_submission
+from app.adapters.telegram.multimodal_extractor import build_telegram_normalized_document
 from app.agents.base_agent import AgentResult, BaseAgent
 from app.application.dto.aggregation import (
     AggregationFailure,
-    ExtractedTextKind,
     MultiSourceExtractionOutput,
     NormalizedSourceDocument,
     SourceExtractionItemResult,
-    SourceMediaAsset,
-    SourceMediaKind,
-    SourceProvenance,
     SourceSubmission,
-    SourceTextBlock,
 )
 from app.domain.models.source import (
     AggregationItemStatus,
@@ -328,59 +324,9 @@ class MultiSourceExtractionAgent(
         message: Any,
         source_item: SourceItem,
     ) -> tuple[int | None, NormalizedSourceDocument, dict[str, Any]]:
-        text = str(
-            getattr(message, "text", None) or getattr(message, "caption", None) or ""
-        ).strip()
-        media = _build_telegram_media_assets(message)
-        metadata = _build_telegram_metadata(message)
-        if not text and not media:
-            msg = "Telegram submission has neither text nor supported media metadata"
-            raise ValueError(msg)
-
-        text_blocks = []
-        if source_item.title_hint:
-            text_blocks.append(
-                SourceTextBlock(
-                    kind=ExtractedTextKind.TITLE,
-                    text=source_item.title_hint,
-                    position=0,
-                )
-            )
-        if text:
-            text_blocks.append(
-                SourceTextBlock(
-                    kind=(
-                        ExtractedTextKind.CAPTION
-                        if getattr(message, "caption", None)
-                        else ExtractedTextKind.BODY
-                    ),
-                    text=text,
-                    position=len(text_blocks),
-                )
-            )
-
-        normalized_document = NormalizedSourceDocument(
-            source_item_id=source_item.stable_id,
-            source_kind=source_item.kind,
-            title=source_item.title_hint,
-            text=text,
-            detected_language=None,
-            text_blocks=text_blocks,
-            media=media,
-            metadata=metadata,
-            provenance=SourceProvenance(
-                source_item_id=source_item.stable_id,
-                source_kind=source_item.kind,
-                original_value=source_item.original_value,
-                normalized_value=source_item.normalized_value,
-                external_id=source_item.external_id,
-                request_id=source_item.request_id,
-                telegram_chat_id=source_item.telegram_chat_id,
-                telegram_message_id=source_item.telegram_message_id,
-                telegram_media_group_id=source_item.telegram_media_group_id,
-                extraction_source="telegram_native",
-                metadata=dict(source_item.metadata),
-            ),
+        normalized_document, metadata = build_telegram_normalized_document(
+            message,
+            source_item=source_item,
         )
         return source_item.request_id, normalized_document, metadata
 
@@ -408,90 +354,6 @@ def _extract_title_from_metadata(metadata: dict[str, Any]) -> str | None:
         if title:
             return title
     return None
-
-
-def _build_telegram_metadata(message: Any) -> dict[str, Any]:
-    chat = getattr(message, "chat", None)
-    forward_from_chat = getattr(message, "forward_from_chat", None)
-    return {
-        "chat_id": _coerce_int(getattr(chat, "id", None)),
-        "message_id": _coerce_int(getattr(message, "id", getattr(message, "message_id", None))),
-        "media_group_id": getattr(message, "media_group_id", None),
-        "forward_from_chat_id": _coerce_int(getattr(forward_from_chat, "id", None)),
-        "forward_from_chat_title": getattr(forward_from_chat, "title", None),
-        "forward_from_message_id": _coerce_int(getattr(message, "forward_from_message_id", None)),
-    }
-
-
-def _build_telegram_media_assets(message: Any) -> list[SourceMediaAsset]:
-    assets: list[SourceMediaAsset] = []
-    photo = getattr(message, "photo", None)
-    if photo is not None:
-        photo_items = photo if isinstance(photo, list) else [photo]
-        for index, item in enumerate(photo_items):
-            file_id = getattr(item, "file_id", None)
-            if not file_id:
-                continue
-            assets.append(
-                SourceMediaAsset(
-                    kind=SourceMediaKind.IMAGE,
-                    url=f"telegram://file/{file_id}",
-                    position=index,
-                    metadata={
-                        "telegram_file_id": file_id,
-                        "width": _coerce_int(getattr(item, "width", None)),
-                        "height": _coerce_int(getattr(item, "height", None)),
-                    },
-                )
-            )
-
-    document = getattr(message, "document", None)
-    if document is not None:
-        file_id = getattr(document, "file_id", None)
-        mime_type = getattr(document, "mime_type", None)
-        if file_id:
-            assets.append(
-                SourceMediaAsset(
-                    kind=_media_kind_for_mime(mime_type),
-                    url=f"telegram://file/{file_id}",
-                    position=len(assets),
-                    mime_type=str(mime_type) if mime_type else None,
-                    metadata={
-                        "telegram_file_id": file_id,
-                        "file_name": getattr(document, "file_name", None),
-                    },
-                )
-            )
-
-    video = getattr(message, "video", None)
-    if video is not None:
-        file_id = getattr(video, "file_id", None)
-        if file_id:
-            assets.append(
-                SourceMediaAsset(
-                    kind=SourceMediaKind.VIDEO,
-                    url=f"telegram://file/{file_id}",
-                    position=len(assets),
-                    mime_type="video/mp4",
-                    metadata={
-                        "telegram_file_id": file_id,
-                        "duration": _coerce_int(getattr(video, "duration", None)),
-                    },
-                )
-            )
-
-    return assets
-
-
-def _media_kind_for_mime(mime_type: Any) -> SourceMediaKind:
-    mime = str(mime_type or "").strip().lower()
-    if mime.startswith("image/"):
-        return SourceMediaKind.IMAGE
-    if mime.startswith("video/"):
-        return SourceMediaKind.VIDEO
-    if mime.startswith("audio/"):
-        return SourceMediaKind.AUDIO
-    return SourceMediaKind.DOCUMENT
 
 
 def _coerce_int(value: Any) -> int | None:
