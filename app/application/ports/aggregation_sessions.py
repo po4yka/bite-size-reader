@@ -69,6 +69,13 @@ class AggregationSessionRepositoryPort(Protocol):
     ) -> None:
         """Persist bundle counters."""
 
+    async def async_update_aggregation_session_output(
+        self,
+        session_id: int,
+        aggregation_output: dict[str, Any],
+    ) -> None:
+        """Persist synthesized bundle output."""
+
     async def async_update_aggregation_session_status(
         self,
         session_id: int,

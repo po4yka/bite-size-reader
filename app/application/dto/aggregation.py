@@ -289,6 +289,153 @@ class SourceExtractionItemResult(BaseModel):
     extraction_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class AggregationEvidenceKind(StrEnum):
+    """Evidence classes used during mixed-source synthesis."""
+
+    TEXT = "text"
+    IMAGE = "image"
+    OCR = "ocr"
+    TRANSCRIPT = "transcript"
+    METADATA = "metadata"
+
+
+class AggregationRelationshipSignal(BaseModel):
+    """Optional relationship signal attached to bundle synthesis output."""
+
+    model_config = ConfigDict(frozen=True)
+
+    relationship_type: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    reasoning: str | None = None
+    signals_used: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @classmethod
+    def from_relationship_analysis(cls, relationship: Any) -> AggregationRelationshipSignal:
+        """Build a lightweight relationship DTO from the batch-analysis output."""
+
+        relationship_type = getattr(relationship, "relationship_type", "unknown")
+        if hasattr(relationship_type, "value"):
+            relationship_type = relationship_type.value
+
+        metadata: dict[str, Any] = {}
+        series_info = getattr(relationship, "series_info", None)
+        if series_info is not None:
+            metadata["series_info"] = (
+                series_info.model_dump() if hasattr(series_info, "model_dump") else series_info
+            )
+        cluster_info = getattr(relationship, "cluster_info", None)
+        if cluster_info is not None:
+            metadata["cluster_info"] = (
+                cluster_info.model_dump() if hasattr(cluster_info, "model_dump") else cluster_info
+            )
+
+        return cls(
+            relationship_type=str(relationship_type or "unknown"),
+            confidence=float(getattr(relationship, "confidence", 0.0) or 0.0),
+            reasoning=getattr(relationship, "reasoning", None),
+            signals_used=list(getattr(relationship, "signals_used", []) or []),
+            metadata=metadata,
+        )
+
+
+class AggregationEvidenceWeight(BaseModel):
+    """Per-evidence weighting used when synthesizing source documents."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: AggregationEvidenceKind
+    weight: float = Field(ge=0.0)
+    rationale: str | None = None
+
+
+class AggregationSourceWeight(BaseModel):
+    """Weight assigned to one extracted source item."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source_item_id: str
+    source_kind: SourceKind
+    total_weight: float = Field(ge=0.0)
+    evidence_weights: list[AggregationEvidenceWeight] = Field(default_factory=list)
+    rationale: str | None = None
+
+
+class AggregatedClaim(BaseModel):
+    """Synthesis claim with explicit provenance back to source items."""
+
+    model_config = ConfigDict(frozen=True)
+
+    claim_id: str
+    text: str
+    source_item_ids: list[str] = Field(default_factory=list)
+    evidence_kinds: list[AggregationEvidenceKind] = Field(default_factory=list)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    @field_validator("claim_id", "text")
+    @classmethod
+    def validate_non_empty_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            msg = "Aggregated claims require non-empty text"
+            raise ValueError(msg)
+        return stripped
+
+
+class AggregatedContradiction(BaseModel):
+    """Potential contradiction or disagreement detected across bundle items."""
+
+    model_config = ConfigDict(frozen=True)
+
+    summary: str
+    source_item_ids: list[str] = Field(default_factory=list)
+    resolution_note: str | None = None
+
+    @field_validator("summary")
+    @classmethod
+    def validate_summary(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            msg = "Contradictions require a non-empty summary"
+            raise ValueError(msg)
+        return stripped
+
+
+class DuplicateSignal(BaseModel):
+    """Cross-source duplicate or overlap signal detected during synthesis."""
+
+    model_config = ConfigDict(frozen=True)
+
+    summary: str
+    source_item_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("summary")
+    @classmethod
+    def validate_summary(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            msg = "Duplicate signals require a non-empty summary"
+            raise ValueError(msg)
+        return stripped
+
+
+class SourceCoverageEntry(BaseModel):
+    """Coverage metadata for one submitted bundle item."""
+
+    model_config = ConfigDict(frozen=True)
+
+    position: int
+    item_id: int
+    source_item_id: str
+    source_kind: SourceKind
+    status: str
+    used_in_summary: bool = False
+    claim_ids: list[str] = Field(default_factory=list)
+    contradiction_count: int = 0
+    duplicate_signal_count: int = 0
+    total_weight: float | None = Field(default=None, ge=0.0)
+
+
 class MultiSourceExtractionOutput(BaseModel):
     """Bundle extraction output with per-item results."""
 
@@ -303,11 +450,55 @@ class MultiSourceExtractionOutput(BaseModel):
     items: list[SourceExtractionItemResult] = Field(default_factory=list)
 
 
+class MultiSourceAggregationOutput(BaseModel):
+    """Bundle-level synthesis output for mixed extracted sources."""
+
+    model_config = ConfigDict(frozen=True)
+
+    session_id: int
+    correlation_id: str
+    status: str
+    source_type: str
+    total_items: int
+    extracted_items: int
+    used_source_count: int
+    overview: str
+    key_claims: list[AggregatedClaim] = Field(default_factory=list)
+    contradictions: list[AggregatedContradiction] = Field(default_factory=list)
+    complementary_points: list[str] = Field(default_factory=list)
+    duplicate_signals: list[DuplicateSignal] = Field(default_factory=list)
+    source_weights: list[AggregationSourceWeight] = Field(default_factory=list)
+    source_coverage: list[SourceCoverageEntry] = Field(default_factory=list)
+    relationship_signal: AggregationRelationshipSignal | None = None
+    entities: list[str] = Field(default_factory=list)
+    topic_tags: list[str] = Field(default_factory=list)
+    total_estimated_consumption_time_min: int | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("overview")
+    @classmethod
+    def validate_overview(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            msg = "Aggregation output requires a non-empty overview"
+            raise ValueError(msg)
+        return stripped
+
+
 __all__ = [
+    "AggregatedClaim",
+    "AggregatedContradiction",
+    "AggregationEvidenceKind",
+    "AggregationEvidenceWeight",
     "AggregationFailure",
+    "AggregationRelationshipSignal",
+    "AggregationSourceWeight",
+    "DuplicateSignal",
     "ExtractedTextKind",
+    "MultiSourceAggregationOutput",
     "MultiSourceExtractionOutput",
     "NormalizedSourceDocument",
+    "SourceCoverageEntry",
     "SourceExtractionItemResult",
     "SourceMediaAsset",
     "SourceMediaKind",

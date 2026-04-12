@@ -192,6 +192,23 @@ class SqliteAggregationSessionRepositoryAdapter(SqliteBaseRepository):
 
         await self._execute(_update, operation_name="update_aggregation_session_counts")
 
+    async def async_update_aggregation_session_output(
+        self,
+        session_id: int,
+        aggregation_output: dict[str, Any],
+    ) -> None:
+        def _update() -> None:
+            AggregationSession.update(
+                {
+                    AggregationSession.aggregation_output_json: prepare_json_payload(
+                        aggregation_output
+                    ),
+                    AggregationSession.updated_at: datetime.now(UTC),
+                }
+            ).where(AggregationSession.id == session_id).execute()
+
+        await self._execute(_update, operation_name="update_aggregation_session_output")
+
     async def async_update_aggregation_session_status(
         self,
         session_id: int,

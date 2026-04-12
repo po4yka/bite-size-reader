@@ -5,11 +5,16 @@ from __future__ import annotations
 import pytest
 
 from app.application.dto.aggregation import (
+    AggregatedClaim,
+    AggregationEvidenceKind,
     AggregationFailure,
+    AggregationRelationshipSignal,
     ExtractedTextKind,
+    MultiSourceAggregationOutput,
     NormalizedSourceDocument,
     SourceMediaAsset,
     SourceMediaKind,
+    SourceProvenance,
 )
 from app.domain.models.source import SourceItem, SourceKind
 
@@ -74,10 +79,10 @@ def test_normalized_source_document_rejects_empty_payload() -> None:
         NormalizedSourceDocument(
             source_item_id=source_item.stable_id,
             source_kind=source_item.kind,
-            provenance={
-                "source_item_id": source_item.stable_id,
-                "source_kind": source_item.kind,
-            },
+            provenance=SourceProvenance(
+                source_item_id=source_item.stable_id,
+                source_kind=source_item.kind,
+            ),
         )
 
 
@@ -91,3 +96,50 @@ def test_aggregation_failure_defaults() -> None:
 
     assert failure.retryable is False
     assert failure.details == {}
+
+
+def test_aggregation_relationship_signal_from_batch_output() -> None:
+    class _SeriesInfo:
+        def model_dump(self) -> dict[str, object]:
+            return {"article_order": [1, 2], "series_title": "Series"}
+
+    class _Relationship:
+        relationship_type = "topic_cluster"
+        confidence = 0.82
+        reasoning = "Shared entities"
+        signals_used = ["entity_overlap"]
+        series_info = _SeriesInfo()
+        cluster_info = None
+
+    relationship = AggregationRelationshipSignal.from_relationship_analysis(_Relationship())
+
+    assert relationship.relationship_type == "topic_cluster"
+    assert relationship.confidence == pytest.approx(0.82)
+    assert relationship.metadata["series_info"]["series_title"] == "Series"
+
+
+def test_multi_source_aggregation_output_requires_overview() -> None:
+    with pytest.raises(ValueError, match="non-empty overview"):
+        MultiSourceAggregationOutput(
+            session_id=1,
+            correlation_id="agg-7",
+            status="completed",
+            source_type="mixed",
+            total_items=2,
+            extracted_items=2,
+            used_source_count=1,
+            overview="  ",
+        )
+
+
+def test_aggregated_claim_requires_text_and_provenance() -> None:
+    claim = AggregatedClaim(
+        claim_id="claim_1",
+        text="Revenue figures differ across the bundle.",
+        source_item_ids=["src_one", "src_two"],
+        evidence_kinds=[AggregationEvidenceKind.TEXT, AggregationEvidenceKind.METADATA],
+        confidence=0.6,
+    )
+
+    assert claim.claim_id == "claim_1"
+    assert claim.source_item_ids == ["src_one", "src_two"]

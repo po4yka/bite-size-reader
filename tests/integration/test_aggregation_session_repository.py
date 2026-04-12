@@ -102,6 +102,14 @@ async def test_aggregation_session_repository_persists_duplicates_and_item_resul
             failed_count=1,
             duplicate_count=1,
         )
+        await repo.async_update_aggregation_session_output(
+            session_id,
+            {
+                "source_type": "mixed",
+                "overview": "Bundle synthesis output",
+                "used_source_count": 1,
+            },
+        )
         await repo.async_update_aggregation_session_status(
             session_id,
             status=AggregationSessionStatus.PARTIAL,
@@ -114,6 +122,7 @@ async def test_aggregation_session_repository_persists_duplicates_and_item_resul
         assert session["failed_count"] == 1
         assert session["status"] == AggregationSessionStatus.PARTIAL.value
         assert session["bundle_metadata_json"]["submitted_via"] == "test"
+        assert session["aggregation_output_json"]["source_type"] == "mixed"
 
         updated_items = await repo.async_get_aggregation_session_items(session_id)
         assert updated_items[0]["request"] == request.id
