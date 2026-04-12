@@ -269,6 +269,9 @@ async def test_pipeline_uses_vtt_fallback_when_transcript_api_empty(tmp_path: Pa
     assert result.content_source == "vtt"
     assert result.detected_lang == "en"
     assert "vtt transcript body" in result.content_text
+    assert result.normalized_document is not None
+    assert result.metadata["video_provenance"]["primary_fact_source"] == "transcript"
+    assert result.metadata["video_controls"]["max_download_size_mb"] == 500
     session_service.persist_success.assert_awaited_once()
     persisted = session_service.persist_success.await_args.kwargs
     assert persisted["transcript_source"] == "vtt"

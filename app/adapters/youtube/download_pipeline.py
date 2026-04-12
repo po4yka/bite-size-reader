@@ -16,6 +16,11 @@ from app.adapters.content.platform_extraction.models import (
     PlatformExtractionRequest,
     PlatformExtractionResult,
 )
+from app.adapters.video.source_extractor import (
+    MetadataDrivenVideoSourceExtractor,
+    VideoSourceRequest,
+    build_video_controls_from_config,
+)
 from app.adapters.youtube.youtube_downloader_parts import (
     metadata as _metadata,
     transcript_api as _transcript_api,
@@ -23,8 +28,8 @@ from app.adapters.youtube.youtube_downloader_parts import (
     yt_dlp_client as _yt_dlp_client,
 )
 from app.application.dto.aggregation import (
-    ExtractedTextKind,
-    NormalizedSourceDocument,
+    SourceMediaAsset,
+    SourceMediaKind,
 )
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
@@ -58,6 +63,7 @@ class YouTubeDownloadPipeline:
         self._audit = audit_func
         self._feedback_service = feedback_service
         self._session_service = session_service
+        self._video_source_extractor = MetadataDrivenVideoSourceExtractor()
 
     async def run(
         self,
@@ -125,9 +131,6 @@ class YouTubeDownloadPipeline:
                 )
 
             detected_lang = detect_language(transcript_text or "")
-            combined_text = _metadata.combine_metadata_and_transcript(
-                video_metadata, transcript_text
-            )
             await self._session_service.persist_success(
                 req_id=req_id,
                 download_id=download_id,
@@ -164,26 +167,56 @@ class YouTubeDownloadPipeline:
                 title_hint=video_metadata.get("title"),
                 metadata={"platform": "youtube"},
             )
-            normalized_document = NormalizedSourceDocument.from_extracted_content(
-                source_item=source_item,
-                text=combined_text,
-                title=video_metadata.get("title"),
-                detected_language=detected_lang,
-                content_source=transcript_source,
-                text_kind=ExtractedTextKind.TRANSCRIPT,
-                metadata=video_metadata,
+            existing_media: list[SourceMediaAsset] = []
+            video_file_path = str(video_metadata.get("video_file_path") or "").strip()
+            if video_file_path:
+                existing_media.append(
+                    SourceMediaAsset(
+                        kind=SourceMediaKind.VIDEO,
+                        local_path=video_file_path,
+                        duration_sec=float(video_metadata.get("duration") or 0) or None,
+                        metadata={"platform": "youtube"},
+                    )
+                )
+            thumbnail_file_path = str(video_metadata.get("thumbnail_file_path") or "").strip()
+            if thumbnail_file_path:
+                existing_media.append(
+                    SourceMediaAsset(
+                        kind=SourceMediaKind.IMAGE,
+                        local_path=thumbnail_file_path,
+                        metadata={"platform": "youtube", "role": "thumbnail"},
+                    )
+                )
+            result = self._video_source_extractor.extract(
+                VideoSourceRequest(
+                    source_item=source_item,
+                    platform="youtube",
+                    title=str(video_metadata.get("title") or "").strip() or None,
+                    body_text=_metadata.format_metadata_header(video_metadata),
+                    transcript_text=transcript_text,
+                    transcript_source=transcript_source,
+                    content_source=transcript_source,
+                    content_text_override=_metadata.combine_metadata_and_transcript(
+                        video_metadata, transcript_text
+                    ),
+                    detected_language=detected_lang,
+                    duration_sec=float(video_metadata.get("duration") or 0) or None,
+                    existing_media=tuple(existing_media),
+                    metadata=video_metadata,
+                    controls=build_video_controls_from_config(self._cfg),
+                )
             )
             return PlatformExtractionResult(
                 platform="youtube",
                 request_id=req_id,
-                content_text=combined_text,
-                content_source=transcript_source,
-                detected_lang=detected_lang,
+                content_text=result.content_text,
+                content_source=result.content_source,
+                detected_lang=result.normalized_document.detected_language or detected_lang,
                 title=video_metadata.get("title"),
-                images=[],
-                metadata=video_metadata,
+                images=result.images,
+                metadata=result.metadata,
                 source_item=source_item,
-                normalized_document=normalized_document,
+                normalized_document=result.normalized_document,
             )
         except Exception as exc:
             raise_if_cancelled(exc)

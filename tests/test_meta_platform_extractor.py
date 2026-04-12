@@ -133,12 +133,16 @@ async def test_instagram_reel_uses_metadata_fallback_for_login_wall_content() ->
     assert result.source_item is not None
     assert result.source_item.kind == SourceKind.INSTAGRAM_REEL
     assert result.content_source == "meta_metadata_fallback"
-    assert result.content_text == "Reel caption text"
+    assert "Reel caption text" in result.content_text
+    assert "Transcript fallback" in result.content_text
     assert result.normalized_document is not None
     assert {block.kind.value for block in result.normalized_document.text_blocks} >= {
         "body",
         "transcript",
         "ocr",
     }
+    assert result.metadata["video_provenance"]["primary_fact_source"] == "transcript"
+    assert result.metadata["video_provenance"]["transcript_source"] == "audio_transcript"
+    assert result.metadata["video_controls"]["audio_transcription_enabled"] is True
     lifecycle.handle_request_dedupe_or_create.assert_awaited_once()
     lifecycle.persist_detected_lang.assert_awaited_once()

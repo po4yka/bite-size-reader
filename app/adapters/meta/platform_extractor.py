@@ -10,6 +10,11 @@ from app.adapters.content.platform_extraction.models import (
     PlatformExtractionResult,
 )
 from app.adapters.content.platform_extraction.protocol import PlatformExtractor
+from app.adapters.video.source_extractor import (
+    MetadataDrivenVideoSourceExtractor,
+    VideoSourceRequest,
+    default_video_controls,
+)
 from app.application.dto.aggregation import (
     ExtractedTextKind,
     NormalizedSourceDocument,
@@ -69,6 +74,7 @@ class MetaPlatformExtractor(PlatformExtractor):
         self._scraper = scraper
         self._firecrawl_sem = firecrawl_sem
         self._lifecycle = lifecycle
+        self._video_source_extractor = MetadataDrivenVideoSourceExtractor()
 
     def supports(self, normalized_url: str) -> bool:
         return is_threads_url(normalized_url) or is_instagram_url(normalized_url)
@@ -110,47 +116,111 @@ class MetaPlatformExtractor(PlatformExtractor):
             metadata={
                 "platform": "meta",
                 "platform_surface": build_result.kind.value,
+                "dedupe_hash": dedupe_hash,
             },
         )
-        normalized_document = NormalizedSourceDocument(
-            source_item_id=source_item.stable_id,
-            source_kind=source_item.kind,
-            title=build_result.title,
-            text=build_result.text,
-            detected_language=detected_lang,
-            text_blocks=build_result.text_blocks,
-            media=build_result.media,
-            metadata=build_result.metadata,
-            provenance=SourceProvenance(
+        if any(asset.kind == SourceMediaKind.VIDEO for asset in build_result.media):
+            transcript_text = _extract_block_text(
+                build_result.text_blocks, ExtractedTextKind.TRANSCRIPT
+            )
+            audio_transcript_text = _extract_audio_transcript(
+                build_result.metadata.get("firecrawl_metadata")
+            )
+            video_result = self._video_source_extractor.extract(
+                VideoSourceRequest(
+                    source_item=source_item,
+                    platform="meta",
+                    title=build_result.title,
+                    body_text=_extract_body_like_text(build_result.text_blocks),
+                    body_kind=(
+                        ExtractedTextKind.CAPTION
+                        if source_item.kind
+                        in {
+                            SourceKind.INSTAGRAM_POST,
+                            SourceKind.INSTAGRAM_CAROUSEL,
+                        }
+                        else ExtractedTextKind.BODY
+                    ),
+                    transcript_text=transcript_text,
+                    transcript_source=(
+                        "audio_transcript"
+                        if transcript_text
+                        and audio_transcript_text
+                        and transcript_text == audio_transcript_text
+                        else None
+                    ),
+                    audio_transcript_text=(
+                        None
+                        if transcript_text
+                        and audio_transcript_text
+                        and transcript_text == audio_transcript_text
+                        else audio_transcript_text
+                    ),
+                    ocr_text=_extract_block_text(build_result.text_blocks, ExtractedTextKind.OCR),
+                    content_source=build_result.content_source,
+                    detected_language=detected_lang,
+                    additional_text_blocks=tuple(
+                        block
+                        for block in build_result.text_blocks
+                        if block.metadata.get("role") == "quoted_context"
+                    ),
+                    existing_media=tuple(build_result.media),
+                    primary_video_url=_extract_primary_video_url(build_result.media),
+                    metadata=build_result.metadata,
+                    controls=default_video_controls(),
+                )
+            )
+            normalized_document = video_result.normalized_document
+            metadata = dict(video_result.metadata)
+            metadata["request_id"] = request_id
+            metadata["detected_lang"] = normalized_document.detected_language
+            content_text = video_result.content_text
+            content_source = video_result.content_source
+            images = video_result.images
+            detected_lang = normalized_document.detected_language or detected_lang
+        else:
+            normalized_document = NormalizedSourceDocument(
                 source_item_id=source_item.stable_id,
                 source_kind=source_item.kind,
-                original_value=source_item.original_value,
-                normalized_value=source_item.normalized_value,
-                external_id=source_item.external_id,
-                request_id=request_id,
-                extraction_source=build_result.content_source,
-                metadata={"dedupe_hash": dedupe_hash},
-            ),
-        )
+                title=build_result.title,
+                text=build_result.text,
+                detected_language=detected_lang,
+                text_blocks=build_result.text_blocks,
+                media=build_result.media,
+                metadata=build_result.metadata,
+                provenance=SourceProvenance(
+                    source_item_id=source_item.stable_id,
+                    source_kind=source_item.kind,
+                    original_value=source_item.original_value,
+                    normalized_value=source_item.normalized_value,
+                    external_id=source_item.external_id,
+                    request_id=request_id,
+                    extraction_source=build_result.content_source,
+                    metadata={"dedupe_hash": dedupe_hash},
+                ),
+            )
+            metadata = dict(build_result.metadata)
+            metadata["request_id"] = request_id
+            metadata["detected_lang"] = detected_lang
+            content_text = build_result.text
+            content_source = build_result.content_source
+            images = [
+                asset.url
+                for asset in build_result.media
+                if asset.kind == SourceMediaKind.IMAGE and asset.url
+            ]
 
         if request.mode == "interactive" and request_id is not None:
             await self._lifecycle.persist_detected_lang(request_id, detected_lang)
 
-        metadata = dict(build_result.metadata)
-        metadata["request_id"] = request_id
-        metadata["detected_lang"] = detected_lang
         return PlatformExtractionResult(
             platform="meta",
             request_id=request_id,
-            content_text=build_result.text,
-            content_source=build_result.content_source,
+            content_text=content_text,
+            content_source=content_source,
             detected_lang=detected_lang,
             title=build_result.title,
-            images=[
-                asset.url
-                for asset in build_result.media
-                if asset.kind == SourceMediaKind.IMAGE and asset.url
-            ],
+            images=images,
             metadata=metadata,
             source_item=source_item,
             normalized_document=normalized_document,
@@ -326,6 +396,37 @@ def _extract_quoted_text(metadata_json: dict[str, Any]) -> str | None:
         or metadata_json.get("quoted_caption")
         or metadata_json.get("quoted_context")
     )
+
+
+def _extract_audio_transcript(metadata_json: Any) -> str | None:
+    if not isinstance(metadata_json, dict):
+        return None
+    return _clean_text(metadata_json.get("audio_transcript"))
+
+
+def _extract_primary_video_url(media: list[SourceMediaAsset]) -> str | None:
+    for asset in media:
+        if asset.kind == SourceMediaKind.VIDEO and asset.url:
+            return asset.url
+    return None
+
+
+def _extract_block_text(
+    text_blocks: list[SourceTextBlock],
+    kind: ExtractedTextKind,
+) -> str | None:
+    for block in text_blocks:
+        if block.kind == kind:
+            return block.text
+    return None
+
+
+def _extract_body_like_text(text_blocks: list[SourceTextBlock]) -> str | None:
+    for kind in (ExtractedTextKind.CAPTION, ExtractedTextKind.BODY):
+        text = _extract_block_text(text_blocks, kind)
+        if text:
+            return text
+    return None
 
 
 def _extract_media_assets(metadata_json: dict[str, Any]) -> list[SourceMediaAsset]:

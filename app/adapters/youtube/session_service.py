@@ -14,10 +14,15 @@ from app.adapters.content.platform_extraction.models import (
     PlatformExtractionRequest,
     PlatformExtractionResult,
 )
+from app.adapters.video.source_extractor import (
+    MetadataDrivenVideoSourceExtractor,
+    VideoSourceRequest,
+    build_video_controls_from_config,
+)
 from app.adapters.youtube.youtube_downloader_parts import metadata as _metadata, storage as _storage
 from app.application.dto.aggregation import (
-    ExtractedTextKind,
-    NormalizedSourceDocument,
+    SourceMediaAsset,
+    SourceMediaKind,
 )
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
@@ -75,6 +80,7 @@ class YouTubeDownloadSessionService:
         self.storage_path = Path(cfg.youtube.storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self._url_locks: dict[str, asyncio.Lock] = {}
+        self._video_source_extractor = MetadataDrivenVideoSourceExtractor()
 
     async def check_storage_limits(self) -> None:
         current_usage = self.calculate_storage_usage()
@@ -243,7 +249,6 @@ class YouTubeDownloadSessionService:
 
         transcript_source = download.get("transcript_source") or "cached"
         detected_lang = download.get("subtitle_language") or detect_language(transcript_text)
-        combined_text = _metadata.combine_metadata_and_transcript(metadata, transcript_text)
         source_item = SourceItem.create(
             kind=SourceKind.YOUTUBE_VIDEO,
             original_value=request.url_text,
@@ -253,26 +258,58 @@ class YouTubeDownloadSessionService:
             title_hint=metadata.get("title"),
             metadata={"platform": "youtube"},
         )
-        normalized_document = NormalizedSourceDocument.from_extracted_content(
-            source_item=source_item,
-            text=combined_text,
-            title=metadata.get("title"),
-            detected_language=str(detected_lang),
-            content_source=str(transcript_source),
-            text_kind=ExtractedTextKind.TRANSCRIPT,
-            metadata=metadata,
+        existing_media: list[SourceMediaAsset] = []
+        video_file_path = str(download.get("video_file_path") or "").strip()
+        if video_file_path:
+            existing_media.append(
+                SourceMediaAsset(
+                    kind=SourceMediaKind.VIDEO,
+                    local_path=video_file_path,
+                    duration_sec=float(metadata.get("duration") or 0) or None,
+                    metadata={"platform": "youtube"},
+                )
+            )
+        thumbnail_file_path = str(download.get("thumbnail_file_path") or "").strip()
+        if thumbnail_file_path:
+            existing_media.append(
+                SourceMediaAsset(
+                    kind=SourceMediaKind.IMAGE,
+                    local_path=thumbnail_file_path,
+                    metadata={"platform": "youtube", "role": "thumbnail"},
+                )
+            )
+        result = self._video_source_extractor.extract(
+            VideoSourceRequest(
+                source_item=source_item,
+                platform="youtube",
+                title=str(metadata.get("title") or "").strip() or None,
+                body_text=_metadata.format_metadata_header(metadata),
+                transcript_text=transcript_text,
+                transcript_source=str(transcript_source),
+                content_source=str(transcript_source),
+                content_text_override=_metadata.combine_metadata_and_transcript(
+                    metadata, transcript_text
+                ),
+                detected_language=str(detected_lang),
+                primary_video_url=None,
+                poster_image_urls=(),
+                existing_media=tuple(existing_media),
+                duration_sec=float(metadata.get("duration") or 0) or None,
+                metadata=metadata,
+                controls=build_video_controls_from_config(self._cfg),
+            )
         )
         return PlatformExtractionResult(
             platform="youtube",
             request_id=req_id,
-            content_text=combined_text,
-            content_source=str(transcript_source),
-            detected_lang=str(detected_lang),
+            content_text=result.content_text,
+            content_source=result.content_source,
+            detected_lang=result.normalized_document.detected_language or str(detected_lang),
             title=metadata.get("title"),
-            images=[],
-            metadata=metadata,
+            images=result.images,
+            metadata=result.metadata,
             source_item=source_item,
-            normalized_document=normalized_document,
+            normalized_document=result.normalized_document,
         )
 
     async def mark_download_started(self, download_id: int) -> None:

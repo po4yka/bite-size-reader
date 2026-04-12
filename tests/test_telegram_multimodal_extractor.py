@@ -74,3 +74,30 @@ def test_summary_context_includes_source_and_caption() -> None:
     assert summary_context is not None
     assert "Forwarded from: Source Channel" in summary_context
     assert "Album caption" in summary_context
+
+
+def test_video_payload_uses_shared_video_source_extractor() -> None:
+    payload = SimpleNamespace(
+        id=21,
+        message_id=21,
+        text=None,
+        caption="Video caption",
+        chat=SimpleNamespace(id=-100777),
+        media_group_id=None,
+        photo=None,
+        document=None,
+        video=SimpleNamespace(file_id="video-1", duration=42),
+        animation=None,
+        forward_from_chat=SimpleNamespace(id=-10042, title="Source Channel"),
+        forward_from_message_id=88,
+        forward_from=None,
+        forward_sender_name=None,
+    )
+
+    source_item = build_source_item_from_telegram_payload(payload)
+    document, metadata = build_telegram_normalized_document(payload, source_item=source_item)
+
+    assert document.media[0].kind.value == "video"
+    assert document.text == "Title: Source Channel\n\nVideo caption"
+    assert metadata["video_processing_strategy"] == "shared_video_source_extractor"
+    assert metadata["video_provenance"]["primary_fact_source"] == "body"

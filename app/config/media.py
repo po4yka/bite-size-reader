@@ -127,6 +127,42 @@ class AttachmentConfig(BaseModel):
         description="Fallback vision models if primary fails",
     )
 
+    video_storage_path: str = Field(
+        default="/data/video-sources",
+        validation_alias="ATTACHMENT_VIDEO_STORAGE_PATH",
+        description="Path to store temporary non-YouTube video assets and frame samples",
+    )
+
+    video_max_download_size_mb: int = Field(
+        default=100,
+        validation_alias="ATTACHMENT_VIDEO_MAX_DOWNLOAD_SIZE_MB",
+        description="Maximum download size for non-YouTube video assets in MB",
+    )
+
+    video_timeout_sec: int = Field(
+        default=120,
+        validation_alias="ATTACHMENT_VIDEO_TIMEOUT_SEC",
+        description="Timeout budget for non-YouTube video extraction in seconds",
+    )
+
+    video_cleanup_after_hours: int = Field(
+        default=24,
+        validation_alias="ATTACHMENT_VIDEO_CLEANUP_AFTER_HOURS",
+        description="Delete temporary non-YouTube video assets after this many hours",
+    )
+
+    video_frame_sample_count: int = Field(
+        default=4,
+        validation_alias="ATTACHMENT_VIDEO_FRAME_SAMPLE_COUNT",
+        description="Maximum number of frame samples to analyze for OCR fallback",
+    )
+
+    video_audio_transcription_enabled: bool = Field(
+        default=True,
+        validation_alias="ATTACHMENT_VIDEO_AUDIO_TRANSCRIPTION_ENABLED",
+        description="Allow audio-transcript fallback for supported non-YouTube video sources",
+    )
+
     max_image_size_mb: int = Field(
         default=10,
         validation_alias="ATTACHMENT_MAX_IMAGE_SIZE_MB",
@@ -176,6 +212,10 @@ class AttachmentConfig(BaseModel):
         "image_max_dimension",
         "cleanup_after_hours",
         "max_vision_pages_per_pdf",
+        "video_max_download_size_mb",
+        "video_timeout_sec",
+        "video_cleanup_after_hours",
+        "video_frame_sample_count",
         mode="before",
     )
     @classmethod

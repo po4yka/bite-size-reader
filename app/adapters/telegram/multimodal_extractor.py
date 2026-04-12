@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.adapters.video.source_extractor import (
+    MetadataDrivenVideoSourceExtractor,
+    VideoSourceRequest,
+    default_video_controls,
+)
 from app.application.dto.aggregation import (
     ExtractedTextKind,
     NormalizedSourceDocument,
@@ -13,6 +18,8 @@ from app.application.dto.aggregation import (
     SourceTextBlock,
 )
 from app.domain.models.source import SourceItem, SourceKind
+
+_VIDEO_SOURCE_EXTRACTOR = MetadataDrivenVideoSourceExtractor()
 
 
 def coerce_telegram_messages(payload: Any) -> list[Any]:
@@ -63,7 +70,7 @@ def build_source_item_from_telegram_payload(
     source_metadata.setdefault("media_count", len(build_telegram_media_assets(messages)))
     source_metadata.setdefault(
         "video_processing_strategy",
-        "deferred_to_phase6"
+        "shared_video_source_extractor"
         if any(getattr(message, "video", None) for message in messages)
         else None,
     )
@@ -92,6 +99,30 @@ def build_telegram_normalized_document(
     if not text and not media:
         msg = "Telegram submission has neither text nor supported media metadata"
         raise ValueError(msg)
+
+    if any(asset.kind == SourceMediaKind.VIDEO for asset in media):
+        video_result = _VIDEO_SOURCE_EXTRACTOR.extract(
+            VideoSourceRequest(
+                source_item=source_item,
+                platform="telegram",
+                title=source_item.title_hint,
+                body_text=text,
+                body_kind=ExtractedTextKind.CAPTION,
+                content_source="telegram_video_native",
+                existing_media=tuple(media),
+                primary_video_url=next(
+                    (
+                        asset.url
+                        for asset in media
+                        if asset.kind == SourceMediaKind.VIDEO and asset.url
+                    ),
+                    None,
+                ),
+                metadata=metadata,
+                controls=default_video_controls(),
+            )
+        )
+        return video_result.normalized_document, video_result.metadata
 
     text_blocks = build_telegram_text_blocks(messages, source_item.title_hint)
     document = NormalizedSourceDocument(
@@ -212,7 +243,7 @@ def build_telegram_extraction_metadata(payload: Any) -> dict[str, Any]:
         "forward_sender_name": _coerce_str(getattr(primary_message, "forward_sender_name", None)),
         "media_count": len(build_telegram_media_assets(messages)),
         "video_processing_strategy": (
-            "deferred_to_phase6"
+            "shared_video_source_extractor"
             if any(getattr(message, "video", None) for message in messages)
             else None
         ),
