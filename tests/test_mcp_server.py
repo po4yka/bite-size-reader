@@ -16,6 +16,7 @@ class FakeFastMCP:
         self.registered_tools: list[str] = []
         self.registered_resources: list[str] = []
         self.run_calls: list[dict[str, Any]] = []
+        self.sse_apps: list[object] = []
 
     def tool(self, *_args: Any, **_kwargs: Any):
         def decorator(fn):
@@ -33,6 +34,11 @@ class FakeFastMCP:
 
     def run(self, **kwargs: Any) -> None:
         self.run_calls.append(kwargs)
+
+    def sse_app(self):
+        app = object()
+        self.sse_apps.append(app)
+        return app
 
 
 @dataclass
@@ -52,6 +58,7 @@ def install_fake_mcp(monkeypatch: pytest.MonkeyPatch) -> None:
     mcp_any: Any = mcp_module
 
     fastmcp_any.FastMCP = FakeFastMCP
+    fastmcp_any.Context = type("FakeContext", (), {})
     transport_any.TransportSecuritySettings = FakeTransportSecuritySettings
     server_any.fastmcp = fastmcp_module
     server_any.transport_security = transport_module
@@ -93,6 +100,7 @@ def test_cli_uses_mcp_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MCP_HOST", "127.0.0.1")
     monkeypatch.setenv("MCP_PORT", "9333")
     monkeypatch.setenv("MCP_USER_ID", "4242")
+    monkeypatch.setenv("MCP_AUTH_MODE", "jwt")
     monkeypatch.setattr(server, "run_server", fake_run_server)
     monkeypatch.setattr(sys, "argv", ["bsr-mcp-server"])
 
@@ -102,6 +110,38 @@ def test_cli_uses_mcp_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured["host"] == "127.0.0.1"
     assert captured["port"] == 9333
     assert captured["user_id"] == 4242
+    assert captured["auth_mode"] == "jwt"
+
+
+def test_run_server_allows_hosted_auth_without_startup_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    server = load_server_module(monkeypatch)
+    monkeypatch.setattr(server._DEFAULT_CONTEXT, "init_runtime", lambda _db_path=None: None)
+
+    captured: dict[str, Any] = {}
+
+    class FakeUvicorn:
+        @staticmethod
+        def run(app: Any, host: str, port: int, log_level: str) -> None:
+            captured["app"] = app
+            captured["host"] = host
+            captured["port"] = port
+            captured["log_level"] = log_level
+
+    monkeypatch.setitem(sys.modules, "uvicorn", FakeUvicorn)
+
+    server.run_server(
+        transport="sse",
+        host="127.0.0.1",
+        port=8200,
+        user_id=None,
+        auth_mode="jwt",
+    )
+
+    assert captured["host"] == "127.0.0.1"
+    assert captured["port"] == 8200
+    assert captured["log_level"] == "info"
 
 
 def test_create_mcp_server_registers_expected_tools_and_resources(

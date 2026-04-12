@@ -67,7 +67,7 @@ class AggregationMcpService:
             return {
                 "error": (
                     "Aggregation MCP tools require a scoped user. "
-                    "Set MCP_USER_ID or start the server with --user-id."
+                    "Set MCP_USER_ID / --user-id for local mode or authenticate the HTTP request."
                 )
             }
         return int(self.context.user_id)
@@ -146,7 +146,11 @@ class AggregationMcpService:
                 user_id=scoped_user,
                 submissions=submissions,
                 language=payload.lang_preference,
-                metadata={"entrypoint": "mcp", **dict(payload.metadata or {})},
+                metadata={
+                    **dict(payload.metadata or {}),
+                    "entrypoint": "mcp",
+                    "client_id": self.context.client_id,
+                },
             )
             persisted_session = await repo.async_get_aggregation_session(
                 result.aggregation.session_id

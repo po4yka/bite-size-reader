@@ -376,6 +376,10 @@ Controls which embedding backend generates vectors for semantic search.
 | `MCP_USER_ID` | _(none)_ | Scope MCP reads to a single user ID |
 | `MCP_ALLOW_REMOTE_SSE` | `false` | Allow non-loopback SSE bind host; also disables DNS rebinding protection |
 | `MCP_ALLOW_UNSCOPED_SSE` | `false` | Allow SSE without explicit user scope |
+| `MCP_AUTH_MODE` | `disabled` | Hosted MCP auth mode: `disabled` or `jwt` |
+| `MCP_FORWARDED_ACCESS_TOKEN_HEADER` | `X-BSR-Forwarded-Access-Token` | Trusted-gateway header for the forwarded original bearer token |
+| `MCP_FORWARDED_SECRET_HEADER` | `X-BSR-MCP-Forwarding-Secret` | Trusted-gateway header for the shared forwarding secret |
+| `MCP_FORWARDING_SECRET` | _(none)_ | Shared secret required before trusting forwarded access-token headers |
 
 ## Mobile API and Auth
 

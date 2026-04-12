@@ -2,7 +2,12 @@
 
 Bite-Size Reader exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that allows external AI agents (OpenClaw, Claude Desktop, etc.) to search, retrieve, and explore stored article summaries, plus run local trusted aggregation bundles when the server is scoped to a single user.
 
-Hosted public multi-user MCP is not implemented yet. The current server is intended for local stdio clients or other trusted deployments where startup scoping is acceptable.
+The server now supports two deployment modes:
+
+- **Local/trusted mode**: stdio or SSE with startup scoping via `MCP_USER_ID` / `--user-id`
+- **Hosted public mode**: SSE with request-scoped JWT auth on every HTTP request
+
+This phase evolves the existing MCP server rather than adding a separate MCP gateway. Public identity is resolved from the same access-token model as the REST API, while local stdio/SSE keeps the existing startup-scope behavior.
 
 ## Configuration
 
@@ -15,6 +20,10 @@ Hosted public multi-user MCP is not implemented yet. The current server is inten
 | `MCP_USER_ID` | _(none)_ | Startup user scope for local stdio/SSE deployments (recommended for SSE) |
 | `MCP_ALLOW_REMOTE_SSE` | `false` | Allow binding SSE to non-loopback hosts (also disables DNS rebinding protection) |
 | `MCP_ALLOW_UNSCOPED_SSE` | `false` | Allow SSE without `MCP_USER_ID` |
+| `MCP_AUTH_MODE` | `disabled` | Hosted auth mode: `disabled` or `jwt` |
+| `MCP_FORWARDED_ACCESS_TOKEN_HEADER` | `X-BSR-Forwarded-Access-Token` | Trusted-gateway header for forwarding the original access token |
+| `MCP_FORWARDED_SECRET_HEADER` | `X-BSR-MCP-Forwarding-Secret` | Trusted-gateway header carrying the shared forwarding secret |
+| `MCP_FORWARDING_SECRET` | _(none)_ | Shared secret required before trusting forwarded access-token headers |
 
 See `docs/environment_variables.md` for full config reference.
 
@@ -32,30 +41,43 @@ python -m app.cli.mcp_server
 python -m app.cli.mcp_server --transport sse --user-id 12345
 ```
 
+**Hosted public SSE mode** (request-scoped auth, no startup user scope required):
+
+```bash
+python -m app.cli.mcp_server --transport sse --auth-mode jwt --allow-remote-sse
+```
+
 SSE safety defaults:
 
 - Binds to loopback (`127.0.0.1`) unless you explicitly enable remote bind.
-- Requires user scoping (`MCP_USER_ID` / `--user-id`) unless you explicitly allow unscoped SSE.
+- Requires either startup scoping (`MCP_USER_ID` / `--user-id`) or hosted auth (`MCP_AUTH_MODE=jwt`).
 - DNS rebinding protection is enabled by default; when `allow_remote_sse` is set, it is disabled so Docker-internal hostnames (e.g. `bsr-mcp:8200`) are accepted.
+
+Hosted auth behavior:
+
+- `MCP_AUTH_MODE=jwt` validates the same access tokens used by the REST API.
+- Direct `Authorization: Bearer <token>` requests are supported.
+- A trusted gateway may forward the original access token via `MCP_FORWARDED_ACCESS_TOKEN_HEADER`, but only when `MCP_FORWARDING_SECRET` is configured and the gateway also sends `MCP_FORWARDED_SECRET_HEADER`.
+- Every tool and resource call resolves the effective user from the authenticated HTTP request. The startup scope is preserved for local mode and does not leak across hosted requests.
 
 Aggregation safety defaults:
 
-- Aggregation MCP tools require a scoped user (`MCP_USER_ID` / `--user-id`).
-- Aggregation bundle creation is intended for local stdio use or other trusted single-user deployments.
+- Aggregation MCP tools require an effective scoped user, either from startup scope or hosted request auth.
+- Aggregation bundle creation now reuses the request-scoped `client_id` when hosted auth is enabled.
 - If the MCP process only has read-only database access, aggregation creation will fail even though read tools still work.
 
 User scoping modes:
 
 - Local mode keeps using the startup scope from `MCP_USER_ID` / `--user-id`.
-- MCP internals now support a request-scoped user override, which is the seam intended for a future hosted multi-user deployment.
-- Public hosted auth is still incomplete: bearer-token validation, trusted gateway forwarding, and transport-to-request identity wiring are not implemented yet.
-- Until that lands, treat SSE as local/trusted infrastructure and rely on startup scoping rather than public internet exposure.
+- Hosted public mode binds `request.state.mcp_identity` from each authenticated SSE request, and the MCP runtime resolves user scope from that request context first.
+- Read tools and write tools both use the same request-scoped identity path, so public requests do not depend on process-wide user configuration.
+- If no request-scoped identity is available, MCP falls back to the existing startup scope behavior.
 
 ## Docker Deployment (SSE)
 
 The `ops/docker/docker-compose.yml` file includes an opt-in `mcp` profile so the SSE server is not started by a plain `docker compose up`.
 
-Start it explicitly:
+Start the local/trusted profile explicitly:
 
 ```bash
 MCP_USER_ID=12345 docker compose -f ops/docker/docker-compose.yml --profile mcp up -d mcp
@@ -89,6 +111,8 @@ Key design decisions:
 - **Explicit user scoping** (`MCP_USER_ID`) -- required for SSE unless you also opt into `MCP_ALLOW_UNSCOPED_SSE=true`.
 - **`MCP_ALLOW_REMOTE_SSE=true`** -- required because `0.0.0.0` is non-loopback inside Docker. This also disables the MCP SDK's DNS rebinding protection so that Docker-internal hostnames (`bsr-mcp`, `bsr-mcp:8200`) are accepted in the `Host` header.
 - **Loopback port binding** (`127.0.0.1:8200`) -- prevents direct external access from the host network.
+
+For hosted public deployments, prefer a dedicated profile or deployment manifest that sets `MCP_AUTH_MODE=jwt` and leaves `MCP_USER_ID` unset. If you terminate client auth at a trusted gateway, configure `MCP_FORWARDING_SECRET` and forward the original access token instead of forwarding a raw user ID.
 
 ### Connecting from another Docker Compose project
 
@@ -162,3 +186,5 @@ Example mcporter config:
 Source: `app/mcp/server.py`
 
 The server uses [FastMCP](https://github.com/modelcontextprotocol/python-sdk) and connects to the same SQLite database as the main bot. Read tools use the existing read-scoped MCP runtime; aggregation tools lazily initialize the normal API runtime so they can reuse the standard extraction and synthesis workflow.
+
+For hosted auth, the repo wraps the FastMCP SSE ASGI app with repo-owned HTTP auth middleware instead of relying on process-wide scope. That middleware validates Bite-Size Reader JWT access tokens, stores `mcp_identity` on the Starlette request, and `McpServerContext` resolves the effective user from the active low-level MCP request context before falling back to local startup scope.

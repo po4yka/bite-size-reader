@@ -161,6 +161,26 @@ class McpConfig(BaseModel):
         validation_alias="MCP_ALLOW_UNSCOPED_SSE",
         description="Allow SSE transport without MCP_USER_ID scoping",
     )
+    auth_mode: str = Field(
+        default="disabled",
+        validation_alias="MCP_AUTH_MODE",
+        description="Hosted MCP auth mode: 'disabled' or 'jwt'",
+    )
+    forwarded_access_token_header: str = Field(
+        default="X-BSR-Forwarded-Access-Token",
+        validation_alias="MCP_FORWARDED_ACCESS_TOKEN_HEADER",
+        description="Header used by a trusted gateway to forward the original bearer token",
+    )
+    forwarded_secret_header: str = Field(
+        default="X-BSR-MCP-Forwarding-Secret",
+        validation_alias="MCP_FORWARDED_SECRET_HEADER",
+        description="Header carrying the shared secret for trusted token forwarding",
+    )
+    forwarding_secret: str | None = Field(
+        default=None,
+        validation_alias="MCP_FORWARDING_SECRET",
+        description="Optional shared secret required when trusting forwarded bearer tokens",
+    )
 
     @field_validator("transport", mode="before")
     @classmethod
@@ -172,6 +192,41 @@ class McpConfig(BaseModel):
             msg = "MCP transport must be 'stdio' or 'sse'"
             raise ValueError(msg)
         return value
+
+    @field_validator("auth_mode", mode="before")
+    @classmethod
+    def _validate_auth_mode(cls, value: Any) -> str:
+        if value in (None, ""):
+            return "disabled"
+        normalized = str(value).strip().lower()
+        if normalized not in ("disabled", "jwt"):
+            msg = "MCP auth mode must be 'disabled' or 'jwt'"
+            raise ValueError(msg)
+        return normalized
+
+    @field_validator(
+        "forwarded_access_token_header",
+        "forwarded_secret_header",
+        mode="before",
+    )
+    @classmethod
+    def _validate_header_name(cls, value: Any) -> str:
+        if value in (None, ""):
+            msg = "MCP forwarded header name must not be empty"
+            raise ValueError(msg)
+        header_name = str(value).strip()
+        if any(ch.isspace() for ch in header_name):
+            msg = "MCP forwarded header name must not contain whitespace"
+            raise ValueError(msg)
+        return header_name
+
+    @field_validator("forwarding_secret", mode="before")
+    @classmethod
+    def _validate_forwarding_secret(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        secret = str(value).strip()
+        return secret or None
 
     @field_validator("port", mode="before")
     @classmethod

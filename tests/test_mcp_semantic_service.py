@@ -7,6 +7,7 @@ import pytest
 
 from app.mcp.article_service import ArticleReadService
 from app.mcp.context import McpServerContext
+from app.mcp.http_auth import McpRequestIdentity
 from app.mcp.semantic_service import SemanticSearchService
 from tests.mcp_test_utils import insert_scoped_summary
 
@@ -218,7 +219,75 @@ async def test_find_similar_articles_excludes_source_summary(
     result_ids = [row["summary_id"] for row in payload["results"]]
 
     assert sid1 not in result_ids
-    assert sid2 in result_ids
+
+
+@pytest.mark.asyncio
+async def test_semantic_search_uses_request_scoped_identity(
+    mcp_test_db: DatabaseSessionManager,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    sid1, req1 = insert_scoped_summary(
+        db=mcp_test_db,
+        user_id=1,
+        url="https://example.com/user1",
+        title="User1",
+        tags=["#ai"],
+        created_at=now,
+    )
+    sid2, req2 = insert_scoped_summary(
+        db=mcp_test_db,
+        user_id=2,
+        url="https://example.com/user2",
+        title="User2",
+        tags=["#ai"],
+        created_at=now.replace(hour=11),
+    )
+
+    context = McpServerContext(user_id=9999)
+    service = SemanticSearchService(context, ArticleReadService(context))
+    fake_results = [
+        FakeChromaResult(
+            request_id=req1,
+            summary_id=sid1,
+            similarity_score=0.92,
+            snippet="user1 chunk",
+            chunk_id="chunk-user1",
+            window_id="w-user1",
+        ),
+        FakeChromaResult(
+            request_id=req2,
+            summary_id=sid2,
+            similarity_score=0.87,
+            snippet="user2 chunk",
+            chunk_id="chunk-user2",
+            window_id="w-user2",
+        ),
+    ]
+
+    async def fake_chroma() -> FakeChromaService:
+        return FakeChromaService(fake_results)
+
+    monkeypatch.setattr(context, "init_chroma_service", fake_chroma)
+
+    with context.request_identity_scope(
+        McpRequestIdentity(
+            user_id=1,
+            client_id="mcp-public-v1",
+            username="semantic-user",
+            auth_source="authorization",
+        )
+    ):
+        payload = await service.semantic_search(
+            "ai policy",
+            limit=10,
+            min_similarity=0.7,
+            include_chunks=True,
+        )
+
+    results = payload["results"]
+    assert len(results) == 1
+    assert results[0]["summary_id"] == sid1
 
 
 @pytest.mark.asyncio

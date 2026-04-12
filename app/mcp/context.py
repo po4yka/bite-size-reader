@@ -9,6 +9,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any, cast
 
 import app.di.mcp as mcp_di
+from app.mcp.http_auth import McpRequestIdentity
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -33,6 +34,12 @@ class McpServerContext:
         self._runtime: Any = None
         self._api_runtime: Any = None
         self._user_id = user_id
+        self._request_identity: contextvars.ContextVar[McpRequestIdentity | None | object] = (
+            contextvars.ContextVar(
+                "mcp_request_identity",
+                default=_NO_REQUEST_USER_SCOPE,
+            )
+        )
         self._request_user_id: contextvars.ContextVar[int | None | object] = contextvars.ContextVar(
             "mcp_request_user_id",
             default=_NO_REQUEST_USER_SCOPE,
@@ -51,10 +58,38 @@ class McpServerContext:
 
     @property
     def user_id(self) -> int | None:
+        identity = self.request_identity
+        if identity is not None:
+            return identity.user_id
         request_user_id = self._request_user_id.get()
         if request_user_id is not _NO_REQUEST_USER_SCOPE:
             return cast("int | None", request_user_id)
         return self._runtime.scope.user_id if self._runtime is not None else self._user_id
+
+    @property
+    def request_identity(self) -> McpRequestIdentity | None:
+        request_identity = self._active_mcp_request_identity()
+        if request_identity is not None:
+            return request_identity
+        scoped_identity = self._request_identity.get()
+        if scoped_identity is _NO_REQUEST_USER_SCOPE:
+            return None
+        return cast("McpRequestIdentity | None", scoped_identity)
+
+    @property
+    def client_id(self) -> str | None:
+        identity = self.request_identity
+        return identity.client_id if identity is not None else None
+
+    @property
+    def username(self) -> str | None:
+        identity = self.request_identity
+        return identity.username if identity is not None else None
+
+    @property
+    def auth_source(self) -> str | None:
+        identity = self.request_identity
+        return identity.auth_source if identity is not None else None
 
     @property
     def runtime(self) -> Any | None:
@@ -96,6 +131,39 @@ class McpServerContext:
         self._user_id = user_id
         if self._runtime is not None:
             mcp_di.set_mcp_user_scope(self._runtime, user_id)
+
+    def _request_identity_from_request(self, request: Any | None) -> McpRequestIdentity | None:
+        if request is None:
+            return None
+        state = getattr(request, "state", None)
+        identity = getattr(state, "mcp_identity", None)
+        return identity if isinstance(identity, McpRequestIdentity) else None
+
+    def _active_mcp_request_identity(self) -> McpRequestIdentity | None:
+        with contextlib.suppress(ImportError, LookupError):
+            from mcp.server.lowlevel.server import request_ctx
+
+            request_context = request_ctx.get()
+            request = getattr(request_context, "request", None)
+            return self._request_identity_from_request(request)
+        return None
+
+    def set_request_identity(
+        self,
+        identity: McpRequestIdentity | None,
+    ) -> contextvars.Token[Any]:
+        return self._request_identity.set(identity)
+
+    def reset_request_identity(self, token: contextvars.Token[Any]) -> None:
+        self._request_identity.reset(token)
+
+    @contextlib.contextmanager
+    def request_identity_scope(self, identity: McpRequestIdentity | None) -> Iterator[None]:
+        token = self.set_request_identity(identity)
+        try:
+            yield
+        finally:
+            self.reset_request_identity(token)
 
     def set_request_user_scope(self, user_id: int | None) -> contextvars.Token[Any]:
         return self._request_user_id.set(user_id)

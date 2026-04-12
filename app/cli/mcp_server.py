@@ -10,6 +10,9 @@ Usage:
     # SSE transport (trusted/local by default, requires startup user scope)
     python -m app.cli.mcp_server --transport sse --user-id 12345
 
+    # Hosted/public SSE mode with JWT auth
+    python -m app.cli.mcp_server --transport sse --auth-mode jwt --allow-remote-sse
+
     # Custom database path
     python -m app.cli.mcp_server --db-path /path/to/app.db
 """
@@ -61,6 +64,12 @@ def main() -> None:
         help="Set startup MCP user scope for local/trusted mode (or use MCP_USER_ID)",
     )
     parser.add_argument(
+        "--auth-mode",
+        choices=["disabled", "jwt"],
+        default=None,
+        help="Hosted request auth mode for SSE transport (defaults to MCP_AUTH_MODE)",
+    )
+    parser.add_argument(
         "--allow-remote-sse",
         action="store_true",
         help="Allow SSE bind on non-loopback hosts (unsafe by default)",
@@ -82,6 +91,7 @@ def main() -> None:
     host = args.host or cfg.host
     port = args.port if args.port is not None else cfg.port
     user_id = args.user_id if args.user_id is not None else cfg.user_id
+    auth_mode = args.auth_mode or cfg.auth_mode
     allow_remote_sse = args.allow_remote_sse or cfg.allow_remote_sse
     allow_unscoped_sse = args.allow_unscoped_sse or cfg.allow_unscoped_sse
 
@@ -99,6 +109,10 @@ def main() -> None:
         port=port,
         db_path=args.db_path,
         user_id=user_id,
+        auth_mode=auth_mode,
+        forwarded_access_token_header=cfg.forwarded_access_token_header,
+        forwarded_secret_header=cfg.forwarded_secret_header,
+        forwarding_secret=cfg.forwarding_secret,
         allow_remote_sse=allow_remote_sse,
         allow_unscoped_sse=allow_unscoped_sse,
     )

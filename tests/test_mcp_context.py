@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from app.db.models import database_proxy
 from app.db.session import DatabaseSessionManager
 from app.mcp.context import McpServerContext
+from app.mcp.http_auth import McpRequestIdentity
 
 
 def test_init_runtime_opens_sqlite_read_only(tmp_path: Any) -> None:
@@ -234,3 +235,61 @@ def test_scope_filters_use_effective_request_user_scope() -> None:
     with context.request_user_scope(None):
         assert context.request_scope_filters(_RequestModel) == [("is_deleted", False)]
         assert context.collection_scope_filters(_CollectionModel) == [("is_deleted", False)]
+
+
+def test_request_identity_scope_exposes_user_and_client() -> None:
+    context = McpServerContext(user_id=111)
+    identity = McpRequestIdentity(
+        user_id=222,
+        client_id="mcp-client",
+        username="scoped-user",
+        auth_source="authorization",
+    )
+
+    with context.request_identity_scope(identity):
+        assert context.user_id == 222
+        assert context.client_id == "mcp-client"
+        assert context.username == "scoped-user"
+        assert context.auth_source == "authorization"
+
+    assert context.user_id == 111
+    assert context.client_id is None
+    assert context.username is None
+    assert context.auth_source is None
+
+
+def test_request_identity_scope_takes_precedence_over_request_user_override() -> None:
+    context = McpServerContext(user_id=111)
+    identity = McpRequestIdentity(
+        user_id=222,
+        client_id="mcp-client",
+        username=None,
+        auth_source="forwarded_bearer",
+    )
+
+    with context.request_user_scope(333):
+        with context.request_identity_scope(identity):
+            assert context.user_id == 222
+            assert context.client_id == "mcp-client"
+
+        assert context.user_id == 333
+
+
+def test_active_mcp_request_identity_takes_precedence() -> None:
+    from mcp.server.lowlevel.server import request_ctx
+
+    context = McpServerContext(user_id=111)
+    identity = McpRequestIdentity(
+        user_id=444,
+        client_id="mcp-public-v1",
+        username="active-request",
+        auth_source="authorization",
+    )
+    fake_request = SimpleNamespace(state=SimpleNamespace(mcp_identity=identity))
+    token = request_ctx.set(cast("Any", SimpleNamespace(request=fake_request)))
+    try:
+        assert context.user_id == 444
+        assert context.client_id == "mcp-public-v1"
+        assert context.username == "active-request"
+    finally:
+        request_ctx.reset(token)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -11,6 +12,7 @@ from app.mcp.aggregation_service import AggregationMcpService
 from app.mcp.article_service import ArticleReadService
 from app.mcp.catalog_service import CatalogReadService
 from app.mcp.context import McpServerContext
+from app.mcp.http_auth import McpHttpAuthMiddleware
 from app.mcp.resource_registrations import register_resources
 from app.mcp.semantic_service import SemanticSearchService
 from app.mcp.tool_registrations import register_tools
@@ -27,6 +29,25 @@ _DEFAULT_CONTEXT = McpServerContext(logger=logger)
 
 def _is_loopback_host(host: str) -> bool:
     return host.strip().lower() in {"127.0.0.1", "::1", "localhost"}
+
+
+def _build_sse_app(
+    *,
+    mcp_server: FastMCP,
+    auth_mode: str,
+    forwarded_access_token_header: str,
+    forwarded_secret_header: str,
+    forwarding_secret: str | None,
+) -> Any:
+    app: Any = mcp_server.sse_app()
+    if auth_mode == "jwt":
+        app = McpHttpAuthMiddleware(
+            app,
+            forwarded_access_token_header=forwarded_access_token_header,
+            forwarded_secret_header=forwarded_secret_header,
+            forwarding_secret=forwarding_secret,
+        )
+    return app
 
 
 def create_mcp_server(context: McpServerContext | None = None) -> FastMCP:
@@ -73,6 +94,10 @@ def run_server(
     port: int = 8200,
     db_path: str | None = None,
     user_id: int | None = None,
+    auth_mode: str = "disabled",
+    forwarded_access_token_header: str = "X-BSR-Forwarded-Access-Token",
+    forwarded_secret_header: str = "X-BSR-MCP-Forwarding-Secret",
+    forwarding_secret: str | None = None,
     allow_remote_sse: bool = False,
     allow_unscoped_sse: bool = False,
 ) -> None:
@@ -85,6 +110,10 @@ def run_server(
         user_id if user_id is not None else "all",
     )
 
+    if transport == "stdio" and auth_mode != "disabled":
+        msg = "HTTP MCP auth modes are only supported with SSE transport."
+        raise ValueError(msg)
+
     if transport == "sse" and not allow_remote_sse and not _is_loopback_host(host):
         msg = (
             "Refusing to bind MCP SSE to non-loopback host without explicit opt-in "
@@ -92,19 +121,36 @@ def run_server(
         )
         raise ValueError(msg)
 
-    if transport == "sse" and user_id is None and not allow_unscoped_sse:
+    if (
+        transport == "sse"
+        and auth_mode == "disabled"
+        and user_id is None
+        and not allow_unscoped_sse
+    ):
         msg = (
             "Refusing to start unscoped MCP SSE server. Set MCP_USER_ID/--user-id or "
             "explicitly acknowledge risk via allow_unscoped_sse=True / --allow-unscoped-sse."
         )
         raise ValueError(msg)
 
-    if user_id is None:
+    if auth_mode == "jwt":
+        logger.info("Hosted MCP request auth enabled (mode=jwt)")
+    elif user_id is None:
         logger.warning("MCP startup user scope is disabled; queries can access all users")
 
     if transport == "sse":
-        mcp.settings.host = host
-        mcp.settings.port = port
-        mcp.run(transport="sse")
+        import uvicorn
+
+        if allow_remote_sse:
+            mcp.settings.transport_security = None
+
+        app = _build_sse_app(
+            mcp_server=mcp,
+            auth_mode=auth_mode,
+            forwarded_access_token_header=forwarded_access_token_header,
+            forwarded_secret_header=forwarded_secret_header,
+            forwarding_secret=forwarding_secret,
+        )
+        uvicorn.run(app, host=host, port=port, log_level="info")
     else:
         mcp.run(transport="stdio")
