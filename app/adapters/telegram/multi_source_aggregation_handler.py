@@ -58,10 +58,10 @@ class MultiSourceAggregationHandler:
             text=text,
             include_message_source=self._should_include_message_source(message),
         )
-        if len(submissions) < 2:
+        if not submissions:
             await self._response_formatter.safe_reply(
                 message,
-                "Send at least two links, or combine a link with a forwarded message or attachment.",
+                "Send at least one link, or provide a forwarded message or attachment to aggregate.",
             )
             return True
 

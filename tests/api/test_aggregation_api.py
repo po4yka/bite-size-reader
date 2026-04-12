@@ -136,6 +136,80 @@ def test_create_aggregation_bundle_endpoint_returns_session_and_items(client, db
     ]
 
 
+def test_create_aggregation_bundle_endpoint_accepts_single_item(client, db, user_factory):
+    allowed_ids = Config.get_allowed_user_ids()
+    user_id = int(allowed_ids[0]) if allowed_ids else 424242
+    user_factory(username="aggregation_api_single_user", telegram_user_id=user_id)
+
+    fake_result = MultiSourceAggregationRunResult(
+        extraction=MultiSourceExtractionOutput(
+            session_id=78,
+            correlation_id="cid-agg-single",
+            status="completed",
+            successful_count=1,
+            failed_count=0,
+            duplicate_count=0,
+            items=[
+                SourceExtractionItemResult(
+                    position=0,
+                    item_id=1101,
+                    source_item_id="src_single",
+                    source_kind=SourceKind.WEB_ARTICLE,
+                    status="extracted",
+                    request_id=601,
+                ),
+            ],
+        ),
+        aggregation=MultiSourceAggregationOutput(
+            session_id=78,
+            correlation_id="cid-agg-single",
+            status="completed",
+            source_type="web_article",
+            total_items=1,
+            extracted_items=1,
+            used_source_count=1,
+            overview="Single-source synthesis",
+            source_coverage=[
+                SourceCoverageEntry(
+                    position=0,
+                    item_id=1101,
+                    source_item_id="src_single",
+                    source_kind=SourceKind.WEB_ARTICLE,
+                    status="extracted",
+                    used_in_summary=True,
+                ),
+            ],
+        ),
+    )
+
+    runtime = _set_runtime(client, db)
+    try:
+        with patch(
+            "app.application.services.multi_source_aggregation_service.MultiSourceAggregationService.aggregate",
+            new=AsyncMock(return_value=fake_result),
+        ):
+            response = client.post(
+                "/v1/aggregations",
+                headers=_auth_headers(user_id),
+                json={
+                    "items": [
+                        {"url": "https://example.com/article"},
+                    ],
+                    "lang_preference": "en",
+                },
+            )
+    finally:
+        client.app.state.runtime = runtime
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["session"]["sessionId"] == 78
+    assert payload["data"]["session"]["successfulCount"] == 1
+    assert payload["data"]["aggregation"]["source_type"] == "web_article"
+    assert [item["sourceKind"] for item in payload["data"]["items"]] == ["web_article"]
+
+
 def test_get_aggregation_bundle_endpoint_returns_persisted_session(client, db, user_factory):
     allowed_ids = Config.get_allowed_user_ids()
     user_id = int(allowed_ids[0]) if allowed_ids else 424242

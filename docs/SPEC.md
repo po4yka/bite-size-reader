@@ -955,7 +955,7 @@ sequenceDiagram
 
 - Summaries: `GET /v1/summaries`, `GET /v1/summaries/{id}`, `PATCH /v1/summaries/{id}` (`is_read`), `DELETE /v1/summaries/{id}` (soft delete).
 - Requests: `POST /v1/requests` (url|forward), `GET /v1/requests/{id}`, `GET /v1/requests/{id}/status`, `POST /v1/requests/{id}/retry`.
-- Aggregations: `POST /v1/aggregations` (bundle of 2-25 source URLs), `GET /v1/aggregations/{id}`.
+- Aggregations: `POST /v1/aggregations` (bundle of 1-25 source URLs), `GET /v1/aggregations/{id}`.
 - Search/Topics: `GET /v1/search`, `GET /v1/topics/trending`, `GET /v1/topics/related`.
 - URL utils: `GET /v1/urls/check-duplicate`.
 - User: `GET /v1/user/preferences`, `PATCH /v1/user/preferences`, `GET /v1/user/stats`.

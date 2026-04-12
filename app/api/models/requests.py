@@ -275,7 +275,7 @@ class AggregationBundleItemRequest(BaseModel):
 class CreateAggregationBundleRequest(BaseModel):
     """Request body for bundle aggregation outside Telegram."""
 
-    items: list[AggregationBundleItemRequest] = Field(min_length=2, max_length=25)
+    items: list[AggregationBundleItemRequest] = Field(min_length=1, max_length=25)
     lang_preference: Literal["auto", "en", "ru"] = "auto"
     metadata: dict[str, Any] | None = None
 
