@@ -53,6 +53,7 @@ class TelegramCommandDispatcherDeps:
     context_factory: Any
     onboarding_handler: Any
     admin_handler: Any
+    aggregation_commands_handler: Any
     url_commands_handler: Any
     content_handler: Any
     search_handler: Any

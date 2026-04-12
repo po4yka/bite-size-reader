@@ -27,6 +27,9 @@ if TYPE_CHECKING:
     from app.adapters.telegram.callback_handler import CallbackHandler
     from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
     from app.adapters.telegram.forward_processor import ForwardProcessor
+    from app.adapters.telegram.multi_source_aggregation_handler import (
+        MultiSourceAggregationHandler,
+    )
     from app.adapters.telegram.routing.models import PreparedRouteContext
     from app.adapters.telegram.task_manager import UserTaskManager
     from app.adapters.telegram.url_handler import URLHandler
@@ -60,6 +63,7 @@ class MessageRouter:
         audit_func: Callable[[str, str, dict], None],
         task_manager: UserTaskManager | None = None,
         attachment_processor: AttachmentProcessor | None = None,
+        aggregation_handler: MultiSourceAggregationHandler | None = None,
         user_repo: UserRepositoryPort | None = None,
         callback_handler: CallbackHandler | None = None,
         lang: str = "en",
@@ -95,6 +99,7 @@ class MessageRouter:
             interaction_recorder=self._interaction_recorder,
             callback_handler=callback_handler,
             attachment_processor=attachment_processor,
+            aggregation_handler=aggregation_handler,
             lang=lang,
         )
         self._failure_handler = MessageRouteFailureHandler(

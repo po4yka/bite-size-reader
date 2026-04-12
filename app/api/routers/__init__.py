@@ -4,6 +4,7 @@ API route handlers.
 
 from . import (
     admin,
+    aggregation,
     auth,
     backups,
     collections,
@@ -30,6 +31,7 @@ from . import (
 
 __all__ = [
     "admin",
+    "aggregation",
     "auth",
     "backups",
     "collections",

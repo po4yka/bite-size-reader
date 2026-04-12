@@ -33,6 +33,7 @@ from app.api.middleware import (
 from app.api.models.responses import success_response
 from app.api.routers import (
     admin,
+    aggregation,
     auth,
     backups,
     collections,
@@ -158,6 +159,7 @@ app.middleware("http")(correlation_id_middleware)
 
 # Include routers
 app.include_router(auth.router, prefix="/v1/auth", tags=["Authentication"])
+app.include_router(aggregation.router, prefix="/v1/aggregations", tags=["Aggregations"])
 app.include_router(collections.router, prefix="/v1/collections", tags=["Collections"])
 app.include_router(summaries.router, prefix="/v1/summaries", tags=["Summaries"])
 app.include_router(summaries.router, prefix="/v1/articles", tags=["Articles"])

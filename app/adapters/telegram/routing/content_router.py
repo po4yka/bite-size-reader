@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.core.ui_strings import t
-from app.core.url_utils import looks_like_url
+from app.core.url_utils import extract_all_urls, looks_like_url
 
 if TYPE_CHECKING:
     from app.adapters.attachment.attachment_processor import AttachmentProcessor
@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from app.adapters.telegram.callback_handler import CallbackHandler
     from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
     from app.adapters.telegram.forward_processor import ForwardProcessor
+    from app.adapters.telegram.multi_source_aggregation_handler import (
+        MultiSourceAggregationHandler,
+    )
     from app.adapters.telegram.url_handler import URLHandler
 
     from .interactions import MessageInteractionRecorder
@@ -37,6 +40,7 @@ class MessageContentRouter:
         interaction_recorder: MessageInteractionRecorder,
         callback_handler: CallbackHandler | None = None,
         attachment_processor: AttachmentProcessor | None = None,
+        aggregation_handler: MultiSourceAggregationHandler | None = None,
         lang: str = "en",
     ) -> None:
         self.command_dispatcher = command_dispatcher
@@ -46,6 +50,7 @@ class MessageContentRouter:
         self.interaction_recorder = interaction_recorder
         self.callback_handler = callback_handler
         self.attachment_processor = attachment_processor
+        self.aggregation_handler = aggregation_handler
         self._lang = lang
 
     async def route(
@@ -106,6 +111,32 @@ class MessageContentRouter:
                 context.correlation_id,
                 interaction_id,
                 start_time,
+            )
+            return
+
+        if context.text and self.aggregation_handler is not None:
+            url_count = len(extract_all_urls(context.text))
+            if url_count >= 2:
+                await self.aggregation_handler.handle_message_bundle(
+                    message=context.message,
+                    text=context.text,
+                    uid=context.uid,
+                    correlation_id=context.correlation_id,
+                    interaction_id=interaction_id,
+                )
+                return
+
+        if (
+            self.aggregation_handler is not None
+            and self._should_handle_attachment(context.message)
+            and extract_all_urls(context.text)
+        ):
+            await self.aggregation_handler.handle_message_bundle(
+                message=context.message,
+                text=context.text,
+                uid=context.uid,
+                correlation_id=context.correlation_id,
+                interaction_id=interaction_id,
             )
             return
 
@@ -184,11 +215,21 @@ class MessageContentRouter:
         fwd_text = (
             getattr(message, "text", None) or getattr(message, "caption", None) or ""
         ).strip()
+        forwarded_urls = extract_all_urls(fwd_text)
         has_supported_attachment = self.attachment_processor and self._should_handle_attachment(
             message
         )
 
         if fwd_chat is not None and fwd_msg_id is not None:
+            if self.aggregation_handler is not None and forwarded_urls:
+                await self.aggregation_handler.handle_message_bundle(
+                    message=message,
+                    text=fwd_text,
+                    uid=context.uid,
+                    correlation_id=context.correlation_id,
+                    interaction_id=interaction_id,
+                )
+                return
             if has_supported_attachment:
                 await self.attachment_processor.handle_attachment_flow(
                     message,
@@ -204,6 +245,15 @@ class MessageContentRouter:
             return
 
         if fwd_from_user is not None or fwd_sender_name:
+            if self.aggregation_handler is not None and forwarded_urls:
+                await self.aggregation_handler.handle_message_bundle(
+                    message=message,
+                    text=fwd_text,
+                    uid=context.uid,
+                    correlation_id=context.correlation_id,
+                    interaction_id=interaction_id,
+                )
+                return
             if has_supported_attachment:
                 await self.attachment_processor.handle_attachment_flow(
                     message,
@@ -219,6 +269,16 @@ class MessageContentRouter:
                 )
                 return
             await self._reply_forward_no_text(context, interaction_id, start_time)
+            return
+
+        if self.aggregation_handler is not None and forwarded_urls:
+            await self.aggregation_handler.handle_message_bundle(
+                message=message,
+                text=fwd_text,
+                uid=context.uid,
+                correlation_id=context.correlation_id,
+                interaction_id=interaction_id,
+            )
             return
 
         if has_supported_attachment:

@@ -39,6 +39,7 @@ class MultiSourceExtractionInput(BaseModel):
     items: list[SourceSubmission]
     allow_partial_success: bool = True
     metadata: dict[str, Any] = Field(default_factory=dict)
+    progress_callback: Any = None
 
 
 class MultiSourceExtractionAgent(
@@ -67,6 +68,14 @@ class MultiSourceExtractionAgent(
             "multi_source_extraction_started",
             total_items=len(input_data.items),
             allow_partial_success=input_data.allow_partial_success,
+        )
+        await _emit_progress(
+            input_data.progress_callback,
+            {
+                "event": "session_started",
+                "correlation_id": input_data.correlation_id,
+                "total_items": len(input_data.items),
+            },
         )
 
         try:
@@ -122,6 +131,16 @@ class MultiSourceExtractionAgent(
             if duplicate_position is not None:
                 duplicate_count += 1
                 duplicate_of_item_id = first_item_ids_by_source[source_item.stable_id]
+                await _emit_progress(
+                    input_data.progress_callback,
+                    {
+                        "event": "item_duplicate",
+                        "position": position,
+                        "source_kind": source_item.kind.value,
+                        "source_item_id": source_item.stable_id,
+                        "duplicate_of_item_id": duplicate_of_item_id,
+                    },
+                )
                 item_results.append(
                     SourceExtractionItemResult(
                         position=position,
@@ -139,6 +158,15 @@ class MultiSourceExtractionAgent(
                 item_id,
                 status=AggregationItemStatus.PROCESSING,
                 request_id=source_item.request_id,
+            )
+            await _emit_progress(
+                input_data.progress_callback,
+                {
+                    "event": "item_processing",
+                    "position": position,
+                    "source_kind": source_item.kind.value,
+                    "source_item_id": source_item.stable_id,
+                },
             )
             try:
                 (
@@ -158,6 +186,16 @@ class MultiSourceExtractionAgent(
                     extraction_metadata=extraction_metadata,
                 )
                 successful_count += 1
+                await _emit_progress(
+                    input_data.progress_callback,
+                    {
+                        "event": "item_extracted",
+                        "position": position,
+                        "source_kind": normalized_document.source_kind.value,
+                        "source_item_id": normalized_document.source_item_id,
+                        "request_id": request_id,
+                    },
+                )
                 item_results.append(
                     SourceExtractionItemResult(
                         position=position,
@@ -204,6 +242,16 @@ class MultiSourceExtractionAgent(
                     source_kind=source_item.kind.value,
                     error=str(exc),
                 )
+                await _emit_progress(
+                    input_data.progress_callback,
+                    {
+                        "event": "item_failed",
+                        "position": position,
+                        "source_kind": source_item.kind.value,
+                        "source_item_id": source_item.stable_id,
+                        "error": str(exc),
+                    },
+                )
 
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         await self._aggregation_session_repo.async_update_aggregation_session_counts(
@@ -240,6 +288,17 @@ class MultiSourceExtractionAgent(
             failed_count=failed_count,
             duplicate_count=duplicate_count,
             items=item_results,
+        )
+        await _emit_progress(
+            input_data.progress_callback,
+            {
+                "event": "session_completed",
+                "session_id": session_id,
+                "status": session_status.value,
+                "successful_count": successful_count,
+                "failed_count": failed_count,
+                "duplicate_count": duplicate_count,
+            },
         )
         if successful_count == 0 and duplicate_count == 0:
             return AgentResult.error_result(
@@ -361,6 +420,17 @@ def _coerce_int(value: Any) -> int | None:
         return int(value) if value is not None else None
     except (TypeError, ValueError):
         return None
+
+
+async def _emit_progress(
+    callback: Any,
+    payload: dict[str, Any],
+) -> None:
+    if callback is None:
+        return
+    result = callback(payload)
+    if result is not None:
+        await result
 
 
 __all__ = [

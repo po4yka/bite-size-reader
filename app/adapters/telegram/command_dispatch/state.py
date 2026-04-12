@@ -10,6 +10,7 @@ from typing import Any
 class TelegramCommandRuntimeState:
     url_processor: Any
     url_handler: Any | None = None
+    aggregation_handler: Any | None = None
     topic_searcher: Any | None = None
     local_searcher: Any | None = None
     _task_manager: Any | None = None

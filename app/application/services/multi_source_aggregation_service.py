@@ -1,0 +1,203 @@
+"""Shared workflow for mixed-source extraction plus synthesis."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
+
+from app.adapter_models.batch_analysis import ArticleMetadata, RelationshipAnalysisInput
+from app.agents.multi_source_aggregation_agent import (
+    MultiSourceAggregationAgent,
+    MultiSourceAggregationInput,
+)
+from app.agents.multi_source_extraction_agent import (
+    MultiSourceExtractionAgent,
+    MultiSourceExtractionInput,
+)
+from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
+from app.application.dto.aggregation import (
+    AggregationRelationshipSignal,
+    MultiSourceAggregationOutput,
+    MultiSourceExtractionOutput,
+    SourceSubmission,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from app.adapters.content.content_extractor import ContentExtractor
+    from app.adapters.llm import LLMClientProtocol
+    from app.application.ports.aggregation_sessions import AggregationSessionRepositoryPort
+
+
+@dataclass(frozen=True, slots=True)
+class MultiSourceAggregationRunResult:
+    """Combined extraction and synthesis outputs for a bundle run."""
+
+    extraction: MultiSourceExtractionOutput
+    aggregation: MultiSourceAggregationOutput
+
+
+class MultiSourceAggregationService:
+    """Run the end-to-end bundle workflow over mixed source submissions."""
+
+    def __init__(
+        self,
+        *,
+        content_extractor: ContentExtractor,
+        aggregation_session_repo: AggregationSessionRepositoryPort,
+        llm_client: LLMClientProtocol | None = None,
+    ) -> None:
+        self._content_extractor = content_extractor
+        self._aggregation_session_repo = aggregation_session_repo
+        self._llm = llm_client
+
+    async def aggregate(
+        self,
+        *,
+        correlation_id: str,
+        user_id: int,
+        submissions: list[SourceSubmission],
+        language: str = "en",
+        metadata: dict[str, Any] | None = None,
+        progress_callback: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None,
+    ) -> MultiSourceAggregationRunResult:
+        """Extract a bundle, derive optional relationship signal, then synthesize."""
+
+        extraction_agent = MultiSourceExtractionAgent(
+            content_extractor=self._content_extractor,
+            aggregation_session_repo=self._aggregation_session_repo,
+        )
+        extraction_result = await extraction_agent.execute(
+            MultiSourceExtractionInput(
+                correlation_id=correlation_id,
+                user_id=user_id,
+                items=submissions,
+                metadata=dict(metadata or {}),
+                progress_callback=progress_callback,
+            )
+        )
+        if not extraction_result.success or extraction_result.output is None:
+            msg = extraction_result.error or "Bundle extraction failed"
+            raise RuntimeError(msg)
+
+        relationship_signal = await self._maybe_build_relationship_signal(
+            extraction_result.output,
+            correlation_id=correlation_id,
+            language=language,
+        )
+        aggregation_agent = MultiSourceAggregationAgent(
+            aggregation_session_repo=self._aggregation_session_repo,
+            llm_client=self._llm,
+        )
+        aggregation_result = await aggregation_agent.execute(
+            MultiSourceAggregationInput(
+                session_id=extraction_result.output.session_id,
+                correlation_id=correlation_id,
+                items=extraction_result.output.items,
+                language=language,
+                relationship_signal=relationship_signal,
+            )
+        )
+        if not aggregation_result.success or aggregation_result.output is None:
+            msg = aggregation_result.error or "Bundle aggregation failed"
+            raise RuntimeError(msg)
+
+        return MultiSourceAggregationRunResult(
+            extraction=extraction_result.output,
+            aggregation=aggregation_result.output,
+        )
+
+    async def _maybe_build_relationship_signal(
+        self,
+        extraction_output: MultiSourceExtractionOutput,
+        *,
+        correlation_id: str,
+        language: str,
+    ) -> AggregationRelationshipSignal | None:
+        if self._llm is None:
+            return None
+
+        articles = self._build_relationship_articles(extraction_output)
+        if len(articles) < 2:
+            return None
+
+        relationship_agent = RelationshipAnalysisAgent(
+            llm_client=self._llm,
+            correlation_id=correlation_id,
+        )
+        relationship_result = await relationship_agent.execute(
+            RelationshipAnalysisInput(
+                articles=articles,
+                correlation_id=correlation_id,
+                language=language,
+            )
+        )
+        if not relationship_result.success or relationship_result.output is None:
+            return None
+        return AggregationRelationshipSignal.from_relationship_analysis(relationship_result.output)
+
+    def _build_relationship_articles(
+        self, extraction_output: MultiSourceExtractionOutput
+    ) -> list[ArticleMetadata]:
+        articles: list[ArticleMetadata] = []
+        for item in extraction_output.items:
+            document = item.normalized_document
+            if document is None or document.provenance.normalized_value is None:
+                continue
+            url = document.provenance.normalized_value
+            entities = _extract_entity_names(document.metadata.get("entities"))
+            topic_tags = [
+                str(tag).strip()
+                for tag in document.metadata.get("topic_tags", [])
+                if str(tag).strip()
+            ]
+            try:
+                domain = urlparse(url).netloc
+            except ValueError:
+                domain = None
+            articles.append(
+                ArticleMetadata(
+                    request_id=item.request_id or item.item_id,
+                    url=url,
+                    title=document.title,
+                    author=_coerce_text(document.metadata.get("author")),
+                    domain=domain,
+                    published_at=_coerce_text(document.metadata.get("published_at")),
+                    topic_tags=topic_tags,
+                    entities=entities,
+                    summary_250=_truncate(document.text, 250),
+                    summary_1000=_truncate(document.text, 1000),
+                    language=document.detected_language,
+                )
+            )
+        return articles
+
+
+def _coerce_text(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+def _extract_entity_names(raw_entities: Any) -> list[str]:
+    if not isinstance(raw_entities, list):
+        return []
+    entities: list[str] = []
+    for entity in raw_entities:
+        if isinstance(entity, dict) and "name" in entity:
+            name = str(entity["name"]).strip()
+        else:
+            name = str(entity).strip()
+        if name and name not in entities:
+            entities.append(name)
+    return entities
+
+
+def _truncate(text: str, max_length: int) -> str | None:
+    normalized = text.strip()
+    if not normalized:
+        return None
+    if len(normalized) <= max_length:
+        return normalized
+    return normalized[: max_length - 1].rstrip()

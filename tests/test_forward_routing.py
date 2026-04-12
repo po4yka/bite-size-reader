@@ -41,6 +41,7 @@ def _make_router(tmp_path):
     )
     forward_processor: Any = SimpleNamespace(handle_forward_flow=AsyncMock())
     attachment_processor: Any = SimpleNamespace(handle_attachment_flow=AsyncMock())
+    aggregation_handler: Any = SimpleNamespace(handle_message_bundle=AsyncMock())
     response_formatter: Any = SimpleNamespace(
         safe_reply=AsyncMock(),
         send_error_notification=AsyncMock(),
@@ -54,10 +55,18 @@ def _make_router(tmp_path):
         url_handler=url_handler,
         forward_processor=forward_processor,
         attachment_processor=attachment_processor,
+        aggregation_handler=aggregation_handler,
         response_formatter=response_formatter,
         audit_func=lambda *_args, **_kwargs: None,
     )
-    return router, forward_processor, attachment_processor, response_formatter, url_handler
+    return (
+        router,
+        forward_processor,
+        attachment_processor,
+        aggregation_handler,
+        response_formatter,
+        url_handler,
+    )
 
 
 def _base_message(**overrides: Any) -> SimpleNamespace:
@@ -83,13 +92,18 @@ def _base_message(**overrides: Any) -> SimpleNamespace:
 
 
 @pytest.mark.asyncio
-async def test_forward_message_with_url_prefers_forward_flow(
+async def test_forward_message_with_url_prefers_aggregation_flow(
     tmp_path, tmp_path_factory, request
 ) -> None:
     del tmp_path_factory, request
-    router, forward_processor, _attachment_processor, _response_formatter, url_handler = (
-        _make_router(tmp_path)
-    )
+    (
+        router,
+        forward_processor,
+        _attachment_processor,
+        aggregation_handler,
+        _response_formatter,
+        url_handler,
+    ) = _make_router(tmp_path)
 
     message = _base_message(
         text="https://example.com/article",
@@ -100,11 +114,18 @@ async def test_forward_message_with_url_prefers_forward_flow(
 
     await router.route_message(message)
 
-    forward_processor.handle_forward_flow.assert_awaited_once_with(
-        message,
-        correlation_id=forward_processor.handle_forward_flow.await_args.kwargs["correlation_id"],
-        interaction_id=forward_processor.handle_forward_flow.await_args.kwargs["interaction_id"],
+    aggregation_handler.handle_message_bundle.assert_awaited_once_with(
+        message=message,
+        text="https://example.com/article",
+        uid=1,
+        correlation_id=aggregation_handler.handle_message_bundle.await_args.kwargs[
+            "correlation_id"
+        ],
+        interaction_id=aggregation_handler.handle_message_bundle.await_args.kwargs[
+            "interaction_id"
+        ],
     )
+    forward_processor.handle_forward_flow.assert_not_awaited()
     url_handler.handle_direct_url.assert_not_awaited()
     url_handler.handle_awaited_url.assert_not_awaited()
 
@@ -114,9 +135,14 @@ async def test_forward_from_user_with_text_routes_to_forward_flow(
     tmp_path, tmp_path_factory, request
 ) -> None:
     del tmp_path_factory, request
-    router, forward_processor, _attachment_processor, _response_formatter, url_handler = (
-        _make_router(tmp_path)
-    )
+    (
+        router,
+        forward_processor,
+        _attachment_processor,
+        _aggregation_handler,
+        _response_formatter,
+        url_handler,
+    ) = _make_router(tmp_path)
 
     message = _base_message(
         text="Some interesting article content",
@@ -135,9 +161,14 @@ async def test_forward_privacy_protected_with_text_routes_to_forward_flow(
     tmp_path, tmp_path_factory, request
 ) -> None:
     del tmp_path_factory, request
-    router, forward_processor, _attachment_processor, _response_formatter, url_handler = (
-        _make_router(tmp_path)
-    )
+    (
+        router,
+        forward_processor,
+        _attachment_processor,
+        _aggregation_handler,
+        _response_formatter,
+        url_handler,
+    ) = _make_router(tmp_path)
 
     message = _base_message(
         text="Privacy protected forward content",
@@ -154,9 +185,14 @@ async def test_forward_privacy_protected_with_text_routes_to_forward_flow(
 @pytest.mark.asyncio
 async def test_forward_from_user_no_text_shows_error(tmp_path, tmp_path_factory, request) -> None:
     del tmp_path_factory, request
-    router, forward_processor, _attachment_processor, response_formatter, _url_handler = (
-        _make_router(tmp_path)
-    )
+    (
+        router,
+        forward_processor,
+        _attachment_processor,
+        _aggregation_handler,
+        response_formatter,
+        _url_handler,
+    ) = _make_router(tmp_path)
 
     message = _base_message(
         text=None,
@@ -177,9 +213,14 @@ async def test_forwarded_channel_photo_with_caption_prefers_attachment_flow(
     tmp_path, tmp_path_factory, request
 ) -> None:
     del tmp_path_factory, request
-    router, forward_processor, attachment_processor, _response_formatter, _url_handler = (
-        _make_router(tmp_path)
-    )
+    (
+        router,
+        forward_processor,
+        attachment_processor,
+        _aggregation_handler,
+        _response_formatter,
+        _url_handler,
+    ) = _make_router(tmp_path)
 
     message = _base_message(
         caption="Forwarded photo caption",
@@ -200,9 +241,14 @@ async def test_forward_from_user_photo_with_caption_prefers_attachment_flow(
     tmp_path, tmp_path_factory, request
 ) -> None:
     del tmp_path_factory, request
-    router, forward_processor, attachment_processor, _response_formatter, _url_handler = (
-        _make_router(tmp_path)
-    )
+    (
+        router,
+        forward_processor,
+        attachment_processor,
+        _aggregation_handler,
+        _response_formatter,
+        _url_handler,
+    ) = _make_router(tmp_path)
 
     message = _base_message(
         caption="Forwarded photo caption",
@@ -215,3 +261,32 @@ async def test_forward_from_user_photo_with_caption_prefers_attachment_flow(
 
     attachment_processor.handle_attachment_flow.assert_awaited_once()
     forward_processor.handle_forward_flow.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_forward_message_with_multiple_urls_routes_via_aggregation_flow(
+    tmp_path, tmp_path_factory, request
+) -> None:
+    del tmp_path_factory, request
+    (
+        router,
+        forward_processor,
+        attachment_processor,
+        aggregation_handler,
+        _response_formatter,
+        url_handler,
+    ) = _make_router(tmp_path)
+
+    message = _base_message(
+        text="https://example.com/a https://example.com/b",
+        forward_from_chat=SimpleNamespace(id=-100200300, title="Forwarded Channel"),
+        forward_from_message_id=123,
+        forward_date=1700000000,
+    )
+
+    await router.route_message(message)
+
+    aggregation_handler.handle_message_bundle.assert_awaited_once()
+    forward_processor.handle_forward_flow.assert_not_awaited()
+    attachment_processor.handle_attachment_flow.assert_not_awaited()
+    url_handler.handle_direct_url.assert_not_awaited()

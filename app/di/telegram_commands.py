@@ -11,6 +11,9 @@ from app.adapters.telegram.command_dispatch import (
     UidCommandRoute,
 )
 from app.adapters.telegram.command_handlers.admin_handler import AdminHandler
+from app.adapters.telegram.command_handlers.aggregation_commands_handler import (
+    AggregationCommandsHandler,
+)
 from app.adapters.telegram.command_handlers.backup_handler import BackupHandler
 from app.adapters.telegram.command_handlers.content_handler import ContentHandler
 from app.adapters.telegram.command_handlers.digest_handler import DigestHandler
@@ -42,6 +45,7 @@ def build_command_dispatcher_deps(
     audit_func: Any,
     url_processor: URLProcessor,
     url_handler: URLHandler | None,
+    aggregation_handler: Any | None,
     topic_searcher: Any | None,
     local_searcher: Any | None,
     task_manager: UserTaskManager | None,
@@ -54,6 +58,7 @@ def build_command_dispatcher_deps(
     runtime_state = TelegramCommandRuntimeState(
         url_processor=url_processor,
         url_handler=url_handler,
+        aggregation_handler=aggregation_handler,
         topic_searcher=topic_searcher,
         local_searcher=local_searcher,
         _task_manager=task_manager,
@@ -73,6 +78,7 @@ def build_command_dispatcher_deps(
         url_handler=url_handler,
         cfg=cfg,
     )
+    aggregation_commands_handler = AggregationCommandsHandler(aggregation_handler)
     url_commands_handler = URLCommandsHandler(
         response_formatter=response_formatter,
         processor_provider=runtime_state,
@@ -184,6 +190,10 @@ def build_command_dispatcher_deps(
         ),
         pre_summarize_text=(
             TextCommandRoute(
+                "/aggregate",
+                _build_text_handler(context_factory, aggregation_commands_handler.handle_aggregate),
+            ),
+            TextCommandRoute(
                 "/summarize_all",
                 _build_text_handler(context_factory, url_commands_handler.handle_summarize_all),
             ),
@@ -280,6 +290,7 @@ def build_command_dispatcher_deps(
         context_factory=context_factory,
         onboarding_handler=onboarding_handler,
         admin_handler=admin_handler,
+        aggregation_commands_handler=aggregation_commands_handler,
         url_commands_handler=url_commands_handler,
         content_handler=content_handler,
         search_handler=search_handler,

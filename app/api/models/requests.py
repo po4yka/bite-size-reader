@@ -255,6 +255,31 @@ class UpdateWebhookRequest(BaseModel):
     enabled: bool | None = None
 
 
+class AggregationBundleItemRequest(BaseModel):
+    """One source item submitted to the aggregation API."""
+
+    type: Literal["url"] = "url"
+    url: HttpUrl = Field(..., max_length=2048)
+    source_kind_hint: str | None = None
+    metadata: dict[str, Any] | None = None
+
+    @field_validator("url")
+    @classmethod
+    def validate_item_url(cls, value: HttpUrl) -> HttpUrl:
+        url_str = str(value)
+        if not url_str.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return value
+
+
+class CreateAggregationBundleRequest(BaseModel):
+    """Request body for bundle aggregation outside Telegram."""
+
+    items: list[AggregationBundleItemRequest] = Field(min_length=2, max_length=25)
+    lang_preference: Literal["auto", "en", "ru"] = "auto"
+    metadata: dict[str, Any] | None = None
+
+
 class CreateRuleRequest(BaseModel):
     """Request body for creating an automation rule."""
 

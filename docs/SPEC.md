@@ -504,6 +504,9 @@ sequenceDiagram
   - `SourceItem` is the normalized source identity object. URL-backed items dedupe on normalized URL unless a stronger platform identifier is available (`external_id` such as a tweet ID or YouTube video ID). Telegram-native items dedupe on `(chat_id, message_id)` or `(chat_id, media_group_id)`.
   - `NormalizedSourceDocument` is the extractor output contract for aggregation: `{source_item_id, source_kind, title?, text, detected_language?, text_blocks[], media[], metadata{}, provenance{...}}`.
   - Failures are stored and surfaced at two levels: bundle-level failures on `aggregation_sessions` and item-level failures on `aggregation_session_items`, both using `failure_code`, `failure_message`, and JSON `failure_details`.
+  - User-facing entry points are explicit: Telegram `/aggregate`, non-command Telegram messages that contain multiple URLs, and mixed Telegram link + forward/attachment messages route into the same workflow; the API exposes the same orchestration at `POST /v1/aggregations`.
+  - Aggregation exports remain session-scoped persistence for now: export endpoints should continue to export request/summary data only until a dedicated aggregation export format is added.
+  - Aggregation outputs are not yet indexed into the existing summary search/topic indices; search continues to operate on canonical summary/request records until a separate aggregation search read model is introduced.
 
 - **(Optional indexing/analytics)**
   `summary_topics(request_id FK, hashtag)`
@@ -937,6 +940,7 @@ sequenceDiagram
 
 - Summaries: `GET /v1/summaries`, `GET /v1/summaries/{id}`, `PATCH /v1/summaries/{id}` (`is_read`), `DELETE /v1/summaries/{id}` (soft delete).
 - Requests: `POST /v1/requests` (url|forward), `GET /v1/requests/{id}`, `GET /v1/requests/{id}/status`, `POST /v1/requests/{id}/retry`.
+- Aggregations: `POST /v1/aggregations` (bundle of 2-25 source URLs), `GET /v1/aggregations/{id}`.
 - Search/Topics: `GET /v1/search`, `GET /v1/topics/trending`, `GET /v1/topics/related`.
 - URL utils: `GET /v1/urls/check-duplicate`.
 - User: `GET /v1/user/preferences`, `PATCH /v1/user/preferences`, `GET /v1/user/stats`.

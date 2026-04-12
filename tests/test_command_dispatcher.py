@@ -21,10 +21,13 @@ def _make_dispatcher(
     routes: TelegramCommandRoutes | None = None,
     runtime_state: TelegramCommandRuntimeState | None = None,
     summarize_result: tuple[str | None, bool] = (None, False),
+    aggregate_result: tuple[str | None, bool] = (None, False),
+    aggregation_commands_handler: Any | None = None,
 ) -> TelegramCommandDispatcher:
     runtime_state = runtime_state or TelegramCommandRuntimeState(
         url_processor=MagicMock(),
         url_handler=SimpleNamespace(add_awaiting_user=AsyncMock()),
+        aggregation_handler=MagicMock(),
         topic_searcher=MagicMock(),
         local_searcher=MagicMock(),
         _task_manager=MagicMock(),
@@ -51,6 +54,11 @@ def _make_dispatcher(
         ),
         onboarding_handler=cast("Any", SimpleNamespace()),
         admin_handler=cast("Any", SimpleNamespace()),
+        aggregation_commands_handler=cast(
+            "Any",
+            aggregation_commands_handler
+            or SimpleNamespace(handle_aggregate=AsyncMock(return_value=aggregate_result)),
+        ),
         url_commands_handler=cast(
             "Any",
             SimpleNamespace(handle_summarize=AsyncMock(return_value=summarize_result)),
@@ -133,6 +141,7 @@ async def test_dispatch_command_marks_awaiting_user_for_summarize_prompt() -> No
         runtime_state=TelegramCommandRuntimeState(
             url_processor=MagicMock(),
             url_handler=url_handler,
+            aggregation_handler=MagicMock(),
             topic_searcher=None,
             local_searcher=None,
             _task_manager=None,
@@ -159,6 +168,7 @@ def test_runtime_state_property_passthroughs_mutate_shared_state() -> None:
     state = TelegramCommandRuntimeState(
         url_processor=MagicMock(),
         url_handler=MagicMock(),
+        aggregation_handler=MagicMock(),
         topic_searcher=MagicMock(),
         local_searcher=MagicMock(),
         _task_manager=MagicMock(),
@@ -168,6 +178,7 @@ def test_runtime_state_property_passthroughs_mutate_shared_state() -> None:
 
     new_url_processor = MagicMock()
     new_url_handler = MagicMock()
+    new_aggregation_handler = MagicMock()
     new_topic_searcher = MagicMock()
     new_local_searcher = MagicMock()
     new_task_manager = MagicMock()
@@ -175,6 +186,7 @@ def test_runtime_state_property_passthroughs_mutate_shared_state() -> None:
 
     dispatcher.url_processor = new_url_processor
     dispatcher.url_handler = new_url_handler
+    dispatcher.aggregation_handler = new_aggregation_handler
     dispatcher.topic_searcher = new_topic_searcher
     dispatcher.local_searcher = new_local_searcher
     dispatcher._task_manager = new_task_manager
@@ -182,7 +194,41 @@ def test_runtime_state_property_passthroughs_mutate_shared_state() -> None:
 
     assert state.url_processor is new_url_processor
     assert state.url_handler is new_url_handler
+    assert state.aggregation_handler is new_aggregation_handler
     assert state.topic_searcher is new_topic_searcher
     assert state.local_searcher is new_local_searcher
     assert state._task_manager is new_task_manager
     assert state.hybrid_search is new_hybrid_search
+
+
+@pytest.mark.asyncio
+async def test_dispatch_command_routes_explicit_aggregate_command() -> None:
+    aggregation_commands_handler = SimpleNamespace(
+        handle_aggregate=AsyncMock(return_value=(None, False))
+    )
+    routes = TelegramCommandRoutes(
+        pre_alias_uid=(),
+        pre_alias_text=(),
+        local_search_aliases=(),
+        online_search_aliases=(),
+        pre_summarize_text=(TextCommandRoute("/aggregate", AsyncMock(return_value=True)),),
+        summarize_prefix="/summarize",
+        post_summarize_uid=(),
+        post_summarize_text=(),
+        tail_uid=(),
+    )
+    dispatcher = _make_dispatcher(
+        routes=routes,
+        aggregation_commands_handler=aggregation_commands_handler,
+    )
+
+    outcome = await dispatcher.dispatch_command(
+        message=object(),
+        text="/aggregate https://example.com/a https://example.com/b",
+        uid=9,
+        correlation_id="cid-agg",
+        interaction_id=7,
+        start_time=1.0,
+    )
+
+    assert outcome.handled is True

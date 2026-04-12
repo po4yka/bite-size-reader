@@ -10,16 +10,23 @@ from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
 from app.adapters.telegram.forward_processor import ForwardProcessor
 from app.adapters.telegram.message_handler import MessageHandler
 from app.adapters.telegram.message_router import MessageRouter
+from app.adapters.telegram.multi_source_aggregation_handler import (
+    MultiSourceAggregationHandler,
+)
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.telegram_client import TelegramClient
 from app.adapters.telegram.url_handler import URLHandler
 from app.application.services.adaptive_timeout import AdaptiveTimeoutService
+from app.application.services.multi_source_aggregation_service import (
+    MultiSourceAggregationService,
+)
 from app.application.services.related_reads_service import RelatedReadsService
 from app.application.services.tts_service import TTSService
 from app.core.logging_utils import get_logger
 from app.core.verbosity import VerbosityResolver
 from app.di.application import build_application_services
 from app.di.repositories import (
+    build_aggregation_session_repository,
     build_audit_log_repository,
     build_batch_session_repository,
     build_crawl_result_repository,
@@ -204,6 +211,14 @@ def build_summary_cli_runtime(
         user_repo=repositories.user_repository,
         request_repo=repositories.request_repository,
     )
+    aggregation_handler = MultiSourceAggregationHandler(
+        response_formatter=core.response_formatter,
+        workflow_service=MultiSourceAggregationService(
+            content_extractor=url_processor.content_extractor,
+            aggregation_session_repo=build_aggregation_session_repository(db),
+            llm_client=core.llm_client,
+        ),
+    )
     dispatcher_deps = _build_command_dispatcher_deps(
         cfg=cfg,
         db=db,
@@ -211,6 +226,7 @@ def build_summary_cli_runtime(
         audit_func=core.audit_sink,
         url_processor=url_processor,
         url_handler=url_handler,
+        aggregation_handler=aggregation_handler,
         topic_searcher=search.topic_searcher,
         local_searcher=search.local_searcher,
         task_manager=None,
@@ -363,6 +379,15 @@ def _build_telegram_interface_stack(
         request_repo=repositories.request_repository,
         file_validator=SecureFileValidator(max_file_size=10 * 1024 * 1024),
     )
+    aggregation_handler = MultiSourceAggregationHandler(
+        response_formatter=core.response_formatter,
+        workflow_service=MultiSourceAggregationService(
+            content_extractor=processing.url_processor.content_extractor,
+            aggregation_session_repo=build_aggregation_session_repository(db),
+            llm_client=core.llm_client,
+        ),
+        lang=getattr(core.response_formatter, "_lang", "en"),
+    )
     dispatcher_deps = _build_command_dispatcher_deps(
         cfg=cfg,
         db=db,
@@ -370,6 +395,7 @@ def _build_telegram_interface_stack(
         audit_func=audit_func,
         url_processor=processing.url_processor,
         url_handler=url_handler,
+        aggregation_handler=aggregation_handler,
         topic_searcher=search.topic_searcher,
         local_searcher=search.local_searcher,
         task_manager=task_manager,
@@ -410,6 +436,7 @@ def _build_telegram_interface_stack(
         audit_func=audit_func,
         task_manager=task_manager,
         attachment_processor=processing.attachment_processor,
+        aggregation_handler=aggregation_handler,
         user_repo=repositories.user_repository,
         callback_handler=callback_handler,
         lang=lang,
@@ -464,6 +491,7 @@ def _build_command_dispatcher(
         context_factory=dispatcher_deps.context_factory,
         onboarding_handler=dispatcher_deps.onboarding_handler,
         admin_handler=dispatcher_deps.admin_handler,
+        aggregation_commands_handler=dispatcher_deps.aggregation_commands_handler,
         url_commands_handler=dispatcher_deps.url_commands_handler,
         content_handler=dispatcher_deps.content_handler,
         search_handler=dispatcher_deps.search_handler,

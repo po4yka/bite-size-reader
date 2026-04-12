@@ -211,9 +211,10 @@ class MessageRouteContextBuilder:
             return "command", telegram_message.get_command(), None
         if has_forward:
             return "forward", None, None
-        if text and looks_like_url(text):
-            urls = extract_all_urls(text)
-            return "url", None, urls[0] if urls else None
+        urls = extract_all_urls(text) if text else []
+        if urls:
+            interaction_type = "url" if looks_like_url(text) or len(urls) > 1 else "text"
+            return interaction_type, None, urls[0]
         if text:
             return "text", None, None
         return "unknown", None, None
