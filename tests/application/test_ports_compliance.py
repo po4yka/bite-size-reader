@@ -13,6 +13,7 @@ import inspect
 import pytest
 
 from app.application.ports import (
+    AggregationSessionRepositoryPort,
     AuditLogRepositoryPort,
     BackupRepositoryPort,
     BatchSessionRepositoryPort,
@@ -20,6 +21,9 @@ from app.application.ports import (
     RequestRepositoryPort,
     SummaryRepositoryPort,
     UserRepositoryPort,
+)
+from app.application.ports.aggregation_sessions import (
+    AggregationSessionRepositoryPort as AggregationSessionRepositoryPortDirect,
 )
 from app.application.ports.audit import AuditLogRepositoryPort as AuditLogRepositoryPortDirect
 from app.application.ports.backups import BackupRepositoryPort as BackupRepositoryPortDirect
@@ -46,6 +50,13 @@ def test_summary_repository_factory_returns_port_instance(db) -> None:
 
     repo = build_summary_repository(db)
     assert isinstance(repo, SummaryRepositoryPort)
+
+
+def test_aggregation_session_repository_factory_returns_port_instance(db) -> None:
+    from app.di.repositories import build_aggregation_session_repository
+
+    repo = build_aggregation_session_repository(db)
+    assert isinstance(repo, AggregationSessionRepositoryPort)
 
 
 def test_request_repository_factory_returns_port_instance(db) -> None:
@@ -83,6 +94,7 @@ def test_request_repository_critical_methods_are_async(db) -> None:
 
 
 def test_root_facade_reexports_current_port_surface() -> None:
+    assert AggregationSessionRepositoryPort is AggregationSessionRepositoryPortDirect
     assert AuditLogRepositoryPort is AuditLogRepositoryPortDirect
     assert BackupRepositoryPort is BackupRepositoryPortDirect
     assert BatchSessionRepositoryPort is BatchSessionRepositoryPortDirect
@@ -95,6 +107,7 @@ def test_root_facade_reexports_current_port_surface() -> None:
 def test_port_submodules_import_cleanly() -> None:
     from app.application import ports
     from app.application.ports import (
+        aggregation_sessions,
         audio,
         audit,
         backups,
@@ -109,6 +122,7 @@ def test_port_submodules_import_cleanly() -> None:
 
     modules = (
         ports,
+        aggregation_sessions,
         audit,
         audio,
         backups,

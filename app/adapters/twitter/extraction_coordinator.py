@@ -14,6 +14,7 @@ from app.adapters.twitter.article_link_resolver import (
     TwitterArticleLinkResolution,
     resolve_twitter_article_link,
 )
+from app.application.dto.aggregation import NormalizedSourceDocument
 from app.core.lang import detect_language
 from app.core.logging_utils import get_logger
 from app.core.url_utils import (
@@ -23,6 +24,7 @@ from app.core.url_utils import (
     extract_twitter_article_id,
     is_twitter_article_url,
 )
+from app.domain.models.source import SourceItem, SourceKind
 from app.observability.failure_observability import (
     REASON_EXTRACTION_EMPTY_OUTPUT,
     REASON_RESOLVE_FAILED,
@@ -181,6 +183,27 @@ class TwitterExtractionCoordinator:
         detected = detect_language(content_text)
         if request.mode == "interactive" and req_id is not None:
             await self._lifecycle.persist_detected_lang(req_id, detected)
+        source_kind = SourceKind.X_ARTICLE if is_article else SourceKind.X_POST
+        source_item = SourceItem.create(
+            kind=source_kind,
+            original_value=request.url_text,
+            normalized_value=metadata.get("article_canonical_url") or request.normalized_url,
+            external_id=article_id if is_article else tweet_id,
+            request_id=req_id,
+            title_hint=metadata.get("title"),
+            metadata={
+                "platform": "twitter",
+                "article_resolution_reason": metadata.get("article_resolution_reason"),
+            },
+        )
+        normalized_document = NormalizedSourceDocument.from_extracted_content(
+            source_item=source_item,
+            text=content_text,
+            title=metadata.get("title"),
+            detected_language=detected,
+            content_source=content_source,
+            metadata=metadata,
+        )
         return PlatformExtractionResult(
             platform="twitter",
             request_id=req_id,
@@ -190,6 +213,8 @@ class TwitterExtractionCoordinator:
             title=metadata.get("title"),
             images=[],
             metadata=metadata,
+            source_item=source_item,
+            normalized_document=normalized_document,
         )
 
     def _build_twitter_metadata(

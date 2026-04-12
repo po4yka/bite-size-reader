@@ -7,6 +7,7 @@ incremental compatibility while the import surface is tightened.
 
 from __future__ import annotations
 
+from .aggregation_sessions import AggregationSessionRepositoryPort
 from .audio import AudioGenerationRepositoryPort, AudioStoragePort, TTSProviderPort
 from .audit import AuditLogRepositoryPort
 from .backups import BackupRepositoryPort
@@ -40,6 +41,7 @@ from .summaries import SummaryRepositoryPort, TagRepositoryPort
 from .users import UserRepositoryPort
 
 __all__ = [
+    "AggregationSessionRepositoryPort",
     "AudioGenerationRepositoryPort",
     "AudioStoragePort",
     "AuditLogRepositoryPort",

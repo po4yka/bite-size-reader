@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from app.infrastructure.persistence.sqlite.repositories.aggregation_session_repository import (
+    SqliteAggregationSessionRepositoryAdapter,
+)
 from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
     SqliteAuditLogRepositoryAdapter,
 )
@@ -49,6 +52,7 @@ from app.infrastructure.persistence.sqlite.repositories.webhook_repository impor
 )
 
 if TYPE_CHECKING:
+    from app.application.ports.aggregation_sessions import AggregationSessionRepositoryPort
     from app.application.ports.audit import AuditLogRepositoryPort
     from app.application.ports.backups import BackupRepositoryPort
     from app.application.ports.batch_sessions import BatchSessionRepositoryPort
@@ -68,6 +72,12 @@ if TYPE_CHECKING:
 
 def build_request_repository(db: DatabaseSessionManager) -> RequestRepositoryPort:
     return SqliteRequestRepositoryAdapter(db)
+
+
+def build_aggregation_session_repository(
+    db: DatabaseSessionManager,
+) -> AggregationSessionRepositoryPort:
+    return SqliteAggregationSessionRepositoryAdapter(db)
 
 
 def build_summary_repository(db: DatabaseSessionManager) -> SummaryRepositoryPort:

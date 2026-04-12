@@ -15,12 +15,17 @@ from app.adapters.content.platform_extraction.models import (
     PlatformExtractionResult,
 )
 from app.adapters.youtube.youtube_downloader_parts import metadata as _metadata, storage as _storage
+from app.application.dto.aggregation import (
+    ExtractedTextKind,
+    NormalizedSourceDocument,
+)
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
 from app.core.logging_utils import get_logger
 from app.core.urls.normalization import url_hash_sha256
 from app.core.urls.youtube import extract_youtube_video_id
 from app.domain.models.request import RequestStatus
+from app.domain.models.source import SourceItem, SourceKind
 
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.lifecycle import PlatformRequestLifecycle
@@ -239,6 +244,24 @@ class YouTubeDownloadSessionService:
         transcript_source = download.get("transcript_source") or "cached"
         detected_lang = download.get("subtitle_language") or detect_language(transcript_text)
         combined_text = _metadata.combine_metadata_and_transcript(metadata, transcript_text)
+        source_item = SourceItem.create(
+            kind=SourceKind.YOUTUBE_VIDEO,
+            original_value=request.url_text,
+            normalized_value=request.normalized_url,
+            external_id=str(metadata.get("video_id") or ""),
+            request_id=req_id,
+            title_hint=metadata.get("title"),
+            metadata={"platform": "youtube"},
+        )
+        normalized_document = NormalizedSourceDocument.from_extracted_content(
+            source_item=source_item,
+            text=combined_text,
+            title=metadata.get("title"),
+            detected_language=str(detected_lang),
+            content_source=str(transcript_source),
+            text_kind=ExtractedTextKind.TRANSCRIPT,
+            metadata=metadata,
+        )
         return PlatformExtractionResult(
             platform="youtube",
             request_id=req_id,
@@ -248,6 +271,8 @@ class YouTubeDownloadSessionService:
             title=metadata.get("title"),
             images=[],
             metadata=metadata,
+            source_item=source_item,
+            normalized_document=normalized_document,
         )
 
     async def mark_download_started(self, download_id: int) -> None:

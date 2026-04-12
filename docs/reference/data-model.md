@@ -157,11 +157,125 @@ CREATE INDEX idx_requests_status ON requests(status);
 
 - Many-to-one with `users`
 - Many-to-one with `chats`
+- One-to-many with `aggregation_session_items`
 - One-to-one with `telegram_messages`
 - One-to-one with `crawl_results`
 - One-to-one with `video_downloads`
 - One-to-many with `llm_calls`
 - One-to-one with `summaries`
+
+---
+
+### aggregation_sessions
+
+**Purpose:** Stores bundle-level state for mixed-source aggregation runs.
+
+**Schema:**
+
+```sql
+CREATE TABLE aggregation_sessions (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id               INTEGER NOT NULL REFERENCES users(telegram_user_id) ON DELETE CASCADE,
+    correlation_id        TEXT NOT NULL UNIQUE,
+    total_items           INTEGER NOT NULL,
+    successful_count      INTEGER NOT NULL DEFAULT 0,
+    failed_count          INTEGER NOT NULL DEFAULT 0,
+    duplicate_count       INTEGER NOT NULL DEFAULT 0,
+    allow_partial_success INTEGER NOT NULL DEFAULT 1,
+    status                TEXT NOT NULL DEFAULT 'pending',
+    bundle_metadata_json  JSON,
+    aggregation_output_json JSON,
+    failure_code          TEXT,
+    failure_message       TEXT,
+    failure_details_json  JSON,
+    processing_time_ms    INTEGER,
+    updated_at            TIMESTAMP NOT NULL,
+    created_at            TIMESTAMP NOT NULL
+);
+```
+
+**Fields:**
+
+- `correlation_id` (str, unique) - Stable bundle correlation ID
+- `total_items` (int) - Number of submitted source items, including duplicates
+- `successful_count` / `failed_count` / `duplicate_count` (int) - Bundle rollup counters
+- `allow_partial_success` (bool) - Whether one failed item may coexist with successful items
+- `status` (str) - Bundle lifecycle (`pending`, `processing`, `completed`, `partial`, `failed`, `cancelled`)
+- `bundle_metadata_json` (json, nullable) - Submission metadata for the bundle
+- `failure_*` (nullable) - Bundle-level failure details surfaced to callers and logs
+
+**Indexes:**
+
+```sql
+CREATE INDEX idx_aggregation_sessions_user ON aggregation_sessions(user_id);
+CREATE INDEX idx_aggregation_sessions_status ON aggregation_sessions(status);
+CREATE INDEX idx_aggregation_sessions_created ON aggregation_sessions(created_at);
+```
+
+---
+
+### aggregation_session_items
+
+**Purpose:** Stores ordered source items, dedupe state, normalized extraction payloads, and item-level failures inside one aggregation bundle.
+
+**Schema:**
+
+```sql
+CREATE TABLE aggregation_session_items (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    aggregation_session_id  INTEGER NOT NULL REFERENCES aggregation_sessions(id) ON DELETE CASCADE,
+    request_id              INTEGER REFERENCES requests(id) ON DELETE SET NULL,
+    position                INTEGER NOT NULL,
+    source_kind             TEXT NOT NULL,
+    source_item_id          TEXT NOT NULL,
+    source_dedupe_key       TEXT NOT NULL,
+    original_value          TEXT,
+    normalized_value        TEXT,
+    external_id             TEXT,
+    telegram_chat_id        INTEGER,
+    telegram_message_id     INTEGER,
+    telegram_media_group_id TEXT,
+    title_hint              TEXT,
+    source_metadata_json    JSON,
+    normalized_document_json JSON,
+    extraction_metadata_json JSON,
+    status                  TEXT NOT NULL DEFAULT 'pending',
+    duplicate_of_item_id    INTEGER,
+    failure_code            TEXT,
+    failure_message         TEXT,
+    failure_details_json    JSON,
+    updated_at              TIMESTAMP NOT NULL,
+    created_at              TIMESTAMP NOT NULL
+);
+```
+
+**Fields:**
+
+- `source_kind` (str) - Shared source taxonomy (`x_post`, `x_article`, `threads_post`, `instagram_*`, `web_article`, `telegram_*`, `youtube_video`)
+- `source_item_id` (str) - Stable hashed source identity
+- `source_dedupe_key` (str) - Natural dedupe key used within the session
+- `request_id` (int, nullable) - Linked extraction request row when one exists
+- `status` (str) - Item lifecycle (`pending`, `processing`, `extracted`, `failed`, `duplicate`, `skipped`)
+- `duplicate_of_item_id` (int, nullable) - First matching source item position inside the same session
+- `normalized_document_json` (json, nullable) - Stored `NormalizedSourceDocument` payload from the extractor contract
+- `failure_*` (nullable) - Item-level failure diagnostics
+
+**Indexes:**
+
+```sql
+CREATE UNIQUE INDEX idx_aggregation_session_items_position
+  ON aggregation_session_items(aggregation_session_id, position);
+CREATE INDEX idx_aggregation_session_items_source_item
+  ON aggregation_session_items(aggregation_session_id, source_item_id);
+CREATE INDEX idx_aggregation_session_items_request ON aggregation_session_items(request_id);
+CREATE INDEX idx_aggregation_session_items_status ON aggregation_session_items(status);
+```
+
+**Dedupe Rules:**
+
+- URL-backed sources dedupe on normalized URL unless a stronger platform identifier exists (`external_id` such as tweet ID or YouTube video ID).
+- Telegram-native sources dedupe on `(telegram_chat_id, telegram_message_id)` or `(telegram_chat_id, telegram_media_group_id)`.
+- Duplicates are preserved as rows with `status='duplicate'` so callers can surface that input was received but merged.
 
 ---
 

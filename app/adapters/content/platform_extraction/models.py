@@ -6,7 +6,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
+    from app.application.dto.aggregation import NormalizedSourceDocument
     from app.core.telegram_progress_message import TelegramProgressMessage
+    from app.domain.models.source import SourceItem
 
 PlatformExtractionMode = Literal["interactive", "pure"]
 
@@ -42,3 +44,5 @@ class PlatformExtractionResult:
     title: str | None = None
     images: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    source_item: SourceItem | None = None
+    normalized_document: NormalizedSourceDocument | None = None

@@ -22,10 +22,15 @@ from app.adapters.youtube.youtube_downloader_parts import (
     vtt as _vtt,
     yt_dlp_client as _yt_dlp_client,
 )
+from app.application.dto.aggregation import (
+    ExtractedTextKind,
+    NormalizedSourceDocument,
+)
 from app.core.async_utils import raise_if_cancelled
 from app.core.lang import detect_language
 from app.core.logging_utils import get_logger
 from app.core.urls.youtube import extract_youtube_video_id
+from app.domain.models.source import SourceItem, SourceKind
 
 if TYPE_CHECKING:
     from app.adapters.youtube.feedback_service import YouTubeFeedbackService
@@ -150,6 +155,24 @@ class YouTubeDownloadPipeline:
                 },
             )
             download_succeeded = True
+            source_item = SourceItem.create(
+                kind=SourceKind.YOUTUBE_VIDEO,
+                original_value=request.url_text,
+                normalized_value=request.normalized_url,
+                external_id=video_id,
+                request_id=req_id,
+                title_hint=video_metadata.get("title"),
+                metadata={"platform": "youtube"},
+            )
+            normalized_document = NormalizedSourceDocument.from_extracted_content(
+                source_item=source_item,
+                text=combined_text,
+                title=video_metadata.get("title"),
+                detected_language=detected_lang,
+                content_source=transcript_source,
+                text_kind=ExtractedTextKind.TRANSCRIPT,
+                metadata=video_metadata,
+            )
             return PlatformExtractionResult(
                 platform="youtube",
                 request_id=req_id,
@@ -159,6 +182,8 @@ class YouTubeDownloadPipeline:
                 title=video_metadata.get("title"),
                 images=[],
                 metadata=video_metadata,
+                source_item=source_item,
+                normalized_document=normalized_document,
             )
         except Exception as exc:
             raise_if_cancelled(exc)

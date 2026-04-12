@@ -336,6 +336,57 @@ sequenceDiagram
   route_version
   ```
 
+- **aggregation_sessions** *(mixed-source bundle state)*:
+
+  ```
+  id (PK)
+  user_id (FK)
+  correlation_id         -- bundle correlation ID
+  total_items
+  successful_count
+  failed_count
+  duplicate_count
+  allow_partial_success
+  status                 -- 'pending'|'processing'|'completed'|'partial'|'failed'|'cancelled'
+  bundle_metadata_json
+  aggregation_output_json
+  failure_code
+  failure_message
+  failure_details_json
+  processing_time_ms
+  created_at
+  updated_at
+  ```
+
+- **aggregation_session_items** *(ordered source items inside one bundle)*:
+
+  ```
+  id (PK)
+  aggregation_session_id (FK)
+  request_id (FK, nullable)
+  position
+  source_kind            -- x_post | x_article | threads_post | instagram_* | web_article | telegram_* | youtube_video
+  source_item_id         -- stable source fingerprint
+  source_dedupe_key      -- natural dedupe key used within the bundle
+  original_value
+  normalized_value
+  external_id
+  telegram_chat_id
+  telegram_message_id
+  telegram_media_group_id
+  title_hint
+  source_metadata_json
+  normalized_document_json
+  extraction_metadata_json
+  status                 -- 'pending'|'processing'|'extracted'|'failed'|'duplicate'|'skipped'
+  duplicate_of_item_id   -- first matching source item in the same session
+  failure_code
+  failure_message
+  failure_details_json
+  created_at
+  updated_at
+  ```
+
 - **telegram_messages** *(full snapshot)*:
 
   ```
@@ -447,6 +498,12 @@ sequenceDiagram
   version                  -- start at 1; bump on regenerate
   created_at
   ```
+
+- **Mixed-source aggregation foundation**:
+  - `SourceKind` is the shared source taxonomy for bundle items: `x_post`, `x_article`, `threads_post`, `instagram_post`, `instagram_carousel`, `instagram_reel`, `web_article`, `telegram_post`, `telegram_post_with_images`, `telegram_album`, and `youtube_video`.
+  - `SourceItem` is the normalized source identity object. URL-backed items dedupe on normalized URL unless a stronger platform identifier is available (`external_id` such as a tweet ID or YouTube video ID). Telegram-native items dedupe on `(chat_id, message_id)` or `(chat_id, media_group_id)`.
+  - `NormalizedSourceDocument` is the extractor output contract for aggregation: `{source_item_id, source_kind, title?, text, detected_language?, text_blocks[], media[], metadata{}, provenance{...}}`.
+  - Failures are stored and surfaced at two levels: bundle-level failures on `aggregation_sessions` and item-level failures on `aggregation_session_items`, both using `failure_code`, `failure_message`, and JSON `failure_details`.
 
 - **(Optional indexing/analytics)**
   `summary_topics(request_id FK, hashtag)`

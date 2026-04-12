@@ -19,6 +19,7 @@ from app.adapters.content.platform_extraction import (
 from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.content.scraper.protocol import ContentScraperProtocol
 from app.adapters.external.firecrawl.models import FirecrawlResult
+from app.application.dto.aggregation import NormalizedSourceDocument
 from app.config import AppConfig
 from app.core.call_status import CallStatus
 from app.core.html_utils import clean_markdown_article_text, html_to_text
@@ -27,6 +28,7 @@ from app.core.logging_utils import get_logger
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.core.validation import safe_message_id, safe_telegram_chat_id, safe_telegram_user_id
 from app.db.session import DatabaseSessionManager
+from app.domain.models.source import SourceItem, SourceKind
 from app.infrastructure.cache.redis_cache import RedisCache
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 from app.observability.failure_observability import (
@@ -175,6 +177,13 @@ class ContentExtractor(
             if platform_result.request_id is not None:
                 metadata.setdefault("request_id", platform_result.request_id)
             metadata.setdefault("detected_lang", platform_result.detected_lang)
+            if platform_result.source_item is not None:
+                metadata.setdefault("source_item", platform_result.source_item.to_dict())
+            if platform_result.normalized_document is not None:
+                metadata.setdefault(
+                    "normalized_source_document",
+                    platform_result.normalized_document.model_dump(mode="json"),
+                )
             return platform_result.content_text, platform_result.content_source, metadata
 
         logger.info(
@@ -254,6 +263,25 @@ class ContentExtractor(
 
         if crawl.metadata_json:
             metadata["firecrawl_metadata"] = crawl.metadata_json
+
+        source_item = SourceItem.create(
+            kind=SourceKind.WEB_ARTICLE,
+            original_value=url,
+            normalized_value=normalized_url,
+            request_id=request_id,
+        )
+        normalized_document = NormalizedSourceDocument.from_extracted_content(
+            source_item=source_item,
+            text=content_text,
+            title=(crawl.metadata_json or {}).get("title")
+            if isinstance(crawl.metadata_json, dict)
+            else None,
+            detected_language=detect_language(content_text or ""),
+            content_source=content_source,
+            metadata=metadata,
+        )
+        metadata["source_item"] = source_item.to_dict()
+        metadata["normalized_source_document"] = normalized_document.model_dump(mode="json")
 
         logger.info(
             "pure_extraction_success",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.db._models_aggregation import AggregationSession, AggregationSessionItem
 from app.db._models_base import (
     TOPIC_SEARCH_INDEX_OPTIONS,
     BaseModel,
@@ -66,6 +67,8 @@ from app.db._models_user_content import (
 __all__ = [
     "ALL_MODELS",
     "TOPIC_SEARCH_INDEX_OPTIONS",
+    "AggregationSession",
+    "AggregationSessionItem",
     "AttachmentProcessing",
     "AudioGeneration",
     "AuditLog",
@@ -123,6 +126,8 @@ ALL_MODELS = (
     User,
     Chat,
     Request,
+    AggregationSession,
+    AggregationSessionItem,
     TelegramMessage,
     CrawlResult,
     LLMCall,
