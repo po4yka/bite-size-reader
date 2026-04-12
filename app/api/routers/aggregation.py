@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -13,6 +14,7 @@ from app.api.models.requests import CreateAggregationBundleRequest  # noqa: TC00
 from app.api.models.responses import success_response
 from app.api.models.responses.common import PaginationInfo
 from app.api.routers.auth import get_current_user
+from app.api.routers.auth.tokens import resolve_client_type
 from app.application.dto.aggregation import SourceSubmission
 from app.application.services.aggregation_rollout import AggregationRolloutGate
 from app.application.services.multi_source_aggregation_service import (
@@ -24,6 +26,7 @@ from app.di.api import resolve_api_runtime
 from app.di.repositories import build_aggregation_session_repository, build_user_repository
 from app.di.shared import build_async_audit_sink
 from app.domain.models.source import AggregationSessionStatus  # noqa: TC001
+from app.observability.metrics import record_request
 from app.security.ssrf import is_url_safe
 
 router = APIRouter()
@@ -135,6 +138,26 @@ def _serialize_persisted_session(session: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _resolve_metric_source(user: dict[str, Any]) -> str:
+    client_type = resolve_client_type(user.get("client_id"))
+    return client_type if client_type != "unknown" else "api"
+
+
+def _record_aggregation_api_metric(
+    *,
+    operation: str,
+    user: dict[str, Any],
+    status: str,
+    started_at: float,
+) -> None:
+    record_request(
+        request_type=f"aggregation.{operation}",
+        status=status,
+        source=_resolve_metric_source(user),
+        latency_seconds=max(0.0, time.perf_counter() - started_at),
+    )
+
+
 @router.post("")
 async def create_aggregation_bundle(
     body: CreateAggregationBundleRequest,
@@ -145,107 +168,126 @@ async def create_aggregation_bundle(
 ) -> dict[str, Any]:
     """Run mixed-source aggregation for one submitted bundle."""
 
-    await _ensure_aggregation_available(gate=rollout_gate, user_id=user["user_id"])
-    correlation_id = getattr(request.state, "correlation_id", None) or generate_correlation_id()
-    runtime = resolve_api_runtime(request)
-    audit = build_async_audit_sink(_resolve_db(request))
-    audit_context = {
-        "user_id": user["user_id"],
-        "client_id": user.get("client_id"),
-        "correlation_id": correlation_id,
-        "item_count": len(body.items),
-        "lang_preference": body.lang_preference,
-    }
-    audit("INFO", "aggregation.bundle_create_requested", audit_context)
-    _ensure_public_bundle_urls(body=body, audit=audit, audit_context=audit_context)
-    submissions = [
-        SourceSubmission.from_url(
-            str(item.url),
-            metadata={
-                **dict(item.metadata or {}),
-                **({"source_kind_hint": item.source_kind_hint} if item.source_kind_hint else {}),
-            },
-        )
-        for item in body.items
-    ]
-    repo = build_aggregation_session_repository(runtime.db)
+    started_at = time.perf_counter()
     try:
-        result = await workflow.aggregate(
-            correlation_id=correlation_id,
-            user_id=user["user_id"],
-            submissions=submissions,
-            language=body.lang_preference,
-            metadata={
-                **dict(body.metadata or {}),
-                "entrypoint": "api",
-                "client_id": user.get("client_id"),
-            },
-        )
-    except Exception as exc:
+        await _ensure_aggregation_available(gate=rollout_gate, user_id=user["user_id"])
+        correlation_id = getattr(request.state, "correlation_id", None) or generate_correlation_id()
+        runtime = resolve_api_runtime(request)
+        audit = build_async_audit_sink(_resolve_db(request))
+        audit_context = {
+            "user_id": user["user_id"],
+            "client_id": user.get("client_id"),
+            "correlation_id": correlation_id,
+            "item_count": len(body.items),
+            "lang_preference": body.lang_preference,
+        }
+        audit("INFO", "aggregation.bundle_create_requested", audit_context)
+        _ensure_public_bundle_urls(body=body, audit=audit, audit_context=audit_context)
+        submissions = [
+            SourceSubmission.from_url(
+                str(item.url),
+                metadata={
+                    **dict(item.metadata or {}),
+                    **(
+                        {"source_kind_hint": item.source_kind_hint} if item.source_kind_hint else {}
+                    ),
+                },
+            )
+            for item in body.items
+        ]
+        repo = build_aggregation_session_repository(runtime.db)
+        try:
+            result = await workflow.aggregate(
+                correlation_id=correlation_id,
+                user_id=user["user_id"],
+                submissions=submissions,
+                language=body.lang_preference,
+                metadata={
+                    **dict(body.metadata or {}),
+                    "entrypoint": "api",
+                    "client_id": user.get("client_id"),
+                },
+            )
+        except Exception as exc:
+            audit(
+                "ERROR",
+                "aggregation.bundle_create_failed",
+                {
+                    **audit_context,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+            )
+            raise
+        persisted_session = await repo.async_get_aggregation_session(result.aggregation.session_id)
         audit(
-            "ERROR",
-            "aggregation.bundle_create_failed",
+            "INFO",
+            "aggregation.bundle_create_succeeded",
             {
                 **audit_context,
-                "error_type": type(exc).__name__,
-                "error": str(exc),
+                "session_id": result.aggregation.session_id,
+                "status": result.aggregation.status,
+                "successful_count": result.extraction.successful_count,
+                "failed_count": result.extraction.failed_count,
+                "duplicate_count": result.extraction.duplicate_count,
             },
         )
-        raise
-    persisted_session = await repo.async_get_aggregation_session(result.aggregation.session_id)
-    audit(
-        "INFO",
-        "aggregation.bundle_create_succeeded",
-        {
-            **audit_context,
-            "session_id": result.aggregation.session_id,
-            "status": result.aggregation.status,
+        progress_source = persisted_session or {
+            "total_items": result.aggregation.total_items,
             "successful_count": result.extraction.successful_count,
             "failed_count": result.extraction.failed_count,
             "duplicate_count": result.extraction.duplicate_count,
-        },
-    )
-    progress_source = persisted_session or {
-        "total_items": result.aggregation.total_items,
-        "successful_count": result.extraction.successful_count,
-        "failed_count": result.extraction.failed_count,
-        "duplicate_count": result.extraction.duplicate_count,
-        "progress_percent": 100 if result.aggregation.status != "failed" else 0,
-    }
-    return success_response(
-        {
-            "session": {
-                "sessionId": result.aggregation.session_id,
-                "correlationId": result.aggregation.correlation_id,
-                "status": (persisted_session or {}).get("status", result.aggregation.status),
-                "sourceType": result.aggregation.source_type,
-                "successfulCount": result.extraction.successful_count,
-                "failedCount": result.extraction.failed_count,
-                "duplicateCount": result.extraction.duplicate_count,
-                "processingTimeMs": (persisted_session or {}).get("processing_time_ms"),
-                "queuedAt": (persisted_session or {}).get("queued_at"),
-                "startedAt": (persisted_session or {}).get("started_at"),
-                "completedAt": (persisted_session or {}).get("completed_at"),
-                "lastProgressAt": (persisted_session or {}).get("last_progress_at"),
-                "progress": _build_progress_payload(progress_source),
-                "failure": _build_failure_payload(persisted_session or {}),
+            "progress_percent": 100 if result.aggregation.status != "failed" else 0,
+        }
+        response = success_response(
+            {
+                "session": {
+                    "sessionId": result.aggregation.session_id,
+                    "correlationId": result.aggregation.correlation_id,
+                    "status": (persisted_session or {}).get("status", result.aggregation.status),
+                    "sourceType": result.aggregation.source_type,
+                    "successfulCount": result.extraction.successful_count,
+                    "failedCount": result.extraction.failed_count,
+                    "duplicateCount": result.extraction.duplicate_count,
+                    "processingTimeMs": (persisted_session or {}).get("processing_time_ms"),
+                    "queuedAt": (persisted_session or {}).get("queued_at"),
+                    "startedAt": (persisted_session or {}).get("started_at"),
+                    "completedAt": (persisted_session or {}).get("completed_at"),
+                    "lastProgressAt": (persisted_session or {}).get("last_progress_at"),
+                    "progress": _build_progress_payload(progress_source),
+                    "failure": _build_failure_payload(persisted_session or {}),
+                },
+                "aggregation": result.aggregation.model_dump(mode="json"),
+                "items": [
+                    {
+                        "position": item.position,
+                        "itemId": item.item_id,
+                        "sourceItemId": item.source_item_id,
+                        "sourceKind": item.source_kind.value,
+                        "status": item.status,
+                        "requestId": item.request_id,
+                        "failure": item.failure.model_dump(mode="json") if item.failure else None,
+                    }
+                    for item in result.extraction.items
+                ],
             },
-            "aggregation": result.aggregation.model_dump(mode="json"),
-            "items": [
-                {
-                    "position": item.position,
-                    "itemId": item.item_id,
-                    "sourceItemId": item.source_item_id,
-                    "sourceKind": item.source_kind.value,
-                    "status": item.status,
-                    "requestId": item.request_id,
-                    "failure": item.failure.model_dump(mode="json") if item.failure else None,
-                }
-                for item in result.extraction.items
-            ],
-        },
-        correlation_id=correlation_id,
-    )
+            correlation_id=correlation_id,
+        )
+        _record_aggregation_api_metric(
+            operation="create",
+            user=user,
+            status="success",
+            started_at=started_at,
+        )
+        return response
+    except Exception:
+        _record_aggregation_api_metric(
+            operation="create",
+            user=user,
+            status="error",
+            started_at=started_at,
+        )
+        raise
 
 
 @router.get("")
@@ -259,31 +301,50 @@ async def list_aggregation_bundles(
 ) -> dict[str, Any]:
     """Return recent aggregation sessions for the authenticated user."""
 
-    await _ensure_aggregation_available(gate=rollout_gate, user_id=user["user_id"])
-    runtime = resolve_api_runtime(request)
-    repo = build_aggregation_session_repository(runtime.db)
-    status_value = status.value if status is not None else None
-    sessions = await repo.async_get_user_aggregation_sessions(
-        user["user_id"],
-        limit=limit + 1,
-        offset=offset,
-        status=status_value,
-    )
-    total = await repo.async_count_user_aggregation_sessions(user["user_id"], status=status_value)
-    has_more = len(sessions) > limit
-    visible_sessions = sessions[:limit]
-    return success_response(
-        {
-            "sessions": [_serialize_persisted_session(session) for session in visible_sessions],
-        },
-        correlation_id=getattr(request.state, "correlation_id", None),
-        pagination=PaginationInfo(
-            total=total,
-            limit=limit,
+    started_at = time.perf_counter()
+    try:
+        await _ensure_aggregation_available(gate=rollout_gate, user_id=user["user_id"])
+        runtime = resolve_api_runtime(request)
+        repo = build_aggregation_session_repository(runtime.db)
+        status_value = status.value if status is not None else None
+        sessions = await repo.async_get_user_aggregation_sessions(
+            user["user_id"],
+            limit=limit + 1,
             offset=offset,
-            has_more=has_more,
-        ),
-    )
+            status=status_value,
+        )
+        total = await repo.async_count_user_aggregation_sessions(
+            user["user_id"], status=status_value
+        )
+        has_more = len(sessions) > limit
+        visible_sessions = sessions[:limit]
+        response = success_response(
+            {
+                "sessions": [_serialize_persisted_session(session) for session in visible_sessions],
+            },
+            correlation_id=getattr(request.state, "correlation_id", None),
+            pagination=PaginationInfo(
+                total=total,
+                limit=limit,
+                offset=offset,
+                has_more=has_more,
+            ),
+        )
+        _record_aggregation_api_metric(
+            operation="list",
+            user=user,
+            status="success",
+            started_at=started_at,
+        )
+        return response
+    except Exception:
+        _record_aggregation_api_metric(
+            operation="list",
+            user=user,
+            status="error",
+            started_at=started_at,
+        )
+        raise
 
 
 @router.get("/{session_id}")
@@ -295,21 +356,38 @@ async def get_aggregation_bundle(
 ) -> dict[str, Any]:
     """Return one persisted aggregation session with bundle items and output."""
 
-    await _ensure_aggregation_available(gate=rollout_gate, user_id=user["user_id"])
-    runtime = resolve_api_runtime(request)
-    repo = build_aggregation_session_repository(runtime.db)
-    session = await repo.async_get_aggregation_session(session_id)
-    if session is None:
-        raise ResourceNotFoundError("Aggregation session", session_id)
-    if session.get("user") != user["user_id"]:
-        raise AuthorizationError("Access denied")
+    started_at = time.perf_counter()
+    try:
+        await _ensure_aggregation_available(gate=rollout_gate, user_id=user["user_id"])
+        runtime = resolve_api_runtime(request)
+        repo = build_aggregation_session_repository(runtime.db)
+        session = await repo.async_get_aggregation_session(session_id)
+        if session is None:
+            raise ResourceNotFoundError("Aggregation session", session_id)
+        if session.get("user") != user["user_id"]:
+            raise AuthorizationError("Access denied")
 
-    items = await repo.async_get_aggregation_session_items(session_id)
-    return success_response(
-        {
-            "session": _serialize_persisted_session(session),
-            "items": items,
-            "aggregation": session.get("aggregation_output_json"),
-        },
-        correlation_id=getattr(request.state, "correlation_id", None),
-    )
+        items = await repo.async_get_aggregation_session_items(session_id)
+        response = success_response(
+            {
+                "session": _serialize_persisted_session(session),
+                "items": items,
+                "aggregation": session.get("aggregation_output_json"),
+            },
+            correlation_id=getattr(request.state, "correlation_id", None),
+        )
+        _record_aggregation_api_metric(
+            operation="get",
+            user=user,
+            status="success",
+            started_at=started_at,
+        )
+        return response
+    except Exception:
+        _record_aggregation_api_metric(
+            operation="get",
+            user=user,
+            status="error",
+            started_at=started_at,
+        )
+        raise

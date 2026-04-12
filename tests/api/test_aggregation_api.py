@@ -424,6 +424,49 @@ def test_get_aggregation_bundle_endpoint_returns_persisted_session(client, db, u
     ]
 
 
+def test_get_aggregation_bundle_endpoint_rejects_foreign_session_and_records_metric(
+    client, db, user_factory
+):
+    allowed_ids = Config.get_allowed_user_ids()
+    owner_user_id = int(allowed_ids[0]) if allowed_ids else 424242
+    foreign_user_id = int(allowed_ids[1]) if len(allowed_ids) > 1 else owner_user_id + 1
+    user_factory(username="aggregation_owner_user", telegram_user_id=owner_user_id)
+    user_factory(username="aggregation_foreign_user", telegram_user_id=foreign_user_id)
+
+    repo = build_aggregation_session_repository(db)
+    session_id = asyncio.run(
+        repo.async_create_aggregation_session(
+            user_id=owner_user_id,
+            correlation_id="cid-agg-foreign",
+            total_items=1,
+        )
+    )
+
+    runtime = getattr(client.app.state, "runtime", None)
+    client.app.state.runtime = SimpleNamespace(db=db)
+    try:
+        with (
+            patch("app.api.routers.auth.dependencies.Config.is_user_allowed", return_value=True),
+            patch("app.api.routers.aggregation.record_request") as metrics_mock,
+        ):
+            response = client.get(
+                f"/v1/aggregations/{session_id}",
+                headers=_auth_headers(foreign_user_id, client_id="cli-foreign-v1"),
+            )
+    finally:
+        client.app.state.runtime = runtime
+
+    assert response.status_code == 403
+    payload = response.json()
+    assert payload["error"]["code"] == "FORBIDDEN"
+    metrics_mock.assert_called_once()
+    metric_kwargs = metrics_mock.call_args.kwargs
+    assert metric_kwargs["request_type"] == "aggregation.get"
+    assert metric_kwargs["status"] == "error"
+    assert metric_kwargs["source"] == "cli"
+    assert metric_kwargs["latency_seconds"] >= 0
+
+
 def test_list_aggregation_bundles_endpoint_returns_only_authenticated_user_sessions(
     client, db, user_factory
 ):
@@ -482,6 +525,122 @@ def test_list_aggregation_bundles_endpoint_returns_only_authenticated_user_sessi
     assert payload["data"]["sessions"][0]["completed_at"] is not None
     assert payload["data"]["sessions"][0]["progress"]["completionPercent"] == 100
     assert payload["meta"]["pagination"]["hasMore"] is False
+
+
+def test_external_aggregation_request_flow_end_to_end(client, db, user_factory):
+    allowed_ids = Config.get_allowed_user_ids()
+    user_id = int(allowed_ids[0]) if allowed_ids else 424242
+    user_factory(username="aggregation_e2e_user", telegram_user_id=user_id)
+
+    class FakeExtractor:
+        cfg = SimpleNamespace(runtime=SimpleNamespace(aggregation_non_youtube_video_enabled=True))
+
+        async def extract_content_pure(
+            self,
+            *,
+            url: str,
+            correlation_id: str,
+            request_id: int | None = None,
+        ) -> tuple[str, str, dict[str, str | int]]:
+            if "x.com" in url:
+                return (
+                    "Breaking post with concrete details.",
+                    "markdown",
+                    {
+                        "title": "X post",
+                        "detected_lang": "en",
+                    },
+                )
+            return (
+                "Longer article body with supporting context and examples.",
+                "markdown",
+                {
+                    "title": "Web article",
+                    "detected_lang": "en",
+                },
+            )
+
+    runtime = getattr(client.app.state, "runtime", None)
+    client.app.state.runtime = SimpleNamespace(
+        cfg=load_config(allow_stub_telegram=True),
+        db=db,
+        background_processor=SimpleNamespace(
+            url_processor=SimpleNamespace(content_extractor=FakeExtractor())
+        ),
+        core=SimpleNamespace(llm_client=None),
+    )
+
+    try:
+        with (
+            _allow_public_urls(),
+            patch("app.api.routers.aggregation.record_request") as metrics_mock,
+        ):
+            create_response = client.post(
+                "/v1/aggregations",
+                headers=_auth_headers(user_id, client_id="cli-e2e-v1"),
+                json={
+                    "items": [
+                        {
+                            "url": "https://example.com/article",
+                            "source_kind_hint": "web_article",
+                        },
+                        {
+                            "url": "https://x.com/example/status/1",
+                            "source_kind_hint": "x_post",
+                        },
+                    ],
+                    "lang_preference": "en",
+                    "metadata": {"submitted_by": "e2e-test"},
+                },
+            )
+            assert create_response.status_code == 200
+            create_payload = create_response.json()
+            session_id = create_payload["data"]["session"]["sessionId"]
+
+            get_response = client.get(
+                f"/v1/aggregations/{session_id}",
+                headers=_auth_headers(user_id, client_id="cli-e2e-v1"),
+            )
+            list_response = client.get(
+                "/v1/aggregations?limit=20&offset=0",
+                headers=_auth_headers(user_id, client_id="cli-e2e-v1"),
+            )
+    finally:
+        client.app.state.runtime = runtime
+
+    assert get_response.status_code == 200
+    assert list_response.status_code == 200
+
+    get_payload = get_response.json()
+    list_payload = list_response.json()
+
+    assert create_payload["data"]["session"]["status"] == "completed"
+    assert create_payload["data"]["session"]["progress"]["completionPercent"] == 100
+    assert create_payload["data"]["aggregation"]["source_type"] == "mixed"
+    assert create_payload["data"]["aggregation"]["overview"]
+    assert [item["status"] for item in create_payload["data"]["items"]] == [
+        "extracted",
+        "extracted",
+    ]
+    assert all(item["requestId"] is None for item in create_payload["data"]["items"])
+
+    assert get_payload["data"]["session"]["id"] == session_id
+    assert get_payload["data"]["session"]["status"] == "completed"
+    assert get_payload["data"]["session"]["progress"]["successfulCount"] == 2
+    assert get_payload["data"]["aggregation"]["metadata"]["generation_mode"] == "heuristic_fallback"
+    assert len(get_payload["data"]["items"]) == 2
+
+    assert [session["id"] for session in list_payload["data"]["sessions"]] == [session_id]
+    assert list_payload["data"]["sessions"][0]["status"] == "completed"
+
+    assert [call.kwargs["request_type"] for call in metrics_mock.call_args_list] == [
+        "aggregation.create",
+        "aggregation.get",
+        "aggregation.list",
+    ]
+    assert {call.kwargs["source"] for call in metrics_mock.call_args_list} == {"cli"}
+    assert {call.kwargs["status"] for call in metrics_mock.call_args_list} == {"success"}
+    assert all(call.kwargs["latency_seconds"] >= 0 for call in metrics_mock.call_args_list)
 
 
 def test_create_aggregation_bundle_endpoint_rejects_invalid_source_kind_hint(

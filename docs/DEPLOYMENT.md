@@ -194,6 +194,55 @@ Before exposing hosted public MCP, also verify:
 6. the MCP deployment has writable access to the database if you want aggregation write tools enabled
 7. `/v1/aggregations` and `/sse` both sit behind HTTPS and normal ingress logging/monitoring
 
+### External Access Stage Order
+
+Roll out external aggregation access in this order and only promote when the previous stage stays within the safety thresholds for at least 24 hours:
+
+1. Internal API users only
+2. Invite-only external CLI users
+3. Local stdio MCP users with write-capable aggregation tools
+4. Trusted hosted SSE MCP beta behind a gateway
+5. Broad external enablement
+
+Watch these signals during every stage:
+
+- `bsr_requests_total{type="aggregation.create",status=...,source="cli"}` for CLI create volume and error rate
+- `bsr_requests_total{type="aggregation.create",status=...,source="api"}` for direct API callers without a typed client prefix
+- `bsr_requests_total{type="<tool>",status=...,source="mcp"}` for MCP tool adoption and failures
+- `bsr_request_latency_seconds{type="aggregation.create",stage="total"}` for end-to-end API create latency
+- `bsr_request_latency_seconds{type="<tool>",stage="total"}` for MCP tool latency
+- `bsr_aggregation_bundles_total{status=...,entrypoint=...}` for completed, partial, and failed bundles
+- `bsr_aggregation_extraction_total{platform=...,outcome=...}` for per-platform extraction failure spikes
+- `bsr_aggregation_bundle_latency_seconds{entrypoint=...}` for bundle completion latency
+- `bsr_aggregation_synthesis_coverage_ratio_bucket{source_type=...,status=...}` for low-coverage summaries
+
+Use these go/no-go thresholds:
+
+- Promote only if `aggregation.create` and MCP write-tool error rates stay below 5% over the last 24 hours.
+- Hold the rollout if failed plus partial bundles exceed 10% of total bundles for any stage.
+- Hold the rollout if p95 `aggregation.create` latency exceeds 30 seconds for CLI/API traffic or if p95 MCP write-tool latency exceeds 15 seconds.
+- Hold the rollout if any single platform in `bsr_aggregation_extraction_total` shows a failure rate above 20%.
+- Hold the rollout if low-coverage syntheses (`coverage_ratio < 0.5`) exceed 10% of completed mixed bundles.
+- Roll back immediately on confirmed cross-user access, auth bypass, SSRF bypass, or sustained 429 saturation caused by the new client cohort.
+
+Stage-specific promotion checks:
+
+- Stage 1 to Stage 2:
+  keep invite-only CLI clients on an explicit allowlist, verify client IDs map cleanly to `cli-*`, and confirm successful create/get/list flows for at least three distinct external users.
+- Stage 2 to Stage 3:
+  verify local MCP aggregation writes use scoped identities only, and confirm `bsr_requests_total{source="mcp"}` shows zero auth or access-denied surprises for trusted testers.
+- Stage 3 to Stage 4:
+  verify hosted SSE traffic arrives through JWT or trusted forwarded-token auth only, confirm request-scoped reads and writes in logs, and require no security incidents during the beta window.
+- Stage 4 to Stage 5:
+  confirm support docs, troubleshooting coverage, rate-limit capacity, and operator dashboards are all in active use before widening access.
+
+Rollback triggers and actions:
+
+- If any hold or rollback condition is hit, stop issuing new external secrets, pause hosted MCP onboarding, and set `AGGREGATION_ROLLOUT_STAGE` back to the last safe stage.
+- If hosted MCP is implicated, disable public exposure first by setting `MCP_ALLOW_REMOTE_SSE=false` or removing the public ingress route.
+- If only secret-based external access is implicated, set `SECRET_LOGIN_ENABLED=false` while keeping internal bot/API traffic available.
+- Rotate affected client secrets, review `aggregation.bundle_create_*` audit events, and restore the previous known-good image before reopening the stage.
+
 ## Operations
 
 - Health: ensure the bot account stays unbanned and tokens valid.

@@ -7,9 +7,11 @@ all business logic is in the injected service classes.
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
 from app.mcp.helpers import to_json
+from app.observability.metrics import record_request
 
 if TYPE_CHECKING:
     from app.mcp.aggregation_service import AggregationMcpService
@@ -26,6 +28,37 @@ def register_tools(
     catalog_service: CatalogReadService,
     semantic_service: SemanticSearchService,
 ) -> None:
+    def _status_from_result(result: Any) -> str:
+        return "error" if isinstance(result, dict) and "error" in result else "success"
+
+    def _record_tool_metric(tool_name: str, *, status: str, started_at: float) -> None:
+        record_request(
+            request_type=tool_name,
+            status=status,
+            source="mcp",
+            latency_seconds=max(0.0, time.perf_counter() - started_at),
+        )
+
+    async def _call_async(tool_name: str, fn: Any, /, *args: Any, **kwargs: Any) -> Any:
+        started_at = time.perf_counter()
+        try:
+            result = await fn(*args, **kwargs)
+        except Exception:
+            _record_tool_metric(tool_name, status="error", started_at=started_at)
+            raise
+        _record_tool_metric(tool_name, status=_status_from_result(result), started_at=started_at)
+        return result
+
+    def _call_sync(tool_name: str, fn: Any, /, *args: Any, **kwargs: Any) -> Any:
+        started_at = time.perf_counter()
+        try:
+            result = fn(*args, **kwargs)
+        except Exception:
+            _record_tool_metric(tool_name, status="error", started_at=started_at)
+            raise
+        _record_tool_metric(tool_name, status=_status_from_result(result), started_at=started_at)
+        return result
+
     @mcp.tool()
     async def create_aggregation_bundle(
         items: list[dict[str, Any]],
@@ -34,7 +67,9 @@ def register_tools(
     ) -> str:
         """Create and run an aggregation bundle for the scoped MCP user."""
         return to_json(
-            await aggregation_service.create_aggregation_bundle(
+            await _call_async(
+                "create_aggregation_bundle",
+                aggregation_service.create_aggregation_bundle,
                 items=items,
                 lang_preference=lang_preference,
                 metadata=metadata,
@@ -44,7 +79,13 @@ def register_tools(
     @mcp.tool()
     async def get_aggregation_bundle(session_id: int) -> str:
         """Get one persisted aggregation bundle by session ID."""
-        return to_json(await aggregation_service.get_aggregation_bundle(session_id))
+        return to_json(
+            await _call_async(
+                "get_aggregation_bundle",
+                aggregation_service.get_aggregation_bundle,
+                session_id,
+            )
+        )
 
     @mcp.tool()
     async def list_aggregation_bundles(
@@ -54,7 +95,9 @@ def register_tools(
     ) -> str:
         """List aggregation bundles for the scoped MCP user."""
         return to_json(
-            await aggregation_service.list_aggregation_bundles(
+            await _call_async(
+                "list_aggregation_bundles",
+                aggregation_service.list_aggregation_bundles,
                 limit=limit,
                 offset=offset,
                 status=status,
@@ -65,7 +108,9 @@ def register_tools(
     def check_source_supported(url: str, source_kind_hint: str | None = None) -> str:
         """Classify whether a URL fits the public aggregation source contract."""
         return to_json(
-            aggregation_service.check_source_supported(
+            _call_sync(
+                "check_source_supported",
+                aggregation_service.check_source_supported,
                 url=url,
                 source_kind_hint=source_kind_hint,
             )
@@ -74,12 +119,12 @@ def register_tools(
     @mcp.tool()
     def search_articles(query: str, limit: int = 10) -> str:
         """Search stored article summaries by keyword, topic, or entity."""
-        return to_json(article_service.search_articles(query, limit))
+        return to_json(_call_sync("search_articles", article_service.search_articles, query, limit))
 
     @mcp.tool()
     def get_article(summary_id: int) -> str:
         """Get full details of an article summary by its ID."""
-        return to_json(article_service.get_article(summary_id))
+        return to_json(_call_sync("get_article", article_service.get_article, summary_id))
 
     @mcp.tool()
     def list_articles(
@@ -90,47 +135,77 @@ def register_tools(
         tag: str | None = None,
     ) -> str:
         """List stored article summaries with optional filters."""
-        return to_json(article_service.list_articles(limit, offset, is_favorited, lang, tag))
+        return to_json(
+            _call_sync(
+                "list_articles",
+                article_service.list_articles,
+                limit,
+                offset,
+                is_favorited,
+                lang,
+                tag,
+            )
+        )
 
     @mcp.tool()
     def get_article_content(summary_id: int) -> str:
         """Get the full extracted content (markdown/text) of an article."""
-        return to_json(article_service.get_article_content(summary_id))
+        return to_json(
+            _call_sync("get_article_content", article_service.get_article_content, summary_id)
+        )
 
     @mcp.tool()
     def get_stats() -> str:
         """Get statistics about the Bite-Size Reader article database."""
-        return to_json(article_service.get_stats())
+        return to_json(_call_sync("get_stats", article_service.get_stats))
 
     @mcp.tool()
     def find_by_entity(entity_name: str, entity_type: str | None = None, limit: int = 10) -> str:
         """Find articles that mention a specific entity."""
-        return to_json(article_service.find_by_entity(entity_name, entity_type, limit))
+        return to_json(
+            _call_sync(
+                "find_by_entity", article_service.find_by_entity, entity_name, entity_type, limit
+            )
+        )
 
     @mcp.tool()
     def list_collections(limit: int = 20, offset: int = 0) -> str:
         """List article collections (folders/reading lists)."""
-        return to_json(catalog_service.list_collections(limit, offset))
+        return to_json(
+            _call_sync("list_collections", catalog_service.list_collections, limit, offset)
+        )
 
     @mcp.tool()
     def get_collection(collection_id: int, include_items: bool = True, limit: int = 50) -> str:
         """Get details of a specific collection and its article summaries."""
-        return to_json(catalog_service.get_collection(collection_id, include_items, limit))
+        return to_json(
+            _call_sync(
+                "get_collection",
+                catalog_service.get_collection,
+                collection_id,
+                include_items,
+                limit,
+            )
+        )
 
     @mcp.tool()
     def list_videos(limit: int = 20, offset: int = 0, status: str | None = None) -> str:
         """List downloaded YouTube videos with metadata."""
-        return to_json(catalog_service.list_videos(limit, offset, status))
+        return to_json(
+            _call_sync("list_videos", catalog_service.list_videos, limit, offset, status)
+        )
 
     @mcp.tool()
     def get_video_transcript(video_id: str) -> str:
         """Get the transcript text of a downloaded YouTube video."""
-        return to_json(catalog_service.get_video_transcript(video_id))
+        return to_json(
+            _call_sync("get_video_transcript", catalog_service.get_video_transcript, video_id)
+        )
 
     @mcp.tool()
     def check_url(url: str) -> str:
         """Check if a URL has already been processed and summarised."""
-        return to_json(article_service.check_url(url))
+        return to_json(_call_sync("check_url", article_service.check_url, url))
 
     @mcp.tool()
     async def semantic_search(
@@ -143,7 +218,9 @@ def register_tools(
     ) -> str:
         """Search articles by semantic meaning with resilient fallback strategy."""
         return to_json(
-            await semantic_service.semantic_search(
+            await _call_async(
+                "semantic_search",
+                semantic_service.semantic_search,
                 description,
                 limit=limit,
                 language=language,
@@ -163,7 +240,9 @@ def register_tools(
     ) -> str:
         """Combine keyword and semantic retrieval into a single ranked result list."""
         return to_json(
-            await semantic_service.hybrid_search(
+            await _call_async(
+                "hybrid_search",
+                semantic_service.hybrid_search,
                 query,
                 limit=limit,
                 language=language,
@@ -182,7 +261,9 @@ def register_tools(
     ) -> str:
         """Find articles semantically similar to an existing summary."""
         return to_json(
-            await semantic_service.find_similar_articles(
+            await _call_async(
+                "find_similar_articles",
+                semantic_service.find_similar_articles,
                 summary_id,
                 limit=limit,
                 min_similarity=min_similarity,
@@ -194,14 +275,23 @@ def register_tools(
     @mcp.tool()
     async def chroma_health() -> str:
         """Check Chroma availability and fallback readiness."""
-        return to_json(await semantic_service.chroma_health())
+        return to_json(await _call_async("chroma_health", semantic_service.chroma_health))
 
     @mcp.tool()
     async def chroma_index_stats(scan_limit: int = 5000) -> str:
         """Return index coverage stats between SQLite summaries and Chroma."""
-        return to_json(await semantic_service.chroma_index_stats(scan_limit))
+        return to_json(
+            await _call_async("chroma_index_stats", semantic_service.chroma_index_stats, scan_limit)
+        )
 
     @mcp.tool()
     async def chroma_sync_gap(max_scan: int = 5000, sample_size: int = 20) -> str:
         """Report sync gaps between SQLite summaries and Chroma index."""
-        return to_json(await semantic_service.chroma_sync_gap(max_scan, sample_size))
+        return to_json(
+            await _call_async(
+                "chroma_sync_gap",
+                semantic_service.chroma_sync_gap,
+                max_scan,
+                sample_size,
+            )
+        )
