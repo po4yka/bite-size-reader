@@ -232,6 +232,16 @@ Use one of:
 2. Could this `extra` payload include auth headers or token-like fields?
 3. If this is a fallback path, is there enough context to debug without exposing sensitive values?
 
+### Aggregation API Audit Events
+
+External aggregation creation now emits explicit audit events so operators can correlate expensive bundle creation with the authenticated actor that triggered it.
+
+- `aggregation.bundle_create_requested`
+- `aggregation.bundle_create_succeeded`
+- `aggregation.bundle_create_failed`
+
+Each event includes the request `correlation_id`, authenticated `user_id`, `client_id`, submitted bundle size, and language preference. Success events also include the persisted aggregation `session_id` and outcome counts.
+
 ---
 
 ## Tracing External API Calls

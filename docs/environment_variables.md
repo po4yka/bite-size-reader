@@ -390,6 +390,8 @@ Controls which embedding backend generates vectors for semantic search.
 | `API_RATE_LIMIT_SUMMARIES` | `200` | Summaries endpoint limit |
 | `API_RATE_LIMIT_REQUESTS` | `10` | Requests endpoint limit |
 | `API_RATE_LIMIT_SEARCH` | `50` | Search endpoint limit |
+| `API_RATE_LIMIT_AGGREGATION_CREATE_USER` | `5` | Aggregation create limit per authenticated user |
+| `API_RATE_LIMIT_AGGREGATION_CREATE_CLIENT` | `20` | Aggregation create limit per client ID across users |
 | `SYNC_EXPIRY_HOURS` | `1` | Sync session expiry |
 | `SYNC_DEFAULT_LIMIT` | `200` | Default sync page size |
 | `SYNC_MIN_LIMIT` | `1` | Min sync page size |

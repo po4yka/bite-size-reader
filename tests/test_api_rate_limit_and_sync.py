@@ -12,13 +12,22 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.api import middleware
+from app.api.routers.auth.tokens import create_access_token
 from app.api.services.sync_service import SyncService
 from app.config import ApiLimitsConfig, RedisConfig, SyncConfig
 from app.infrastructure.redis import redis_key
 
 
 class DummyCfg:
-    def __init__(self, *, required: bool = False, limit: int = 5, window_seconds: int = 60):
+    def __init__(
+        self,
+        *,
+        required: bool = False,
+        limit: int = 5,
+        window_seconds: int = 60,
+        aggregation_user_limit: int = 5,
+        aggregation_client_limit: int = 20,
+    ):
         self.redis = RedisConfig(enabled=True, required=required, prefix="test")
         self.api_limits = ApiLimitsConfig(
             window_seconds=window_seconds,
@@ -28,8 +37,16 @@ class DummyCfg:
             summaries_limit=limit,
             requests_limit=limit,
             search_limit=limit,
+            auth_limit=limit,
+            aggregation_create_user_limit=aggregation_user_limit,
+            aggregation_create_client_limit=aggregation_client_limit,
         )
         self.sync = SyncConfig(expiry_hours=1, default_limit=100, min_limit=1, max_limit=500)
+
+
+def _auth_header(user_id: int, client_id: str) -> list[tuple[bytes, bytes]]:
+    token = create_access_token(user_id, client_id=client_id)
+    return [(b"authorization", f"Bearer {token}".encode())]
 
 
 @pytest.mark.asyncio
@@ -183,7 +200,145 @@ async def test_rate_limit_uses_webapp_user_id_over_client_host(monkeypatch):
     assert getattr(resp, "status_code", None) == 200
 
     keys = await redis_client.keys("*")
-    assert any(":rate:555:" in key for key in keys)
-    assert not any(":rate:127.0.0.1:" in key for key in keys)
+    assert any(":rate:requests:555:" in key for key in keys)
+    assert not any(":rate:requests:127.0.0.1:" in key for key in keys)
+
+    await redis_client.flushall()
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_buckets_are_isolated(monkeypatch):
+    redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    cfg = DummyCfg(limit=1, window_seconds=60)
+
+    middleware._cfg = cfg
+    middleware._redis_warning_logged = False
+
+    async def fake_get_redis(_: DummyCfg):
+        return redis_client
+
+    monkeypatch.setattr(middleware, "get_redis", fake_get_redis)
+
+    async def call_next(_: Request):
+        return Response(status_code=200)
+
+    headers = _auth_header(101, "cli-bucket-test")
+    request_one = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/v1/requests",
+            "headers": headers,
+            "client": ("127.0.0.1", 0),
+        }
+    )
+    request_two = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/v1/search",
+            "headers": headers,
+            "client": ("127.0.0.1", 0),
+        }
+    )
+
+    first = await middleware.rate_limit_middleware(request_one, call_next)
+    second = await middleware.rate_limit_middleware(request_two, call_next)
+
+    assert getattr(first, "status_code", None) == 200
+    assert getattr(second, "status_code", None) == 200
+
+    await redis_client.flushall()
+
+
+@pytest.mark.asyncio
+async def test_aggregation_create_rate_limit_blocks_same_user(monkeypatch):
+    redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    cfg = DummyCfg(
+        limit=100,
+        window_seconds=60,
+        aggregation_user_limit=1,
+        aggregation_client_limit=10,
+    )
+
+    middleware._cfg = cfg
+    middleware._redis_warning_logged = False
+
+    async def fake_get_redis(_: DummyCfg):
+        return redis_client
+
+    monkeypatch.setattr(middleware, "get_redis", fake_get_redis)
+
+    async def call_next(_: Request):
+        return Response(status_code=200)
+
+    headers = _auth_header(202, "cli-agg-user")
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/aggregations",
+        "headers": headers,
+        "client": ("127.0.0.1", 0),
+    }
+
+    first = await middleware.rate_limit_middleware(Request(scope), call_next)
+    second = await middleware.rate_limit_middleware(Request(scope), call_next)
+
+    assert getattr(first, "status_code", None) == 200
+    assert getattr(second, "status_code", None) == 429
+    assert second.headers.get("X-RateLimit-Limit") == "1"
+
+    await redis_client.flushall()
+
+
+@pytest.mark.asyncio
+async def test_aggregation_create_client_limit_blocks_shared_client(monkeypatch):
+    redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    cfg = DummyCfg(
+        limit=100,
+        window_seconds=60,
+        aggregation_user_limit=10,
+        aggregation_client_limit=1,
+    )
+
+    middleware._cfg = cfg
+    middleware._redis_warning_logged = False
+
+    async def fake_get_redis(_: DummyCfg):
+        return redis_client
+
+    monkeypatch.setattr(middleware, "get_redis", fake_get_redis)
+
+    async def call_next(_: Request):
+        return Response(status_code=200)
+
+    first = await middleware.rate_limit_middleware(
+        Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/v1/aggregations",
+                "headers": _auth_header(301, "cli-shared"),
+                "client": ("127.0.0.1", 0),
+            }
+        ),
+        call_next,
+    )
+    second = await middleware.rate_limit_middleware(
+        Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/v1/aggregations",
+                "headers": _auth_header(302, "cli-shared"),
+                "client": ("127.0.0.1", 0),
+            }
+        ),
+        call_next,
+    )
+
+    assert getattr(first, "status_code", None) == 200
+    assert getattr(second, "status_code", None) == 429
+    assert second.headers.get("X-RateLimit-Limit") == "1"
 
     await redis_client.flushall()

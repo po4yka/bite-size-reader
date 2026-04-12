@@ -168,6 +168,7 @@ Full variable reference: `docs/environment_variables.md`
 
 - Access control: set `ALLOWED_USER_IDS`; restrict `ALLOWED_CLIENT_IDS` for API if used.
 - Resource control: configure rate limits (`API_RATE_LIMIT_*`) and concurrency caps; prefer Redis.
+- Aggregation guardrails: tune `API_RATE_LIMIT_AGGREGATION_CREATE_USER` and `API_RATE_LIMIT_AGGREGATION_CREATE_CLIENT` before exposing `/v1/aggregations` to external clients.
 - Secrets: use `.env` or secret manager; never commit secrets.
 - Logs: JSON with correlation IDs; redact `Authorization`.
 - Container: least privilege; restrict `/data` permissions on host; HTTPS termination in front of API.

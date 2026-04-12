@@ -1,13 +1,13 @@
 """FastAPI middleware for request processing."""
 
+from __future__ import annotations
+
 import threading
 import time
 import uuid
 from collections import defaultdict
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.api.context import correlation_id_ctx
@@ -16,6 +16,11 @@ from app.api.models.responses import error_response, make_error
 from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger
 from app.infrastructure.redis import get_redis, redis_key
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from fastapi import Request
 
 logger = get_logger(__name__)
 
@@ -126,6 +131,8 @@ def _resolve_limit(_path: str, cfg: AppConfig) -> int:
 
 def _resolve_limit_from_bucket(cfg: AppConfig, bucket: str | None) -> int:
     limits = cfg.api_limits
+    if bucket == "aggregation_create":
+        return limits.aggregation_create_user_limit
     if bucket == "summaries":
         return limits.summaries_limit
     if bucket == "requests":
@@ -137,41 +144,82 @@ def _resolve_limit_from_bucket(cfg: AppConfig, bucket: str | None) -> int:
     return limits.default_limit
 
 
-def _get_user_id_from_auth_header(request: Request) -> str | None:
+def _get_auth_context_from_auth_header(request: Request) -> tuple[str | None, str | None]:
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.lower().startswith("bearer "):
-        return None
+        return None, None
     token = auth_header.split(" ", 1)[1].strip()
     if not token:
-        return None
+        return None, None
     try:
         from app.api.routers.auth import decode_token
 
         payload = decode_token(token, expected_type="access")
     except Exception:
         logger.warning("jwt_decode_failed_for_rate_limit")
-        return None
+        return None, None
     user_id = payload.get("user_id")
+    client_id = payload.get("client_id")
+    normalized_client_id = client_id.strip() if isinstance(client_id, str) else None
     if isinstance(user_id, int):
-        return str(user_id)
+        return str(user_id), normalized_client_id or None
     if isinstance(user_id, str) and user_id.isdigit():
-        return user_id
+        return user_id, normalized_client_id or None
+    return None, normalized_client_id or None
+
+
+def _resolve_rate_limit_context(request: Request) -> dict[str, str | None]:
+    auth_user_id, auth_client_id = _get_auth_context_from_auth_header(request)
+    user_id = getattr(request.state, "user_id", None)
+    client_id = getattr(request.state, "client_id", None)
+
+    resolved_user_id = str(user_id) if user_id else auth_user_id
+    resolved_client_id = str(client_id) if client_id else auth_client_id
+
+    if not resolved_user_id or not resolved_client_id:
+        webapp_user = getattr(request.state, "webapp_user", None)
+        if isinstance(webapp_user, dict):
+            if not resolved_user_id:
+                webapp_user_id = webapp_user.get("user_id")
+                if isinstance(webapp_user_id, int):
+                    resolved_user_id = str(webapp_user_id)
+                elif isinstance(webapp_user_id, str) and webapp_user_id.isdigit():
+                    resolved_user_id = webapp_user_id
+            if not resolved_client_id:
+                resolved_client_id = "webapp"
+
+    actor = (
+        resolved_user_id
+        if resolved_user_id
+        else request.client.host
+        if request.client and request.client.host
+        else "unknown"
+    )
+    return {
+        "actor": actor,
+        "user_id": resolved_user_id,
+        "client_id": resolved_client_id,
+    }
+
+
+def _resolve_bucket(method: str, path: str) -> str | None:
+    normalized_path = path.rstrip("/") or "/"
+    if method.upper() == "POST" and normalized_path == "/v1/aggregations":
+        return "aggregation_create"
+    if "/summaries" in normalized_path:
+        return "summaries"
+    if "/search" in normalized_path:
+        return "search"
+    if "/requests" in normalized_path:
+        return "requests"
+    if "/auth" in normalized_path:
+        return "auth"
     return None
 
 
-def _resolve_rate_limit_actor(request: Request) -> str:
-    user_id = getattr(request.state, "user_id", None) or _get_user_id_from_auth_header(request)
-    if not user_id:
-        webapp_user = getattr(request.state, "webapp_user", None)
-        if isinstance(webapp_user, dict):
-            webapp_user_id = webapp_user.get("user_id")
-            if isinstance(webapp_user_id, int):
-                user_id = str(webapp_user_id)
-            elif isinstance(webapp_user_id, str) and webapp_user_id.isdigit():
-                user_id = webapp_user_id
-    if user_id:
-        return str(user_id)
-    return request.client.host if request.client and request.client.host else "unknown"
+def _bucket_rate_key(bucket: str | None, actor: str) -> str:
+    bucket_name = bucket or "default"
+    return f"{bucket_name}:{actor}"
 
 
 def _build_rate_limit_response(
@@ -254,19 +302,20 @@ async def _handle_local_rate_limit(
     call_next: Callable,
     cfg: AppConfig,
     correlation_id: str | None,
-    user_id: str,
+    rate_key: str,
+    log_actor: str,
     bucket_limit: int,
     window: int,
     window_start: int,
     now: int,
 ) -> JSONResponse | Any:
-    allowed, remaining = _check_local_rate_limit(user_id, bucket_limit, window)
+    allowed, remaining = _check_local_rate_limit(rate_key, bucket_limit, window)
     if not allowed:
         retry_after = _compute_retry_after(now, window_start, window, cfg)
         logger.info(
             "rate_limit_exceeded_local",
             extra={
-                "user_id": user_id,
+                "user_id": log_actor,
                 "path": request.url.path,
                 "limit": bucket_limit,
                 "retry_after": retry_after,
@@ -303,13 +352,14 @@ async def _handle_redis_rate_limit(
     cfg: AppConfig,
     correlation_id: str | None,
     redis_client: Any,
-    user_id: str,
+    rate_key: str,
+    log_actor: str,
     bucket_limit: int,
     window: int,
     window_start: int,
     now: int,
 ) -> JSONResponse | Any:
-    key = redis_key(cfg.redis.prefix, "rate", user_id, str(window_start))
+    key = redis_key(cfg.redis.prefix, "rate", rate_key, str(window_start))
     ttl = max(window + 5, int(window * cfg.api_limits.cooldown_multiplier))
     pipe = redis_client.pipeline()
     pipe.incr(key)
@@ -321,7 +371,7 @@ async def _handle_redis_rate_limit(
         logger.info(
             "rate_limit_exceeded",
             extra={
-                "user_id": user_id,
+                "user_id": log_actor,
                 "path": request.url.path,
                 "limit": bucket_limit,
                 "count": count,
@@ -351,29 +401,127 @@ async def _handle_redis_rate_limit(
     )
 
 
+def _aggregation_client_limit(cfg: AppConfig, bucket: str | None) -> int | None:
+    if bucket != "aggregation_create":
+        return None
+    return cfg.api_limits.aggregation_create_client_limit
+
+
+async def _enforce_client_limit_local(
+    *,
+    request: Request,
+    cfg: AppConfig,
+    correlation_id: str | None,
+    client_id: str,
+    limit: int,
+    window: int,
+    window_start: int,
+    now: int,
+) -> JSONResponse | None:
+    allowed, _remaining = _check_local_rate_limit(
+        _bucket_rate_key("aggregation_create_client", client_id),
+        limit,
+        window,
+    )
+    if allowed:
+        return None
+
+    retry_after = _compute_retry_after(now, window_start, window, cfg)
+    logger.info(
+        "aggregation_create_client_rate_limit_exceeded_local",
+        extra={
+            "client_id": client_id,
+            "path": request.url.path,
+            "limit": limit,
+            "retry_after": retry_after,
+            "correlation_id": correlation_id,
+            "backend": "in-memory",
+        },
+    )
+    return _build_rate_limit_response(
+        correlation_id=correlation_id,
+        code="RATE_LIMIT_EXCEEDED",
+        message=f"Aggregation client rate limit exceeded. Try again in {retry_after} seconds.",
+        error_type=ErrorType.RATE_LIMIT,
+        status_code=429,
+        retry_after=retry_after,
+        limit=limit,
+        remaining=0,
+        reset=window_start + window,
+    )
+
+
+async def _enforce_client_limit_redis(
+    *,
+    request: Request,
+    cfg: AppConfig,
+    correlation_id: str | None,
+    redis_client: Any,
+    client_id: str,
+    limit: int,
+    window: int,
+    window_start: int,
+    now: int,
+) -> JSONResponse | None:
+    key = redis_key(
+        cfg.redis.prefix,
+        "rate",
+        _bucket_rate_key("aggregation_create_client", client_id),
+        str(window_start),
+    )
+    ttl = max(window + 5, int(window * cfg.api_limits.cooldown_multiplier))
+    pipe = redis_client.pipeline()
+    pipe.incr(key)
+    pipe.expire(key, ttl)
+    count, _ = await pipe.execute()
+
+    if count <= limit:
+        return None
+
+    retry_after = _compute_retry_after(now, window_start, window, cfg)
+    logger.info(
+        "aggregation_create_client_rate_limit_exceeded",
+        extra={
+            "client_id": client_id,
+            "path": request.url.path,
+            "limit": limit,
+            "count": count,
+            "retry_after": retry_after,
+            "correlation_id": correlation_id,
+        },
+    )
+    return _build_rate_limit_response(
+        correlation_id=correlation_id,
+        code="RATE_LIMIT_EXCEEDED",
+        message=f"Aggregation client rate limit exceeded. Try again in {retry_after} seconds.",
+        error_type=ErrorType.RATE_LIMIT,
+        status_code=429,
+        retry_after=retry_after,
+        limit=limit,
+        remaining=0,
+        reset=window_start + window,
+    )
+
+
 async def rate_limit_middleware(request: Request, call_next: Callable):
     """Redis-backed rate limiting middleware with graceful fallback."""
     cfg = _get_cfg()
     correlation_id = getattr(request.state, "correlation_id", None)
-
-    user_id = _resolve_rate_limit_actor(request)
+    rate_limit_context = _resolve_rate_limit_context(request)
+    actor = rate_limit_context["actor"] or "unknown"
+    log_actor = rate_limit_context["user_id"] or actor
+    client_id = rate_limit_context["client_id"]
 
     # Simple path-based rate limit bucket resolution
     path = request.url.path
-    bucket: str | None = None
-    if "/summaries" in path:
-        bucket = "summaries"
-    elif "/search" in path:
-        bucket = "search"
-    elif "/requests" in path:
-        bucket = "requests"
-    elif "/auth" in path:
-        bucket = "auth"
+    bucket = _resolve_bucket(request.method, path)
 
     request.state.interface_route_key = path
     request.state.interface_route_requires_auth = True
 
     bucket_limit = _resolve_limit_from_bucket(cfg=cfg, bucket=bucket)
+    rate_key = _bucket_rate_key(bucket, actor)
+    client_limit = _aggregation_client_limit(cfg, bucket)
     window = cfg.api_limits.window_seconds
     now = int(time.time())
     window_start = (now // window) * window
@@ -390,17 +538,46 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
                 error_type=ErrorType.INTERNAL,
                 status_code=503,
             )
+        if client_limit is not None and client_id:
+            client_limit_response = await _enforce_client_limit_local(
+                request=request,
+                cfg=cfg,
+                correlation_id=correlation_id,
+                client_id=client_id,
+                limit=client_limit,
+                window=window,
+                window_start=window_start,
+                now=now,
+            )
+            if client_limit_response is not None:
+                return client_limit_response
         return await _handle_local_rate_limit(
             request=request,
             call_next=call_next,
             cfg=cfg,
             correlation_id=correlation_id,
-            user_id=user_id,
+            rate_key=rate_key,
+            log_actor=log_actor,
             bucket_limit=bucket_limit,
             window=window,
             window_start=window_start,
             now=now,
         )
+
+    if client_limit is not None and client_id:
+        client_limit_response = await _enforce_client_limit_redis(
+            request=request,
+            cfg=cfg,
+            correlation_id=correlation_id,
+            redis_client=redis_client,
+            client_id=client_id,
+            limit=client_limit,
+            window=window,
+            window_start=window_start,
+            now=now,
+        )
+        if client_limit_response is not None:
+            return client_limit_response
 
     return await _handle_redis_rate_limit(
         request=request,
@@ -408,7 +585,8 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
         cfg=cfg,
         correlation_id=correlation_id,
         redis_client=redis_client,
-        user_id=user_id,
+        rate_key=rate_key,
+        log_actor=log_actor,
         bucket_limit=bucket_limit,
         window=window,
         window_start=window_start,

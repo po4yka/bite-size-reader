@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 
+from app.api.dependencies.database import get_session_manager
 from app.api.exceptions import AuthorizationError, ResourceNotFoundError
 from app.api.models.requests import CreateAggregationBundleRequest  # noqa: TC001
 from app.api.models.responses import success_response
@@ -20,6 +22,7 @@ from app.config import load_config
 from app.core.logging_utils import generate_correlation_id
 from app.di.api import resolve_api_runtime
 from app.di.repositories import build_aggregation_session_repository, build_user_repository
+from app.di.shared import build_async_audit_sink
 from app.domain.models.source import AggregationSessionStatus  # noqa: TC001
 
 router = APIRouter()
@@ -42,6 +45,12 @@ def _get_rollout_gate(request: Request) -> AggregationRolloutGate:
         cfg=cfg,
         user_repo=build_user_repository(db) if db is not None else None,
     )
+
+
+def _resolve_db(request: Request) -> Any:
+    with contextlib.suppress(RuntimeError):
+        return resolve_api_runtime(request).db
+    return get_session_manager(request)
 
 
 async def _ensure_aggregation_available(
@@ -109,6 +118,16 @@ async def create_aggregation_bundle(
 
     await _ensure_aggregation_available(gate=rollout_gate, user_id=user["user_id"])
     correlation_id = getattr(request.state, "correlation_id", None) or generate_correlation_id()
+    runtime = resolve_api_runtime(request)
+    audit = build_async_audit_sink(_resolve_db(request))
+    audit_context = {
+        "user_id": user["user_id"],
+        "client_id": user.get("client_id"),
+        "correlation_id": correlation_id,
+        "item_count": len(body.items),
+        "lang_preference": body.lang_preference,
+    }
+    audit("INFO", "aggregation.bundle_create_requested", audit_context)
     submissions = [
         SourceSubmission.from_url(
             str(item.url),
@@ -119,16 +138,43 @@ async def create_aggregation_bundle(
         )
         for item in body.items
     ]
-    runtime = resolve_api_runtime(request)
     repo = build_aggregation_session_repository(runtime.db)
-    result = await workflow.aggregate(
-        correlation_id=correlation_id,
-        user_id=user["user_id"],
-        submissions=submissions,
-        language=body.lang_preference,
-        metadata={"entrypoint": "api", **dict(body.metadata or {})},
-    )
+    try:
+        result = await workflow.aggregate(
+            correlation_id=correlation_id,
+            user_id=user["user_id"],
+            submissions=submissions,
+            language=body.lang_preference,
+            metadata={
+                **dict(body.metadata or {}),
+                "entrypoint": "api",
+                "client_id": user.get("client_id"),
+            },
+        )
+    except Exception as exc:
+        audit(
+            "ERROR",
+            "aggregation.bundle_create_failed",
+            {
+                **audit_context,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            },
+        )
+        raise
     persisted_session = await repo.async_get_aggregation_session(result.aggregation.session_id)
+    audit(
+        "INFO",
+        "aggregation.bundle_create_succeeded",
+        {
+            **audit_context,
+            "session_id": result.aggregation.session_id,
+            "status": result.aggregation.status,
+            "successful_count": result.extraction.successful_count,
+            "failed_count": result.extraction.failed_count,
+            "duplicate_count": result.extraction.duplicate_count,
+        },
+    )
     progress_source = persisted_session or {
         "total_items": result.aggregation.total_items,
         "successful_count": result.extraction.successful_count,

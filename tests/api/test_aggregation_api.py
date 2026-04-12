@@ -23,8 +23,8 @@ from app.di.repositories import build_aggregation_session_repository
 from app.domain.models.source import AggregationSessionStatus, SourceItem, SourceKind
 
 
-def _auth_headers(user_id: int) -> dict[str, str]:
-    token = create_access_token(user_id, client_id="test")
+def _auth_headers(user_id: int, client_id: str = "test") -> dict[str, str]:
+    token = create_access_token(user_id, client_id=client_id)
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -135,6 +135,94 @@ def test_create_aggregation_bundle_endpoint_returns_session_and_items(client, db
         "web_article",
         "x_post",
     ]
+
+
+def test_create_aggregation_bundle_endpoint_audits_and_passes_client_id_metadata(
+    client, db, user_factory
+):
+    allowed_ids = Config.get_allowed_user_ids()
+    user_id = int(allowed_ids[0]) if allowed_ids else 424242
+    user_factory(username="aggregation_api_audit_user", telegram_user_id=user_id)
+
+    fake_result = MultiSourceAggregationRunResult(
+        extraction=MultiSourceExtractionOutput(
+            session_id=701,
+            correlation_id="cid-agg-audit",
+            status="completed",
+            successful_count=1,
+            failed_count=0,
+            duplicate_count=0,
+            items=[
+                SourceExtractionItemResult(
+                    position=0,
+                    item_id=9001,
+                    source_item_id="src_audit",
+                    source_kind=SourceKind.WEB_ARTICLE,
+                    status="extracted",
+                    request_id=801,
+                ),
+            ],
+        ),
+        aggregation=MultiSourceAggregationOutput(
+            session_id=701,
+            correlation_id="cid-agg-audit",
+            status="completed",
+            source_type="web_article",
+            total_items=1,
+            extracted_items=1,
+            used_source_count=1,
+            overview="Audited aggregation",
+            source_coverage=[
+                SourceCoverageEntry(
+                    position=0,
+                    item_id=9001,
+                    source_item_id="src_audit",
+                    source_kind=SourceKind.WEB_ARTICLE,
+                    status="extracted",
+                    used_in_summary=True,
+                ),
+            ],
+        ),
+    )
+
+    aggregate_mock = AsyncMock(return_value=fake_result)
+    audit_mock = MagicMock()
+    runtime = _set_runtime(client, db)
+    try:
+        with (
+            patch(
+                "app.application.services.multi_source_aggregation_service.MultiSourceAggregationService.aggregate",
+                new=aggregate_mock,
+            ),
+            patch(
+                "app.api.routers.aggregation.build_async_audit_sink",
+                return_value=audit_mock,
+            ),
+        ):
+            response = client.post(
+                "/v1/aggregations",
+                headers=_auth_headers(user_id, client_id="cli-audit-v1"),
+                json={
+                    "items": [
+                        {"url": "https://example.com/article"},
+                    ],
+                    "metadata": {"submitted_by": "test"},
+                },
+            )
+    finally:
+        client.app.state.runtime = runtime
+
+    assert response.status_code == 200
+    aggregate_kwargs = aggregate_mock.await_args.kwargs
+    assert aggregate_kwargs["metadata"]["entrypoint"] == "api"
+    assert aggregate_kwargs["metadata"]["client_id"] == "cli-audit-v1"
+    assert aggregate_kwargs["metadata"]["submitted_by"] == "test"
+    assert [call.args[1] for call in audit_mock.call_args_list] == [
+        "aggregation.bundle_create_requested",
+        "aggregation.bundle_create_succeeded",
+    ]
+    assert audit_mock.call_args_list[0].args[2]["client_id"] == "cli-audit-v1"
+    assert audit_mock.call_args_list[1].args[2]["session_id"] == 701
 
 
 def test_create_aggregation_bundle_endpoint_accepts_single_item(client, db, user_factory):
