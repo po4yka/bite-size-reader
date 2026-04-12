@@ -121,7 +121,8 @@ class ContentExtractor(
         )
         router.register(
             predicate=lambda normalized_url: (
-                is_threads_url(normalized_url) or is_instagram_url(normalized_url)
+                bool(getattr(self.cfg.runtime, "aggregation_meta_extractors_enabled", True))
+                and (is_threads_url(normalized_url) or is_instagram_url(normalized_url))
             ),
             factory=self._build_meta_platform_extractor,
         )

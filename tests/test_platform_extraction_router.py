@@ -25,11 +25,15 @@ async def _dummy_sem():
     yield
 
 
-def _dummy_cfg() -> AppConfig:
+def _dummy_cfg(*, aggregation_meta_extractors_enabled: bool = True) -> AppConfig:
     return cast(
         "AppConfig",
         SimpleNamespace(
-            runtime=SimpleNamespace(enable_textacy=False, request_timeout_sec=5),
+            runtime=SimpleNamespace(
+                enable_textacy=False,
+                request_timeout_sec=5,
+                aggregation_meta_extractors_enabled=aggregation_meta_extractors_enabled,
+            ),
             scraper=SimpleNamespace(profile="balanced"),
             redis=SimpleNamespace(
                 enabled=False,
@@ -77,6 +81,38 @@ def _make_extractor() -> ContentExtractor:
     firecrawl = cast("FirecrawlClient", SimpleNamespace(scrape_markdown=firecrawl_scrape_mock))
     return ContentExtractor(
         cfg=_dummy_cfg(),
+        db=cast("DatabaseSessionManager", SimpleNamespace()),
+        firecrawl=firecrawl,  # type: ignore[arg-type]
+        response_formatter=cast(
+            "ResponseFormatter", SimpleNamespace(send_url_accepted_notification=AsyncMock())
+        ),
+        audit_func=lambda *args, **kwargs: None,
+        sem=_dummy_sem,
+    )
+
+
+def _make_extractor_with_cfg(
+    *, aggregation_meta_extractors_enabled: bool = True
+) -> ContentExtractor:
+    firecrawl_scrape_mock = AsyncMock(
+        return_value=SimpleNamespace(
+            status="ok",
+            content_markdown="# Title\n\nBody",
+            content_html=None,
+            error_text=None,
+            http_status=200,
+            latency_ms=1,
+            endpoint="scraper",
+            metadata_json=None,
+            response_success=True,
+            source_url="https://example.com",
+            correlation_id="cid",
+            options_json=None,
+        )
+    )
+    firecrawl = cast("FirecrawlClient", SimpleNamespace(scrape_markdown=firecrawl_scrape_mock))
+    return ContentExtractor(
+        cfg=_dummy_cfg(aggregation_meta_extractors_enabled=aggregation_meta_extractors_enabled),
         db=cast("DatabaseSessionManager", SimpleNamespace()),
         firecrawl=firecrawl,  # type: ignore[arg-type]
         response_formatter=cast(
@@ -174,6 +210,47 @@ async def test_extract_content_pure_routes_meta_urls_through_platform_router() -
     assert metadata["source"] == "meta"
     assert metadata["platform_surface"] == "threads_post"
     extractor._build_meta_platform_extractor.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_extract_content_pure_skips_meta_router_when_feature_flag_disabled() -> None:
+    extractor = cast("Any", _make_extractor_with_cfg(aggregation_meta_extractors_enabled=False))
+    extractor._build_meta_platform_extractor = MagicMock()
+    extractor.firecrawl.scrape_markdown = AsyncMock(
+        return_value=SimpleNamespace(
+            status="ok",
+            content_markdown=(
+                "# Threads\n\n"
+                "Generic fallback body with enough narrative detail to look like a real article. "
+                "It explains how a creator posted a product update, why the audience reacted, "
+                "and what changed after the first announcement.\n\n"
+                "A second paragraph adds context about the feature rollout, the audience feedback, "
+                "and the follow-up clarifications so the generic extractor keeps the page as "
+                "substantive content instead of rejecting it as navigation chrome."
+            ),
+            content_html=None,
+            error_text=None,
+            http_status=200,
+            latency_ms=1,
+            endpoint="scraper",
+            metadata_json={"title": "Threads fallback"},
+            response_success=True,
+            source_url="https://www.threads.net/@user/post/C8abc123",
+            correlation_id="cid",
+            options_json=None,
+        )
+    )
+
+    content_text, content_source, metadata = await extractor.extract_content_pure(
+        "https://www.threads.net/@user/post/C8abc123",
+        correlation_id="cid",
+        request_id=77,
+    )
+
+    assert "Generic fallback body" in content_text
+    assert content_source == "markdown"
+    extractor._build_meta_platform_extractor.assert_not_called()
+    assert "normalized_source_document" in metadata
 
 
 @pytest.mark.asyncio

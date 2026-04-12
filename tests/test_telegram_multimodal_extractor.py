@@ -9,6 +9,7 @@ from app.adapters.telegram.multimodal_extractor import (
     classify_telegram_messages_source_kind,
 )
 from app.domain.models.source import SourceKind
+from tests.helpers.aggregation_fixture_loader import load_aggregation_fixture
 
 
 def _album_message(
@@ -101,3 +102,40 @@ def test_video_payload_uses_shared_video_source_extractor() -> None:
     assert document.text == "Title: Source Channel\n\nVideo caption"
     assert metadata["video_processing_strategy"] == "shared_video_source_extractor"
     assert metadata["video_provenance"]["primary_fact_source"] == "body"
+
+
+def test_fixture_backed_forwarded_photo_payload_builds_multimodal_document() -> None:
+    fixture = load_aggregation_fixture("telegram_post_with_images")
+    payload = SimpleNamespace(
+        id=21,
+        message_id=21,
+        text=None,
+        caption=fixture["caption"],
+        chat=SimpleNamespace(id=fixture["chat_id"]),
+        media_group_id=None,
+        photo=[
+            SimpleNamespace(
+                file_id=fixture["photos"][0]["file_id"],
+                width=fixture["photos"][0]["width"],
+                height=fixture["photos"][0]["height"],
+            )
+        ],
+        document=None,
+        video=None,
+        animation=None,
+        forward_from_chat=SimpleNamespace(
+            id=fixture["forward_from_chat_id"],
+            title=fixture["forward_from_chat_title"],
+        ),
+        forward_from_message_id=fixture["forward_from_message_id"],
+        forward_from=None,
+        forward_sender_name=None,
+    )
+
+    source_item = build_source_item_from_telegram_payload(payload)
+    document, metadata = build_telegram_normalized_document(payload, source_item=source_item)
+
+    assert document.source_kind == SourceKind.TELEGRAM_POST_WITH_IMAGES
+    assert document.text == fixture["caption"]
+    assert document.media[0].url == f"telegram://file/{fixture['photos'][0]['file_id']}"
+    assert metadata["forward_from_chat_title"] == fixture["forward_from_chat_title"]

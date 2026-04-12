@@ -17,6 +17,7 @@ from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.telegram_client import TelegramClient
 from app.adapters.telegram.url_handler import URLHandler
 from app.application.services.adaptive_timeout import AdaptiveTimeoutService
+from app.application.services.aggregation_rollout import AggregationRolloutGate
 from app.application.services.multi_source_aggregation_service import (
     MultiSourceAggregationService,
 )
@@ -218,6 +219,10 @@ def build_summary_cli_runtime(
             aggregation_session_repo=build_aggregation_session_repository(db),
             llm_client=core.llm_client,
         ),
+        rollout_gate=AggregationRolloutGate(
+            cfg=cfg,
+            user_repo=repositories.user_repository,
+        ),
     )
     dispatcher_deps = _build_command_dispatcher_deps(
         cfg=cfg,
@@ -385,6 +390,10 @@ def _build_telegram_interface_stack(
             content_extractor=processing.url_processor.content_extractor,
             aggregation_session_repo=build_aggregation_session_repository(db),
             llm_client=core.llm_client,
+        ),
+        rollout_gate=AggregationRolloutGate(
+            cfg=cfg,
+            user_repo=repositories.user_repository,
         ),
         lang=getattr(core.response_formatter, "_lang", "en"),
     )

@@ -9,6 +9,7 @@ import pytest
 from app.adapters.content.platform_extraction.models import PlatformExtractionRequest
 from app.adapters.meta.platform_extractor import MetaPlatformExtractor
 from app.domain.models.source import SourceKind
+from tests.helpers.aggregation_fixture_loader import load_aggregation_fixture
 
 
 class _DummySemCtx:
@@ -54,18 +55,12 @@ def _make_request(url: str, *, mode: str = "pure") -> PlatformExtractionRequest:
 
 @pytest.mark.asyncio
 async def test_threads_extractor_preserves_quote_and_media_metadata() -> None:
+    fixture = load_aggregation_fixture("threads_post")
     crawl_result = SimpleNamespace(
         status="ok",
-        content_markdown="Main Threads body",
+        content_markdown=fixture["content_markdown"],
         content_html=None,
-        metadata_json={
-            "title": "Threads title",
-            "quoted_post": {"author": "quoted_user", "text": "Quoted post body"},
-            "media": [
-                {"type": "image", "url": "https://cdn.example.com/thread-image.jpg"},
-                {"type": "video", "url": "https://cdn.example.com/thread-video.mp4"},
-            ],
-        },
+        metadata_json=fixture["metadata_json"],
     )
     extractor, _ = _make_extractor(crawl_result=crawl_result)
 
@@ -87,17 +82,12 @@ async def test_threads_extractor_preserves_quote_and_media_metadata() -> None:
 
 @pytest.mark.asyncio
 async def test_instagram_post_upgrades_to_carousel_when_multiple_images_exist() -> None:
+    fixture = load_aggregation_fixture("instagram_carousel")
     crawl_result = SimpleNamespace(
         status="ok",
-        content_markdown="Carousel caption",
+        content_markdown=fixture["content_markdown"],
         content_html=None,
-        metadata_json={
-            "title": "Carousel title",
-            "images": [
-                "https://cdn.example.com/slide-1.jpg",
-                "https://cdn.example.com/slide-2.jpg",
-            ],
-        },
+        metadata_json=fixture["metadata_json"],
     )
     extractor, _ = _make_extractor(crawl_result=crawl_result)
 
@@ -112,17 +102,12 @@ async def test_instagram_post_upgrades_to_carousel_when_multiple_images_exist() 
 
 @pytest.mark.asyncio
 async def test_instagram_reel_uses_metadata_fallback_for_login_wall_content() -> None:
+    fixture = load_aggregation_fixture("instagram_reel")
     crawl_result = SimpleNamespace(
         status="ok",
-        content_markdown="Log in to see Instagram photos and videos from friends you know.",
+        content_markdown=fixture["content_markdown"],
         content_html=None,
-        metadata_json={
-            "title": "Reel title",
-            "description": "Reel caption text",
-            "video_url": "https://cdn.example.com/reel.mp4",
-            "audio_transcript": "Transcript fallback",
-            "ocr_text": "Frame OCR fallback",
-        },
+        metadata_json=fixture["metadata_json"],
     )
     extractor, lifecycle = _make_extractor(crawl_result=crawl_result)
 

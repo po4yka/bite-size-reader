@@ -1,7 +1,7 @@
 # Bite‑Size Reader — Technical Specification
 
 **Version:** 3.0
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-12
 
 ---
 
@@ -505,6 +505,8 @@ sequenceDiagram
   - `NormalizedSourceDocument` is the extractor output contract for aggregation: `{source_item_id, source_kind, title?, text, detected_language?, text_blocks[], media[], metadata{}, provenance{...}}`.
   - Failures are stored and surfaced at two levels: bundle-level failures on `aggregation_sessions` and item-level failures on `aggregation_session_items`, both using `failure_code`, `failure_message`, and JSON `failure_details`.
   - User-facing entry points are explicit: Telegram `/aggregate`, non-command Telegram messages that contain multiple URLs, and mixed Telegram link + forward/attachment messages route into the same workflow; the API exposes the same orchestration at `POST /v1/aggregations`.
+  - Rollout is stage-driven: `AGGREGATION_BUNDLE_ENABLED=false` disables the surface entirely, `AGGREGATION_ROLLOUT_STAGE=internal` restricts access to `ALLOWED_USER_IDS`, `owner_beta` restricts access to persisted owner accounts, and `enabled` exposes the feature to authenticated API users plus the allowed Telegram bot audience.
+  - Threads/Instagram routing is independently gated by `AGGREGATION_META_EXTRACTORS_ENABLED`; when disabled, those URLs fall back to the generic article extractor instead of the dedicated Meta extractor.
   - Aggregation exports remain session-scoped persistence for now: export endpoints should continue to export request/summary data only until a dedicated aggregation export format is added.
   - Aggregation outputs are not yet indexed into the existing summary search/topic indices; search continues to operate on canonical summary/request records until a separate aggregation search read model is introduced.
 
@@ -800,6 +802,9 @@ flowchart LR
 - **Structured JSON logs**: intake, Firecrawl call, OpenRouter call, DB writes, reply send; include correlation IDs and latencies.
 - **Audit logs**: external call attempts & outcomes, validation errors.
 - **Metrics in logs**: token counts, content size (chars/words), estimated cost.
+- **Prometheus metrics**: mixed-source aggregation exports `bsr_aggregation_extraction_total`, `bsr_aggregation_bundles_total`, `bsr_aggregation_bundle_latency_seconds`, `bsr_aggregation_synthesis_coverage_ratio`, and `bsr_aggregation_used_sources`.
+- **Bundle dashboards**: multimodal and video-heavy aggregation dashboards should break down entrypoint (`api`, `telegram_command`, `telegram_message`), bundle profile (`text_only`, `image_heavy`, `video_heavy`, `mixed_media`), partial-success rate, synthesis coverage ratio, and used-source counts.
+- **Rollout telemetry**: staged rollout decisions should be correlated with latency, coverage, and failure metrics so `internal`, `owner_beta`, and wider enablement can be compared before broad rollout.
 
 ---
 
@@ -849,6 +854,9 @@ DB & runtime:
 DB_PATH=/data/app.db
 LOG_LEVEL=INFO
 REQUEST_TIMEOUT_SEC=60
+AGGREGATION_BUNDLE_ENABLED=true
+AGGREGATION_ROLLOUT_STAGE=enabled
+AGGREGATION_META_EXTRACTORS_ENABLED=true
 HYBRID_FTS_WEIGHT=0.4
 HYBRID_VECTOR_WEIGHT=0.6
 HYBRID_WINDOW_SIZE=3
@@ -858,6 +866,13 @@ RERANK_TOPK=50
 RERANK_TIMEOUT_SEC=8
 CHROMA_COLLECTION_VERSION=v1
 ```
+
+Aggregation rollout notes:
+
+- `AGGREGATION_BUNDLE_ENABLED=false` fully disables bundle orchestration in Telegram and API.
+- `AGGREGATION_ROLLOUT_STAGE` supports `disabled`, `internal`, `owner_beta`, and `enabled`.
+- `AGGREGATION_META_EXTRACTORS_ENABLED=false` disables dedicated Threads/Instagram extraction while leaving bundle orchestration enabled.
+- Recommended rollout order is internal allowlist first, owner-only beta second, and wider default enablement only after bundle metrics confirm acceptable latency, partial-success rate, and synthesis coverage on multimodal workloads.
 
 > Local CLI runs (`python -m app.cli.summary`) automatically load environment variables from a `.env` file in the current directory or repository root before invoking `load_config`. You can override the location with `--env-file path/to/.env`.
 

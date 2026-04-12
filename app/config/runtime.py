@@ -56,6 +56,15 @@ class RuntimeConfig(BaseModel):
     summary_two_pass_enabled: bool = Field(
         default=False, validation_alias="SUMMARY_TWO_PASS_ENABLED"
     )
+    aggregation_bundle_enabled: bool = Field(
+        default=True, validation_alias="AGGREGATION_BUNDLE_ENABLED"
+    )
+    aggregation_rollout_stage: str = Field(
+        default="enabled", validation_alias="AGGREGATION_ROLLOUT_STAGE"
+    )
+    aggregation_meta_extractors_enabled: bool = Field(
+        default=True, validation_alias="AGGREGATION_META_EXTRACTORS_ENABLED"
+    )
     rate_limit_max_requests: int = Field(default=10, validation_alias="RATE_LIMIT_MAX_REQUESTS")
     rate_limit_window_seconds: int = Field(default=60, validation_alias="RATE_LIMIT_WINDOW_SECONDS")
     rate_limit_max_concurrent: int = Field(default=3, validation_alias="RATE_LIMIT_MAX_CONCURRENT")
@@ -186,6 +195,16 @@ class RuntimeConfig(BaseModel):
             msg = f"Summary streaming provider scope must be one of {sorted(allowed)}"
             raise ValueError(msg)
         return scope
+
+    @field_validator("aggregation_rollout_stage", mode="before")
+    @classmethod
+    def _validate_aggregation_rollout_stage(cls, value: Any) -> str:
+        stage = str(value or "enabled").strip().lower()
+        allowed = {"disabled", "internal", "owner_beta", "enabled"}
+        if stage not in allowed:
+            msg = f"Aggregation rollout stage must be one of {sorted(allowed)}"
+            raise ValueError(msg)
+        return stage
 
     @field_validator("db_backup_interval_minutes", mode="before")
     @classmethod

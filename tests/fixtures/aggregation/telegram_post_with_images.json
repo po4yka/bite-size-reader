@@ -1,0 +1,14 @@
+{
+  "chat_id": -100777,
+  "forward_from_chat_id": -10042,
+  "forward_from_chat_title": "Source Channel",
+  "forward_from_message_id": 88,
+  "caption": "Photo post caption",
+  "photos": [
+    {
+      "file_id": "photo-1",
+      "width": 1280,
+      "height": 720
+    }
+  ]
+}

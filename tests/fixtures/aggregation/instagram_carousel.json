@@ -1,0 +1,10 @@
+{
+  "content_markdown": "Carousel caption",
+  "metadata_json": {
+    "title": "Carousel title",
+    "images": [
+      "https://cdn.example.com/slide-1.jpg",
+      "https://cdn.example.com/slide-2.jpg"
+    ]
+  }
+}

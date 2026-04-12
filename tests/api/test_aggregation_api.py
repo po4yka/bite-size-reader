@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.api.routers.auth.tokens import create_access_token
 from app.application.dto.aggregation import (
@@ -10,10 +11,14 @@ from app.application.dto.aggregation import (
     SourceCoverageEntry,
     SourceExtractionItemResult,
 )
+from app.application.services.aggregation_rollout import (
+    AggregationRolloutDecision,
+    AggregationRolloutStage,
+)
 from app.application.services.multi_source_aggregation_service import (
     MultiSourceAggregationRunResult,
 )
-from app.config import Config
+from app.config import Config, load_config
 from app.di.repositories import build_aggregation_session_repository
 from app.domain.models.source import AggregationSessionStatus, SourceItem, SourceKind
 
@@ -23,8 +28,20 @@ def _auth_headers(user_id: int) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_create_aggregation_bundle_endpoint_returns_session_and_items(client, user_factory):
-    from app.api.routers.aggregation import _get_aggregation_workflow
+def _set_runtime(client, db) -> SimpleNamespace | None:
+    runtime = getattr(client.app.state, "runtime", None)
+    client.app.state.runtime = SimpleNamespace(
+        cfg=load_config(allow_stub_telegram=True),
+        db=db,
+        background_processor=SimpleNamespace(
+            url_processor=SimpleNamespace(content_extractor=MagicMock())
+        ),
+        core=SimpleNamespace(llm_client=MagicMock()),
+    )
+    return runtime
+
+
+def test_create_aggregation_bundle_endpoint_returns_session_and_items(client, db, user_factory):
 
     allowed_ids = Config.get_allowed_user_ids()
     user_id = int(allowed_ids[0]) if allowed_ids else 424242
@@ -87,25 +104,25 @@ def test_create_aggregation_bundle_endpoint_returns_session_and_items(client, us
         ),
     )
 
-    async def _aggregate(**_: object) -> MultiSourceAggregationRunResult:
-        return fake_result
-
-    workflow = SimpleNamespace(aggregate=_aggregate)
-    client.app.dependency_overrides[_get_aggregation_workflow] = lambda: workflow
+    runtime = _set_runtime(client, db)
     try:
-        response = client.post(
-            "/v1/aggregations",
-            headers=_auth_headers(user_id),
-            json={
-                "items": [
-                    {"url": "https://example.com/article"},
-                    {"url": "https://x.com/example/status/1"},
-                ],
-                "lang_preference": "en",
-            },
-        )
+        with patch(
+            "app.application.services.multi_source_aggregation_service.MultiSourceAggregationService.aggregate",
+            new=AsyncMock(return_value=fake_result),
+        ):
+            response = client.post(
+                "/v1/aggregations",
+                headers=_auth_headers(user_id),
+                json={
+                    "items": [
+                        {"url": "https://example.com/article"},
+                        {"url": "https://x.com/example/status/1"},
+                    ],
+                    "lang_preference": "en",
+                },
+            )
     finally:
-        client.app.dependency_overrides.pop(_get_aggregation_workflow, None)
+        client.app.state.runtime = runtime
 
     assert response.status_code == 200
     payload = response.json()
@@ -184,3 +201,41 @@ def test_get_aggregation_bundle_endpoint_returns_persisted_session(client, db, u
         "web_article",
         "x_post",
     ]
+
+
+def test_create_aggregation_bundle_endpoint_returns_404_when_rollout_disabled(
+    client, db, user_factory
+):
+    from app.api.routers.aggregation import _get_rollout_gate
+
+    allowed_ids = Config.get_allowed_user_ids()
+    user_id = int(allowed_ids[0]) if allowed_ids else 424242
+    user_factory(username="aggregation_api_rollout_user", telegram_user_id=user_id)
+
+    async def _evaluate(_: int) -> AggregationRolloutDecision:
+        return AggregationRolloutDecision(
+            enabled=False,
+            reason="Aggregation bundles are currently disabled.",
+            stage=AggregationRolloutStage.DISABLED,
+        )
+
+    runtime = _set_runtime(client, db)
+    client.app.dependency_overrides[_get_rollout_gate] = lambda: SimpleNamespace(evaluate=_evaluate)
+    try:
+        response = client.post(
+            "/v1/aggregations",
+            headers=_auth_headers(user_id),
+            json={
+                "items": [
+                    {"url": "https://example.com/article"},
+                    {"url": "https://x.com/example/status/1"},
+                ]
+            },
+        )
+    finally:
+        client.app.dependency_overrides.pop(_get_rollout_gate, None)
+        client.app.state.runtime = runtime
+
+    assert response.status_code == 404
+    payload = response.json()
+    assert payload["error"]["code"] == "NOT_FOUND"

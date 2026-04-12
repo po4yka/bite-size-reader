@@ -1,0 +1,17 @@
+{
+  "content_text": "playwright body",
+  "content_source": "twitter_graphql",
+  "detected_lang": "en",
+  "title": "Tweet with media",
+  "metadata": {
+    "source": "twitter",
+    "tweet_media": [
+      {
+        "url": "https://pbs.twimg.com/media/chart.jpg",
+        "alt_text": "Revenue chart",
+        "tweet_id": "1",
+        "tweet_order": 0
+      }
+    ]
+  }
+}

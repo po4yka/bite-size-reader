@@ -22,6 +22,7 @@ from app.application.dto.aggregation import (
     MultiSourceExtractionOutput,
     SourceSubmission,
 )
+from app.observability.metrics import record_aggregation_synthesis
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -101,9 +102,27 @@ class MultiSourceAggregationService:
             )
         )
         if not aggregation_result.success or aggregation_result.output is None:
+            record_aggregation_synthesis(
+                source_type="unknown",
+                bundle_profile=_classify_bundle_profile(extraction_result.output),
+                status="failed",
+                used_source_count=0,
+                coverage_ratio=0.0,
+            )
             msg = aggregation_result.error or "Bundle aggregation failed"
             raise RuntimeError(msg)
 
+        bundle_profile = _classify_bundle_profile(extraction_result.output)
+        coverage_ratio = aggregation_result.output.used_source_count / max(
+            extraction_result.output.successful_count, 1
+        )
+        record_aggregation_synthesis(
+            source_type=aggregation_result.output.source_type,
+            bundle_profile=bundle_profile,
+            status=aggregation_result.output.status,
+            used_source_count=aggregation_result.output.used_source_count,
+            coverage_ratio=coverage_ratio,
+        )
         return MultiSourceAggregationRunResult(
             extraction=extraction_result.output,
             aggregation=aggregation_result.output,
@@ -201,3 +220,22 @@ def _truncate(text: str, max_length: int) -> str | None:
     if len(normalized) <= max_length:
         return normalized
     return normalized[: max_length - 1].rstrip()
+
+
+def _classify_bundle_profile(extraction_output: MultiSourceExtractionOutput) -> str:
+    has_video = False
+    has_media = False
+    for item in extraction_output.items:
+        document = item.normalized_document
+        if document is None:
+            continue
+        media_kinds = {asset.kind.value for asset in document.media}
+        if "video" in media_kinds:
+            has_video = True
+        if media_kinds:
+            has_media = True
+    if has_video:
+        return "video_heavy"
+    if has_media:
+        return "multimodal"
+    return "text_only"

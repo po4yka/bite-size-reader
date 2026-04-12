@@ -1,0 +1,9 @@
+{
+  "content_markdown": "Single post caption",
+  "metadata_json": {
+    "title": "Instagram post title",
+    "images": [
+      "https://cdn.example.com/post-image.jpg"
+    ]
+  }
+}

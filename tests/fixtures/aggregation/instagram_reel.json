@@ -1,0 +1,10 @@
+{
+  "content_markdown": "Log in to see Instagram photos and videos from friends you know.",
+  "metadata_json": {
+    "title": "Reel title",
+    "description": "Reel caption text",
+    "video_url": "https://cdn.example.com/reel.mp4",
+    "audio_transcript": "Transcript fallback",
+    "ocr_text": "Frame OCR fallback"
+  }
+}

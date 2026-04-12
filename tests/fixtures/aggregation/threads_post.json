@@ -1,0 +1,20 @@
+{
+  "content_markdown": "Main Threads body",
+  "metadata_json": {
+    "title": "Threads title",
+    "quoted_post": {
+      "author": "quoted_user",
+      "text": "Quoted post body"
+    },
+    "media": [
+      {
+        "type": "image",
+        "url": "https://cdn.example.com/thread-image.jpg"
+      },
+      {
+        "type": "video",
+        "url": "https://cdn.example.com/thread-video.mp4"
+      }
+    ]
+  }
+}

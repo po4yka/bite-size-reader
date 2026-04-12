@@ -12,6 +12,7 @@ from app.application.dto.aggregation import (
     MultiSourceExtractionOutput,
     SourceSubmission,
 )
+from app.application.services.aggregation_rollout import AggregationRolloutGate
 from app.application.services.multi_source_aggregation_service import (
     MultiSourceAggregationRunResult,
     MultiSourceAggregationService,
@@ -32,10 +33,12 @@ class MultiSourceAggregationHandler:
         *,
         response_formatter: ResponseFormatter,
         workflow_service: MultiSourceAggregationService,
+        rollout_gate: AggregationRolloutGate | None = None,
         lang: str = "en",
     ) -> None:
         self._response_formatter = response_formatter
         self._workflow_service = workflow_service
+        self._rollout_gate = rollout_gate
         self._lang = lang
         self._media_group_collector: MediaGroupCollector[Any] = MediaGroupCollector()
 
@@ -47,7 +50,9 @@ class MultiSourceAggregationHandler:
         uid: int,
         correlation_id: str,
         interaction_id: int | None = None,
-    ) -> None:
+    ) -> bool:
+        if not await self._ensure_enabled(uid=uid, message=message, explicit=True):
+            return False
         submissions = await self._build_submissions(
             message=message,
             text=text,
@@ -58,7 +63,7 @@ class MultiSourceAggregationHandler:
                 message,
                 "Send at least two links, or combine a link with a forwarded message or attachment.",
             )
-            return
+            return True
 
         await self._run_bundle(
             message=message,
@@ -70,6 +75,7 @@ class MultiSourceAggregationHandler:
                 "interaction_id": interaction_id,
             },
         )
+        return True
 
     async def handle_message_bundle(
         self,
@@ -79,14 +85,16 @@ class MultiSourceAggregationHandler:
         uid: int,
         correlation_id: str,
         interaction_id: int | None = None,
-    ) -> None:
+    ) -> bool:
+        if not await self._ensure_enabled(uid=uid, message=message, explicit=False):
+            return False
         submissions = await self._build_submissions(
             message=message,
             text=text,
             include_message_source=self._should_include_message_source(message),
         )
         if len(submissions) < 2:
-            return
+            return False
 
         await self._run_bundle(
             message=message,
@@ -98,6 +106,14 @@ class MultiSourceAggregationHandler:
                 "interaction_id": interaction_id,
             },
         )
+        return True
+
+    async def is_enabled_for_user(self, uid: int) -> bool:
+        """Return whether bundle aggregation is enabled for one Telegram user."""
+        if self._rollout_gate is None:
+            return True
+        decision = await self._rollout_gate.evaluate(uid)
+        return decision.enabled
 
     async def _run_bundle(
         self,
@@ -297,6 +313,25 @@ class MultiSourceAggregationHandler:
             text,
             parse_mode="HTML",
         )
+
+    async def _ensure_enabled(
+        self,
+        *,
+        uid: int,
+        message: Any,
+        explicit: bool,
+    ) -> bool:
+        if self._rollout_gate is None:
+            return True
+        decision = await self._rollout_gate.evaluate(uid)
+        if decision.enabled:
+            return True
+        if explicit:
+            await self._response_formatter.safe_reply(
+                message,
+                decision.reason,
+            )
+        return False
 
     @staticmethod
     def _should_include_message_source(message: Any) -> bool:

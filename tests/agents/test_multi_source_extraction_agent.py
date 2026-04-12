@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -20,6 +20,7 @@ from app.domain.models.source import SourceKind
 from app.infrastructure.persistence.sqlite.repositories.aggregation_session_repository import (
     SqliteAggregationSessionRepositoryAdapter,
 )
+from tests.helpers.aggregation_fixture_loader import load_aggregation_fixture
 from tests.integration.helpers import temp_db
 
 
@@ -92,17 +93,26 @@ async def test_multi_source_extraction_agent_returns_partial_success_for_mixed_b
             aggregation_session_repo=repo,
         )
 
-        result = await agent.execute(
-            MultiSourceExtractionInput(
-                correlation_id="agg-phase2-1",
-                user_id=user.telegram_user_id,
-                items=[
-                    SourceSubmission.from_url("https://x.com/user/status/123"),
-                    SourceSubmission.from_url("https://www.threads.net/@user/post/abc"),
-                    SourceSubmission.from_url("https://example.com/broken"),
-                ],
+        with (
+            patch(
+                "app.agents.multi_source_extraction_agent.record_aggregation_extraction"
+            ) as extraction_metrics,
+            patch(
+                "app.agents.multi_source_extraction_agent.record_aggregation_bundle"
+            ) as bundle_metrics,
+        ):
+            result = await agent.execute(
+                MultiSourceExtractionInput(
+                    correlation_id="agg-phase2-1",
+                    user_id=user.telegram_user_id,
+                    items=[
+                        SourceSubmission.from_url("https://x.com/user/status/123"),
+                        SourceSubmission.from_url("https://www.threads.net/@user/post/abc"),
+                        SourceSubmission.from_url("https://example.com/broken"),
+                    ],
+                    metadata={"entrypoint": "test"},
+                )
             )
-        )
 
         assert result.success is True
         assert result.output is not None
@@ -123,6 +133,8 @@ async def test_multi_source_extraction_agent_returns_partial_success_for_mixed_b
         assert session["status"] == "partial"
         assert session["successful_count"] == 2
         assert session["failed_count"] == 1
+        assert extraction_metrics.call_count == 3
+        bundle_metrics.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -299,3 +311,92 @@ async def test_multi_source_extraction_agent_extracts_telegram_album_as_one_item
         assert result.output.items[0].normalized_document is not None
         assert len(result.output.items[0].normalized_document.media) == 2
         assert result.output.items[0].normalized_document.metadata["message_ids"] == [601, 602]
+
+
+@pytest.mark.asyncio
+async def test_multi_source_extraction_agent_handles_fixture_backed_supported_bundle() -> None:
+    with temp_db() as db:
+        user, repo = _make_user_and_repo(db)
+        threads_fixture = load_aggregation_fixture("threads_post")
+        x_fixture = load_aggregation_fixture("x_media_post")
+        youtube_fixture = load_aggregation_fixture("youtube_video")
+        telegram_fixture = load_aggregation_fixture("telegram_post_with_images")
+
+        content_extractor = MagicMock()
+
+        async def _extract(
+            url: str, correlation_id: str | None = None, request_id: int | None = None
+        ) -> tuple[str, str, dict[str, object]]:
+            del correlation_id, request_id
+            if "threads.net" in url:
+                return (
+                    threads_fixture["content_markdown"],
+                    "markdown",
+                    {
+                        "firecrawl_metadata": threads_fixture["metadata_json"],
+                        "detected_lang": "en",
+                    },
+                )
+            if "youtube.com" in url:
+                return (
+                    youtube_fixture["content_text"],
+                    youtube_fixture["content_source"],
+                    {
+                        **youtube_fixture["metadata"],
+                        "title": youtube_fixture["title"],
+                        "detected_lang": youtube_fixture["detected_lang"],
+                    },
+                )
+            return (
+                x_fixture["content_text"],
+                x_fixture["content_source"],
+                {
+                    **x_fixture["metadata"],
+                    "title": x_fixture["title"],
+                    "detected_lang": x_fixture["detected_lang"],
+                },
+            )
+
+        content_extractor.extract_content_pure = AsyncMock(side_effect=_extract)
+        agent = MultiSourceExtractionAgent(
+            content_extractor=content_extractor,
+            aggregation_session_repo=repo,
+        )
+        telegram_message = _make_forward_message_with_photo()
+        telegram_message.caption = telegram_fixture["caption"]
+        telegram_message.photo = [
+            SimpleNamespace(
+                file_id=telegram_fixture["photos"][0]["file_id"],
+                width=telegram_fixture["photos"][0]["width"],
+                height=telegram_fixture["photos"][0]["height"],
+            )
+        ]
+        telegram_message.forward_from_chat = SimpleNamespace(
+            id=telegram_fixture["forward_from_chat_id"],
+            title=telegram_fixture["forward_from_chat_title"],
+        )
+        telegram_message.forward_from_message_id = telegram_fixture["forward_from_message_id"]
+
+        result = await agent.execute(
+            MultiSourceExtractionInput(
+                correlation_id="agg-phase9-fixtures",
+                user_id=user.telegram_user_id,
+                items=[
+                    SourceSubmission.from_url("https://x.com/user/status/123"),
+                    SourceSubmission.from_url("https://www.threads.net/@user/post/abc"),
+                    SourceSubmission.from_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+                    SourceSubmission.from_telegram_message(telegram_message),
+                ],
+            )
+        )
+
+        assert result.success is True
+        assert result.output is not None
+        assert [item.source_kind for item in result.output.items] == [
+            SourceKind.X_POST,
+            SourceKind.THREADS_POST,
+            SourceKind.YOUTUBE_VIDEO,
+            SourceKind.TELEGRAM_POST_WITH_IMAGES,
+        ]
+        assert result.output.successful_count == 4
+        assert result.output.failed_count == 0

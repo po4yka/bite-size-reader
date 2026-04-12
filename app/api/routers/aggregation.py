@@ -11,12 +11,14 @@ from app.api.models.requests import CreateAggregationBundleRequest  # noqa: TC00
 from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
 from app.application.dto.aggregation import SourceSubmission
+from app.application.services.aggregation_rollout import AggregationRolloutGate
 from app.application.services.multi_source_aggregation_service import (
     MultiSourceAggregationService,
 )
+from app.config import load_config
 from app.core.logging_utils import generate_correlation_id
 from app.di.api import resolve_api_runtime
-from app.di.repositories import build_aggregation_session_repository
+from app.di.repositories import build_aggregation_session_repository, build_user_repository
 
 router = APIRouter()
 
@@ -30,15 +32,40 @@ def _get_aggregation_workflow(request: Request) -> MultiSourceAggregationService
     )
 
 
+def _get_rollout_gate(request: Request) -> AggregationRolloutGate:
+    runtime = resolve_api_runtime(request)
+    cfg = getattr(runtime, "cfg", None) or load_config(allow_stub_telegram=True)
+    db = getattr(runtime, "db", None)
+    return AggregationRolloutGate(
+        cfg=cfg,
+        user_repo=build_user_repository(db) if db is not None else None,
+    )
+
+
+async def _ensure_aggregation_available(
+    *,
+    gate: AggregationRolloutGate,
+    user_id: int,
+) -> None:
+    decision = await gate.evaluate(user_id)
+    if decision.enabled:
+        return
+    if decision.stage.value == "disabled":
+        raise ResourceNotFoundError("Aggregation feature", "v1/aggregations")
+    raise AuthorizationError(decision.reason)
+
+
 @router.post("")
 async def create_aggregation_bundle(
     body: CreateAggregationBundleRequest,
     request: Request,
     user: dict[str, Any] = Depends(get_current_user),
     workflow: MultiSourceAggregationService = Depends(_get_aggregation_workflow),
+    rollout_gate: AggregationRolloutGate = Depends(_get_rollout_gate),
 ) -> dict[str, Any]:
     """Run mixed-source aggregation for one submitted bundle."""
 
+    await _ensure_aggregation_available(gate=rollout_gate, user_id=user["user_id"])
     correlation_id = getattr(request.state, "correlation_id", None) or generate_correlation_id()
     submissions = [
         SourceSubmission.from_url(
@@ -91,9 +118,11 @@ async def get_aggregation_bundle(
     session_id: int,
     request: Request,
     user: dict[str, Any] = Depends(get_current_user),
+    rollout_gate: AggregationRolloutGate = Depends(_get_rollout_gate),
 ) -> dict[str, Any]:
     """Return one persisted aggregation session with bundle items and output."""
 
+    await _ensure_aggregation_available(gate=rollout_gate, user_id=user["user_id"])
     runtime = resolve_api_runtime(request)
     repo = build_aggregation_session_repository(runtime.db)
     session = await repo.async_get_aggregation_session(session_id)

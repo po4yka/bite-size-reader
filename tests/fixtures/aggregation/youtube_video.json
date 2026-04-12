@@ -1,0 +1,12 @@
+{
+  "content_text": "Video title and transcript",
+  "content_source": "youtube-transcript-api",
+  "detected_lang": "en",
+  "title": "YouTube video",
+  "metadata": {
+    "source": "youtube",
+    "video_provenance": {
+      "primary_fact_source": "transcript"
+    }
+  }
+}

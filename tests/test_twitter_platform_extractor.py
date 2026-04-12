@@ -13,6 +13,7 @@ from app.adapters.twitter.graphql_parser import ExtractionResult, TweetData
 from app.adapters.twitter.platform_extractor import TwitterPlatformExtractor
 from app.adapters.twitter.playwright_extractor import TwitterPlaywrightExtractor
 from app.core.url_utils import compute_dedupe_hash
+from tests.helpers.aggregation_fixture_loader import load_aggregation_fixture
 
 
 class _DummySemCtx:
@@ -184,6 +185,7 @@ async def test_force_tier_firecrawl_skips_playwright() -> None:
 
 @pytest.mark.asyncio
 async def test_auto_mode_runs_playwright_after_firecrawl_to_enrich_tweet_media() -> None:
+    fixture = load_aggregation_fixture("x_media_post")
     extractor: Any = _make_platform_extractor(
         cfg=_make_cfg(playwright_enabled=True, prefer_firecrawl=True),
         crawl_result=SimpleNamespace(status="ok", content_markdown="unused", content_html=None),
@@ -194,27 +196,21 @@ async def test_auto_mode_runs_playwright_after_firecrawl_to_enrich_tweet_media()
     )
     coordinator._playwright_extractor.extract = AsyncMock(
         return_value=(
-            "playwright body",
-            "twitter_graphql",
-            {
-                "tweet_media": [
-                    {
-                        "url": "https://pbs.twimg.com/media/chart.jpg",
-                        "alt_text": "Revenue chart",
-                        "tweet_id": "1",
-                        "tweet_order": 0,
-                    }
-                ]
-            },
+            fixture["content_text"],
+            fixture["content_source"],
+            fixture["metadata"],
         )
     )
 
     result = await extractor.extract(_make_request(url_text="https://x.com/user/status/1"))
 
-    assert result.content_text == "playwright body"
-    assert result.images == ["https://pbs.twimg.com/media/chart.jpg"]
+    assert result.content_text == fixture["content_text"]
+    assert result.images == [fixture["metadata"]["tweet_media"][0]["url"]]
     assert result.normalized_document is not None
-    assert result.normalized_document.media[0].alt_text == "Revenue chart"
+    assert (
+        result.normalized_document.media[0].alt_text
+        == fixture["metadata"]["tweet_media"][0]["alt_text"]
+    )
     coordinator._firecrawl_extractor.extract.assert_awaited_once()
     coordinator._playwright_extractor.extract.assert_awaited_once()
 

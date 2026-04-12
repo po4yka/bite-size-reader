@@ -10,9 +10,11 @@ from app.application.dto.aggregation import (
     SourceMediaKind,
 )
 from app.domain.models.source import SourceItem, SourceKind
+from tests.helpers.aggregation_fixture_loader import load_aggregation_fixture
 
 
 def test_video_source_extractor_prefers_transcript_and_tracks_provenance() -> None:
+    fixture = load_aggregation_fixture("instagram_reel")
     source_item = SourceItem.create(
         kind=SourceKind.INSTAGRAM_REEL,
         original_value="https://www.instagram.com/reel/DAreel456/",
@@ -23,18 +25,18 @@ def test_video_source_extractor_prefers_transcript_and_tracks_provenance() -> No
         VideoSourceRequest(
             source_item=source_item,
             platform="meta",
-            title="Reel title",
-            body_text="Caption text",
+            title=fixture["metadata_json"]["title"],
+            body_text=fixture["metadata_json"]["description"],
             body_kind=ExtractedTextKind.CAPTION,
-            transcript_text="Primary transcript",
+            transcript_text=fixture["metadata_json"]["audio_transcript"],
             transcript_source="subtitle_api",
             audio_transcript_text="Audio fallback",
-            ocr_text="Frame OCR fallback",
+            ocr_text=fixture["metadata_json"]["ocr_text"],
             content_source="meta_video",
             existing_media=(
                 SourceMediaAsset(
                     kind=SourceMediaKind.VIDEO,
-                    url="https://cdn.example.com/reel.mp4",
+                    url=fixture["metadata_json"]["video_url"],
                 ),
                 SourceMediaAsset(
                     kind=SourceMediaKind.IMAGE,
@@ -47,7 +49,7 @@ def test_video_source_extractor_prefers_transcript_and_tracks_provenance() -> No
     )
 
     assert result.content_source == "meta_video"
-    assert "Primary transcript" in result.content_text
+    assert fixture["metadata_json"]["audio_transcript"] in result.content_text
     assert result.normalized_document.text_blocks[1].kind == ExtractedTextKind.CAPTION
     assert result.normalized_document.text_blocks[2].kind == ExtractedTextKind.TRANSCRIPT
     assert result.metadata["video_provenance"]["primary_fact_source"] == "transcript"

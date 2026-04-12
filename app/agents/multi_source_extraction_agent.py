@@ -23,6 +23,10 @@ from app.domain.models.source import (
     AggregationSessionStatus,
     SourceItem,
 )
+from app.observability.metrics import (
+    record_aggregation_bundle,
+    record_aggregation_extraction,
+)
 
 if TYPE_CHECKING:
     from app.adapters.content.content_extractor import ContentExtractor
@@ -152,6 +156,7 @@ class MultiSourceExtractionAgent(
                         duplicate_of_item_id=duplicate_of_item_id,
                     )
                 )
+                _record_item_metric(item_results[-1])
                 continue
 
             await self._aggregation_session_repo.async_update_aggregation_session_item_result(
@@ -208,6 +213,7 @@ class MultiSourceExtractionAgent(
                         extraction_metadata=extraction_metadata,
                     )
                 )
+                _record_item_metric(item_results[-1])
             except Exception as exc:
                 failed_count += 1
                 item_failure = AggregationFailure(
@@ -236,6 +242,7 @@ class MultiSourceExtractionAgent(
                         failure=item_failure,
                     )
                 )
+                _record_item_metric(item_results[-1])
                 self.log_warning(
                     "multi_source_item_failed",
                     position=position,
@@ -288,6 +295,13 @@ class MultiSourceExtractionAgent(
             failed_count=failed_count,
             duplicate_count=duplicate_count,
             items=item_results,
+        )
+        record_aggregation_bundle(
+            entrypoint=str(input_data.metadata.get("entrypoint", "unknown")),
+            status=output.status,
+            partial_success=successful_count > 0 and failed_count > 0,
+            bundle_profile=_classify_bundle_profile(item_results),
+            latency_seconds=elapsed_ms / 1000,
         )
         await _emit_progress(
             input_data.progress_callback,
@@ -431,6 +445,77 @@ async def _emit_progress(
     result = callback(payload)
     if result is not None:
         await result
+
+
+def _record_item_metric(result: SourceExtractionItemResult) -> None:
+    record_aggregation_extraction(
+        source_kind=result.source_kind.value,
+        platform=_platform_from_source_kind(result.source_kind.value),
+        outcome=result.status,
+        fallback_tier=_resolve_fallback_tier(result),
+        media_type=_resolve_media_type(result.normalized_document),
+    )
+
+
+def _platform_from_source_kind(source_kind: str) -> str:
+    if source_kind.startswith("x_"):
+        return "twitter"
+    if source_kind.startswith("instagram_"):
+        return "instagram"
+    if source_kind.startswith("telegram_"):
+        return "telegram"
+    if source_kind == "threads_post":
+        return "threads"
+    if source_kind == "youtube_video":
+        return "youtube"
+    if source_kind == "web_article":
+        return "web"
+    return "unknown"
+
+
+def _resolve_fallback_tier(result: SourceExtractionItemResult) -> str:
+    if result.status == AggregationItemStatus.DUPLICATE.value:
+        return "duplicate"
+    metadata = dict(result.extraction_metadata or {})
+    auth_strategy = metadata.get("auth_strategy")
+    if isinstance(auth_strategy, dict):
+        selected_tier = auth_strategy.get("selected_tier")
+        if selected_tier:
+            return str(selected_tier)
+    if result.normalized_document is not None:
+        extraction_source = result.normalized_document.provenance.extraction_source
+        if extraction_source:
+            return str(extraction_source)
+        content_source = result.normalized_document.metadata.get("content_source")
+        if content_source:
+            return str(content_source)
+    if result.failure is not None:
+        return result.failure.code
+    return "unknown"
+
+
+def _resolve_media_type(document: NormalizedSourceDocument | None) -> str:
+    if document is None or not document.media:
+        return "text"
+    media_kinds = {asset.kind.value for asset in document.media}
+    if len(media_kinds) == 1:
+        return next(iter(media_kinds))
+    if "video" in media_kinds:
+        return "video_mixed"
+    return "mixed"
+
+
+def _classify_bundle_profile(results: list[SourceExtractionItemResult]) -> str:
+    media_types = {
+        _resolve_media_type(result.normalized_document)
+        for result in results
+        if result.status == AggregationItemStatus.EXTRACTED.value
+    }
+    if "video" in media_types or "video_mixed" in media_types:
+        return "video_heavy"
+    if media_types - {"text"}:
+        return "multimodal"
+    return "text_only"
 
 
 __all__ = [
