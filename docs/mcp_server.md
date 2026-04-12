@@ -86,8 +86,9 @@ MCP_USER_ID=123456 python -m app.cli.mcp_server
 Typical local aggregation workflow:
 
 1. Call `create_aggregation_bundle(items, lang_preference, metadata)`
-2. Poll `get_aggregation_bundle(session_id)` until the status is terminal
-3. Use `list_aggregation_bundles(limit, offset, status)` or `bsr://aggregations/recent` for recent context
+2. The create call blocks until the bundle reaches a terminal status or fails
+3. Use `get_aggregation_bundle(session_id)` or `bsr://aggregations/{session_id}` to re-open the persisted result later
+4. Use `list_aggregation_bundles(limit, offset, status)` or `bsr://aggregations/recent` for recent context
 
 This mode is for one trusted user at a time. Do not expose it publicly.
 
@@ -140,11 +141,11 @@ Gateway guidance:
 
 ### Aggregation Tool Flow
 
-For long-running bundles, use this call order:
+Current MCP aggregation execution is synchronous from the caller's perspective: `create_aggregation_bundle(...)` waits for extraction plus synthesis and normally returns a terminal session (`completed`, `partial`, or `failed`). Use the follow-up reads when you need to revisit a past run, recover after a network interruption, or browse history:
 
 1. `create_aggregation_bundle(...)`
-2. `get_aggregation_bundle(session_id)` while status is `pending` or `processing`
-3. `list_aggregation_bundles(...)` or `bsr://aggregations/recent` to browse past runs
+2. `get_aggregation_bundle(session_id)` or `bsr://aggregations/{session_id}`
+3. `list_aggregation_bundles(...)` or `bsr://aggregations/recent`
 
 Useful fields on session reads:
 
@@ -156,9 +157,11 @@ Useful fields on session reads:
 
 ## Docker Deployment (SSE)
 
-The `ops/docker/docker-compose.yml` file includes an opt-in `mcp` profile so the SSE server is not started by a plain `docker compose up`.
+The `ops/docker/docker-compose.yml` file includes three opt-in MCP profiles so the SSE server is not started by a plain `docker compose up`.
 
-Start the local/trusted profile explicitly:
+### Read-Only Local SSE Profile
+
+Start the read-only local/trusted profile explicitly:
 
 ```bash
 MCP_USER_ID=12345 docker compose -f ops/docker/docker-compose.yml --profile mcp up -d mcp
@@ -193,7 +196,36 @@ Key design decisions:
 - **`MCP_ALLOW_REMOTE_SSE=true`** -- required because `0.0.0.0` is non-loopback inside Docker. This also disables the MCP SDK's DNS rebinding protection so that Docker-internal hostnames (`bsr-mcp`, `bsr-mcp:8200`) are accepted in the `Host` header.
 - **Loopback port binding** (`127.0.0.1:8200`) -- prevents direct external access from the host network.
 
-For hosted public deployments, prefer a dedicated profile or deployment manifest that sets `MCP_AUTH_MODE=jwt` and leaves `MCP_USER_ID` unset. If you terminate client auth at a trusted gateway, configure `MCP_FORWARDING_SECRET` and forward the original access token instead of forwarding a raw user ID.
+### Writable Trusted SSE Profile
+
+Use the dedicated writable trusted profile when the local/scoped MCP server should be allowed to create aggregation bundles:
+
+```bash
+MCP_USER_ID=12345 docker compose -f ops/docker/docker-compose.yml --profile mcp-write up -d mcp-write
+```
+
+Key differences from the read-only profile:
+
+- the SQLite volume is mounted read-write, so aggregation tools can persist sessions and items
+- the service binds to `127.0.0.1:8201`
+- startup scoping via `MCP_USER_ID` is still required
+
+### Hosted JWT SSE Profile
+
+Use the hosted profile when you want request-scoped public MCP over SSE:
+
+```bash
+docker compose -f ops/docker/docker-compose.yml --profile mcp-public up -d mcp-public
+```
+
+This profile:
+
+- leaves `MCP_USER_ID` unset so request-scoped auth is the source of truth
+- enables `MCP_AUTH_MODE=jwt`
+- mounts the database read-write so authenticated hosted requests can use aggregation write tools
+- exposes the service on `127.0.0.1:8202` for reverse-proxy or local gateway attachment
+
+If you terminate client auth at a trusted gateway, configure `MCP_FORWARDING_SECRET` and forward the original access token instead of forwarding a raw user ID.
 
 ### Connecting from another Docker Compose project
 
@@ -238,11 +270,12 @@ Example mcporter config:
 | `chroma_index_stats(scan_limit)` | Index coverage stats between SQLite summaries and ChromaDB |
 | `chroma_sync_gap(max_scan, sample_size)` | Report sync gaps between SQLite summaries and ChromaDB index |
 
-## Resources (14)
+## Resources (15)
 
 | URI | Description |
 | ----- | ------------- |
 | `bsr://aggregations/recent` | 10 most recent aggregation bundles for the scoped MCP user |
+| `bsr://aggregations/{session_id}` | One persisted aggregation bundle for the scoped MCP user |
 | `bsr://articles/recent` | 10 most recent article summaries |
 | `bsr://articles/favorites` | All favorited summaries |
 | `bsr://articles/unread` | Up to 20 unread summaries |

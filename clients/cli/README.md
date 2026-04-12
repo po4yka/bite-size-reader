@@ -29,7 +29,7 @@ bsr login --server https://bsr.example.com --user-id 123456 --client-id my-cli -
 # 3. Submit a mixed-source aggregation bundle
 bsr aggregate https://x.com/example/status/1 https://www.youtube.com/watch?v=dQw4w9WgXcQ
 
-# 4. Poll the aggregation session
+# 4. Reopen the persisted aggregation session later
 bsr aggregation get 42
 
 # 5. Search saved summaries
@@ -146,7 +146,7 @@ bsr search "api design" --domain blog.example.com
 
 ### Aggregation Bundles
 
-Mixed-source aggregation uses the public `/v1/aggregations` API. The CLI submits the bundle and prints the latest server-side session snapshot immediately. It does not keep polling until completion by default.
+Mixed-source aggregation uses the public `/v1/aggregations` API. The CLI submits the bundle and waits for the server to finish extraction plus synthesis. On success it prints the final persisted session snapshot (`completed` or `partial`); on timeout or upstream failure the API returns `PROCESSING_ERROR`.
 
 ### `bsr aggregate [URL ...]`
 
@@ -200,11 +200,7 @@ bsr aggregation list --limit 10 --offset 10
 bsr --json aggregation list --limit 5 | jq '.sessions[] | {id, status}'
 ```
 
-This is the recommended polling flow for long-running bundles:
-
-1. Run `bsr aggregate ...`
-2. Note `session.sessionId`
-3. Poll with `bsr aggregation get <id>` until the status is `completed`, `partial`, or `failed`
+`bsr aggregation get` and `bsr aggregation list` are mainly for revisiting stored runs, recovering after a network interruption, or scripting against previously created sessions. The current create path is blocking, so a successful `bsr aggregate ...` call already returns a terminal session snapshot.
 
 The most useful session fields are:
 

@@ -31,6 +31,15 @@ def register_resources(
         """Recent aggregation bundles for the scoped MCP user."""
         return to_json(await aggregation_service.list_aggregation_bundles(limit=10, offset=0))
 
+    @mcp.resource("bsr://aggregations/{session_id}")
+    async def aggregation_bundle_resource(session_id: str) -> str:
+        """One persisted aggregation bundle for the scoped MCP user."""
+        try:
+            resolved_session_id = int(session_id)
+        except ValueError:
+            return to_json({"error": f"Invalid aggregation session ID: {session_id}"})
+        return to_json(await aggregation_service.get_aggregation_bundle(resolved_session_id))
+
     @mcp.resource("bsr://articles/recent")
     def recent_articles_resource() -> str:
         """A snapshot of the 10 most recent article summaries."""

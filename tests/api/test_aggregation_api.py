@@ -310,6 +310,52 @@ def test_create_aggregation_bundle_endpoint_accepts_single_item(client, db, user
     assert [item["sourceKind"] for item in payload["data"]["items"]] == ["web_article"]
 
 
+def test_create_aggregation_bundle_endpoint_surfaces_processing_error_code(
+    client, db, user_factory
+):
+    allowed_ids = Config.get_allowed_user_ids()
+    user_id = int(allowed_ids[0]) if allowed_ids else 424242
+    user_factory(username="aggregation_api_error_user", telegram_user_id=user_id)
+
+    runtime = _set_runtime(client, db)
+    try:
+        with (
+            patch(
+                "app.application.services.multi_source_aggregation_service.MultiSourceAggregationService.aggregate",
+                new=AsyncMock(
+                    side_effect=RuntimeError("No source extractions completed successfully")
+                ),
+            ),
+            patch("app.api.routers.aggregation.record_request") as metrics_mock,
+            _allow_public_urls(),
+        ):
+            response = client.post(
+                "/v1/aggregations",
+                headers=_auth_headers(user_id, client_id="cli-agg-error-v1"),
+                json={
+                    "items": [
+                        {"url": "https://example.com/article"},
+                    ],
+                    "lang_preference": "en",
+                },
+            )
+    finally:
+        client.app.state.runtime = runtime
+
+    assert response.status_code == 500
+    payload = response.json()
+    assert payload["error"]["code"] == "PROCESSING_ERROR"
+    assert payload["error"]["details"]["reason_code"] == "AGGREGATION_UPSTREAM_FAILURE"
+    assert (
+        payload["error"]["details"]["upstream_error"]
+        == "No source extractions completed successfully"
+    )
+    metric_kwargs = metrics_mock.call_args.kwargs
+    assert metric_kwargs["request_type"] == "aggregation.create"
+    assert metric_kwargs["status"] == "error"
+    assert metric_kwargs["source"] == "cli"
+
+
 def test_create_aggregation_bundle_endpoint_rejects_blocked_ssrf_url(client, db, user_factory):
     allowed_ids = Config.get_allowed_user_ids()
     user_id = int(allowed_ids[0]) if allowed_ids else 424242

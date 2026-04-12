@@ -65,9 +65,10 @@ async def build_api_runtime(
             "api_access_control_unconfigured",
             extra={
                 "detail": (
-                    "ALLOWED_USER_IDS is not set — all authenticated API users will be "
-                    "permitted. Set ALLOWED_USER_IDS to enforce a whitelist, consistent "
-                    "with the Telegram bot's fail-closed access control."
+                    "ALLOWED_USER_IDS is not set — JWT-backed API and hosted MCP auth "
+                    "run in explicit fail-open multi-user mode by design. Set "
+                    "ALLOWED_USER_IDS to enforce a whitelist. Secret-login onboarding "
+                    "and Telegram bot access remain separately constrained."
                 )
             },
         )

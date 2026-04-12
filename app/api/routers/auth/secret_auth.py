@@ -173,11 +173,11 @@ async def check_expired(record: dict) -> None:
             raise AuthenticationError("Secret has expired")
 
 
-async def handle_failed_attempt(record: dict) -> None:
+async def handle_failed_attempt(record: dict) -> dict:
     """Increment failed attempts and potentially lock the secret."""
     cfg = _get_auth_config()
     auth_repo = get_auth_repository()
-    await auth_repo.async_increment_failed_attempts(
+    return await auth_repo.async_increment_failed_attempts(
         record["id"],
         max_attempts=cfg.secret_max_failed_attempts,
         lockout_minutes=cfg.secret_lockout_minutes,

@@ -120,9 +120,10 @@ Everything runs in one Docker container; code lives on GitHub. Access is restric
 
 ## User & Access Control
 
-- **Single user only**: hard whitelist with `ALLOWED_USER_IDS` (comma‑separated).
-- Reject group/supergroup chats and non‑owner DMs with a generic message.
-- All secrets pass via env vars; no secrets in DB or logs.
+- **Telegram bot access** remains allowlist-first via `ALLOWED_USER_IDS` (comma-separated), with group/supergroup chats and unauthorized DMs rejected generically.
+- **JWT API and hosted MCP auth** are allowlist-aware but intentionally fail-open when `ALLOWED_USER_IDS` is empty, which enables explicit multi-user external deployments.
+- **Client-level external access** can be constrained independently via `ALLOWED_CLIENT_IDS`, secret-login provisioning rules, and rollout stages.
+- All secrets pass via env vars or hashed secret storage; no plaintext secrets in DB or logs.
 
 ---
 
@@ -353,6 +354,11 @@ sequenceDiagram
   failure_code
   failure_message
   failure_details_json
+  queued_at
+  started_at
+  completed_at
+  last_progress_at
+  progress_percent
   processing_time_ms
   created_at
   updated_at
@@ -953,13 +959,13 @@ sequenceDiagram
 
 - Envelopes only: `success`, `data` or `error`, `meta{timestamp,version}`, `correlation_id` echoed in headers and errors.
 - Errors standardized (401/403/404/409/410/422/429/500) with retry hints where applicable.
-- Auth: JWT via `POST /v1/auth/telegram-login` (Telegram login verification), `POST /v1/auth/secret-login` (client-secret exchange), and `POST /v1/auth/refresh`. Optional client gating via `ALLOWED_CLIENT_IDS`. Secret-key management remains owner-capable for all client IDs, while non-owner self-service secret management is limited to `cli-*`, `mcp-*`, and `automation-*` style client IDs.
+- Auth: JWT via `POST /v1/auth/telegram-login` (Telegram login verification), `POST /v1/auth/secret-login` (client-secret exchange), and `POST /v1/auth/refresh`. Optional client gating via `ALLOWED_CLIENT_IDS`. Secret-key management remains owner-capable for all client IDs, while non-owner self-service secret management is limited to `cli-*`, `mcp-*`, and `automation-*` style client IDs. `POST /v1/auth/secret-login` uses a dedicated rate-limit bucket plus secret-level failed-attempt lockouts.
 
 ### Core endpoints
 
 - Summaries: `GET /v1/summaries`, `GET /v1/summaries/{id}`, `PATCH /v1/summaries/{id}` (`is_read`), `DELETE /v1/summaries/{id}` (soft delete).
 - Requests: `POST /v1/requests` (url|forward), `GET /v1/requests/{id}`, `GET /v1/requests/{id}/status`, `POST /v1/requests/{id}/retry`.
-- Aggregations: `POST /v1/aggregations` (bundle of 1-25 source URLs), `GET /v1/aggregations/{id}`.
+- Aggregations: `POST /v1/aggregations` (blocking execution for a bundle of 1-25 source URLs), `GET /v1/aggregations`, `GET /v1/aggregations/{id}`.
 - Search/Topics: `GET /v1/search`, `GET /v1/topics/trending`, `GET /v1/topics/related`.
 - URL utils: `GET /v1/urls/check-duplicate`.
 - User: `GET /v1/user/preferences`, `PATCH /v1/user/preferences`, `GET /v1/user/stats`.
@@ -983,6 +989,7 @@ sequenceDiagram
 - Users: `preferences_json`, `is_owner` flag, optional client metadata.
 - Summaries: `is_read`, `is_deleted`, `deleted_at`, `version`, `json_payload` (contract).
 - Requests: `status`, `route_version`, dedupe hash, forward metadata; linked crawl/video/LLM records as in core schema.
+- Aggregation sessions: lifecycle timestamps (`queued_at`, `started_at`, `completed_at`, `last_progress_at`), persisted `progress_percent`, bundle-level `failure_*`, and `processing_time_ms`. Duplicate source items are counted inside a bundle; retrying the same bundle creates a new session rather than reusing an older one.
 
 ### Background processing (requests → summaries)
 

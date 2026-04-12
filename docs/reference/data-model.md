@@ -47,7 +47,7 @@ CREATE TABLE users (
 - `first_name` (str, nullable) - User's first name
 - `last_name` (str, nullable) - User's last name
 - `language_code` (str, nullable) - Telegram language code (e.g., `en`, `ru`)
-- `is_owner` (bool) - True if user ID in `ALLOWED_USER_IDS`
+- `is_owner` (bool) - Owner/admin rollout flag used by privileged bot and auth-management paths. External JWT API and hosted MCP auth can still run multi-user when `ALLOWED_USER_IDS` is empty.
 - `created_at` (datetime) - First interaction timestamp
 - `updated_at` (datetime) - Last update timestamp
 
@@ -188,6 +188,11 @@ CREATE TABLE aggregation_sessions (
     failure_code          TEXT,
     failure_message       TEXT,
     failure_details_json  JSON,
+    queued_at             TIMESTAMP,
+    started_at            TIMESTAMP,
+    completed_at          TIMESTAMP,
+    last_progress_at      TIMESTAMP,
+    progress_percent      INTEGER,
     processing_time_ms    INTEGER,
     updated_at            TIMESTAMP NOT NULL,
     created_at            TIMESTAMP NOT NULL
@@ -203,6 +208,9 @@ CREATE TABLE aggregation_sessions (
 - `status` (str) - Bundle lifecycle (`pending`, `processing`, `completed`, `partial`, `failed`, `cancelled`)
 - `bundle_metadata_json` (json, nullable) - Submission metadata for the bundle
 - `failure_*` (nullable) - Bundle-level failure details surfaced to callers and logs
+- `queued_at` / `started_at` / `completed_at` / `last_progress_at` (datetime, nullable) - Lifecycle timestamps used by the external API, CLI, and MCP surfaces
+- `progress_percent` (int, nullable) - Persisted bundle-level completion percentage used for external progress reporting
+- `processing_time_ms` (int, nullable) - End-to-end latency once extraction plus synthesis reaches a terminal state
 
 **Indexes:**
 

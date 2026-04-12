@@ -133,6 +133,8 @@ def _resolve_limit_from_bucket(cfg: AppConfig, bucket: str | None) -> int:
     limits = cfg.api_limits
     if bucket == "aggregation_create":
         return limits.aggregation_create_user_limit
+    if bucket == "secret_login":
+        return limits.secret_login_limit
     if bucket == "summaries":
         return limits.summaries_limit
     if bucket == "requests":
@@ -206,6 +208,8 @@ def _resolve_bucket(method: str, path: str) -> str | None:
     normalized_path = path.rstrip("/") or "/"
     if method.upper() == "POST" and normalized_path == "/v1/aggregations":
         return "aggregation_create"
+    if method.upper() == "POST" and normalized_path == "/v1/auth/secret-login":
+        return "secret_login"
     if "/summaries" in normalized_path:
         return "summaries"
     if "/search" in normalized_path:

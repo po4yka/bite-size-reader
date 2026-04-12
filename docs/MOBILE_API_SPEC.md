@@ -237,7 +237,7 @@ Alias endpoints for compatibility (`/v1/articles/*`) map to the same handlers:
 
 - `type`: currently `url`
 - `url`: `http://` or `https://` source URL
-- `source_kind_hint`: optional hint for classification/routing
+- `source_kind_hint`: optional classification hint. Allowed values are `x_post`, `x_article`, `threads_post`, `instagram_post`, `instagram_carousel`, `instagram_reel`, `web_article`, `telegram_post`, and `youtube_video`.
 - `metadata`: optional per-item metadata
 
 Bundle-level fields:
@@ -245,13 +245,15 @@ Bundle-level fields:
 - `lang_preference`: `auto`, `en`, or `ru`
 - `metadata`: optional request metadata attached to the aggregation session
 
+`POST /v1/aggregations` is the canonical execution entrypoint and is currently **blocking**: the request waits for extraction plus synthesis and returns a terminal session snapshot on success. Use `GET /v1/aggregations/{session_id}` and `GET /v1/aggregations` to revisit stored runs later or recover after a client/network interruption.
+
 The create response returns:
 
-- `session`: session identifier, correlation ID, status, source type, and extraction counts
+- `session`: create-specific session view with camelCase lifecycle/progress fields
 - `aggregation`: synthesized bundle output
 - `items`: per-item extraction status, request IDs, and item-level failures
 
-Aggregation sessions expose these terminal and in-flight statuses:
+Persisted aggregation sessions expose these statuses:
 
 - `pending`
 - `processing`
@@ -305,27 +307,28 @@ Example create response:
     "session": {
       "sessionId": 42,
       "correlationId": "cid-agg-42",
-      "status": "processing",
+      "status": "completed",
       "sourceType": "mixed",
-      "successfulCount": 1,
+      "successfulCount": 2,
       "failedCount": 0,
       "duplicateCount": 0,
       "queuedAt": "2026-04-12T09:31:00Z",
       "startedAt": "2026-04-12T09:31:01Z",
-      "lastProgressAt": "2026-04-12T09:31:04Z",
+      "completedAt": "2026-04-12T09:31:07Z",
+      "lastProgressAt": "2026-04-12T09:31:07Z",
       "progress": {
         "totalItems": 2,
-        "processedItems": 1,
-        "successfulCount": 1,
+        "processedItems": 2,
+        "successfulCount": 2,
         "failedCount": 0,
         "duplicateCount": 0,
-        "completionPercent": 50
+        "completionPercent": 100
       },
       "failure": null
     },
     "aggregation": {
       "session_id": 42,
-      "status": "processing",
+      "status": "completed",
       "source_type": "mixed"
     },
     "items": [
@@ -339,8 +342,8 @@ Example create response:
       {
         "position": 1,
         "sourceKind": "youtube_video",
-        "status": "processing",
-        "requestId": null,
+        "status": "extracted",
+        "requestId": 502,
         "failure": null
       }
     ]
@@ -362,7 +365,60 @@ GET /v1/aggregations?limit=20&offset=0&status=processing
 Authorization: Bearer eyJ...
 ```
 
-List responses return `data.sessions[]` and standard pagination metadata. Poll `GET /v1/aggregations/{session_id}` until the status becomes `completed`, `partial`, or `failed`.
+`GET /v1/aggregations/{session_id}` and `GET /v1/aggregations` return persisted session records using the repository-backed snake_case fields (`id`, `correlation_id`, `successful_count`, `queued_at`, and so on) plus derived `progress` and `failure` objects.
+
+Example list response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "sessions": [
+      {
+        "id": 42,
+        "user": 123456,
+        "correlation_id": "cid-agg-42",
+        "total_items": 2,
+        "successful_count": 2,
+        "failed_count": 0,
+        "duplicate_count": 0,
+        "status": "completed",
+        "processing_time_ms": 6123,
+        "queued_at": "2026-04-12T09:31:00Z",
+        "started_at": "2026-04-12T09:31:01Z",
+        "completed_at": "2026-04-12T09:31:07Z",
+        "last_progress_at": "2026-04-12T09:31:07Z",
+        "created_at": "2026-04-12T09:31:00Z",
+        "updated_at": "2026-04-12T09:31:07Z",
+        "progress": {
+          "totalItems": 2,
+          "processedItems": 2,
+          "successfulCount": 2,
+          "failedCount": 0,
+          "duplicateCount": 0,
+          "completionPercent": 100
+        },
+        "failure": null
+      }
+    ]
+  },
+  "meta": {
+    "pagination": {
+      "total": 1,
+      "limit": 20,
+      "offset": 0,
+      "hasMore": false
+    }
+  }
+}
+```
+
+Duplicate handling and retries:
+
+- duplicate source items are accepted; later duplicates are persisted with duplicate status and counted in `duplicateCount` / `duplicate_count`
+- duplicate bundles are **not** de-duplicated at the bundle level; retrying the same bundle creates a new session
+- there is currently no public `DELETE /v1/aggregations/{id}` or cancel endpoint; treat sessions as immutable history records
+- retry clients should retry the same request only after transport failures or a `PROCESSING_ERROR`; successful create calls already persisted the bundle session
 
 Common pre-execution failures:
 
@@ -370,6 +426,11 @@ Common pre-execution failures:
 - validation failure because the bundle is malformed or exceeds limits
 - unsupported or blocked URLs, including localhost/private-network SSRF targets
 - rate limiting on aggregation create per user or per client ID
+
+Execution failures:
+
+- `500 PROCESSING_ERROR` with `details.reason_code=AGGREGATION_TIMEOUT` when server-side aggregation exceeds the processing window
+- `500 PROCESSING_ERROR` with `details.reason_code=AGGREGATION_UPSTREAM_FAILURE` when no source extraction or synthesis output could be completed successfully
 
 ### Search and Topics
 

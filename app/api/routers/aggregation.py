@@ -9,7 +9,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.dependencies.database import get_session_manager
-from app.api.exceptions import AuthorizationError, ResourceNotFoundError, ValidationError
+from app.api.exceptions import (
+    AuthorizationError,
+    ProcessingError,
+    ResourceNotFoundError,
+    ValidationError,
+)
 from app.api.models.requests import CreateAggregationBundleRequest  # noqa: TC001
 from app.api.models.responses import success_response
 from app.api.models.responses.common import PaginationInfo
@@ -208,6 +213,39 @@ async def create_aggregation_bundle(
                     "client_id": user.get("client_id"),
                 },
             )
+        except TimeoutError as exc:
+            audit(
+                "ERROR",
+                "aggregation.bundle_create_failed",
+                {
+                    **audit_context,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "reason_code": "AGGREGATION_TIMEOUT",
+                },
+            )
+            raise ProcessingError(
+                "Aggregation request timed out",
+                details={"reason_code": "AGGREGATION_TIMEOUT"},
+            ) from exc
+        except RuntimeError as exc:
+            audit(
+                "ERROR",
+                "aggregation.bundle_create_failed",
+                {
+                    **audit_context,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "reason_code": "AGGREGATION_UPSTREAM_FAILURE",
+                },
+            )
+            raise ProcessingError(
+                "Aggregation request failed",
+                details={
+                    "reason_code": "AGGREGATION_UPSTREAM_FAILURE",
+                    "upstream_error": str(exc),
+                },
+            ) from exc
         except Exception as exc:
             audit(
                 "ERROR",

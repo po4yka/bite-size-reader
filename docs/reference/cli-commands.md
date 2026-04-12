@@ -35,7 +35,7 @@ bsr login --server https://bsr.example.com --user-id 123456 --client-id cli-work
 # Submit a bundle
 bsr aggregate https://x.com/example/status/1 https://youtu.be/dQw4w9WgXcQ
 
-# Poll one session
+# Reopen one session
 bsr aggregation get 42
 
 # List recent sessions
@@ -48,8 +48,8 @@ bsr --json aggregate --file sources.txt | jq '.session'
 Aggregation notes:
 
 - `bsr aggregate` accepts positional URLs, `--file`, `--lang`, and repeatable `--hint`.
-- The command returns immediately with the latest session snapshot; it does not poll until completion by default.
-- Use `bsr aggregation get <id>` to watch `status`, `progress.completionPercent`, and `failure`.
+- The command is currently blocking: it waits for extraction plus synthesis and returns a terminal session snapshot on success.
+- Use `bsr aggregation get <id>` or `bsr aggregation list` to revisit persisted sessions after a network interruption or for scripting against prior runs.
 
 See:
 

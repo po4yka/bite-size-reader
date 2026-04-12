@@ -2641,7 +2641,7 @@
           "Aggregations"
         ],
         "summary": "Create Aggregation Bundle",
-        "description": "Run mixed-source aggregation for one submitted bundle of 1-25 URL items.",
+        "description": "Execute mixed-source aggregation for one submitted bundle of 1-25 URL items. This endpoint is blocking and returns the final persisted session snapshot on success.",
         "operationId": "create_aggregation_bundle_v1_aggregations_post",
         "security": [
           {
@@ -2673,7 +2673,18 @@
                         },
                         "source_kind_hint": {
                           "type": "string",
-                          "nullable": true
+                          "nullable": true,
+                          "enum": [
+                            "x_post",
+                            "x_article",
+                            "threads_post",
+                            "instagram_post",
+                            "instagram_carousel",
+                            "instagram_reel",
+                            "web_article",
+                            "telegram_post",
+                            "youtube_video"
+                          ]
                         },
                         "metadata": {
                           "type": "object",
@@ -2711,7 +2722,7 @@
         },
         "responses": {
           "200": {
-            "description": "Aggregation bundle created",
+            "description": "Aggregation bundle completed or partially completed",
             "content": {
               "application/json": {
                 "schema": {
@@ -2747,6 +2758,35 @@
                             },
                             "duplicateCount": {
                               "type": "integer"
+                            },
+                            "processingTimeMs": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "queuedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "startedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "completedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "lastProgressAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "progress": {
+                              "type": "object",
+                              "additionalProperties": true
+                            },
+                            "failure": {
+                              "type": "object",
+                              "nullable": true,
+                              "additionalProperties": true
                             }
                           }
                         },
@@ -2789,7 +2829,7 @@
                       }
                     },
                     "meta": {
-                      "$ref": "#/components/schemas/ResponseMeta"
+                      "$ref": "#/components/schemas/Meta"
                     }
                   },
                   "required": [
@@ -2812,6 +2852,118 @@
           },
           "422": {
             "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequestsError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Aggregations"
+        ],
+        "summary": "List Aggregation Bundles",
+        "description": "Return recent persisted aggregation sessions for the authenticated user.",
+        "operationId": "list_aggregation_bundles_v1_aggregations_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true,
+              "enum": [
+                "pending",
+                "processing",
+                "completed",
+                "partial",
+                "failed",
+                "cancelled"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregation bundle list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "sessions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": true
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Meta"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequestsError"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -2877,7 +3029,7 @@
                       }
                     },
                     "meta": {
-                      "$ref": "#/components/schemas/ResponseMeta"
+                      "$ref": "#/components/schemas/Meta"
                     }
                   },
                   "required": [
@@ -2900,6 +3052,9 @@
           },
           "422": {
             "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequestsError"
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"

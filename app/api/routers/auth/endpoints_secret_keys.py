@@ -105,17 +105,33 @@ async def secret_login(login_data: SecretLoginRequest, response: Response):
         raise AuthenticationError("Invalid credentials")
 
     if secret_record.get("status") == "revoked":
+        logger.warning(
+            "secret_login_revoked_secret",
+            extra={"user_id": login_data.user_id, "client_id": login_data.client_id},
+        )
         raise AuthenticationError("Secret has been revoked")
 
     if secret_record.get("status") == "locked":
         locked_until = secret_record.get("locked_until")
         locked_until_dt = _parse_naive_dt(locked_until)
         if locked_until_dt is None:
+            logger.warning(
+                "secret_login_locked_secret",
+                extra={"user_id": login_data.user_id, "client_id": login_data.client_id},
+            )
             raise AuthorizationError("Secret is temporarily locked")
         if locked_until_dt < now:
             await auth_repo.async_update_client_secret(secret_record["id"], status="active")
             await reset_failed_attempts(secret_record)
         else:
+            logger.warning(
+                "secret_login_locked_secret",
+                extra={
+                    "user_id": login_data.user_id,
+                    "client_id": login_data.client_id,
+                    "locked_until": locked_until_dt.isoformat() + "Z",
+                },
+            )
             raise AuthorizationError("Secret is temporarily locked")
 
     await check_expired(secret_record)
@@ -124,7 +140,17 @@ async def secret_login(login_data: SecretLoginRequest, response: Response):
     expected_hash = hash_secret(provided_secret, secret_record.get("secret_salt", ""))
 
     if not hmac.compare_digest(expected_hash, secret_record.get("secret_hash", "")):
-        await handle_failed_attempt(secret_record)
+        updated_record = await handle_failed_attempt(secret_record)
+        logger.warning(
+            "secret_login_failed",
+            extra={
+                "user_id": login_data.user_id,
+                "client_id": login_data.client_id,
+                "failed_attempts": updated_record.get("failed_attempts"),
+                "status": updated_record.get("status"),
+                "locked_until": updated_record.get("locked_until"),
+            },
+        )
         raise AuthenticationError("Invalid credentials")
 
     await reset_failed_attempts(secret_record)

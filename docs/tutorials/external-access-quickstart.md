@@ -76,18 +76,18 @@ bsr aggregate \
   https://youtu.be/dQw4w9WgXcQ
 ```
 
-The command returns the latest server-side session snapshot immediately. It does not keep polling until completion by default.
+The command is currently blocking. It waits for extraction plus synthesis and returns the final server-side session snapshot on success.
 
-## 3. Poll the Session and List Recent Bundles
+## 3. Reopen the Session and List Recent Bundles
 
-Use the session ID from the create response to inspect progress:
+Use the session ID from the create response to revisit the persisted result later:
 
 ```bash
 bsr aggregation get 42
 bsr aggregation list --limit 20
 ```
 
-Typical status flow:
+Possible session statuses:
 
 - `pending`
 - `processing`
@@ -95,7 +95,7 @@ Typical status flow:
 - `partial`
 - `failed`
 
-Useful fields to watch:
+Useful fields to inspect:
 
 - `progress.completionPercent`
 - `successfulCount`
@@ -163,7 +163,7 @@ X-BSR-MCP-Forwarding-Secret: <shared-forwarding-secret>
 Once connected, the typical aggregation workflow is:
 
 1. Call `create_aggregation_bundle(...)`
-2. Poll `get_aggregation_bundle(session_id)`
+2. Re-open a specific stored run with `get_aggregation_bundle(session_id)` or `bsr://aggregations/{session_id}`
 3. Optionally inspect `list_aggregation_bundles(...)`
 4. Read `bsr://aggregations/recent` for recent bundle context
 

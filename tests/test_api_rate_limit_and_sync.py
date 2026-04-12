@@ -25,6 +25,7 @@ class DummyCfg:
         required: bool = False,
         limit: int = 5,
         window_seconds: int = 60,
+        secret_login_limit: int = 20,
         aggregation_user_limit: int = 5,
         aggregation_client_limit: int = 20,
     ):
@@ -38,6 +39,7 @@ class DummyCfg:
             requests_limit=limit,
             search_limit=limit,
             auth_limit=limit,
+            secret_login_limit=secret_login_limit,
             aggregation_create_user_limit=aggregation_user_limit,
             aggregation_create_client_limit=aggregation_client_limit,
         )
@@ -336,6 +338,40 @@ async def test_aggregation_create_client_limit_blocks_shared_client(monkeypatch)
         ),
         call_next,
     )
+
+    assert getattr(first, "status_code", None) == 200
+    assert getattr(second, "status_code", None) == 429
+    assert second.headers.get("X-RateLimit-Limit") == "1"
+
+    await redis_client.flushall()
+
+
+@pytest.mark.asyncio
+async def test_secret_login_rate_limit_uses_dedicated_bucket(monkeypatch):
+    redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    cfg = DummyCfg(limit=100, window_seconds=60, secret_login_limit=1)
+
+    middleware._cfg = cfg
+    middleware._redis_warning_logged = False
+
+    async def fake_get_redis(_: DummyCfg):
+        return redis_client
+
+    monkeypatch.setattr(middleware, "get_redis", fake_get_redis)
+
+    async def call_next(_: Request):
+        return Response(status_code=200)
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/auth/secret-login",
+        "headers": [],
+        "client": ("127.0.0.1", 0),
+    }
+
+    first = await middleware.rate_limit_middleware(Request(scope), call_next)
+    second = await middleware.rate_limit_middleware(Request(scope), call_next)
 
     assert getattr(first, "status_code", None) == 200
     assert getattr(second, "status_code", None) == 429

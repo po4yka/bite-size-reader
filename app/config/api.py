@@ -26,6 +26,10 @@ class ApiLimitsConfig(BaseModel):
     requests_limit: int = Field(default=10, validation_alias="API_RATE_LIMIT_REQUESTS")
     search_limit: int = Field(default=50, validation_alias="API_RATE_LIMIT_SEARCH")
     auth_limit: int = Field(default=20, validation_alias="API_RATE_LIMIT_AUTH")
+    secret_login_limit: int = Field(
+        default=10,
+        validation_alias="API_RATE_LIMIT_SECRET_LOGIN",
+    )
     aggregation_create_user_limit: int = Field(
         default=5,
         validation_alias="API_RATE_LIMIT_AGGREGATION_CREATE_USER",
@@ -68,6 +72,7 @@ class ApiLimitsConfig(BaseModel):
         "requests_limit",
         "search_limit",
         "auth_limit",
+        "secret_login_limit",
         "aggregation_create_user_limit",
         "aggregation_create_client_limit",
         mode="before",

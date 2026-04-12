@@ -111,7 +111,7 @@ AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED=true
 | `API_ID` | Telegram API ID (from https://my.telegram.org/apps) |
 | `API_HASH` | Telegram API hash |
 | `BOT_TOKEN` | Telegram bot token (from BotFather) |
-| `ALLOWED_USER_IDS` | Comma-separated Telegram user IDs allowed to interact |
+| `ALLOWED_USER_IDS` | Comma-separated Telegram user IDs for allowlist-gated bot/API/MCP paths. When empty, JWT API and hosted MCP auth run fail-open, while Telegram bot access and some onboarding paths remain separately constrained. |
 | `FIRECRAWL_API_KEY` | Firecrawl API key (optional -- only required for cloud Firecrawl or web search enrichment; defaults to empty) |
 | `OPENROUTER_API_KEY` | OpenRouter API key |
 
@@ -394,6 +394,7 @@ Controls which embedding backend generates vectors for semantic search.
 | `API_RATE_LIMIT_SUMMARIES` | `200` | Summaries endpoint limit |
 | `API_RATE_LIMIT_REQUESTS` | `10` | Requests endpoint limit |
 | `API_RATE_LIMIT_SEARCH` | `50` | Search endpoint limit |
+| `API_RATE_LIMIT_SECRET_LOGIN` | `10` | Dedicated `POST /v1/auth/secret-login` limit |
 | `API_RATE_LIMIT_AGGREGATION_CREATE_USER` | `5` | Aggregation create limit per authenticated user |
 | `API_RATE_LIMIT_AGGREGATION_CREATE_CLIENT` | `20` | Aggregation create limit per client ID across users |
 | `SYNC_EXPIRY_HOURS` | `1` | Sync session expiry |
@@ -532,7 +533,7 @@ Use this checklist to verify your configuration before deploying:
 ### ✅ Essential Configuration
 
 - [ ] **Telegram API credentials set**: `API_ID`, `API_HASH`, `BOT_TOKEN`
-- [ ] **User whitelist configured**: `ALLOWED_USER_IDS` contains your Telegram user ID
+- [ ] **Telegram user allowlist configured**: `ALLOWED_USER_IDS` contains your Telegram user ID if you use the bot or an allowlist-gated rollout stage
 - [ ] **Firecrawl API key valid** (if using cloud Firecrawl): Test with `curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" https://api.firecrawl.dev/v1/account`
 - [ ] **OpenRouter API key valid**: Test with `curl -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/models`
 - [ ] **OpenRouter model specified**: `OPENROUTER_MODEL` set to valid model (e.g., `deepseek/deepseek-v3.2`)
@@ -559,7 +560,7 @@ Use this checklist to verify your configuration before deploying:
 ### ✅ Security
 
 - [ ] **API keys not in git**: `.env` file in `.gitignore`
-- [ ] **Access control enabled**: `ALLOWED_USER_IDS` restricts access
+- [ ] **Access control model chosen**: either populate `ALLOWED_USER_IDS` for allowlist-based rollout, or intentionally leave it empty for multi-user JWT API / hosted MCP deployments
 - [ ] **JWT secret strong**: `JWT_SECRET_KEY` is 32+ random characters
 - [ ] **Debug mode off**: `DEBUG_PAYLOADS=0` in production
 

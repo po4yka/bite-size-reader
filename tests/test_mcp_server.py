@@ -175,6 +175,7 @@ def test_create_mcp_server_registers_expected_tools_and_resources(
     }
     assert set(mcp.registered_resources) == {
         "bsr://aggregations/recent",
+        "bsr://aggregations/{session_id}",
         "bsr://articles/recent",
         "bsr://articles/favorites",
         "bsr://articles/unread",

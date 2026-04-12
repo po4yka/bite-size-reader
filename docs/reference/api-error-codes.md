@@ -207,6 +207,26 @@ Try:
 
 ---
 
+### Secret Login Behavior
+
+`POST /v1/auth/secret-login` uses the shared API error envelope rather than a separate secret-specific code family.
+
+Common outcomes:
+
+- `401 UNAUTHORIZED` - the plaintext secret did not match the stored hash, or the token payload was malformed
+- `403 FORBIDDEN` - the user/client is not allowed for the deployment, or the matching secret is locked or revoked
+- `404 NOT_FOUND` - there is no stored secret for that `(user_id, client_id)` pair
+- `429 RATE_LIMIT_EXCEEDED` - the dedicated secret-login bucket (`API_RATE_LIMIT_SECRET_LOGIN`) was exceeded
+
+Lockout notes:
+
+- repeated bad secrets increment `failed_attempts`
+- once `SECRET_LOGIN_MAX_FAILED_ATTEMPTS` is reached, the secret is marked `locked`
+- `locked_until` controls when the next successful login attempt is allowed
+- revoked secrets never recover automatically and must be rotated or recreated
+
+---
+
 ## Validation Errors (422)
 
 ### VAL001: Invalid URL
@@ -319,6 +339,31 @@ The URL must start with http:// or https://
 ```
 
 **Resolution:** Use value within allowed range
+
+---
+
+### Aggregation Request Failures
+
+`POST /v1/aggregations`, `GET /v1/aggregations`, and `GET /v1/aggregations/{id}` use the shared API envelope codes. The aggregation-specific details live in `error.details`.
+
+Common aggregation outcomes:
+
+- `422 VALIDATION_ERROR` - malformed bundle, invalid `source_kind_hint`, oversized metadata, or blocked SSRF targets such as `localhost`
+- `403 FORBIDDEN` - rollout denied or cross-user access to a persisted aggregation session
+- `404 NOT_FOUND` - aggregation feature disabled for the current rollout stage, or the requested session ID does not exist
+- `429 RATE_LIMIT_EXCEEDED` - aggregation create limit exceeded for the authenticated user or client ID
+- `500 PROCESSING_ERROR` - bundle execution failed after acceptance
+
+`PROCESSING_ERROR` detail payloads:
+
+- `reason_code=AGGREGATION_TIMEOUT` - extraction or synthesis exceeded the server-side processing window
+- `reason_code=AGGREGATION_UPSTREAM_FAILURE` - upstream extraction/synthesis failed to produce a usable result; `upstream_error` may include the immediate failure text
+
+Duplicate and retry semantics:
+
+- duplicate source items inside one bundle are persisted and counted rather than rejected
+- retrying the same bundle creates a new aggregation session; there is no bundle-level idempotency key today
+- there is currently no public cancel/delete endpoint for aggregation sessions
 
 ---
 
