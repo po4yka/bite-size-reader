@@ -14,6 +14,7 @@ This guide helps you diagnose and resolve common issues with Bite-Size Reader.
 - [Redis Issues](#redis-issues)
 - [ChromaDB Issues](#chromadb-issues)
 - [Mobile API Issues](#mobile-api-issues)
+- [External Aggregation and Auth Issues](#external-aggregation-and-auth-issues)
 - [MCP Server Issues](#mcp-server-issues)
 - [Performance Issues](#performance-issues)
 - [Debugging Strategies](#debugging-strategies)
@@ -810,6 +811,130 @@ docker restart bite-size-reader
 
 ---
 
+## External Aggregation and Auth Issues
+
+### Secret Login Fails
+
+**Symptom**: `bsr login` fails or `POST /v1/auth/secret-login` returns `401` or `403`.
+
+**Cause**: One of the following is usually true:
+
+- `SECRET_LOGIN_ENABLED` is disabled
+- the submitted `client_id` is not in `ALLOWED_CLIENT_IDS`
+- the plaintext secret was mistyped, rotated, or revoked
+- too many failed attempts locked the secret temporarily
+
+**Solution**:
+
+```bash
+# Server-side checks
+grep SECRET_LOGIN_ENABLED .env
+grep ALLOWED_CLIENT_IDS .env
+grep SECRET_LOGIN_MAX_FAILED_ATTEMPTS .env
+grep SECRET_LOGIN_LOCKOUT_MINUTES .env
+
+# Retry the exchange directly
+curl -X POST http://localhost:8000/v1/auth/secret-login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": 123456,
+    "client_id": "cli-workstation-v1",
+    "secret": "<plaintext-secret>"
+  }'
+```
+
+If the secret was rotated or revoked, mint a new one and retry. Plaintext client secrets are only available at create or rotate time.
+
+### Refresh Token Stops Working
+
+**Symptom**: CLI or custom client starts getting `401` on refresh after working earlier.
+
+**Cause**:
+
+- the refresh token was revoked explicitly
+- the session was logged out
+- refresh-token reuse detection revoked the wider session set
+
+**Solution**:
+
+```bash
+# Try one refresh explicitly
+curl -X POST http://localhost:8000/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "<refresh-token>"}'
+```
+
+If refresh fails, re-run `bsr login` or repeat `secret-login` with an active client secret.
+
+### Aggregation Create Is Denied Before Execution Starts
+
+**Symptom**: `POST /v1/aggregations` returns `403` or `404` before any extraction begins.
+
+**Cause**:
+
+- `AGGREGATION_BUNDLE_ENABLED=false`
+- the current `AGGREGATION_ROLLOUT_STAGE` does not include the caller
+- the authenticated user is outside `ALLOWED_USER_IDS` for the current rollout phase
+
+**Solution**:
+
+```bash
+grep AGGREGATION_BUNDLE_ENABLED .env
+grep AGGREGATION_ROLLOUT_STAGE .env
+grep ALLOWED_USER_IDS .env
+```
+
+Use `enabled` only after validating internal or beta rollout first.
+
+### Aggregation URL Is Rejected as Unsupported or Unsafe
+
+**Symptom**: Aggregation create returns `422` with validation details, or the server logs `aggregation.bundle_create_blocked_ssrf`.
+
+**Cause**:
+
+- the URL is not part of the public URL-first contract
+- the URL points at localhost, a private network, or another blocked address range
+
+**Solution**:
+
+- resubmit public `http://` or `https://` URLs only
+- remove internal, localhost, or VPN-only targets
+- add `source_kind_hint` only when it matches one of the supported public hint values
+
+### Aggregation Create Returns 429
+
+**Symptom**: External bundle submission is rate limited even though other API calls still work.
+
+**Cause**: Aggregation create has its own per-user and per-client guardrails.
+
+**Solution**:
+
+```bash
+grep API_RATE_LIMIT_AGGREGATION_CREATE_USER .env
+grep API_RATE_LIMIT_AGGREGATION_CREATE_CLIENT .env
+```
+
+Raise those limits carefully and monitor for spikes, because `/v1/aggregations` is much heavier than read endpoints.
+
+### Aggregation Session Gets Stuck in Partial or Failed
+
+**Symptom**: `bsr aggregation get` or `GET /v1/aggregations/{id}` never reaches a clean `completed` state.
+
+**Cause**:
+
+- one or more upstream sources failed extraction
+- synthesis finished with incomplete coverage
+- a long-running upstream dependency exceeded practical runtime
+
+**Solution**:
+
+- inspect `session.failure` plus per-item `failure`
+- use `progress`, `queuedAt`, `startedAt`, `completedAt`, and `lastProgressAt` to see where work stopped
+- resubmit a narrower bundle after removing failing URLs
+- check server logs with the returned `correlation_id`
+
+---
+
 ## MCP Server Issues
 
 ### Connection Failures
@@ -864,6 +989,64 @@ tail -f /var/log/bite-size-reader/mcp.log
 echo "MCP_TRANSPORT=sse" >> .env
 echo "MCP_USER_ID=123456789" >> .env
 ```
+
+### Hosted SSE Returns 401 or 403
+
+**Symptom**: Hosted MCP connects to `/sse` but every request is rejected.
+
+**Cause**:
+
+- `MCP_AUTH_MODE=jwt` is enabled but the client did not send a bearer token
+- the bearer token is expired or invalid
+- the server is accidentally still relying on startup scope instead of request auth
+
+**Solution**:
+
+```bash
+grep MCP_AUTH_MODE .env
+grep MCP_USER_ID .env
+```
+
+For hosted mode:
+
+- set `MCP_AUTH_MODE=jwt`
+- leave `MCP_USER_ID` unset
+- make sure the MCP client sends `Authorization: Bearer <access_token>` on SSE requests
+
+### Trusted Gateway Forwarding Fails
+
+**Symptom**: Hosted MCP works with direct bearer auth but fails behind a reverse proxy or MCP gateway.
+
+**Cause**:
+
+- `MCP_FORWARDING_SECRET` is missing or mismatched
+- the gateway forwarded a user ID instead of the original bearer token
+- the forwarded header names do not match the configured names
+
+**Solution**:
+
+```bash
+grep MCP_FORWARDING_SECRET .env
+grep MCP_FORWARDED_ACCESS_TOKEN_HEADER .env
+grep MCP_FORWARDED_SECRET_HEADER .env
+```
+
+The gateway must forward:
+
+- the original access token in `MCP_FORWARDED_ACCESS_TOKEN_HEADER`
+- the shared forwarding secret in `MCP_FORWARDED_SECRET_HEADER`
+
+### Hosted MCP Reads Work but Aggregation Writes Fail
+
+**Symptom**: Search and article tools work, but `create_aggregation_bundle` fails.
+
+**Cause**: The MCP process is using a read-only database mount or a runtime profile intended for read-only tools.
+
+**Solution**:
+
+- use a writable database path for the MCP deployment
+- keep the read-only Docker profile for read tools only
+- verify the same scoped user can create bundles through `/v1/aggregations`
 
 ---
 

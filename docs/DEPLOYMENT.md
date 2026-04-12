@@ -159,7 +159,7 @@ These services are not required but enhance functionality when available:
 
 - **Redis** -- Caching layer for Firecrawl/LLM responses, API rate limiting, sync locks, and background task distributed locking. Set `REDIS_ENABLED=true` and configure `REDIS_URL` or host/port.
 - **ChromaDB** -- Vector search for semantic article queries. Set `CHROMA_HOST` to a running Chroma instance. Degrades gracefully when unavailable.
-- **MCP Server** -- Exposes 17 tools and 13 resources for article search, retrieval, and ChromaDB diagnostics to external AI agents (OpenClaw, Claude Desktop). Runs as a dedicated Docker container with SSE transport (`bsr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
+- **MCP Server** -- Exposes article, search, ChromaDB, and aggregation tools/resources to external AI agents (OpenClaw, Claude Desktop, hosted SSE clients). Runs as a dedicated Docker container with SSE transport (`bsr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels. Set `DIGEST_ENABLED=true` and `API_BASE_URL` to the Mobile API endpoint. Run `/init_session` in the bot to authenticate the userbot via Mini App OTP/2FA flow, then use `/subscribe @channel` to add channels.
 
 Full variable reference: `docs/environment_variables.md`
@@ -173,6 +173,26 @@ Full variable reference: `docs/environment_variables.md`
 - Secrets: use `.env` or secret manager; never commit secrets.
 - Logs: JSON with correlation IDs; redact `Authorization`.
 - Container: least privilege; restrict `/data` permissions on host; HTTPS termination in front of API.
+
+### External CLI and Hosted MCP Rollout Checklist
+
+Before onboarding external users, verify:
+
+1. `SECRET_LOGIN_ENABLED=true` on the API service.
+2. `ALLOWED_CLIENT_IDS` is explicitly set for the client IDs you plan to issue, for example `cli-workstation-v1,mcp-agent-v1`.
+3. Client IDs follow stable prefixes such as `cli-*`, `mcp-*`, `automation-*`, `web-*`, or `mobile-*`.
+4. Operators understand that plaintext client secrets are visible only at create or rotate time.
+5. External self-service secret issuance remains limited to `cli-*`, `mcp-*`, and `automation-*` clients unless you intentionally widen the model later.
+
+Before exposing hosted public MCP, also verify:
+
+1. `MCP_TRANSPORT=sse`
+2. `MCP_AUTH_MODE=jwt`
+3. `MCP_USER_ID` is unset for hosted request-scoped mode
+4. `MCP_ALLOW_REMOTE_SSE=true` only when you intentionally bind beyond loopback
+5. `MCP_FORWARDING_SECRET` is configured if a trusted gateway forwards bearer tokens
+6. the MCP deployment has writable access to the database if you want aggregation write tools enabled
+7. `/v1/aggregations` and `/sse` both sit behind HTTPS and normal ingress logging/monitoring
 
 ## Operations
 

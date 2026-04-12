@@ -151,6 +151,52 @@ Current sync uses explicit sessions and chunked/full + delta + apply endpoints:
 - `POST /v1/auth/me/telegram/complete`
 - `DELETE /v1/auth/me/telegram`
 
+External CLI and hosted MCP clients usually use the secret-key flow instead of Telegram login:
+
+1. `POST /v1/auth/secret-keys` creates or registers a client secret. The plaintext secret is returned once, at creation or rotation time only.
+2. `POST /v1/auth/secret-login` exchanges that secret for an access token, refresh token, and session ID.
+3. `POST /v1/auth/refresh` rotates the refresh token and returns a fresh access token.
+4. `POST /v1/auth/logout` revokes the supplied refresh token or the refresh cookie-backed session.
+5. `POST /v1/auth/secret-keys/{key_id}/rotate` replaces the old plaintext secret for future logins.
+6. `POST /v1/auth/secret-keys/{key_id}/revoke` is idempotent and prevents future `secret-login` exchanges with that secret.
+
+Example `secret-login` request:
+
+```http
+POST /v1/auth/secret-login
+Content-Type: application/json
+
+{
+  "user_id": 123456,
+  "client_id": "cli-workstation-v1",
+  "secret": "paste-once-secret"
+}
+```
+
+Example `secret-login` success payload:
+
+```json
+{
+  "success": true,
+  "data": {
+    "tokens": {
+      "accessToken": "eyJ...",
+      "refreshToken": "eyJ...",
+      "expiresIn": 3600,
+      "tokenType": "Bearer"
+    },
+    "user": {
+      "userId": 123456,
+      "username": "reader",
+      "clientId": "cli-workstation-v1",
+      "isOwner": false,
+      "createdAt": "2026-04-12T09:30:00Z"
+    },
+    "sessionId": 88
+  }
+}
+```
+
 ### Summaries and Articles
 
 Canonical summary endpoints:
@@ -184,6 +230,7 @@ Alias endpoints for compatibility (`/v1/articles/*`) map to the same handlers:
 ### Aggregations
 
 - `POST /v1/aggregations`
+- `GET /v1/aggregations`
 - `GET /v1/aggregations/{session_id}`
 
 `POST /v1/aggregations` accepts a bundle of 1-25 URL items:
@@ -203,6 +250,126 @@ The create response returns:
 - `session`: session identifier, correlation ID, status, source type, and extraction counts
 - `aggregation`: synthesized bundle output
 - `items`: per-item extraction status, request IDs, and item-level failures
+
+Aggregation sessions expose these terminal and in-flight statuses:
+
+- `pending`
+- `processing`
+- `completed`
+- `partial`
+- `failed`
+
+Key progress fields:
+
+- `progress.totalItems`
+- `progress.processedItems`
+- `progress.successfulCount`
+- `progress.failedCount`
+- `progress.duplicateCount`
+- `progress.completionPercent`
+- `queuedAt`, `startedAt`, `completedAt`, `lastProgressAt`
+
+Example create request:
+
+```http
+POST /v1/aggregations
+Authorization: Bearer eyJ...
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "type": "url",
+      "url": "https://x.com/example/status/1",
+      "source_kind_hint": "x_post"
+    },
+    {
+      "type": "url",
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "source_kind_hint": "youtube_video"
+    }
+  ],
+  "lang_preference": "en",
+  "metadata": {
+    "submitted_by": "cli"
+  }
+}
+```
+
+Example create response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "session": {
+      "sessionId": 42,
+      "correlationId": "cid-agg-42",
+      "status": "processing",
+      "sourceType": "mixed",
+      "successfulCount": 1,
+      "failedCount": 0,
+      "duplicateCount": 0,
+      "queuedAt": "2026-04-12T09:31:00Z",
+      "startedAt": "2026-04-12T09:31:01Z",
+      "lastProgressAt": "2026-04-12T09:31:04Z",
+      "progress": {
+        "totalItems": 2,
+        "processedItems": 1,
+        "successfulCount": 1,
+        "failedCount": 0,
+        "duplicateCount": 0,
+        "completionPercent": 50
+      },
+      "failure": null
+    },
+    "aggregation": {
+      "session_id": 42,
+      "status": "processing",
+      "source_type": "mixed"
+    },
+    "items": [
+      {
+        "position": 0,
+        "sourceKind": "x_post",
+        "status": "extracted",
+        "requestId": 501,
+        "failure": null
+      },
+      {
+        "position": 1,
+        "sourceKind": "youtube_video",
+        "status": "processing",
+        "requestId": null,
+        "failure": null
+      }
+    ]
+  }
+}
+```
+
+Example get request:
+
+```http
+GET /v1/aggregations/42
+Authorization: Bearer eyJ...
+```
+
+Example list request:
+
+```http
+GET /v1/aggregations?limit=20&offset=0&status=processing
+Authorization: Bearer eyJ...
+```
+
+List responses return `data.sessions[]` and standard pagination metadata. Poll `GET /v1/aggregations/{session_id}` until the status becomes `completed`, `partial`, or `failed`.
+
+Common pre-execution failures:
+
+- rollout denied because aggregation is disabled or the user is not in the current rollout stage
+- validation failure because the bundle is malformed or exceeds limits
+- unsupported or blocked URLs, including localhost/private-network SSRF targets
+- rate limiting on aggregation create per user or per client ID
 
 ### Search and Topics
 

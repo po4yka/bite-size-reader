@@ -12,6 +12,7 @@ Complete reference for all command-line tools in Bite-Size Reader.
 
 Bite-Size Reader provides CLI tools for:
 
+- External API access via the packaged `bsr` client
 - Testing summarization without Telegram (`summary.py`)
 - Database migrations (`migrate_db.py`)
 - Search functionality testing (`search.py`, `search_compare.py`)
@@ -20,6 +21,41 @@ Bite-Size Reader provides CLI tools for:
 - MCP server (`mcp_server.py`)
 
 **Common Pattern:** `python -m app.cli.<command> [options]`
+
+## External `bsr` CLI
+
+The packaged external client lives under `clients/cli/` and talks to the public `/v1/*` API instead of the internal `app.cli.*` harnesses documented below.
+
+Use it when you need authenticated external access, especially for mixed-source aggregation:
+
+```bash
+# Authenticate with a client secret
+bsr login --server https://bsr.example.com --user-id 123456 --client-id cli-workstation-v1
+
+# Submit a bundle
+bsr aggregate https://x.com/example/status/1 https://youtu.be/dQw4w9WgXcQ
+
+# Poll one session
+bsr aggregation get 42
+
+# List recent sessions
+bsr aggregation list --limit 10
+
+# Script with JSON
+bsr --json aggregate --file sources.txt | jq '.session'
+```
+
+Aggregation notes:
+
+- `bsr aggregate` accepts positional URLs, `--file`, `--lang`, and repeatable `--hint`.
+- The command returns immediately with the latest session snapshot; it does not poll until completion by default.
+- Use `bsr aggregation get <id>` to watch `status`, `progress.completionPercent`, and `failure`.
+
+See:
+
+- [CLI README](../../clients/cli/README.md)
+- [External Access Quickstart](../tutorials/external-access-quickstart.md)
+- [Mobile API Spec](../MOBILE_API_SPEC.md)
 
 ---
 

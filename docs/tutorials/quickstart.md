@@ -209,6 +209,7 @@ Congratulations! You've successfully set up Bite-Size Reader. 🎉
 
 - ✨ [Enable YouTube support](../how-to/configure-youtube-download.md) - Summarize videos
 - 🔍 [Enable web search](../how-to/enable-web-search.md) - Add real-time context
+- 🔌 [External Access Quickstart](external-access-quickstart.md) - Onboard CLI or MCP aggregation clients
 - ⚡ [Setup Redis caching](../how-to/setup-redis-caching.md) - Faster responses
 - 🧠 [Setup ChromaDB](../how-to/setup-chroma-vector-search.md) - Semantic search
 - 🖥️ [Frontend Web Guide](../reference/frontend-web.md) - Carbon web app routes/auth/development

@@ -2,6 +2,8 @@
 
 Build a simple mobile client for Bite-Size Reader using the REST API.
 
+If you are onboarding the packaged `bsr` CLI or hosted MCP clients with client secrets instead of Telegram login, start with [External Access Quickstart](external-access-quickstart.md) first.
+
 **Time:** ~30 minutes
 **Difficulty:** Intermediate
 **Prerequisites:** Python 3.8+ or JavaScript/Node.js 16+

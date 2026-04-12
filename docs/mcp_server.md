@@ -73,6 +73,87 @@ User scoping modes:
 - Read tools and write tools both use the same request-scoped identity path, so public requests do not depend on process-wide user configuration.
 - If no request-scoped identity is available, MCP falls back to the existing startup scope behavior.
 
+## Integration Workflows
+
+### Local stdio Client
+
+For Claude Desktop or another same-machine agent, start MCP in stdio mode with a single trusted startup scope:
+
+```bash
+MCP_USER_ID=123456 python -m app.cli.mcp_server
+```
+
+Typical local aggregation workflow:
+
+1. Call `create_aggregation_bundle(items, lang_preference, metadata)`
+2. Poll `get_aggregation_bundle(session_id)` until the status is terminal
+3. Use `list_aggregation_bundles(limit, offset, status)` or `bsr://aggregations/recent` for recent context
+
+This mode is for one trusted user at a time. Do not expose it publicly.
+
+### Hosted Public SSE Client with Direct Bearer Auth
+
+First mint an access token through the API:
+
+```bash
+curl -X POST https://bsr.example.com/v1/auth/secret-login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": 123456,
+    "client_id": "mcp-agent-v1",
+    "secret": "<plaintext-secret>"
+  }'
+```
+
+Then point the MCP client at `https://bsr.example.com/sse` and send:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+Hosted request-scoped mode requirements:
+
+- the client must send the bearer token on SSE requests
+- `MCP_AUTH_MODE=jwt` must be enabled on the server
+- `MCP_USER_ID` should remain unset in hosted mode so the request identity is the source of truth
+
+### Hosted Public SSE Behind a Trusted Gateway
+
+If the MCP client cannot attach bearer headers directly, terminate client auth at a trusted gateway and forward the original access token to Bite-Size Reader:
+
+```http
+X-BSR-Forwarded-Access-Token: <original-access-token>
+X-BSR-MCP-Forwarding-Secret: <shared-forwarding-secret>
+```
+
+Server-side requirements:
+
+- `MCP_AUTH_MODE=jwt`
+- `MCP_FORWARDING_SECRET=<shared-forwarding-secret>`
+- matching forwarded header names if you override the defaults
+
+Gateway guidance:
+
+- forward the original bearer token, not a raw user ID
+- protect the forwarding secret like any other server-to-server credential
+- strip untrusted inbound copies of the forwarded headers before re-adding your trusted values
+
+### Aggregation Tool Flow
+
+For long-running bundles, use this call order:
+
+1. `create_aggregation_bundle(...)`
+2. `get_aggregation_bundle(session_id)` while status is `pending` or `processing`
+3. `list_aggregation_bundles(...)` or `bsr://aggregations/recent` to browse past runs
+
+Useful fields on session reads:
+
+- `status`
+- `progress.completionPercent`
+- `successful_count` / `failed_count`
+- `failure`
+- lifecycle timestamps such as `queued_at` and `completed_at`
+
 ## Docker Deployment (SSE)
 
 The `ops/docker/docker-compose.yml` file includes an opt-in `mcp` profile so the SSE server is not started by a plain `docker compose up`.

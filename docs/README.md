@@ -24,14 +24,16 @@ You want to use Bite-Size Reader to summarize articles, videos, or mixed-source 
 **Start here**:
 
 1. [Quickstart Tutorial](tutorials/quickstart.md) - Get your first summary in 5 minutes
-2. [FAQ](FAQ.md) - Common questions answered
-3. [DEPLOYMENT.md](DEPLOYMENT.md) - Setup and installation
-4. [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Fix common issues
+2. [External Access Quickstart](tutorials/external-access-quickstart.md) - First CLI or MCP aggregation session
+3. [FAQ](FAQ.md) - Common questions answered
+4. [DEPLOYMENT.md](DEPLOYMENT.md) - Setup and installation
+5. [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Fix common issues
 
 **Next steps**:
 
 - [How to enable YouTube support](how-to/configure-youtube-download.md)
 - [How to enable web search](how-to/enable-web-search.md)
+- [External Access Quickstart](tutorials/external-access-quickstart.md)
 - [SPEC.md § Mixed-source aggregation foundation](SPEC.md#data-model-sqlite)
 - [Environment variables reference](environment_variables.md)
 
@@ -96,7 +98,8 @@ You want to integrate Bite-Size Reader with other tools or build a client.
 1. [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) - REST API specification
 2. [Frontend Web Guide](reference/frontend-web.md) - Web client routes, auth, and API usage
 3. [MCP Server Guide](mcp_server.md) - AI agent integration
-4. [First Mobile API Client Tutorial](tutorials/first-mobile-api-client.md)
+4. [External Access Quickstart](tutorials/external-access-quickstart.md)
+5. [First Mobile API Client Tutorial](tutorials/first-mobile-api-client.md)
 
 **Next steps**:
 
@@ -113,6 +116,7 @@ You want to integrate Bite-Size Reader with other tools or build a client.
 **I want to...**
 
 - **Get my first summary in 5 minutes** → [Quickstart Tutorial](tutorials/quickstart.md)
+- **Submit an aggregation bundle from CLI or MCP** → [External Access Quickstart](tutorials/external-access-quickstart.md)
 - **Install on my server** → [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Understand what this project does** → [README.md](../README.md) (project root)
 - **Decide if this is right for me** → [FAQ](FAQ.md)
@@ -124,6 +128,7 @@ You want to integrate Bite-Size Reader with other tools or build a client.
 
 - **Enable YouTube support** → [How to configure YouTube download](how-to/configure-youtube-download.md)
 - **Run mixed-source aggregation** → [SPEC.md § Mixed-source aggregation foundation](SPEC.md#data-model-sqlite)
+- **Onboard an external CLI or MCP client** → [External Access Quickstart](tutorials/external-access-quickstart.md)
 - **Enable web search enrichment** → [How to enable web search](how-to/enable-web-search.md)
 - **Setup Redis caching** → [How to setup Redis caching](how-to/setup-redis-caching.md)
 - **Setup semantic search (ChromaDB)** → [How to setup ChromaDB](how-to/setup-chroma-vector-search.md)
@@ -164,6 +169,7 @@ You want to integrate Bite-Size Reader with other tools or build a client.
 **I want to...**
 
 - **Build a mobile app client** → [First Mobile API Client Tutorial](tutorials/first-mobile-api-client.md)
+- **Connect the packaged CLI or hosted MCP** → [External Access Quickstart](tutorials/external-access-quickstart.md)
 - **Build or extend web client** → [Frontend Web Guide](reference/frontend-web.md)
 - **Integrate with Claude Desktop** → [MCP Server Guide](mcp_server.md)
 - **Access the database directly** → [SPEC.md § Database Schema](SPEC.md#database-schema)
@@ -182,6 +188,7 @@ Step-by-step lessons that teach you how to use Bite-Size Reader.
 | Tutorial | Description | Audience | Time |
 | ---------- | ------------- | ---------- | ------ |
 | [Quickstart](tutorials/quickstart.md) | Get first summary in 5 minutes | Users | 5 min |
+| [External Access Quickstart](tutorials/external-access-quickstart.md) | First CLI or MCP aggregation session | Integrators, External users | 10 min |
 | [Local Development](tutorials/local-development.md) | Set up dev environment | Developers | 20 min |
 | [First Mobile API Client](tutorials/first-mobile-api-client.md) | Build a simple mobile client | Integrators | 30 min |
 

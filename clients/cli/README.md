@@ -26,13 +26,13 @@ bsr config --url https://bsr.example.com
 # 2. Authenticate
 bsr login --server https://bsr.example.com --user-id 123456 --client-id my-cli --secret <secret>
 
-# 3. Save a URL
-bsr save https://example.com/article --tag python --tag async
+# 3. Submit a mixed-source aggregation bundle
+bsr aggregate https://x.com/example/status/1 https://www.youtube.com/watch?v=dQw4w9WgXcQ
 
-# 4. List saved summaries
-bsr list --limit 10
+# 4. Poll the aggregation session
+bsr aggregation get 42
 
-# 5. Search
+# 5. Search saved summaries
 bsr search "async python" --lang en
 ```
 
@@ -143,6 +143,77 @@ bsr search "api design" --domain blog.example.com
 | `--tag` | `-t` | Filter by tag (repeatable) |
 | `--lang` | | Filter by language (`en`, `ru`) |
 | `--domain` | `-d` | Filter by domain (repeatable) |
+
+### Aggregation Bundles
+
+Mixed-source aggregation uses the public `/v1/aggregations` API. The CLI submits the bundle and prints the latest server-side session snapshot immediately. It does not keep polling until completion by default.
+
+### `bsr aggregate [URL ...]`
+
+Submit one or more URLs as a single aggregation bundle.
+
+```bash
+bsr aggregate https://x.com/example/status/1 https://youtu.be/dQw4w9WgXcQ
+bsr aggregate --file sources.txt --lang en
+bsr aggregate --hint x_post --hint youtube_video \
+  https://x.com/example/status/1 \
+  https://youtu.be/dQw4w9WgXcQ
+bsr --json aggregate --file sources.txt | jq '.session.sessionId'
+```
+
+| Option | Description |
+|--------|-------------|
+| `URL ...` | Positional URLs to include in the bundle |
+| `--file` | Read additional URLs from a file, one per line |
+| `--lang` | Preferred language: `auto`, `en`, or `ru` |
+| `--hint` | Source-kind hint for the matching URL position |
+| `--json` | Emit the raw API payload for scripting |
+
+Supported `--hint` values:
+
+- `x_post`
+- `x_article`
+- `threads_post`
+- `instagram_post`
+- `instagram_carousel`
+- `instagram_reel`
+- `web_article`
+- `telegram_post`
+- `youtube_video`
+
+### `bsr aggregation get ID`
+
+Fetch one aggregation session by ID.
+
+```bash
+bsr aggregation get 42
+bsr --json aggregation get 42 | jq '.session.progress'
+```
+
+### `bsr aggregation list`
+
+List recent aggregation sessions for the authenticated user.
+
+```bash
+bsr aggregation list
+bsr aggregation list --limit 10 --offset 10
+bsr --json aggregation list --limit 5 | jq '.sessions[] | {id, status}'
+```
+
+This is the recommended polling flow for long-running bundles:
+
+1. Run `bsr aggregate ...`
+2. Note `session.sessionId`
+3. Poll with `bsr aggregation get <id>` until the status is `completed`, `partial`, or `failed`
+
+The most useful session fields are:
+
+- `status`
+- `progress.completionPercent`
+- `successfulCount`
+- `failedCount`
+- `failure`
+- `queuedAt`, `startedAt`, `completedAt`, `lastProgressAt`
 
 ### `bsr delete ID`
 
@@ -257,7 +328,13 @@ BSR CLI uses a secret-key authentication flow:
 3. Tokens are stored in the config file
 4. The CLI automatically refreshes the access token when it's within 5 minutes of expiry
 
-If your token expires and refresh fails, run `bsr login` again.
+Important auth semantics:
+
+- Client secrets are shown in plaintext only when they are created or rotated.
+- A rotated or revoked secret cannot be used for future `bsr login` calls.
+- If access-token refresh fails because the refresh session was revoked or expired, run `bsr login` again with an active secret.
+
+For a full onboarding flow, including hosted MCP usage, see [External Access Quickstart](../../docs/tutorials/external-access-quickstart.md).
 
 ## JSON Output
 
