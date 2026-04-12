@@ -28,6 +28,10 @@ def _auth_headers(user_id: int, client_id: str = "test") -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _allow_public_urls():
+    return patch("app.api.routers.aggregation.is_url_safe", return_value=(True, None))
+
+
 def _set_runtime(client, db) -> SimpleNamespace | None:
     runtime = getattr(client.app.state, "runtime", None)
     client.app.state.runtime = SimpleNamespace(
@@ -106,9 +110,12 @@ def test_create_aggregation_bundle_endpoint_returns_session_and_items(client, db
 
     runtime = _set_runtime(client, db)
     try:
-        with patch(
-            "app.application.services.multi_source_aggregation_service.MultiSourceAggregationService.aggregate",
-            new=AsyncMock(return_value=fake_result),
+        with (
+            patch(
+                "app.application.services.multi_source_aggregation_service.MultiSourceAggregationService.aggregate",
+                new=AsyncMock(return_value=fake_result),
+            ),
+            _allow_public_urls(),
         ):
             response = client.post(
                 "/v1/aggregations",
@@ -198,6 +205,7 @@ def test_create_aggregation_bundle_endpoint_audits_and_passes_client_id_metadata
                 "app.api.routers.aggregation.build_async_audit_sink",
                 return_value=audit_mock,
             ),
+            _allow_public_urls(),
         ):
             response = client.post(
                 "/v1/aggregations",
@@ -273,9 +281,12 @@ def test_create_aggregation_bundle_endpoint_accepts_single_item(client, db, user
 
     runtime = _set_runtime(client, db)
     try:
-        with patch(
-            "app.application.services.multi_source_aggregation_service.MultiSourceAggregationService.aggregate",
-            new=AsyncMock(return_value=fake_result),
+        with (
+            patch(
+                "app.application.services.multi_source_aggregation_service.MultiSourceAggregationService.aggregate",
+                new=AsyncMock(return_value=fake_result),
+            ),
+            _allow_public_urls(),
         ):
             response = client.post(
                 "/v1/aggregations",
@@ -297,6 +308,44 @@ def test_create_aggregation_bundle_endpoint_accepts_single_item(client, db, user
     assert payload["data"]["session"]["successfulCount"] == 1
     assert payload["data"]["aggregation"]["source_type"] == "web_article"
     assert [item["sourceKind"] for item in payload["data"]["items"]] == ["web_article"]
+
+
+def test_create_aggregation_bundle_endpoint_rejects_blocked_ssrf_url(client, db, user_factory):
+    allowed_ids = Config.get_allowed_user_ids()
+    user_id = int(allowed_ids[0]) if allowed_ids else 424242
+    user_factory(username="aggregation_api_ssrf_user", telegram_user_id=user_id)
+
+    aggregate_mock = AsyncMock()
+    audit_mock = MagicMock()
+    runtime = _set_runtime(client, db)
+    try:
+        with (
+            patch(
+                "app.application.services.multi_source_aggregation_service.MultiSourceAggregationService.aggregate",
+                new=aggregate_mock,
+            ),
+            patch(
+                "app.api.routers.aggregation.build_async_audit_sink",
+                return_value=audit_mock,
+            ),
+        ):
+            response = client.post(
+                "/v1/aggregations",
+                headers=_auth_headers(user_id, client_id="cli-ssrf-v1"),
+                json={"items": [{"url": "http://localhost/internal"}]},
+            )
+    finally:
+        client.app.state.runtime = runtime
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["error"]["code"] == "VALIDATION_ERROR"
+    assert payload["error"]["details"]["reason"] == "Localhost is not allowed"
+    assert aggregate_mock.await_count == 0
+    assert [call.args[1] for call in audit_mock.call_args_list] == [
+        "aggregation.bundle_create_requested",
+        "aggregation.bundle_create_blocked_ssrf",
+    ]
 
 
 def test_get_aggregation_bundle_endpoint_returns_persisted_session(client, db, user_factory):

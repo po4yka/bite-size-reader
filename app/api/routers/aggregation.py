@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.dependencies.database import get_session_manager
-from app.api.exceptions import AuthorizationError, ResourceNotFoundError
+from app.api.exceptions import AuthorizationError, ResourceNotFoundError, ValidationError
 from app.api.models.requests import CreateAggregationBundleRequest  # noqa: TC001
 from app.api.models.responses import success_response
 from app.api.models.responses.common import PaginationInfo
@@ -24,6 +24,7 @@ from app.di.api import resolve_api_runtime
 from app.di.repositories import build_aggregation_session_repository, build_user_repository
 from app.di.shared import build_async_audit_sink
 from app.domain.models.source import AggregationSessionStatus  # noqa: TC001
+from app.security.ssrf import is_url_safe
 
 router = APIRouter()
 
@@ -51,6 +52,34 @@ def _resolve_db(request: Request) -> Any:
     with contextlib.suppress(RuntimeError):
         return resolve_api_runtime(request).db
     return get_session_manager(request)
+
+
+def _ensure_public_bundle_urls(
+    *,
+    body: CreateAggregationBundleRequest,
+    audit: Any,
+    audit_context: dict[str, Any],
+) -> None:
+    for position, item in enumerate(body.items):
+        url = str(item.url)
+        safe, reason = is_url_safe(url)
+        if safe:
+            continue
+        details = {
+            **audit_context,
+            "position": position,
+            "url": url,
+            "reason": reason,
+        }
+        audit("WARNING", "aggregation.bundle_create_blocked_ssrf", details)
+        raise ValidationError(
+            "Aggregation bundle contains a blocked URL",
+            details={
+                "position": position,
+                "url": url,
+                "reason": reason,
+            },
+        )
 
 
 async def _ensure_aggregation_available(
@@ -128,6 +157,7 @@ async def create_aggregation_bundle(
         "lang_preference": body.lang_preference,
     }
     audit("INFO", "aggregation.bundle_create_requested", audit_context)
+    _ensure_public_bundle_urls(body=body, audit=audit, audit_context=audit_context)
     submissions = [
         SourceSubmission.from_url(
             str(item.url),

@@ -237,10 +237,11 @@ Use one of:
 External aggregation creation now emits explicit audit events so operators can correlate expensive bundle creation with the authenticated actor that triggered it.
 
 - `aggregation.bundle_create_requested`
+- `aggregation.bundle_create_blocked_ssrf`
 - `aggregation.bundle_create_succeeded`
 - `aggregation.bundle_create_failed`
 
-Each event includes the request `correlation_id`, authenticated `user_id`, `client_id`, submitted bundle size, and language preference. Success events also include the persisted aggregation `session_id` and outcome counts.
+Each event includes the request `correlation_id`, authenticated `user_id`, `client_id`, submitted bundle size, and language preference. Blocked-SSRF events also include the rejected URL, item position, and block reason. Success events also include the persisted aggregation `session_id` and outcome counts.
 
 ---
 
