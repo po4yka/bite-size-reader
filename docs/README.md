@@ -6,19 +6,20 @@ Welcome to the Bite-Size Reader documentation. This guide helps you find the rig
 
 ## Documentation freshness
 
-- Last documentation refresh: **2026-03-28**
+- Last documentation refresh: **2026-04-12**
 - This refresh aligns docs with:
   - Root namespace reorganization: `clients/`, `integrations/`, `ops/`, and `tools/`
   - Carbon web interface architecture in `clients/web/` (routing, auth modes, deploy/static namespaces)
   - Web static check workflow (`npm run check:static`) and CI jobs (`web-build`, `web-test`, `web-static-check`)
   - Docker and compose assets relocated under `ops/docker/`
   - FastAPI SPA serving contract (`/web`, `/web/*`) alongside Telegram Mini App static assets
+  - Mixed-source aggregation across Telegram and FastAPI, including rollout flags and bundle observability
 
 ## Documentation by Audience
 
 ### 👤 I'm a User
 
-You want to use Bite-Size Reader to summarize articles and videos.
+You want to use Bite-Size Reader to summarize articles, videos, or mixed-source bundles.
 
 **Start here**:
 
@@ -31,6 +32,7 @@ You want to use Bite-Size Reader to summarize articles and videos.
 
 - [How to enable YouTube support](how-to/configure-youtube-download.md)
 - [How to enable web search](how-to/enable-web-search.md)
+- [SPEC.md § Mixed-source aggregation foundation](SPEC.md#data-model-sqlite)
 - [Environment variables reference](environment_variables.md)
 
 ### 💻 I'm a Developer
@@ -121,6 +123,7 @@ You want to integrate Bite-Size Reader with other tools or build a client.
 **I want to...**
 
 - **Enable YouTube support** → [How to configure YouTube download](how-to/configure-youtube-download.md)
+- **Run mixed-source aggregation** → [SPEC.md § Mixed-source aggregation foundation](SPEC.md#data-model-sqlite)
 - **Enable web search enrichment** → [How to enable web search](how-to/enable-web-search.md)
 - **Setup Redis caching** → [How to setup Redis caching](how-to/setup-redis-caching.md)
 - **Setup semantic search (ChromaDB)** → [How to setup ChromaDB](how-to/setup-chroma-vector-search.md)
@@ -248,7 +251,7 @@ Background, context, and "why" discussions.
 
 | File | Description | When to Read |
 | ------ | ------------- | -------------- |
-| [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) | REST API spec | Building mobile client |
+| [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) | REST API spec, including aggregation endpoints | Building mobile client |
 | [Frontend Web Guide](reference/frontend-web.md) | Carbon web routes/auth/build details | Building or debugging web UI |
 | [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) | Architecture guide | Understanding code structure |
 | [multi_agent_architecture.md](multi_agent_architecture.md) | Multi-agent LLM | Understanding summarization pipeline |
@@ -306,6 +309,7 @@ See [SPEC.md § Glossary](SPEC.md#glossary) for full glossary.
 | **LLM models** | [environment_variables.md § LLM](environment_variables.md), [FAQ § Cost](FAQ.md#what-are-the-cheapest-models-that-work-well) |
 | **MCP Server** | [mcp_server.md](mcp_server.md), [TROUBLESHOOTING.md § MCP](TROUBLESHOOTING.md#mcp-server-issues) |
 | **Mobile API** | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md), [First Mobile API Client Tutorial](tutorials/first-mobile-api-client.md) |
+| **Mixed-source aggregation** | [SPEC.md](SPEC.md), [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md), [environment_variables.md](environment_variables.md) |
 | **Multi-agent** | [multi_agent_architecture.md](multi_agent_architecture.md), [ADR-0005](adr/0005-multi-agent-llm-pipeline.md) |
 | **OpenRouter** | [environment_variables.md § OpenRouter](environment_variables.md), [TROUBLESHOOTING.md § OpenRouter](TROUBLESHOOTING.md#openrouter-issues) |
 | **Performance** | [How to optimize performance](how-to/optimize-performance.md), [TROUBLESHOOTING.md § Performance](TROUBLESHOOTING.md#performance-issues) |
@@ -335,6 +339,6 @@ Found a typo? Documentation unclear? Want to add a tutorial?
 
 ---
 
-**Last Updated**: 2026-03-28
+**Last Updated**: 2026-04-12
 
 **Questions?** Check [FAQ](FAQ.md) or open an [issue](https://github.com/po4yka/bite-size-reader/issues).

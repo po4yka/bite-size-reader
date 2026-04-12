@@ -21,7 +21,7 @@ Common questions about Bite-Size Reader.
 
 ### What is Bite-Size Reader?
 
-Bite-Size Reader is an AI-powered Telegram bot that transforms long web articles and YouTube videos into structured, searchable summaries. It uses:
+Bite-Size Reader is an AI-powered Telegram bot that transforms long web articles, YouTube videos, forwarded Telegram posts, and mixed-source bundles into structured, searchable outputs. It uses:
 
 - **Firecrawl** for clean content extraction
 - **OpenRouter** (or OpenAI/Anthropic) for LLM-powered summarization
@@ -34,6 +34,7 @@ Bite-Size Reader is an AI-powered Telegram bot that transforms long web articles
 - Semantic search (ChromaDB, vector embeddings)
 - Mobile API (JWT auth, multi-device sync)
 - YouTube video + transcript support
+- Mixed-source aggregation across X, Threads, Instagram, YouTube, web, and Telegram-native sources
 - Optional web search enrichment
 - Self-hosted, privacy-focused
 
@@ -59,12 +60,12 @@ See [Cost Optimization](#cost-optimization) for ways to minimize costs.
 
 ### How does it work?
 
-1. **You send a URL** (article or YouTube video) to the Telegram bot
-2. **Content extraction**: Multi-provider scraper chain (Scrapling, Firecrawl, Playwright, Crawlee, direct HTML) extracts the article (or yt-dlp downloads YouTube transcript)
-3. **LLM summarization**: OpenRouter sends content to an LLM (e.g., DeepSeek, Qwen, Kimi)
-4. **Structured output**: LLM returns JSON summary (validated, self-corrected via multi-agent pipeline)
-5. **Storage**: Summary stored in SQLite with metadata (topics, entities, timestamps)
-6. **Reply**: Bot sends formatted summary back to Telegram
+1. **You send a URL, multiple URLs, or forwarded content** to the Telegram bot (or call the API).
+2. **Content extraction**: Multi-provider scraper chain (Scrapling, Firecrawl, Playwright, Crawlee, direct HTML) extracts articles; platform extractors handle X, Threads, Instagram, and YouTube; Telegram-native submissions preserve message/media provenance.
+3. **LLM summarization or synthesis**: OpenRouter sends extracted content to an LLM (e.g., DeepSeek, Qwen, Kimi).
+4. **Structured output**: The system returns either a strict summary JSON object or a provenance-aware aggregation bundle result.
+5. **Storage**: Requests, source items, crawl artifacts, LLM calls, and outputs are stored in SQLite.
+6. **Reply**: Bot sends formatted results back to Telegram, and the API returns the same workflow through `/v1/*`.
 
 ### What makes it different from ChatGPT?
 
@@ -73,6 +74,7 @@ See [Cost Optimization](#cost-optimization) for ways to minimize costs.
 - **Multi-Interface**: Telegram, mobile app, CLI, MCP server access the same data
 - **Self-Hosted**: Your data never leaves your server
 - **YouTube Support**: Extract and summarize video transcripts
+- **Bundle Synthesis**: Compare and combine one or many mixed sources into one aggregation output
 - **Optimized for Reading**: Designed specifically for article summarization, not general chat
 
 ---
@@ -216,8 +218,12 @@ All users share the same database (no per-user isolation). This is designed for 
 **Supported**:
 
 - ✅ Web articles (news sites, blogs, documentation)
+- ✅ X/Twitter posts and X article links
+- ✅ Threads posts
+- ✅ Instagram posts, carousels, and reels
 - ✅ YouTube videos (any format: watch, shorts, live, music)
 - ✅ Forwarded Telegram channel posts
+- ✅ Mixed-source aggregation bundles (one or many URLs, plus Telegram-native content in Telegram flows)
 - ✅ PDFs (with embedded image analysis)
 - ✅ Channel digest summaries (scheduled digests of subscribed Telegram channels)
 - ✅ Long-form content (up to 256k tokens with long-context models)
@@ -281,6 +287,14 @@ Yes. Multiple export formats:
 - **PDF**: Via `weasyprint` (roadmap: not yet implemented)
 - **Markdown**: Via CLI export (roadmap: not yet implemented)
 - **SQLite**: Direct database access (`data/app.db`)
+
+### Can I combine multiple links or forwarded posts into one result?
+
+Yes. The Telegram bot exposes `/aggregate`, and the API exposes `POST /v1/aggregations`.
+
+- Telegram: `/aggregate` accepts one or more links and can include the current forwarded/attached message context when present.
+- API: `POST /v1/aggregations` accepts a bundle of 1-25 URL items.
+- Output: the result includes per-item extraction status plus one synthesized aggregation payload with source coverage, duplicates, contradictions, and provenance-aware claims.
 
 ### Does it deduplicate URLs?
 

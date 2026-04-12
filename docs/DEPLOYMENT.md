@@ -49,6 +49,7 @@ Copy `.env.example` to `.env` and fill:
 - Firecrawl: `FIRECRAWL_API_KEY`
 - Runtime: `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO| DEBUG`, `REQUEST_TIMEOUT_SEC=60`, `PREFERRED_LANG=auto | en | ru`, `DEBUG_PAYLOADS=0 |1` (keep 0 in prod)
 - YouTube: `YOUTUBE_DOWNLOAD_ENABLED=true`, `YOUTUBE_PREFERRED_QUALITY=1080p`, `YOUTUBE_STORAGE_PATH=/data/videos`, size/retention knobs as needed
+- Mixed-source aggregation: `AGGREGATION_BUNDLE_ENABLED=true`, `AGGREGATION_ROLLOUT_STAGE=enabled`, optional extractor flags (`AGGREGATION_META_EXTRACTORS_ENABLED`, `AGGREGATION_ARTICLE_MEDIA_ENABLED`, `AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED`)
 - API (mobile): `JWT_SECRET_KEY` (>=32 chars), `API_HOST`, `API_PORT` (default 8000), optional `ALLOWED_CLIENT_IDS`
 - Web frontend (JWT mode login widget, optional for `clients/web/` local build/dev): `VITE_TELEGRAM_BOT_USERNAME`
 - Redis (rate limit/sync, optional): `REDIS_ENABLED`, `REDIS_URL` or host/port/db, `REDIS_PREFIX=bsr`, `REDIS_REQUIRED=false`, `API_RATE_LIMIT_*` caps, `SYNC_DEFAULT_CHUNK_SIZE`, `SYNC_EXPIRY_HOURS`
@@ -83,9 +84,11 @@ npm run build
 How to use (no commands needed)
 
 - You can simply send a URL (or several URLs in one message) or forward a channel post — the bot will summarize it.
+- You can also use `/aggregate` to synthesize one mixed-source bundle from one or more links and, when applicable, the current forwarded/attached Telegram content.
 - Commands are optional helpers:
   - `/summarize <URL>` or `/summarize` then send URL
   - `/summarize_all <URLs>` to process many URLs immediately
+  - `/aggregate <URLs>` to request one bundle-level aggregation
   - `/summarize_forward` then forward a channel post
 
 ## Docker Deployment
@@ -173,6 +176,7 @@ Full variable reference: `docs/environment_variables.md`
 
 - Health: ensure the bot account stays unbanned and tokens valid.
 - Monitoring: watch logs for latency spikes and error rates; consider dashboarding via structured logs.
+- Aggregation observability: Grafana provisioning includes `ops/monitoring/grafana/provisioning/dashboards/bsr-aggregation.json` for bundle cost, latency, partial-success, and coverage tracking.
 - Backups: automatic snapshots land in `/data/backups`. Copy them off-host or adjust `DB_BACKUP_*` if you need a different cadence.
 
 ### Health Checks

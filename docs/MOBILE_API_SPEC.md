@@ -1,7 +1,7 @@
 # Mobile API Specification (Bite-Size Reader)
 
-- Version: 1.1
-- Last Updated: 2026-03-28
+- Version: 1.2
+- Last Updated: 2026-04-12
 - Canonical machine-readable contract: `docs/openapi/mobile_api.yaml` and `docs/openapi/mobile_api.json`
 
 ## Overview
@@ -11,6 +11,7 @@ This document is a developer-facing summary of the mobile API implemented by the
 - Base API prefix: `/v1`
 - Primary clients: mobile apps (Android/iOS/KMP), Telegram Mini App, Carbon web interface (`clients/web/`)
 - Envelope contract: all JSON business responses use `success`, `data`, `meta`, and standardized `error`
+- Mixed-source aggregation surface: `/v1/aggregations`
 - OpenAPI source of truth: `docs/openapi/mobile_api.yaml`
 
 The same FastAPI host also serves the Carbon web SPA:
@@ -179,6 +180,29 @@ Alias endpoints for compatibility (`/v1/articles/*`) map to the same handlers:
 - `GET /v1/requests/{request_id}/status`
 - `POST /v1/requests/{request_id}/retry`
 - `GET /v1/urls/check-duplicate`
+
+### Aggregations
+
+- `POST /v1/aggregations`
+- `GET /v1/aggregations/{session_id}`
+
+`POST /v1/aggregations` accepts a bundle of 1-25 URL items:
+
+- `type`: currently `url`
+- `url`: `http://` or `https://` source URL
+- `source_kind_hint`: optional hint for classification/routing
+- `metadata`: optional per-item metadata
+
+Bundle-level fields:
+
+- `lang_preference`: `auto`, `en`, or `ru`
+- `metadata`: optional request metadata attached to the aggregation session
+
+The create response returns:
+
+- `session`: session identifier, correlation ID, status, source type, and extraction counts
+- `aggregation`: synthesized bundle output
+- `items`: per-item extraction status, request IDs, and item-level failures
 
 ### Search and Topics
 

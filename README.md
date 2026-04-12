@@ -1,6 +1,6 @@
 # Bite-Size Reader
 
-Async Telegram bot that summarizes web articles and YouTube videos into structured JSON. For articles, it uses a multi-provider scraper chain (Scrapling / self-hosted Firecrawl / Playwright / Crawlee / direct HTML) + OpenRouter; for YouTube videos, it downloads the video (1080p) and extracts transcripts. Also supports summarizing forwarded channel posts. Returns a strict JSON summary and stores artifacts in SQLite.
+Async Telegram bot that summarizes web articles, YouTube videos, forwarded Telegram posts, and mixed-source bundles into structured outputs. For articles, it uses a multi-provider scraper chain (Scrapling / self-hosted Firecrawl / Playwright / Crawlee / direct HTML) + OpenRouter; for YouTube videos, it downloads the video (1080p) and extracts transcripts; for mixed-source aggregation, it can synthesize one or many sources across X, Threads, Instagram, YouTube, web articles, and Telegram-native submissions with provenance-aware bundle output. All artifacts are stored in SQLite.
 
 **🚀 New to Bite-Size Reader?** Start with the [5-Minute Quickstart Tutorial](docs/tutorials/quickstart.md)
 
@@ -139,6 +139,7 @@ For the mobile API, routers are transport-focused and delegate infrastructure or
 | ------ | ----- | --------------- |
 | **Summarize web articles** | Send URL to Telegram bot | [Quickstart Tutorial](docs/tutorials/quickstart.md) |
 | **Summarize YouTube videos** | Send YouTube URL (transcript extracted) | [Configure YouTube](docs/how-to/configure-youtube-download.md) |
+| **Aggregate multiple sources** | Use `/aggregate ...` or submit a multi-link bundle via API | [SPEC.md § Mixed-source aggregation foundation](docs/SPEC.md#data-model-sqlite) |
 | **Search past summaries** | `/search <query>` command | [FAQ § Search](docs/FAQ.md#can-i-search-my-summaries) |
 | **Get real-time context** | Enable web search enrichment | [Enable Web Search](docs/how-to/enable-web-search.md) |
 | **Speed up responses** | Enable Redis caching | [Setup Redis](docs/how-to/setup-redis-caching.md) |
@@ -158,7 +159,7 @@ For the mobile API, routers are transport-focused and delegate infrastructure or
 
 ## Commands and usage
 
-You can simply send a URL (or several URLs) or forward a channel post -- commands are optional.
+You can simply send a URL, several URLs, or forward a channel post. Commands are optional helpers.
 
 ### Summarization
 
@@ -168,9 +169,11 @@ You can simply send a URL (or several URLs) or forward a channel post -- command
 | `/summarize <URL>` | Summarize a URL immediately |
 | `/summarize` | Bot asks for a URL in the next message |
 | `/summarize_all <URLs>` | Summarize multiple URLs without confirmation |
+| `/aggregate <URLs>` | Build one mixed-source aggregation from one or more links and optional forwarded/attached Telegram content |
 | `/cancel` | Cancel pending summarize prompt or multi-link confirmation |
 
 Multiple URLs in one message: bot asks "Process N links?"; reply "yes/no". Each link gets its own correlation ID and is processed sequentially.
+Bundle aggregation: `/aggregate` accepts one or more links, and Telegram message routing can also auto-switch to bundle mode for feasible multi-link or link-plus-forward/attachment submissions.
 
 ### Content Management
 
@@ -239,6 +242,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 | **Mobile API** | `JWT_SECRET_KEY`<br>`ALLOWED_CLIENT_IDS`<br>`API_RATE_LIMIT_*` | Build mobile clients |
 | **Karakeep** | `KARAKEEP_ENABLED=false`<br>`KARAKEEP_API_URL`<br>`KARAKEEP_API_KEY` | Bookmark sync |
 | **Channel Digest** | `DIGEST_ENABLED=true`<br>`API_BASE_URL=http://localhost:8000` | Scheduled channel digests |
+| **Mixed-Source Aggregation** | `AGGREGATION_BUNDLE_ENABLED=true`<br>`AGGREGATION_META_EXTRACTORS_ENABLED=true`<br>`AGGREGATION_ARTICLE_MEDIA_ENABLED=true`<br>`AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED=true` | Enable bundle synthesis, dedicated Meta routing, multimodal article/X media, and Telegram/Meta video normalization |
 
 ### ⚙️ Advanced (Fine-Tuning)
 
@@ -367,7 +371,7 @@ Only ~30-40% of articles trigger search (self-contained content is skipped). Add
 
 ## Mobile API
 
-FastAPI-based REST API for mobile clients with Telegram-based JWT authentication, summary retrieval, and sync endpoints. See `docs/MOBILE_API_SPEC.md` for details.
+FastAPI-based REST API for mobile clients with Telegram-based JWT authentication, summary retrieval, sync endpoints, and mixed-source aggregation endpoints (`POST /v1/aggregations`, `GET /v1/aggregations/{id}`). See `docs/MOBILE_API_SPEC.md` for details.
 
 ## Carbon Web Interface (V1)
 

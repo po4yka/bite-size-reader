@@ -2635,6 +2635,278 @@
         }
       }
     },
+    "/v1/aggregations": {
+      "post": {
+        "tags": [
+          "Aggregations"
+        ],
+        "summary": "Create Aggregation Bundle",
+        "description": "Run mixed-source aggregation for one submitted bundle of 1-25 URL items.",
+        "operationId": "create_aggregation_bundle_v1_aggregations_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 25,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "url",
+                          "default": "url"
+                        },
+                        "url": {
+                          "type": "string",
+                          "format": "uri",
+                          "maxLength": 2048
+                        },
+                        "source_kind_hint": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      },
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  },
+                  "lang_preference": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "en",
+                      "ru"
+                    ],
+                    "default": "auto"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "items"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Aggregation bundle created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "session": {
+                          "type": "object",
+                          "properties": {
+                            "sessionId": {
+                              "type": "integer"
+                            },
+                            "correlationId": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "sourceType": {
+                              "type": "string"
+                            },
+                            "successfulCount": {
+                              "type": "integer"
+                            },
+                            "failedCount": {
+                              "type": "integer"
+                            },
+                            "duplicateCount": {
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        "aggregation": {
+                          "type": "object",
+                          "additionalProperties": true
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "position": {
+                                "type": "integer"
+                              },
+                              "itemId": {
+                                "type": "integer"
+                              },
+                              "sourceItemId": {
+                                "type": "string"
+                              },
+                              "sourceKind": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "requestId": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "failure": {
+                                "type": "object",
+                                "nullable": true,
+                                "additionalProperties": true
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/aggregations/{session_id}": {
+      "get": {
+        "tags": [
+          "Aggregations"
+        ],
+        "summary": "Get Aggregation Bundle",
+        "description": "Return one persisted aggregation session with bundle items and synthesized output.",
+        "operationId": "get_aggregation_bundle_v1_aggregations__session_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregation bundle detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "session": {
+                          "type": "object",
+                          "additionalProperties": true
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": true
+                          }
+                        },
+                        "aggregation": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/v1/search": {
       "get": {
         "tags": [
@@ -12978,15 +13250,13 @@
       "RefreshTokenRequest": {
         "properties": {
           "refresh_token": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           }
         },
         "type": "object",
-        "required": [
-          "refresh_token"
-        ],
         "title": "RefreshTokenRequest",
-        "description": "Request body for token refresh."
+        "description": "Request body for token refresh. The refresh_token field is optional when using httpOnly cookie transport."
       },
       "SubmitForwardRequest": {
         "properties": {

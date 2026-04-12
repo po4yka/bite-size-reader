@@ -3,7 +3,7 @@
 Complete reference for all Bite-Size Reader configuration. Source of truth: `app/config/` (entrypoint `app/config/settings.py`).
 
 **Total Variables**: 250+
-**Last Updated**: 2026-03-28
+**Last Updated**: 2026-04-12
 
 ---
 
@@ -91,6 +91,13 @@ CHROMA_REQUIRED=false
 # [OPTIONAL] - Mobile API
 JWT_SECRET_KEY=your_secret_key
 API_RATE_LIMIT_DEFAULT=100
+
+# [OPTIONAL] - Mixed-Source Aggregation
+AGGREGATION_BUNDLE_ENABLED=true
+AGGREGATION_ROLLOUT_STAGE=enabled
+AGGREGATION_META_EXTRACTORS_ENABLED=true
+AGGREGATION_ARTICLE_MEDIA_ENABLED=true
+AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED=true
 ```
 
 **Use case**: Full features, high performance, multi-device access.
@@ -493,6 +500,16 @@ Controls which embedding backend generates vectors for semantic search.
 | `SUMMARY_STREAMING_PROVIDER_SCOPE` | `openrouter` | Provider scope for token streaming (`openrouter`, `all`, `disabled`) |
 | `TELEGRAM_REPLY_TIMEOUT_SEC` | `30.0` | Timeout for Telegram reply operations |
 
+## Mixed-Source Aggregation Rollout
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `AGGREGATION_BUNDLE_ENABLED` | `true` | Master switch for bundle aggregation in Telegram and API |
+| `AGGREGATION_ROLLOUT_STAGE` | `enabled` | Availability stage: `disabled`, `internal`, `owner_beta`, `enabled` |
+| `AGGREGATION_META_EXTRACTORS_ENABLED` | `true` | Enable dedicated Threads/Instagram extraction instead of generic article fallback |
+| `AGGREGATION_ARTICLE_MEDIA_ENABLED` | `true` | Attach curated article/X image assets to aggregation documents and multimodal summary requests |
+| `AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED` | `true` | Enable shared Telegram/Meta video normalization with transcript/audio/OCR fallbacks |
+
 ---
 
 ## Configuration Validation Checklist
@@ -516,6 +533,8 @@ Use this checklist to verify your configuration before deploying:
 - [ ] **Mobile API**: `JWT_SECRET_KEY` set → Strong secret (32+ characters)
 - [ ] **MCP Server**: `MCP_ENABLED=true` → Claude Desktop config updated
 - [ ] **Channel Digest**: `DIGEST_ENABLED=true` → `API_BASE_URL` set, `/init_session` completed
+- [ ] **Aggregation rollout**: `AGGREGATION_BUNDLE_ENABLED=true` and `AGGREGATION_ROLLOUT_STAGE` set to the intended exposure stage
+- [ ] **Aggregation media/video flags**: `AGGREGATION_META_EXTRACTORS_ENABLED`, `AGGREGATION_ARTICLE_MEDIA_ENABLED`, and `AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED` match the desired rollout scope
 
 ### ✅ Performance & Storage
 
