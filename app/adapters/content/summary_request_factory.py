@@ -261,8 +261,9 @@ class SummaryRequestFactory:
         """Choose truncation/model strategy and return (cleaned_content, model_override, content_tier)."""
         content_for_summary = content_text
         attachment_cfg = self._runtime.cfg.attachment
-        use_vision = images and attachment_cfg.article_vision_enabled
-        model_override = attachment_cfg.vision_model if use_vision else None
+        article_vision_enabled = bool(getattr(attachment_cfg, "article_vision_enabled", True))
+        use_vision = bool(images) and article_vision_enabled
+        model_override = getattr(attachment_cfg, "vision_model", None) if use_vision else None
         if not use_vision:
             images = None
         content_tier: str | None = None

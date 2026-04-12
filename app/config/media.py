@@ -110,7 +110,7 @@ class AttachmentConfig(BaseModel):
     )
 
     article_vision_enabled: bool = Field(
-        default=False,
+        default=True,
         validation_alias="ARTICLE_VISION_ENABLED",
         description="Send extracted article images to a vision model for richer summaries",
     )

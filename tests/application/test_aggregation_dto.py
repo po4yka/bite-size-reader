@@ -39,6 +39,31 @@ def test_normalized_source_document_from_extracted_content() -> None:
     assert document.provenance.external_id == "dQw4w9WgXcQ"
 
 
+def test_normalized_source_document_preserves_structured_media_assets() -> None:
+    source_item = SourceItem.create(
+        kind=SourceKind.X_POST,
+        original_value="https://x.com/user/status/123",
+        external_id="123",
+    )
+
+    document = NormalizedSourceDocument.from_extracted_content(
+        source_item=source_item,
+        text="Tweet body",
+        content_source="twitter_graphql",
+        media_assets=[
+            SourceMediaAsset(
+                kind=SourceMediaKind.IMAGE,
+                url="https://pbs.twimg.com/media/chart.jpg",
+                alt_text="Quarterly revenue chart",
+            )
+        ],
+    )
+
+    assert document.media[0].url == "https://pbs.twimg.com/media/chart.jpg"
+    assert document.media[0].alt_text == "Quarterly revenue chart"
+    assert document.media[0].position == 0
+
+
 def test_normalized_source_document_rejects_empty_payload() -> None:
     source_item = SourceItem.create(
         kind=SourceKind.WEB_ARTICLE,

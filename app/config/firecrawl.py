@@ -61,7 +61,7 @@ class FirecrawlConfig(BaseModel):
     include_summary_format: bool = Field(
         default=False, validation_alias="FIRECRAWL_INCLUDE_SUMMARY"
     )
-    include_images_format: bool = Field(default=False, validation_alias="FIRECRAWL_INCLUDE_IMAGES")
+    include_images_format: bool = Field(default=True, validation_alias="FIRECRAWL_INCLUDE_IMAGES")
     enable_screenshot_format: bool = Field(
         default=False, validation_alias="FIRECRAWL_ENABLE_SCREENSHOT"
     )

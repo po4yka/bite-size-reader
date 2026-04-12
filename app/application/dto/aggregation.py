@@ -211,6 +211,7 @@ class NormalizedSourceDocument(BaseModel):
         detected_language: str | None = None,
         content_source: str | None = None,
         media_urls: list[str] | None = None,
+        media_assets: list[SourceMediaAsset] | None = None,
         metadata: dict[str, Any] | None = None,
         text_kind: ExtractedTextKind = ExtractedTextKind.BODY,
     ) -> NormalizedSourceDocument:
@@ -234,11 +235,18 @@ class NormalizedSourceDocument(BaseModel):
                 )
             )
 
-        media = [
-            SourceMediaAsset(kind=SourceMediaKind.IMAGE, url=url, position=index)
-            for index, url in enumerate(media_urls or [])
-            if url
-        ]
+        if media_assets is not None:
+            media = [
+                asset.model_copy(update={"position": index})
+                for index, asset in enumerate(media_assets)
+                if asset.url or asset.local_path
+            ]
+        else:
+            media = [
+                SourceMediaAsset(kind=SourceMediaKind.IMAGE, url=url, position=index)
+                for index, url in enumerate(media_urls or [])
+                if url
+            ]
         return cls(
             source_item_id=source_item.stable_id,
             source_kind=source_item.kind,

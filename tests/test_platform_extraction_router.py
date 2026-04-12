@@ -9,6 +9,7 @@ import pytest
 
 from app.adapters.content.content_extractor import ContentExtractionResult, ContentExtractor
 from app.adapters.content.platform_extraction.models import PlatformExtractionResult
+from app.application.dto.aggregation import NormalizedSourceDocument
 
 if TYPE_CHECKING:
     from app.adapters.external.firecrawl.client import FirecrawlClient
@@ -210,6 +211,70 @@ async def test_extract_and_process_content_routes_platform_urls_before_generic_s
         images=[],
     )
     extractor.firecrawl.scrape_markdown.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_extract_content_pure_builds_multimodal_article_document_from_firecrawl_images() -> (
+    None
+):
+    extractor: Any = _make_extractor()
+    router = MagicMock()
+    router.extract = AsyncMock(return_value=None)
+    extractor._platform_router = router
+    extractor.firecrawl.scrape_markdown = AsyncMock(
+        return_value=SimpleNamespace(
+            status="ok",
+            content_markdown=(
+                "# Title\n\n"
+                "This article explains the quarterly business results in detail, including "
+                "revenue changes, segment performance, and executive commentary. "
+                "It also breaks down the charts, highlights regional variance, and "
+                "summarizes management guidance for the next quarter."
+            ),
+            content_html=None,
+            error_text=None,
+            http_status=200,
+            latency_ms=1,
+            endpoint="scraper",
+            metadata_json={
+                "title": "Example article",
+                "images": [
+                    {
+                        "url": "https://cdn.example.com/chart.png",
+                        "alt": "Quarterly revenue chart",
+                        "width": 1280,
+                        "height": 720,
+                    },
+                    {
+                        "url": "https://cdn.example.com/logo.svg",
+                        "alt": "Site logo",
+                    },
+                ],
+                "og:image": "https://cdn.example.com/chart.png",
+            },
+            response_success=True,
+            source_url="https://example.com/article",
+            correlation_id="cid",
+            options_json=None,
+        )
+    )
+
+    content_text, content_source, metadata = await extractor.extract_content_pure(
+        "https://example.com/article",
+        correlation_id="cid",
+        request_id=42,
+    )
+
+    assert content_text.startswith("# Title")
+    assert content_source == "markdown"
+    normalized_document = NormalizedSourceDocument.model_validate(
+        metadata["normalized_source_document"]
+    )
+    assert normalized_document.media[0].url == "https://cdn.example.com/chart.png"
+    assert normalized_document.media[0].alt_text == "Quarterly revenue chart"
+    assert len(normalized_document.media) == 1
+    assert metadata["media_selection"]["selected_count"] == 1
+    assert metadata["media_selection"]["rejected_reasons"]["blocked_extension"] == 1
 
 
 @pytest.mark.asyncio

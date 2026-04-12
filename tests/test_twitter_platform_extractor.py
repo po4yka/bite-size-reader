@@ -183,6 +183,43 @@ async def test_force_tier_firecrawl_skips_playwright() -> None:
 
 
 @pytest.mark.asyncio
+async def test_auto_mode_runs_playwright_after_firecrawl_to_enrich_tweet_media() -> None:
+    extractor: Any = _make_platform_extractor(
+        cfg=_make_cfg(playwright_enabled=True, prefer_firecrawl=True),
+        crawl_result=SimpleNamespace(status="ok", content_markdown="unused", content_html=None),
+    )
+    coordinator: Any = extractor._coordinator
+    coordinator._firecrawl_extractor.extract = AsyncMock(
+        return_value=(True, "firecrawl body", "markdown")
+    )
+    coordinator._playwright_extractor.extract = AsyncMock(
+        return_value=(
+            "playwright body",
+            "twitter_graphql",
+            {
+                "tweet_media": [
+                    {
+                        "url": "https://pbs.twimg.com/media/chart.jpg",
+                        "alt_text": "Revenue chart",
+                        "tweet_id": "1",
+                        "tweet_order": 0,
+                    }
+                ]
+            },
+        )
+    )
+
+    result = await extractor.extract(_make_request(url_text="https://x.com/user/status/1"))
+
+    assert result.content_text == "playwright body"
+    assert result.images == ["https://pbs.twimg.com/media/chart.jpg"]
+    assert result.normalized_document is not None
+    assert result.normalized_document.media[0].alt_text == "Revenue chart"
+    coordinator._firecrawl_extractor.extract.assert_awaited_once()
+    coordinator._playwright_extractor.extract.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_firecrawl_accepts_short_tweet_content() -> None:
     crawl_result = SimpleNamespace(status="ok", content_markdown="Yes", content_html=None)
     request_repo = SimpleNamespace()
@@ -248,6 +285,8 @@ async def test_playwright_extracts_tweet_thread() -> None:
                 order=0,
                 text="hello world",
                 author_handle="user",
+                images=["https://pbs.twimg.com/media/chart.jpg"],
+                alt_texts=["Revenue chart"],
             ),
             TweetData(
                 tweet_id="2",
@@ -274,6 +313,8 @@ async def test_playwright_extracts_tweet_thread() -> None:
 
     assert content_source == "twitter_graphql"
     assert metadata["tweet_count"] == 2
+    assert metadata["tweet_media"][0]["url"] == "https://pbs.twimg.com/media/chart.jpg"
+    assert metadata["tweet_media"][0]["alt_text"] == "Revenue chart"
     assert "hello world" in content_text
 
 
@@ -292,6 +333,10 @@ async def test_playwright_extracts_article() -> None:
                     "author": "Author",
                     "authorHandle": "author",
                     "content": "Body text",
+                    "images": [
+                        "https://cdn.example.com/hero.jpg",
+                        "https://cdn.example.com/logo.svg",
+                    ],
                     "finalUrl": "https://x.com/i/article/42",
                     "canonicalUrl": "https://x.com/i/article/42",
                 }
@@ -314,7 +359,54 @@ async def test_playwright_extracts_article() -> None:
 
     assert content_source == "twitter_article"
     assert metadata["title"] == "Article title"
+    assert metadata["article_images"] == ["https://cdn.example.com/hero.jpg"]
     assert "Body text" in content_text
+
+
+@pytest.mark.asyncio
+async def test_playwright_includes_quoted_post_media_in_same_source_item() -> None:
+    extractor = TwitterPlaywrightExtractor(
+        cfg=_make_cfg(playwright_enabled=True), request_repo=MagicMock()
+    )
+    result = ExtractionResult(
+        url="https://x.com/user/status/1",
+        tweets=[
+            TweetData(
+                tweet_id="1",
+                author="User",
+                order=0,
+                text="commentary",
+                author_handle="user",
+                quote_tweet=TweetData(
+                    tweet_id="9",
+                    author="Quoted",
+                    order=0,
+                    text="quoted body",
+                    author_handle="quoted",
+                    images=["https://pbs.twimg.com/media/quoted.jpg"],
+                    alt_texts=["Quoted slide"],
+                ),
+            )
+        ],
+    )
+
+    with patch(
+        "app.adapters.twitter.playwright_extractor.extract_tweet",
+        new=AsyncMock(return_value=result),
+    ):
+        _content_text, _content_source, metadata = await extractor.extract(
+            url_text="https://x.com/user/status/1",
+            tweet_id="1",
+            is_article=False,
+            correlation_id="cid",
+            metadata={},
+            timeout_ms=15000,
+        )
+
+    assert metadata["quoted_post_media_policy"] == "included_with_role_annotation"
+    assert metadata["quoted_post_media_included"] is True
+    assert metadata["tweet_media"][0]["from_quoted_post"] is True
+    assert metadata["tweet_media"][0]["quoted_by_tweet_id"] == "1"
 
 
 def test_playwright_detects_article_redirect_from_single_url_tweet() -> None:

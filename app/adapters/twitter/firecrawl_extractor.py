@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.adapters.content.article_media import extract_firecrawl_image_assets
 from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.twitter.article_quality import is_low_quality_article_content
 from app.core.async_utils import raise_if_cancelled
@@ -127,6 +128,11 @@ class TwitterFirecrawlExtractor:
                     return False, "", "none"
 
                 metadata["extraction_method"] = "firecrawl"
+                media_assets, media_selection = extract_firecrawl_image_assets(crawl)
+                if media_selection["candidate_count"] > 0:
+                    metadata["media_selection"] = media_selection
+                if media_assets:
+                    metadata["article_images"] = [asset.url for asset in media_assets if asset.url]
                 if is_article:
                     metadata["article_extraction_stage"] = "firecrawl"
                 logger.info(

@@ -14,7 +14,11 @@ from app.adapters.twitter.article_link_resolver import (
     TwitterArticleLinkResolution,
     resolve_twitter_article_link,
 )
-from app.application.dto.aggregation import NormalizedSourceDocument
+from app.application.dto.aggregation import (
+    NormalizedSourceDocument,
+    SourceMediaAsset,
+    SourceMediaKind,
+)
 from app.core.lang import detect_language
 from app.core.logging_utils import get_logger
 from app.core.url_utils import (
@@ -135,7 +139,12 @@ class TwitterExtractionCoordinator:
             )
 
         should_try_playwright = use_playwright_tier and (
-            self._tier_policy.force_tier() == "playwright" or not firecrawl_ok
+            self._tier_policy.force_tier() == "playwright"
+            or not firecrawl_ok
+            or self._should_enrich_with_playwright_media(
+                is_article=is_article,
+                firecrawl_ok=firecrawl_ok,
+            )
         )
         if should_try_playwright:
             try:
@@ -196,12 +205,14 @@ class TwitterExtractionCoordinator:
                 "article_resolution_reason": metadata.get("article_resolution_reason"),
             },
         )
+        media_assets = self._build_media_assets(metadata)
         normalized_document = NormalizedSourceDocument.from_extracted_content(
             source_item=source_item,
             text=content_text,
             title=metadata.get("title"),
             detected_language=detected,
             content_source=content_source,
+            media_assets=media_assets,
             metadata=metadata,
         )
         return PlatformExtractionResult(
@@ -211,7 +222,7 @@ class TwitterExtractionCoordinator:
             content_source=content_source,
             detected_lang=detected,
             title=metadata.get("title"),
-            images=[],
+            images=[asset.url for asset in media_assets if asset.url],
             metadata=metadata,
             source_item=source_item,
             normalized_document=normalized_document,
@@ -238,6 +249,69 @@ class TwitterExtractionCoordinator:
             "article_extraction_stage": None,
             "tier_outcomes": {"firecrawl": "skipped", "playwright": "skipped"},
         }
+
+    def _should_enrich_with_playwright_media(
+        self,
+        *,
+        is_article: bool,
+        firecrawl_ok: bool,
+    ) -> bool:
+        if self._tier_policy.force_tier() == "firecrawl":
+            return False
+        return firecrawl_ok and not is_article
+
+    def _build_media_assets(self, metadata: dict[str, Any]) -> list[SourceMediaAsset]:
+        tweet_media = metadata.get("tweet_media")
+        if isinstance(tweet_media, list):
+            assets = self._build_tweet_media_assets(tweet_media)
+            if assets:
+                return assets
+
+        article_images = metadata.get("article_images")
+        if isinstance(article_images, list):
+            return [
+                SourceMediaAsset(
+                    kind=SourceMediaKind.IMAGE,
+                    url=image_url,
+                    position=index,
+                    metadata={"platform": "twitter", "source": "article_image"},
+                )
+                for index, image_url in enumerate(article_images)
+                if isinstance(image_url, str) and image_url.strip()
+            ]
+        return []
+
+    def _build_tweet_media_assets(
+        self,
+        tweet_media: list[Any],
+    ) -> list[SourceMediaAsset]:
+        assets: list[SourceMediaAsset] = []
+        seen_urls: set[str] = set()
+        for item in tweet_media:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("url") or "").strip()
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            assets.append(
+                SourceMediaAsset(
+                    kind=SourceMediaKind.IMAGE,
+                    url=url,
+                    alt_text=str(item.get("alt_text") or "").strip() or None,
+                    position=len(assets),
+                    metadata={
+                        "platform": "twitter",
+                        "tweet_id": item.get("tweet_id"),
+                        "tweet_author_handle": item.get("tweet_author_handle"),
+                        "tweet_order": item.get("tweet_order"),
+                        "media_index": item.get("media_index"),
+                        "from_quoted_post": bool(item.get("from_quoted_post")),
+                        "quoted_by_tweet_id": item.get("quoted_by_tweet_id"),
+                    },
+                )
+            )
+        return assets
 
     async def _handle_empty_output(
         self,

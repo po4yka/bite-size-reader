@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 from app.adapters.twitter.article_quality import is_low_quality_article_content
 from app.adapters.twitter.playwright_client import extract_tweet, resolve_tco_url, scrape_article
@@ -26,9 +27,13 @@ from app.observability.failure_observability import (
 )
 from app.observability.metrics import record_twitter_article_extraction
 
+if TYPE_CHECKING:
+    from app.adapters.twitter.graphql_parser import TweetData
+
 logger = get_logger(__name__)
 _TCO_URL_RE = re.compile(r"https?://t\.co/[A-Za-z0-9]+", re.IGNORECASE)
 _MAX_TCO_EXPANSIONS = 20
+_LOW_SIGNAL_IMAGE_TERMS = ("logo", "icon", "avatar", "favicon", "sprite", "badge", "emoji")
 
 
 class TwitterPlaywrightExtractor:
@@ -132,11 +137,15 @@ class TwitterPlaywrightExtractor:
             return content_text, content_source, pw_metadata
 
         content_text = format_tweets_for_summary(result.tweets)
+        tweet_media = _collect_tweet_media(result.tweets)
         pw_metadata = {
             "tweet_count": len(result.tweets),
             "tweet_id": tweet_id or (result.tweets[0].tweet_id if result.tweets else None),
             "author_handle": result.tweets[0].author_handle if result.tweets else None,
             "is_thread": len(result.tweets) > 1,
+            "tweet_media": tweet_media,
+            "quoted_post_media_policy": "included_with_role_annotation",
+            "quoted_post_media_included": any(item.get("from_quoted_post") for item in tweet_media),
         }
         logger.info(
             "twitter_playwright_tweet_success",
@@ -242,6 +251,7 @@ class TwitterPlaywrightExtractor:
             "article_id": extract_twitter_article_id(url),
             "article_resolved_url": article_data.get("finalUrl"),
             "article_canonical_url": article_data.get("canonicalUrl"),
+            "article_images": _normalize_article_images(article_data.get("images")),
         }
         if article_data.get("selectorFallbackUsed"):
             logger.info(
@@ -353,3 +363,82 @@ class TwitterPlaywrightExtractor:
         )
         if getattr(tweet, "quote_tweet", None):
             TwitterPlaywrightExtractor.apply_tco_replacements(tweet.quote_tweet, replacements)
+
+
+def _collect_tweet_media(tweets: list[TweetData]) -> list[dict[str, Any]]:
+    media_items: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for tweet in tweets:
+        media_items.extend(
+            _collect_single_tweet_media(
+                tweet,
+                seen_urls=seen_urls,
+                from_quoted_post=False,
+                quoted_by_tweet_id=None,
+            )
+        )
+        if tweet.quote_tweet is not None:
+            media_items.extend(
+                _collect_single_tweet_media(
+                    tweet.quote_tweet,
+                    seen_urls=seen_urls,
+                    from_quoted_post=True,
+                    quoted_by_tweet_id=tweet.tweet_id,
+                )
+            )
+    return media_items
+
+
+def _collect_single_tweet_media(
+    tweet: TweetData,
+    *,
+    seen_urls: set[str],
+    from_quoted_post: bool,
+    quoted_by_tweet_id: str | None,
+) -> list[dict[str, Any]]:
+    media_items: list[dict[str, Any]] = []
+    alt_texts = list(tweet.alt_texts)
+    if len(alt_texts) < len(tweet.images):
+        alt_texts.extend("" for _ in range(len(tweet.images) - len(alt_texts)))
+    for index, url in enumerate(tweet.images):
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        media_items.append(
+            {
+                "url": url,
+                "alt_text": (alt_texts[index] or "").strip() or None,
+                "tweet_id": tweet.tweet_id,
+                "tweet_author_handle": tweet.author_handle,
+                "tweet_order": tweet.order,
+                "media_index": index,
+                "from_quoted_post": from_quoted_post,
+                "quoted_by_tweet_id": quoted_by_tweet_id,
+            }
+        )
+    return media_items
+
+
+def _normalize_article_images(raw_images: Any) -> list[str]:
+    if isinstance(raw_images, str):
+        candidates = [raw_images]
+    elif isinstance(raw_images, list):
+        candidates = [item for item in raw_images if isinstance(item, str)]
+    else:
+        return []
+
+    images: list[str] = []
+    seen: set[str] = set()
+    for image in candidates:
+        url = image.strip()
+        if not url or not url.startswith(("http://", "https://")) or url in seen:
+            continue
+        parsed = urlparse(url)
+        path_and_query = f"{parsed.path}?{parsed.query}".lower()
+        if parsed.path.lower().endswith((".svg", ".ico")):
+            continue
+        if any(term in path_and_query for term in _LOW_SIGNAL_IMAGE_TERMS):
+            continue
+        seen.add(url)
+        images.append(url)
+    return images[:5]

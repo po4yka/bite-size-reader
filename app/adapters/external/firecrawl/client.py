@@ -91,7 +91,7 @@ class FirecrawlClientConfig:
     include_html_format: bool = True
     include_links_format: bool = False
     include_summary_format: bool = False
-    include_images_format: bool = False
+    include_images_format: bool = True
     # Screenshot options
     enable_screenshot_format: bool = False
     screenshot_full_page: bool = True

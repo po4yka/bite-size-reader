@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.content.article_media import extract_firecrawl_image_assets
 from app.adapters.content.content_extractor_crawl import ContentExtractorCrawlMixin
 from app.adapters.content.content_extractor_requests import ContentExtractorRequestsMixin
 from app.adapters.content.platform_extraction import (
@@ -280,6 +281,10 @@ class ContentExtractor(
         if crawl.metadata_json:
             metadata["firecrawl_metadata"] = crawl.metadata_json
 
+        media_assets, media_selection = extract_firecrawl_image_assets(crawl)
+        if media_selection["candidate_count"] > 0:
+            metadata["media_selection"] = media_selection
+
         source_item = SourceItem.create(
             kind=SourceKind.WEB_ARTICLE,
             original_value=url,
@@ -294,6 +299,7 @@ class ContentExtractor(
             else None,
             detected_language=detect_language(content_text or ""),
             content_source=content_source,
+            media_assets=media_assets,
             metadata=metadata,
         )
         metadata["source_item"] = source_item.to_dict()
