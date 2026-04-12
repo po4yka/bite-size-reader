@@ -111,6 +111,10 @@ def test_create_mcp_server_registers_expected_tools_and_resources(
     mcp = server.create_mcp_server()
 
     assert set(mcp.registered_tools) == {
+        "create_aggregation_bundle",
+        "get_aggregation_bundle",
+        "list_aggregation_bundles",
+        "check_source_supported",
         "search_articles",
         "get_article",
         "list_articles",
@@ -130,6 +134,7 @@ def test_create_mcp_server_registers_expected_tools_and_resources(
         "chroma_sync_gap",
     }
     assert set(mcp.registered_resources) == {
+        "bsr://aggregations/recent",
         "bsr://articles/recent",
         "bsr://articles/favorites",
         "bsr://articles/unread",

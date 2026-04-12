@@ -20,6 +20,19 @@ from app.core.time_utils import UTC
 
 logger = get_logger(__name__)
 
+_CLIENT_TYPE_PREFIXES: tuple[tuple[str, str], ...] = (
+    ("cli", "cli"),
+    ("mcp", "mcp"),
+    ("automation", "automation"),
+    ("web", "web"),
+    ("mobile", "mobile"),
+    ("android", "mobile"),
+    ("ios", "mobile"),
+    ("admin", "admin"),
+    ("test", "test"),
+)
+_SELF_SERVICE_SECRET_CLIENT_TYPES = frozenset({"cli", "mcp", "automation"})
+
 
 def _load_secret_key() -> str:
     """Load and validate the JWT secret key."""
@@ -231,3 +244,36 @@ def validate_client_id(client_id: str | None) -> None:
         raise AuthorizationError("Client application not authorized. Please contact administrator.")
 
     return
+
+
+def resolve_client_type(client_id: str | None) -> str:
+    """Return a coarse client type inferred from the client ID."""
+    if not client_id:
+        return "unknown"
+
+    normalized = client_id.lower()
+    if normalized == "webapp":
+        return "web"
+
+    if normalized.count(".") >= 2 and all(
+        part.isidentifier() or part.isalnum() for part in normalized.split(".")
+    ):
+        return "mobile"
+
+    for prefix, client_type in _CLIENT_TYPE_PREFIXES:
+        if normalized == prefix:
+            return client_type
+        if any(normalized.startswith(f"{prefix}{separator}") for separator in ("-", "_", ".")):
+            return client_type
+
+    return "unknown"
+
+
+def is_self_service_secret_client(client_id: str | None) -> bool:
+    """Return whether a client ID is eligible for self-service secret management."""
+    return resolve_client_type(client_id) in _SELF_SERVICE_SECRET_CLIENT_TYPES
+
+
+def supported_self_service_secret_client_types() -> tuple[str, ...]:
+    """Return the supported self-service secret client types."""
+    return tuple(sorted(_SELF_SERVICE_SECRET_CLIENT_TYPES))

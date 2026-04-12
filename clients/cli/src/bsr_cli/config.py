@@ -7,7 +7,6 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
-import tomli_w
 from bsr_cli.exceptions import ConfigError
 
 
@@ -58,13 +57,27 @@ def load_config() -> BSRConfig:
     )
 
 
+def _serialize_config_toml(data: dict[str, dict[str, object]]) -> str:
+    lines: list[str] = []
+    for section, values in data.items():
+        lines.append(f"[{section}]")
+        for key, value in values.items():
+            if isinstance(value, str):
+                escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+                lines.append(f'{key} = "{escaped}"')
+            else:
+                lines.append(f"{key} = {value}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def save_config(config: BSRConfig) -> None:
     """Save config to TOML file with secure permissions."""
     config_dir = get_config_dir()
     config_dir.mkdir(parents=True, exist_ok=True)
 
     path = get_config_path()
-    data = {
+    data: dict[str, dict[str, object]] = {
         "server": {"url": config.server_url},
         "auth": {
             "client_id": config.client_id,
@@ -76,7 +89,12 @@ def save_config(config: BSRConfig) -> None:
     }
 
     with open(path, "wb") as f:
-        tomli_w.dump(data, f)
+        try:
+            import tomli_w
+        except ModuleNotFoundError:
+            f.write(_serialize_config_toml(data).encode("utf-8"))
+        else:
+            tomli_w.dump(data, f)
 
     # Secure file permissions (owner read/write only)
     os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)

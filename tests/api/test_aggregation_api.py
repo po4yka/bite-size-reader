@@ -129,6 +129,7 @@ def test_create_aggregation_bundle_endpoint_returns_session_and_items(client, db
     assert payload["success"] is True
     assert payload["data"]["session"]["sessionId"] == 77
     assert payload["data"]["session"]["sourceType"] == "mixed"
+    assert payload["data"]["session"]["progress"]["completionPercent"] == 100
     assert payload["data"]["aggregation"]["overview"] == "Two-source synthesis"
     assert [item["sourceKind"] for item in payload["data"]["items"]] == [
         "web_article",
@@ -252,6 +253,12 @@ def test_get_aggregation_bundle_endpoint_returns_persisted_session(client, db, u
     asyncio.run(
         repo.async_update_aggregation_session_status(
             session_id,
+            status=AggregationSessionStatus.PROCESSING,
+        )
+    )
+    asyncio.run(
+        repo.async_update_aggregation_session_status(
+            session_id,
             status=AggregationSessionStatus.COMPLETED,
         )
     )
@@ -270,11 +277,101 @@ def test_get_aggregation_bundle_endpoint_returns_persisted_session(client, db, u
     assert payload["success"] is True
     assert payload["data"]["session"]["id"] == session_id
     assert payload["data"]["session"]["correlation_id"] == "cid-agg-fetch"
+    assert payload["data"]["session"]["started_at"] is not None
+    assert payload["data"]["session"]["completed_at"] is not None
+    assert payload["data"]["session"]["progress"]["completionPercent"] == 0
     assert payload["data"]["aggregation"]["overview"] == "Persisted synthesis output"
     assert [item["source_kind"] for item in payload["data"]["items"]] == [
         "web_article",
         "x_post",
     ]
+
+
+def test_list_aggregation_bundles_endpoint_returns_only_authenticated_user_sessions(
+    client, db, user_factory
+):
+    allowed_ids = Config.get_allowed_user_ids()
+    primary_user_id = int(allowed_ids[0]) if allowed_ids else 424242
+    secondary_user_id = primary_user_id + 1
+    user_factory(username="aggregation_list_primary", telegram_user_id=primary_user_id)
+    user_factory(username="aggregation_list_secondary", telegram_user_id=secondary_user_id)
+
+    repo = build_aggregation_session_repository(db)
+    first_session_id = asyncio.run(
+        repo.async_create_aggregation_session(
+            user_id=primary_user_id,
+            correlation_id="cid-agg-list-1",
+            total_items=3,
+        )
+    )
+    asyncio.run(
+        repo.async_update_aggregation_session_counts(
+            first_session_id,
+            successful_count=2,
+            failed_count=1,
+            duplicate_count=0,
+        )
+    )
+    asyncio.run(
+        repo.async_update_aggregation_session_status(
+            first_session_id,
+            status=AggregationSessionStatus.PARTIAL,
+        )
+    )
+    asyncio.run(
+        repo.async_create_aggregation_session(
+            user_id=secondary_user_id,
+            correlation_id="cid-agg-list-2",
+            total_items=1,
+        )
+    )
+
+    runtime = getattr(client.app.state, "runtime", None)
+    client.app.state.runtime = SimpleNamespace(db=db)
+    try:
+        response = client.get(
+            "/v1/aggregations?limit=20&offset=0",
+            headers=_auth_headers(primary_user_id),
+        )
+    finally:
+        client.app.state.runtime = runtime
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert [session["id"] for session in payload["data"]["sessions"]] == [first_session_id]
+    assert payload["data"]["sessions"][0]["status"] == AggregationSessionStatus.PARTIAL.value
+    assert payload["data"]["sessions"][0]["started_at"] is not None
+    assert payload["data"]["sessions"][0]["completed_at"] is not None
+    assert payload["data"]["sessions"][0]["progress"]["completionPercent"] == 100
+    assert payload["meta"]["pagination"]["hasMore"] is False
+
+
+def test_create_aggregation_bundle_endpoint_rejects_invalid_source_kind_hint(
+    client, db, user_factory
+):
+    allowed_ids = Config.get_allowed_user_ids()
+    user_id = int(allowed_ids[0]) if allowed_ids else 424242
+    user_factory(username="aggregation_invalid_hint_user", telegram_user_id=user_id)
+
+    runtime = _set_runtime(client, db)
+    try:
+        response = client.post(
+            "/v1/aggregations",
+            headers=_auth_headers(user_id),
+            json={
+                "items": [
+                    {
+                        "url": "https://example.com/article",
+                        "source_kind_hint": "unknown_kind",
+                    }
+                ],
+            },
+        )
+    finally:
+        client.app.state.runtime = runtime
+
+    assert response.status_code == 422
 
 
 def test_create_aggregation_bundle_endpoint_returns_404_when_rollout_disabled(

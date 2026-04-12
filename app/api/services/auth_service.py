@@ -7,6 +7,10 @@ from datetime import datetime
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import AuthorizationError, ResourceNotFoundError
 from app.api.models.auth import TelegramLinkStatus
+from app.api.routers.auth.tokens import (
+    is_self_service_secret_client,
+    supported_self_service_secret_client_types,
+)
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 
@@ -56,6 +60,26 @@ class AuthService:
         user_record = await user_repo.async_get_user_by_telegram_id(user["user_id"])
         if not user_record or not user_record.get("is_owner"):
             raise AuthorizationError("Owner permissions required")
+        return user_record
+
+    @staticmethod
+    async def require_secret_key_manager(
+        user: dict,
+        *,
+        target_user_id: int,
+        client_id: str,
+    ) -> dict:
+        """Allow owners broad access and users self-service on allowed client types only."""
+        user_record = await AuthService.ensure_user(user["user_id"])
+        if user_record.get("is_owner"):
+            return user_record
+        if int(user_record["telegram_user_id"]) != int(target_user_id):
+            raise AuthorizationError("You can only manage your own client secrets")
+        if not is_self_service_secret_client(client_id):
+            allowed_types = ", ".join(supported_self_service_secret_client_types())
+            raise AuthorizationError(
+                f"Self-service secret management is only available for {allowed_types} clients"
+            )
         return user_record
 
     @staticmethod

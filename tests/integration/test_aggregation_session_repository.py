@@ -46,6 +46,10 @@ async def test_aggregation_session_repository_persists_duplicates_and_item_resul
             total_items=3,
             bundle_metadata={"submitted_via": "test"},
         )
+        await repo.async_update_aggregation_session_status(
+            session_id,
+            status=AggregationSessionStatus.PROCESSING,
+        )
 
         first = SourceItem.create(
             kind=SourceKind.WEB_ARTICLE,
@@ -120,8 +124,13 @@ async def test_aggregation_session_repository_persists_duplicates_and_item_resul
         assert session is not None
         assert session["duplicate_count"] == 1
         assert session["failed_count"] == 1
+        assert session["progress_percent"] == 100
         assert session["status"] == AggregationSessionStatus.PARTIAL.value
         assert session["bundle_metadata_json"]["submitted_via"] == "test"
+        assert session["queued_at"] is not None
+        assert session["started_at"] is not None
+        assert session["completed_at"] is not None
+        assert session["last_progress_at"] is not None
         assert session["aggregation_output_json"]["source_type"] == "mixed"
 
         updated_items = await repo.async_get_aggregation_session_items(session_id)

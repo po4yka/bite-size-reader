@@ -362,6 +362,55 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
 
         return await self._execute(_create, operation_name="create_client_secret")
 
+    async def async_replace_active_client_secret(
+        self,
+        *,
+        user_id: int,
+        client_id: str,
+        secret_hash: str,
+        secret_salt: str,
+        status: str = "active",
+        label: str | None = None,
+        description: str | None = None,
+        expires_at: dt.datetime | None = None,
+    ) -> int:
+        """Atomically revoke active secrets for a client and create a replacement."""
+
+        def _replace() -> int:
+            user = User.select().where(User.telegram_user_id == user_id).first()
+            if not user:
+                raise ValueError(f"User {user_id} not found")
+
+            active = ClientSecret.select().where(
+                (ClientSecret.user == user)
+                & (ClientSecret.client_id == client_id)
+                & (ClientSecret.status == "active")
+            )
+            for record in active:
+                record.status = "revoked"
+                record.failed_attempts = 0
+                record.locked_until = None
+                record.save()
+
+            new_record = ClientSecret.create(
+                user=user,
+                client_id=client_id,
+                secret_hash=secret_hash,
+                secret_salt=secret_salt,
+                status=status,
+                label=label,
+                description=description,
+                expires_at=expires_at,
+                failed_attempts=0,
+                locked_until=None,
+            )
+            return new_record.id
+
+        return await self._execute_transaction(
+            _replace,
+            operation_name="replace_active_client_secret",
+        )
+
     async def async_update_client_secret(
         self,
         key_id: int,
@@ -379,33 +428,6 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
             record.save()
 
         await self._execute(_update, operation_name="update_client_secret")
-
-    async def async_revoke_active_secrets(self, user_id: int, client_id: str) -> int:
-        """Revoke all active secrets for a user/client pair.
-
-        Returns:
-            Number of secrets revoked.
-        """
-
-        def _revoke() -> int:
-            user = User.select().where(User.telegram_user_id == user_id).first()
-            if not user:
-                return 0
-            count = 0
-            active = ClientSecret.select().where(
-                (ClientSecret.user == user)
-                & (ClientSecret.client_id == client_id)
-                & (ClientSecret.status == "active")
-            )
-            for record in active:
-                record.status = "revoked"
-                record.failed_attempts = 0
-                record.locked_until = None
-                record.save()
-                count += 1
-            return count
-
-        return await self._execute(_revoke, operation_name="revoke_active_secrets")
 
     async def async_list_client_secrets(
         self,

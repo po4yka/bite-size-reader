@@ -953,7 +953,7 @@ sequenceDiagram
 
 - Envelopes only: `success`, `data` or `error`, `meta{timestamp,version}`, `correlation_id` echoed in headers and errors.
 - Errors standardized (401/403/404/409/410/422/429/500) with retry hints where applicable.
-- Auth: JWT via `POST /v1/auth/telegram-login` (Telegram login verification) and `POST /v1/auth/refresh`. Optional client gating via `ALLOWED_CLIENT_IDS`.
+- Auth: JWT via `POST /v1/auth/telegram-login` (Telegram login verification), `POST /v1/auth/secret-login` (client-secret exchange), and `POST /v1/auth/refresh`. Optional client gating via `ALLOWED_CLIENT_IDS`. Secret-key management remains owner-capable for all client IDs, while non-owner self-service secret management is limited to `cli-*`, `mcp-*`, and `automation-*` style client IDs.
 
 ### Core endpoints
 

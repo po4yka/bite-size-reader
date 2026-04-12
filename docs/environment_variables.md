@@ -402,6 +402,13 @@ Controls which embedding backend generates vectors for semantic search.
 | `SECRET_LOGIN_LOCKOUT_MINUTES` | `15` | Lockout duration |
 | `SECRET_LOGIN_PEPPER` | _(none)_ | Optional pepper for secret hashing |
 
+**External client ID guidance**:
+
+- Use stable, exact client IDs and list them explicitly in `ALLOWED_CLIENT_IDS` for public deployments.
+- Recommended prefixes are `cli-...`, `mcp-...`, `automation-...`, `web-...`, and `mobile-...`.
+- Non-owner self-service secret creation, rotation, revoke, and listing are intentionally limited to `cli`, `mcp`, and `automation` client types.
+- Mobile and web client secrets should remain owner-issued unless the provisioning model is expanded later.
+
 ## Channel Digest
 
 | Variable | Default | Description |

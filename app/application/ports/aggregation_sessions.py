@@ -34,6 +34,24 @@ class AggregationSessionRepositoryPort(Protocol):
     ) -> dict[str, Any] | None:
         """Return a stored aggregation session by correlation ID."""
 
+    async def async_get_user_aggregation_sessions(
+        self,
+        user_id: int,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+        status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return stored aggregation sessions for one user."""
+
+    async def async_count_user_aggregation_sessions(
+        self,
+        user_id: int,
+        *,
+        status: str | None = None,
+    ) -> int:
+        """Return the total aggregation-session count for one user."""
+
     async def async_add_aggregation_session_item(
         self,
         session_id: int,

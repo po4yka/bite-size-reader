@@ -1,7 +1,6 @@
-"""
-Pydantic models for API request validation.
-"""
+"""Pydantic models for API request validation."""
 
+import json
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
@@ -260,7 +259,20 @@ class AggregationBundleItemRequest(BaseModel):
 
     type: Literal["url"] = "url"
     url: HttpUrl = Field(..., max_length=2048)
-    source_kind_hint: str | None = None
+    source_kind_hint: (
+        Literal[
+            "x_post",
+            "x_article",
+            "threads_post",
+            "instagram_post",
+            "instagram_carousel",
+            "instagram_reel",
+            "web_article",
+            "telegram_post",
+            "youtube_video",
+        ]
+        | None
+    ) = None
     metadata: dict[str, Any] | None = None
 
     @field_validator("url")
@@ -271,6 +283,16 @@ class AggregationBundleItemRequest(BaseModel):
             raise ValueError("URL must start with http:// or https://")
         return value
 
+    @field_validator("metadata")
+    @classmethod
+    def validate_item_metadata_size(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if value is None:
+            return value
+        payload_size = len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+        if payload_size > 2048:
+            raise ValueError("Item metadata must be 2048 bytes or smaller")
+        return value
+
 
 class CreateAggregationBundleRequest(BaseModel):
     """Request body for bundle aggregation outside Telegram."""
@@ -278,6 +300,16 @@ class CreateAggregationBundleRequest(BaseModel):
     items: list[AggregationBundleItemRequest] = Field(min_length=1, max_length=25)
     lang_preference: Literal["auto", "en", "ru"] = "auto"
     metadata: dict[str, Any] | None = None
+
+    @field_validator("metadata")
+    @classmethod
+    def validate_bundle_metadata_size(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if value is None:
+            return value
+        payload_size = len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+        if payload_size > 4096:
+            raise ValueError("Bundle metadata must be 4096 bytes or smaller")
+        return value
 
 
 class CreateRuleRequest(BaseModel):

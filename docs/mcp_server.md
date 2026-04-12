@@ -1,6 +1,8 @@
 # MCP Server
 
-Bite-Size Reader exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that allows external AI agents (OpenClaw, Claude Desktop, etc.) to search, retrieve, and explore stored article summaries.
+Bite-Size Reader exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that allows external AI agents (OpenClaw, Claude Desktop, etc.) to search, retrieve, and explore stored article summaries, plus run local trusted aggregation bundles when the server is scoped to a single user.
+
+Hosted public multi-user MCP is not implemented yet. The current server is intended for local stdio clients or other trusted deployments where startup scoping is acceptable.
 
 ## Configuration
 
@@ -10,7 +12,7 @@ Bite-Size Reader exposes an [MCP (Model Context Protocol)](https://modelcontextp
 | `MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `sse` |
 | `MCP_HOST` | `127.0.0.1` | SSE bind address |
 | `MCP_PORT` | `8200` | SSE port |
-| `MCP_USER_ID` | _(none)_ | Scope MCP reads to one user ID (recommended for SSE) |
+| `MCP_USER_ID` | _(none)_ | Startup user scope for local stdio/SSE deployments (recommended for SSE) |
 | `MCP_ALLOW_REMOTE_SSE` | `false` | Allow binding SSE to non-loopback hosts (also disables DNS rebinding protection) |
 | `MCP_ALLOW_UNSCOPED_SSE` | `false` | Allow SSE without `MCP_USER_ID` |
 
@@ -35,6 +37,19 @@ SSE safety defaults:
 - Binds to loopback (`127.0.0.1`) unless you explicitly enable remote bind.
 - Requires user scoping (`MCP_USER_ID` / `--user-id`) unless you explicitly allow unscoped SSE.
 - DNS rebinding protection is enabled by default; when `allow_remote_sse` is set, it is disabled so Docker-internal hostnames (e.g. `bsr-mcp:8200`) are accepted.
+
+Aggregation safety defaults:
+
+- Aggregation MCP tools require a scoped user (`MCP_USER_ID` / `--user-id`).
+- Aggregation bundle creation is intended for local stdio use or other trusted single-user deployments.
+- If the MCP process only has read-only database access, aggregation creation will fail even though read tools still work.
+
+User scoping modes:
+
+- Local mode keeps using the startup scope from `MCP_USER_ID` / `--user-id`.
+- MCP internals now support a request-scoped user override, which is the seam intended for a future hosted multi-user deployment.
+- Public hosted auth is still incomplete: bearer-token validation, trusted gateway forwarding, and transport-to-request identity wiring are not implemented yet.
+- Until that lands, treat SSE as local/trusted infrastructure and rely on startup scoping rather than public internet exposure.
 
 ## Docker Deployment (SSE)
 
@@ -70,7 +85,7 @@ mcp:
 Key design decisions:
 
 - **Opt-in profile** (`profiles: ["mcp"]`) -- keeps MCP disabled during the default compose startup path.
-- **Read-only data mount** (`./data:/data:ro`) -- the MCP server only reads the SQLite database.
+- **Read-only data mount** (`./data:/data:ro`) -- this Docker profile is for read tools/resources only; aggregation write tools need a writable database path in a trusted deployment.
 - **Explicit user scoping** (`MCP_USER_ID`) -- required for SSE unless you also opt into `MCP_ALLOW_UNSCOPED_SSE=true`.
 - **`MCP_ALLOW_REMOTE_SSE=true`** -- required because `0.0.0.0` is non-loopback inside Docker. This also disables the MCP SDK's DNS rebinding protection so that Docker-internal hostnames (`bsr-mcp`, `bsr-mcp:8200`) are accepted in the `Host` header.
 - **Loopback port binding** (`127.0.0.1:8200`) -- prevents direct external access from the host network.
@@ -92,10 +107,14 @@ Example mcporter config:
 }
 ```
 
-## Tools (17)
+## Tools (21)
 
 | Tool | Description |
 | ------ | ------------- |
+| `create_aggregation_bundle(items, lang_preference, metadata)` | Create and run a mixed-source aggregation bundle for the scoped MCP user |
+| `get_aggregation_bundle(session_id)` | Get one persisted aggregation bundle by session ID |
+| `list_aggregation_bundles(limit, offset, status)` | List aggregation bundles for the scoped MCP user |
+| `check_source_supported(url, source_kind_hint)` | Classify whether a URL fits the public aggregation source contract |
 | `search_articles(query, limit)` | Full-text search across titles, summaries, tags, entities |
 | `get_article(summary_id)` | Full summary details by ID |
 | `list_articles(limit, offset, is_favorited, lang, tag)` | Paginated article list with filters |
@@ -114,10 +133,11 @@ Example mcporter config:
 | `chroma_index_stats(scan_limit)` | Index coverage stats between SQLite summaries and ChromaDB |
 | `chroma_sync_gap(max_scan, sample_size)` | Report sync gaps between SQLite summaries and ChromaDB index |
 
-## Resources (13)
+## Resources (14)
 
 | URI | Description |
 | ----- | ------------- |
+| `bsr://aggregations/recent` | 10 most recent aggregation bundles for the scoped MCP user |
 | `bsr://articles/recent` | 10 most recent article summaries |
 | `bsr://articles/favorites` | All favorited summaries |
 | `bsr://articles/unread` | Up to 20 unread summaries |
@@ -141,4 +161,4 @@ Example mcporter config:
 
 Source: `app/mcp/server.py`
 
-The server uses [FastMCP](https://github.com/modelcontextprotocol/python-sdk) and connects to the same SQLite database as the main bot. Database is initialized once at startup via Peewee ORM.
+The server uses [FastMCP](https://github.com/modelcontextprotocol/python-sdk) and connects to the same SQLite database as the main bot. Read tools use the existing read-scoped MCP runtime; aggregation tools lazily initialize the normal API runtime so they can reuse the standard extraction and synthesis workflow.

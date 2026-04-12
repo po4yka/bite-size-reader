@@ -1,5 +1,8 @@
 """Tests for CLI commands using Click's test runner."""
 
+import json
+from unittest.mock import MagicMock, patch
+
 from bsr_cli.main import cli
 from click.testing import CliRunner
 
@@ -9,6 +12,8 @@ class TestCLIHelp:
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
+        assert "aggregate" in result.output
+        assert "aggregation" in result.output
         assert "save" in result.output
         assert "list" in result.output
         assert "search" in result.output
@@ -32,6 +37,21 @@ class TestCLIHelp:
         runner = CliRunner()
         result = runner.invoke(cli, ["save"])
         assert result.exit_code != 0
+
+    def test_aggregate_help(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["aggregate", "--help"])
+        assert result.exit_code == 0
+        assert "--file" in result.output
+        assert "--lang" in result.output
+        assert "--hint" in result.output
+
+    def test_aggregation_help(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["aggregation", "--help"])
+        assert result.exit_code == 0
+        assert "get" in result.output
+        assert "list" in result.output
 
     def test_list_help(self):
         runner = CliRunner()
@@ -78,3 +98,72 @@ class TestCLIHelp:
         runner = CliRunner()
         result = runner.invoke(cli, ["config"], input="https://test.com\n")
         assert result.exit_code == 0
+
+
+class TestAggregationCommands:
+    def test_aggregate_uses_file_and_hints(self, tmp_path):
+        source_file = tmp_path / "sources.txt"
+        source_file.write_text(
+            "https://one.example\n# comment\nhttps://two.example\n", encoding="utf-8"
+        )
+
+        client = MagicMock()
+        client.create_aggregation_bundle.return_value = {
+            "session": {"id": 7, "status": "processing"},
+            "items": [],
+            "aggregation": None,
+        }
+
+        runner = CliRunner()
+        with patch("bsr_cli.commands.aggregation.get_client", return_value=client):
+            result = runner.invoke(
+                cli,
+                [
+                    "aggregate",
+                    "--file",
+                    str(source_file),
+                    "--lang",
+                    "en",
+                    "--hint",
+                    "x_post",
+                    "--hint",
+                    "youtube_video",
+                ],
+            )
+
+        assert result.exit_code == 0
+        client.create_aggregation_bundle.assert_called_once_with(
+            [
+                {"type": "url", "url": "https://one.example", "source_kind_hint": "x_post"},
+                {
+                    "type": "url",
+                    "url": "https://two.example",
+                    "source_kind_hint": "youtube_video",
+                },
+            ],
+            lang_preference="en",
+        )
+
+    def test_aggregate_honors_global_json(self):
+        client = MagicMock()
+        client.create_aggregation_bundle.return_value = {
+            "session": {"id": 9, "status": "completed"},
+            "items": [],
+            "aggregation": {"tldr": "Short"},
+        }
+
+        runner = CliRunner()
+        with patch("bsr_cli.commands.aggregation.get_client", return_value=client):
+            result = runner.invoke(cli, ["--json", "aggregate", "https://example.com"])
+
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert parsed["session"]["id"] == 9
+        assert parsed["aggregation"]["tldr"] == "Short"
+
+    def test_aggregate_rejects_missing_urls(self):
+        runner = CliRunner()
+        with patch("bsr_cli.commands.aggregation.get_client", return_value=MagicMock()):
+            result = runner.invoke(cli, ["aggregate"])
+
+        assert result.exit_code != 0

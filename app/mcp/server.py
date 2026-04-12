@@ -7,6 +7,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
+from app.mcp.aggregation_service import AggregationMcpService
 from app.mcp.article_service import ArticleReadService
 from app.mcp.catalog_service import CatalogReadService
 from app.mcp.context import McpServerContext
@@ -34,24 +35,28 @@ def create_mcp_server(context: McpServerContext | None = None) -> FastMCP:
         "bite-size-reader",
         instructions=(
             "Bite-Size Reader is a personal knowledge base of web article summaries. "
-            "Use the tools below to search, retrieve, and explore stored articles. "
+            "Use the tools below to search, retrieve, explore stored articles, and "
+            "run local trusted aggregation bundles for the effective scoped user. "
             "Articles are summarised with key ideas, topic tags, entities, "
             "reading-time estimates, and more."
         ),
     )
 
+    aggregation_service = AggregationMcpService(server_context)
     article_service = ArticleReadService(server_context)
     catalog_service = CatalogReadService(server_context)
     semantic_service = SemanticSearchService(server_context, article_service)
 
     register_tools(
         mcp,
+        aggregation_service=aggregation_service,
         article_service=article_service,
         catalog_service=catalog_service,
         semantic_service=semantic_service,
     )
     register_resources(
         mcp,
+        aggregation_service=aggregation_service,
         article_service=article_service,
         catalog_service=catalog_service,
         semantic_service=semantic_service,
@@ -75,7 +80,7 @@ def run_server(
     _DEFAULT_CONTEXT.set_user_scope(user_id)
     _DEFAULT_CONTEXT.init_runtime(db_path)
     logger.info(
-        "Starting Bite-Size Reader MCP server (transport=%s, user_scope=%s)",
+        "Starting Bite-Size Reader MCP server (transport=%s, startup_user_scope=%s)",
         transport,
         user_id if user_id is not None else "all",
     )
@@ -95,7 +100,7 @@ def run_server(
         raise ValueError(msg)
 
     if user_id is None:
-        logger.warning("MCP user scope is disabled; queries can access all users")
+        logger.warning("MCP startup user scope is disabled; queries can access all users")
 
     if transport == "sse":
         mcp.settings.host = host

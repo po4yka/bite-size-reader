@@ -151,6 +151,7 @@ async def test_multi_source_aggregation_agent_builds_fallback_synthesis_and_pers
 
         assert result.success is True
         assert isinstance(result.output, MultiSourceAggregationOutput)
+        assert result.output.status == "partial"
         assert result.output.source_type == "mixed"
         assert result.output.used_source_count == 2
         assert len(result.output.key_claims) >= 2
@@ -259,6 +260,7 @@ async def test_multi_source_aggregation_agent_uses_llm_output_when_available() -
 
         assert result.success is True
         assert result.output is not None
+        assert result.output.status == "completed"
         assert result.output.overview.startswith("The bundle combines reporting")
         assert result.output.key_claims[0].source_item_ids == [
             article_document.source_item_id,

@@ -78,6 +78,232 @@ def format_summary_detail(data: Any, json_mode: bool = False) -> None:
         click.echo(f"\nTLDR: {tldr}")
 
 
+def _pick(data: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    for key in keys:
+        if key in data:
+            value = data[key]
+            if value is not None and value != "":
+                return value
+    return default
+
+
+def _as_list(data: Any, *keys: str) -> list[Any]:
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        return []
+    for key in keys:
+        value = data.get(key)
+        if isinstance(value, list):
+            return value
+    return []
+
+
+def _format_count(value: Any) -> str:
+    return str(value) if value is not None else "?"
+
+
+def _format_failure(failure: Any) -> str | None:
+    if not isinstance(failure, dict):
+        return None
+    code = _pick(failure, "code", "failure_code")
+    message = _pick(failure, "message", "failure_message")
+    if code and message:
+        return f"{code}: {message}"
+    if code:
+        return str(code)
+    if message:
+        return str(message)
+    return None
+
+
+def format_aggregation_detail(data: Any, json_mode: bool = False) -> None:
+    """Format a single aggregation session with summary and item details."""
+    if json_mode:
+        format_json(data)
+        return
+
+    session = data.get("session") if isinstance(data, dict) else data
+    if not isinstance(session, dict):
+        session = {}
+
+    aggregation: dict[str, Any] = {}
+    if isinstance(data, dict):
+        aggregation = data.get("aggregation") or data.get("aggregation_output_json") or {}
+    if not isinstance(aggregation, dict):
+        aggregation = {}
+
+    items = _as_list(data, "items")
+
+    session_id = _pick(session, "sessionId", "id", "session_id")
+    status = _pick(session, "status", default="N/A")
+    correlation_id = _pick(session, "correlationId", "correlation_id")
+    source_type = _pick(session, "sourceType", "source_type")
+    total_items = _pick(session, "totalItems", "total_items", default=len(items) or None)
+    successful_count = _pick(session, "successfulCount", "successful_count")
+    failed_count = _pick(session, "failedCount", "failed_count")
+    duplicate_count = _pick(session, "duplicateCount", "duplicate_count")
+    created_at = _pick(session, "createdAt", "created_at")
+    queued_at = _pick(session, "queuedAt", "queued_at")
+    started_at = _pick(session, "startedAt", "started_at")
+    completed_at = _pick(session, "completedAt", "completed_at")
+    last_progress_at = _pick(session, "lastProgressAt", "last_progress_at")
+    updated_at = _pick(session, "updatedAt", "updated_at")
+    processing_time_ms = _pick(session, "processingTimeMs", "processing_time_ms")
+    failure_text = _format_failure(session.get("failure") if isinstance(session, dict) else None)
+    failure_code = _pick(session, "failureCode", "failure_code")
+    failure_message = _pick(session, "failureMessage", "failure_message")
+
+    click.echo("Aggregation Session")
+    click.echo(f"ID:       {session_id if session_id is not None else 'N/A'}")
+    click.echo(f"Status:   {status}")
+    if correlation_id:
+        click.echo(f"Correlation: {correlation_id}")
+    if source_type:
+        click.echo(f"Source Type: {source_type}")
+    click.echo(
+        "Counts:   "
+        f"{_format_count(total_items)} total, "
+        f"{_format_count(successful_count)} successful, "
+        f"{_format_count(failed_count)} failed, "
+        f"{_format_count(duplicate_count)} duplicates"
+    )
+    if queued_at:
+        click.echo(f"Queued:   {queued_at}")
+    if started_at:
+        click.echo(f"Started:  {started_at}")
+    if completed_at:
+        click.echo(f"Completed:{completed_at}")
+    if last_progress_at:
+        click.echo(f"Progress: {last_progress_at}")
+    if processing_time_ms is not None:
+        click.echo(f"Latency:  {processing_time_ms}ms")
+    if created_at:
+        click.echo(f"Created:  {created_at}")
+    if updated_at:
+        click.echo(f"Updated:  {updated_at}")
+    if failure_text or failure_code or failure_message:
+        failure_line = failure_text or "Unknown failure"
+        click.echo(f"Failure:  {failure_line}")
+
+    summary = _pick(aggregation, "tldr", "summary_250", "summary250")
+    long_summary = _pick(aggregation, "summary_1000", "summary1000")
+    overview = _pick(aggregation, "overview")
+    key_ideas = _as_list(aggregation, "key_ideas", "keyIdeas")
+    progress = session.get("progress") if isinstance(session, dict) else None
+
+    if summary or long_summary or overview or key_ideas:
+        click.echo("\nAggregation Output")
+
+    if overview:
+        click.echo(f"Overview: {overview}")
+    if summary:
+        click.echo(f"TLDR: {summary}")
+    if long_summary and long_summary != summary:
+        click.echo(f"\nSummary: {long_summary}")
+    if key_ideas:
+        click.echo("\nKey Ideas:")
+        for idea in key_ideas:
+            click.echo(f"  - {idea}")
+    if isinstance(progress, dict):
+        completion_percent = _pick(progress, "completionPercent", "completion_percent")
+        processed_items = _pick(progress, "processedItems", "processed_items")
+        if completion_percent is not None or processed_items is not None:
+            click.echo(
+                "\nProgress: "
+                f"{_format_count(processed_items)} processed, "
+                f"{_format_count(completion_percent)}%"
+            )
+
+    if items:
+        click.echo("\nItems:")
+        for item in items:
+            if not isinstance(item, dict):
+                click.echo(f"  - {item}")
+                continue
+            position = _pick(item, "position")
+            item_status = _pick(item, "status", default="unknown")
+            source_kind = _pick(item, "sourceKind", "source_kind")
+            source_value = _pick(
+                item,
+                "url",
+                "originalValue",
+                "original_value",
+                "normalizedValue",
+                "normalized_value",
+                "sourceItemId",
+                "source_item_id",
+            )
+            line = f"  - {item_status}"
+            if position is not None:
+                line = f"  - [{position}] {item_status}"
+            if source_kind:
+                line += f" ({source_kind})"
+            if source_value:
+                line += f": {source_value}"
+            item_failure = _format_failure(item.get("failure"))
+            if item_failure:
+                line += f" [{item_failure}]"
+            click.echo(line)
+
+
+def format_aggregation_list(data: Any, json_mode: bool = False) -> None:
+    """Format a list of aggregation sessions."""
+    if json_mode:
+        format_json(data)
+        return
+
+    sessions = _as_list(data, "sessions", "aggregations", "items")
+    if not sessions:
+        click.echo("No aggregation sessions found.")
+        return
+
+    try:
+        from rich.console import Console
+        from rich.table import Table
+
+        console = Console()
+        table = Table(title="Aggregation Sessions")
+        table.add_column("ID", style="dim", width=6)
+        table.add_column("Status", width=12)
+        table.add_column("Items", width=8)
+        table.add_column("Succ", width=6)
+        table.add_column("Fail", width=6)
+        table.add_column("Dup", width=6)
+        table.add_column("Created", width=20)
+
+        for session in sessions:
+            if not isinstance(session, dict):
+                table.add_row(str(session), "", "", "", "", "", "")
+                continue
+            table.add_row(
+                str(_pick(session, "sessionId", "id", "session_id", default="")),
+                str(_pick(session, "status", default="")),
+                _format_count(_pick(session, "totalItems", "total_items")),
+                _format_count(_pick(session, "successfulCount", "successful_count")),
+                _format_count(_pick(session, "failedCount", "failed_count")),
+                _format_count(_pick(session, "duplicateCount", "duplicate_count")),
+                str(_pick(session, "createdAt", "created_at", default=""))[:20],
+            )
+
+        console.print(table)
+    except ImportError:
+        for session in sessions:
+            if not isinstance(session, dict):
+                click.echo(f"  {session}")
+                continue
+            sid = _pick(session, "sessionId", "id", "session_id", default="?")
+            status = _pick(session, "status", default="?")
+            total = _format_count(_pick(session, "totalItems", "total_items"))
+            success = _format_count(_pick(session, "successfulCount", "successful_count"))
+            failed = _format_count(_pick(session, "failedCount", "failed_count"))
+            dup = _format_count(_pick(session, "duplicateCount", "duplicate_count"))
+            created = _pick(session, "createdAt", "created_at", default="?")
+            click.echo(
+                f"  {sid:>6}  {status:<12} items={total} succ={success} fail={failed} dup={dup}  {created}"
+            )
+
+
 def format_search_results(data: Any, json_mode: bool = False) -> None:
     """Format search results."""
     if json_mode:

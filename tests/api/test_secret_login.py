@@ -161,6 +161,109 @@ async def test_secret_key_management(tmp_path, monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("client_id", ["cli-client", "mcp-client", "automation-client"])
+async def test_self_service_secret_key_management_round_trip_for_supported_client_types(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    client_id: str,
+):
+    _configure_env(monkeypatch)
+    _db = _init_db(tmp_path)
+
+    user = User.create(telegram_user_id=222222222, username="regular-user", is_owner=False)
+    user_context = {"user_id": user.telegram_user_id, "client_id": client_id, "username": "regular"}
+
+    create_payload = SecretKeyCreateRequest(
+        user_id=user.telegram_user_id,
+        client_id=client_id,
+        label="self-service",
+        description="secondary key",
+        expires_at=None,
+        secret="self-service-secret-strong",
+        username="regular-user",
+    )
+
+    create_resp = await auth_endpoints.create_secret_key(create_payload, user=user_context)
+    created_key = create_resp["data"]["key"]
+    assert created_key["user_id"] == user.telegram_user_id
+    assert created_key["client_id"] == client_id
+    assert created_key["status"] == "active"
+
+    list_resp = await auth_endpoints.list_secret_keys(user=user_context)
+    assert [key["id"] for key in list_resp["data"]["keys"]] == [created_key["id"]]
+
+    rotate_resp = await auth_endpoints.rotate_secret_key(
+        created_key["id"],
+        SecretKeyRotateRequest(secret="rotated-secret-value"),
+        user=user_context,
+    )
+    assert rotate_resp["data"]["secret"] == "rotated-secret-value"
+
+    revoke_resp = await auth_endpoints.revoke_secret_key(
+        created_key["id"],
+        SecretKeyRevokeRequest(reason="cleanup"),
+        user=user_context,
+    )
+    revoked_key = revoke_resp["data"]["key"]
+    assert revoked_key["status"] == "revoked"
+
+    with pytest.raises(AuthenticationError, match="Only active secrets can be rotated"):
+        await auth_endpoints.rotate_secret_key(
+            created_key["id"],
+            SecretKeyRotateRequest(secret="another-rotated-secret"),
+            user=user_context,
+        )
+
+    second_revoke_resp = await auth_endpoints.revoke_secret_key(
+        created_key["id"],
+        SecretKeyRevokeRequest(reason="cleanup-again"),
+        user=user_context,
+    )
+    assert second_revoke_resp["data"]["key"]["status"] == "revoked"
+
+    reloaded = ClientSecret.get_by_id(created_key["id"])
+    assert reloaded.status == "revoked"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload_user_id", "client_id"),
+    [
+        (222222222, "mobile-client"),
+        (333333333, "cli-client"),
+    ],
+)
+async def test_self_service_secret_key_management_rejects_invalid_scope(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    payload_user_id: int,
+    client_id: str,
+):
+    _configure_env(monkeypatch)
+    _db = _init_db(tmp_path)
+
+    user = User.create(telegram_user_id=222222222, username="regular-user", is_owner=False)
+    user_context = {
+        "user_id": user.telegram_user_id,
+        "client_id": "cli-client",
+        "username": "regular",
+    }
+
+    create_payload = SecretKeyCreateRequest(
+        user_id=payload_user_id,
+        client_id=client_id,
+        label="self-service",
+        description=None,
+        expires_at=None,
+        secret="self-service-secret-strong",
+        username="regular-user",
+    )
+
+    with pytest.raises(AuthorizationError):
+        await auth_endpoints.create_secret_key(create_payload, user=user_context)
+
+
+@pytest.mark.asyncio
 async def test_secret_key_creation_does_not_promote_target_to_owner(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ):

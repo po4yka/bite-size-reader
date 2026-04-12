@@ -27,7 +27,7 @@ from app.application.dto.aggregation import (
 )
 from app.core.call_status import CallStatus
 from app.core.json_utils import extract_json
-from app.domain.models.source import AggregationItemStatus
+from app.domain.models.source import AggregationItemStatus, AggregationSessionStatus
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -287,7 +287,7 @@ class MultiSourceAggregationAgent(
         return MultiSourceAggregationOutput(
             session_id=input_data.session_id,
             correlation_id=input_data.correlation_id,
-            status="completed",
+            status=self._resolve_output_status(input_data.items),
             source_type=self._resolve_source_type(extracted_items),
             total_items=len(input_data.items),
             extracted_items=len(extracted_items),
@@ -319,7 +319,7 @@ class MultiSourceAggregationAgent(
         return MultiSourceAggregationOutput(
             session_id=input_data.session_id,
             correlation_id=input_data.correlation_id,
-            status="completed",
+            status=self._resolve_output_status(input_data.items),
             source_type=self._resolve_source_type(extracted_items),
             total_items=len(input_data.items),
             extracted_items=len(extracted_items),
@@ -339,6 +339,16 @@ class MultiSourceAggregationAgent(
             ),
             metadata={"generation_mode": "heuristic_fallback"},
         )
+
+    @staticmethod
+    def _resolve_output_status(items: list[SourceExtractionItemResult]) -> str:
+        has_extracted = any(item.status == AggregationItemStatus.EXTRACTED.value for item in items)
+        has_failed = any(item.status == AggregationItemStatus.FAILED.value for item in items)
+        if has_failed and has_extracted:
+            return AggregationSessionStatus.PARTIAL.value
+        if has_extracted:
+            return AggregationSessionStatus.COMPLETED.value
+        return AggregationSessionStatus.FAILED.value
 
     def _build_llm_context(
         self,

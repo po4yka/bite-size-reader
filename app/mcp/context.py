@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import contextvars
 import logging
 import os
-from typing import Any
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any, cast
 
 import app.di.mcp as mcp_di
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+_NO_REQUEST_USER_SCOPE = object()
 
 
 class McpServerContext:
@@ -22,7 +31,13 @@ class McpServerContext:
         self.logger = logger or logging.getLogger("bsr.mcp")
         self.db_path = db_path or os.getenv("DB_PATH", "/data/app.db")
         self._runtime: Any = None
+        self._api_runtime: Any = None
         self._user_id = user_id
+        self._request_user_id: contextvars.ContextVar[int | None | object] = contextvars.ContextVar(
+            "mcp_request_user_id",
+            default=_NO_REQUEST_USER_SCOPE,
+        )
+        self._api_runtime_lock: asyncio.Lock | None = None
         self._chroma_retry_interval_sec = (
             chroma_retry_interval_sec
             if chroma_retry_interval_sec is not None
@@ -36,11 +51,18 @@ class McpServerContext:
 
     @property
     def user_id(self) -> int | None:
+        request_user_id = self._request_user_id.get()
+        if request_user_id is not _NO_REQUEST_USER_SCOPE:
+            return cast("int | None", request_user_id)
         return self._runtime.scope.user_id if self._runtime is not None else self._user_id
 
     @property
     def runtime(self) -> Any | None:
         return self._runtime
+
+    @property
+    def api_runtime(self) -> Any | None:
+        return self._api_runtime
 
     @property
     def chroma_last_failed_at(self) -> float | None:
@@ -60,7 +82,8 @@ class McpServerContext:
             self.db_path = db_path
         mcp_di.CHROMA_RETRY_INTERVAL_SEC = self._chroma_retry_interval_sec
         mcp_di.LOCAL_VECTOR_RETRY_INTERVAL_SEC = self._local_vector_retry_interval_sec
-        self._runtime = mcp_di.build_mcp_runtime(db_path=self.db_path, user_id=self.user_id)
+        # Request-scoped overrides are transient and must not leak into the shared runtime.
+        self._runtime = mcp_di.build_mcp_runtime(db_path=self.db_path, user_id=self._user_id)
         self.logger.info("Database connected (read-only): %s", self._runtime.db_path)
         return self._runtime
 
@@ -73,6 +96,47 @@ class McpServerContext:
         self._user_id = user_id
         if self._runtime is not None:
             mcp_di.set_mcp_user_scope(self._runtime, user_id)
+
+    def set_request_user_scope(self, user_id: int | None) -> contextvars.Token[Any]:
+        return self._request_user_id.set(user_id)
+
+    def reset_request_user_scope(self, token: contextvars.Token[Any]) -> None:
+        self._request_user_id.reset(token)
+
+    @contextlib.contextmanager
+    def request_user_scope(self, user_id: int | None) -> Iterator[None]:
+        token = self.set_request_user_scope(user_id)
+        try:
+            yield
+        finally:
+            self.reset_request_user_scope(token)
+
+    async def init_api_runtime(self, db_path: str | None = None) -> Any:
+        """Initialize a write-capable API runtime for trusted MCP aggregation tools."""
+        from app.config import load_config
+        from app.di.api import build_api_runtime
+
+        if db_path:
+            self.db_path = db_path
+        cfg = load_config(allow_stub_telegram=True)
+        if cfg.runtime.db_path != self.db_path:
+            cfg = replace(
+                cfg,
+                runtime=cfg.runtime.model_copy(update={"db_path": self.db_path}),
+            )
+        self._api_runtime = await build_api_runtime(cfg)
+        self.logger.info("API runtime connected for MCP aggregation tools: %s", self.db_path)
+        return self._api_runtime
+
+    async def ensure_api_runtime(self, db_path: str | None = None) -> Any:
+        if self._api_runtime is not None and (db_path is None or db_path == self.db_path):
+            return self._api_runtime
+        if self._api_runtime_lock is None:
+            self._api_runtime_lock = asyncio.Lock()
+        async with self._api_runtime_lock:
+            if self._api_runtime is not None and (db_path is None or db_path == self.db_path):
+                return self._api_runtime
+            return await self.init_api_runtime(db_path)
 
     def request_scope_filters(self, request_model: Any) -> list[Any]:
         filters: list[Any] = [request_model.is_deleted == False]  # noqa: E712
@@ -105,6 +169,12 @@ class McpServerContext:
         return service
 
     async def aclose(self) -> None:
+        if self._api_runtime is not None:
+            from app.di.api import close_api_runtime
+
+            api_runtime = self._api_runtime
+            self._api_runtime = None
+            await close_api_runtime(api_runtime)
         if self._runtime is None:
             return
         runtime = self._runtime

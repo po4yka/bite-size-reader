@@ -130,9 +130,12 @@ async def test_multi_source_extraction_agent_returns_partial_success_for_mixed_b
 
         session = await repo.async_get_aggregation_session(result.output.session_id)
         assert session is not None
-        assert session["status"] == "partial"
+        assert session["status"] == "processing"
         assert session["successful_count"] == 2
         assert session["failed_count"] == 1
+        assert session["progress_percent"] == 100
+        assert session["started_at"] is not None
+        assert session["completed_at"] is None
         assert extraction_metrics.call_count == 3
         bundle_metrics.assert_called_once()
 

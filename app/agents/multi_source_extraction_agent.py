@@ -120,6 +120,14 @@ class MultiSourceExtractionAgent(
         duplicate_count = 0
         first_item_ids_by_source: dict[str, int] = {}
 
+        async def _persist_counts() -> None:
+            await self._aggregation_session_repo.async_update_aggregation_session_counts(
+                session_id,
+                successful_count=successful_count,
+                failed_count=failed_count,
+                duplicate_count=duplicate_count,
+            )
+
         for position, (submission, source_item) in enumerate(
             zip(input_data.items, aggregation_request.bundle.items, strict=True)
         ):
@@ -157,6 +165,7 @@ class MultiSourceExtractionAgent(
                     )
                 )
                 _record_item_metric(item_results[-1])
+                await _persist_counts()
                 continue
 
             await self._aggregation_session_repo.async_update_aggregation_session_item_result(
@@ -214,6 +223,7 @@ class MultiSourceExtractionAgent(
                     )
                 )
                 _record_item_metric(item_results[-1])
+                await _persist_counts()
             except Exception as exc:
                 failed_count += 1
                 item_failure = AggregationFailure(
@@ -243,6 +253,7 @@ class MultiSourceExtractionAgent(
                     )
                 )
                 _record_item_metric(item_results[-1])
+                await _persist_counts()
                 self.log_warning(
                     "multi_source_item_failed",
                     position=position,
@@ -261,31 +272,29 @@ class MultiSourceExtractionAgent(
                 )
 
         elapsed_ms = int((time.perf_counter() - started) * 1000)
-        await self._aggregation_session_repo.async_update_aggregation_session_counts(
-            session_id,
-            successful_count=successful_count,
-            failed_count=failed_count,
-            duplicate_count=duplicate_count,
-        )
+        await _persist_counts()
         session_status = self._resolve_session_status(
             successful_count=successful_count,
             failed_count=failed_count,
             duplicate_count=duplicate_count,
         )
         failure: AggregationFailure | None = None
-        if successful_count == 0 and failed_count > 0:
+        if successful_count == 0:
             failure = AggregationFailure(
-                code="all_sources_failed",
-                message="All source extractions failed",
+                code="no_extracted_sources",
+                message="No source extractions completed successfully",
                 retryable=True,
-                details={"failed_count": failed_count},
+                details={
+                    "failed_count": failed_count,
+                    "duplicate_count": duplicate_count,
+                },
             )
-        await self._aggregation_session_repo.async_update_aggregation_session_status(
-            session_id,
-            status=session_status,
-            processing_time_ms=elapsed_ms,
-            failure=failure,
-        )
+            await self._aggregation_session_repo.async_update_aggregation_session_status(
+                session_id,
+                status=AggregationSessionStatus.FAILED,
+                processing_time_ms=elapsed_ms,
+                failure=failure,
+            )
 
         output = MultiSourceExtractionOutput(
             session_id=session_id,
@@ -314,12 +323,13 @@ class MultiSourceExtractionAgent(
                 "duplicate_count": duplicate_count,
             },
         )
-        if successful_count == 0 and duplicate_count == 0:
+        if successful_count == 0:
             return AgentResult.error_result(
-                "All source extractions failed",
+                "No source extractions completed successfully",
                 session_id=session_id,
-                status=session_status.value,
+                status=AggregationSessionStatus.FAILED.value,
                 failed_count=failed_count,
+                duplicate_count=duplicate_count,
             )
 
         return AgentResult.success_result(

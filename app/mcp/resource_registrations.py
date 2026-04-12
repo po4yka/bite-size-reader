@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from app.mcp.helpers import to_json
 
 if TYPE_CHECKING:
+    from app.mcp.aggregation_service import AggregationMcpService
     from app.mcp.article_service import ArticleReadService
     from app.mcp.catalog_service import CatalogReadService
     from app.mcp.semantic_service import SemanticSearchService
@@ -20,10 +21,16 @@ if TYPE_CHECKING:
 def register_resources(
     mcp: Any,
     *,
+    aggregation_service: AggregationMcpService,
     article_service: ArticleReadService,
     catalog_service: CatalogReadService,
     semantic_service: SemanticSearchService,
 ) -> None:
+    @mcp.resource("bsr://aggregations/recent")
+    async def recent_aggregations_resource() -> str:
+        """Recent aggregation bundles for the scoped MCP user."""
+        return to_json(await aggregation_service.list_aggregation_bundles(limit=10, offset=0))
+
     @mcp.resource("bsr://articles/recent")
     def recent_articles_resource() -> str:
         """A snapshot of the 10 most recent article summaries."""

@@ -1,13 +1,13 @@
 """CLI entry point for the Bite-Size Reader MCP server.
 
 Starts an MCP (Model Context Protocol) server that exposes articles
-and search functionality to external AI agents like OpenClaw.
+and search functionality to local or otherwise trusted AI agents.
 
 Usage:
-    # stdio transport (default — for OpenClaw, Claude Desktop, etc.)
+    # stdio transport (default — for Claude Desktop and other local MCP clients)
     python -m app.cli.mcp_server
 
-    # SSE transport (local-only by default, requires user scope)
+    # SSE transport (trusted/local by default, requires startup user scope)
     python -m app.cli.mcp_server --transport sse --user-id 12345
 
     # Custom database path
@@ -24,7 +24,7 @@ import sys
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="bsr-mcp-server",
-        description="Bite-Size Reader MCP server for AI agent integrations",
+        description="Bite-Size Reader MCP server for local or trusted AI agent integrations",
     )
     parser.add_argument(
         "--transport",
@@ -58,7 +58,7 @@ def main() -> None:
         "--user-id",
         type=int,
         default=None,
-        help="Scope MCP reads to a single user ID (or use MCP_USER_ID)",
+        help="Set startup MCP user scope for local/trusted mode (or use MCP_USER_ID)",
     )
     parser.add_argument(
         "--allow-remote-sse",

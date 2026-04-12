@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -17,11 +18,13 @@ from app.agents.multi_source_extraction_agent import (
 )
 from app.agents.relationship_analysis_agent import RelationshipAnalysisAgent
 from app.application.dto.aggregation import (
+    AggregationFailure,
     AggregationRelationshipSignal,
     MultiSourceAggregationOutput,
     MultiSourceExtractionOutput,
     SourceSubmission,
 )
+from app.domain.models.source import AggregationSessionStatus
 from app.observability.metrics import record_aggregation_synthesis
 
 if TYPE_CHECKING:
@@ -66,6 +69,7 @@ class MultiSourceAggregationService:
     ) -> MultiSourceAggregationRunResult:
         """Extract a bundle, derive optional relationship signal, then synthesize."""
 
+        run_started = time.perf_counter()
         extraction_agent = MultiSourceExtractionAgent(
             content_extractor=self._content_extractor,
             aggregation_session_repo=self._aggregation_session_repo,
@@ -111,6 +115,21 @@ class MultiSourceAggregationService:
                 cost_usd=float(aggregation_result.metadata.get("llm_cost_usd", 0.0)),
             )
             msg = aggregation_result.error or "Bundle aggregation failed"
+            await self._aggregation_session_repo.async_update_aggregation_session_status(
+                extraction_result.output.session_id,
+                status=AggregationSessionStatus.FAILED,
+                processing_time_ms=int((time.perf_counter() - run_started) * 1000),
+                failure=AggregationFailure(
+                    code="aggregation_failed",
+                    message=msg,
+                    retryable=True,
+                    details={
+                        "extraction_status": extraction_result.output.status,
+                        "successful_count": extraction_result.output.successful_count,
+                        "failed_count": extraction_result.output.failed_count,
+                    },
+                ),
+            )
             raise RuntimeError(msg)
 
         bundle_profile = _classify_bundle_profile(extraction_result.output)
@@ -124,6 +143,11 @@ class MultiSourceAggregationService:
             used_source_count=aggregation_result.output.used_source_count,
             coverage_ratio=coverage_ratio,
             cost_usd=float(aggregation_result.metadata.get("llm_cost_usd", 0.0)),
+        )
+        await self._aggregation_session_repo.async_update_aggregation_session_status(
+            extraction_result.output.session_id,
+            status=aggregation_result.output.status,
+            processing_time_ms=int((time.perf_counter() - run_started) * 1000),
         )
         return MultiSourceAggregationRunResult(
             extraction=extraction_result.output,

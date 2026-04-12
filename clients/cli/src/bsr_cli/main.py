@@ -67,6 +67,7 @@ def _register_commands() -> None:
     """Register all command modules with the CLI group."""
     from bsr_cli.commands.actions import delete, favorite, read_cmd
     from bsr_cli.commands.admin import admin
+    from bsr_cli.commands.aggregation import aggregate, aggregation
     from bsr_cli.commands.collections import collections
     from bsr_cli.commands.get import get
     from bsr_cli.commands.import_export import export_cmd, import_cmd
@@ -75,6 +76,8 @@ def _register_commands() -> None:
     from bsr_cli.commands.search import search
     from bsr_cli.commands.tags import tags
 
+    cli.add_command(aggregate)
+    cli.add_command(aggregation)
     cli.add_command(save)
     cli.add_command(list_cmd)
     cli.add_command(get)

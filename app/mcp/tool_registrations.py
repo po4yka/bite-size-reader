@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from app.mcp.helpers import to_json
 
 if TYPE_CHECKING:
+    from app.mcp.aggregation_service import AggregationMcpService
     from app.mcp.article_service import ArticleReadService
     from app.mcp.catalog_service import CatalogReadService
     from app.mcp.semantic_service import SemanticSearchService
@@ -20,10 +21,56 @@ if TYPE_CHECKING:
 def register_tools(
     mcp: Any,
     *,
+    aggregation_service: AggregationMcpService,
     article_service: ArticleReadService,
     catalog_service: CatalogReadService,
     semantic_service: SemanticSearchService,
 ) -> None:
+    @mcp.tool()
+    async def create_aggregation_bundle(
+        items: list[dict[str, Any]],
+        lang_preference: str = "auto",
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """Create and run an aggregation bundle for the scoped MCP user."""
+        return to_json(
+            await aggregation_service.create_aggregation_bundle(
+                items=items,
+                lang_preference=lang_preference,
+                metadata=metadata,
+            )
+        )
+
+    @mcp.tool()
+    async def get_aggregation_bundle(session_id: int) -> str:
+        """Get one persisted aggregation bundle by session ID."""
+        return to_json(await aggregation_service.get_aggregation_bundle(session_id))
+
+    @mcp.tool()
+    async def list_aggregation_bundles(
+        limit: int = 20,
+        offset: int = 0,
+        status: str | None = None,
+    ) -> str:
+        """List aggregation bundles for the scoped MCP user."""
+        return to_json(
+            await aggregation_service.list_aggregation_bundles(
+                limit=limit,
+                offset=offset,
+                status=status,
+            )
+        )
+
+    @mcp.tool()
+    def check_source_supported(url: str, source_kind_hint: str | None = None) -> str:
+        """Classify whether a URL fits the public aggregation source contract."""
+        return to_json(
+            aggregation_service.check_source_supported(
+                url=url,
+                source_kind_hint=source_kind_hint,
+            )
+        )
+
     @mcp.tool()
     def search_articles(query: str, limit: int = 10) -> str:
         """Search stored article summaries by keyword, topic, or entity."""

@@ -158,12 +158,6 @@ def serialize_secret(record: dict) -> ClientSecretInfo:
     )
 
 
-async def revoke_active_secrets(user_id: int, client_id: str) -> None:
-    """Revoke all active secrets for a user/client pair."""
-    auth_repo = get_auth_repository()
-    await auth_repo.async_revoke_active_secrets(user_id, client_id)
-
-
 async def check_expired(record: dict) -> None:
     """Check if secret has expired and update status if so."""
     now = utcnow_naive()
@@ -219,7 +213,7 @@ async def build_secret_record(
     secret_hash = hash_secret(secret_value, salt)
 
     auth_repo = get_auth_repository()
-    record_id = await auth_repo.async_create_client_secret(
+    record_id = await auth_repo.async_replace_active_client_secret(
         user_id=user_id,
         client_id=client_id,
         secret_hash=secret_hash,

@@ -135,3 +135,102 @@ async def test_get_chroma_service_forwards_required_and_timeout(
         "required": True,
         "connection_timeout": 7.5,
     }
+
+
+def test_request_user_scope_prefers_override_and_resets_to_startup_scope() -> None:
+    context = McpServerContext(user_id=111)
+
+    assert context.user_id == 111
+
+    token = context.set_request_user_scope(222)
+    try:
+        assert context.user_id == 222
+    finally:
+        context.reset_request_user_scope(token)
+
+    assert context.user_id == 111
+
+
+def test_init_runtime_uses_startup_scope_even_with_request_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.di.mcp as mcp_di
+
+    captured: dict[str, Any] = {}
+
+    def fake_build_mcp_runtime(*, db_path: str | None = None, user_id: int | None = None) -> Any:
+        captured["db_path"] = db_path
+        captured["user_id"] = user_id
+        return SimpleNamespace(
+            db_path=db_path,
+            scope=SimpleNamespace(user_id=user_id),
+            chroma_state=SimpleNamespace(last_failed_at=None),
+            local_vector_state=SimpleNamespace(last_failed_at=None),
+        )
+
+    monkeypatch.setattr(mcp_di, "build_mcp_runtime", fake_build_mcp_runtime)
+
+    context = McpServerContext(db_path="/tmp/request-scope.db", user_id=111)
+    with context.request_user_scope(222):
+        context.init_runtime()
+        assert captured == {"db_path": "/tmp/request-scope.db", "user_id": 111}
+        assert context.user_id == 222
+
+    assert context.runtime.scope.user_id == 111
+    assert context.user_id == 111
+
+
+def test_nested_request_user_scopes_restore_without_mutating_runtime_scope() -> None:
+    context = McpServerContext(user_id=111)
+    context._runtime = SimpleNamespace(
+        scope=SimpleNamespace(user_id=111),
+        chroma_state=SimpleNamespace(last_failed_at=None),
+        local_vector_state=SimpleNamespace(last_failed_at=None),
+    )
+
+    with context.request_user_scope(222):
+        assert context.user_id == 222
+        assert context.runtime.scope.user_id == 111
+
+        with context.request_user_scope(None):
+            assert context.user_id is None
+            assert context.runtime.scope.user_id == 111
+
+        assert context.user_id == 222
+
+    assert context.user_id == 111
+
+
+def test_scope_filters_use_effective_request_user_scope() -> None:
+    class _Field:
+        __hash__ = object.__hash__
+
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def __eq__(self, other: Any) -> tuple[str, Any]:  # type: ignore[override]
+            return (self.name, other)
+
+    class _RequestModel:
+        is_deleted = _Field("is_deleted")
+        user_id = _Field("user_id")
+
+    class _CollectionModel:
+        is_deleted = _Field("is_deleted")
+        user = _Field("user")
+
+    context = McpServerContext(user_id=7)
+
+    with context.request_user_scope(8):
+        assert context.request_scope_filters(_RequestModel) == [
+            ("is_deleted", False),
+            ("user_id", 8),
+        ]
+        assert context.collection_scope_filters(_CollectionModel) == [
+            ("is_deleted", False),
+            ("user", 8),
+        ]
+
+    with context.request_user_scope(None):
+        assert context.request_scope_filters(_RequestModel) == [("is_deleted", False)]
+        assert context.collection_scope_filters(_CollectionModel) == [("is_deleted", False)]

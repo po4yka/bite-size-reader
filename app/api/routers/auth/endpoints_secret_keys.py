@@ -40,7 +40,6 @@ from app.api.routers.auth.secret_auth import (
     handle_failed_attempt,
     hash_secret,
     reset_failed_attempts,
-    revoke_active_secrets,
     serialize_secret,
     utcnow_naive,
     validate_secret_value,
@@ -49,6 +48,7 @@ from app.api.routers.auth.tokens import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
     create_refresh_token,
+    is_self_service_secret_client,
     validate_client_id,
 )
 from app.api.services.auth_service import AuthService
@@ -161,16 +161,21 @@ async def secret_login(login_data: SecretLoginRequest, response: Response):
 async def create_secret_key(
     payload: SecretKeyCreateRequest, user: dict[str, Any] = Depends(get_current_user)
 ):
-    """Create or register a client secret for a user (owner-only)."""
+    """Create or register a client secret for a user."""
     ensure_secret_login_enabled()
-    admin_user = await AuthService.require_owner(user)
     validate_client_id(payload.client_id)
-    ensure_user_allowed(payload.user_id)
-
-    target_user = await AuthService.get_or_create_target_user(payload.user_id, payload.username)
+    acting_user = await AuthService.require_secret_key_manager(
+        user,
+        target_user_id=payload.user_id,
+        client_id=payload.client_id,
+    )
+    if acting_user.get("is_owner"):
+        ensure_user_allowed(payload.user_id)
+        target_user = await AuthService.get_or_create_target_user(payload.user_id, payload.username)
+    else:
+        target_user = acting_user
     target_user_id = target_user.get("telegram_user_id", payload.user_id)
 
-    await revoke_active_secrets(target_user_id, payload.client_id)
     secret_value, record = await build_secret_record(
         target_user_id,
         payload.client_id,
@@ -183,7 +188,7 @@ async def create_secret_key(
     logger.info(
         "secret_key_created",
         extra={
-            "created_by": admin_user.get("telegram_user_id"),
+            "created_by": acting_user.get("telegram_user_id"),
             "user_id": target_user_id,
             "client_id": payload.client_id,
             "label": payload.label,
@@ -199,9 +204,8 @@ async def create_secret_key(
 async def rotate_secret_key(
     key_id: int, payload: SecretKeyRotateRequest, user: dict[str, Any] = Depends(get_current_user)
 ):
-    """Rotate an existing client secret (owner-only)."""
+    """Rotate an existing client secret."""
     ensure_secret_login_enabled()
-    admin_user = await AuthService.require_owner(user)
 
     auth_repo = get_auth_repository()
     record = await auth_repo.async_get_client_secret_by_id(key_id)
@@ -209,8 +213,18 @@ async def rotate_secret_key(
         raise ResourceNotFoundError("Secret key", key_id)
 
     record_user_id = _extract_record_user_id(record)
-    ensure_user_allowed(record_user_id)
-    validate_client_id(record.get("client_id", ""))
+    client_id = record.get("client_id", "")
+    validate_client_id(client_id)
+    acting_user = await AuthService.require_secret_key_manager(
+        user,
+        target_user_id=record_user_id or 0,
+        client_id=client_id,
+    )
+    if acting_user.get("is_owner"):
+        ensure_user_allowed(record_user_id)
+
+    if record.get("status") != "active":
+        raise AuthenticationError("Only active secrets can be rotated")
 
     new_secret_value = (
         validate_secret_value(payload.secret, context="create")
@@ -240,7 +254,7 @@ async def rotate_secret_key(
     logger.info(
         "secret_key_rotated",
         extra={
-            "rotated_by": admin_user.get("telegram_user_id"),
+            "rotated_by": acting_user.get("telegram_user_id"),
             "user_id": record_user_id,
             "client_id": record.get("client_id"),
             "key_id": key_id,
@@ -258,9 +272,8 @@ async def revoke_secret_key(
     payload: SecretKeyRevokeRequest | None = None,
     user: dict[str, Any] = Depends(get_current_user),
 ):
-    """Revoke an existing client secret (owner-only)."""
+    """Revoke an existing client secret."""
     ensure_secret_login_enabled()
-    admin_user = await AuthService.require_owner(user)
 
     auth_repo = get_auth_repository()
     record = await auth_repo.async_get_client_secret_by_id(key_id)
@@ -268,21 +281,30 @@ async def revoke_secret_key(
         raise ResourceNotFoundError("Secret key", key_id)
 
     record_user_id = _extract_record_user_id(record)
-    ensure_user_allowed(record_user_id)
-
-    await auth_repo.async_update_client_secret(
-        key_id,
-        status="revoked",
-        failed_attempts=0,
-        locked_until=None,
+    client_id = record.get("client_id", "")
+    validate_client_id(client_id)
+    acting_user = await AuthService.require_secret_key_manager(
+        user,
+        target_user_id=record_user_id or 0,
+        client_id=client_id,
     )
+    if acting_user.get("is_owner"):
+        ensure_user_allowed(record_user_id)
+
+    if record.get("status") != "revoked":
+        await auth_repo.async_update_client_secret(
+            key_id,
+            status="revoked",
+            failed_attempts=0,
+            locked_until=None,
+        )
 
     updated_record = await auth_repo.async_get_client_secret_by_id(key_id)
 
     logger.info(
         "secret_key_revoked",
         extra={
-            "revoked_by": admin_user.get("telegram_user_id"),
+            "revoked_by": acting_user.get("telegram_user_id"),
             "user_id": record_user_id,
             "client_id": record.get("client_id"),
             "key_id": key_id,
@@ -300,12 +322,26 @@ async def list_secret_keys(
     client_id: str | None = None,
     status: str | None = None,
 ):
-    """List stored client secrets (owner-only)."""
+    """List stored client secrets visible to the current user."""
     ensure_secret_login_enabled()
-    await AuthService.require_owner(user)
+    current_user = await AuthService.ensure_user(user["user_id"])
+    is_owner = bool(current_user.get("is_owner"))
+    if client_id is not None:
+        validate_client_id(client_id)
 
-    if user_id is not None:
-        ensure_user_allowed(user_id)
+    if is_owner:
+        if user_id is not None:
+            ensure_user_allowed(user_id)
+    else:
+        if user_id is not None and int(user_id) != int(current_user["telegram_user_id"]):
+            raise AuthorizationError("You can only list your own client secrets")
+        if client_id is not None:
+            await AuthService.require_secret_key_manager(
+                user,
+                target_user_id=current_user["telegram_user_id"],
+                client_id=client_id,
+            )
+        user_id = int(current_user["telegram_user_id"])
 
     auth_repo = get_auth_repository()
     records = await auth_repo.async_list_client_secrets(
@@ -313,6 +349,13 @@ async def list_secret_keys(
         client_id=client_id,
         status=status,
     )
+    if not is_owner:
+        records = [
+            record
+            for record in records
+            if _extract_record_user_id(record) == int(current_user["telegram_user_id"])
+            and is_self_service_secret_client(record.get("client_id"))
+        ]
 
     keys = [serialize_secret(rec) for rec in records]
     return success_response(SecretKeyListResponse(keys=keys))

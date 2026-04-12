@@ -171,6 +171,32 @@ class BSRClient:
             "POST", f"/v1/collections/{collection_id}/items", json={"summary_id": summary_id}
         )
 
+    # ---- Aggregations ----
+
+    def create_aggregation_bundle(
+        self,
+        items: list[dict[str, Any]],
+        *,
+        lang_preference: str = "auto",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"items": items, "lang_preference": lang_preference}
+        if metadata is not None:
+            body["metadata"] = metadata
+        return self._request("POST", "/v1/aggregations", json=body)
+
+    def get_aggregation_bundle(self, session_id: int) -> dict[str, Any]:
+        return self._request("GET", f"/v1/aggregations/{session_id}")
+
+    def list_aggregation_bundles(
+        self,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        return self._request("GET", "/v1/aggregations", params=params)
+
     # ---- Import/Export ----
 
     def export_data(self, fmt: str = "json") -> bytes:

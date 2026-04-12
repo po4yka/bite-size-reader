@@ -48,7 +48,7 @@ async def test_multi_source_aggregation_service_records_synthesis_metrics() -> N
     aggregation_output = MultiSourceAggregationOutput(
         session_id=10,
         correlation_id="cid-service",
-        status="completed",
+        status="partial",
         source_type="mixed",
         total_items=2,
         extracted_items=2,
@@ -73,10 +73,13 @@ async def test_multi_source_aggregation_service_records_synthesis_metrics() -> N
             ),
         ],
     )
+    repo = SimpleNamespace(
+        async_update_aggregation_session_status=AsyncMock(),
+    )
 
     service = MultiSourceAggregationService(
         content_extractor=cast("Any", SimpleNamespace()),
-        aggregation_session_repo=cast("Any", SimpleNamespace()),
+        aggregation_session_repo=cast("Any", repo),
         llm_client=None,
     )
 
@@ -105,10 +108,14 @@ async def test_multi_source_aggregation_service_records_synthesis_metrics() -> N
         )
 
     assert result.aggregation == aggregation_output
+    repo.async_update_aggregation_session_status.assert_awaited_once()
+    status_call = repo.async_update_aggregation_session_status.await_args.kwargs
+    assert status_call["status"] == "partial"
+    assert isinstance(status_call["processing_time_ms"], int)
     metrics_mock.assert_called_once_with(
         source_type="mixed",
         bundle_profile="text_only",
-        status="completed",
+        status="partial",
         used_source_count=2,
         coverage_ratio=1.0,
         cost_usd=0.023,
