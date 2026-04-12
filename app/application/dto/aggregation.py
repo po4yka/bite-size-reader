@@ -33,6 +33,66 @@ class SourceMediaKind(StrEnum):
     DOCUMENT = "document"
 
 
+class SourceSubmissionKind(StrEnum):
+    """Kinds of raw bundle submissions accepted by the orchestrator."""
+
+    URL = "url"
+    TELEGRAM_MESSAGE = "telegram_message"
+
+
+class SourceSubmission(BaseModel):
+    """Raw bundle item before source classification and extraction."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    submission_kind: SourceSubmissionKind
+    url: str | None = None
+    telegram_message: Any | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_payload(self) -> SourceSubmission:
+        if self.submission_kind == SourceSubmissionKind.URL:
+            if not self.url or not self.url.strip():
+                msg = "URL source submissions require a non-empty URL"
+                raise ValueError(msg)
+            return self
+        if self.submission_kind == SourceSubmissionKind.TELEGRAM_MESSAGE:
+            if self.telegram_message is None:
+                msg = "Telegram source submissions require a message payload"
+                raise ValueError(msg)
+            return self
+
+        msg = f"Unsupported source submission kind: {self.submission_kind}"
+        raise ValueError(msg)
+
+    @classmethod
+    def from_url(
+        cls,
+        url: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> SourceSubmission:
+        return cls(
+            submission_kind=SourceSubmissionKind.URL,
+            url=url,
+            metadata=dict(metadata or {}),
+        )
+
+    @classmethod
+    def from_telegram_message(
+        cls,
+        telegram_message: Any,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> SourceSubmission:
+        return cls(
+            submission_kind=SourceSubmissionKind.TELEGRAM_MESSAGE,
+            telegram_message=telegram_message,
+            metadata=dict(metadata or {}),
+        )
+
+
 class AggregationFailure(BaseModel):
     """Shared failure payload for bundle-level and item-level errors."""
 
@@ -191,12 +251,47 @@ class NormalizedSourceDocument(BaseModel):
         )
 
 
+class SourceExtractionItemResult(BaseModel):
+    """Item-level extraction result ready for bundle synthesis."""
+
+    model_config = ConfigDict(frozen=True)
+
+    position: int
+    item_id: int
+    source_item_id: str
+    source_kind: SourceKind
+    status: str
+    request_id: int | None = None
+    duplicate_of_item_id: int | None = None
+    normalized_document: NormalizedSourceDocument | None = None
+    failure: AggregationFailure | None = None
+    extraction_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MultiSourceExtractionOutput(BaseModel):
+    """Bundle extraction output with per-item results."""
+
+    model_config = ConfigDict(frozen=True)
+
+    session_id: int
+    correlation_id: str
+    status: str
+    successful_count: int
+    failed_count: int
+    duplicate_count: int
+    items: list[SourceExtractionItemResult] = Field(default_factory=list)
+
+
 __all__ = [
     "AggregationFailure",
     "ExtractedTextKind",
+    "MultiSourceExtractionOutput",
     "NormalizedSourceDocument",
+    "SourceExtractionItemResult",
     "SourceMediaAsset",
     "SourceMediaKind",
     "SourceProvenance",
+    "SourceSubmission",
+    "SourceSubmissionKind",
     "SourceTextBlock",
 ]
