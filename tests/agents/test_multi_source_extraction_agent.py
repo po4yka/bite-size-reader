@@ -314,13 +314,40 @@ async def test_multi_source_extraction_agent_extracts_telegram_album_as_one_item
 
 
 @pytest.mark.asyncio
-async def test_multi_source_extraction_agent_handles_fixture_backed_supported_bundle() -> None:
+async def test_multi_source_extraction_agent_handles_fixture_backed_all_supported_platforms_bundle() -> (
+    None
+):
     with temp_db() as db:
         user, repo = _make_user_and_repo(db)
         threads_fixture = load_aggregation_fixture("threads_post")
+        instagram_fixture = load_aggregation_fixture("instagram_carousel")
         x_fixture = load_aggregation_fixture("x_media_post")
         youtube_fixture = load_aggregation_fixture("youtube_video")
         telegram_fixture = load_aggregation_fixture("telegram_post_with_images")
+        instagram_document = NormalizedSourceDocument(
+            source_item_id="src_instagram_carousel",
+            source_kind=SourceKind.INSTAGRAM_CAROUSEL,
+            title=instagram_fixture["metadata_json"]["title"],
+            text=instagram_fixture["content_markdown"],
+            detected_language="en",
+            media=[
+                SourceMediaAsset(
+                    kind=SourceMediaKind.IMAGE,
+                    url=image_url,
+                    position=index,
+                )
+                for index, image_url in enumerate(instagram_fixture["metadata_json"]["images"])
+            ],
+            provenance=SourceProvenance(
+                source_item_id="src_instagram_carousel",
+                source_kind=SourceKind.INSTAGRAM_CAROUSEL,
+                original_value="https://www.instagram.com/p/DApost123/",
+                normalized_value="https://www.instagram.com/p/DApost123",
+                external_id="DApost123",
+                request_id=None,
+                extraction_source="markdown",
+            ),
+        )
 
         content_extractor = MagicMock()
 
@@ -337,6 +364,15 @@ async def test_multi_source_extraction_agent_handles_fixture_backed_supported_bu
                         "detected_lang": "en",
                     },
                 )
+            if "instagram.com" in url:
+                return (
+                    instagram_fixture["content_markdown"],
+                    "markdown",
+                    {
+                        "detected_lang": "en",
+                        "normalized_source_document": instagram_document.model_dump(mode="json"),
+                    },
+                )
             if "youtube.com" in url:
                 return (
                     youtube_fixture["content_text"],
@@ -345,6 +381,15 @@ async def test_multi_source_extraction_agent_handles_fixture_backed_supported_bu
                         **youtube_fixture["metadata"],
                         "title": youtube_fixture["title"],
                         "detected_lang": youtube_fixture["detected_lang"],
+                    },
+                )
+            if "example.com/article" in url:
+                return (
+                    "Generic article body with enough detail to represent the web article path.",
+                    "markdown",
+                    {
+                        "firecrawl_metadata": {"title": "Generic web article"},
+                        "detected_lang": "en",
                     },
                 )
             return (
@@ -384,7 +429,9 @@ async def test_multi_source_extraction_agent_handles_fixture_backed_supported_bu
                 items=[
                     SourceSubmission.from_url("https://x.com/user/status/123"),
                     SourceSubmission.from_url("https://www.threads.net/@user/post/abc"),
+                    SourceSubmission.from_url("https://www.instagram.com/p/DApost123/"),
                     SourceSubmission.from_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+                    SourceSubmission.from_url("https://example.com/article"),
                     SourceSubmission.from_telegram_message(telegram_message),
                 ],
             )
@@ -395,8 +442,14 @@ async def test_multi_source_extraction_agent_handles_fixture_backed_supported_bu
         assert [item.source_kind for item in result.output.items] == [
             SourceKind.X_POST,
             SourceKind.THREADS_POST,
+            SourceKind.INSTAGRAM_CAROUSEL,
             SourceKind.YOUTUBE_VIDEO,
+            SourceKind.WEB_ARTICLE,
             SourceKind.TELEGRAM_POST_WITH_IMAGES,
         ]
-        assert result.output.successful_count == 4
+        assert result.output.successful_count == 6
         assert result.output.failed_count == 0
+        assert result.output.items[2].normalized_document is not None
+        assert len(result.output.items[2].normalized_document.media) == 2
+        assert result.output.items[4].normalized_document is not None
+        assert result.output.items[4].normalized_document.title == "Generic web article"
