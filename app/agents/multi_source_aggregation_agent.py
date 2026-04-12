@@ -137,7 +137,7 @@ class MultiSourceAggregationAgent(
         duplicate_signals = self._detect_duplicate_signals(extracted_items)
         contradiction_hints = self._detect_contradiction_hints(extracted_items)
 
-        output = await self._generate_with_llm(
+        output, llm_cost_usd = await self._generate_with_llm(
             input_data=input_data,
             extracted_items=extracted_items,
             source_weights=source_weights,
@@ -181,6 +181,7 @@ class MultiSourceAggregationAgent(
             session_id=input_data.session_id,
             used_source_count=used_source_count,
             source_type=source_type,
+            llm_cost_usd=llm_cost_usd,
         )
 
     async def _generate_with_llm(
@@ -191,9 +192,9 @@ class MultiSourceAggregationAgent(
         source_weights: list[AggregationSourceWeight],
         duplicate_signals: list[DuplicateSignal],
         contradiction_hints: list[AggregatedContradiction],
-    ) -> MultiSourceAggregationOutput | None:
+    ) -> tuple[MultiSourceAggregationOutput | None, float]:
         if self._llm is None:
-            return None
+            return None, 0.0
 
         prompt = self._load_prompt(input_data.language)
         context = self._build_llm_context(
@@ -215,25 +216,28 @@ class MultiSourceAggregationAgent(
         )
         if result.status != CallStatus.OK:
             self.log_warning("multi_source_aggregation_llm_failed", error=result.error_text)
-            return None
+            return None, float(result.cost_usd or 0.0)
 
         parsed = extract_json(result.response_text or "")
         if not isinstance(parsed, dict):
             self.log_warning("multi_source_aggregation_llm_invalid_json")
-            return None
+            return None, float(result.cost_usd or 0.0)
 
         try:
-            return self._parse_llm_output(
-                parsed=parsed,
-                input_data=input_data,
-                extracted_items=extracted_items,
-                source_weights=source_weights,
-                fallback_duplicates=duplicate_signals,
-                fallback_contradictions=contradiction_hints,
+            return (
+                self._parse_llm_output(
+                    parsed=parsed,
+                    input_data=input_data,
+                    extracted_items=extracted_items,
+                    source_weights=source_weights,
+                    fallback_duplicates=duplicate_signals,
+                    fallback_contradictions=contradiction_hints,
+                ),
+                float(result.cost_usd or 0.0),
             )
         except Exception as exc:
             self.log_warning("multi_source_aggregation_llm_parse_failed", error=str(exc))
-            return None
+            return None, float(result.cost_usd or 0.0)
 
     def _parse_llm_output(
         self,

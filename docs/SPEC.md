@@ -802,8 +802,8 @@ flowchart LR
 - **Structured JSON logs**: intake, Firecrawl call, OpenRouter call, DB writes, reply send; include correlation IDs and latencies.
 - **Audit logs**: external call attempts & outcomes, validation errors.
 - **Metrics in logs**: token counts, content size (chars/words), estimated cost.
-- **Prometheus metrics**: mixed-source aggregation exports `bsr_aggregation_extraction_total`, `bsr_aggregation_bundles_total`, `bsr_aggregation_bundle_latency_seconds`, `bsr_aggregation_synthesis_coverage_ratio`, and `bsr_aggregation_used_sources`.
-- **Bundle dashboards**: multimodal and video-heavy aggregation dashboards should break down entrypoint (`api`, `telegram_command`, `telegram_message`), bundle profile (`text_only`, `image_heavy`, `video_heavy`, `mixed_media`), partial-success rate, synthesis coverage ratio, and used-source counts.
+- **Prometheus metrics**: mixed-source aggregation exports `bsr_aggregation_extraction_total`, `bsr_aggregation_bundles_total`, `bsr_aggregation_bundle_latency_seconds`, `bsr_aggregation_synthesis_coverage_ratio`, `bsr_aggregation_used_sources`, and `bsr_aggregation_cost_usd_total`.
+- **Bundle dashboards**: Grafana provisions a dedicated aggregation dashboard at `ops/monitoring/grafana/provisioning/dashboards/bsr-aggregation.json`, focused on multimodal and video-heavy workloads. It breaks down entrypoint (`api`, `telegram_command`, `telegram_message`), bundle profile (`text_only`, `image_heavy`, `video_heavy`, `mixed_media`), partial-success rate, synthesis coverage ratio, used-source counts, latency, and synthesis cost.
 - **Rollout telemetry**: staged rollout decisions should be correlated with latency, coverage, and failure metrics so `internal`, `owner_beta`, and wider enablement can be compared before broad rollout.
 
 ---

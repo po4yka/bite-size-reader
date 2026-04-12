@@ -108,6 +108,7 @@ class MultiSourceAggregationService:
                 status="failed",
                 used_source_count=0,
                 coverage_ratio=0.0,
+                cost_usd=float(aggregation_result.metadata.get("llm_cost_usd", 0.0)),
             )
             msg = aggregation_result.error or "Bundle aggregation failed"
             raise RuntimeError(msg)
@@ -122,6 +123,7 @@ class MultiSourceAggregationService:
             status=aggregation_result.output.status,
             used_source_count=aggregation_result.output.used_source_count,
             coverage_ratio=coverage_ratio,
+            cost_usd=float(aggregation_result.metadata.get("llm_cost_usd", 0.0)),
         )
         return MultiSourceAggregationRunResult(
             extraction=extraction_result.output,

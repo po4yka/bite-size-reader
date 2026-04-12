@@ -217,6 +217,13 @@ if PROMETHEUS_AVAILABLE:
         registry=REGISTRY,
     )
 
+    AGGREGATION_COST_USD = Counter(
+        "bsr_aggregation_cost_usd_total",
+        "Total synthesis cost in USD for aggregation workloads",
+        ["source_type", "bundle_profile", "status"],
+        registry=REGISTRY,
+    )
+
 else:
     # Create dummy metrics when prometheus_client is not available
     REGISTRY = None
@@ -243,6 +250,7 @@ else:
     AGGREGATION_BUNDLE_LATENCY = None
     AGGREGATION_SYNTHESIS_COVERAGE = None
     AGGREGATION_USED_SOURCES = None
+    AGGREGATION_COST_USD = None
 
 
 def get_metrics() -> bytes:
@@ -538,6 +546,7 @@ def record_aggregation_synthesis(
     status: str,
     used_source_count: int,
     coverage_ratio: float,
+    cost_usd: float = 0.0,
 ) -> None:
     """Record synthesis coverage and used-source counts for aggregation output."""
     if not PROMETHEUS_AVAILABLE:
@@ -552,3 +561,9 @@ def record_aggregation_synthesis(
         bundle_profile=bundle_profile,
         status=status,
     ).observe(max(0, used_source_count))
+    if cost_usd > 0:
+        AGGREGATION_COST_USD.labels(
+            source_type=source_type,
+            bundle_profile=bundle_profile,
+            status=status,
+        ).inc(cost_usd)

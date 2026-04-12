@@ -27,6 +27,7 @@ def test_aggregation_metrics_are_exported() -> None:
         status="completed",
         used_source_count=2,
         coverage_ratio=1.0,
+        cost_usd=0.42,
     )
 
     exported = metrics.get_metrics().decode("utf-8")
@@ -37,3 +38,4 @@ def test_aggregation_metrics_are_exported() -> None:
     assert 'bundle_profile="multimodal"' in exported
     assert "bsr_aggregation_synthesis_coverage_ratio_bucket" in exported
     assert "bsr_aggregation_used_sources_bucket" in exported
+    assert "bsr_aggregation_cost_usd_total" in exported

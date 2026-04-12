@@ -87,7 +87,12 @@ async def test_multi_source_aggregation_service_records_synthesis_metrics() -> N
         ),
         patch(
             "app.application.services.multi_source_aggregation_service.MultiSourceAggregationAgent.execute",
-            new=AsyncMock(return_value=AgentResult.success_result(aggregation_output)),
+            new=AsyncMock(
+                return_value=AgentResult.success_result(
+                    aggregation_output,
+                    llm_cost_usd=0.023,
+                )
+            ),
         ),
         patch(
             "app.application.services.multi_source_aggregation_service.record_aggregation_synthesis"
@@ -106,4 +111,5 @@ async def test_multi_source_aggregation_service_records_synthesis_metrics() -> N
         status="completed",
         used_source_count=2,
         coverage_ratio=1.0,
+        cost_usd=0.023,
     )
