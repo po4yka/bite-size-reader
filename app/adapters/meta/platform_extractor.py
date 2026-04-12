@@ -39,6 +39,7 @@ from app.domain.models.source import SourceItem, SourceKind
 
 if TYPE_CHECKING:
     from app.adapters.content.platform_extraction.lifecycle import PlatformRequestLifecycle
+    from app.config import AppConfig
 
 _META_LOGIN_WALL_TERMS = (
     "log in",
@@ -67,10 +68,12 @@ class MetaPlatformExtractor(PlatformExtractor):
     def __init__(
         self,
         *,
+        cfg: AppConfig | Any,
         scraper: Any,
         firecrawl_sem: Any,
         lifecycle: PlatformRequestLifecycle,
     ) -> None:
+        self._cfg = cfg
         self._scraper = scraper
         self._firecrawl_sem = firecrawl_sem
         self._lifecycle = lifecycle
@@ -119,7 +122,13 @@ class MetaPlatformExtractor(PlatformExtractor):
                 "dedupe_hash": dedupe_hash,
             },
         )
-        if any(asset.kind == SourceMediaKind.VIDEO for asset in build_result.media):
+        if any(asset.kind == SourceMediaKind.VIDEO for asset in build_result.media) and bool(
+            getattr(
+                getattr(self._cfg, "runtime", None),
+                "aggregation_non_youtube_video_enabled",
+                True,
+            )
+        ):
             transcript_text = _extract_block_text(
                 build_result.text_blocks, ExtractedTextKind.TRANSCRIPT
             )
@@ -200,6 +209,8 @@ class MetaPlatformExtractor(PlatformExtractor):
                 ),
             )
             metadata = dict(build_result.metadata)
+            if any(asset.kind == SourceMediaKind.VIDEO for asset in build_result.media):
+                metadata["video_processing_strategy"] = "disabled_by_runtime_flag"
             metadata["request_id"] = request_id
             metadata["detected_lang"] = detected_lang
             content_text = build_result.text

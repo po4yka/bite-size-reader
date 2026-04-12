@@ -29,6 +29,8 @@ def _cfg(
                 aggregation_bundle_enabled=enabled,
                 aggregation_rollout_stage=stage,
                 aggregation_meta_extractors_enabled=True,
+                aggregation_article_media_enabled=True,
+                aggregation_non_youtube_video_enabled=True,
             ),
             telegram=SimpleNamespace(allowed_user_ids=allowed_user_ids),
         ),
@@ -36,8 +38,14 @@ def _cfg(
 
 
 def test_runtime_config_validates_aggregation_rollout_stage() -> None:
-    cfg = RuntimeConfig(aggregation_rollout_stage="owner_beta")
+    cfg = RuntimeConfig(
+        aggregation_rollout_stage="owner_beta",
+        aggregation_article_media_enabled=False,
+        aggregation_non_youtube_video_enabled=False,
+    )
     assert cfg.aggregation_rollout_stage == "owner_beta"
+    assert cfg.aggregation_article_media_enabled is False
+    assert cfg.aggregation_non_youtube_video_enabled is False
 
     with pytest.raises(ValueError, match="Aggregation rollout stage must be one of"):
         RuntimeConfig(aggregation_rollout_stage="invalid-stage")

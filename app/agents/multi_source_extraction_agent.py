@@ -400,6 +400,13 @@ class MultiSourceExtractionAgent(
         normalized_document, metadata = build_telegram_normalized_document(
             message,
             source_item=source_item,
+            enable_non_youtube_video_extraction=bool(
+                getattr(
+                    getattr(self._content_extractor.cfg, "runtime", None),
+                    "aggregation_non_youtube_video_enabled",
+                    True,
+                )
+            ),
         )
         return source_item.request_id, normalized_document, metadata
 

@@ -104,6 +104,36 @@ def test_video_payload_uses_shared_video_source_extractor() -> None:
     assert metadata["video_provenance"]["primary_fact_source"] == "body"
 
 
+def test_video_payload_skips_shared_video_source_extractor_when_flag_disabled() -> None:
+    payload = SimpleNamespace(
+        id=22,
+        message_id=22,
+        text=None,
+        caption="Video caption",
+        chat=SimpleNamespace(id=-100777),
+        media_group_id=None,
+        photo=None,
+        document=None,
+        video=SimpleNamespace(file_id="video-2", duration=42),
+        animation=None,
+        forward_from_chat=SimpleNamespace(id=-10042, title="Source Channel"),
+        forward_from_message_id=89,
+        forward_from=None,
+        forward_sender_name=None,
+    )
+
+    source_item = build_source_item_from_telegram_payload(payload)
+    document, metadata = build_telegram_normalized_document(
+        payload,
+        source_item=source_item,
+        enable_non_youtube_video_extraction=False,
+    )
+
+    assert document.media[0].kind.value == "video"
+    assert metadata["video_processing_strategy"] == "disabled_by_runtime_flag"
+    assert "video_provenance" not in metadata
+
+
 def test_fixture_backed_forwarded_photo_payload_builds_multimodal_document() -> None:
     fixture = load_aggregation_fixture("telegram_post_with_images")
     payload = SimpleNamespace(

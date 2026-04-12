@@ -100,6 +100,9 @@ class ContentExtractor(
         """Clear the extraction cache."""
         return await self._cache.clear()
 
+    def _aggregation_article_media_enabled(self) -> bool:
+        return bool(getattr(self.cfg.runtime, "aggregation_article_media_enabled", True))
+
     def _get_platform_router(self) -> PlatformExtractionRouter:
         if self._platform_router is not None:
             return self._platform_router
@@ -163,6 +166,7 @@ class ContentExtractor(
         from app.adapters.meta.platform_extractor import MetaPlatformExtractor
 
         return MetaPlatformExtractor(
+            cfg=self.cfg,
             scraper=self.firecrawl,
             firecrawl_sem=self._sem,
             lifecycle=self._platform_request_lifecycle,
@@ -282,9 +286,13 @@ class ContentExtractor(
         if crawl.metadata_json:
             metadata["firecrawl_metadata"] = crawl.metadata_json
 
-        media_assets, media_selection = extract_firecrawl_image_assets(crawl)
-        if media_selection["candidate_count"] > 0:
-            metadata["media_selection"] = media_selection
+        media_assets: list[Any] = []
+        if self._aggregation_article_media_enabled():
+            media_assets, media_selection = extract_firecrawl_image_assets(crawl)
+            if media_selection["candidate_count"] > 0:
+                metadata["media_selection"] = media_selection
+        else:
+            metadata["media_selection"] = {"strategy": "disabled_by_runtime_flag"}
 
         source_item = SourceItem.create(
             kind=SourceKind.WEB_ARTICLE,

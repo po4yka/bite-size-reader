@@ -261,6 +261,10 @@ class TwitterExtractionCoordinator:
         return firecrawl_ok and not is_article
 
     def _build_media_assets(self, metadata: dict[str, Any]) -> list[SourceMediaAsset]:
+        if not bool(
+            getattr(getattr(self._cfg, "runtime", None), "aggregation_article_media_enabled", True)
+        ):
+            return []
         tweet_media = metadata.get("tweet_media")
         if isinstance(tweet_media, list):
             assets = self._build_tweet_media_assets(tweet_media)

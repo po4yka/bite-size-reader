@@ -34,8 +34,12 @@ def _make_cfg(
     force_tier: str = "auto",
     twitter_scraper_profile: str = "inherit",
     scraper_profile: str = "balanced",
+    aggregation_article_media_enabled: bool = True,
 ) -> Any:
     return SimpleNamespace(
+        runtime=SimpleNamespace(
+            aggregation_article_media_enabled=aggregation_article_media_enabled,
+        ),
         scraper=SimpleNamespace(profile=scraper_profile),
         twitter=SimpleNamespace(
             enabled=True,
@@ -213,6 +217,36 @@ async def test_auto_mode_runs_playwright_after_firecrawl_to_enrich_tweet_media()
     )
     coordinator._firecrawl_extractor.extract.assert_awaited_once()
     coordinator._playwright_extractor.extract.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_article_media_flag_disables_twitter_media_propagation() -> None:
+    fixture = load_aggregation_fixture("x_media_post")
+    extractor: Any = _make_platform_extractor(
+        cfg=_make_cfg(
+            playwright_enabled=True,
+            prefer_firecrawl=True,
+            aggregation_article_media_enabled=False,
+        ),
+        crawl_result=SimpleNamespace(status="ok", content_markdown="unused", content_html=None),
+    )
+    coordinator: Any = extractor._coordinator
+    coordinator._firecrawl_extractor.extract = AsyncMock(
+        return_value=(True, "firecrawl body", "markdown")
+    )
+    coordinator._playwright_extractor.extract = AsyncMock(
+        return_value=(
+            fixture["content_text"],
+            fixture["content_source"],
+            fixture["metadata"],
+        )
+    )
+
+    result = await extractor.extract(_make_request(url_text="https://x.com/user/status/1"))
+
+    assert result.images == []
+    assert result.normalized_document is not None
+    assert result.normalized_document.media == []
 
 
 @pytest.mark.asyncio

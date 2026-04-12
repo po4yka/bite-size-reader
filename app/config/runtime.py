@@ -65,6 +65,12 @@ class RuntimeConfig(BaseModel):
     aggregation_meta_extractors_enabled: bool = Field(
         default=True, validation_alias="AGGREGATION_META_EXTRACTORS_ENABLED"
     )
+    aggregation_article_media_enabled: bool = Field(
+        default=True, validation_alias="AGGREGATION_ARTICLE_MEDIA_ENABLED"
+    )
+    aggregation_non_youtube_video_enabled: bool = Field(
+        default=True, validation_alias="AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED"
+    )
     rate_limit_max_requests: int = Field(default=10, validation_alias="RATE_LIMIT_MAX_REQUESTS")
     rate_limit_window_seconds: int = Field(default=60, validation_alias="RATE_LIMIT_WINDOW_SECONDS")
     rate_limit_max_concurrent: int = Field(default=3, validation_alias="RATE_LIMIT_MAX_CONCURRENT")

@@ -578,6 +578,8 @@ class ContentExtractorCrawlMixin:
 
     def _extract_images(self, crawl: FirecrawlResult) -> list[str]:
         """Extract curated image URLs from Firecrawl metadata and markdown."""
+        if not bool(getattr(self.cfg.runtime, "aggregation_article_media_enabled", True)):
+            return []
         assets, _report = extract_firecrawl_image_assets(crawl)
         return [asset.url for asset in assets if asset.url]
 

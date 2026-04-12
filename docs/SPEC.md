@@ -507,6 +507,8 @@ sequenceDiagram
   - User-facing entry points are explicit: Telegram `/aggregate`, non-command Telegram messages that contain multiple URLs, and mixed Telegram link + forward/attachment messages route into the same workflow; the API exposes the same orchestration at `POST /v1/aggregations`.
   - Rollout is stage-driven: `AGGREGATION_BUNDLE_ENABLED=false` disables the surface entirely, `AGGREGATION_ROLLOUT_STAGE=internal` restricts access to `ALLOWED_USER_IDS`, `owner_beta` restricts access to persisted owner accounts, and `enabled` exposes the feature to authenticated API users plus the allowed Telegram bot audience.
   - Threads/Instagram routing is independently gated by `AGGREGATION_META_EXTRACTORS_ENABLED`; when disabled, those URLs fall back to the generic article extractor instead of the dedicated Meta extractor.
+  - Multimodal article and X media propagation is independently gated by `AGGREGATION_ARTICLE_MEDIA_ENABLED`; when disabled, extraction remains text-first and does not attach curated article/tweet image assets to aggregation documents or summary requests.
+  - Shared non-YouTube video normalization is independently gated by `AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED`; when disabled, Telegram/Meta video submissions stay on metadata-only fallback behavior instead of the shared transcript/audio/OCR video extractor.
   - Aggregation exports remain session-scoped persistence for now: export endpoints should continue to export request/summary data only until a dedicated aggregation export format is added.
   - Aggregation outputs are not yet indexed into the existing summary search/topic indices; search continues to operate on canonical summary/request records until a separate aggregation search read model is introduced.
 
@@ -872,6 +874,8 @@ Aggregation rollout notes:
 - `AGGREGATION_BUNDLE_ENABLED=false` fully disables bundle orchestration in Telegram and API.
 - `AGGREGATION_ROLLOUT_STAGE` supports `disabled`, `internal`, `owner_beta`, and `enabled`.
 - `AGGREGATION_META_EXTRACTORS_ENABLED=false` disables dedicated Threads/Instagram extraction while leaving bundle orchestration enabled.
+- `AGGREGATION_ARTICLE_MEDIA_ENABLED=false` disables multimodal article/X image propagation while leaving text extraction intact.
+- `AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED=false` disables shared Telegram/Meta video normalization while leaving those sources on metadata/body fallback handling.
 - Recommended rollout order is internal allowlist first, owner-only beta second, and wider default enablement only after bundle metrics confirm acceptable latency, partial-success rate, and synthesis coverage on multimodal workloads.
 
 > Local CLI runs (`python -m app.cli.summary`) automatically load environment variables from a `.env` file in the current directory or repository root before invoking `load_config`. You can override the location with `--env-file path/to/.env`.

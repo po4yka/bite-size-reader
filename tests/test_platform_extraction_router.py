@@ -25,7 +25,11 @@ async def _dummy_sem():
     yield
 
 
-def _dummy_cfg(*, aggregation_meta_extractors_enabled: bool = True) -> AppConfig:
+def _dummy_cfg(
+    *,
+    aggregation_meta_extractors_enabled: bool = True,
+    aggregation_article_media_enabled: bool = True,
+) -> AppConfig:
     return cast(
         "AppConfig",
         SimpleNamespace(
@@ -33,6 +37,7 @@ def _dummy_cfg(*, aggregation_meta_extractors_enabled: bool = True) -> AppConfig
                 enable_textacy=False,
                 request_timeout_sec=5,
                 aggregation_meta_extractors_enabled=aggregation_meta_extractors_enabled,
+                aggregation_article_media_enabled=aggregation_article_media_enabled,
             ),
             scraper=SimpleNamespace(profile="balanced"),
             redis=SimpleNamespace(
@@ -92,7 +97,9 @@ def _make_extractor() -> ContentExtractor:
 
 
 def _make_extractor_with_cfg(
-    *, aggregation_meta_extractors_enabled: bool = True
+    *,
+    aggregation_meta_extractors_enabled: bool = True,
+    aggregation_article_media_enabled: bool = True,
 ) -> ContentExtractor:
     firecrawl_scrape_mock = AsyncMock(
         return_value=SimpleNamespace(
@@ -112,7 +119,10 @@ def _make_extractor_with_cfg(
     )
     firecrawl = cast("FirecrawlClient", SimpleNamespace(scrape_markdown=firecrawl_scrape_mock))
     return ContentExtractor(
-        cfg=_dummy_cfg(aggregation_meta_extractors_enabled=aggregation_meta_extractors_enabled),
+        cfg=_dummy_cfg(
+            aggregation_meta_extractors_enabled=aggregation_meta_extractors_enabled,
+            aggregation_article_media_enabled=aggregation_article_media_enabled,
+        ),
         db=cast("DatabaseSessionManager", SimpleNamespace()),
         firecrawl=firecrawl,  # type: ignore[arg-type]
         response_formatter=cast(
@@ -251,6 +261,43 @@ async def test_extract_content_pure_skips_meta_router_when_feature_flag_disabled
     assert content_source == "markdown"
     extractor._build_meta_platform_extractor.assert_not_called()
     assert "normalized_source_document" in metadata
+
+
+@pytest.mark.asyncio
+async def test_extract_content_pure_disables_article_media_when_flag_off() -> None:
+    extractor = _make_extractor_with_cfg(aggregation_article_media_enabled=False)
+    extractor.firecrawl.scrape_markdown = AsyncMock(
+        return_value=SimpleNamespace(
+            status="ok",
+            content_markdown=(
+                "# Title\n\n"
+                "This article has enough substantive body text to bypass the low-value guard. "
+                "It explains the rollout, the audience reaction, and the follow-up context "
+                "in a way that looks like a real article instead of a stub."
+            ),
+            content_html=None,
+            error_text=None,
+            http_status=200,
+            latency_ms=1,
+            endpoint="scraper",
+            metadata_json={
+                "title": "Title",
+                "image_urls": ["https://cdn.example.com/hero.jpg"],
+            },
+            response_success=True,
+            source_url="https://example.com/article",
+            correlation_id="cid",
+            options_json=None,
+        )
+    )
+
+    _content_text, _content_source, metadata = await extractor.extract_content_pure(
+        "https://example.com/article",
+        correlation_id="cid",
+    )
+
+    assert metadata["media_selection"]["strategy"] == "disabled_by_runtime_flag"
+    assert metadata["normalized_source_document"]["media"] == []
 
 
 @pytest.mark.asyncio

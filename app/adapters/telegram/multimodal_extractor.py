@@ -89,6 +89,7 @@ def build_telegram_normalized_document(
     payload: Any,
     *,
     source_item: SourceItem,
+    enable_non_youtube_video_extraction: bool = True,
 ) -> tuple[NormalizedSourceDocument, dict[str, Any]]:
     """Build a normalized Telegram source document from one message or an album."""
 
@@ -100,7 +101,9 @@ def build_telegram_normalized_document(
         msg = "Telegram submission has neither text nor supported media metadata"
         raise ValueError(msg)
 
-    if any(asset.kind == SourceMediaKind.VIDEO for asset in media):
+    if any(asset.kind == SourceMediaKind.VIDEO for asset in media) and (
+        enable_non_youtube_video_extraction
+    ):
         video_result = _VIDEO_SOURCE_EXTRACTOR.extract(
             VideoSourceRequest(
                 source_item=source_item,
@@ -123,6 +126,9 @@ def build_telegram_normalized_document(
             )
         )
         return video_result.normalized_document, video_result.metadata
+
+    if any(asset.kind == SourceMediaKind.VIDEO for asset in media):
+        metadata["video_processing_strategy"] = "disabled_by_runtime_flag"
 
     text_blocks = build_telegram_text_blocks(messages, source_item.title_hint)
     document = NormalizedSourceDocument(

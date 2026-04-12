@@ -30,10 +30,19 @@ def _make_lifecycle() -> Any:
     return lifecycle
 
 
-def _make_extractor(*, crawl_result: Any) -> tuple[MetaPlatformExtractor, Any]:
+def _make_extractor(
+    *,
+    crawl_result: Any,
+    aggregation_non_youtube_video_enabled: bool = True,
+) -> tuple[MetaPlatformExtractor, Any]:
     scraper = SimpleNamespace(scrape_markdown=AsyncMock(return_value=crawl_result))
     lifecycle = _make_lifecycle()
     extractor = MetaPlatformExtractor(
+        cfg=SimpleNamespace(
+            runtime=SimpleNamespace(
+                aggregation_non_youtube_video_enabled=aggregation_non_youtube_video_enabled
+            )
+        ),
         scraper=scraper,
         firecrawl_sem=lambda: _DummySemCtx(),
         lifecycle=lifecycle,
@@ -131,3 +140,26 @@ async def test_instagram_reel_uses_metadata_fallback_for_login_wall_content() ->
     assert result.metadata["video_controls"]["audio_transcription_enabled"] is True
     lifecycle.handle_request_dedupe_or_create.assert_awaited_once()
     lifecycle.persist_detected_lang.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_instagram_reel_skips_shared_video_extractor_when_flag_disabled() -> None:
+    fixture = load_aggregation_fixture("instagram_reel")
+    crawl_result = SimpleNamespace(
+        status="ok",
+        content_markdown=fixture["content_markdown"],
+        content_html=None,
+        metadata_json=fixture["metadata_json"],
+    )
+    extractor, _ = _make_extractor(
+        crawl_result=crawl_result,
+        aggregation_non_youtube_video_enabled=False,
+    )
+
+    result = await extractor.extract(_make_request("https://www.instagram.com/reel/DAreel456/"))
+
+    assert result.normalized_document is not None
+    assert result.content_source == "meta_metadata_fallback"
+    assert result.metadata["video_processing_strategy"] == "disabled_by_runtime_flag"
+    assert "video_controls" not in result.metadata
+    assert any(asset.kind.value == "video" for asset in result.normalized_document.media)
