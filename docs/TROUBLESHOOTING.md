@@ -453,7 +453,7 @@ sudo chmod a+rx /usr/local/bin/yt-dlp
 **Solution**:
 
 - YouTube only: Use audio transcription (requires `WHISPER_API_KEY` or local Whisper)
-- Or: Use video download + audio extraction workflow (not implemented yet)
+- Or: enable the download fallback path so the YouTube pipeline can try downloaded subtitle/VTT fallback after transcript lookup
 
 ```bash
 # Option 1: Enable Whisper transcription (if available)

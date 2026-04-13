@@ -517,16 +517,17 @@ Yes, if self-hosted:
 
 ### Can multiple users access it safely?
 
-**Single-User Mode** (default):
+**Shared-instance access** (supported):
 
-- One database, no user isolation
-- All users see all summaries
-- Suitable for personal use or small trusted teams (family, close colleagues)
+- Multiple allowed users can use the same deployment through Telegram, the JWT API, the CLI, and request-scoped MCP access.
+- Aggregation bundle API and MCP operations are scoped to the authenticated user.
+- This is suitable for personal use or small trusted teams.
 
-**Multi-User Mode** (not implemented):
+**What is still not provided**:
 
-- Would require user-specific databases or row-level security
-- See [ADR-0003](adr/0003-single-user-access-control.md) for decision rationale
+- This is not a fully isolated multi-tenant SaaS deployment.
+- The app still runs as one shared instance and database.
+- If you need strict tenant isolation, run separate deployments or add row-level isolation around the remaining shared surfaces.
 
 ### How are API keys stored?
 

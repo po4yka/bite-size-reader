@@ -1,243 +1,123 @@
 # Multi-Source Aggregation Roadmap
 
-## Goal
+## Status
 
-Implement a first-class aggregation workflow that can ingest and synthesize information from:
+Completed.
 
-- X post
-- X article
-- Threads post
-- Instagram post
-- Instagram carousel
-- Instagram reel
-- Web article
-- Telegram post
-- Telegram post with images
-- YouTube video
+The mixed-source aggregation workflow described in this roadmap is implemented in the main codebase and covered by tests. The system now supports one or many mixed sources in a single bundle, preserves multimodal inputs, stores provenance-rich extraction results, and produces one synthesized aggregation output with coverage, duplicate, and contradiction signals.
 
-The end state is a single AI-agent-driven pipeline that can accept one or many mixed sources, extract the relevant content from each source, normalize it into a shared representation, and generate one aggregated summary with source-aware provenance.
+## Delivered End State
 
-## Current Gaps
+Supported bundle inputs now include:
 
-- Only YouTube and X have first-class platform extractors.
-- Threads and Instagram have no dedicated extraction path.
-- Aggregation exists only for URL batches and only after relationship detection.
-- There is no mixed-source bundle request model.
-- Telegram forwarded posts with caption text ignore attached images.
-- Telegram albums/carousels are not treated as a single source unit.
-- X extraction keeps alt text but does not pass image URLs into the multimodal summary path.
-- Non-YouTube video extraction is missing.
-- Article image-aware summarization exists only as an optional partial path and is off by default.
+- X posts
+- X article links
+- Threads posts
+- Instagram posts
+- Instagram carousels
+- Instagram reels
+- Web articles
+- Telegram forwarded posts
+- Telegram posts with images
+- Telegram albums
+- YouTube videos
 
-## Phase 1: Foundations
+The shared pipeline accepts mixed bundles, extracts each item with source-specific logic or a controlled fallback, persists per-item results, and synthesizes one source-aware output even when only part of the bundle succeeds.
 
-### Objective
+## Phase Status
 
-Introduce shared domain and persistence primitives for mixed-source aggregation.
+### Phase 1: Foundations
 
-### TODO
+Implemented.
 
-- [ ] Add a `SourceKind` enum for all supported source types.
-- [ ] Add a normalized `SourceItem` model that represents one extracted source.
-- [ ] Add a `SourceBundle` / `AggregationRequest` model for multi-source input.
-- [ ] Add a `NormalizedSourceDocument` schema for extracted text, media, metadata, and provenance.
-- [ ] Add an `AggregationSession` persistence model separate from URL batch analysis.
-- [ ] Add `AggregationSessionItem` persistence to link one session to many extracted requests.
-- [ ] Define stable IDs and dedupe rules for source items inside an aggregation session.
-- [ ] Decide how bundle-level and item-level failures are stored and surfaced.
+- Shared source taxonomy and bundle primitives live in `app/domain/models/source.py`.
+- Shared extraction and synthesis DTOs live in `app/application/dto/aggregation.py`.
+- Aggregation session persistence lives in `app/db/_models_aggregation.py`.
+- Database support landed in `app/db/migrations/021_add_aggregation_sessions.py` and `app/db/migrations/022_add_aggregation_session_lifecycle.py`.
+- Stable IDs, dedupe keys, and bundle/item failure storage are implemented in the domain model plus the aggregation session repository.
 
-### Deliverables
+### Phase 2: Unified Extraction Orchestrator
 
-- Shared source models in the domain/application layer.
-- Database migration for aggregation session storage.
-- Clear contract for what every extractor must return.
+Implemented.
 
-## Phase 2: Unified Extraction Orchestrator
+- `app/agents/multi_source_extraction_agent.py` is the heterogeneous extraction entry point.
+- URL and Telegram-native classification lives in `app/adapters/content/multi_source_classification.py`.
+- Mixed inputs are accepted through `SourceSubmission` and routed per item.
+- Partial success is first-class: one failed source does not discard the whole bundle.
+- Item-level extraction status, normalized payload, duplicates, and failures are persisted and returned.
 
-### Objective
+### Phase 3: Threads and Instagram Coverage
 
-Build one orchestration path that accepts heterogeneous inputs and dispatches each item to the correct extractor.
+Implemented.
 
-### TODO
+- Dedicated URL detection lives in `app/core/urls/meta.py`.
+- First-class Threads and Instagram extraction lives in `app/adapters/meta/platform_extractor.py`.
+- Threads quoted context, image/video metadata, Instagram post/carousel/reel handling, and login-wall fallback tiers are implemented.
+- Shared fixtures and tests cover these paths in `tests/test_meta_platform_extractor.py`, `tests/core/urls/test_meta.py`, and `tests/agents/test_multi_source_extraction_agent.py`.
 
-- [ ] Add a `MultiSourceExtractionAgent` or equivalent orchestrator for source bundles.
-- [ ] Add source classification for URLs and Telegram-native submissions.
-- [ ] Route each source item to a dedicated extractor or fallback extractor.
-- [ ] Support mixed inputs in one request: links, forwarded Telegram posts, and media attachments.
-- [ ] Allow aggregation even when sources are unrelated; relationship analysis should enrich the result, not gate it.
-- [ ] Add partial-success behavior so one failed source does not discard the whole bundle.
-- [ ] Return item-level extraction status, normalized payload, and error diagnostics.
+### Phase 4: Telegram Multimodal Completion
 
-### Deliverables
+Implemented.
 
-- A single entry point for mixed-source aggregation.
-- Item-level extraction results ready for synthesis.
+- Telegram multimodal extraction lives in `app/adapters/telegram/multimodal_extractor.py`.
+- Forwarded caption + media, albums/media groups, ordered images, forwarded provenance, and video handoff into the shared video extractor are implemented.
+- Telegram routing uses these paths through `app/adapters/telegram/routing/content_router.py`.
+- Coverage exists in `tests/test_telegram_multimodal_extractor.py` and `tests/test_forward_routing.py`.
 
-## Phase 3: Threads and Instagram Coverage
+### Phase 5: X and Article Multimodal Upgrades
 
-### Objective
+Implemented.
 
-Close the largest platform coverage gaps with first-class extractors.
+- X/Twitter platform extraction preserves image URLs, alt text, and quoted-post media metadata through `app/adapters/twitter/platform_extractor.py` and `app/adapters/twitter/extraction_coordinator.py`.
+- Article image selection, filtering, and decorative/tracker rejection live in `app/adapters/content/article_media.py`.
+- Generic article extraction propagates normalized multimodal article documents through `app/adapters/content/content_extractor.py`.
+- Coverage exists in `tests/test_twitter_platform_extractor.py` and `tests/test_platform_extraction_router.py`.
 
-### TODO
+### Phase 6: Video Extraction Beyond YouTube
 
-- [ ] Add a Threads URL detector and extractor.
-- [ ] Support Threads post text, quoted context, images, and video metadata where available.
-- [ ] Add Instagram URL detectors for post, carousel, and reel URLs.
-- [ ] Add an Instagram post extractor for caption text and metadata.
-- [ ] Add an Instagram carousel extractor that treats the full carousel as one source item.
-- [ ] Add an Instagram reel extractor for caption, OCR/frame analysis, and audio/transcript fallback where feasible.
-- [ ] Define authenticated vs unauthenticated extraction strategy for Meta surfaces.
-- [ ] Add platform-specific quality checks and fallback tiers for login-wall or low-value extraction.
+Implemented.
 
-### Deliverables
+- The shared interface and metadata-driven implementation live in `app/adapters/video/source_extractor.py`.
+- The extractor is reused for Instagram reels and Telegram videos, and complements the YouTube pipeline.
+- Transcript, audio-transcript, OCR/frame-text, media provenance, and runtime controls are included in the normalized output.
+- Coverage exists in `tests/test_video_source_extractor.py`, `tests/test_meta_platform_extractor.py`, `tests/test_telegram_multimodal_extractor.py`, and `tests/test_youtube_platform_extractor.py`.
 
-- First-class support for Threads, Instagram posts, Instagram carousels, and Instagram reels.
+### Phase 7: Aggregated Synthesis and Output Contract
 
-## Phase 4: Telegram Multimodal Completion
+Implemented.
 
-### Objective
+- `app/agents/multi_source_aggregation_agent.py` synthesizes extracted bundle items.
+- Bundle synthesis no longer depends on relationship gating; relationship analysis is optional enrichment.
+- Duplicate detection, contradiction hints, provenance-aware claims, evidence weighting, source coverage, and mixed-source typing are implemented.
+- The persisted aggregation output contract lives in `app/application/dto/aggregation.py`.
+- Coverage exists in `tests/agents/test_multi_source_aggregation_agent.py`.
 
-Fix Telegram-specific routing so forwarded posts and albums are extracted as complete multimodal sources.
+### Phase 8: API, Telegram UX, and Product Surface
 
-### TODO
+Implemented.
 
-- [ ] Change forwarded Telegram post routing so `caption + images` is handled as one multimodal source, not text-only.
-- [ ] Add a Telegram post extractor that combines text, caption, and media into one normalized source item.
-- [ ] Add album/media-group detection using Telegram grouping metadata.
-- [ ] Treat Telegram albums as one source item with ordered images.
-- [ ] Support forwarded posts with images even when text exists.
-- [ ] Support forwarded posts with image-only content plus OCR/vision extraction.
-- [ ] Decide whether Telegram videos should enter the non-YouTube video extraction flow.
-- [ ] Preserve Telegram provenance: source chat, original post ID, sender metadata, and media order.
+- Telegram `/aggregate` command support lives in `app/adapters/telegram/command_handlers/aggregation_commands_handler.py`.
+- Telegram bundle handling and progress rendering live in `app/adapters/telegram/multi_source_aggregation_handler.py`.
+- Mixed-link and link-plus-forward-or-attachment routing lives in `app/adapters/telegram/routing/content_router.py`.
+- REST API create/get/list support lives in `app/api/routers/aggregation.py`.
+- Aggregated outputs are persisted and retrievable as dedicated aggregation sessions. Legacy summary search remains separate by design until a dedicated aggregation search read model is introduced.
 
-### Deliverables
+### Phase 9: Validation, Observability, and Rollout
 
-- Correct multimodal extraction for forwarded Telegram posts and Telegram albums.
+Implemented.
 
-## Phase 5: X and Article Multimodal Upgrades
-
-### Objective
-
-Close the remaining multimodal gaps in existing X and article support.
-
-### TODO
-
-- [ ] Pass X image URLs into the platform extraction result instead of dropping them.
-- [ ] Preserve X image alt text and media URLs together in the normalized source document.
-- [ ] Support X posts with multiple images as true multimodal inputs to the summarizer.
-- [ ] Decide whether quoted-post media should be included in the same source item.
-- [ ] Enable article image extraction for summarization when image URLs are present.
-- [ ] Review Firecrawl image extraction defaults and rollout strategy.
-- [ ] Make article vision summarization production-ready instead of config-hidden partial support.
-- [ ] Add quality checks to avoid feeding logos, trackers, and decorative images into the summary path.
-
-### Deliverables
-
-- Existing X and article extraction paths become consistently multimodal.
-
-## Phase 6: Video Extraction Beyond YouTube
-
-### Objective
-
-Add a reusable video-capable extraction layer for reels and other short-form video sources.
-
-### TODO
-
-- [ ] Define a shared `VideoSourceExtractor` interface for YouTube, Instagram reels, Telegram videos, and future platforms.
-- [ ] Reuse the strongest parts of the YouTube flow: transcript lookup, metadata extraction, persistence, and fallback handling.
-- [ ] Add OCR/frame-sampling fallback for videos without transcripts.
-- [ ] Add audio transcription fallback for supported non-YouTube video sources.
-- [ ] Add storage, cleanup, and size limits for downloaded video assets outside YouTube.
-- [ ] Add media provenance so the final summary can reference transcript vs OCR vs frame-derived facts.
-- [ ] Add timeout and cost controls for video-heavy bundles.
-
-### Deliverables
-
-- A common video extraction path that supports short-form social video, not only YouTube.
-
-## Phase 7: Aggregated Synthesis and Output Contract
-
-### Objective
-
-Move from "combined summary for related URLs" to "bundle synthesis for mixed source sets".
-
-### TODO
-
-- [ ] Add a `MultiSourceAggregationAgent` that synthesizes normalized source items into one output.
-- [ ] Make bundle synthesis independent from relationship detection.
-- [ ] Keep relationship analysis as an optional enrichment signal inside the final output.
-- [ ] Add cross-source dedupe and contradiction detection.
-- [ ] Add provenance-aware synthesis so each key claim can be traced back to one or more source items.
-- [ ] Add source weighting rules for text, images, OCR, transcript, and metadata-derived facts.
-- [ ] Add a new output shape for aggregated summaries if the existing summary contract is too article-centric.
-- [ ] Decide how `source_type` should work for mixed bundles.
-- [ ] Add "source coverage" fields so the UI can show which bundle items were actually used.
-
-### Deliverables
-
-- One aggregation output that works for related and unrelated mixed sources.
-
-## Phase 8: API, Telegram UX, and Product Surface
-
-### Objective
-
-Expose the new capability through user-facing entry points.
-
-### TODO
-
-- [ ] Add a Telegram command and routing path for explicit multi-source aggregation.
-- [ ] Support one Telegram message containing multiple mixed links.
-- [ ] Support link + forward + attachment combinations where feasible.
-- [ ] Add API endpoints for submitting aggregation bundles outside Telegram.
-- [ ] Add progress updates that show per-source extraction stages.
-- [ ] Add final response rendering with source list, failures, and confidence/provenance notes.
-- [ ] Decide how exports should include aggregation sessions and source item payloads.
-- [ ] Decide whether aggregated outputs are searchable and how they relate to existing summary search.
-
-### Deliverables
-
-- End-user entry points for the new aggregation workflow.
-
-## Phase 9: Validation, Observability, and Rollout
-
-### Objective
-
-Make the feature measurable, testable, and safe to release incrementally.
-
-### TODO
-
-- [ ] Add unit tests for each new extractor and shared normalization model.
-- [ ] Add integration tests for mixed bundles across supported platforms.
-- [ ] Add fixtures for Threads, Instagram posts, Instagram carousels, Instagram reels, Telegram posts, and X media posts.
-- [ ] Add regression tests for current YouTube, X, URL, and Telegram flows.
-- [ ] Add metrics for extraction success by platform, fallback tier, and media type.
-- [ ] Add metrics for bundle-level partial success and synthesis coverage.
-- [ ] Add feature flags for new extractors and bundle orchestration.
-- [ ] Add cost and latency dashboards for multimodal and video-heavy workloads.
-- [ ] Add a staged rollout plan: internal-only, owner-only beta, then wider default enablement.
-
-### Deliverables
-
-- Production readiness for the full multi-source aggregation workflow.
-
-## Suggested Execution Order
-
-1. Phase 1
-2. Phase 2
-3. Phase 4
-4. Phase 5
-5. Phase 3
-6. Phase 6
-7. Phase 7
-8. Phase 8
-9. Phase 9
+- Unit and integration coverage exists for domain models, extractors, synthesis, persistence, API, CLI, MCP, and routing.
+- Fixture-backed bundle tests cover Threads, Instagram, Telegram, X, YouTube, and generic web article flows.
+- Aggregation metrics, bundle success/partial-success signals, synthesis coverage metrics, rollout flags, and deployment guidance are implemented.
+- Key files include `tests/agents/test_multi_source_extraction_agent.py`, `tests/agents/test_multi_source_aggregation_agent.py`, `tests/observability/test_aggregation_metrics.py`, `tests/test_aggregation_rollout.py`, and `docs/DEPLOYMENT.md`.
 
 ## Definition of Done
+
+Completed.
 
 - A single request can contain one or many mixed sources.
 - Each source is extracted with source-specific logic or a controlled fallback.
 - Multimodal content is preserved instead of silently downgraded to text-only.
 - Aggregation no longer depends on URL-batch relationship detection.
-- Threads, Instagram, Telegram media posts, X media posts, articles, and YouTube are all supported in the same workflow.
+- Threads, Instagram, Telegram media posts, X media posts, articles, and YouTube are supported in the same workflow.
 - The final summary includes provenance and handles partial extraction failures cleanly.
