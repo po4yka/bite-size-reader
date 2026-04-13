@@ -167,9 +167,11 @@ class ModelCapabilities:
             "deepseek/deepseek-r1",
             # Moonshot AI (Kimi) models
             "moonshotai/kimi-k2",
+            "moonshotai/kimi-k2-0905",
             "moonshotai/kimi-k2.5",
             # Qwen models
             "qwen/qwen3-max",
+            "qwen/qwen3.5-plus-02-15",
             "qwen/qwen3-235b-a22b-2507",
             "qwen/qwen3-next-80b-a3b-thinking",
             "qwen/qwen3-coder-plus",
@@ -187,7 +189,7 @@ class ModelCapabilities:
     def get_safe_structured_fallbacks(self) -> list[str]:
         """Get list of models known to support structured outputs reliably."""
         return [
-            "minimax/minimax-m1",  # 1M ctx, low cost
+            "minimax/minimax-m2",  # structured-output capable per live capability probe
             "qwen/qwen3.5-plus-02-15",  # strong structured-output support
             "deepseek/deepseek-v3.2",  # paid fallback
         ]

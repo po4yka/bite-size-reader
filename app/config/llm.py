@@ -22,8 +22,8 @@ class OpenRouterConfig(BaseModel):
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: (
             "qwen/qwen3.5-plus-02-15",
-            "moonshotai/kimi-k2.5",
-            "minimax/minimax-m1",
+            "moonshotai/kimi-k2-0905",
+            "minimax/minimax-m2",
         ),
         validation_alias="OPENROUTER_FALLBACK_MODELS",
     )
@@ -37,7 +37,7 @@ class OpenRouterConfig(BaseModel):
     )
     enable_stats: bool = Field(default=False, validation_alias="OPENROUTER_ENABLE_STATS")
     long_context_model: str | None = Field(
-        default="minimax/minimax-m1",
+        default="minimax/minimax-m2",
         validation_alias="OPENROUTER_LONG_CONTEXT_MODEL",
     )
     flash_model: str = Field(
@@ -299,7 +299,7 @@ class ModelRoutingConfig(BaseModel):
         default_factory=lambda: (
             "deepseek/deepseek-v3.2",
             "qwen/qwen3.5-plus-02-15",
-            "minimax/minimax-m1",
+            "minimax/minimax-m2",
         ),
         validation_alias="MODEL_ROUTING_FALLBACK_MODELS",
     )
