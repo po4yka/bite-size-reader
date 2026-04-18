@@ -41,6 +41,10 @@ _TRACKING_HOST_TERMS = (
     "googletagmanager",
 )
 _BLOCKED_EXTENSIONS = (".svg", ".ico")
+# Path segments that indicate an unsubstituted JS template variable (e.g. Wired's
+# Cloudinary URLs sometimes serialize with "/undefined" when the filename
+# placeholder did not render). Such URLs 404 when fetched downstream.
+_INVALID_PATH_SEGMENTS = ("/undefined", "/null", "/none", "/[object%20object]")
 
 
 def extract_firecrawl_image_assets(
@@ -164,6 +168,13 @@ def _is_content_image_candidate(candidate: dict[str, Any]) -> tuple[bool, str]:
         return False, "tracking_host"
     if parsed.path.lower().endswith(_BLOCKED_EXTENSIONS):
         return False, "blocked_extension"
+
+    lower_path = parsed.path.lower()
+    if any(segment in lower_path for segment in _INVALID_PATH_SEGMENTS) or lower_path in (
+        "/undefined",
+        "/null",
+    ):
+        return False, "unresolved_template"
 
     path_and_query = f"{parsed.path}?{parsed.query}".lower()
     if any(term in path_and_query for term in _DECORATIVE_PATH_TERMS):

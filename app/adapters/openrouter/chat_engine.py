@@ -20,6 +20,58 @@ from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
+_IMAGE_FETCH_ERROR_SIGNALS = (
+    "fetching image from url",
+    "fetching image",
+    "failed to fetch image",
+    "invalid image url",
+)
+
+
+def _has_image_fetch_error(
+    error_text: str | None,
+    error_context: dict[str, Any] | None,
+) -> bool:
+    haystack = (error_text or "").lower()
+    if error_context:
+        for key in ("message", "api_error"):
+            value = error_context.get(key)
+            if isinstance(value, str):
+                haystack += " " + value.lower()
+    return any(signal in haystack for signal in _IMAGE_FETCH_ERROR_SIGNALS)
+
+
+def _strip_images_from_messages(
+    messages: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
+    """Return messages with image parts removed and a count of stripped images.
+
+    Multimodal user messages have ``content`` as a list of parts; text parts are
+    concatenated back into a single string so downstream text-only models can
+    still consume them.
+    """
+    stripped = 0
+    new_messages: list[dict[str, Any]] = []
+    for message in messages:
+        content = message.get("content")
+        if not isinstance(content, list):
+            new_messages.append(message)
+            continue
+        text_parts: list[str] = []
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if part.get("type") == "image_url":
+                stripped += 1
+                continue
+            if part.get("type") == "text":
+                text_parts.append(str(part.get("text", "")))
+        joined = "\n".join(part for part in text_parts if part)
+        new_message = dict(message)
+        new_message["content"] = joined
+        new_messages.append(new_message)
+    return new_messages, stripped
+
 
 @asynccontextmanager
 async def _noop_timeout() -> AsyncIterator[None]:
@@ -78,6 +130,7 @@ class OpenRouterChatEngine:
         last_model_reported: str | None = None
         last_response_text: str | None = None
         last_error_context: dict[str, Any] | None = None
+        images_stripped = False
 
         try:
             async with self._client._request_context() as http_client:
@@ -159,6 +212,33 @@ class OpenRouterChatEngine:
                             else:
                                 self._client._circuit_breaker.record_failure()
                         return model_state.terminal_result
+
+                    if not images_stripped and _has_image_fetch_error(
+                        last_error_text, last_error_context
+                    ):
+                        stripped_messages, stripped_count = _strip_images_from_messages(
+                            context.sanitized_messages
+                        )
+                        if stripped_count:
+                            context.sanitized_messages = stripped_messages
+                            context.message_lengths = [
+                                len(str(m.get("content", ""))) for m in stripped_messages
+                            ]
+                            context.message_roles = [m.get("role", "?") for m in stripped_messages]
+                            context.total_chars = sum(context.message_lengths)
+                            current_request = current_request.model_copy(
+                                update={"messages": stripped_messages}
+                            )
+                            images_stripped = True
+                            logger.warning(
+                                "openrouter_stripped_images_after_fetch_error",
+                                extra={
+                                    "model": model,
+                                    "request_id": request_id,
+                                    "images_removed": stripped_count,
+                                    "error_preview": (last_error_text or "")[:200],
+                                },
+                            )
 
                     if structured_output_state.parse_error:
                         logger.info(

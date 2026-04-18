@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 from app.adapters.content.llm_response_workflow import (
     LLMInteractionConfig,
@@ -77,6 +78,48 @@ def log_llm_content_validation(
             },
         },
     )
+
+
+_INVALID_IMAGE_SEGMENTS = ("/undefined", "/null", "/none", "/[object%20object]")
+_ACCEPTED_IMAGE_EXTENSIONS = (
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+    ".bmp",
+    ".tiff",
+    ".heic",
+    ".avif",
+)
+
+
+def _is_valid_image_url(url: str) -> bool:
+    """Validate an image URL before forwarding it to a vision model.
+
+    Rejects URLs that contain leaked JS template variables (e.g. `/undefined`)
+    or that clearly do not point at an image asset. The check is deliberately
+    conservative: unknown-but-plausible URLs are allowed through so that
+    non-extension CDN routes (such as `/photos/.../w_640,c_limit/picture`)
+    still work.
+    """
+    if not url or not url.startswith("https://"):
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    path = parsed.path.lower()
+    if not path or path == "/":
+        return False
+    if any(segment in path for segment in _INVALID_IMAGE_SEGMENTS):
+        return False
+    if path.endswith(("/undefined", "/null", "/none")):
+        return False
+    # Block obvious non-image extensions to avoid HTML/JSON URLs slipping in.
+    if path.endswith((".html", ".htm", ".json", ".xml", ".pdf")):
+        return False
+    return True
 
 
 def _clamp_float(value: float, min_value: float, max_value: float) -> float:
@@ -210,7 +253,20 @@ class SummaryRequestFactory:
         images: list[str] | None,
     ) -> list[dict[str, Any]]:
         """Build multimodal chat messages for the summary request."""
-        valid_images = [url for url in (images or []) if url.startswith("https://")]
+        raw_images = list(images or [])
+        valid_images = [url for url in raw_images if _is_valid_image_url(url)]
+        dropped = len(raw_images) - len(valid_images)
+        if dropped:
+            logger.info(
+                "summary_images_filtered",
+                extra={
+                    "dropped": dropped,
+                    "kept": len(valid_images),
+                    "sample_dropped": next(
+                        (url for url in raw_images if url not in valid_images), None
+                    ),
+                },
+            )
         if not valid_images:
             return [
                 {"role": "system", "content": system_prompt},
