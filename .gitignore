@@ -142,6 +142,7 @@ app/static/digest/
 .claude/settings.local.json
 .claude/worktrees/
 .claude/skills/redeploy-raspi/
+.claude/scheduled_tasks.lock
 .agents/
 
 # --- oh-my-claudecode ---
