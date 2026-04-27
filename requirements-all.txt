@@ -450,7 +450,7 @@ requests-file==3.0.1
     # via tldextract
 requests-oauthlib==2.0.0
     # via kubernetes
-rich==14.3.3
+rich==15.0.0
     # via
     #   chromadb
     #   typer
