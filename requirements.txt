@@ -15,7 +15,7 @@ catalogue==2.0.10
     #   spacy
     #   srsly
     #   thinc
-certifi==2026.2.25
+certifi==2026.4.22
     # via
     #   httpcore
     #   httpx
@@ -26,7 +26,7 @@ charset-normalizer==3.4.7
     #   htmldate
     #   requests
     #   trafilatura
-click==8.3.1
+click==8.3.3
     # via typer
 cloudpathlib==0.23.0
     # via weasel
@@ -62,14 +62,14 @@ httpx==0.28.1
     #   weasel
 hyperframe==6.1.0
     # via h2
-idna==3.11
+idna==3.13
     # via
     #   anyio
     #   httpx
     #   requests
 jinja2==3.1.6
     # via spacy
-json-repair==0.58.7
+json-repair==0.59.5
     # via bite-size-reader (pyproject.toml)
 justext==3.0.2
     # via trafilatura
@@ -104,12 +104,12 @@ orjson==3.11.8
     # via
     #   bite-size-reader (pyproject.toml)
     #   scrapling
-packaging==26.0
+packaging==26.2
     # via
     #   spacy
     #   thinc
     #   weasel
-peewee==4.0.4
+peewee==4.0.5
     # via bite-size-reader (pyproject.toml)
 preshed==3.0.13
     # via
@@ -117,20 +117,20 @@ preshed==3.0.13
     #   thinc
 pyaes==1.6.1
     # via pyrotgfork
-pydantic==2.12.5
+pydantic==2.13.3
     # via
     #   bite-size-reader (pyproject.toml)
     #   pydantic-settings
     #   spacy
     #   thinc
     #   weasel
-pydantic-core==2.41.5
+pydantic-core==2.46.3
     # via pydantic
-pydantic-settings==2.13.1
+pydantic-settings==2.14.0
     # via bite-size-reader (pyproject.toml)
 pygments==2.20.0
     # via rich
-pyrotgfork==2.2.21
+pyrotgfork==2.2.23
     # via bite-size-reader (pyproject.toml)
 pysocks==1.7.1
     # via pyrotgfork
@@ -146,13 +146,13 @@ pytz==2026.1.post1
     # via dateparser
 redis==7.4.0
     # via bite-size-reader (pyproject.toml)
-regex==2026.3.32
+regex==2026.4.4
     # via dateparser
 requests==2.33.1
     # via spacy
 rich==15.0.0
     # via typer
-scrapling==0.4.3
+scrapling==0.4.7
     # via bite-size-reader (pyproject.toml)
 setuptools==82.0.1
     # via
@@ -162,7 +162,7 @@ shellingham==1.5.4
     # via typer
 six==1.17.0
     # via python-dateutil
-smart-open==7.5.1
+smart-open==7.6.0
     # via weasel
 spacy==3.8.14
     # via bite-size-reader (pyproject.toml)
@@ -185,7 +185,7 @@ tqdm==4.67.3
     # via spacy
 trafilatura==2.0.0
     # via bite-size-reader (pyproject.toml)
-typer==0.24.1
+typer==0.25.0
     # via
     #   spacy
     #   weasel
