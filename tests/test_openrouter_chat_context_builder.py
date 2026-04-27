@@ -75,7 +75,15 @@ def test_chat_context_builder_adds_safe_structured_fallbacks_for_reasoning_model
 
     assert context.models_to_try[0] == "deepseek/deepseek-r1"
     assert "fallback/model" in context.models_to_try
-    assert "google/gemini-3-flash-preview" in context.models_to_try
+    # Reasoning models append the safe structured fallback list (currently
+    # minimax/qwen/deepseek-v3.2) -- assert at least one of the safe entries
+    # appears so the test isn't tied to a single rotating model name.
+    safe_fallbacks = {
+        "minimax/minimax-m2",
+        "qwen/qwen3.5-plus-02-15",
+        "deepseek/deepseek-v3.2",
+    }
+    assert safe_fallbacks.intersection(context.models_to_try)
 
 
 @pytest.mark.asyncio

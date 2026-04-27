@@ -54,9 +54,25 @@ class SpyBot(TelegramBot):
 
 
 def make_bot(tmp_path: str) -> SpyBot:
+    from app.config.runtime import RuntimeConfig
+
     db = DatabaseSessionManager(tmp_path)
     db.migrate()
-    cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1, 55, 66, 77, 88))
+    # Aggregation persists FK-bound rows referencing the users table; this
+    # multi-link test never seeds users, so disable the bundle workflow to
+    # keep the URL routing the only thing under test.
+    cfg = make_test_app_config(
+        db_path=tmp_path,
+        allowed_user_ids=(1, 55, 66, 77, 88),
+        runtime=RuntimeConfig(
+            db_path=tmp_path,
+            log_level="INFO",
+            request_timeout_sec=5,
+            preferred_lang="en",
+            debug_payloads=False,
+            aggregation_bundle_enabled=False,
+        ),
+    )
     from app.adapters import telegram_bot as tbmod
 
     tbmod.Client = object

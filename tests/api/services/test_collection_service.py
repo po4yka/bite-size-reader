@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.api.exceptions import ResourceNotFoundError
 from app.api.services.collection_service import CollectionService
 from app.db.models import Collection, CollectionCollaborator, CollectionItem
-from app.domain.exceptions.domain_exceptions import ResourceNotFoundError
 
 
 @pytest.mark.asyncio

@@ -7,12 +7,13 @@ from datetime import datetime
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import AuthorizationError, ResourceNotFoundError
 from app.api.models.auth import TelegramLinkStatus
-from app.api.routers.auth.tokens import (
-    is_self_service_secret_client,
-    supported_self_service_secret_client_types,
-)
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
+
+# ``app.api.routers.auth.tokens`` is imported lazily inside the methods that
+# need it: importing it at module load triggers the routers package, which
+# pulls back in this module via several router endpoints and produces a
+# circular-import error during test collection.
 
 logger = get_logger(__name__)
 
@@ -75,6 +76,11 @@ class AuthService:
             return user_record
         if int(user_record["telegram_user_id"]) != int(target_user_id):
             raise AuthorizationError("You can only manage your own client secrets")
+        from app.api.routers.auth.tokens import (
+            is_self_service_secret_client,
+            supported_self_service_secret_client_types,
+        )
+
         if not is_self_service_secret_client(client_id):
             allowed_types = ", ".join(supported_self_service_secret_client_types())
             raise AuthorizationError(
