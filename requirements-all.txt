@@ -92,7 +92,7 @@ courlan==1.3.2
     # via trafilatura
 crawlee==1.6.1
     # via bite-size-reader
-cryptography==46.0.6
+cryptography==47.0.0
     # via pyjwt
 cssselect==1.4.0
     # via scrapling
@@ -207,7 +207,7 @@ kubernetes==35.0.0
     # via chromadb
 loguru==0.7.3
     # via bite-size-reader
-lxml==6.0.2
+lxml==6.1.0
     # via
     #   beautifulsoup4
     #   htmldate
@@ -413,7 +413,7 @@ python-dotenv==1.2.2
     # via
     #   pydantic-settings
     #   uvicorn
-python-multipart==0.0.22
+python-multipart==0.0.26
     # via
     #   bite-size-reader
     #   mcp
