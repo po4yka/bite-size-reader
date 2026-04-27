@@ -749,6 +749,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/aggregations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Aggregation Bundles
+         * @description Return recent persisted aggregation sessions for the authenticated user.
+         */
+        get: operations["list_aggregation_bundles_v1_aggregations_get"];
+        put?: never;
+        /**
+         * Create Aggregation Bundle
+         * @description Execute mixed-source aggregation for one submitted bundle of 1-25 URL items. This endpoint is blocking and returns the final persisted session snapshot on success.
+         */
+        post: operations["create_aggregation_bundle_v1_aggregations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/aggregations/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Aggregation Bundle
+         * @description Return one persisted aggregation session with bundle items and synthesized output.
+         */
+        get: operations["get_aggregation_bundle_v1_aggregations__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/search": {
         parameters: {
             query?: never;
@@ -5276,6 +5320,181 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequestRetryResponseEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["NotFoundError"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequestsError"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    list_aggregation_bundles_v1_aggregations_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                status?: "pending" | "processing" | "completed" | "partial" | "failed" | "cancelled" | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aggregation bundle list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            sessions?: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                        meta: components["schemas"]["Meta"];
+                    };
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["NotFoundError"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequestsError"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    create_aggregation_bundle_v1_aggregations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    items: {
+                        /**
+                         * @default url
+                         * @constant
+                         */
+                        type?: "url";
+                        /** Format: uri */
+                        url: string;
+                        /** @enum {string|null} */
+                        source_kind_hint?: "x_post" | "x_article" | "threads_post" | "instagram_post" | "instagram_carousel" | "instagram_reel" | "web_article" | "telegram_post" | "youtube_video" | null;
+                        metadata?: {
+                            [key: string]: unknown;
+                        } | null;
+                    }[];
+                    /**
+                     * @default auto
+                     * @enum {string}
+                     */
+                    lang_preference?: "auto" | "en" | "ru";
+                    metadata?: {
+                        [key: string]: unknown;
+                    } | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Aggregation bundle completed or partially completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            session?: {
+                                sessionId?: number;
+                                correlationId?: string;
+                                status?: string;
+                                sourceType?: string;
+                                successfulCount?: number;
+                                failedCount?: number;
+                                duplicateCount?: number;
+                                processingTimeMs?: number | null;
+                                queuedAt?: string | null;
+                                startedAt?: string | null;
+                                completedAt?: string | null;
+                                lastProgressAt?: string | null;
+                                progress?: {
+                                    [key: string]: unknown;
+                                };
+                                failure?: {
+                                    [key: string]: unknown;
+                                } | null;
+                            };
+                            aggregation?: {
+                                [key: string]: unknown;
+                            };
+                            items?: {
+                                position?: number;
+                                itemId?: number;
+                                sourceItemId?: string;
+                                sourceKind?: string;
+                                status?: string;
+                                requestId?: number | null;
+                                failure?: {
+                                    [key: string]: unknown;
+                                } | null;
+                            }[];
+                        };
+                        meta: components["schemas"]["Meta"];
+                    };
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            403: components["responses"]["ForbiddenError"];
+            404: components["responses"]["NotFoundError"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequestsError"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    get_aggregation_bundle_v1_aggregations__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aggregation bundle detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            session?: {
+                                [key: string]: unknown;
+                            };
+                            items?: {
+                                [key: string]: unknown;
+                            }[];
+                            aggregation?: {
+                                [key: string]: unknown;
+                            } | null;
+                        };
+                        meta: components["schemas"]["Meta"];
+                    };
                 };
             };
             401: components["responses"]["UnauthorizedError"];

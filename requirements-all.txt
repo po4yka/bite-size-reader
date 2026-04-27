@@ -39,7 +39,7 @@ brotlicffi==1.2.0.1 ; platform_python_implementation != 'CPython'
     # via fonttools
 browserforge==1.2.4
     # via crawlee
-build==1.4.3
+build==1.4.2
     # via chromadb
 cachetools==7.0.5
     # via crawlee
@@ -65,9 +65,9 @@ charset-normalizer==3.4.7
     #   htmldate
     #   requests
     #   trafilatura
-chromadb==1.5.8
+chromadb==1.5.5
     # via bite-size-reader
-click==8.3.2
+click==8.3.1
     # via
     #   browserforge
     #   typer
@@ -90,9 +90,9 @@ confection==1.3.3
     #   weasel
 courlan==1.3.2
     # via trafilatura
-crawlee==1.6.2
+crawlee==1.6.1
     # via bite-size-reader
-cryptography==46.0.7
+cryptography==46.0.6
     # via pyjwt
 cssselect==1.4.0
     # via scrapling
@@ -100,9 +100,9 @@ cssselect2==0.9.0
     # via weasyprint
 cuda-bindings==13.2.0 ; sys_platform == 'linux'
     # via torch
-cuda-pathfinder==1.5.3 ; sys_platform == 'linux'
+cuda-pathfinder==1.5.0 ; sys_platform == 'linux'
     # via cuda-bindings
-cuda-toolkit==13.2.1 ; sys_platform == 'linux'
+cuda-toolkit==13.0.2 ; sys_platform == 'linux'
     # via torch
 cymem==2.0.13
     # via
@@ -117,9 +117,9 @@ defusedxml==0.7.1
     #   youtube-transcript-api
 durationpy==0.10
     # via kubernetes
-fastapi==0.136.0
+fastapi==0.135.3
     # via bite-size-reader
-filelock==3.29.0
+filelock==3.25.2
     # via
     #   huggingface-hub
     #   tldextract
@@ -134,7 +134,7 @@ fsspec==2026.3.0
     #   torch
 googleapis-common-protos==1.74.0
     # via opentelemetry-exporter-otlp-proto-grpc
-greenlet==3.4.0
+greenlet==3.3.2
     # via playwright
 grpcio==1.80.0
     # via
@@ -167,7 +167,7 @@ httpx==0.28.1
     #   weasel
 httpx-sse==0.4.3
     # via mcp
-huggingface-hub==1.11.0
+huggingface-hub==1.9.0
     # via
     #   sentence-transformers
     #   tokenizers
@@ -183,7 +183,7 @@ idna==3.11
     #   yarl
 impit==0.12.0
     # via crawlee
-importlib-metadata==9.0.0
+importlib-metadata==8.7.1
     # via opentelemetry-api
 importlib-resources==6.5.2
     # via chromadb
@@ -193,9 +193,9 @@ jinja2==3.1.6
     #   torch
 joblib==1.5.3
     # via scikit-learn
-json-repair==0.59.4
+json-repair==0.58.7
     # via bite-size-reader
-jsonschema==4.26.0
+jsonschema==4.24.1
     # via
     #   chromadb
     #   mcp
@@ -207,7 +207,7 @@ kubernetes==35.0.0
     # via chromadb
 loguru==0.7.3
     # via bite-size-reader
-lxml==6.1.0
+lxml==6.0.2
     # via
     #   beautifulsoup4
     #   htmldate
@@ -227,9 +227,9 @@ mdurl==0.1.2
     # via markdown-it-py
 mmh3==5.2.1
     # via chromadb
-more-itertools==11.0.2
+more-itertools==11.0.1
     # via crawlee
-mpmath==1.4.1
+mpmath==1.3.0
     # via sympy
 multidict==6.7.1
     # via yarl
@@ -251,44 +251,44 @@ numpy==2.4.4
     #   spacy
     #   thinc
     #   transformers
-nvidia-cublas==13.4.0.1 ; sys_platform == 'linux'
+nvidia-cublas==13.1.0.3 ; sys_platform == 'linux'
     # via
     #   cuda-toolkit
     #   nvidia-cudnn-cu13
     #   nvidia-cusolver
-nvidia-cuda-cupti==13.2.75 ; sys_platform == 'linux'
+nvidia-cuda-cupti==13.0.85 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cuda-nvrtc==13.2.78 ; sys_platform == 'linux'
+nvidia-cuda-nvrtc==13.0.88 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cuda-runtime==13.2.75 ; sys_platform == 'linux'
+nvidia-cuda-runtime==13.0.96 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cudnn-cu13==9.21.0.82 ; sys_platform == 'linux'
+nvidia-cudnn-cu13==9.19.0.56 ; sys_platform == 'linux'
     # via torch
-nvidia-cufft==12.2.0.46 ; sys_platform == 'linux'
+nvidia-cufft==12.0.0.61 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cufile==1.17.1.22 ; sys_platform == 'linux'
+nvidia-cufile==1.15.1.6 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-curand==10.4.2.55 ; sys_platform == 'linux'
+nvidia-curand==10.4.0.35 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cusolver==12.2.0.1 ; sys_platform == 'linux'
+nvidia-cusolver==12.0.4.66 ; sys_platform == 'linux'
     # via cuda-toolkit
-nvidia-cusparse==12.7.10.1 ; sys_platform == 'linux'
+nvidia-cusparse==12.6.3.3 ; sys_platform == 'linux'
     # via
     #   cuda-toolkit
     #   nvidia-cusolver
-nvidia-cusparselt-cu13==0.9.0 ; sys_platform == 'linux'
+nvidia-cusparselt-cu13==0.8.0 ; sys_platform == 'linux'
     # via torch
-nvidia-nccl-cu13==2.29.7 ; sys_platform == 'linux'
+nvidia-nccl-cu13==2.28.9 ; sys_platform == 'linux'
     # via torch
-nvidia-nvjitlink==13.2.78 ; sys_platform == 'linux'
+nvidia-nvjitlink==13.0.88 ; sys_platform == 'linux'
     # via
     #   cuda-toolkit
     #   nvidia-cufft
     #   nvidia-cusolver
     #   nvidia-cusparse
-nvidia-nvshmem-cu13==3.6.5 ; sys_platform == 'linux'
+nvidia-nvshmem-cu13==3.4.5 ; sys_platform == 'linux'
     # via torch
-nvidia-nvtx==13.2.75 ; sys_platform == 'linux'
+nvidia-nvtx==13.0.85 ; sys_platform == 'linux'
     # via cuda-toolkit
 oauthlib==3.3.1
     # via requests-oauthlib
@@ -296,25 +296,25 @@ onnxruntime==1.24.4
     # via
     #   bite-size-reader
     #   chromadb
-opentelemetry-api==1.41.0
+opentelemetry-api==1.40.0
     # via
     #   chromadb
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
-opentelemetry-exporter-otlp-proto-common==1.41.0
+opentelemetry-exporter-otlp-proto-common==1.40.0
     # via opentelemetry-exporter-otlp-proto-grpc
-opentelemetry-exporter-otlp-proto-grpc==1.41.0
+opentelemetry-exporter-otlp-proto-grpc==1.40.0
     # via chromadb
-opentelemetry-proto==1.41.0
+opentelemetry-proto==1.40.0
     # via
     #   opentelemetry-exporter-otlp-proto-common
     #   opentelemetry-exporter-otlp-proto-grpc
-opentelemetry-sdk==1.41.0
+opentelemetry-sdk==1.40.0
     # via
     #   chromadb
     #   opentelemetry-exporter-otlp-proto-grpc
-opentelemetry-semantic-conventions==0.62b0
+opentelemetry-semantic-conventions==0.61b0
     # via opentelemetry-sdk
 orjson==3.11.8
     # via
@@ -323,7 +323,7 @@ orjson==3.11.8
     #   scrapling
 overrides==7.7.0
     # via chromadb
-packaging==26.1
+packaging==26.0
     # via
     #   build
     #   huggingface-hub
@@ -361,7 +361,7 @@ pybase64==1.4.3
     # via chromadb
 pycparser==3.0 ; implementation_name != 'PyPy'
     # via cffi
-pydantic==2.13.2
+pydantic==2.12.5
     # via
     #   bite-size-reader
     #   chromadb
@@ -372,7 +372,7 @@ pydantic==2.13.2
     #   spacy
     #   thinc
     #   weasel
-pydantic-core==2.46.2
+pydantic-core==2.41.5
     # via pydantic
 pydantic-settings==2.13.1
     # via
@@ -398,7 +398,7 @@ pypika==0.51.1
     # via chromadb
 pyproject-hooks==1.2.0
     # via build
-pyrotgfork==2.2.23
+pyrotgfork==2.2.21
     # via bite-size-reader
 pysocks==1.7.1
     # via pyrotgfork
@@ -413,7 +413,7 @@ python-dotenv==1.2.2
     # via
     #   pydantic-settings
     #   uvicorn
-python-multipart==0.0.26
+python-multipart==0.0.22
     # via
     #   bite-size-reader
     #   mcp
@@ -434,7 +434,7 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-regex==2026.4.4
+regex==2026.3.32
     # via
     #   dateparser
     #   transformers
@@ -468,11 +468,11 @@ scipy==1.17.1
     # via
     #   scikit-learn
     #   sentence-transformers
-scrapling==0.4.7
+scrapling==0.4.3
     # via bite-size-reader
-sentence-transformers==5.4.1
+sentence-transformers==5.3.0
     # via bite-size-reader
-setuptools==82.0.1
+setuptools==81.0.0
     # via
     #   spacy
     #   thinc
@@ -484,7 +484,7 @@ six==1.17.0
     #   html5lib
     #   kubernetes
     #   python-dateutil
-smart-open==7.6.0
+smart-open==7.5.1
     # via weasel
 soupsieve==2.8.3
     # via beautifulsoup4
@@ -546,7 +546,7 @@ tqdm==4.67.3
     #   transformers
 trafilatura==2.0.0
     # via bite-size-reader
-transformers==5.5.4
+transformers==5.5.0
     # via
     #   bite-size-reader
     #   sentence-transformers
@@ -598,7 +598,7 @@ urllib3==2.6.3
     #   kubernetes
     #   requests
     #   trafilatura
-uvicorn==0.44.0
+uvicorn==0.42.0
     # via
     #   bite-size-reader
     #   chromadb
@@ -640,7 +640,7 @@ youtube-transcript-api==1.2.4
     # via bite-size-reader
 yt-dlp==2026.3.17
     # via bite-size-reader
-zipp==3.23.1
+zipp==3.23.0
     # via importlib-metadata
 zopfli==0.4.1
     # via fonttools

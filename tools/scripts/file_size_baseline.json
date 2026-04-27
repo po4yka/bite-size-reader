@@ -6,5 +6,5 @@
   "ops/monitoring/grafana/provisioning/dashboards/bsr-overview.json": 1666,
   "uv.lock": 4792,
   "clients/web/package-lock.json": 7326,
-  "clients/web/src/api/generated.ts": 8600
+  "clients/web/src/api/generated.ts": 8819
 }
