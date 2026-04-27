@@ -472,7 +472,7 @@ scrapling==0.4.3
     # via bite-size-reader
 sentence-transformers==5.3.0
     # via bite-size-reader
-setuptools==81.0.0
+setuptools==82.0.1
     # via
     #   spacy
     #   thinc
