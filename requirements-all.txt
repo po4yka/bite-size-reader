@@ -183,7 +183,7 @@ idna==3.11
     #   yarl
 impit==0.12.0
     # via crawlee
-importlib-metadata==8.7.1
+importlib-metadata==9.0.0
     # via opentelemetry-api
 importlib-resources==7.1.0
     # via chromadb
