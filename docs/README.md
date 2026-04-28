@@ -43,11 +43,12 @@ You want to contribute code, customize the bot, or understand the architecture.
 
 **Start here**:
 
-1. [Local Development Tutorial](tutorials/local-development.md) - Set up dev environment
-2. [Frontend Web Guide](reference/frontend-web.md) - Carbon web app architecture and workflows
-3. [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Architecture overview
-4. [SPEC.md](SPEC.md) - Technical specification
-5. [CLAUDE.md](../CLAUDE.md) - AI assistant guide (comprehensive codebase overview)
+1. [Architecture Overview](explanation/architecture-overview.md) - Component diagram, request lifecycle, subsystem index
+2. [Local Development Tutorial](tutorials/local-development.md) - Set up dev environment
+3. [Frontend Web Guide](reference/frontend-web.md) - Carbon web app architecture and workflows
+4. [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Why ports and adapters
+5. [SPEC.md](SPEC.md) - Technical specification
+6. [CLAUDE.md](../CLAUDE.md) - AI assistant guide (comprehensive codebase overview)
 
 **Next steps**:
 
@@ -148,7 +149,8 @@ You want to integrate Ratatoskr with other tools or build a client.
 
 **I want to...**
 
-- **Understand the architecture** → [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
+- **Get the high-level picture** → [Architecture Overview](explanation/architecture-overview.md)
+- **Understand the layer rationale** → [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
 - **Understand the multi-agent pipeline** → [Multi-Agent Architecture](multi_agent_architecture.md)
 - **Understand design decisions** → [ADRs](adr/README.md)
 - **See the full technical spec** → [SPEC.md](SPEC.md)
@@ -231,6 +233,7 @@ Background, context, and "why" discussions.
 
 | Explanation | Description | Audience |
 | ------------- | ------------- | ---------- |
+| [Architecture Overview](explanation/architecture-overview.md) | Component diagram, request lifecycle, subsystem index | Operators, Developers, Integrators |
 | [ADRs](adr/README.md) | Architecture decision records | Developers, Contributors |
 | [Hexagonal Architecture](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) | Why ports and adapters | Developers |
 | [Multi-Agent Architecture](multi_agent_architecture.md) | Why specialized agents | Developers |
@@ -291,7 +294,7 @@ Background, context, and "why" discussions.
 - **ChromaDB**: Vector database for semantic search
 - **Deduplication Hash**: SHA256 of normalized URL to prevent re-processing same article
 
-See [SPEC.md § Glossary](SPEC.md#glossary) for full glossary.
+See the [Architecture Overview](explanation/architecture-overview.md) for an annotated component diagram, the [SPEC.md](SPEC.md) data-model and API contracts, and the [Multi-Agent Architecture](multi_agent_architecture.md) explanation for the LLM pipeline-specific terms.
 
 ---
 

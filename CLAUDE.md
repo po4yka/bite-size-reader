@@ -45,54 +45,12 @@ This document helps AI assistants (like Claude) understand and work effectively 
 
 ## Architecture Overview
 
-### Core Pipeline Flow
-
-```
-Telegram Message -> MessageHandler -> AccessController -> MessageRouter
-                                                            |
-                    +---------------------------------------+-----------+
-                    | |
-              URL Handler                                  Forward Processor
-                    | |
-              URLProcessor                                  LLMSummarizer
-                    | |
-     ContentExtractor -> ScraperChain                             OpenRouter
-                    | |
-              LLMSummarizer -> OpenRouter                     Summary JSON
-                    | |
-              Summary JSON                                 ResponseFormatter
-                    | |
-           ResponseFormatter -------------------------------------------+
-                    |
-         Telegram Reply + SQLite Storage
-```
-
-### Key Components
-
-- **Telegram Layer** (`app/adapters/telegram/`) -- Bot orchestration, message routing, access control, persistence, command processing, URL/forward handling
-- **Content Pipeline** (`app/adapters/content/`) -- Multi-provider scraper chain (Scrapling -> Defuddle -> self-hosted Firecrawl -> Playwright -> Crawlee -> direct HTTP/trafilatura), content chunking, LLM summarization, web search context. Scraper protocol, chain, factory, and providers in `app/adapters/content/scraper/`. For JS-heavy sites (configured via `SCRAPER_JS_HEAVY_HOSTS`), browser providers are automatically tried first. **Note:** after a no-cache Docker rebuild, Playwright's Chromium binary may need reinstalling (`playwright install chromium` inside the container) if the Playwright package version changed
-- **YouTube Adapter** (`app/adapters/youtube/`) -- yt-dlp video download, transcript extraction, storage management
-- **Twitter/X Adapter** (`app/adapters/twitter/`) -- Two-tier extraction: Firecrawl (public) + Playwright (authenticated). GraphQL interception for tweets/threads, DOM scraping for X Articles
-- **LLM Abstraction** (`app/adapters/llm/`) -- Provider-agnostic LLM interface (OpenRouter, OpenAI, Anthropic)
-- **External Services** (`app/adapters/openrouter/`, `app/adapters/external/`) -- OpenRouter client, Firecrawl parser, response formatting
-- **ElevenLabs TTS** (`app/adapters/elevenlabs/`) -- Text-to-speech audio generation via ElevenLabs API
-- **Attachment Processing** (`app/adapters/attachment/`) -- Attachment handling and processing
-- **Digest** (`app/adapters/digest/`, `app/adapters/telegram/command_handlers/digest*.py`) -- Channel digest orchestration with userbot, scheduler, and bot-mediated session init via Mini App
-- **Domain Layer** (`app/domain/`) -- Business models and domain services
-- **Application Layer** (`app/application/`) -- DTOs (`dto/`), ports, use cases (`use_cases/`), and application services for orchestrating domain logic
-- **Core Utilities** (`app/core/`) -- URL normalization, JSON parsing/repair, summary contract validation, language detection, structured logging
-- **Database** (`app/db/`) -- SQLite schema, Peewee ORM models (31 model classes), migrations. `DatabaseSessionManager` (`app/db/session.py`) is the sole DB entry point (connection management, migrations, FTS5 indexing, async RW lock)
-- **Infrastructure** (`app/infrastructure/`) -- Persistence layer, event bus, vector store, cache, HTTP clients, and concrete search/embedding implementations
-- **Dependency Injection** (`app/di/`) -- Runtime composition only; production code outside `app/di/` should not assemble concrete dependency graphs
-- **CLI Tools** (`app/cli/`) -- Summary runner, search, migrations, MCP server, embedding backfill, Chroma backfill, search comparison, performance indexes
-- **Mobile API** (`app/api/`) -- FastAPI REST API with JWT auth, sync, background processing
-- **Web Frontend** (`clients/web/`) -- Carbon web interface (library/article/search/submit/collections/digest/preferences/admin), hybrid auth (Telegram WebApp + JWT), React Query data layer
-- **Multi-Agent System** (`app/agents/`) -- Content extraction, summarization with self-correction, validation, web search agents. See `docs/multi_agent_architecture.md`
-- **Search Services** (`app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/`) -- Topic search workflows, vector/hybrid search, embeddings (local/Gemini via protocol+factory), reranking, query expansion
-- **MCP Server** (`app/mcp/`) -- Model Context Protocol server for AI agent access. See `docs/mcp_server.md`
-- **Observability** (`app/observability/`) -- Metrics, tracing, and telemetry infrastructure
-- **Domain Layer** (`app/domain/`) -- DDD models and services
-- **Infrastructure** (`app/infrastructure/`) -- Persistence layer, event bus, vector store, cache, HTTP clients, messaging
+The component diagram, request lifecycle, layered view, and the
+canonical subsystem index live in
+[`docs/explanation/architecture-overview.md`](docs/explanation/architecture-overview.md).
+Read that page first when orienting yourself; this file focuses on
+AI-assistant operating notes (where things live, what to touch, what
+not to touch) rather than re-stating the architecture.
 
 ## Directory Structure
 
