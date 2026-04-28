@@ -310,7 +310,7 @@ docker restart ratatoskr
 echo "DEBUG_PAYLOADS=1" >> .env
 
 # Check database for Firecrawl response
-sqlite3 data/app.db "SELECT * FROM crawl_results WHERE request_id = '<correlation_id>';"
+sqlite3 data/ratatoskr.db "SELECT * FROM crawl_results WHERE request_id = '<correlation_id>';"
 
 # If Firecrawl failed, enable fallback
 echo "CONTENT_EXTRACTION_FALLBACK=true" >> .env
@@ -417,7 +417,7 @@ echo "OPENROUTER_MODEL=qwen/qwen3-max" >> .env  # Qwen is excellent at JSON
 echo "OPENROUTER_ENABLE_STRUCTURED_OUTPUTS=true" >> .env
 
 # Check actual LLM response in database
-sqlite3 data/app.db "SELECT response FROM llm_calls WHERE request_id = '<correlation_id>';"
+sqlite3 data/ratatoskr.db "SELECT response FROM llm_calls WHERE request_id = '<correlation_id>';"
 ```
 
 ---
@@ -526,10 +526,10 @@ docker restart ratatoskr
 echo "DB_OPERATION_TIMEOUT=30" >> .env  # Default: 5 seconds
 
 # Or use WAL mode (Write-Ahead Logging)
-sqlite3 data/app.db "PRAGMA journal_mode=WAL;"
+sqlite3 data/ratatoskr.db "PRAGMA journal_mode=WAL;"
 
 # Verify
-sqlite3 data/app.db "PRAGMA journal_mode;"
+sqlite3 data/ratatoskr.db "PRAGMA journal_mode;"
 # Should return: wal
 ```
 
@@ -543,15 +543,15 @@ sqlite3 data/app.db "PRAGMA journal_mode;"
 
 ```bash
 # Check integrity
-sqlite3 data/app.db "PRAGMA integrity_check;"
+sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
 
 # If corrupted, restore from backup
-cp data/app.db data/app.db.corrupted
-cp data/backups/app.db.backup data/app.db
+cp data/ratatoskr.db data/ratatoskr.db.corrupted
+cp data/backups/app.db.backup data/ratatoskr.db
 
 # If no backup, try to recover
-sqlite3 data/app.db ".recover" | sqlite3 data/app.db.recovered
-mv data/app.db.recovered data/app.db
+sqlite3 data/ratatoskr.db ".recover" | sqlite3 data/ratatoskr.db.recovered
+mv data/ratatoskr.db.recovered data/ratatoskr.db
 ```
 
 **Prevention**: Enable automatic backups:
@@ -574,11 +574,11 @@ echo "DB_BACKUP_INTERVAL_HOURS=24" >> .env
 python -m app.cli.migrate_db
 
 # Or force recreate (WARNING: deletes all data)
-rm data/app.db
+rm data/ratatoskr.db
 python -m app.cli.migrate_db
 
 # Restore data from backup if needed
-sqlite3 data/app.db < data/backups/app.db.backup.sql
+sqlite3 data/ratatoskr.db < data/backups/app.db.backup.sql
 ```
 
 ### Performance Issues
@@ -594,10 +594,10 @@ sqlite3 data/app.db < data/backups/app.db.backup.sql
 python -m app.cli.rebuild_indexes
 
 # Vacuum database (reclaim space, rebuild indexes)
-sqlite3 data/app.db "VACUUM;"
+sqlite3 data/ratatoskr.db "VACUUM;"
 
 # Analyze query performance
-sqlite3 data/app.db "EXPLAIN QUERY PLAN SELECT * FROM summaries WHERE url = 'example.com';"
+sqlite3 data/ratatoskr.db "EXPLAIN QUERY PLAN SELECT * FROM summaries WHERE url = 'example.com';"
 ```
 
 ---
@@ -1158,7 +1158,7 @@ python -m app.cli.summary --url https://example.com/article
 python -m app.cli.search --query "python tutorial"
 
 # Test database
-sqlite3 data/app.db "SELECT COUNT(*) FROM summaries;"
+sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summaries;"
 
 # Test ChromaDB
 python -m app.cli.backfill_chroma_store --dry-run
@@ -1169,7 +1169,7 @@ python -m app.cli.backfill_chroma_store --dry-run
 Use correlation IDs to trace requests:
 
 ```bash
-sqlite3 data/app.db
+sqlite3 data/ratatoskr.db
 
 -- Find failed requests
 SELECT id, url, status, error FROM requests WHERE status = 'failed' LIMIT 10;

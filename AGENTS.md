@@ -28,7 +28,7 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 | Infrastructure | `app/infrastructure/` | Concrete persistence, vector search, cache, and messaging adapters |
 | DI | `app/di/` | Runtime composition only |
 | Core | `app/core/` | URL normalization, JSON parsing, summary contract, logging |
-| Database | `app/db/` | Peewee ORM models (31 classes), `DatabaseSessionManager` (`session.py`) is sole DB entry point |
+| Database | `app/db/` | Peewee ORM models (48 classes), `DatabaseSessionManager` (`session.py`) is sole DB entry point |
 | API | `app/api/` | FastAPI REST API with JWT auth |
 | Web | `clients/web/` | Carbon web interface (React + TypeScript + Vite) |
 | Search | `app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/` | Search workflows, vector search, and embedding services |
@@ -81,7 +81,7 @@ python -m app.cli.summary --url <URL>           # CLI test runner
 
 ## Database
 
-31 Peewee model classes in `app/db/models.py`. `DatabaseSessionManager` (`app/db/session.py`) handles connection management, migrations, FTS5 indexing, and async operations via `AsyncRWLock`. No other DB entry point exists.
+48 Peewee model classes in `app/db/models.py`. `DatabaseSessionManager` (`app/db/session.py`) handles connection management, migrations, FTS5 indexing, and async operations via `AsyncRWLock`. No other DB entry point exists.
 
 ## Summary JSON Contract
 

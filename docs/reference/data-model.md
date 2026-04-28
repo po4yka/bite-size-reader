@@ -1160,4 +1160,4 @@ sqlite3 data/app.db "PRAGMA integrity_check;"
 
 ---
 
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-04-28

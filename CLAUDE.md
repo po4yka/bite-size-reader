@@ -447,7 +447,7 @@ Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-28
 
 For questions about the codebase, always refer to:
 

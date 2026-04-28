@@ -286,7 +286,7 @@ Yes. Multiple export formats:
 - **JSON**: Via mobile API (`GET /v1/summaries`)
 - **PDF**: Via `weasyprint` (roadmap: not yet implemented)
 - **Markdown**: Via CLI export (roadmap: not yet implemented)
-- **SQLite**: Direct database access (`data/app.db`)
+- **SQLite**: Direct database access (`data/ratatoskr.db`)
 
 ### Can I combine multiple links or forwarded posts into one result?
 
@@ -506,7 +506,7 @@ Yes, if self-hosted:
 
 - **No data leaves your server** (except API calls to Firecrawl/OpenRouter)
 - **API calls redacted**: Authorization headers never logged
-- **SQLite database**: Stored locally (`data/app.db`)
+- **SQLite database**: Stored locally (`data/ratatoskr.db`)
 - **No telemetry**: No usage analytics sent anywhere
 
 **Privacy considerations**:

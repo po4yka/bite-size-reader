@@ -6,7 +6,7 @@ Welcome to the Ratatoskr documentation. This guide helps you find the right docu
 
 ## Documentation freshness
 
-- Last documentation refresh: **2026-04-12**
+- Last documentation refresh: **2026-04-28**
 - This refresh aligns docs with:
   - Root namespace reorganization: `clients/`, `integrations/`, `ops/`, and `tools/`
   - Carbon web interface architecture in `clients/web/` (routing, auth modes, deploy/static namespaces)
@@ -353,6 +353,6 @@ Found a typo? Documentation unclear? Want to add a tutorial?
 
 ---
 
-**Last Updated**: 2026-04-12
+**Last Updated**: 2026-04-28
 
 **Questions?** Check [FAQ](FAQ.md) or open an [issue](https://github.com/po4yka/ratatoskr/issues).
