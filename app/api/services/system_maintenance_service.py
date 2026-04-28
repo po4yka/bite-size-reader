@@ -60,7 +60,7 @@ class SystemMaintenanceService:
         backup_dir: str | None = None,
         backup_filename: str = "ratatoskr_backup.sqlite",
     ) -> None:
-        self._db_path = db_path or Config.get("DB_PATH", "/data/app.db")
+        self._db_path = db_path or Config.get("DB_PATH", "/data/ratatoskr.db")
         self._backup_dir = backup_dir or tempfile.gettempdir()
         self._backup_filename = backup_filename
 

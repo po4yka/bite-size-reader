@@ -243,7 +243,7 @@ If you need to manually intervene:
 
 ```bash
 # Connect to database
-sqlite3 /data/app.db
+sqlite3 /data/ratatoskr.db
 
 # Check migration history
 SELECT * FROM migration_history;
@@ -260,7 +260,7 @@ python -m app.cli.migrations.migration_runner run
 
 ```bash
 # Manually mark as applied
-sqlite3 /data/app.db
+sqlite3 /data/ratatoskr.db
 INSERT INTO migration_history (migration_name, applied_at)
 VALUES ('001_add_indexes', datetime('now'));
 ```

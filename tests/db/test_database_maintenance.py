@@ -9,7 +9,7 @@ import peewee
 from app.db.database_maintenance import DatabaseMaintenance
 
 
-def _make_maintenance(path: str = "/data/app.db") -> DatabaseMaintenance:
+def _make_maintenance(path: str = "/data/ratatoskr.db") -> DatabaseMaintenance:
     db = MagicMock()
     db.connection_context.return_value.__enter__ = MagicMock(return_value=None)
     db.connection_context.return_value.__exit__ = MagicMock(return_value=False)
