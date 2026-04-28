@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import logging
 import os
 import sqlite3
 from dataclasses import dataclass, field
@@ -12,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from peewee import SqliteDatabase as _BaseSqliteDatabase
 
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Iterable, Iterator
     from pathlib import Path
 

@@ -6599,7 +6599,7 @@ export interface operations {
             /** @description SQLite database file */
             200: {
                 headers: {
-                    /** @description Attachment filename (e.g., bite_size_reader_backup_YYYYMMDD_HHMMSS.sqlite) */
+                    /** @description Attachment filename (e.g., ratatoskr_backup_YYYYMMDD_HHMMSS.sqlite) */
                     "Content-Disposition"?: string;
                     /** @description Entity tag for cache validation */
                     ETag?: string;
