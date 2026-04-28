@@ -3,8 +3,8 @@
 import json
 from unittest.mock import MagicMock, patch
 
-from ratatoskr_cli.main import cli
 from click.testing import CliRunner
+from ratatoskr_cli.main import cli
 
 
 class TestCLIHelp:
