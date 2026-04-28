@@ -1,20 +1,20 @@
 "use strict";
 
-const CONTEXT_MENU_SAVE_PAGE = "bsr-save-page";
-const CONTEXT_MENU_SAVE_SELECTION = "bsr-save-selection";
+const CONTEXT_MENU_SAVE_PAGE = "ratatoskr-save-page";
+const CONTEXT_MENU_SAVE_SELECTION = "ratatoskr-save-selection";
 const BADGE_CLEAR_DELAY_MS = 3000;
 const MAX_RECENT_SAVES = 20;
 
 chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({
         id: CONTEXT_MENU_SAVE_PAGE,
-        title: "Save to Bite-Size Reader",
+        title: "Save to Ratatoskr",
         contexts: ["page", "link"],
     });
 
     chrome.contextMenus.create({
         id: CONTEXT_MENU_SAVE_SELECTION,
-        title: "Save selection to Bite-Size Reader",
+        title: "Save selection to Ratatoskr",
         contexts: ["selection"],
     });
 });
@@ -64,7 +64,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 /**
- * Save a page/selection to the Bite-Size Reader API.
+ * Save a page/selection to the Ratatoskr API.
  */
 async function saveToReader(url, title, selectedText = "", tags = [], summarize = false) {
     const settings = await chrome.storage.sync.get([

@@ -1,15 +1,15 @@
-# bsr-cli
+# ratatoskr-cli
 
-Command-line client for [Bite-Size Reader](https://github.com/po4yka/bite-size-reader) -- save, search, and organize web content from your terminal.
+Command-line client for [Ratatoskr](https://github.com/po4yka/ratatoskr) -- save, search, and organize web content from your terminal.
 
 ## Installation
 
 ```bash
 # From PyPI (when published)
-pip install bsr-cli
+pip install ratatoskr-cli
 
 # Or with pipx for isolated install
-pipx install bsr-cli
+pipx install ratatoskr-cli
 
 # Development install
 cd cli && pip install -e .
@@ -20,20 +20,20 @@ Requires Python 3.11+.
 ## Quick Start
 
 ```bash
-# 1. Point at your BSR server
-bsr config --url https://bsr.example.com
+# 1. Point at your Ratatoskr server
+ratatoskr config --url https://ratatoskr.example.com
 
 # 2. Authenticate
-bsr login --server https://bsr.example.com --user-id 123456 --client-id my-cli --secret <secret>
+ratatoskr login --server https://ratatoskr.example.com --user-id 123456 --client-id my-cli --secret <secret>
 
 # 3. Submit a mixed-source aggregation bundle
-bsr aggregate https://x.com/example/status/1 https://www.youtube.com/watch?v=dQw4w9WgXcQ
+ratatoskr aggregate https://x.com/example/status/1 https://www.youtube.com/watch?v=dQw4w9WgXcQ
 
 # 4. Reopen the persisted aggregation session later
-bsr aggregation get 42
+ratatoskr aggregation get 42
 
 # 5. Search saved summaries
-bsr search "async python" --lang en
+ratatoskr search "async python" --lang en
 ```
 
 ## Command Reference
@@ -43,25 +43,25 @@ bsr search "async python" --lang en
 | Flag | Env Var | Description |
 |------|---------|-------------|
 | `--json` | | Output raw JSON (for scripting) |
-| `--server URL` | `BSR_SERVER_URL` | Override server URL |
+| `--server URL` | `RATATOSKR_SERVER_URL` | Override server URL |
 | `--version` | | Show version |
 | `--help` | | Show help |
 
-### `bsr config`
+### `ratatoskr config`
 
-Configure the BSR server connection.
+Configure the Ratatoskr server connection.
 
 ```bash
-bsr config --url https://bsr.example.com
+ratatoskr config --url https://ratatoskr.example.com
 ```
 
-### `bsr login`
+### `ratatoskr login`
 
-Authenticate with the BSR server using a secret key.
+Authenticate with the Ratatoskr server using a secret key.
 
 ```bash
-bsr login \
-  --server https://bsr.example.com \
+ratatoskr login \
+  --server https://ratatoskr.example.com \
   --user-id 123456 \
   --client-id my-cli \
   --secret <secret>
@@ -69,24 +69,24 @@ bsr login \
 
 All options are prompted interactively if omitted. The secret is hidden during input.
 
-### `bsr whoami`
+### `ratatoskr whoami`
 
 Show the currently authenticated user.
 
 ```bash
-bsr whoami
-bsr --json whoami    # JSON output
+ratatoskr whoami
+ratatoskr --json whoami    # JSON output
 ```
 
-### `bsr save URL`
+### `ratatoskr save URL`
 
 Save a URL and optionally trigger summarization.
 
 ```bash
-bsr save https://example.com/article
-bsr save https://example.com/article --title "Custom Title" --tag python --tag web
-bsr save https://example.com/article --no-summarize
-bsr save https://example.com/article --note "Key paragraph here"
+ratatoskr save https://example.com/article
+ratatoskr save https://example.com/article --title "Custom Title" --tag python --tag web
+ratatoskr save https://example.com/article --no-summarize
+ratatoskr save https://example.com/article --note "Key paragraph here"
 ```
 
 | Option | Short | Description |
@@ -96,16 +96,16 @@ bsr save https://example.com/article --note "Key paragraph here"
 | `--summarize/--no-summarize` | | Trigger summarization (default: on) |
 | `--note` | | Note or selected text to attach |
 
-### `bsr list`
+### `ratatoskr list`
 
 List saved summaries.
 
 ```bash
-bsr list
-bsr list --limit 50 --offset 20
-bsr list --unread
-bsr list --favorites
-bsr list --tag python
+ratatoskr list
+ratatoskr list --limit 50 --offset 20
+ratatoskr list --unread
+ratatoskr list --favorites
+ratatoskr list --tag python
 ```
 
 | Option | Short | Description |
@@ -116,25 +116,25 @@ bsr list --tag python
 | `--favorites` | | Show only favorites |
 | `--tag` | `-t` | Filter by tag name |
 
-### `bsr get ID`
+### `ratatoskr get ID`
 
 Get summary details by ID.
 
 ```bash
-bsr get 42
-bsr get 42 --content     # Include full article content
-bsr --json get 42        # JSON output
+ratatoskr get 42
+ratatoskr get 42 --content     # Include full article content
+ratatoskr --json get 42        # JSON output
 ```
 
-### `bsr search QUERY`
+### `ratatoskr search QUERY`
 
 Search summaries by text query.
 
 ```bash
-bsr search "machine learning"
-bsr search "rust async" --limit 5
-bsr search "web dev" --tag tutorial --lang en
-bsr search "api design" --domain blog.example.com
+ratatoskr search "machine learning"
+ratatoskr search "rust async" --limit 5
+ratatoskr search "web dev" --tag tutorial --lang en
+ratatoskr search "api design" --domain blog.example.com
 ```
 
 | Option | Short | Description |
@@ -148,17 +148,17 @@ bsr search "api design" --domain blog.example.com
 
 Mixed-source aggregation uses the public `/v1/aggregations` API. The CLI submits the bundle and waits for the server to finish extraction plus synthesis. On success it prints the final persisted session snapshot (`completed` or `partial`); on timeout or upstream failure the API returns `PROCESSING_ERROR`.
 
-### `bsr aggregate [URL ...]`
+### `ratatoskr aggregate [URL ...]`
 
 Submit one or more URLs as a single aggregation bundle.
 
 ```bash
-bsr aggregate https://x.com/example/status/1 https://youtu.be/dQw4w9WgXcQ
-bsr aggregate --file sources.txt --lang en
-bsr aggregate --hint x_post --hint youtube_video \
+ratatoskr aggregate https://x.com/example/status/1 https://youtu.be/dQw4w9WgXcQ
+ratatoskr aggregate --file sources.txt --lang en
+ratatoskr aggregate --hint x_post --hint youtube_video \
   https://x.com/example/status/1 \
   https://youtu.be/dQw4w9WgXcQ
-bsr --json aggregate --file sources.txt | jq '.session.sessionId'
+ratatoskr --json aggregate --file sources.txt | jq '.session.sessionId'
 ```
 
 | Option | Description |
@@ -181,26 +181,26 @@ Supported `--hint` values:
 - `telegram_post`
 - `youtube_video`
 
-### `bsr aggregation get ID`
+### `ratatoskr aggregation get ID`
 
 Fetch one aggregation session by ID.
 
 ```bash
-bsr aggregation get 42
-bsr --json aggregation get 42 | jq '.session.progress'
+ratatoskr aggregation get 42
+ratatoskr --json aggregation get 42 | jq '.session.progress'
 ```
 
-### `bsr aggregation list`
+### `ratatoskr aggregation list`
 
 List recent aggregation sessions for the authenticated user.
 
 ```bash
-bsr aggregation list
-bsr aggregation list --limit 10 --offset 10
-bsr --json aggregation list --limit 5 | jq '.sessions[] | {id, status}'
+ratatoskr aggregation list
+ratatoskr aggregation list --limit 10 --offset 10
+ratatoskr --json aggregation list --limit 5 | jq '.sessions[] | {id, status}'
 ```
 
-`bsr aggregation get` and `bsr aggregation list` are mainly for revisiting stored runs, recovering after a network interruption, or scripting against previously created sessions. The current create path is blocking, so a successful `bsr aggregate ...` call already returns a terminal session snapshot.
+`ratatoskr aggregation get` and `ratatoskr aggregation list` are mainly for revisiting stored runs, recovering after a network interruption, or scripting against previously created sessions. The current create path is blocking, so a successful `ratatoskr aggregate ...` call already returns a terminal session snapshot.
 
 The most useful session fields are:
 
@@ -211,61 +211,61 @@ The most useful session fields are:
 - `failure`
 - `queuedAt`, `startedAt`, `completedAt`, `lastProgressAt`
 
-### `bsr delete ID`
+### `ratatoskr delete ID`
 
 Delete a summary by ID.
 
 ```bash
-bsr delete 42
+ratatoskr delete 42
 ```
 
-### `bsr favorite ID`
+### `ratatoskr favorite ID`
 
 Toggle favorite status on a summary.
 
 ```bash
-bsr favorite 42
+ratatoskr favorite 42
 ```
 
-### `bsr read ID`
+### `ratatoskr read ID`
 
 Mark a summary as read.
 
 ```bash
-bsr read 42
+ratatoskr read 42
 ```
 
-### `bsr tags`
+### `ratatoskr tags`
 
-Manage tags. Running `bsr tags` without a subcommand lists all tags.
+Manage tags. Running `ratatoskr tags` without a subcommand lists all tags.
 
 ```bash
-bsr tags                           # List all tags
-bsr tags create "machine-learning" --color "#3B82F6"
-bsr tags delete 5                  # Prompts for confirmation
-bsr tags attach 42 "python"       # Attach tag to summary 42
-bsr tags detach 42 5              # Detach tag ID 5 from summary 42
+ratatoskr tags                           # List all tags
+ratatoskr tags create "machine-learning" --color "#3B82F6"
+ratatoskr tags delete 5                  # Prompts for confirmation
+ratatoskr tags attach 42 "python"       # Attach tag to summary 42
+ratatoskr tags detach 42 5              # Detach tag ID 5 from summary 42
 ```
 
-### `bsr collections`
+### `ratatoskr collections`
 
-Manage collections. Running `bsr collections` without a subcommand lists all collections.
+Manage collections. Running `ratatoskr collections` without a subcommand lists all collections.
 
 ```bash
-bsr collections                            # List all
-bsr collections create "Reading List" -d "Articles to read this week"
-bsr collections delete 3                   # Prompts for confirmation
-bsr collections add 3 42                   # Add summary 42 to collection 3
+ratatoskr collections                            # List all
+ratatoskr collections create "Reading List" -d "Articles to read this week"
+ratatoskr collections delete 3                   # Prompts for confirmation
+ratatoskr collections add 3 42                   # Add summary 42 to collection 3
 ```
 
-### `bsr export`
+### `ratatoskr export`
 
 Export all data.
 
 ```bash
-bsr export                          # JSON to stdout
-bsr export --format csv -o data.csv
-bsr export --format html -o export.html
+ratatoskr export                          # JSON to stdout
+ratatoskr export --format csv -o data.csv
+ratatoskr export --format html -o export.html
 ```
 
 | Option | Short | Description |
@@ -273,32 +273,32 @@ bsr export --format html -o export.html
 | `--format` | | `json`, `csv`, or `html` (default: `json`) |
 | `--output` | `-o` | Output file (default: stdout) |
 
-### `bsr import FILE`
+### `ratatoskr import FILE`
 
 Import bookmarks from a file.
 
 ```bash
-bsr import bookmarks.html
-bsr import bookmarks.json --summarize   # Trigger summarization for imports
+ratatoskr import bookmarks.html
+ratatoskr import bookmarks.json --summarize   # Trigger summarization for imports
 ```
 
-### `bsr admin`
+### `ratatoskr admin`
 
 Admin-only operations.
 
 ```bash
-bsr admin users     # List users with stats
-bsr admin health    # Content health report
-bsr admin jobs      # Background job status
+ratatoskr admin users     # List users with stats
+ratatoskr admin health    # Content health report
+ratatoskr admin jobs      # Background job status
 ```
 
 ## Configuration
 
-Config is stored at `$XDG_CONFIG_HOME/bsr/config.toml` (defaults to `~/.config/bsr/config.toml`). The file is created with `0600` permissions (owner read/write only).
+Config is stored at `$XDG_CONFIG_HOME/ratatoskr/config.toml` (defaults to `~/.config/ratatoskr/config.toml`). The file is created with `0600` permissions (owner read/write only).
 
 ```toml
 [server]
-url = "https://bsr.example.com"
+url = "https://ratatoskr.example.com"
 
 [auth]
 client_id = "my-cli"
@@ -312,23 +312,23 @@ token_expires_at = "2025-12-31T00:00:00+00:00"
 
 | Variable | Description |
 |----------|-------------|
-| `BSR_SERVER_URL` | Override server URL (same as `--server` flag) |
+| `RATATOSKR_SERVER_URL` | Override server URL (same as `--server` flag) |
 | `XDG_CONFIG_HOME` | Override config directory base |
 
 ## Authentication
 
-BSR CLI uses a secret-key authentication flow:
+Ratatoskr CLI uses a secret-key authentication flow:
 
 1. A client secret is generated server-side (via Telegram bot or admin API)
-2. `bsr login` exchanges the secret for JWT access and refresh tokens
+2. `ratatoskr login` exchanges the secret for JWT access and refresh tokens
 3. Tokens are stored in the config file
 4. The CLI automatically refreshes the access token when it's within 5 minutes of expiry
 
 Important auth semantics:
 
 - Client secrets are shown in plaintext only when they are created or rotated.
-- A rotated or revoked secret cannot be used for future `bsr login` calls.
-- If access-token refresh fails because the refresh session was revoked or expired, run `bsr login` again with an active secret.
+- A rotated or revoked secret cannot be used for future `ratatoskr login` calls.
+- If access-token refresh fails because the refresh session was revoked or expired, run `ratatoskr login` again with an active secret.
 
 For a full onboarding flow, including hosted MCP usage, see [External Access Quickstart](../../docs/tutorials/external-access-quickstart.md).
 
@@ -337,9 +337,9 @@ For a full onboarding flow, including hosted MCP usage, see [External Access Qui
 Pass `--json` before any command to get raw JSON output, suitable for piping to `jq` or scripting:
 
 ```bash
-bsr --json list | jq '.[].title'
-bsr --json search "python" | jq '.results[] | {id, title}'
-bsr --json get 42 | jq '.tldr'
+ratatoskr --json list | jq '.[].title'
+ratatoskr --json search "python" | jq '.results[] | {id, title}'
+ratatoskr --json get 42 | jq '.tldr'
 ```
 
 ## Examples
@@ -347,34 +347,34 @@ bsr --json get 42 | jq '.tldr'
 ### Save and tag an article
 
 ```bash
-bsr save https://blog.example.com/post -t rust -t async -T "Async Rust Guide"
+ratatoskr save https://blog.example.com/post -t rust -t async -T "Async Rust Guide"
 ```
 
 ### Browse unread articles
 
 ```bash
-bsr list --unread --limit 5
-bsr get 42
-bsr read 42
+ratatoskr list --unread --limit 5
+ratatoskr get 42
+ratatoskr read 42
 ```
 
 ### Search and export results
 
 ```bash
-bsr --json search "kubernetes" --domain blog.example.com | jq '.results[].url'
+ratatoskr --json search "kubernetes" --domain blog.example.com | jq '.results[].url'
 ```
 
 ### Build a reading list
 
 ```bash
-bsr collections create "Weekend Reads"
-bsr collections add 1 42
-bsr collections add 1 43
-bsr collections
+ratatoskr collections create "Weekend Reads"
+ratatoskr collections add 1 42
+ratatoskr collections add 1 43
+ratatoskr collections
 ```
 
 ### Backup your data
 
 ```bash
-bsr export --format json -o backup.json
+ratatoskr export --format json -o backup.json
 ```

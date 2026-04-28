@@ -1,4 +1,4 @@
-# Mobile API Specification (Bite-Size Reader)
+# Mobile API Specification (Ratatoskr)
 
 - Version: 1.2
 - Last Updated: 2026-04-12
@@ -21,7 +21,7 @@ The same FastAPI host also serves the Carbon web SPA:
 
 ## Base URLs
 
-- Production: `https://bitsizereaderapi.po4yka.com`
+- Production: `https://ratatoskrapi.po4yka.com`
 - Local: `http://localhost:8000`
 
 Examples:

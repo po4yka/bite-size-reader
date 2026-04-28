@@ -1,10 +1,10 @@
-"""BSR CLI tag management commands."""
+"""Ratatoskr CLI tag management commands."""
 
 from __future__ import annotations
 
 import click
-from bsr_cli.auth import get_client
-from bsr_cli.output import echo_success, format_json, format_tags
+from ratatoskr_cli.auth import get_client
+from ratatoskr_cli.output import echo_success, format_json, format_tags
 
 
 @click.group(invoke_without_command=True)

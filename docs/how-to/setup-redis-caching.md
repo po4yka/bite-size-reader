@@ -25,7 +25,7 @@ Redis adds optional caching and coordination:
 
 ## Prerequisites
 
-- Bite-Size Reader installed and running
+- Ratatoskr installed and running
 - Redis 6.0+ (recommend Redis 7.x)
 
 ---
@@ -135,7 +135,7 @@ ENABLE_SEARCH_CACHE=true
 
 ```bash
 # Docker
-docker restart bite-size-reader
+docker restart ratatoskr
 
 # Local
 python bot.py
@@ -297,7 +297,7 @@ redis-cli MONITOR
 # Send URL to bot, verify GET/SET commands appear
 
 # Check logs
-docker logs bite-size-reader | grep -i cache
+docker logs ratatoskr | grep -i cache
 ```
 
 **Common causes:**
@@ -402,7 +402,7 @@ REDIS_SOCKET_KEEPALIVE=true
 Organize cache by type:
 
 ```bash
-REDIS_KEY_PREFIX=bsr:  # All keys prefixed with "bsr:"
+REDIS_KEY_PREFIX=ratatoskr:  # All keys prefixed with "ratatoskr:"
 FIRECRAWL_CACHE_PREFIX=firecrawl:
 LLM_CACHE_PREFIX=llm:
 ```
@@ -451,7 +451,7 @@ docker run -d -p 9121:9121 oliver006/redis_exporter \
 REDIS_ENABLED=false
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 
 # Bot falls back to no-cache mode (no functional impact)
 ```

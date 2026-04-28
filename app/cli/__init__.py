@@ -1,1 +1,1 @@
-"""Command-line helpers for Bite-Size Reader."""
+"""Command-line helpers for Ratatoskr."""

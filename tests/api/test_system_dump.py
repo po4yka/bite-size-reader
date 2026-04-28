@@ -66,7 +66,7 @@ def test_db_dump_regeneration_logic(client: TestClient, db):
     # to force regeneration
     import tempfile
 
-    backup_path = os.path.join(tempfile.gettempdir(), "bite_size_reader_backup.sqlite")
+    backup_path = os.path.join(tempfile.gettempdir(), "ratatoskr_backup.sqlite")
 
     if os.path.exists(backup_path):
         old_time = time.time() - 70

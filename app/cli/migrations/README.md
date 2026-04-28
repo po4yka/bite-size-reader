@@ -1,6 +1,6 @@
 # Database Migrations
 
-This directory contains versioned database schema migrations for the Bite-Size Reader project.
+This directory contains versioned database schema migrations for the Ratatoskr project.
 
 ## Quick Start
 

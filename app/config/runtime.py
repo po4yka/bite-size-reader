@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 class RuntimeConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
-    db_path: str = Field(default="/data/app.db", validation_alias="DB_PATH")
+    db_path: str = Field(default="/data/ratatoskr.db", validation_alias="DB_PATH")
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
     request_timeout_sec: int = Field(default=60, validation_alias="REQUEST_TIMEOUT_SEC")
     preferred_lang: str = Field(default="auto", validation_alias="PREFERRED_LANG")

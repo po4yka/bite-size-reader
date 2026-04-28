@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 class RedisQueryCache:
     """Shared query result cache using Redis.
 
-    Key pattern: bsr:query:{query_hash}
+    Key pattern: ratatoskr:query:{query_hash}
     Value: JSON-serialized query result
     TTL: Configurable via REDIS_QUERY_CACHE_TTL_SECONDS (default: 5 minutes)
 

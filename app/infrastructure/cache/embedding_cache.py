@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 class EmbeddingCache:
     """Cache computed embedding vectors in Redis.
 
-    Key pattern: bsr:embed:v1:{model_name}:{content_hash}
+    Key pattern: ratatoskr:embed:v1:{model_name}:{content_hash}
     Value: {"embedding": base64_encoded_float32_array, "dimensions": int}
     TTL: 24 hours (configurable via REDIS_EMBEDDING_CACHE_TTL_SECONDS)
 

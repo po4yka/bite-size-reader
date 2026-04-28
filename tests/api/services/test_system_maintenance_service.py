@@ -24,7 +24,7 @@ def test_build_db_dump_file_creates_backup_and_reuses_for_range_requests(db, tmp
 
     dump_file = service.build_db_dump_file(request_headers={}, user_id=1)
     assert Path(dump_file.path).exists()
-    assert dump_file.filename.startswith("bite_size_reader_backup_")
+    assert dump_file.filename.startswith("ratatoskr_backup_")
 
     with patch.object(service, "_create_backup") as create_backup:
         reused = service.build_db_dump_file(request_headers={"Range": "bytes=0-9"}, user_id=1)

@@ -1,11 +1,11 @@
 services:
-  bsr:
+  ratatoskr:
     build:
       context: ../..
       dockerfile: ops/docker/Dockerfile
       args:
         VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME:-}
-    container_name: bsr-bot
+    container_name: ratatoskr-bot
     init: true
     env_file:
       - ../../.env
@@ -17,7 +17,7 @@ services:
       - /tmp
     environment:
       - TEXTACY_ENABLED=1
-      - DB_PATH=/data/app.db
+      - DB_PATH=/data/ratatoskr.db
       - CHROMA_HOST=http://chroma:8000
       - REDIS_ENABLED=1
       - REDIS_HOST=redis
@@ -43,7 +43,7 @@ services:
           memory: 512M
           cpus: "0.50"
     healthcheck:
-      test: ["CMD", "python", "-c", "import sqlite3, os; conn = sqlite3.connect(os.getenv('DB_PATH', '/data/app.db'), timeout=5); conn.execute('SELECT 1').fetchone(); conn.close()"]
+      test: ["CMD", "python", "-c", "import sqlite3, os; conn = sqlite3.connect(os.getenv('DB_PATH', '/data/ratatoskr.db'), timeout=5); conn.execute('SELECT 1').fetchone(); conn.close()"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -68,7 +68,7 @@ services:
       dockerfile: ops/docker/Dockerfile.api
       args:
         VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME:-}
-    container_name: bsr-mobile-api
+    container_name: ratatoskr-mobile-api
     init: true
     tmpfs:
       - /tmp
@@ -78,7 +78,7 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - API_WORKERS=${API_WORKERS:-1}
-      - DB_PATH=/data/app.db
+      - DB_PATH=/data/ratatoskr.db
       - CHROMA_HOST=http://chroma:8000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - REDIS_ENABLED=1
@@ -124,7 +124,7 @@ services:
     build:
       context: ../..
       dockerfile: ops/docker/Dockerfile
-    container_name: bsr-mcp
+    container_name: ratatoskr-mcp
     init: true
     env_file:
       - ../../.env
@@ -135,7 +135,7 @@ services:
       - MCP_PORT=8200
       - MCP_USER_ID=${MCP_USER_ID:?MCP_USER_ID must be set in .env to scope MCP server access to a specific user}
       - MCP_ALLOW_REMOTE_SSE=true
-      - DB_PATH=/data/app.db
+      - DB_PATH=/data/ratatoskr.db
       - CHROMA_HOST=http://chroma:8000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PYTHONUNBUFFERED=1
@@ -182,7 +182,7 @@ services:
     build:
       context: ../..
       dockerfile: ops/docker/Dockerfile
-    container_name: bsr-mcp-write
+    container_name: ratatoskr-mcp-write
     init: true
     env_file:
       - ../../.env
@@ -193,7 +193,7 @@ services:
       - MCP_PORT=8200
       - MCP_USER_ID=${MCP_USER_ID:?MCP_USER_ID must be set in .env to scope writable MCP access to a specific user}
       - MCP_ALLOW_REMOTE_SSE=true
-      - DB_PATH=/data/app.db
+      - DB_PATH=/data/ratatoskr.db
       - CHROMA_HOST=http://chroma:8000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PYTHONUNBUFFERED=1
@@ -240,7 +240,7 @@ services:
     build:
       context: ../..
       dockerfile: ops/docker/Dockerfile
-    container_name: bsr-mcp-public
+    container_name: ratatoskr-mcp-public
     init: true
     env_file:
       - ../../.env
@@ -251,10 +251,10 @@ services:
       - MCP_PORT=8200
       - MCP_AUTH_MODE=jwt
       - MCP_ALLOW_REMOTE_SSE=true
-      - MCP_FORWARDED_ACCESS_TOKEN_HEADER=${MCP_FORWARDED_ACCESS_TOKEN_HEADER:-X-BSR-Forwarded-Access-Token}
-      - MCP_FORWARDED_SECRET_HEADER=${MCP_FORWARDED_SECRET_HEADER:-X-BSR-MCP-Forwarding-Secret}
+      - MCP_FORWARDED_ACCESS_TOKEN_HEADER=${MCP_FORWARDED_ACCESS_TOKEN_HEADER:-X-Ratatoskr-Forwarded-Access-Token}
+      - MCP_FORWARDED_SECRET_HEADER=${MCP_FORWARDED_SECRET_HEADER:-X-Ratatoskr-MCP-Forwarding-Secret}
       - MCP_FORWARDING_SECRET=${MCP_FORWARDING_SECRET:-}
-      - DB_PATH=/data/app.db
+      - DB_PATH=/data/ratatoskr.db
       - CHROMA_HOST=http://chroma:8000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PYTHONUNBUFFERED=1
@@ -297,7 +297,7 @@ services:
           cpus: "0.10"
   redis:
     image: redis:7-alpine
-    container_name: bsr-redis
+    container_name: ratatoskr-redis
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     volumes:
       - redis_data:/data
@@ -327,11 +327,11 @@ services:
       - no-new-privileges:true
     stop_grace_period: 30s
   chroma:
-    image: bsr-chroma:1.5.2
+    image: ratatoskr-chroma:1.5.2
     build:
       context: ../..
       dockerfile: ops/docker/Dockerfile.chroma
-    container_name: bsr-chroma
+    container_name: ratatoskr-chroma
     init: true
     volumes:
       - ../../chroma_data:/data

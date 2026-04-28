@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import click
-from bsr_cli.auth import get_client
-from bsr_cli.output import format_summary_detail
+from ratatoskr_cli.auth import get_client
+from ratatoskr_cli.output import format_summary_detail
 
 
 @click.command()

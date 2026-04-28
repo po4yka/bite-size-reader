@@ -1,5 +1,5 @@
 """
-FastAPI application for Bite-Size Reader Mobile API.
+FastAPI application for Ratatoskr Mobile API.
 
 Usage:
     uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
 # FastAPI app instance
 _docs_enabled = os.getenv("API_DOCS_ENABLED", "").lower() in ("1", "true")
 app = FastAPI(
-    title="Bite-Size Reader Mobile API",
+    title="Ratatoskr Mobile API",
     description="RESTful API for Android/iOS mobile clients",
     version="1.0.0",
     docs_url="/docs" if _docs_enabled else None,
@@ -230,7 +230,7 @@ def root(request: Request) -> dict[str, Any]:
     """API root endpoint."""
     return success_response(
         {
-            "service": "Bite-Size Reader Mobile API",
+            "service": "Ratatoskr Mobile API",
             "version": app.version,
             "docs": "/docs",
             "health": "/health",

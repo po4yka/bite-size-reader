@@ -28,10 +28,10 @@ interface HighlightsPanelProps {
 }
 
 const COLOR_OPTIONS = [
-  { value: "yellow", cssVar: "var(--bsr-highlight-yellow)", label: "Yellow" },
-  { value: "green", cssVar: "var(--bsr-highlight-green)", label: "Green" },
-  { value: "blue", cssVar: "var(--bsr-highlight-blue)", label: "Blue" },
-  { value: "red", cssVar: "var(--bsr-highlight-red)", label: "Red" },
+  { value: "yellow", cssVar: "var(--ratatoskr-highlight-yellow)", label: "Yellow" },
+  { value: "green", cssVar: "var(--ratatoskr-highlight-green)", label: "Green" },
+  { value: "blue", cssVar: "var(--ratatoskr-highlight-blue)", label: "Blue" },
+  { value: "red", cssVar: "var(--ratatoskr-highlight-red)", label: "Red" },
 ] as const;
 
 type ColorValue = (typeof COLOR_OPTIONS)[number]["value"];
@@ -41,10 +41,10 @@ function resolveColorCss(color: string | null): string {
   const match = COLOR_OPTIONS.find((opt) => opt.value === color);
   if (match) return match.cssVar;
   // Legacy hex fallback
-  if (color === "#D1FAE5") return "var(--bsr-highlight-green)";
-  if (color === "#DBEAFE") return "var(--bsr-highlight-blue)";
-  if (color === "#FEE2E2") return "var(--bsr-highlight-red)";
-  return "var(--bsr-highlight-yellow)";
+  if (color === "#D1FAE5") return "var(--ratatoskr-highlight-green)";
+  if (color === "#DBEAFE") return "var(--ratatoskr-highlight-blue)";
+  if (color === "#FEE2E2") return "var(--ratatoskr-highlight-red)";
+  return "var(--ratatoskr-highlight-yellow)";
 }
 
 function truncate(text: string, maxLen: number): string {

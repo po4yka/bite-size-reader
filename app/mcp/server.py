@@ -22,7 +22,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     stream=sys.stderr,
 )
-logger = logging.getLogger("bsr.mcp")
+logger = logging.getLogger("ratatoskr.mcp")
 
 _DEFAULT_CONTEXT = McpServerContext(logger=logger)
 
@@ -53,9 +53,9 @@ def _build_sse_app(
 def create_mcp_server(context: McpServerContext | None = None) -> FastMCP:
     server_context = context or _DEFAULT_CONTEXT
     mcp = FastMCP(
-        "bite-size-reader",
+        "ratatoskr",
         instructions=(
-            "Bite-Size Reader is a personal knowledge base of web article summaries. "
+            "Ratatoskr is a personal knowledge base of web article summaries. "
             "Use the tools below to search, retrieve, explore stored articles, and "
             "run local trusted aggregation bundles for the effective scoped user. "
             "Articles are summarised with key ideas, topic tags, entities, "
@@ -95,8 +95,8 @@ def run_server(
     db_path: str | None = None,
     user_id: int | None = None,
     auth_mode: str = "disabled",
-    forwarded_access_token_header: str = "X-BSR-Forwarded-Access-Token",
-    forwarded_secret_header: str = "X-BSR-MCP-Forwarding-Secret",
+    forwarded_access_token_header: str = "X-Ratatoskr-Forwarded-Access-Token",
+    forwarded_secret_header: str = "X-Ratatoskr-MCP-Forwarding-Secret",
     forwarding_secret: str | None = None,
     allow_remote_sse: bool = False,
     allow_unscoped_sse: bool = False,
@@ -105,7 +105,7 @@ def run_server(
     _DEFAULT_CONTEXT.set_user_scope(user_id)
     _DEFAULT_CONTEXT.init_runtime(db_path)
     logger.info(
-        "Starting Bite-Size Reader MCP server (transport=%s, startup_user_scope=%s)",
+        "Starting Ratatoskr MCP server (transport=%s, startup_user_scope=%s)",
         transport,
         user_id if user_id is not None else "all",
     )

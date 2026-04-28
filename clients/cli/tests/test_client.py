@@ -1,18 +1,18 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from bsr_cli.client import BSRClient
-from bsr_cli.exceptions import APIError
+from ratatoskr_cli.client import RatatoskrClient
+from ratatoskr_cli.exceptions import APIError
 
 
-class TestBSRClient:
+class TestRatatoskrClient:
     def test_success_response_unwrapping(self):
         """_request unwraps success envelope correctly."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"success": True, "data": {"id": 1, "title": "Test"}}
 
-        client = BSRClient("http://localhost:8000", "fake-token")
+        client = RatatoskrClient("http://localhost:8000", "fake-token")
         with patch.object(client._client, "request", return_value=mock_resp):
             result = client._request("GET", "/v1/test")
         assert result == {"id": 1, "title": "Test"}
@@ -26,7 +26,7 @@ class TestBSRClient:
             "error": {"code": "VALIDATION_ERROR", "message": "Invalid input"},
         }
 
-        client = BSRClient("http://localhost:8000", "fake-token")
+        client = RatatoskrClient("http://localhost:8000", "fake-token")
         with patch.object(client._client, "request", return_value=mock_resp):
             with pytest.raises(APIError) as exc_info:
                 client._request("GET", "/v1/test")
@@ -37,18 +37,18 @@ class TestBSRClient:
         mock_resp = MagicMock()
         mock_resp.status_code = 204
 
-        client = BSRClient("http://localhost:8000", "fake-token")
+        client = RatatoskrClient("http://localhost:8000", "fake-token")
         with patch.object(client._client, "request", return_value=mock_resp):
             assert client._request("DELETE", "/v1/test") is None
 
     def test_auth_header_set(self):
         """Client sets Authorization header."""
-        client = BSRClient("http://localhost:8000", "my-token")
+        client = RatatoskrClient("http://localhost:8000", "my-token")
         assert client._client.headers["authorization"] == "Bearer my-token"
 
     def test_create_aggregation_bundle_routes_to_api(self):
         """create_aggregation_bundle sends the expected POST request."""
-        client = BSRClient("http://localhost:8000", "my-token")
+        client = RatatoskrClient("http://localhost:8000", "my-token")
         items = [{"type": "url", "url": "https://example.com", "source_kind_hint": "x_post"}]
 
         with patch.object(client, "_request", return_value={"session": {"id": 1}}) as request:
@@ -66,7 +66,7 @@ class TestBSRClient:
 
     def test_get_aggregation_bundle_routes_to_api(self):
         """get_aggregation_bundle targets the session detail route."""
-        client = BSRClient("http://localhost:8000", "my-token")
+        client = RatatoskrClient("http://localhost:8000", "my-token")
 
         with patch.object(client, "_request", return_value={"session": {"id": 42}}) as request:
             client.get_aggregation_bundle(42)
@@ -75,7 +75,7 @@ class TestBSRClient:
 
     def test_list_aggregation_bundles_routes_to_api(self):
         """list_aggregation_bundles targets the list route."""
-        client = BSRClient("http://localhost:8000", "my-token")
+        client = RatatoskrClient("http://localhost:8000", "my-token")
 
         with patch.object(client, "_request", return_value={"sessions": []}) as request:
             client.list_aggregation_bundles(limit=5, offset=10)

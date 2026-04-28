@@ -156,7 +156,7 @@ def register_tools(
 
     @mcp.tool()
     def get_stats() -> str:
-        """Get statistics about the Bite-Size Reader article database."""
+        """Get statistics about the Ratatoskr article database."""
         return to_json(_call_sync("get_stats", article_service.get_stats))
 
     @mcp.tool()

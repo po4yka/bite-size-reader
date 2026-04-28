@@ -22,7 +22,7 @@ class RedisConfig(BaseModel):
     port: int = Field(default=6379, validation_alias="REDIS_PORT")
     db: int = Field(default=0, validation_alias="REDIS_DB")
     password: str | None = Field(default=None, validation_alias="REDIS_PASSWORD")
-    prefix: str = Field(default="bsr", validation_alias="REDIS_PREFIX")
+    prefix: str = Field(default="ratatoskr", validation_alias="REDIS_PREFIX")
     socket_timeout: float = Field(default=5.0, validation_alias="REDIS_SOCKET_TIMEOUT")
     cache_timeout_sec: float = Field(default=0.3, validation_alias="REDIS_CACHE_TIMEOUT_SEC")
     reconnect_interval: float = Field(
@@ -154,7 +154,7 @@ class RedisConfig(BaseModel):
     @field_validator("prefix", mode="before")
     @classmethod
     def _validate_prefix(cls, value: Any) -> str:
-        prefix = str(value or "bsr").strip()
+        prefix = str(value or "ratatoskr").strip()
         if not prefix:
             msg = "Redis prefix cannot be empty"
             raise ValueError(msg)

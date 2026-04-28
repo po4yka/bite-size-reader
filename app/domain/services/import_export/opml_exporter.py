@@ -17,7 +17,7 @@ class OPMLExporter:
     ) -> str:
         opml = ET.Element("opml", version="2.0")
         head = ET.SubElement(opml, "head")
-        ET.SubElement(head, "title").text = "Bite-Size Reader Feed Subscriptions"
+        ET.SubElement(head, "title").text = "Ratatoskr Feed Subscriptions"
         ET.SubElement(head, "dateCreated").text = datetime.now(UTC).strftime(
             "%a, %d %b %Y %H:%M:%S %z"
         )

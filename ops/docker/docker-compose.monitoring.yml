@@ -1,4 +1,4 @@
-# Monitoring stack for Bite-Size Reader
+# Monitoring stack for Ratatoskr
 # Optimized for Raspberry Pi 5 (16GB RAM)
 #
 # Usage:
@@ -19,7 +19,7 @@
 services:
   prometheus:
     image: prom/prometheus:v2.48.0
-    container_name: bsr-prometheus
+    container_name: ratatoskr-prometheus
     restart: unless-stopped
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -52,7 +52,7 @@ services:
 
   grafana:
     image: grafana/grafana:10.2.2
-    container_name: bsr-grafana
+    container_name: ratatoskr-grafana
     restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_USER=admin
@@ -82,7 +82,7 @@ services:
 
   loki:
     image: grafana/loki:2.9.2
-    container_name: bsr-loki
+    container_name: ratatoskr-loki
     restart: unless-stopped
     command: -config.file=/etc/loki/local-config.yaml
     volumes:
@@ -106,7 +106,7 @@ services:
 
   promtail:
     image: grafana/promtail:2.9.2
-    container_name: bsr-promtail
+    container_name: ratatoskr-promtail
     restart: unless-stopped
     volumes:
       - ../monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
@@ -126,7 +126,7 @@ services:
 
   node-exporter:
     image: prom/node-exporter:v1.8.2
-    container_name: bsr-node-exporter
+    container_name: ratatoskr-node-exporter
     restart: unless-stopped
     command:
       - '--path.procfs=/host/proc'

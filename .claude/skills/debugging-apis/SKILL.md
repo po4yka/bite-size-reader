@@ -13,7 +13,7 @@ Debug and troubleshoot Firecrawl (content scraping) and OpenRouter (LLM) API int
 
 Recent LLM failures (last 24h):
 
-!sqlite3 data/app.db "SELECT COUNT(*) FROM llm_calls WHERE status != 'ok' AND created_at > datetime('now', '-24 hours')"
+!sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM llm_calls WHERE status != 'ok' AND created_at > datetime('now', '-24 hours')"
 
 ## Debugging Approach
 
@@ -27,7 +27,7 @@ Recent LLM failures (last 24h):
 ### Check crawl results for a request
 
 ```bash
-sqlite3 /data/app.db << EOF
+sqlite3 /data/ratatoskr.db << EOF
 .mode json
 SELECT request_id, source_url, status, firecrawl_success,
        firecrawl_error_code, firecrawl_error_message, http_status, latency_ms
@@ -39,7 +39,7 @@ EOF
 ### Check LLM calls for a request
 
 ```bash
-sqlite3 /data/app.db << EOF
+sqlite3 /data/ratatoskr.db << EOF
 .mode json
 SELECT id, model, status, tokens_prompt, tokens_completion,
        cost_usd, latency_ms, error_text, created_at
@@ -52,8 +52,8 @@ EOF
 ### View full LLM request/response
 
 ```bash
-sqlite3 /data/app.db "SELECT request_messages_json FROM llm_calls WHERE request_id = '<correlation_id>' LIMIT 1;" | python -m json.tool
-sqlite3 /data/app.db "SELECT response_json FROM llm_calls WHERE request_id = '<correlation_id>' LIMIT 1;" | python -m json.tool
+sqlite3 /data/ratatoskr.db "SELECT request_messages_json FROM llm_calls WHERE request_id = '<correlation_id>' LIMIT 1;" | python -m json.tool
+sqlite3 /data/ratatoskr.db "SELECT response_json FROM llm_calls WHERE request_id = '<correlation_id>' LIMIT 1;" | python -m json.tool
 ```
 
 ## Integration Locations

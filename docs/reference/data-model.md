@@ -1,6 +1,6 @@
 # Data Model Reference
 
-Complete reference for Bite-Size Reader's SQLite database schema.
+Complete reference for Ratatoskr's SQLite database schema.
 
 **Audience:** Developers, Database Administrators
 **Type:** Reference
@@ -10,9 +10,9 @@ Complete reference for Bite-Size Reader's SQLite database schema.
 
 ## Overview
 
-Bite-Size Reader uses **SQLite** as its persistence layer with 21 model classes managed by Peewee ORM.
+Ratatoskr uses **SQLite** as its persistence layer with 21 model classes managed by Peewee ORM.
 
-**Database Location:** `DB_PATH` environment variable (default: `/data/app.db`)
+**Database Location:** `DB_PATH` environment variable (default: `/data/ratatoskr.db`)
 
 **ORM:** Peewee
 **Migrations:** Manual SQL files in `app/cli/migrations/`

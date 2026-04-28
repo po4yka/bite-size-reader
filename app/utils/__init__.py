@@ -1,1 +1,1 @@
-"""Utility helpers for the bite-size reader service."""
+"""Utility helpers for the ratatoskr service."""

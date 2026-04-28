@@ -1,4 +1,4 @@
-# Promtail configuration for Bite-Size Reader
+# Promtail configuration for Ratatoskr
 # Ships logs from Docker containers to Loki
 
 server:
@@ -10,7 +10,7 @@ positions:
 
 clients:
   - url: http://loki:3100/loki/api/v1/push
-    tenant_id: bsr
+    tenant_id: ratatoskr
     batchwait: 1s
     batchsize: 1048576
     timeout: 10s
@@ -64,14 +64,14 @@ scrape_configs:
       - output:
           source: log
 
-  # BSR bot logs (if logging to file)
-  - job_name: bsr-logs
+  # Ratatoskr bot logs (if logging to file)
+  - job_name: ratatoskr-logs
     static_configs:
       - targets:
           - localhost
         labels:
-          job: bsr
-          __path__: /var/log/bsr/*.log
+          job: ratatoskr
+          __path__: /var/log/ratatoskr/*.log
 
     pipeline_stages:
       - json:

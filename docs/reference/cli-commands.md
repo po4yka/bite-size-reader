@@ -1,6 +1,6 @@
 # CLI Commands Reference
 
-Complete reference for all command-line tools in Bite-Size Reader.
+Complete reference for all command-line tools in Ratatoskr.
 
 **Audience:** Developers, Operators
 **Type:** Reference
@@ -10,9 +10,9 @@ Complete reference for all command-line tools in Bite-Size Reader.
 
 ## Overview
 
-Bite-Size Reader provides CLI tools for:
+Ratatoskr provides CLI tools for:
 
-- External API access via the packaged `bsr` client
+- External API access via the packaged `ratatoskr` client
 - Testing summarization without Telegram (`summary.py`)
 - Database migrations (`migrate_db.py`)
 - Search functionality testing (`search.py`, `search_compare.py`)
@@ -22,7 +22,7 @@ Bite-Size Reader provides CLI tools for:
 
 **Common Pattern:** `python -m app.cli.<command> [options]`
 
-## External `bsr` CLI
+## External `ratatoskr` CLI
 
 The packaged external client lives under `clients/cli/` and talks to the public `/v1/*` API instead of the internal `app.cli.*` harnesses documented below.
 
@@ -30,26 +30,26 @@ Use it when you need authenticated external access, especially for mixed-source 
 
 ```bash
 # Authenticate with a client secret
-bsr login --server https://bsr.example.com --user-id 123456 --client-id cli-workstation-v1
+ratatoskr login --server https://ratatoskr.example.com --user-id 123456 --client-id cli-workstation-v1
 
 # Submit a bundle
-bsr aggregate https://x.com/example/status/1 https://youtu.be/dQw4w9WgXcQ
+ratatoskr aggregate https://x.com/example/status/1 https://youtu.be/dQw4w9WgXcQ
 
 # Reopen one session
-bsr aggregation get 42
+ratatoskr aggregation get 42
 
 # List recent sessions
-bsr aggregation list --limit 10
+ratatoskr aggregation list --limit 10
 
 # Script with JSON
-bsr --json aggregate --file sources.txt | jq '.session'
+ratatoskr --json aggregate --file sources.txt | jq '.session'
 ```
 
 Aggregation notes:
 
-- `bsr aggregate` accepts positional URLs, `--file`, `--lang`, and repeatable `--hint`.
+- `ratatoskr aggregate` accepts positional URLs, `--file`, `--lang`, and repeatable `--hint`.
 - The command is currently blocking: it waits for extraction plus synthesis and returns a terminal session snapshot on success.
-- Use `bsr aggregation get <id>` or `bsr aggregation list` to revisit persisted sessions after a network interruption or for scripting against prior runs.
+- Use `ratatoskr aggregation get <id>` or `ratatoskr aggregation list` to revisit persisted sessions after a network interruption or for scripting against prior runs.
 
 See:
 
@@ -726,12 +726,12 @@ python -m app.cli.mcp_server
 # ~/.config/claude/claude_desktop_config.json
 {
   "mcpServers": {
-    "bite-size-reader": {
+    "ratatoskr": {
       "command": "python",
       "args": ["-m", "app.cli.mcp_server"],
-      "cwd": "/path/to/bite-size-reader",
+      "cwd": "/path/to/ratatoskr",
       "env": {
-        "DB_PATH": "/path/to/data/app.db"
+        "DB_PATH": "/path/to/data/ratatoskr.db"
       }
     }
   }
@@ -834,7 +834,7 @@ sqlite3 data/app.db "VACUUM;"
 
 ```bash
 # Database
-DB_PATH=/data/app.db
+DB_PATH=/data/ratatoskr.db
 
 # Logging
 LOG_LEVEL=INFO         # DEBUG for CLI debugging

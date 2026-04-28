@@ -2,7 +2,7 @@
 
 import json
 
-from bsr_cli.output import (
+from ratatoskr_cli.output import (
     format_aggregation_detail,
     format_aggregation_list,
     format_collections,

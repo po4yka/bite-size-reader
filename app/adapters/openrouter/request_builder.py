@@ -251,7 +251,7 @@ class RequestBuilder:
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": (self._http_referer or "https://github.com/your-repo"),
-            "X-Title": self._x_title or "Bite-Size Reader Bot",
+            "X-Title": self._x_title or "Ratatoskr Bot",
         }
 
     def build_request_body(

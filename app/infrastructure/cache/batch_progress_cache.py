@@ -24,11 +24,11 @@ class BatchProgressCache:
     """Store and broadcast batch processing progress via Redis.
 
     Key patterns:
-    - Progress state: bsr:batch:progress:{session_id}
+    - Progress state: ratatoskr:batch:progress:{session_id}
       Value: {"status": str, "processed": int, "total": int, "percent": float, ...}
       TTL: 1 hour (configurable via REDIS_BATCH_PROGRESS_TTL_SECONDS)
 
-    - Pub/Sub channel: bsr:batch:updates:{session_id}
+    - Pub/Sub channel: ratatoskr:batch:updates:{session_id}
       Messages: {"event": str, "data": {...}, "timestamp": str}
 
     Fallback: On Redis unavailable, callers should use DB polling.

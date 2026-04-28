@@ -1,12 +1,12 @@
-# Grafana dashboard provisioning for Bite-Size Reader
+# Grafana dashboard provisioning for Ratatoskr
 
 apiVersion: 1
 
 providers:
-  - name: 'BSR Dashboards'
+  - name: 'Ratatoskr Dashboards'
     orgId: 1
-    folder: 'Bite-Size Reader'
-    folderUid: 'bsr'
+    folder: 'Ratatoskr'
+    folderUid: 'ratatoskr'
     type: file
     disableDeletion: false
     updateIntervalSeconds: 60

@@ -1,4 +1,4 @@
-# Loki configuration for Bite-Size Reader
+# Loki configuration for Ratatoskr
 # Optimized for Raspberry Pi 5 with 7-day retention
 
 auth_enabled: false

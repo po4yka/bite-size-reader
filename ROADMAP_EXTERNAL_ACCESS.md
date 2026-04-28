@@ -20,9 +20,9 @@ These endpoints are authenticated, user-scoped, URL-first for the public contrac
 
 Implemented commands:
 
-- `bsr aggregate ...`
-- `bsr aggregation get <session_id>`
-- `bsr aggregation list --limit N --offset N`
+- `ratatoskr aggregate ...`
+- `ratatoskr aggregation get <session_id>`
+- `ratatoskr aggregation list --limit N --offset N`
 
 The CLI is a thin authenticated API client and supports positional URLs, `--file`, `--lang`, repeatable `--hint`, human-readable output, and JSON output.
 
@@ -37,10 +37,10 @@ Implemented tools:
 
 Implemented resources:
 
-- `bsr://aggregations/recent`
-- `bsr://aggregations/{session_id}`
+- `ratatoskr://aggregations/recent`
+- `ratatoskr://aggregations/{session_id}`
 
-Note: the earlier proposed `bsr://aggregations/stats` resource was not shipped because instance-wide statistics are already exposed through the existing `bsr://stats` resource.
+Note: the earlier proposed `ratatoskr://aggregations/stats` resource was not shipped because instance-wide statistics are already exposed through the existing `ratatoskr://stats` resource.
 
 ## Phase Status
 
@@ -66,9 +66,9 @@ Implemented.
 
 Implemented.
 
-- Client methods live in `clients/cli/src/bsr_cli/client.py`.
-- Commands live in `clients/cli/src/bsr_cli/commands/aggregation.py`.
-- Rendering lives in `clients/cli/src/bsr_cli/output.py`.
+- Client methods live in `clients/cli/src/ratatoskr_cli/client.py`.
+- Commands live in `clients/cli/src/ratatoskr_cli/commands/aggregation.py`.
+- Rendering lives in `clients/cli/src/ratatoskr_cli/output.py`.
 - CLI documentation lives in `clients/cli/README.md` and `docs/reference/cli-commands.md`.
 
 ### Phase 4: Session Lifecycle and Long-Running Job Semantics

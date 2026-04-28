@@ -1,4 +1,4 @@
-"""BSR CLI configuration management."""
+"""Ratatoskr CLI configuration management."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
-from bsr_cli.exceptions import ConfigError
+from ratatoskr_cli.exceptions import ConfigError
 
 
 @dataclass
-class BSRConfig:
+class RatatoskrConfig:
     """CLI configuration."""
 
     server_url: str = ""
@@ -26,18 +26,18 @@ def get_config_dir() -> Path:
     """Return config directory (XDG-aware)."""
     xdg = os.environ.get("XDG_CONFIG_HOME")
     base = Path(xdg) if xdg else Path.home() / ".config"
-    return base / "bsr"
+    return base / "ratatoskr"
 
 
 def get_config_path() -> Path:
     return get_config_dir() / "config.toml"
 
 
-def load_config() -> BSRConfig:
+def load_config() -> RatatoskrConfig:
     """Load config from TOML file. Returns defaults if file doesn't exist."""
     path = get_config_path()
     if not path.exists():
-        return BSRConfig()
+        return RatatoskrConfig()
 
     import tomllib
 
@@ -47,7 +47,7 @@ def load_config() -> BSRConfig:
     server = data.get("server", {})
     auth = data.get("auth", {})
 
-    return BSRConfig(
+    return RatatoskrConfig(
         server_url=server.get("url", ""),
         client_id=auth.get("client_id", ""),
         user_id=auth.get("user_id", 0),
@@ -71,7 +71,7 @@ def _serialize_config_toml(data: dict[str, dict[str, object]]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def save_config(config: BSRConfig) -> None:
+def save_config(config: RatatoskrConfig) -> None:
     """Save config to TOML file with secure permissions."""
     config_dir = get_config_dir()
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -100,9 +100,9 @@ def save_config(config: BSRConfig) -> None:
     os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
 
 
-def require_config() -> BSRConfig:
+def require_config() -> RatatoskrConfig:
     """Load config and validate it has required fields."""
     config = load_config()
     if not config.server_url:
-        raise ConfigError("Server URL not configured. Run: bsr config")
+        raise ConfigError("Server URL not configured. Run: ratatoskr config")
     return config

@@ -176,7 +176,7 @@ async def main() -> int:
         print("  query         Search query (required)")
         print()
         print("Options:")
-        print("  --db=PATH     Database path (default: /data/app.db)")
+        print("  --db=PATH     Database path (default: /data/ratatoskr.db)")
         print("  --limit=N     Maximum results per mode (default: 10)")
         print("  --help, -h    Show this help message")
         print()
@@ -188,7 +188,7 @@ async def main() -> int:
 
     # Parse arguments
     query_parts = []
-    db_path = "/data/app.db"
+    db_path = "/data/ratatoskr.db"
     max_results = 10
 
     for arg in sys.argv[1:]:

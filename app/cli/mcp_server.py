@@ -1,4 +1,4 @@
-"""CLI entry point for the Bite-Size Reader MCP server.
+"""CLI entry point for the Ratatoskr MCP server.
 
 Starts an MCP (Model Context Protocol) server that exposes articles
 and search functionality to local or otherwise trusted AI agents.
@@ -26,8 +26,8 @@ import sys
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="bsr-mcp-server",
-        description="Bite-Size Reader MCP server for local or trusted AI agent integrations",
+        prog="ratatoskr-mcp-server",
+        description="Ratatoskr MCP server for local or trusted AI agent integrations",
     )
     parser.add_argument(
         "--transport",

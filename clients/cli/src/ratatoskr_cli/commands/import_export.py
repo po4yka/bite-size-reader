@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
-from bsr_cli.auth import get_client
-from bsr_cli.output import echo_success, format_json
+from ratatoskr_cli.auth import get_client
+from ratatoskr_cli.output import echo_success, format_json
 
 
 @click.command("export")

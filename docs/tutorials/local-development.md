@@ -1,6 +1,6 @@
 # Local Development Tutorial
 
-Set up a local development environment for Bite-Size Reader.
+Set up a local development environment for Ratatoskr.
 
 **Time**: ~20 minutes
 **Difficulty**: Intermediate
@@ -26,8 +26,8 @@ By the end of this tutorial, you'll have:
 
 ```bash
 # Clone the repository
-git clone https://github.com/po4yka/bite-size-reader.git
-cd bite-size-reader
+git clone https://github.com/po4yka/ratatoskr.git
+cd ratatoskr
 
 # Verify Python version (3.13+ required)
 python3 --version
@@ -143,7 +143,7 @@ OPENROUTER_API_KEY=your_openrouter_key
 OPENROUTER_MODEL=deepseek/deepseek-v3.2
 
 # Database (local dev)
-DB_PATH=./data/app.db
+DB_PATH=./data/ratatoskr.db
 
 # Logging
 LOG_LEVEL=DEBUG
@@ -645,7 +645,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 - [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) - Debugging guide
 - [FAQ](../FAQ.md) - Common questions
-- [GitHub Issues](https://github.com/po4yka/bite-size-reader/issues) - Ask questions
+- [GitHub Issues](https://github.com/po4yka/ratatoskr/issues) - Ask questions
 
 ---
 

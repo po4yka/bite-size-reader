@@ -172,161 +172,6 @@ lxml = [
 ]
 
 [[package]]
-name = "bite-size-reader"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "httpx", extra = ["http2"] },
-    { name = "json-repair" },
-    { name = "loguru" },
-    { name = "orjson" },
-    { name = "peewee" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "pyrotgfork" },
-    { name = "pytgcrypto" },
-    { name = "redis" },
-    { name = "scrapling" },
-    { name = "spacy" },
-    { name = "trafilatura" },
-    { name = "uvloop" },
-]
-
-[package.optional-dependencies]
-api = [
-    { name = "chromadb" },
-    { name = "crawlee", extra = ["beautifulsoup", "playwright"] },
-    { name = "defusedxml" },
-    { name = "fastapi" },
-    { name = "onnxruntime" },
-    { name = "playwright" },
-    { name = "pyjwt" },
-    { name = "python-multipart" },
-    { name = "sentence-transformers" },
-    { name = "starlette" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-attachment = [
-    { name = "pillow" },
-    { name = "pymupdf" },
-]
-browser-scraper = [
-    { name = "crawlee", extra = ["beautifulsoup", "playwright"] },
-    { name = "playwright" },
-]
-export = [
-    { name = "weasyprint" },
-]
-gemini = [
-    { name = "google-genai" },
-]
-inference-core = [
-    { name = "chromadb" },
-    { name = "onnxruntime" },
-    { name = "sentence-transformers" },
-]
-mcp = [
-    { name = "mcp" },
-]
-ml = [
-    { name = "chromadb" },
-    { name = "onnxruntime" },
-    { name = "scikit-learn" },
-    { name = "sentence-transformers" },
-    { name = "torch" },
-    { name = "transformers" },
-]
-monitoring = [
-    { name = "prometheus-client" },
-]
-push = [
-    { name = "firebase-admin" },
-]
-scheduler = [
-    { name = "apscheduler" },
-]
-youtube = [
-    { name = "youtube-transcript-api" },
-    { name = "yt-dlp" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "fakeredis" },
-    { name = "hypothesis" },
-    { name = "isort" },
-    { name = "mypy" },
-    { name = "openapi-spec-validator" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-benchmark" },
-    { name = "pyyaml" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "apscheduler", marker = "extra == 'scheduler'", specifier = ">=3.11.2,<4.0.0" },
-    { name = "bite-size-reader", extras = ["browser-scraper"], marker = "extra == 'api'" },
-    { name = "bite-size-reader", extras = ["inference-core"], marker = "extra == 'api'" },
-    { name = "bite-size-reader", extras = ["inference-core"], marker = "extra == 'ml'" },
-    { name = "chromadb", marker = "extra == 'inference-core'", specifier = ">=1.5.0" },
-    { name = "crawlee", extras = ["beautifulsoup", "playwright"], marker = "extra == 'browser-scraper'", specifier = ">=1.4.0" },
-    { name = "defusedxml", marker = "extra == 'api'", specifier = ">=0.7.1" },
-    { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.128.0" },
-    { name = "firebase-admin", marker = "extra == 'push'", specifier = ">=6.0.0" },
-    { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.0.0" },
-    { name = "httpx", extras = ["http2"], specifier = ">=0.28.1" },
-    { name = "json-repair", specifier = ">=0.55.1" },
-    { name = "loguru", specifier = ">=0.7.3" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.26,<2" },
-    { name = "onnxruntime", marker = "extra == 'inference-core'", specifier = ">=1.24.1" },
-    { name = "orjson", specifier = ">=3.11.6" },
-    { name = "peewee", specifier = ">=4.0.0" },
-    { name = "pillow", marker = "extra == 'attachment'", specifier = ">=11.0.0" },
-    { name = "playwright", marker = "extra == 'browser-scraper'", specifier = ">=1.40" },
-    { name = "prometheus-client", marker = "extra == 'monitoring'", specifier = ">=0.21.0" },
-    { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "pydantic-settings", specifier = ">=2.12.0" },
-    { name = "pyjwt", marker = "extra == 'api'", specifier = ">=2.12.0" },
-    { name = "pymupdf", marker = "extra == 'attachment'", specifier = ">=1.25.0" },
-    { name = "pyrotgfork", specifier = ">=2.2.18" },
-    { name = "pytgcrypto", specifier = ">=1.2.12" },
-    { name = "python-multipart", marker = "extra == 'api'", specifier = ">=0.0.26" },
-    { name = "redis", specifier = ">=7.1.0" },
-    { name = "scikit-learn", marker = "extra == 'ml'", specifier = ">=1.8.0" },
-    { name = "scrapling", specifier = ">=0.2" },
-    { name = "sentence-transformers", marker = "extra == 'inference-core'", specifier = ">=5.2.2" },
-    { name = "spacy", specifier = ">=3.8.11,<4" },
-    { name = "starlette", marker = "extra == 'api'", specifier = ">=0.50.0" },
-    { name = "torch", marker = "extra == 'ml'", specifier = ">=2.10.0" },
-    { name = "trafilatura", specifier = ">=2.0.0" },
-    { name = "transformers", marker = "extra == 'ml'", specifier = ">=5.0.0" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'api'", specifier = ">=0.40.0" },
-    { name = "uvloop", specifier = ">=0.22.1" },
-    { name = "weasyprint", marker = "extra == 'export'", specifier = ">=68.0" },
-    { name = "youtube-transcript-api", marker = "extra == 'youtube'", specifier = ">=1.2.4" },
-    { name = "yt-dlp", marker = "extra == 'youtube'", specifier = ">=2026.1.31" },
-]
-provides-extras = ["attachment", "browser-scraper", "inference-core", "api", "ml", "youtube", "twitter", "export", "scheduler", "gemini", "push", "monitoring", "mcp"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "fakeredis", specifier = ">=2.33.0" },
-    { name = "hypothesis", specifier = ">=6.0.0" },
-    { name = "isort", specifier = ">=7.0.0" },
-    { name = "mypy", specifier = ">=1.19.1" },
-    { name = "openapi-spec-validator", specifier = ">=0.7.2" },
-    { name = "pre-commit", specifier = ">=4.5.1" },
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "pytest-asyncio", specifier = ">=1.3.0" },
-    { name = "pytest-benchmark", specifier = ">=5.0.0" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "ruff", specifier = ">=0.14.14" },
-]
-
-[[package]]
 name = "blis"
 version = "1.3.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3470,6 +3315,161 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/da/92/1446574745d74df0c92e6aa4a7b0b3130706a4142b2d1a5869f2eaa423c6/pyyaml-6.0.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:16249ee61e95f858e83976573de0f5b2893b3677ba71c9dd36b9cf8be9ac6d65", size = 829923, upload-time = "2025-09-25T21:32:54.537Z" },
     { url = "https://files.pythonhosted.org/packages/f0/7a/1c7270340330e575b92f397352af856a8c06f230aa3e76f86b39d01b416a/pyyaml-6.0.3-cp314-cp314t-win_amd64.whl", hash = "sha256:4ad1906908f2f5ae4e5a8ddfce73c320c2a1429ec52eafd27138b7f1cbe341c9", size = 174062, upload-time = "2025-09-25T21:32:55.767Z" },
     { url = "https://files.pythonhosted.org/packages/f1/12/de94a39c2ef588c7e6455cfbe7343d3b2dc9d6b6b2f40c4c6565744c873d/pyyaml-6.0.3-cp314-cp314t-win_arm64.whl", hash = "sha256:ebc55a14a21cb14062aa4162f906cd962b28e2e9ea38f9b4391244cd8de4ae0b", size = 149341, upload-time = "2025-09-25T21:32:56.828Z" },
+]
+
+[[package]]
+name = "ratatoskr"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "httpx", extra = ["http2"] },
+    { name = "json-repair" },
+    { name = "loguru" },
+    { name = "orjson" },
+    { name = "peewee" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyrotgfork" },
+    { name = "pytgcrypto" },
+    { name = "redis" },
+    { name = "scrapling" },
+    { name = "spacy" },
+    { name = "trafilatura" },
+    { name = "uvloop" },
+]
+
+[package.optional-dependencies]
+api = [
+    { name = "chromadb" },
+    { name = "crawlee", extra = ["beautifulsoup", "playwright"] },
+    { name = "defusedxml" },
+    { name = "fastapi" },
+    { name = "onnxruntime" },
+    { name = "playwright" },
+    { name = "pyjwt" },
+    { name = "python-multipart" },
+    { name = "sentence-transformers" },
+    { name = "starlette" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+attachment = [
+    { name = "pillow" },
+    { name = "pymupdf" },
+]
+browser-scraper = [
+    { name = "crawlee", extra = ["beautifulsoup", "playwright"] },
+    { name = "playwright" },
+]
+export = [
+    { name = "weasyprint" },
+]
+gemini = [
+    { name = "google-genai" },
+]
+inference-core = [
+    { name = "chromadb" },
+    { name = "onnxruntime" },
+    { name = "sentence-transformers" },
+]
+mcp = [
+    { name = "mcp" },
+]
+ml = [
+    { name = "chromadb" },
+    { name = "onnxruntime" },
+    { name = "scikit-learn" },
+    { name = "sentence-transformers" },
+    { name = "torch" },
+    { name = "transformers" },
+]
+monitoring = [
+    { name = "prometheus-client" },
+]
+push = [
+    { name = "firebase-admin" },
+]
+scheduler = [
+    { name = "apscheduler" },
+]
+youtube = [
+    { name = "youtube-transcript-api" },
+    { name = "yt-dlp" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "fakeredis" },
+    { name = "hypothesis" },
+    { name = "isort" },
+    { name = "mypy" },
+    { name = "openapi-spec-validator" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-benchmark" },
+    { name = "pyyaml" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "apscheduler", marker = "extra == 'scheduler'", specifier = ">=3.11.2,<4.0.0" },
+    { name = "chromadb", marker = "extra == 'inference-core'", specifier = ">=1.5.0" },
+    { name = "crawlee", extras = ["beautifulsoup", "playwright"], marker = "extra == 'browser-scraper'", specifier = ">=1.4.0" },
+    { name = "defusedxml", marker = "extra == 'api'", specifier = ">=0.7.1" },
+    { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.128.0" },
+    { name = "firebase-admin", marker = "extra == 'push'", specifier = ">=6.0.0" },
+    { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.0.0" },
+    { name = "httpx", extras = ["http2"], specifier = ">=0.28.1" },
+    { name = "json-repair", specifier = ">=0.55.1" },
+    { name = "loguru", specifier = ">=0.7.3" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.26,<2" },
+    { name = "onnxruntime", marker = "extra == 'inference-core'", specifier = ">=1.24.1" },
+    { name = "orjson", specifier = ">=3.11.6" },
+    { name = "peewee", specifier = ">=4.0.0" },
+    { name = "pillow", marker = "extra == 'attachment'", specifier = ">=11.0.0" },
+    { name = "playwright", marker = "extra == 'browser-scraper'", specifier = ">=1.40" },
+    { name = "prometheus-client", marker = "extra == 'monitoring'", specifier = ">=0.21.0" },
+    { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "pydantic-settings", specifier = ">=2.12.0" },
+    { name = "pyjwt", marker = "extra == 'api'", specifier = ">=2.12.0" },
+    { name = "pymupdf", marker = "extra == 'attachment'", specifier = ">=1.25.0" },
+    { name = "pyrotgfork", specifier = ">=2.2.18" },
+    { name = "pytgcrypto", specifier = ">=1.2.12" },
+    { name = "python-multipart", marker = "extra == 'api'", specifier = ">=0.0.26" },
+    { name = "ratatoskr", extras = ["browser-scraper"], marker = "extra == 'api'" },
+    { name = "ratatoskr", extras = ["inference-core"], marker = "extra == 'api'" },
+    { name = "ratatoskr", extras = ["inference-core"], marker = "extra == 'ml'" },
+    { name = "redis", specifier = ">=7.1.0" },
+    { name = "scikit-learn", marker = "extra == 'ml'", specifier = ">=1.8.0" },
+    { name = "scrapling", specifier = ">=0.2" },
+    { name = "sentence-transformers", marker = "extra == 'inference-core'", specifier = ">=5.2.2" },
+    { name = "spacy", specifier = ">=3.8.11,<4" },
+    { name = "starlette", marker = "extra == 'api'", specifier = ">=0.50.0" },
+    { name = "torch", marker = "extra == 'ml'", specifier = ">=2.10.0" },
+    { name = "trafilatura", specifier = ">=2.0.0" },
+    { name = "transformers", marker = "extra == 'ml'", specifier = ">=5.0.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'api'", specifier = ">=0.40.0" },
+    { name = "uvloop", specifier = ">=0.22.1" },
+    { name = "weasyprint", marker = "extra == 'export'", specifier = ">=68.0" },
+    { name = "youtube-transcript-api", marker = "extra == 'youtube'", specifier = ">=1.2.4" },
+    { name = "yt-dlp", marker = "extra == 'youtube'", specifier = ">=2026.1.31" },
+]
+provides-extras = ["attachment", "browser-scraper", "inference-core", "api", "ml", "youtube", "twitter", "export", "scheduler", "gemini", "push", "monitoring", "mcp"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "fakeredis", specifier = ">=2.33.0" },
+    { name = "hypothesis", specifier = ">=6.0.0" },
+    { name = "isort", specifier = ">=7.0.0" },
+    { name = "mypy", specifier = ">=1.19.1" },
+    { name = "openapi-spec-validator", specifier = ">=0.7.2" },
+    { name = "pre-commit", specifier = ">=4.5.1" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-asyncio", specifier = ">=1.3.0" },
+    { name = "pytest-benchmark", specifier = ">=5.0.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "ruff", specifier = ">=0.14.14" },
 ]
 
 [[package]]

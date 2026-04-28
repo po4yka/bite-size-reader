@@ -3,7 +3,7 @@
   "app/mcp/server.py": 2247,
   "docs/openapi/mobile_api.json": 13974,
   "docs/openapi/mobile_api.yaml": 8916,
-  "ops/monitoring/grafana/provisioning/dashboards/bsr-overview.json": 1666,
+  "ops/monitoring/grafana/provisioning/dashboards/ratatoskr-overview.json": 1666,
   "uv.lock": 4792,
   "clients/web/package-lock.json": 7326,
   "clients/web/src/api/generated.ts": 8819

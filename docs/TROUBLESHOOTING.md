@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-This guide helps you diagnose and resolve common issues with Bite-Size Reader.
+This guide helps you diagnose and resolve common issues with Ratatoskr.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ This guide helps you diagnose and resolve common issues with Bite-Size Reader.
 
 ## Debugging with Correlation IDs
 
-**Correlation IDs are your best debugging tool.** Every request in Bite-Size Reader gets a unique `correlation_id` that ties together:
+**Correlation IDs are your best debugging tool.** Every request in Ratatoskr gets a unique `correlation_id` that ties together:
 
 - Telegram messages
 - Database requests
@@ -43,7 +43,7 @@ This guide helps you diagnose and resolve common issues with Bite-Size Reader.
 2. **From Logs**: Search logs for the error message, find the correlation_id
 
    ```bash
-   grep "a1b2c3d4" /var/log/bite-size-reader/app.log
+   grep "a1b2c3d4" /var/log/ratatoskr/app.log
    ```
 
 3. **From Database**: Query the `requests` table
@@ -236,14 +236,14 @@ curl -H "Authorization: Bearer $OPENROUTER_API_KEY" \
 # Method 1: Message @userinfobot on Telegram
 
 # Method 2: Check bot logs when you message it
-grep "Access denied" /var/log/bite-size-reader/app.log
+grep "Access denied" /var/log/ratatoskr/app.log
 # Look for: "user_id": 987654321
 
 # Add to .env
 echo "ALLOWED_USER_IDS=123456789,987654321" >> .env
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ---
@@ -282,7 +282,7 @@ curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" \
 echo "SCRAPER_FIRECRAWL_TIMEOUT_SEC=120" >> .env
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ### Proxy Failures
@@ -337,7 +337,7 @@ echo "OPENROUTER_MODEL=deepseek/deepseek-v3.2" >> .env
 echo "OPENROUTER_FALLBACK_MODELS=qwen/qwen3-max,moonshotai/kimi-k2.5" >> .env
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ### Rate Limiting
@@ -376,7 +376,7 @@ echo "CHUNKING_ENABLED=true" >> .env
 echo "CHUNK_MAX_CHARS=150000" >> .env
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ### Fallback Chain Failures
@@ -389,7 +389,7 @@ docker restart bite-size-reader
 
 ```bash
 # Check logs for specific model errors
-grep "model failed" /var/log/bite-size-reader/app.log
+grep "model failed" /var/log/ratatoskr/app.log
 
 # Update fallback chain to reliable models
 echo "OPENROUTER_FALLBACK_MODELS=qwen/qwen3-max,google/gemini-2.0-flash-001:free" >> .env
@@ -484,7 +484,7 @@ echo "YOUTUBE_CLEANUP_AFTER_DAYS=7" >> .env  # Delete after 7 days
 echo "YOUTUBE_MAX_STORAGE_GB=10" >> .env    # Max 10 GB storage
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ### Format/Quality Issues
@@ -506,7 +506,7 @@ echo "YOUTUBE_VIDEO_QUALITY=720" >> .env
 echo "YOUTUBE_VIDEO_FORMAT=mp4" >> .env  # Default: mp4
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ---
@@ -632,7 +632,7 @@ echo "REDIS_URL=redis://localhost:6379/0" >> .env
 echo "REDIS_TIMEOUT=5" >> .env
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ### Graceful Degradation
@@ -697,7 +697,7 @@ chroma run --host localhost --port 8000
 echo "CHROMA_HOST=http://localhost:8000" >> .env
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ### Embedding Errors
@@ -719,7 +719,7 @@ echo "CHROMA_DEVICE=cpu" >> .env
 echo "CHROMA_EMBEDDING_MODEL=all-mpnet-base-v2" >> .env
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ### Collection Not Found
@@ -762,7 +762,7 @@ openssl rand -hex 32
 echo "JWT_SECRET_KEY=<generated_secret>" >> .env
 
 # Restart API
-docker restart bite-size-reader
+docker restart ratatoskr
 
 # Client: Re-authenticate to get new token
 curl -X POST http://localhost:8000/v1/auth/telegram-login \
@@ -783,7 +783,7 @@ curl -X POST http://localhost:8000/v1/auth/telegram-login \
 echo "SYNC_CONFLICT_LOGGING=debug" >> .env
 
 # Check logs for conflict details
-grep "sync conflict" /var/log/bite-size-reader/app.log
+grep "sync conflict" /var/log/ratatoskr/app.log
 
 # Client: Force full sync (discards local changes)
 curl -X POST http://localhost:8000/v1/sync/summaries?mode=full \
@@ -806,7 +806,7 @@ echo "API_RATE_LIMIT_DEFAULT=200" >> .env
 echo "API_ENABLE_RATE_LIMIT=false" >> .env
 
 # Restart API
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ---
@@ -815,7 +815,7 @@ docker restart bite-size-reader
 
 ### Secret Login Fails
 
-**Symptom**: `bsr login` fails or `POST /v1/auth/secret-login` returns `401` or `403`.
+**Symptom**: `ratatoskr login` fails or `POST /v1/auth/secret-login` returns `401` or `403`.
 
 **Cause**: One of the following is usually true:
 
@@ -864,7 +864,7 @@ curl -X POST http://localhost:8000/v1/auth/refresh \
   -d '{"refresh_token": "<refresh-token>"}'
 ```
 
-If refresh fails, re-run `bsr login` or repeat `secret-login` with an active client secret.
+If refresh fails, re-run `ratatoskr login` or repeat `secret-login` with an active client secret.
 
 ### Aggregation Create Is Denied Before Execution Starts
 
@@ -918,7 +918,7 @@ Raise those limits carefully and monitor for spikes, because `/v1/aggregations` 
 
 ### Aggregation Session Gets Stuck in Partial or Failed
 
-**Symptom**: `bsr aggregation get` or `GET /v1/aggregations/{id}` never reaches a clean `completed` state.
+**Symptom**: `ratatoskr aggregation get` or `GET /v1/aggregations/{id}` never reaches a clean `completed` state.
 
 **Cause**:
 
@@ -956,12 +956,12 @@ Raise those limits carefully and monitor for spikes, because `/v1/aggregations` 
    ```json
    {
      "mcpServers": {
-       "bite-size-reader": {
+       "ratatoskr": {
          "command": "python",
          "args": ["-m", "app.cli.mcp_server"],
-         "cwd": "/path/to/bite-size-reader",
+         "cwd": "/path/to/ratatoskr",
          "env": {
-           "PYTHONPATH": "/path/to/bite-size-reader"
+           "PYTHONPATH": "/path/to/ratatoskr"
          }
        }
      }
@@ -983,7 +983,7 @@ Raise those limits carefully and monitor for spikes, because `/v1/aggregations` 
 echo "MCP_LOG_LEVEL=DEBUG" >> .env
 
 # Check MCP server logs
-tail -f /var/log/bite-size-reader/mcp.log
+tail -f /var/log/ratatoskr/mcp.log
 
 # If using SSE, ensure user scoping is configured
 echo "MCP_TRANSPORT=sse" >> .env
@@ -1074,7 +1074,7 @@ echo "CHUNKING_ENABLED=true" >> .env
 echo "MAX_CONCURRENT_CALLS=5" >> .env  # Default: 4
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ### High Memory Usage
@@ -1096,7 +1096,7 @@ echo "CHROMA_MAX_MEMORY_MB=512" >> .env
 echo "CHROMA_REQUIRED=false" >> .env
 
 # Restart bot with memory limit (Docker)
-docker run --memory=1g bite-size-reader
+docker run --memory=1g ratatoskr
 ```
 
 ### Token Counting Overhead
@@ -1115,7 +1115,7 @@ echo "TOKEN_COUNTING_MODE=fast" >> .env  # Uses len(text)//4 approximation
 echo "TOKEN_COUNTING_CACHE_SIZE=1000" >> .env
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ---
@@ -1127,7 +1127,7 @@ docker restart bite-size-reader
 Before diving deep:
 
 1. **Check bot is running**: `docker ps` or `pgrep -f bot.py`
-2. **Check logs**: `docker logs bite-size-reader` or `tail -f /var/log/bite-size-reader/app.log`
+2. **Check logs**: `docker logs ratatoskr` or `tail -f /var/log/ratatoskr/app.log`
 3. **Test basic command**: Send `/start` to bot, verify it responds
 
 ### 2. Enable Debug Logging
@@ -1140,10 +1140,10 @@ echo "LOG_LEVEL=DEBUG" >> .env
 echo "DEBUG_PAYLOADS=1" >> .env
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 
 # Watch logs in real-time
-docker logs -f bite-size-reader
+docker logs -f ratatoskr
 ```
 
 ### 3. Use CLI Tools
@@ -1221,8 +1221,8 @@ pip list | grep -i firecrawl
 
 # Rollback to last working version
 git checkout <commit_hash>
-docker build -f ops/docker/Dockerfile -t bite-size-reader .
-docker run bite-size-reader
+docker build -f ops/docker/Dockerfile -t ratatoskr .
+docker run ratatoskr
 ```
 
 ### 7. Minimal Reproduction
@@ -1263,7 +1263,7 @@ If you're still stuck after trying these steps:
    - Database query results (requests, llm_calls, crawl_results)
    - Environment configuration (redact API keys!)
 
-2. **Check existing issues**: [GitHub Issues](https://github.com/po4yka/bite-size-reader/issues)
+2. **Check existing issues**: [GitHub Issues](https://github.com/po4yka/ratatoskr/issues)
 
 3. **Open new issue** with:
    - Clear title (e.g., "Firecrawl timeouts on all URLs")

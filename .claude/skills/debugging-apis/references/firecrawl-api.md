@@ -32,7 +32,7 @@
 ## Debugging Failed Crawls
 
 ```bash
-sqlite3 /data/app.db << EOF
+sqlite3 /data/ratatoskr.db << EOF
 .mode json
 SELECT
   request_id,

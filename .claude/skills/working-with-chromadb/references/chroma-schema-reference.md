@@ -8,7 +8,7 @@ All fields validated by Pydantic on upsert. `extra="forbid"` rejects unknown key
 
 | Field | Type | Required | Constraints | Description |
 |---|---|---|---|---|
-| `request_id` | `int` | yes | `>= 0` | BSR request correlation ID |
+| `request_id` | `int` | yes | `>= 0` | Ratatoskr request correlation ID |
 | `summary_id` | `int` | yes | `>= 0` | Summary record ID |
 | `user_id` | `int \| None` | no | `>= 1` | Telegram user ID (multi-tenant) |
 | `user_scope` | `str` | yes | alphanumeric + `-_`, lowercased | Tenant scope (injected by store) |

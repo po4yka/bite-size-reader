@@ -29,8 +29,8 @@ class McpServerContext:
         chroma_retry_interval_sec: float | None = None,
         local_vector_retry_interval_sec: float | None = None,
     ) -> None:
-        self.logger = logger or logging.getLogger("bsr.mcp")
-        self.db_path = db_path or os.getenv("DB_PATH", "/data/app.db")
+        self.logger = logger or logging.getLogger("ratatoskr.mcp")
+        self.db_path = db_path or os.getenv("DB_PATH", "/data/ratatoskr.db")
         self._runtime: Any = None
         self._api_runtime: Any = None
         self._user_id = user_id

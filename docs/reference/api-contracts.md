@@ -1,6 +1,6 @@
 # External API Contracts
 
-Reference for external service APIs used by Bite-Size Reader.
+Reference for external service APIs used by Ratatoskr.
 
 **Audience:** Developers, Integrators
 **Type:** Reference
@@ -10,7 +10,7 @@ Reference for external service APIs used by Bite-Size Reader.
 
 ## Overview
 
-Bite-Size Reader integrates with four primary external services:
+Ratatoskr integrates with four primary external services:
 
 1. **Firecrawl** - Content extraction
 2. **OpenRouter** - LLM completions
@@ -167,8 +167,8 @@ except httpx.HTTPStatusError as e:
 ```http
 POST https://openrouter.ai/api/v1/chat/completions
 Authorization: Bearer sk-or-xxx...
-HTTP-Referer: https://github.com/po4yka/bite-size-reader
-X-Title: Bite-Size Reader
+HTTP-Referer: https://github.com/po4yka/ratatoskr
+X-Title: Ratatoskr
 Content-Type: application/json
 
 {
@@ -316,7 +316,7 @@ cost_usd = (prompt_tokens * pricing["prompt"] + completion_tokens * pricing["com
 from pyrogram import Client
 
 app = Client(
-    "bite_size_reader",
+    "ratatoskr",
     api_id=API_ID,  # From my.telegram.org
     api_hash=API_HASH,  # From my.telegram.org
     bot_token=BOT_TOKEN  # From @BotFather

@@ -1,6 +1,6 @@
 # Summary JSON Contract
 
-Complete specification for the strict JSON schema enforced by Bite-Size Reader for all summaries.
+Complete specification for the strict JSON schema enforced by Ratatoskr for all summaries.
 
 **Audience:** Developers, Integrators
 **Type:** Reference

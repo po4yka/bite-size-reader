@@ -1,4 +1,4 @@
-# Grafana datasource provisioning for Bite-Size Reader monitoring
+# Grafana datasource provisioning for Ratatoskr monitoring
 
 apiVersion: 1
 

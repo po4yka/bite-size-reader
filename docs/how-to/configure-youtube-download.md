@@ -1,6 +1,6 @@
 # How to Configure YouTube Download
 
-Enable YouTube video and transcript support in Bite-Size Reader.
+Enable YouTube video and transcript support in Ratatoskr.
 
 **Audience:** Users, Operators
 **Difficulty:** Beginner
@@ -10,7 +10,7 @@ Enable YouTube video and transcript support in Bite-Size Reader.
 
 ## Prerequisites
 
-- Bite-Size Reader installed and running
+- Ratatoskr installed and running
 - ffmpeg installed on your system (for video/audio merging)
 
 ---
@@ -83,7 +83,7 @@ mkdir -p /data/videos
 
 ```bash
 # Docker
-docker restart bite-size-reader
+docker restart ratatoskr
 
 # Local
 # Press Ctrl+C to stop, then:
@@ -185,7 +185,7 @@ find /data/videos/ -type f -mtime +7 -delete
 echo "YOUTUBE_AUTO_CLEANUP_ENABLED=true" >> .env
 echo "YOUTUBE_CLEANUP_AFTER_DAYS=7" >> .env
 echo "YOUTUBE_MAX_STORAGE_GB=10" >> .env
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ---
@@ -204,7 +204,7 @@ YOUTUBE_PREFERRED_QUALITY=720p
 YOUTUBE_PREFERRED_QUALITY=best
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ---
@@ -275,7 +275,7 @@ ls -t /data/videos/*.mp4 | tail -n +101 | xargs rm
 
 ## Supported URL Formats
 
-Bite-Size Reader supports all major YouTube URL formats:
+Ratatoskr supports all major YouTube URL formats:
 
 ```
 # Standard watch

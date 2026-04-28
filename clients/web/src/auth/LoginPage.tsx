@@ -107,7 +107,7 @@ export default function LoginPage() {
     <div className="login-page">
       <Tile className="login-card">
         <div className="login-header">
-          <h2>Bite-Size Reader</h2>
+          <h2>Ratatoskr</h2>
           <p className="page-subtitle">Sign in to access your summaries.</p>
         </div>
 

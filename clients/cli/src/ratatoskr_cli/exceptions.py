@@ -1,19 +1,19 @@
-"""BSR CLI exception types."""
+"""Ratatoskr CLI exception types."""
 
 from __future__ import annotations
 
 import click
 
 
-class BSRError(click.ClickException):
-    """Base error for BSR CLI."""
+class RatatoskrError(click.ClickException):
+    """Base error for Ratatoskr CLI."""
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
 
 
-class APIError(BSRError):
-    """Error from the BSR API."""
+class APIError(RatatoskrError):
+    """Error from the Ratatoskr API."""
 
     def __init__(self, code: str, message: str, status_code: int | None = None) -> None:
         self.code = code
@@ -21,9 +21,9 @@ class APIError(BSRError):
         super().__init__(f"[{code}] {message}")
 
 
-class AuthError(BSRError):
+class AuthError(RatatoskrError):
     """Authentication error."""
 
 
-class ConfigError(BSRError):
+class ConfigError(RatatoskrError):
     """Missing or invalid configuration."""

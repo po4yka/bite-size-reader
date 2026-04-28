@@ -117,7 +117,7 @@ export default function AppShell() {
     <Theme theme={theme}>
       <div className="app-shell">
         <SkipToContent />
-        <Header aria-label="Bite-Size Reader Web">
+        <Header aria-label="Ratatoskr Web">
           <HeaderMenuButton
             aria-label={expanded ? "Close navigation menu" : "Open navigation menu"}
             onClick={() => setExpanded((prev) => !prev)}

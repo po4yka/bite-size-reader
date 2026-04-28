@@ -1,6 +1,6 @@
 # Design Philosophy
 
-Understanding the principles and trade-offs behind Bite-Size Reader's architecture.
+Understanding the principles and trade-offs behind Ratatoskr's architecture.
 
 **Audience:** Developers, Architects
 **Type:** Explanation

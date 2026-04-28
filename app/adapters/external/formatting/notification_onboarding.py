@@ -22,7 +22,7 @@ class NotificationOnboardingPresenter:
             "  /summarize <URL> -- Summarize a URL\n"
             "  /summarize_all <URLs> -- Summarize multiple URLs from one message\n"
             "  /findweb <topic> -- Search the web (Firecrawl) for recent articles\n"
-            "  /finddb <topic> -- Search your saved Bite-Size Reader library\n"
+            "  /finddb <topic> -- Search your saved Ratatoskr library\n"
             "  /find <topic> -- Alias for /findweb\n"
             "  /cancel -- Cancel any pending URL or multi-link requests\n"
             "  /unread [topic] [limit] -- Show unread articles optionally filtered by topic\n"
@@ -48,7 +48,7 @@ class NotificationOnboardingPresenter:
 
     async def send_welcome(self, message: Any) -> None:
         welcome = (
-            "Welcome to Bite-Size Reader!\n\n"
+            "Welcome to Ratatoskr!\n\n"
             "What I do:\n"
             "- Summarize articles from URLs using Firecrawl + OpenRouter.\n"
             "- Summarize forwarded channel posts.\n"

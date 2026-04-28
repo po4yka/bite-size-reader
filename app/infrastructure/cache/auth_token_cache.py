@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 class AuthTokenCache:
     """Cache refresh tokens in Redis for fast validation.
 
-    Key pattern: bsr:auth:token:{token_hash}
+    Key pattern: ratatoskr:auth:token:{token_hash}
     Value: {"user_id": int, "client_id": str | None, "expires_at": str, "is_revoked": bool}
     TTL: Aligned with token expiry (configurable via REDIS_AUTH_TOKEN_CACHE_TTL_SECONDS)
 

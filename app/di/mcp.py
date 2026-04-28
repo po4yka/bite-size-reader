@@ -29,7 +29,7 @@ def build_mcp_runtime(
     cfg: AppConfig | None = None,
 ) -> McpRuntime:
     """Build the MCP runtime with read-only SQLite binding and lazy service state."""
-    path = db_path or os.getenv("DB_PATH", "/data/app.db")
+    path = db_path or os.getenv("DB_PATH", "/data/ratatoskr.db")
     database = init_read_only_database_proxy(path)
     return McpRuntime(
         cfg=cfg,

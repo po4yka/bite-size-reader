@@ -1,4 +1,4 @@
-# Bite-Size Reader Browser Extension
+# Ratatoskr Browser Extension
 
 Save and summarize web pages with one click from Chrome or Firefox.
 
@@ -6,7 +6,7 @@ Save and summarize web pages with one click from Chrome or Firefox.
 
 ### 1. Create API Credentials (Server Side)
 
-Before configuring the extension, you need API credentials from your BSR server.
+Before configuring the extension, you need API credentials from your Ratatoskr server.
 
 #### Option A: Secret-Key Auth (Recommended)
 
@@ -15,7 +15,7 @@ Requires `SECRET_LOGIN_ENABLED=true` on the server.
 1. As the server owner, create a client secret via the API:
 
    ```bash
-   curl -X POST https://bsr.example.com/v1/auth/secret-keys \
+   curl -X POST https://ratatoskr.example.com/v1/auth/secret-keys \
      -H "Authorization: Bearer <owner-jwt>" \
      -H "Content-Type: application/json" \
      -d '{"label": "Browser Extension", "description": "Chrome/Firefox extension"}'
@@ -26,7 +26,7 @@ Requires `SECRET_LOGIN_ENABLED=true` on the server.
 3. Exchange the secret for a JWT token:
 
    ```bash
-   curl -X POST https://bsr.example.com/v1/auth/secret-login \
+   curl -X POST https://ratatoskr.example.com/v1/auth/secret-login \
      -H "Content-Type: application/json" \
      -d '{"user_id": <your_telegram_user_id>, "client_id": "<client_id>", "secret": "<secret>"}'
    ```
@@ -56,7 +56,7 @@ If you already have a JWT token (from the web UI session or Telegram WebApp), yo
 ### 3. Configure the Extension
 
 1. Click the extension icon, then click the gear icon (or right-click the extension icon and select "Options")
-2. Enter your BSR server URL (e.g., `https://bsr.example.com`)
+2. Enter your Ratatoskr server URL (e.g., `https://ratatoskr.example.com`)
 3. Enter your API key (the JWT `access_token` from step 1)
 4. Click "Test Connection" -- you should see a success message
 5. Optionally set default tags and auto-summarize preference
@@ -66,14 +66,14 @@ If you already have a JWT token (from the web UI session or Telegram WebApp), yo
 
 ### Save Current Page
 
-- **Click** the extension icon to open the popup, then click "Save to BSR"
+- **Click** the extension icon to open the popup, then click "Save to Ratatoskr"
 - **Keyboard shortcut**: `Ctrl+Shift+S` (Mac: `Cmd+Shift+S`) for instant save with defaults
-- **Right-click** on a page and select "Save to Bite-Size Reader"
+- **Right-click** on a page and select "Save to Ratatoskr"
 
 ### Save with Selected Text
 
 1. Select text on a page
-2. Right-click and choose "Save selection to Bite-Size Reader"
+2. Right-click and choose "Save selection to Ratatoskr"
 3. The selected text is saved as a note alongside the URL
 
 ### Tag Assignment

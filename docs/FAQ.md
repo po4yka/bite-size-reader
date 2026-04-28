@@ -1,6 +1,6 @@
 # Frequently Asked Questions (FAQ)
 
-Common questions about Bite-Size Reader.
+Common questions about Ratatoskr.
 
 ## Table of Contents
 
@@ -19,9 +19,9 @@ Common questions about Bite-Size Reader.
 
 ## General
 
-### What is Bite-Size Reader?
+### What is Ratatoskr?
 
-Bite-Size Reader is an AI-powered Telegram bot that transforms long web articles, YouTube videos, forwarded Telegram posts, and mixed-source bundles into structured, searchable outputs. It uses:
+Ratatoskr is an AI-powered Telegram bot that transforms long web articles, YouTube videos, forwarded Telegram posts, and mixed-source bundles into structured, searchable outputs. It uses:
 
 - **Firecrawl** for clean content extraction
 - **OpenRouter** (or OpenAI/Anthropic) for LLM-powered summarization
@@ -167,7 +167,7 @@ FIRECRAWL_API_KEY=...   # Only needed for cloud Firecrawl or web search (Scrapli
 ```bash
 OPENROUTER_MODEL=deepseek/deepseek-v3.2
 OPENROUTER_FALLBACK_MODELS=qwen/qwen3-max,moonshotai/kimi-k2.5
-DB_PATH=/data/app.db
+DB_PATH=/data/ratatoskr.db
 LOG_LEVEL=INFO
 ```
 
@@ -726,4 +726,4 @@ REDIS_LLM_TTL_SECONDS=604800  # 7 days
 
 **Last Updated**: 2026-03-28
 
-**Have a question not answered here?** [Open an issue](https://github.com/po4yka/bite-size-reader/issues) or check [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+**Have a question not answered here?** [Open an issue](https://github.com/po4yka/ratatoskr/issues) or check [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

@@ -1,10 +1,10 @@
-"""Save command -- save a URL to Bite-Size Reader."""
+"""Save command -- save a URL to Ratatoskr."""
 
 from __future__ import annotations
 
 import click
-from bsr_cli.auth import get_client
-from bsr_cli.output import echo_success, format_json
+from ratatoskr_cli.auth import get_client
+from ratatoskr_cli.output import echo_success, format_json
 
 
 @click.command()
@@ -22,7 +22,7 @@ def save(
     summarize: bool,
     note: str | None,
 ) -> None:
-    """Save a URL to Bite-Size Reader."""
+    """Save a URL to Ratatoskr."""
     client = get_client(ctx.obj)
     result = client.quick_save(
         url,

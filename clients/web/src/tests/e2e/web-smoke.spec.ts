@@ -13,13 +13,13 @@ function successEnvelope(data: unknown) {
 
 test("renders login route", async ({ page }) => {
   await page.goto("login");
-  await expect(page.getByText("Sign in to Bite-Size Reader")).toBeVisible();
+  await expect(page.getByText("Sign in to Ratatoskr")).toBeVisible();
 });
 
 test("loads library after jwt bootstrap", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem(
-      "bsr_web_auth_tokens",
+      "ratatoskr_web_auth_tokens",
       JSON.stringify({
         accessToken: "test-access",
         refreshToken: "test-refresh",

@@ -1,4 +1,4 @@
-"""MCP (Model Context Protocol) server for Bite-Size Reader.
+"""MCP (Model Context Protocol) server for Ratatoskr.
 
 Exposes article summaries and search functionality to AI agents
 like OpenClaw, Claude Desktop, and other MCP-compatible clients.

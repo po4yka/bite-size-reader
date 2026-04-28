@@ -32,13 +32,13 @@ def test_aggregation_metrics_are_exported() -> None:
 
     exported = metrics.get_metrics().decode("utf-8")
 
-    assert "bsr_aggregation_extraction_total" in exported
+    assert "ratatoskr_aggregation_extraction_total" in exported
     assert 'source_kind="threads_post"' in exported
-    assert "bsr_aggregation_bundles_total" in exported
+    assert "ratatoskr_aggregation_bundles_total" in exported
     assert 'bundle_profile="multimodal"' in exported
-    assert "bsr_aggregation_synthesis_coverage_ratio_bucket" in exported
-    assert "bsr_aggregation_used_sources_bucket" in exported
-    assert "bsr_aggregation_cost_usd_total" in exported
+    assert "ratatoskr_aggregation_synthesis_coverage_ratio_bucket" in exported
+    assert "ratatoskr_aggregation_used_sources_bucket" in exported
+    assert "ratatoskr_aggregation_cost_usd_total" in exported
 
 
 @pytest.mark.skipif(not metrics.PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
@@ -58,9 +58,9 @@ def test_external_surface_request_metrics_are_exported() -> None:
 
     exported = metrics.get_metrics().decode("utf-8")
 
-    assert "bsr_requests_total" in exported
+    assert "ratatoskr_requests_total" in exported
     assert 'type="aggregation.create"' in exported
     assert 'source="cli"' in exported
     assert 'type="create_aggregation_bundle"' in exported
     assert 'source="mcp"' in exported
-    assert "bsr_request_latency_seconds_bucket" in exported
+    assert "ratatoskr_request_latency_seconds_bucket" in exported

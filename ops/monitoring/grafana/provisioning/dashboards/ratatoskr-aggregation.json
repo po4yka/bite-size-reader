@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Bite-Size Reader aggregation dashboard for multimodal and video-heavy bundle workloads.",
+  "description": "Ratatoskr aggregation dashboard for multimodal and video-heavy bundle workloads.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -94,7 +94,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(bsr_aggregation_cost_usd_total{bundle_profile=~\"multimodal|video_heavy\"}[24h]))",
+          "expr": "sum(increase(ratatoskr_aggregation_cost_usd_total{bundle_profile=~\"multimodal|video_heavy\"}[24h]))",
           "legendFormat": "Cost",
           "refId": "A"
         }
@@ -161,7 +161,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(bsr_aggregation_bundle_latency_seconds_bucket{bundle_profile=~\"multimodal|video_heavy\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(ratatoskr_aggregation_bundle_latency_seconds_bucket{bundle_profile=~\"multimodal|video_heavy\"}[5m])) by (le))",
           "legendFormat": "p95",
           "refId": "A"
         }
@@ -228,7 +228,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(bsr_aggregation_synthesis_coverage_ratio_sum{bundle_profile=~\"multimodal|video_heavy\"}[5m])) / clamp_min(sum(rate(bsr_aggregation_synthesis_coverage_ratio_count{bundle_profile=~\"multimodal|video_heavy\"}[5m])), 1)",
+          "expr": "sum(rate(ratatoskr_aggregation_synthesis_coverage_ratio_sum{bundle_profile=~\"multimodal|video_heavy\"}[5m])) / clamp_min(sum(rate(ratatoskr_aggregation_synthesis_coverage_ratio_count{bundle_profile=~\"multimodal|video_heavy\"}[5m])), 1)",
           "legendFormat": "Coverage",
           "refId": "A"
         }
@@ -295,7 +295,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(bsr_aggregation_bundles_total{bundle_profile=~\"multimodal|video_heavy\",partial_success=\"true\"}[5m])) / clamp_min(sum(rate(bsr_aggregation_bundles_total{bundle_profile=~\"multimodal|video_heavy\"}[5m])), 1)",
+          "expr": "sum(rate(ratatoskr_aggregation_bundles_total{bundle_profile=~\"multimodal|video_heavy\",partial_success=\"true\"}[5m])) / clamp_min(sum(rate(ratatoskr_aggregation_bundles_total{bundle_profile=~\"multimodal|video_heavy\"}[5m])), 1)",
           "legendFormat": "Partial success",
           "refId": "A"
         }
@@ -354,7 +354,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(bsr_aggregation_cost_usd_total[1h])) by (bundle_profile)",
+          "expr": "sum(increase(ratatoskr_aggregation_cost_usd_total[1h])) by (bundle_profile)",
           "legendFormat": "{{bundle_profile}}",
           "refId": "A"
         }
@@ -413,7 +413,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(bsr_aggregation_bundle_latency_seconds_bucket[5m])) by (le, bundle_profile))",
+          "expr": "histogram_quantile(0.95, sum(rate(ratatoskr_aggregation_bundle_latency_seconds_bucket[5m])) by (le, bundle_profile))",
           "legendFormat": "{{bundle_profile}}",
           "refId": "A"
         }
@@ -472,7 +472,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(bsr_aggregation_synthesis_coverage_ratio_sum[5m])) by (bundle_profile) / clamp_min(sum(rate(bsr_aggregation_synthesis_coverage_ratio_count[5m])) by (bundle_profile), 1)",
+          "expr": "sum(rate(ratatoskr_aggregation_synthesis_coverage_ratio_sum[5m])) by (bundle_profile) / clamp_min(sum(rate(ratatoskr_aggregation_synthesis_coverage_ratio_count[5m])) by (bundle_profile), 1)",
           "legendFormat": "{{bundle_profile}}",
           "refId": "A"
         }
@@ -531,7 +531,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(bsr_aggregation_used_sources_sum[5m])) by (bundle_profile) / clamp_min(sum(rate(bsr_aggregation_used_sources_count[5m])) by (bundle_profile), 1)",
+          "expr": "sum(rate(ratatoskr_aggregation_used_sources_sum[5m])) by (bundle_profile) / clamp_min(sum(rate(ratatoskr_aggregation_used_sources_count[5m])) by (bundle_profile), 1)",
           "legendFormat": "{{bundle_profile}}",
           "refId": "A"
         }
@@ -544,7 +544,7 @@
   "schemaVersion": 39,
   "style": "dark",
   "tags": [
-    "bsr",
+    "ratatoskr",
     "aggregation",
     "observability"
   ],
@@ -556,8 +556,8 @@
     "to": "now"
   },
   "timezone": "",
-  "title": "BSR Aggregation",
-  "uid": "bsr-aggregation",
+  "title": "Ratatoskr Aggregation",
+  "uid": "ratatoskr-aggregation",
   "version": 1,
   "weekStart": ""
 }

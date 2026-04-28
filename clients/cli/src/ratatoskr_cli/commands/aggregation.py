@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
-from bsr_cli.auth import get_client
-from bsr_cli.output import format_aggregation_detail, format_aggregation_list
+from ratatoskr_cli.auth import get_client
+from ratatoskr_cli.output import format_aggregation_detail, format_aggregation_list
 
 AGGREGATION_HINT_CHOICES = [
     "x_post",
@@ -85,8 +85,8 @@ def aggregate(
     """Submit a mixed-source aggregation bundle.
 
     Examples:
-      bsr aggregate https://x.com/... https://youtube.com/...
-      bsr aggregate --file sources.txt --lang en
+      ratatoskr aggregate https://x.com/... https://youtube.com/...
+      ratatoskr aggregate --file sources.txt --lang en
     """
     client = get_client(ctx.obj)
     collected_urls = _collect_urls(urls, source_file)

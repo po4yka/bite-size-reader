@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Bite-Size Reader",
+    "name": "Ratatoskr",
     "version": "1.0.0",
-    "description": "Save and summarize web pages with Bite-Size Reader",
+    "description": "Save and summarize web pages with Ratatoskr",
     "permissions": ["activeTab", "storage", "contextMenus"],
     "host_permissions": ["<all_urls>"],
     "action": {
@@ -30,7 +30,7 @@
                 "default": "Ctrl+Shift+S",
                 "mac": "Command+Shift+S"
             },
-            "description": "Save current page to Bite-Size Reader"
+            "description": "Save current page to Ratatoskr"
         }
     }
 }

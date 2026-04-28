@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from starlette.responses import Response  # noqa: TC002 - needed at runtime
 
-REFRESH_COOKIE_NAME = "bsr_refresh_token"
+REFRESH_COOKIE_NAME = "ratatoskr_refresh_token"
 REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60  # 30 days in seconds
 
 

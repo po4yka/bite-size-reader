@@ -48,7 +48,7 @@ class TelegramClient:
             self.client = None
         else:
             self.client = Client(
-                name="bite_size_reader_bot",
+                name="ratatoskr_bot",
                 api_id=self.cfg.telegram.api_id,
                 api_hash=self.cfg.telegram.api_hash,
                 bot_token=self.cfg.telegram.bot_token,
@@ -178,7 +178,7 @@ class TelegramClient:
                 # Set bot descriptions
                 try:
                     await client_any.set_bot_description(
-                        "Bite-Size Reader: Summarize URLs, YouTube videos, and forwarded posts. "
+                        "Ratatoskr: Summarize URLs, YouTube videos, and forwarded posts. "
                         "Get structured summaries with key ideas, entities, and tags.",
                         language_code="en",
                     )
@@ -187,7 +187,7 @@ class TelegramClient:
                         language_code="en",
                     )
                     await client_any.set_bot_description(
-                        "Bite-Size Reader: Резюме ссылок, YouTube видео и пересланных постов. "
+                        "Ratatoskr: Резюме ссылок, YouTube видео и пересланных постов. "
                         "Структурированные саммари с ключевыми идеями, сущностями и тегами.",
                         language_code="ru",
                     )

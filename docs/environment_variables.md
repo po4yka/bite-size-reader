@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-Complete reference for all Bite-Size Reader configuration. Source of truth: `app/config/` (entrypoint `app/config/settings.py`).
+Complete reference for all Ratatoskr configuration. Source of truth: `app/config/` (entrypoint `app/config/settings.py`).
 
 **Total Variables**: 250+
 **Last Updated**: 2026-04-12
@@ -15,7 +15,7 @@ Variables are categorized by priority:
 - **[OPTIONAL]** - Enable specific features (YouTube, web search, caching, etc.)
 - **[ADVANCED]** - Fine-tuning and optimization, safe to use defaults
 
-**New to Bite-Size Reader?** Start with [Quick Configuration Profiles](#quick-configuration-profiles) below.
+**New to Ratatoskr?** Start with [Quick Configuration Profiles](#quick-configuration-profiles) below.
 
 ---
 
@@ -36,7 +36,7 @@ OPENROUTER_API_KEY=your_openrouter_key
 OPENROUTER_MODEL=deepseek/deepseek-v3.2
 
 # [OPTIONAL] - Database
-DB_PATH=/data/app.db
+DB_PATH=/data/ratatoskr.db
 LOG_LEVEL=INFO
 ```
 
@@ -209,7 +209,7 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 | `SCRAPER_DEFUDDLE_API_BASE_URL` | `https://defuddle.md` | Defuddle API base URL |
 | `FIRECRAWL_SELF_HOSTED_ENABLED` | `false` | Enable self-hosted Firecrawl provider |
 | `FIRECRAWL_SELF_HOSTED_URL` | `http://firecrawl:3002` | Self-hosted Firecrawl base URL |
-| `FIRECRAWL_SELF_HOSTED_API_KEY` | `fc-bsr-local` | Self-hosted Firecrawl API key |
+| `FIRECRAWL_SELF_HOSTED_API_KEY` | `fc-ratatoskr-local` | Self-hosted Firecrawl API key |
 | `SCRAPER_FIRECRAWL_TIMEOUT_SEC` | `90` | Self-hosted Firecrawl timeout for article chain |
 | `SCRAPER_FIRECRAWL_WAIT_FOR_MS` | `3000` | Self-hosted Firecrawl wait-for milliseconds for article chain |
 | `SCRAPER_FIRECRAWL_MAX_RETRIES` | `3` | Self-hosted Firecrawl retries for article chain |
@@ -232,7 +232,7 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 
 - Scrapling is a free, in-process scraper that requires no API key. It is tried first by default.
 - Defuddle is a free HTTP API for content extraction. It is tried second in the default chain, after Scrapling.
-- Self-hosted Firecrawl runs as a Docker Compose service (`bsr-firecrawl` on port 3002) and also requires no cloud API key.
+- Self-hosted Firecrawl runs as a Docker Compose service (`ratatoskr-firecrawl` on port 3002) and also requires no cloud API key.
 - Playwright fallback is useful for JS-heavy pages that fail in HTTP-only extractors.
 - Crawlee fallback is a single-page advanced fallback (BeautifulSoup stage, then Playwright stage); it is not broad multi-page site crawling in this pipeline.
 - Cloud Firecrawl (`FIRECRAWL_API_KEY`) is only needed when it appears in `SCRAPER_PROVIDER_ORDER` as `"firecrawl"` or when web search enrichment is enabled.
@@ -312,7 +312,7 @@ uv run python tools/scripts/twitter_article_live_smoke.py \
 | `REDIS_PORT` | `6379` | Redis port |
 | `REDIS_DB` | `0` | Redis database number |
 | `REDIS_PASSWORD` | _(none)_ | Redis password |
-| `REDIS_PREFIX` | `bsr` | Key prefix for namespacing |
+| `REDIS_PREFIX` | `ratatoskr` | Key prefix for namespacing |
 | `REDIS_SOCKET_TIMEOUT` | `5.0` | Socket timeout (seconds) |
 | `REDIS_CACHE_TIMEOUT_SEC` | `0.3` | Cache operation timeout (seconds) |
 | `REDIS_FIRECRAWL_TTL_SECONDS` | `21600` | Firecrawl response cache TTL (6h) |
@@ -346,7 +346,7 @@ Controls which embedding backend generates vectors for semantic search.
 
 - Switching providers or Gemini output dimensions changes the embedding space. Re-embed all data after switching: `python -m app.cli.backfill_embeddings --force` then `python -m app.cli.backfill_chroma_store --force`.
 - Chroma collections are automatically namespaced by Gemini model + dimensionality to avoid mixing incompatible embedding spaces such as `gemini-embedding-001` and `gemini-embedding-2-preview`.
-- `google-genai` package is an optional dependency (`pip install bite-size-reader[gemini]`). The app works without it when `EMBEDDING_PROVIDER=local`.
+- `google-genai` package is an optional dependency (`pip install ratatoskr[gemini]`). The app works without it when `EMBEDDING_PROVIDER=local`.
 - Gemini uses task-type-aware embeddings: `RETRIEVAL_DOCUMENT` for indexing, `RETRIEVAL_QUERY` for search queries.
 
 ## [OPTIONAL] ElevenLabs Text-to-Speech (TTS)
@@ -377,8 +377,8 @@ Controls which embedding backend generates vectors for semantic search.
 | `MCP_ALLOW_REMOTE_SSE` | `false` | Allow non-loopback SSE bind host; also disables DNS rebinding protection |
 | `MCP_ALLOW_UNSCOPED_SSE` | `false` | Allow SSE without explicit user scope |
 | `MCP_AUTH_MODE` | `disabled` | Hosted MCP auth mode: `disabled` or `jwt` |
-| `MCP_FORWARDED_ACCESS_TOKEN_HEADER` | `X-BSR-Forwarded-Access-Token` | Trusted-gateway header for the forwarded original bearer token |
-| `MCP_FORWARDED_SECRET_HEADER` | `X-BSR-MCP-Forwarding-Secret` | Trusted-gateway header for the shared forwarding secret |
+| `MCP_FORWARDED_ACCESS_TOKEN_HEADER` | `X-Ratatoskr-Forwarded-Access-Token` | Trusted-gateway header for the forwarded original bearer token |
+| `MCP_FORWARDED_SECRET_HEADER` | `X-Ratatoskr-MCP-Forwarding-Secret` | Trusted-gateway header for the shared forwarding secret |
 | `MCP_FORWARDING_SECRET` | _(none)_ | Shared secret required before trusting forwarded access-token headers |
 
 ## Mobile API and Auth
@@ -435,7 +435,7 @@ Controls which embedding backend generates vectors for semantic search.
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `DB_PATH` | `/data/app.db` | SQLite database path |
+| `DB_PATH` | `/data/ratatoskr.db` | SQLite database path |
 | `DB_BACKUP_ENABLED` | `1` | Enable automatic backups (0/1) |
 | `DB_BACKUP_INTERVAL_MINUTES` | `360` | Backup interval |
 | `DB_BACKUP_RETENTION` | `14` | Backup retention (days) |
@@ -690,4 +690,4 @@ curl "$CHROMA_HOST/api/v2/heartbeat"
 
 **Last Updated**: 2026-03-28
 
-**Found an error or have a question?** [Open an issue](https://github.com/po4yka/bite-size-reader/issues) or check [FAQ](FAQ.md).
+**Found an error or have a question?** [Open an issue](https://github.com/po4yka/ratatoskr/issues) or check [FAQ](FAQ.md).

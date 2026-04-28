@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Bite-Size Reader monitoring dashboard - requests, latency, circuit breakers, costs",
+  "description": "Ratatoskr monitoring dashboard - requests, latency, circuit breakers, costs",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -86,7 +86,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(bsr_requests_total[24h]))",
+          "expr": "sum(increase(ratatoskr_requests_total[24h]))",
           "legendFormat": "Total",
           "refId": "A"
         }
@@ -152,7 +152,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(bsr_requests_total{status=\"error\"}[5m])) / sum(rate(bsr_requests_total[5m]))",
+          "expr": "sum(rate(ratatoskr_requests_total{status=\"error\"}[5m])) / sum(rate(ratatoskr_requests_total[5m]))",
           "legendFormat": "Error Rate",
           "refId": "A"
         }
@@ -218,7 +218,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(bsr_request_latency_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(ratatoskr_request_latency_seconds_bucket[5m])) by (le))",
           "legendFormat": "p95",
           "refId": "A"
         }
@@ -305,7 +305,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(bsr_circuit_breaker_state{service=\"firecrawl\"})",
+          "expr": "max(ratatoskr_circuit_breaker_state{service=\"firecrawl\"})",
           "legendFormat": "Firecrawl",
           "refId": "A"
         }
@@ -392,7 +392,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(bsr_circuit_breaker_state{service=\"openrouter\"})",
+          "expr": "max(ratatoskr_circuit_breaker_state{service=\"openrouter\"})",
           "legendFormat": "OpenRouter",
           "refId": "A"
         }
@@ -458,7 +458,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "increase(bsr_openrouter_cost_usd_total[24h])",
+          "expr": "increase(ratatoskr_openrouter_cost_usd_total[24h])",
           "legendFormat": "Cost",
           "refId": "A"
         }
@@ -559,7 +559,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(bsr_requests_total[5m])) by (type)",
+          "expr": "sum(rate(ratatoskr_requests_total[5m])) by (type)",
           "legendFormat": "{{type}}",
           "refId": "A"
         }
@@ -678,7 +678,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(bsr_requests_total[5m])) by (status)",
+          "expr": "sum(rate(ratatoskr_requests_total[5m])) by (status)",
           "legendFormat": "{{status}}",
           "refId": "A"
         }
@@ -787,7 +787,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(bsr_request_latency_seconds_bucket[5m])) by (le, type))",
+          "expr": "histogram_quantile(0.50, sum(rate(ratatoskr_request_latency_seconds_bucket[5m])) by (le, type))",
           "legendFormat": "p50 {{type}}",
           "refId": "A"
         },
@@ -796,7 +796,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(bsr_request_latency_seconds_bucket[5m])) by (le, type))",
+          "expr": "histogram_quantile(0.95, sum(rate(ratatoskr_request_latency_seconds_bucket[5m])) by (le, type))",
           "legendFormat": "p95 {{type}}",
           "refId": "B"
         },
@@ -805,7 +805,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(bsr_request_latency_seconds_bucket[5m])) by (le, type))",
+          "expr": "histogram_quantile(0.99, sum(rate(ratatoskr_request_latency_seconds_bucket[5m])) by (le, type))",
           "legendFormat": "p99 {{type}}",
           "refId": "C"
         }
@@ -893,7 +893,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(bsr_db_query_latency_seconds_bucket[5m])) by (le, operation))",
+          "expr": "histogram_quantile(0.95, sum(rate(ratatoskr_db_query_latency_seconds_bucket[5m])) by (le, operation))",
           "legendFormat": "p95 {{operation}}",
           "refId": "A"
         }
@@ -1010,7 +1010,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(bsr_firecrawl_requests_total[5m])) by (status, endpoint)",
+          "expr": "sum(rate(ratatoskr_firecrawl_requests_total[5m])) by (status, endpoint)",
           "legendFormat": "{{endpoint}} - {{status}}",
           "refId": "A"
         }
@@ -1098,7 +1098,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(bsr_firecrawl_latency_seconds_bucket[5m])) by (le, endpoint))",
+          "expr": "histogram_quantile(0.95, sum(rate(ratatoskr_firecrawl_latency_seconds_bucket[5m])) by (le, endpoint))",
           "legendFormat": "p95 {{endpoint}}",
           "refId": "A"
         }
@@ -1230,7 +1230,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(bsr_openrouter_tokens_total[1h])) by (type)",
+          "expr": "sum(increase(ratatoskr_openrouter_tokens_total[1h])) by (type)",
           "legendFormat": "{{type}}",
           "refId": "A"
         }
@@ -1326,7 +1326,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "increase(bsr_openrouter_cost_usd_total[1h])",
+          "expr": "increase(ratatoskr_openrouter_cost_usd_total[1h])",
           "legendFormat": "Cost",
           "refId": "A"
         }
@@ -1414,7 +1414,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(bsr_openrouter_latency_seconds_bucket[5m])) by (le, model))",
+          "expr": "histogram_quantile(0.95, sum(rate(ratatoskr_openrouter_latency_seconds_bucket[5m])) by (le, model))",
           "legendFormat": "p95 {{model}}",
           "refId": "A"
         }
@@ -1502,7 +1502,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(bsr_openrouter_tokens_total[1h])) by (model)",
+          "expr": "sum(increase(ratatoskr_openrouter_tokens_total[1h])) by (model)",
           "legendFormat": "{{model}}",
           "refId": "A"
         }
@@ -1634,7 +1634,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "bsr_circuit_breaker_state",
+          "expr": "ratatoskr_circuit_breaker_state",
           "legendFormat": "{{service}}",
           "refId": "A"
         }
@@ -1646,7 +1646,7 @@
   "refresh": "30s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["bite-size-reader", "telegram", "llm"],
+  "tags": ["ratatoskr", "telegram", "llm"],
   "templating": {
     "list": []
   },
@@ -1659,8 +1659,8 @@
     "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
   },
   "timezone": "browser",
-  "title": "Bite-Size Reader Overview",
-  "uid": "bsr-overview",
+  "title": "Ratatoskr Overview",
+  "uid": "ratatoskr-overview",
   "version": 1,
   "weekStart": ""
 }

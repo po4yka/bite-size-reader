@@ -1,4 +1,4 @@
-"""Domain model entities for the bite-size-reader bounded context.
+"""Domain model entities for the ratatoskr bounded context.
 
 Boundary rule: this package contains pure domain entities and value objects
 with no infrastructure dependencies (no ORM, no Pydantic, no external types).

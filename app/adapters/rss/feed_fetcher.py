@@ -61,7 +61,7 @@ def fetch_feed(
     # SSRF protection: block requests to internal/private networks
     _validate_feed_url(url)
 
-    headers: dict[str, str] = {"User-Agent": "BSR-FeedFetcher/1.0"}
+    headers: dict[str, str] = {"User-Agent": "Ratatoskr-FeedFetcher/1.0"}
     if etag:
         headers["If-None-Match"] = etag
     if last_modified:

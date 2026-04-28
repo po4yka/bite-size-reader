@@ -3,7 +3,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
-from bsr_cli.main import cli
+from ratatoskr_cli.main import cli
 from click.testing import CliRunner
 
 
@@ -115,7 +115,7 @@ class TestAggregationCommands:
         }
 
         runner = CliRunner()
-        with patch("bsr_cli.commands.aggregation.get_client", return_value=client):
+        with patch("ratatoskr_cli.commands.aggregation.get_client", return_value=client):
             result = runner.invoke(
                 cli,
                 [
@@ -153,7 +153,7 @@ class TestAggregationCommands:
         }
 
         runner = CliRunner()
-        with patch("bsr_cli.commands.aggregation.get_client", return_value=client):
+        with patch("ratatoskr_cli.commands.aggregation.get_client", return_value=client):
             result = runner.invoke(cli, ["--json", "aggregate", "https://example.com"])
 
         assert result.exit_code == 0
@@ -163,7 +163,7 @@ class TestAggregationCommands:
 
     def test_aggregate_rejects_missing_urls(self):
         runner = CliRunner()
-        with patch("bsr_cli.commands.aggregation.get_client", return_value=MagicMock()):
+        with patch("ratatoskr_cli.commands.aggregation.get_client", return_value=MagicMock()):
             result = runner.invoke(cli, ["aggregate"])
 
         assert result.exit_code != 0

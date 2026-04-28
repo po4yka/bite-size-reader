@@ -1,6 +1,6 @@
 # How to Optimize Performance
 
-Tune Bite-Size Reader for speed, cost, and resource efficiency.
+Tune Ratatoskr for speed, cost, and resource efficiency.
 
 **Audience:** Operators
 **Difficulty:** Intermediate
@@ -358,10 +358,10 @@ sqlite3 data/app.db "
 ```bash
 # Check which step is slow
 LOG_LEVEL=DEBUG
-docker restart bite-size-reader
+docker restart ratatoskr
 
 # Look for timing logs
-docker logs bite-size-reader | grep -i "took\ | elapsed\ |duration"
+docker logs ratatoskr | grep -i "took\ | elapsed\ |duration"
 ```
 
 **Common causes:**
@@ -378,7 +378,7 @@ docker logs bite-size-reader | grep -i "took\ | elapsed\ |duration"
 
 ```bash
 # Check memory usage
-docker stats bite-size-reader
+docker stats ratatoskr
 
 # Or system-wide
 htop  # or top

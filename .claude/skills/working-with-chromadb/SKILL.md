@@ -11,7 +11,7 @@ allowed-tools: Bash, Read, Grep
 
 # ChromaDB Vector Store Management
 
-Manage ChromaDB health, embeddings, search quality, and debugging for the Bite-Size Reader vector search subsystem.
+Manage ChromaDB health, embeddings, search quality, and debugging for the Ratatoskr vector search subsystem.
 
 ## Dynamic Context
 
@@ -20,11 +20,11 @@ Manage ChromaDB health, embeddings, search quality, and debugging for the Bite-S
 ```
 
 ```bash
-!sqlite3 data/app.db "SELECT (SELECT COUNT(*) FROM summaries) as total_summaries, (SELECT COUNT(*) FROM summary_embeddings) as total_embeddings"
+!sqlite3 data/ratatoskr.db "SELECT (SELECT COUNT(*) FROM summaries) as total_summaries, (SELECT COUNT(*) FROM summary_embeddings) as total_embeddings"
 ```
 
 ```bash
-!sqlite3 data/app.db "SELECT COUNT(*) as recent_embeddings FROM summary_embeddings WHERE created_at > datetime('now', '-24 hours')"
+!sqlite3 data/ratatoskr.db "SELECT COUNT(*) as recent_embeddings FROM summary_embeddings WHERE created_at > datetime('now', '-24 hours')"
 ```
 
 ## Configuration
@@ -59,25 +59,25 @@ Output: `ChromaDB: healthy | collection=notes_dev_public_v1 | docs=1234 | env=de
 **Full backfill** (skips existing embeddings):
 
 ```bash
-python -m app.cli.backfill_chroma_store --db=data/app.db
+python -m app.cli.backfill_chroma_store --db=data/ratatoskr.db
 ```
 
 **Incremental** (limit to recent):
 
 ```bash
-python -m app.cli.backfill_chroma_store --db=data/app.db --limit=50
+python -m app.cli.backfill_chroma_store --db=data/ratatoskr.db --limit=50
 ```
 
 **Force regeneration** (re-embeds everything):
 
 ```bash
-python -m app.cli.backfill_chroma_store --db=data/app.db --force
+python -m app.cli.backfill_chroma_store --db=data/ratatoskr.db --force
 ```
 
 **Custom Chroma target:**
 
 ```bash
-python -m app.cli.backfill_chroma_store --db=data/app.db --chroma-host=http://chroma:8000 --chroma-env=prod --chroma-scope=user123
+python -m app.cli.backfill_chroma_store --db=data/ratatoskr.db --chroma-host=http://chroma:8000 --chroma-env=prod --chroma-scope=user123
 ```
 
 ### Search Testing
@@ -107,7 +107,7 @@ python -m app.cli.search_compare "query text"
 ### Embedding Coverage Check
 
 ```bash
-sqlite3 data/app.db << 'EOF'
+sqlite3 data/ratatoskr.db << 'EOF'
 .mode column
 .headers on
 SELECT
@@ -124,7 +124,7 @@ EOF
 ### Coverage by Language
 
 ```bash
-sqlite3 data/app.db << 'EOF'
+sqlite3 data/ratatoskr.db << 'EOF'
 .mode column
 .headers on
 SELECT s.lang, COUNT(*) as summaries,
@@ -138,7 +138,7 @@ EOF
 ### Missing Embeddings
 
 ```bash
-sqlite3 data/app.db << 'EOF'
+sqlite3 data/ratatoskr.db << 'EOF'
 .mode column
 .headers on
 SELECT s.id, s.lang, r.input_url
@@ -153,13 +153,13 @@ EOF
 ### Model Distribution
 
 ```bash
-sqlite3 data/app.db "SELECT model_name, COUNT(*) as count FROM summary_embeddings GROUP BY model_name;"
+sqlite3 data/ratatoskr.db "SELECT model_name, COUNT(*) as count FROM summary_embeddings GROUP BY model_name;"
 ```
 
 ### Recent Embedding Activity
 
 ```bash
-sqlite3 data/app.db << 'EOF'
+sqlite3 data/ratatoskr.db << 'EOF'
 .mode column
 .headers on
 SELECT DATE(created_at) as date, COUNT(*) as count

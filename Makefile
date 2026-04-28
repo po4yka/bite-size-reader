@@ -90,10 +90,10 @@ check-openapi-validate: ## Validate OpenAPI spec syntax
 .PHONY: docker-rebuild-mobile-api docker-logs-mobile-api docker-shell-mobile-api
 
 docker-build:
-	DOCKER_BUILDKIT=1 docker build -f $(DOCKERFILE_BOT) --tag bsr:latest --progress=plain .
+	DOCKER_BUILDKIT=1 docker build -f $(DOCKERFILE_BOT) --tag ratatoskr:latest --progress=plain .
 
 docker-build-no-cache:
-	DOCKER_BUILDKIT=1 docker build -f $(DOCKERFILE_BOT) --no-cache --tag bsr:latest --progress=plain .
+	DOCKER_BUILDKIT=1 docker build -f $(DOCKERFILE_BOT) --no-cache --tag ratatoskr:latest --progress=plain .
 
 docker-build-mobile-api:
 	DOCKER_BUILDKIT=1 docker compose -f $(COMPOSE_FILE) build mobile-api
@@ -110,19 +110,19 @@ docker-stop:
 docker-restart: docker-stop docker-run
 
 docker-logs:
-	docker compose -f $(COMPOSE_FILE) logs -f bsr
+	docker compose -f $(COMPOSE_FILE) logs -f ratatoskr
 
 docker-logs-tail:
-	docker compose -f $(COMPOSE_FILE) logs --tail=100 -f bsr
+	docker compose -f $(COMPOSE_FILE) logs --tail=100 -f ratatoskr
 
 docker-logs-mobile-api:
 	docker compose -f $(COMPOSE_FILE) logs -f mobile-api
 
 docker-shell:
-	docker compose -f $(COMPOSE_FILE) exec bsr sh
+	docker compose -f $(COMPOSE_FILE) exec ratatoskr sh
 
 docker-shell-root:
-	docker compose -f $(COMPOSE_FILE) exec -u root bsr sh
+	docker compose -f $(COMPOSE_FILE) exec -u root ratatoskr sh
 
 docker-shell-mobile-api:
 	docker compose -f $(COMPOSE_FILE) exec mobile-api sh
@@ -133,20 +133,20 @@ docker-restart-mobile-api:
 docker-rebuild-mobile-api: docker-build-mobile-api docker-restart-mobile-api
 
 docker-test:
-	DOCKER_BUILDKIT=1 docker build -f $(DOCKERFILE_BOT) --target builder --tag bsr:test .
-	docker run --rm bsr:test uv run pytest
+	DOCKER_BUILDKIT=1 docker build -f $(DOCKERFILE_BOT) --target builder --tag ratatoskr:test .
+	docker run --rm ratatoskr:test uv run pytest
 
 docker-clean:
 	docker compose -f $(COMPOSE_FILE) down -v
-	docker rmi bsr:latest bsr:test 2>/dev/null || true
+	docker rmi ratatoskr:latest ratatoskr:test 2>/dev/null || true
 	docker builder prune -f
 
 docker-size:
 	@echo "=== Docker Image Size ==="
-	@docker images bsr --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}"
+	@docker images ratatoskr --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}"
 	@echo ""
 	@echo "=== Layer Analysis ==="
-	@docker history bsr:latest --human --format "table {{.Size}}\t{{.CreatedBy}}" | head -15
+	@docker history ratatoskr:latest --human --format "table {{.Size}}\t{{.CreatedBy}}" | head -15
 
 docker-deploy: docker-build docker-stop docker-run
 	@echo "=== Deployment complete ==="
@@ -155,4 +155,4 @@ docker-deploy: docker-build docker-stop docker-run
 docker-health:
 	@docker compose -f $(COMPOSE_FILE) ps
 	@echo ""
-	@docker inspect --format='{{json .State.Health}}' bsr-bot 2>/dev/null | python -m json.tool || echo "Container not running or no health check configured"
+	@docker inspect --format='{{json .State.Health}}' ratatoskr-bot 2>/dev/null | python -m json.tool || echo "Container not running or no health check configured"

@@ -810,8 +810,8 @@ flowchart LR
 - **Structured JSON logs**: intake, Firecrawl call, OpenRouter call, DB writes, reply send; include correlation IDs and latencies.
 - **Audit logs**: external call attempts & outcomes, validation errors.
 - **Metrics in logs**: token counts, content size (chars/words), estimated cost.
-- **Prometheus metrics**: mixed-source aggregation exports `bsr_aggregation_extraction_total`, `bsr_aggregation_bundles_total`, `bsr_aggregation_bundle_latency_seconds`, `bsr_aggregation_synthesis_coverage_ratio`, `bsr_aggregation_used_sources`, and `bsr_aggregation_cost_usd_total`.
-- **Bundle dashboards**: Grafana provisions a dedicated aggregation dashboard at `ops/monitoring/grafana/provisioning/dashboards/bsr-aggregation.json`, focused on multimodal and video-heavy workloads. It breaks down entrypoint (`api`, `telegram_command`, `telegram_message`), bundle profile (`text_only`, `image_heavy`, `video_heavy`, `mixed_media`), partial-success rate, synthesis coverage ratio, used-source counts, latency, and synthesis cost.
+- **Prometheus metrics**: mixed-source aggregation exports `ratatoskr_aggregation_extraction_total`, `ratatoskr_aggregation_bundles_total`, `ratatoskr_aggregation_bundle_latency_seconds`, `ratatoskr_aggregation_synthesis_coverage_ratio`, `ratatoskr_aggregation_used_sources`, and `ratatoskr_aggregation_cost_usd_total`.
+- **Bundle dashboards**: Grafana provisions a dedicated aggregation dashboard at `ops/monitoring/grafana/provisioning/dashboards/ratatoskr-aggregation.json`, focused on multimodal and video-heavy workloads. It breaks down entrypoint (`api`, `telegram_command`, `telegram_message`), bundle profile (`text_only`, `image_heavy`, `video_heavy`, `mixed_media`), partial-success rate, synthesis coverage ratio, used-source counts, latency, and synthesis cost.
 - **Rollout telemetry**: staged rollout decisions should be correlated with latency, coverage, and failure metrics so `internal`, `owner_beta`, and wider enablement can be compared before broad rollout.
 
 ---
@@ -843,8 +843,8 @@ OPENROUTER_API_KEY=...
 OPENROUTER_MODEL=qwen/qwen3-max
 OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1,moonshotai/kimi-k2.5,deepseek/deepseek-v3.2
 OPENROUTER_LONG_CONTEXT_MODEL=moonshotai/kimi-k2.5
-OPENROUTER_HTTP_REFERER=https://github.com/po4yka/bite-size-reader
-OPENROUTER_X_TITLE=Bite-Size Reader
+OPENROUTER_HTTP_REFERER=https://github.com/po4yka/ratatoskr
+OPENROUTER_X_TITLE=Ratatoskr
 
 YOUTUBE_DOWNLOAD_ENABLED=true
 YOUTUBE_STORAGE_PATH=/data/videos
@@ -859,7 +859,7 @@ YOUTUBE_CLEANUP_AFTER_DAYS=30
 DB & runtime:
 
 ```
-DB_PATH=/data/app.db
+DB_PATH=/data/ratatoskr.db
 LOG_LEVEL=INFO
 REQUEST_TIMEOUT_SEC=60
 AGGREGATION_BUNDLE_ENABLED=true
@@ -891,7 +891,7 @@ Aggregation rollout notes:
 - Single image (multi-stage): build -> `python:slim` runtime.
 - Runtime includes **ffmpeg** (required for yt-dlp video/audio merging).
 - Mount volumes:
-  - `/data/app.db` for database
+  - `/data/ratatoskr.db` for database
   - `/data/videos` for YouTube video downloads
 - Healthcheck: lightweight DB read and Telegram self-ping (optional).
 - Log to stdout; rotate in container runtime if needed.
@@ -994,7 +994,7 @@ sequenceDiagram
 ### Background processing (requests → summaries)
 
 - `app/api/background_processor.py` uses `BackgroundProcessor` from `app/di/background.py` to run the same Firecrawl/YouTube → OpenRouter pipeline.
-- Idempotent Redis lock `bsr:bg:req:{id}` with TTL (`BACKGROUND_LOCK_TTL_MS`, default 300000); skips if held when `BACKGROUND_LOCK_SKIP_ON_HELD` is true.
+- Idempotent Redis lock `ratatoskr:bg:req:{id}` with TTL (`BACKGROUND_LOCK_TTL_MS`, default 300000); skips if held when `BACKGROUND_LOCK_SKIP_ON_HELD` is true.
 - Retries: exponential backoff (`BACKGROUND_RETRY_ATTEMPTS` default 3, `BACKGROUND_RETRY_BASE_DELAY_MS` 500, `BACKGROUND_RETRY_MAX_DELAY_MS` 5000, jitter 0.2).
 - Errors: structured logs `{error_type,error_code,error_stage,correlation_id}`; request status set to `error`; lock fallback to local if Redis down and not required.
 
@@ -1046,7 +1046,7 @@ Carbon-based web client implemented in `clients/web/` (React + TypeScript + Vite
 Content extraction uses an ordered fallback chain via `ContentScraperChain`:
 
 1. **Scrapling** (primary) -- in-process Python library with TLS impersonation. Uses `trafilatura.extract()` for text extraction. Zero external dependencies, fastest path.
-2. **Self-hosted Firecrawl** (secondary) -- same v2 API running in Docker Compose (`bsr-firecrawl` on port 3002). Handles JS rendering, proxies, PDFs.
+2. **Self-hosted Firecrawl** (secondary) -- same v2 API running in Docker Compose (`ratatoskr-firecrawl` on port 3002). Handles JS rendering, proxies, PDFs.
 3. **Playwright** (tertiary) -- browser-rendered extraction for JS-heavy pages. Minimum 400-char content threshold.
 4. **Crawlee** (quaternary) -- hybrid single-page extraction (`BeautifulSoupCrawler` then `PlaywrightCrawler`) before final salvage.
 5. **Direct HTML** (last resort) -- httpx streaming fetch + `html_to_text()`. Minimum 400-char content threshold.

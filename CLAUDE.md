@@ -1,10 +1,10 @@
-# CLAUDE.md -- AI Assistant Guide for Bite-Size Reader
+# CLAUDE.md -- AI Assistant Guide for Ratatoskr
 
-This document helps AI assistants (like Claude) understand and work effectively with the Bite-Size Reader codebase.
+This document helps AI assistants (like Claude) understand and work effectively with the Ratatoskr codebase.
 
 ## Project Overview
 
-**Bite-Size Reader** is an async Telegram bot that:
+**Ratatoskr** is an async Telegram bot that:
 
 - Accepts web article URLs and summarizes them using a multi-provider scraper chain (content extraction) + OpenRouter (LLM summarization)
 - Accepts YouTube video URLs, downloads them in 1080p, extracts transcripts, and generates summaries
@@ -192,16 +192,16 @@ cd clients/web && npm run test
 make lock-uv               # Lock dependencies with uv (recommended)
 
 # Docker
-# IMPORTANT: `make docker-deploy` builds `bsr:latest` via `docker build`,
-# but `docker compose up` uses image `bite-size-reader-bsr`.
+# IMPORTANT: `make docker-deploy` builds `ratatoskr:latest` via `docker build`,
+# but `docker compose up` uses image `ratatoskr-ratatoskr` (compose prefixes the project name).
 # To deploy code changes, always use `docker compose build`:
-docker compose -f ops/docker/docker-compose.yml build bsr            # Build with compose (picks up code changes)
-docker compose -f ops/docker/docker-compose.yml build --no-cache bsr # Full rebuild (after Dockerfile/dependency changes)
+docker compose -f ops/docker/docker-compose.yml build ratatoskr            # Build with compose (picks up code changes)
+docker compose -f ops/docker/docker-compose.yml build --no-cache ratatoskr # Full rebuild (after Dockerfile/dependency changes)
 docker compose -f ops/docker/docker-compose.yml down && docker compose -f ops/docker/docker-compose.yml up -d  # Restart with new image
 
 # Legacy standalone build (NOT used by docker compose):
-docker build -f ops/docker/Dockerfile -t bsr:latest .
-docker run --env-file .env -v $(pwd)/data:/data --name bsr bsr:latest
+docker build -f ops/docker/Dockerfile -t ratatoskr:latest .
+docker run --env-file .env -v $(pwd)/data:/data --name ratatoskr ratatoskr:latest
 
 # CLI Summary Runner
 python -m app.cli.summary --url https://example.com/article
@@ -326,7 +326,7 @@ When `WEB_SEARCH_ENABLED=true`, the bot enriches summaries with current web cont
 1. **Correlation IDs:** Every request gets a unique `correlation_id` -- use it to trace through logs and DB
 2. **Debug Payloads:** Set `DEBUG_PAYLOADS=1` to log Firecrawl/OpenRouter request/response previews (Authorization redacted)
 3. **CLI Runner:** Use `python -m app.cli.summary` to test URL processing without Telegram
-4. **Database Inspection:** SQLite at `DB_PATH` (default: `/data/app.db`) -- use any SQLite browser
+4. **Database Inspection:** SQLite at `DB_PATH` (default: `/data/ratatoskr.db`) -- use any SQLite browser
 5. **Logs:** Structured JSON logs to stdout; use `LOG_LEVEL=DEBUG` for verbose traces
 6. **Scraper Chain:** Each provider logs success/failure with provider name. Check logs for `scraper` context to see which provider served the request and which ones failed in the fallback chain. Config in `app/config/scraper.py` (`ScraperConfig`)
 

@@ -289,8 +289,8 @@ def test_hosted_mcp_tool_uses_request_scoped_identity_and_client_id(
     app = Starlette(routes=[Route("/tool", create_tool)])
     app_asgi: Any = McpHttpAuthMiddleware(
         app,
-        forwarded_access_token_header="X-BSR-Forwarded-Access-Token",
-        forwarded_secret_header="X-BSR-MCP-Forwarding-Secret",
+        forwarded_access_token_header="X-Ratatoskr-Forwarded-Access-Token",
+        forwarded_secret_header="X-Ratatoskr-MCP-Forwarding-Secret",
         forwarding_secret=None,
     )
 

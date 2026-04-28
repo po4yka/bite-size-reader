@@ -1,4 +1,4 @@
-"""BSR API HTTP client."""
+"""Ratatoskr API HTTP client."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 import httpx
-from bsr_cli.exceptions import APIError
+from ratatoskr_cli.exceptions import APIError
 
 
-class BSRClient:
-    """HTTP client for BSR REST API."""
+class RatatoskrClient:
+    """HTTP client for Ratatoskr REST API."""
 
     def __init__(self, base_url: str, access_token: str, timeout: float = 30.0) -> None:
         self._client = httpx.Client(

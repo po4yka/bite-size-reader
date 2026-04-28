@@ -18,8 +18,8 @@ def test_authenticate_mcp_http_headers_accepts_direct_bearer(monkeypatch) -> Non
     token = create_access_token(user_id=123, username="mcp-user", client_id="mcp-public-v1")
     result = authenticate_mcp_http_headers(
         {"authorization": f"Bearer {token}"},
-        forwarded_access_token_header="X-BSR-Forwarded-Access-Token",
-        forwarded_secret_header="X-BSR-MCP-Forwarding-Secret",
+        forwarded_access_token_header="X-Ratatoskr-Forwarded-Access-Token",
+        forwarded_secret_header="X-Ratatoskr-MCP-Forwarding-Secret",
         forwarding_secret=None,
     )
 
@@ -37,11 +37,11 @@ def test_authenticate_mcp_http_headers_accepts_forwarded_bearer(monkeypatch) -> 
     token = create_access_token(user_id=456, username="gateway-user", client_id="mcp-public-v1")
     result = authenticate_mcp_http_headers(
         {
-            "x-bsr-forwarded-access-token": token,
-            "x-bsr-mcp-forwarding-secret": "shared-secret",
+            "x-ratatoskr-forwarded-access-token": token,
+            "x-ratatoskr-mcp-forwarding-secret": "shared-secret",
         },
-        forwarded_access_token_header="X-BSR-Forwarded-Access-Token",
-        forwarded_secret_header="X-BSR-MCP-Forwarding-Secret",
+        forwarded_access_token_header="X-Ratatoskr-Forwarded-Access-Token",
+        forwarded_secret_header="X-Ratatoskr-MCP-Forwarding-Secret",
         forwarding_secret="shared-secret",
     )
 
@@ -57,11 +57,11 @@ def test_authenticate_mcp_http_headers_rejects_bad_forwarding_secret(monkeypatch
     token = create_access_token(user_id=789, username="gateway-user", client_id="mcp-public-v1")
     result = authenticate_mcp_http_headers(
         {
-            "x-bsr-forwarded-access-token": token,
-            "x-bsr-mcp-forwarding-secret": "wrong-secret",
+            "x-ratatoskr-forwarded-access-token": token,
+            "x-ratatoskr-mcp-forwarding-secret": "wrong-secret",
         },
-        forwarded_access_token_header="X-BSR-Forwarded-Access-Token",
-        forwarded_secret_header="X-BSR-MCP-Forwarding-Secret",
+        forwarded_access_token_header="X-Ratatoskr-Forwarded-Access-Token",
+        forwarded_secret_header="X-Ratatoskr-MCP-Forwarding-Secret",
         forwarding_secret="shared-secret",
     )
 
@@ -88,8 +88,8 @@ def test_mcp_http_auth_middleware_populates_request_state(monkeypatch) -> None:
     app = Starlette(routes=[Route("/whoami", whoami)])
     app_asgi: Any = McpHttpAuthMiddleware(
         app,
-        forwarded_access_token_header="X-BSR-Forwarded-Access-Token",
-        forwarded_secret_header="X-BSR-MCP-Forwarding-Secret",
+        forwarded_access_token_header="X-Ratatoskr-Forwarded-Access-Token",
+        forwarded_secret_header="X-Ratatoskr-MCP-Forwarding-Secret",
         forwarding_secret=None,
     )
 
@@ -111,8 +111,8 @@ def test_mcp_http_auth_middleware_rejects_missing_auth() -> None:
     app = Starlette(routes=[Route("/whoami", whoami)])
     app_asgi: Any = McpHttpAuthMiddleware(
         app,
-        forwarded_access_token_header="X-BSR-Forwarded-Access-Token",
-        forwarded_secret_header="X-BSR-MCP-Forwarding-Secret",
+        forwarded_access_token_header="X-Ratatoskr-Forwarded-Access-Token",
+        forwarded_secret_header="X-Ratatoskr-MCP-Forwarding-Secret",
         forwarding_secret=None,
     )
 

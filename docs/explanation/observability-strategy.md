@@ -1,6 +1,6 @@
 # Observability Strategy
 
-How Bite-Size Reader implements logging, tracing, and debugging to ensure production reliability.
+How Ratatoskr implements logging, tracing, and debugging to ensure production reliability.
 
 **Audience:** Developers, Operators
 **Type:** Explanation
@@ -672,17 +672,17 @@ ORDER BY total_calls DESC;
 
 ```bash
 # Use logrotate for file-based logs
-# /etc/logrotate.d/bite-size-reader
-/var/log/bite-size-reader/*.log {
+# /etc/logrotate.d/ratatoskr
+/var/log/ratatoskr/*.log {
     daily
     rotate 30
     compress
     delaycompress
     notifempty
-    create 0644 bsr bsr
+    create 0644 ratatoskr ratatoskr
     sharedscripts
     postrotate
-        systemctl reload bite-size-reader
+        systemctl reload ratatoskr
     endscript
 }
 ```
@@ -711,7 +711,7 @@ services:
   promtail:
     image: grafana/promtail:latest
     volumes:
-      - /var/log/bite-size-reader:/var/log/bite-size-reader
+      - /var/log/ratatoskr:/var/log/ratatoskr
     command: -config.file=/etc/promtail/config.yml
 ```
 
@@ -748,23 +748,23 @@ services:
 
 ```bash
 #!/bin/bash
-# /usr/local/bin/check-bsr-health.sh
+# /usr/local/bin/check-ratatoskr-health.sh
 
-ERROR_RATE=$(sqlite3 /data/app.db "
+ERROR_RATE=$(sqlite3 /data/ratatoskr.db "
   SELECT ROUND(100.0 * SUM(CASE WHEN error_message IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*), 2)
   FROM requests
   WHERE created_at > datetime('now', '-1 hour');
 ")
 
 if (( $(echo "$ERROR_RATE > 10" | bc -l) )); then
-    echo "ALERT: Bite-Size Reader error rate is ${ERROR_RATE}%" | mail -s "BSR Alert" admin@example.com
+    echo "ALERT: Ratatoskr error rate is ${ERROR_RATE}%" | mail -s "Ratatoskr Alert" admin@example.com
 fi
 ```
 
 **Cron:**
 
 ```bash
-*/5 * * * * /usr/local/bin/check-bsr-health.sh
+*/5 * * * * /usr/local/bin/check-ratatoskr-health.sh
 ```
 
 ---
@@ -793,9 +793,9 @@ LIMIT 20;
 
 Prometheus metrics for extraction failure analysis:
 
-- `bsr_extraction_failures_total{stage,component,reason_code,retryable}`
-- `bsr_extraction_attempts_total{stage,component,outcome}`
-- `bsr_extraction_stage_latency_seconds{stage,component,outcome}`
+- `ratatoskr_extraction_failures_total{stage,component,reason_code,retryable}`
+- `ratatoskr_extraction_attempts_total{stage,component,outcome}`
+- `ratatoskr_extraction_stage_latency_seconds{stage,component,outcome}`
 
 ---
 

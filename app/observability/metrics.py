@@ -1,4 +1,4 @@
-"""Prometheus metrics for Bite-Size Reader.
+"""Prometheus metrics for Ratatoskr.
 
 This module provides metrics collection for monitoring the application's:
 - Request throughput and latency
@@ -45,14 +45,14 @@ if PROMETHEUS_AVAILABLE:
 
     # Request metrics
     REQUESTS_TOTAL = Counter(
-        "bsr_requests_total",
+        "ratatoskr_requests_total",
         "Total number of requests processed",
         ["type", "status", "source"],
         registry=REGISTRY,
     )
 
     REQUEST_LATENCY = Histogram(
-        "bsr_request_latency_seconds",
+        "ratatoskr_request_latency_seconds",
         "Request latency in seconds",
         ["type", "stage"],
         buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0],
@@ -61,14 +61,14 @@ if PROMETHEUS_AVAILABLE:
 
     # Firecrawl metrics
     FIRECRAWL_REQUESTS = Counter(
-        "bsr_firecrawl_requests_total",
+        "ratatoskr_firecrawl_requests_total",
         "Total Firecrawl API requests",
         ["status", "endpoint"],
         registry=REGISTRY,
     )
 
     FIRECRAWL_LATENCY = Histogram(
-        "bsr_firecrawl_latency_seconds",
+        "ratatoskr_firecrawl_latency_seconds",
         "Firecrawl API latency in seconds",
         ["endpoint"],
         buckets=[0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0],
@@ -77,20 +77,20 @@ if PROMETHEUS_AVAILABLE:
 
     # OpenRouter metrics
     OPENROUTER_TOKENS = Counter(
-        "bsr_openrouter_tokens_total",
+        "ratatoskr_openrouter_tokens_total",
         "Total tokens used in OpenRouter API calls",
         ["model", "type"],
         registry=REGISTRY,
     )
 
     OPENROUTER_COST_USD = Counter(
-        "bsr_openrouter_cost_usd_total",
+        "ratatoskr_openrouter_cost_usd_total",
         "Total cost in USD for OpenRouter API calls",
         registry=REGISTRY,
     )
 
     OPENROUTER_LATENCY = Histogram(
-        "bsr_openrouter_latency_seconds",
+        "ratatoskr_openrouter_latency_seconds",
         "OpenRouter API latency in seconds",
         ["model"],
         buckets=[0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0],
@@ -99,7 +99,7 @@ if PROMETHEUS_AVAILABLE:
 
     # Circuit breaker metrics
     CIRCUIT_BREAKER_STATE = Gauge(
-        "bsr_circuit_breaker_state",
+        "ratatoskr_circuit_breaker_state",
         "Circuit breaker state (0=closed, 1=half_open, 2=open)",
         ["service"],
         registry=REGISTRY,
@@ -107,7 +107,7 @@ if PROMETHEUS_AVAILABLE:
 
     # Database metrics
     DB_QUERY_LATENCY = Histogram(
-        "bsr_db_query_latency_seconds",
+        "ratatoskr_db_query_latency_seconds",
         "Database query latency in seconds",
         ["operation"],
         buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0],
@@ -115,20 +115,20 @@ if PROMETHEUS_AVAILABLE:
     )
 
     DB_CONNECTIONS = Gauge(
-        "bsr_db_connections_active",
+        "ratatoskr_db_connections_active",
         "Number of active database connections",
         registry=REGISTRY,
     )
 
     TWITTER_ARTICLE_RESOLUTION = Counter(
-        "bsr_twitter_article_resolution_total",
+        "ratatoskr_twitter_article_resolution_total",
         "Twitter/X article resolution attempts",
         ["status", "reason"],
         registry=REGISTRY,
     )
 
     TWITTER_ARTICLE_RESOLUTION_LATENCY = Histogram(
-        "bsr_twitter_article_resolution_latency_seconds",
+        "ratatoskr_twitter_article_resolution_latency_seconds",
         "Twitter/X article resolution latency in seconds",
         ["status"],
         buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0],
@@ -136,28 +136,28 @@ if PROMETHEUS_AVAILABLE:
     )
 
     TWITTER_ARTICLE_EXTRACTION = Counter(
-        "bsr_twitter_article_extraction_total",
+        "ratatoskr_twitter_article_extraction_total",
         "Twitter/X article extraction attempts by stage",
         ["stage", "status", "reason"],
         registry=REGISTRY,
     )
 
     EXTRACTION_FAILURES = Counter(
-        "bsr_extraction_failures_total",
+        "ratatoskr_extraction_failures_total",
         "Normalized extraction failures",
         ["stage", "component", "reason_code", "retryable"],
         registry=REGISTRY,
     )
 
     EXTRACTION_ATTEMPTS = Counter(
-        "bsr_extraction_attempts_total",
+        "ratatoskr_extraction_attempts_total",
         "Extraction attempts by stage/component/outcome",
         ["stage", "component", "outcome"],
         registry=REGISTRY,
     )
 
     EXTRACTION_STAGE_LATENCY = Histogram(
-        "bsr_extraction_stage_latency_seconds",
+        "ratatoskr_extraction_stage_latency_seconds",
         "Extraction stage latency in seconds",
         ["stage", "component", "outcome"],
         buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0],
@@ -165,14 +165,14 @@ if PROMETHEUS_AVAILABLE:
     )
 
     DRAFT_STREAM_EVENTS = Counter(
-        "bsr_draft_stream_events_total",
+        "ratatoskr_draft_stream_events_total",
         "Draft/stream lifecycle events",
         ["event"],
         registry=REGISTRY,
     )
 
     STREAM_LATENCY_MS = Histogram(
-        "bsr_stream_latency_ms",
+        "ratatoskr_stream_latency_ms",
         "Streaming timing metrics in milliseconds",
         ["metric"],
         buckets=[5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000],
@@ -180,21 +180,21 @@ if PROMETHEUS_AVAILABLE:
     )
 
     AGGREGATION_EXTRACTION = Counter(
-        "bsr_aggregation_extraction_total",
+        "ratatoskr_aggregation_extraction_total",
         "Aggregation extraction outcomes by source kind, platform, fallback tier, and media type",
         ["source_kind", "platform", "outcome", "fallback_tier", "media_type"],
         registry=REGISTRY,
     )
 
     AGGREGATION_BUNDLES = Counter(
-        "bsr_aggregation_bundles_total",
+        "ratatoskr_aggregation_bundles_total",
         "Aggregation bundle outcomes by entrypoint and partial-success state",
         ["entrypoint", "status", "partial_success", "bundle_profile"],
         registry=REGISTRY,
     )
 
     AGGREGATION_BUNDLE_LATENCY = Histogram(
-        "bsr_aggregation_bundle_latency_seconds",
+        "ratatoskr_aggregation_bundle_latency_seconds",
         "End-to-end aggregation bundle latency in seconds",
         ["entrypoint", "status", "bundle_profile"],
         buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0],
@@ -202,7 +202,7 @@ if PROMETHEUS_AVAILABLE:
     )
 
     AGGREGATION_SYNTHESIS_COVERAGE = Histogram(
-        "bsr_aggregation_synthesis_coverage_ratio",
+        "ratatoskr_aggregation_synthesis_coverage_ratio",
         "Share of extracted sources used in final synthesis",
         ["source_type", "bundle_profile", "status"],
         buckets=[0.0, 0.25, 0.5, 0.75, 1.0],
@@ -210,7 +210,7 @@ if PROMETHEUS_AVAILABLE:
     )
 
     AGGREGATION_USED_SOURCES = Histogram(
-        "bsr_aggregation_used_sources",
+        "ratatoskr_aggregation_used_sources",
         "Count of sources contributing to final aggregation output",
         ["source_type", "bundle_profile", "status"],
         buckets=[1, 2, 3, 5, 8, 13, 21, 34],
@@ -218,7 +218,7 @@ if PROMETHEUS_AVAILABLE:
     )
 
     AGGREGATION_COST_USD = Counter(
-        "bsr_aggregation_cost_usd_total",
+        "ratatoskr_aggregation_cost_usd_total",
         "Total synthesis cost in USD for aggregation workloads",
         ["source_type", "bundle_profile", "status"],
         registry=REGISTRY,

@@ -1,6 +1,6 @@
 # Summary Contract Design
 
-Why Bite-Size Reader enforces a strict 35+ field JSON schema for all summaries.
+Why Ratatoskr enforces a strict 35+ field JSON schema for all summaries.
 
 **Audience:** Developers, Architects
 **Type:** Explanation
@@ -12,7 +12,7 @@ Why Bite-Size Reader enforces a strict 35+ field JSON schema for all summaries.
 
 ### Unstructured LLM Output
 
-Early versions of Bite-Size Reader used free-form prompts:
+Early versions of Ratatoskr used free-form prompts:
 
 ```text
 Summarize this article in 2-3 paragraphs. Include key points and interesting facts.
@@ -429,7 +429,7 @@ summary.metadata = {
 
 **Rejected:** No machine-readable structure, cannot build search or quality metrics.
 
-**When to Use:** If Bite-Size Reader were purely a human-readable summarization tool with no search or API.
+**When to Use:** If Ratatoskr were purely a human-readable summarization tool with no search or API.
 
 ---
 

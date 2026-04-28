@@ -1,6 +1,6 @@
 # How to Migrate Between Versions
 
-Upgrade Bite-Size Reader to a new version safely.
+Upgrade Ratatoskr to a new version safely.
 
 **Audience:** Operators
 **Difficulty:** Intermediate
@@ -30,7 +30,7 @@ ls -lh data/*.backup* youtube_backup*
 
 ### Check Release Notes
 
-1. Visit https://github.com/po4yka/bite-size-reader/releases
+1. Visit https://github.com/po4yka/ratatoskr/releases
 2. Read **CHANGELOG.md** for breaking changes
 3. Note any required migration steps
 
@@ -44,27 +44,27 @@ ls -lh data/*.backup* youtube_backup*
 
 ```bash
 # Pull new version
-docker pull ghcr.io/po4yka/bite-size-reader:latest
+docker pull ghcr.io/po4yka/ratatoskr:latest
 
 # Or specific version
-docker pull ghcr.io/po4yka/bite-size-reader:v1.2.0
+docker pull ghcr.io/po4yka/ratatoskr:v1.2.0
 ```
 
 #### 2. Stop Current Container
 
 ```bash
 # Stop gracefully
-docker stop bite-size-reader
+docker stop ratatoskr
 
 # Backup current container (optional)
-docker commit bite-size-reader bite-size-reader-backup
+docker commit ratatoskr ratatoskr-backup
 ```
 
 #### 3. Update Configuration (If Needed)
 
 ```bash
 # Compare .env.example from new version
-docker run --rm ghcr.io/po4yka/bite-size-reader:latest cat .env.example > .env.example.new
+docker run --rm ghcr.io/po4yka/ratatoskr:latest cat .env.example > .env.example.new
 
 # Review differences
 diff .env .env.example.new
@@ -80,7 +80,7 @@ nano .env
 docker run --rm \
   --env-file .env \
   -v $(pwd)/data:/data \
-  ghcr.io/po4yka/bite-size-reader:latest \
+  ghcr.io/po4yka/ratatoskr:latest \
   python -m app.cli.migrate_db
 
 # Check output for any errors
@@ -90,18 +90,18 @@ docker run --rm \
 
 ```bash
 # Remove old container
-docker rm bite-size-reader
+docker rm ratatoskr
 
 # Start new version
 docker run -d \
-  --name bite-size-reader \
+  --name ratatoskr \
   --env-file .env \
   -v $(pwd)/data:/data \
   --restart unless-stopped \
-  ghcr.io/po4yka/bite-size-reader:latest
+  ghcr.io/po4yka/ratatoskr:latest
 
 # Verify startup
-docker logs bite-size-reader | head -20
+docker logs ratatoskr | head -20
 ```
 
 #### 6. Test Functionality
@@ -111,10 +111,10 @@ docker logs bite-size-reader | head -20
 # Expected: Bot responds normally
 
 # Check logs for errors
-docker logs bite-size-reader | grep -i error
+docker logs ratatoskr | grep -i error
 
 # Verify database integrity
-docker exec bite-size-reader sqlite3 /data/app.db "PRAGMA integrity_check;"
+docker exec ratatoskr sqlite3 /data/ratatoskr.db "PRAGMA integrity_check;"
 ```
 
 ---
@@ -238,22 +238,22 @@ If upgrade fails or causes issues:
 
 ```bash
 # Stop new version
-docker stop bite-size-reader
-docker rm bite-size-reader
+docker stop ratatoskr
+docker rm ratatoskr
 
 # Restore database backup
 cp data/app.db.backup.YYYYMMDD data/app.db
 
 # Run previous version
 docker run -d \
-  --name bite-size-reader \
+  --name ratatoskr \
   --env-file .env.backup \
   -v $(pwd)/data:/data \
   --restart unless-stopped \
-  ghcr.io/po4yka/bite-size-reader:v1.1.0  # Previous version
+  ghcr.io/po4yka/ratatoskr:v1.1.0  # Previous version
 
 # Verify
-docker logs bite-size-reader
+docker logs ratatoskr
 ```
 
 ### Local Rollback
@@ -324,7 +324,7 @@ python -m app.cli.migrate_db
 
 ```bash
 # Check logs
-docker logs bite-size-reader
+docker logs ratatoskr
 
 # Common causes:
 # 1. Missing environment variables
@@ -367,7 +367,7 @@ docker run -d \
   containrrr/watchtower \
   --cleanup \
   --interval 86400 \
-  bite-size-reader
+  ratatoskr
 
 # Watchtower checks daily and updates if new version available
 ```

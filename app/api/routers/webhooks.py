@@ -241,7 +241,7 @@ async def send_test_webhook(
 
     payload = build_webhook_payload(
         event_type="test",
-        data={"message": "This is a test webhook delivery from Bite-Size Reader."},
+        data={"message": "This is a test webhook delivery from Ratatoskr."},
     )
 
     import orjson

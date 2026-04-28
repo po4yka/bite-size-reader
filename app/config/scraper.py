@@ -117,7 +117,7 @@ class ScraperConfig(BaseModel):
         validation_alias="FIRECRAWL_SELF_HOSTED_URL",
     )
     firecrawl_self_hosted_api_key: str = Field(
-        default="fc-bsr-local",
+        default="fc-ratatoskr-local",
         validation_alias="FIRECRAWL_SELF_HOSTED_API_KEY",
     )
 

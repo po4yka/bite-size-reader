@@ -91,7 +91,7 @@ async def test_aggregation_detail_resource_returns_session_payload() -> None:
     payload = await mcp.resources["aggregation_bundle_resource"]("42")
 
     assert json.loads(payload)["session"]["id"] == 42
-    assert "bsr://aggregations/{session_id}" in mcp.resource_uris
+    assert "ratatoskr://aggregations/{session_id}" in mcp.resource_uris
 
 
 def test_hosted_mcp_resource_uses_request_scoped_identity(mcp_test_db, monkeypatch) -> None:
@@ -162,8 +162,8 @@ def test_hosted_mcp_resource_uses_request_scoped_identity(mcp_test_db, monkeypat
     app = Starlette(routes=[Route("/resource", bundle_resource)])
     app_asgi = McpHttpAuthMiddleware(
         app,
-        forwarded_access_token_header="X-BSR-Forwarded-Access-Token",
-        forwarded_secret_header="X-BSR-MCP-Forwarding-Secret",
+        forwarded_access_token_header="X-Ratatoskr-Forwarded-Access-Token",
+        forwarded_secret_header="X-Ratatoskr-MCP-Forwarding-Secret",
         forwarding_secret=None,
     )
 

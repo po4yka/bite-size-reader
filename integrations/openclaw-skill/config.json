@@ -1,5 +1,5 @@
 {
-  "name": "bite-size-reader",
+  "name": "ratatoskr",
   "description": "Personal knowledge base of web article summaries with keyword search, semantic search (ChromaDB), collections, YouTube transcripts, and entity discovery",
   "version": "1.2.0",
   "mcp": {
@@ -7,7 +7,7 @@
     "command": "python",
     "args": ["-m", "app.cli.mcp_server"],
     "env": {
-      "DB_PATH": "/data/app.db"
+      "DB_PATH": "/data/ratatoskr.db"
     }
   },
   "tools": [
@@ -25,16 +25,16 @@
     "check_url"
   ],
   "resources": [
-    "bsr://articles/recent",
-    "bsr://articles/favorites",
-    "bsr://articles/unread",
-    "bsr://stats",
-    "bsr://tags",
-    "bsr://entities",
-    "bsr://domains",
-    "bsr://collections",
-    "bsr://videos/recent",
-    "bsr://processing/stats"
+    "ratatoskr://articles/recent",
+    "ratatoskr://articles/favorites",
+    "ratatoskr://articles/unread",
+    "ratatoskr://stats",
+    "ratatoskr://tags",
+    "ratatoskr://entities",
+    "ratatoskr://domains",
+    "ratatoskr://collections",
+    "ratatoskr://videos/recent",
+    "ratatoskr://processing/stats"
   ],
   "tags": ["knowledge-base", "articles", "summaries", "search", "semantic-search", "reading", "collections", "youtube", "transcripts"]
 }

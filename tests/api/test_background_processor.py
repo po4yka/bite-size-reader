@@ -138,7 +138,7 @@ async def test_di_builder_creates_processor_with_semaphore(monkeypatch):
     monkeypatch.setenv("ALLOWED_USER_IDS", "1")
     monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test-key")
     monkeypatch.setenv("OPENROUTER_API_KEY", "or_test_key")
-    monkeypatch.setenv("DB_PATH", "/tmp/bsr-bg-test.db")
+    monkeypatch.setenv("DB_PATH", "/tmp/ratatoskr-bg-test.db")
 
     redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
 

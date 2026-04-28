@@ -1,7 +1,7 @@
-# Gitleaks configuration for Bite-Size Reader
+# Gitleaks configuration for Ratatoskr
 # https://github.com/gitleaks/gitleaks
 
-title = "Gitleaks configuration for Bite-Size Reader"
+title = "Gitleaks configuration for Ratatoskr"
 
 # Extend default gitleaks config
 [extend]

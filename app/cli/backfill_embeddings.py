@@ -145,7 +145,7 @@ async def backfill_embeddings(db_path: str, limit: int | None = None, force: boo
 
 def main() -> int:
     """Main CLI entry point."""
-    db_path = "/data/app.db"
+    db_path = "/data/ratatoskr.db"
     limit = None
     force = False
 
@@ -166,7 +166,7 @@ def main() -> int:
             print("Usage: python -m app.cli.backfill_embeddings [OPTIONS]")
             print()
             print("Options:")
-            print("  --db=PATH       Database path (default: /data/app.db)")
+            print("  --db=PATH       Database path (default: /data/ratatoskr.db)")
             print("  --limit=N       Process only N summaries")
             print("  --force         Regenerate all embeddings (even if they exist)")
             print("  --help, -h      Show this help message")

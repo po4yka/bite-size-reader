@@ -1,12 +1,12 @@
 openapi: 3.1.0
 info:
-  title: Bite-Size Reader Mobile API
+  title: Ratatoskr Mobile API
   description: RESTful API for Android/iOS mobile clients
   version: 1.0.0
 servers:
-  - url: https://bitsizereaderapi.po4yka.com
+  - url: https://ratatoskrapi.po4yka.com
     description: Production
-  - url: https://staging-bitsizereaderapi.po4yka.com
+  - url: https://staging-ratatoskrapi.po4yka.com
     description: Staging
   - url: http://localhost:8000
     description: Local development
@@ -3461,7 +3461,7 @@ paths:
             Content-Disposition:
               schema:
                 type: string
-              description: 'Attachment filename (e.g., bite_size_reader_backup_YYYYMMDD_HHMMSS.sqlite)'
+              description: 'Attachment filename (e.g., ratatoskr_backup_YYYYMMDD_HHMMSS.sqlite)'
             ETag:
               schema:
                 type: string

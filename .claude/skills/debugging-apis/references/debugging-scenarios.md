@@ -6,7 +6,7 @@ Check:
 
 ```bash
 # View raw response
-sqlite3 /data/app.db "
+sqlite3 /data/ratatoskr.db "
   SELECT raw_response_json
   FROM crawl_results
   WHERE request_id = '<correlation_id>';
@@ -28,7 +28,7 @@ Check `app/core/json_utils.py`:
 
 ```bash
 # Count recent API calls
-sqlite3 /data/app.db "
+sqlite3 /data/ratatoskr.db "
   SELECT COUNT(*) as calls_last_hour
   FROM llm_calls
   WHERE created_at > datetime('now', '-1 hour');
@@ -39,7 +39,7 @@ sqlite3 /data/app.db "
 
 ```bash
 # Analyze token usage and costs
-sqlite3 /data/app.db << EOF
+sqlite3 /data/ratatoskr.db << EOF
 .mode column
 .headers on
 SELECT

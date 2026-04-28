@@ -121,8 +121,8 @@ class WebhookDispatcher:
 
         headers = {
             "Content-Type": "application/json",
-            "X-BSR-Signature": f"sha256={signature}",
-            "X-BSR-Event": event_type,
+            "X-Ratatoskr-Signature": f"sha256={signature}",
+            "X-Ratatoskr-Event": event_type,
         }
 
         start = time.monotonic()

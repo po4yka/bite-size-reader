@@ -1,4 +1,4 @@
-"""BSR CLI authentication and token management."""
+"""Ratatoskr CLI authentication and token management."""
 
 from __future__ import annotations
 
@@ -6,15 +6,15 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import httpx
-from bsr_cli.config import load_config, save_config
-from bsr_cli.exceptions import AuthError
+from ratatoskr_cli.config import load_config, save_config
+from ratatoskr_cli.exceptions import AuthError
 
 if TYPE_CHECKING:
-    from bsr_cli.client import BSRClient
-    from bsr_cli.config import BSRConfig
+    from ratatoskr_cli.client import RatatoskrClient
+    from ratatoskr_cli.config import RatatoskrConfig
 
 
-def login(server_url: str, user_id: int, client_id: str, secret: str) -> BSRConfig:
+def login(server_url: str, user_id: int, client_id: str, secret: str) -> RatatoskrConfig:
     """Authenticate via secret-key login and return updated config with tokens."""
     resp = httpx.post(
         f"{server_url.rstrip('/')}/v1/auth/secret-login",
@@ -46,7 +46,7 @@ def login(server_url: str, user_id: int, client_id: str, secret: str) -> BSRConf
     return config
 
 
-def refresh_if_needed(config: BSRConfig) -> BSRConfig:
+def refresh_if_needed(config: RatatoskrConfig) -> RatatoskrConfig:
     """Refresh access token if it's about to expire (within 5 minutes)."""
     if not config.token_expires_at or not config.refresh_token:
         return config
@@ -84,19 +84,19 @@ def refresh_if_needed(config: BSRConfig) -> BSRConfig:
     return config
 
 
-def ensure_authenticated(config: BSRConfig) -> BSRConfig:
+def ensure_authenticated(config: RatatoskrConfig) -> RatatoskrConfig:
     """Validate config has tokens and refresh if needed."""
     if not config.access_token:
-        raise AuthError("Not authenticated. Run: bsr login")
+        raise AuthError("Not authenticated. Run: ratatoskr login")
     return refresh_if_needed(config)
 
 
-def get_client(ctx: dict) -> BSRClient:
-    """Build an authenticated BSRClient from CLI context."""
-    from bsr_cli.client import BSRClient
-    from bsr_cli.config import require_config
+def get_client(ctx: dict) -> RatatoskrClient:
+    """Build an authenticated RatatoskrClient from CLI context."""
+    from ratatoskr_cli.client import RatatoskrClient
+    from ratatoskr_cli.config import require_config
 
     config = require_config()
     config = ensure_authenticated(config)
     server = ctx.get("server") or config.server_url
-    return BSRClient(server, config.access_token)
+    return RatatoskrClient(server, config.access_token)

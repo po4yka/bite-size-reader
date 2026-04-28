@@ -167,12 +167,12 @@ class McpConfig(BaseModel):
         description="Hosted MCP auth mode: 'disabled' or 'jwt'",
     )
     forwarded_access_token_header: str = Field(
-        default="X-BSR-Forwarded-Access-Token",
+        default="X-Ratatoskr-Forwarded-Access-Token",
         validation_alias="MCP_FORWARDED_ACCESS_TOKEN_HEADER",
         description="Header used by a trusted gateway to forward the original bearer token",
     )
     forwarded_secret_header: str = Field(
-        default="X-BSR-MCP-Forwarding-Secret",
+        default="X-Ratatoskr-MCP-Forwarding-Secret",
         validation_alias="MCP_FORWARDED_SECRET_HEADER",
         description="Header carrying the shared secret for trusted token forwarding",
     )

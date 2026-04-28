@@ -1,6 +1,6 @@
 # Quickstart Tutorial: Your First Summary in 5 Minutes
 
-Get your first article summary with Bite-Size Reader in 5 minutes using Docker.
+Get your first article summary with Ratatoskr in 5 minutes using Docker.
 
 **Time**: ~5 minutes
 **Difficulty**: Beginner
@@ -12,7 +12,7 @@ Get your first article summary with Bite-Size Reader in 5 minutes using Docker.
 
 By the end of this tutorial, you'll have:
 
-- ✅ Bite-Size Reader running in a Docker container
+- ✅ Ratatoskr running in a Docker container
 - ✅ Your Telegram bot responding to messages
 - ✅ Your first article summary generated
 
@@ -67,10 +67,10 @@ Create a file named `.env` with your API keys:
 
 ```bash
 # Create directory for data
-mkdir -p ~/bite-size-reader/data
+mkdir -p ~/ratatoskr/data
 
 # Create .env file
-cat > ~/bite-size-reader/.env << 'EOF'
+cat > ~/ratatoskr/.env << 'EOF'
 # Telegram Configuration
 API_ID=your_api_id_here
 API_HASH=your_api_hash_here
@@ -85,7 +85,7 @@ OPENROUTER_API_KEY=your_openrouter_key_here
 OPENROUTER_MODEL=deepseek/deepseek-v3.2
 
 # Database
-DB_PATH=/data/app.db
+DB_PATH=/data/ratatoskr.db
 
 # Logging
 LOG_LEVEL=INFO
@@ -107,18 +107,18 @@ EOF
 
 ```bash
 # Pull latest image
-docker pull ghcr.io/po4yka/bite-size-reader:latest
+docker pull ghcr.io/po4yka/ratatoskr:latest
 
 # Run container
 docker run -d \
-  --name bite-size-reader \
-  --env-file ~/bite-size-reader/.env \
-  -v ~/bite-size-reader/data:/data \
+  --name ratatoskr \
+  --env-file ~/ratatoskr/.env \
+  -v ~/ratatoskr/data:/data \
   --restart unless-stopped \
-  ghcr.io/po4yka/bite-size-reader:latest
+  ghcr.io/po4yka/ratatoskr:latest
 
 # Verify it's running
-docker logs bite-size-reader
+docker logs ratatoskr
 
 # Should see:
 # INFO: Bot started successfully
@@ -146,7 +146,7 @@ docker logs bite-size-reader
 **Expected response**:
 
 ```
-👋 Welcome to Bite-Size Reader!
+👋 Welcome to Ratatoskr!
 
 Send me:
 • Web article URL → Get structured summary
@@ -203,7 +203,7 @@ Try these commands to confirm full functionality:
 
 ## Next Steps
 
-Congratulations! You've successfully set up Bite-Size Reader. 🎉
+Congratulations! You've successfully set up Ratatoskr. 🎉
 
 **Enhance your setup**:
 
@@ -235,10 +235,10 @@ Congratulations! You've successfully set up Bite-Size Reader. 🎉
 # Message @userinfobot and verify it matches ALLOWED_USER_IDS
 
 # Update .env
-echo "ALLOWED_USER_IDS=123456789" >> ~/bite-size-reader/.env
+echo "ALLOWED_USER_IDS=123456789" >> ~/ratatoskr/.env
 
 # Restart container
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 ### "Access denied" error
@@ -282,26 +282,26 @@ curl -H "Authorization: Bearer YOUR_OPENROUTER_KEY" \
 
 ```bash
 # View logs
-docker logs bite-size-reader
+docker logs ratatoskr
 
 # Follow logs in real-time
-docker logs -f bite-size-reader
+docker logs -f ratatoskr
 
 # Stop container
-docker stop bite-size-reader
+docker stop ratatoskr
 
 # Start container
-docker start bite-size-reader
+docker start ratatoskr
 
 # Restart container
-docker restart bite-size-reader
+docker restart ratatoskr
 
 # Remove container
-docker rm -f bite-size-reader
+docker rm -f ratatoskr
 
 # Update to latest version
-docker pull ghcr.io/po4yka/bite-size-reader:latest
-docker rm -f bite-size-reader
+docker pull ghcr.io/po4yka/ratatoskr:latest
+docker rm -f ratatoskr
 # Re-run docker run command from Step 3
 ```
 
@@ -313,8 +313,8 @@ If you prefer running without Docker:
 
 ```bash
 # Clone repository
-git clone https://github.com/po4yka/bite-size-reader.git
-cd bite-size-reader
+git clone https://github.com/po4yka/ratatoskr.git
+cd ratatoskr
 
 # Create virtual environment
 python3 -m venv .venv
@@ -324,7 +324,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Copy .env file to project root
-cp ~/bite-size-reader/.env .
+cp ~/ratatoskr/.env .
 
 # Run bot
 python bot.py
@@ -336,9 +336,9 @@ See [Local Development Tutorial](local-development.md) for full guide.
 
 **Tutorial Complete!** 🎓
 
-You now have a working Bite-Size Reader setup. Try summarizing a few articles to get familiar with the output format.
+You now have a working Ratatoskr setup. Try summarizing a few articles to get familiar with the output format.
 
-**Questions?** Check [FAQ](../FAQ.md) or [open an issue](https://github.com/po4yka/bite-size-reader/issues).
+**Questions?** Check [FAQ](../FAQ.md) or [open an issue](https://github.com/po4yka/ratatoskr/issues).
 
 ---
 

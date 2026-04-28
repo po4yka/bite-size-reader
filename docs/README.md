@@ -1,6 +1,6 @@
-# Bite-Size Reader Documentation Hub
+# Ratatoskr Documentation Hub
 
-Welcome to the Bite-Size Reader documentation. This guide helps you find the right documentation for your needs.
+Welcome to the Ratatoskr documentation. This guide helps you find the right documentation for your needs.
 
 > Note: this directory keeps current, user-facing and engineering reference docs; temporary planning notes and historical implementation reports are removed after completion.
 
@@ -19,7 +19,7 @@ Welcome to the Bite-Size Reader documentation. This guide helps you find the rig
 
 ### 👤 I'm a User
 
-You want to use Bite-Size Reader to summarize articles, videos, or mixed-source bundles.
+You want to use Ratatoskr to summarize articles, videos, or mixed-source bundles.
 
 **Start here**:
 
@@ -57,7 +57,7 @@ You want to contribute code, customize the bot, or understand the architecture.
 
 ### 🔧 I'm an Operator
 
-You want to deploy, monitor, and maintain Bite-Size Reader in production.
+You want to deploy, monitor, and maintain Ratatoskr in production.
 
 **Start here**:
 
@@ -91,7 +91,7 @@ You want to submit pull requests or improve the project.
 
 ### 🔌 I'm an Integrator
 
-You want to integrate Bite-Size Reader with other tools or build a client.
+You want to integrate Ratatoskr with other tools or build a client.
 
 **Start here**:
 
@@ -183,7 +183,7 @@ The documentation is organized using the [Diátaxis framework](https://diataxis.
 
 ### Tutorials (Learning-Oriented)
 
-Step-by-step lessons that teach you how to use Bite-Size Reader.
+Step-by-step lessons that teach you how to use Ratatoskr.
 
 | Tutorial | Description | Audience | Time |
 | ---------- | ------------- | ---------- | ------ |
@@ -287,7 +287,7 @@ Background, context, and "why" discussions.
 - **OpenRouter**: Multi-model LLM routing service (supports DeepSeek, Qwen, Kimi, GPT-4, Claude, etc.)
 - **Hexagonal Architecture**: Design pattern separating core logic from adapters (Telegram, Firecrawl, database)
 - **Multi-Agent Pipeline**: LLM architecture with specialized agents (extraction, summarization, validation, web search)
-- **MCP Server**: Model Context Protocol server exposing Bite-Size Reader to AI agents (Claude Desktop, etc.)
+- **MCP Server**: Model Context Protocol server exposing Ratatoskr to AI agents (Claude Desktop, etc.)
 - **ChromaDB**: Vector database for semantic search
 - **Deduplication Hash**: SHA256 of normalized URL to prevent re-processing same article
 
@@ -348,4 +348,4 @@ Found a typo? Documentation unclear? Want to add a tutorial?
 
 **Last Updated**: 2026-04-12
 
-**Questions?** Check [FAQ](FAQ.md) or open an [issue](https://github.com/po4yka/bite-size-reader/issues).
+**Questions?** Check [FAQ](FAQ.md) or open an [issue](https://github.com/po4yka/ratatoskr/issues).

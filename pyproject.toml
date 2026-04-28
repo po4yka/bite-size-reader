@@ -112,13 +112,13 @@ warn_return_any = false
 no_implicit_optional = false
 disallow_untyped_defs = false
 disallow_any_generics = false
-exclude = ["data", "build", "dist", "venv", "bite-size-reader", "\\.claude"]
+exclude = ["data", "build", "dist", "venv", "ratatoskr", "\\.claude"]
 # Fix for _thread.RLock internal error
 plugins = []
 strict_optional = false
 
 [project]
-name = "bite-size-reader"
+name = "ratatoskr"
 version = "0.1.0"
 description = "Telegram bot that summarizes URLs and forwarded posts via Firecrawl + OpenRouter"
 requires-python = ">=3.13"
@@ -162,8 +162,8 @@ inference_core = [
 
 # Mobile REST API dependencies (FastAPI, JWT auth, vector search client)
 api = [
-  "bite-size-reader[inference_core]",
-  "bite-size-reader[browser_scraper]",
+  "ratatoskr[inference_core]",
+  "ratatoskr[browser_scraper]",
   "fastapi>=0.128.0",
   "uvicorn[standard]>=0.40.0",
   "starlette>=0.50.0",
@@ -174,7 +174,7 @@ api = [
 
 # Machine learning dependencies (embeddings, vector search, transformers)
 ml = [
-  "bite-size-reader[inference_core]",
+  "ratatoskr[inference_core]",
   "torch>=2.10.0",
   "transformers>=5.0.0",
   "scikit-learn>=1.8.0",

@@ -133,7 +133,7 @@ def check_indexes(db: DatabaseSessionManager) -> None:
 def main() -> int:
     """Run index migration."""
     # Determine database path
-    db_path = "/data/app.db"
+    db_path = "/data/ratatoskr.db"
     if len(sys.argv) > 1:
         db_path = sys.argv[1]
 

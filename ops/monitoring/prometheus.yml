@@ -1,11 +1,11 @@
-# Prometheus configuration for Bite-Size Reader
+# Prometheus configuration for Ratatoskr
 # Optimized for Raspberry Pi 5 with 30s scrape interval
 
 global:
   scrape_interval: 30s
   evaluation_interval: 30s
   external_labels:
-    monitor: 'bite-size-reader'
+    monitor: 'ratatoskr'
 
 # Alertmanager configuration (optional)
 # alerting:
@@ -23,15 +23,15 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # Bite-Size Reader Mobile API
-  - job_name: 'bsr-mobile-api'
+  # Ratatoskr Mobile API
+  - job_name: 'ratatoskr-mobile-api'
     metrics_path: '/metrics'
     static_configs:
       - targets: ['mobile-api:8000']
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
-        replacement: 'bsr-mobile-api'
+        replacement: 'ratatoskr-mobile-api'
 
   # Host metrics via node-exporter sidecar
   - job_name: 'node'

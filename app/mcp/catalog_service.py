@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.call_status import CallStatus
 from app.mcp.helpers import McpErrorResult, format_summary_compact, isotime, paginated_payload
 
-logger = logging.getLogger("bsr.mcp")
+logger = logging.getLogger("ratatoskr.mcp")
 
 if TYPE_CHECKING:
     from app.mcp.context import McpServerContext

@@ -103,7 +103,7 @@ RUN useradd -r -u 1000 -m -d /home/appuser -s /sbin/nologin appuser \
 
 # Runtime configuration
 VOLUME ["/data"]
-ENV DB_PATH=/data/app.db \
+ENV DB_PATH=/data/ratatoskr.db \
     LOG_LEVEL=INFO \
     REQUEST_TIMEOUT_SEC=60 \
     TEXTACY_ENABLED=1
@@ -114,7 +114,7 @@ USER appuser
 # Health check to ensure database is accessible
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD python -c "import sqlite3, os; \
-    conn = sqlite3.connect(os.getenv('DB_PATH', '/data/app.db'), timeout=5); \
+    conn = sqlite3.connect(os.getenv('DB_PATH', '/data/ratatoskr.db'), timeout=5); \
     conn.execute('SELECT 1').fetchone(); \
     conn.close()"
 

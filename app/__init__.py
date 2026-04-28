@@ -1,4 +1,4 @@
-"""Bite-Size Reader application package.
+"""Ratatoskr application package.
 
 Contains core logic, adapters for external services, and DB layer.
 """

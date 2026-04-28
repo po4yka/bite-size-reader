@@ -58,7 +58,7 @@ class SystemMaintenanceService:
         *,
         db_path: str | None = None,
         backup_dir: str | None = None,
-        backup_filename: str = "bite_size_reader_backup.sqlite",
+        backup_filename: str = "ratatoskr_backup.sqlite",
     ) -> None:
         self._db_path = db_path or Config.get("DB_PATH", "/data/app.db")
         self._backup_dir = backup_dir or tempfile.gettempdir()
@@ -84,7 +84,7 @@ class SystemMaintenanceService:
 
         mtime = os.path.getmtime(backup_path)
         timestamp = datetime.fromtimestamp(mtime, tz=UTC).strftime("%Y%m%d_%H%M%S")
-        download_filename = f"bite_size_reader_backup_{timestamp}.sqlite"
+        download_filename = f"ratatoskr_backup_{timestamp}.sqlite"
 
         return DatabaseDumpFile(path=backup_path, filename=download_filename)
 

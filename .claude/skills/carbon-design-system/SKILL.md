@@ -1,7 +1,7 @@
 ---
 name: carbon-design-system
 description: >
-  IBM Carbon Design System patterns for the Bite-Size Reader web frontend.
+  IBM Carbon Design System patterns for the Ratatoskr web frontend.
   Component selection, import conventions, theming, layout, spacing, motion
   tokens, and accessibility. Triggers: Carbon component, Carbon theme,
   Carbon layout, Carbon grid, Carbon tokens, design system, UI component,

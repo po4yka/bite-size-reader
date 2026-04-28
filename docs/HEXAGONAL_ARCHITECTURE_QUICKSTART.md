@@ -1,4 +1,4 @@
-# Hexagonal Architecture Quickstart (Bite-Size Reader)
+# Hexagonal Architecture Quickstart (Ratatoskr)
 
 This doc keeps our layering consistent across Telegram, CLI, and the mobile API. Keep dependencies pointing inward: Domain has no outward dependencies.
 

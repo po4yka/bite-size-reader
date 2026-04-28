@@ -67,7 +67,7 @@ def get_or_create_runtime_database_from_env(
                 _cached_runtime_db.database.connect(reuse_if_open=True)
             return _cached_runtime_db
 
-        db_path = os.getenv("DB_PATH", "/data/app.db")
+        db_path = os.getenv("DB_PATH", "/data/ratatoskr.db")
         db_cfg = _get_env_db_config()
         _cached_runtime_db = DatabaseSessionManager(
             path=db_path,

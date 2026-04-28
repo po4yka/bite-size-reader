@@ -14,7 +14,7 @@ from app.api.exceptions import AuthorizationError, ValidationError
 from app.api.routers.auth.tokens import decode_token, validate_client_id
 from app.config import Config
 
-logger = logging.getLogger("bsr.mcp")
+logger = logging.getLogger("ratatoskr.mcp")
 
 if TYPE_CHECKING:
     from starlette.types import ASGIApp, Receive, Scope, Send

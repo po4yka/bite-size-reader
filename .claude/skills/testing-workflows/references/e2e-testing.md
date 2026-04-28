@@ -6,26 +6,26 @@
 
 ```bash
 # Build image
-docker build -t bite-size-reader .
+docker build -t ratatoskr .
 
 # Run container
 docker run --env-file .env \
   -v $(pwd)/data:/data \
-  --name bsr \
-  bite-size-reader
+  --name ratatoskr \
+  ratatoskr
 ```
 
 ### Check Bot Health
 
 ```bash
 # View logs
-docker logs bsr
+docker logs ratatoskr
 
 # Check if bot is running
-docker ps | grep bsr
+docker ps | grep ratatoskr
 
 # Inspect database
-docker exec bsr sqlite3 /data/app.db ".tables"
+docker exec ratatoskr sqlite3 /data/ratatoskr.db ".tables"
 ```
 
 ## E2E Tests (Gated)

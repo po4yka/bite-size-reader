@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 
 def main() -> int:
     """Main entry point."""
-    db_path = sys.argv[1] if len(sys.argv) > 1 else "/data/app.db"
+    db_path = sys.argv[1] if len(sys.argv) > 1 else "/data/ratatoskr.db"
 
     logging.basicConfig(
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",

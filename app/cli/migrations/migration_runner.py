@@ -10,7 +10,7 @@ Usage:
     from app.cli.migrations.migration_runner import MigrationRunner
     from app.db.session import DatabaseSessionManager
 
-    db = DatabaseSessionManager("/data/app.db")
+    db = DatabaseSessionManager("/data/ratatoskr.db")
     runner = MigrationRunner(db)
 
     # Run all pending migrations
@@ -333,7 +333,7 @@ def main() -> int:
         return 1
 
     command = sys.argv[1]
-    db_path = "/data/app.db"
+    db_path = "/data/ratatoskr.db"
 
     # Allow specifying database path with --db flag
     if "--db" in sys.argv:

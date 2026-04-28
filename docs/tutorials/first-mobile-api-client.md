@@ -1,8 +1,8 @@
 # First Mobile API Client Tutorial
 
-Build a simple mobile client for Bite-Size Reader using the REST API.
+Build a simple mobile client for Ratatoskr using the REST API.
 
-If you are onboarding the packaged `bsr` CLI or hosted MCP clients with client secrets instead of Telegram login, start with [External Access Quickstart](external-access-quickstart.md) first.
+If you are onboarding the packaged `ratatoskr` CLI or hosted MCP clients with client secrets instead of Telegram login, start with [External Access Quickstart](external-access-quickstart.md) first.
 
 **Time:** ~30 minutes
 **Difficulty:** Intermediate
@@ -24,7 +24,7 @@ By the end of this tutorial, you'll have:
 
 ## Prerequisites
 
-### 1. Bite-Size Reader Mobile API Running
+### 1. Ratatoskr Mobile API Running
 
 ```bash
 # Verify API is running
@@ -635,7 +635,7 @@ for attempt in range(3):
 
 ```python
 # Server error
-# Check API logs: docker logs bite-size-reader
+# Check API logs: docker logs ratatoskr
 ```
 
 ---

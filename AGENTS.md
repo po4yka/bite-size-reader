@@ -1,4 +1,4 @@
-# AGENTS.md -- AI Agent Guide for Bite-Size Reader
+# AGENTS.md -- AI Agent Guide for Ratatoskr
 
 This document provides project context for AI coding agents (Codex, Copilot, etc.). For the full guide see `CLAUDE.md`.
 

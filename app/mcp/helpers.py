@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any, TypedDict
 
-logger = logging.getLogger("bsr.mcp")
+logger = logging.getLogger("ratatoskr.mcp")
 
 
 class McpErrorResult(TypedDict):

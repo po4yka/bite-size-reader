@@ -34,7 +34,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 `FIRECRAWL_API_KEY` is **optional**. The default scraper chain (`SCRAPER_PROVIDER_ORDER`) tries Scrapling (free, in-process) first, then falls back to Firecrawl, Playwright, Crawlee, and direct HTML extraction. You only need a cloud Firecrawl API key if you want to use cloud Firecrawl or web search enrichment.
 
 - Cloud Firecrawl: Sign up at https://www.firecrawl.dev/ and set `FIRECRAWL_API_KEY`.
-- Self-hosted Firecrawl: Enable via `FIRECRAWL_SELF_HOSTED_ENABLED=true`. Docker Compose includes a `bsr-firecrawl` service on port 3002.
+- Self-hosted Firecrawl: Enable via `FIRECRAWL_SELF_HOSTED_ENABLED=true`. Docker Compose includes a `ratatoskr-firecrawl` service on port 3002.
 - Scrapling: Enabled by default (`SCRAPER_SCRAPLING_ENABLED=true`), no API key required.
 - Breaking rename note: legacy vars (`SCRAPLING_*`, `SCRAPER_DIRECT_HTTP_ENABLED`) now fail fast at startup.
 
@@ -47,12 +47,12 @@ Copy `.env.example` to `.env` and fill:
 - Telegram: `API_ID`, `API_HASH`, `BOT_TOKEN`, `ALLOWED_USER_IDS`
 - OpenRouter: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (e.g., `deepseek/deepseek-v3.2`), optional `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`
 - Firecrawl: `FIRECRAWL_API_KEY`
-- Runtime: `DB_PATH=/data/app.db`, `LOG_LEVEL=INFO| DEBUG`, `REQUEST_TIMEOUT_SEC=60`, `PREFERRED_LANG=auto | en | ru`, `DEBUG_PAYLOADS=0 |1` (keep 0 in prod)
+- Runtime: `DB_PATH=/data/ratatoskr.db`, `LOG_LEVEL=INFO| DEBUG`, `REQUEST_TIMEOUT_SEC=60`, `PREFERRED_LANG=auto | en | ru`, `DEBUG_PAYLOADS=0 |1` (keep 0 in prod)
 - YouTube: `YOUTUBE_DOWNLOAD_ENABLED=true`, `YOUTUBE_PREFERRED_QUALITY=1080p`, `YOUTUBE_STORAGE_PATH=/data/videos`, size/retention knobs as needed
 - Mixed-source aggregation: `AGGREGATION_BUNDLE_ENABLED=true`, `AGGREGATION_ROLLOUT_STAGE=enabled`, optional extractor flags (`AGGREGATION_META_EXTRACTORS_ENABLED`, `AGGREGATION_ARTICLE_MEDIA_ENABLED`, `AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED`)
 - API (mobile): `JWT_SECRET_KEY` (>=32 chars), `API_HOST`, `API_PORT` (default 8000), optional `ALLOWED_CLIENT_IDS`
 - Web frontend (JWT mode login widget, optional for `clients/web/` local build/dev): `VITE_TELEGRAM_BOT_USERNAME`
-- Redis (rate limit/sync, optional): `REDIS_ENABLED`, `REDIS_URL` or host/port/db, `REDIS_PREFIX=bsr`, `REDIS_REQUIRED=false`, `API_RATE_LIMIT_*` caps, `SYNC_DEFAULT_CHUNK_SIZE`, `SYNC_EXPIRY_HOURS`
+- Redis (rate limit/sync, optional): `REDIS_ENABLED`, `REDIS_URL` or host/port/db, `REDIS_PREFIX=ratatoskr`, `REDIS_REQUIRED=false`, `API_RATE_LIMIT_*` caps, `SYNC_DEFAULT_CHUNK_SIZE`, `SYNC_EXPIRY_HOURS`
 
 ## Local Development
 
@@ -94,19 +94,19 @@ How to use (no commands needed)
 ## Docker Deployment
 
 1) Lock deps: `make lock-uv`.
-2) Build: `docker build -f ops/docker/Dockerfile -t bite-size-reader .`
+2) Build: `docker build -f ops/docker/Dockerfile -t ratatoskr .`
 3) Run:
 
 ```
 docker run --env-file .env \
   -v $(pwd)/data:/data \
   -p 8000:8000 \  # expose API if needed
-  --name bsr --restart unless-stopped bite-size-reader
+  --name ratatoskr --restart unless-stopped ratatoskr
 ```
 
 Notes
 
-- SQLite at `/data/app.db`; backups under `/data/backups`. Mount `/data` for durability.
+- SQLite at `/data/ratatoskr.db`; backups under `/data/backups`. Mount `/data` for durability.
 - Set `ALLOWED_USER_IDS`; keep `DEBUG_PAYLOADS=0` in prod.
 - If using mobile API, ensure `JWT_SECRET_KEY` is set and port 8000 exposed.
 - Docker build includes the `clients/web/` bundle and publishes it under `/static/web/*`.
@@ -117,7 +117,7 @@ The production `ops/docker/docker-compose.yml` defines a 5-service stack:
 
 ```yaml
 services:
-  bsr:              # Telegram bot
+  ratatoskr:              # Telegram bot
     build: .
     env_file: .env
     volumes: [./data:/data]
@@ -145,7 +145,7 @@ services:
     healthcheck: redis-cli ping every 10s
 
   chroma:           # Vector search (ChromaDB)
-    image: bsr-chroma:1.5.2
+    image: ratatoskr-chroma:1.5.2
     build: {context: ../.., dockerfile: ops/docker/Dockerfile.chroma}
     ports: ["127.0.0.1:8001:8000"]
     healthcheck: HTTP /api/v2/heartbeat every 30s
@@ -159,7 +159,7 @@ These services are not required but enhance functionality when available:
 
 - **Redis** -- Caching layer for Firecrawl/LLM responses, API rate limiting, sync locks, and background task distributed locking. Set `REDIS_ENABLED=true` and configure `REDIS_URL` or host/port.
 - **ChromaDB** -- Vector search for semantic article queries. Set `CHROMA_HOST` to a running Chroma instance. Degrades gracefully when unavailable.
-- **MCP Server** -- Exposes article, search, ChromaDB, and aggregation tools/resources to external AI agents (OpenClaw, Claude Desktop, hosted SSE clients). Runs as a dedicated Docker container with SSE transport (`bsr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
+- **MCP Server** -- Exposes article, search, ChromaDB, and aggregation tools/resources to external AI agents (OpenClaw, Claude Desktop, hosted SSE clients). Runs as a dedicated Docker container with SSE transport (`ratatoskr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels. Set `DIGEST_ENABLED=true` and `API_BASE_URL` to the Mobile API endpoint. Run `/init_session` in the bot to authenticate the userbot via Mini App OTP/2FA flow, then use `/subscribe @channel` to add channels.
 
 Full variable reference: `docs/environment_variables.md`
@@ -206,22 +206,22 @@ Roll out external aggregation access in this order and only promote when the pre
 
 Watch these signals during every stage:
 
-- `bsr_requests_total{type="aggregation.create",status=...,source="cli"}` for CLI create volume and error rate
-- `bsr_requests_total{type="aggregation.create",status=...,source="api"}` for direct API callers without a typed client prefix
-- `bsr_requests_total{type="<tool>",status=...,source="mcp"}` for MCP tool adoption and failures
-- `bsr_request_latency_seconds{type="aggregation.create",stage="total"}` for end-to-end API create latency
-- `bsr_request_latency_seconds{type="<tool>",stage="total"}` for MCP tool latency
-- `bsr_aggregation_bundles_total{status=...,entrypoint=...}` for completed, partial, and failed bundles
-- `bsr_aggregation_extraction_total{platform=...,outcome=...}` for per-platform extraction failure spikes
-- `bsr_aggregation_bundle_latency_seconds{entrypoint=...}` for bundle completion latency
-- `bsr_aggregation_synthesis_coverage_ratio_bucket{source_type=...,status=...}` for low-coverage summaries
+- `ratatoskr_requests_total{type="aggregation.create",status=...,source="cli"}` for CLI create volume and error rate
+- `ratatoskr_requests_total{type="aggregation.create",status=...,source="api"}` for direct API callers without a typed client prefix
+- `ratatoskr_requests_total{type="<tool>",status=...,source="mcp"}` for MCP tool adoption and failures
+- `ratatoskr_request_latency_seconds{type="aggregation.create",stage="total"}` for end-to-end API create latency
+- `ratatoskr_request_latency_seconds{type="<tool>",stage="total"}` for MCP tool latency
+- `ratatoskr_aggregation_bundles_total{status=...,entrypoint=...}` for completed, partial, and failed bundles
+- `ratatoskr_aggregation_extraction_total{platform=...,outcome=...}` for per-platform extraction failure spikes
+- `ratatoskr_aggregation_bundle_latency_seconds{entrypoint=...}` for bundle completion latency
+- `ratatoskr_aggregation_synthesis_coverage_ratio_bucket{source_type=...,status=...}` for low-coverage summaries
 
 Use these go/no-go thresholds:
 
 - Promote only if `aggregation.create` and MCP write-tool error rates stay below 5% over the last 24 hours.
 - Hold the rollout if failed plus partial bundles exceed 10% of total bundles for any stage.
 - Hold the rollout if p95 `aggregation.create` latency exceeds 30 seconds for CLI/API traffic or if p95 MCP write-tool latency exceeds 15 seconds.
-- Hold the rollout if any single platform in `bsr_aggregation_extraction_total` shows a failure rate above 20%.
+- Hold the rollout if any single platform in `ratatoskr_aggregation_extraction_total` shows a failure rate above 20%.
 - Hold the rollout if low-coverage syntheses (`coverage_ratio < 0.5`) exceed 10% of completed mixed bundles.
 - Roll back immediately on confirmed cross-user access, auth bypass, SSRF bypass, or sustained 429 saturation caused by the new client cohort.
 
@@ -230,7 +230,7 @@ Stage-specific promotion checks:
 - Stage 1 to Stage 2:
   keep invite-only CLI clients on an explicit allowlist, verify client IDs map cleanly to `cli-*`, and confirm successful create/get/list flows for at least three distinct external users.
 - Stage 2 to Stage 3:
-  verify local MCP aggregation writes use scoped identities only, and confirm `bsr_requests_total{source="mcp"}` shows zero auth or access-denied surprises for trusted testers.
+  verify local MCP aggregation writes use scoped identities only, and confirm `ratatoskr_requests_total{source="mcp"}` shows zero auth or access-denied surprises for trusted testers.
 - Stage 3 to Stage 4:
   verify hosted SSE traffic arrives through JWT or trusted forwarded-token auth only, confirm request-scoped reads and writes in logs, and require no security incidents during the beta window.
 - Stage 4 to Stage 5:
@@ -247,14 +247,14 @@ Rollback triggers and actions:
 
 - Health: ensure the bot account stays unbanned and tokens valid.
 - Monitoring: watch logs for latency spikes and error rates; consider dashboarding via structured logs.
-- Aggregation observability: Grafana provisioning includes `ops/monitoring/grafana/provisioning/dashboards/bsr-aggregation.json` for bundle cost, latency, partial-success, and coverage tracking.
+- Aggregation observability: Grafana provisioning includes `ops/monitoring/grafana/provisioning/dashboards/ratatoskr-aggregation.json` for bundle cost, latency, partial-success, and coverage tracking.
 - Backups: automatic snapshots land in `/data/backups`. Copy them off-host or adjust `DB_BACKUP_*` if you need a different cadence.
 
 ### Health Checks
 
 | Service | Method | Interval | Details |
 | --------- | -------- | ---------- | --------- |
-| bsr | SQLite `SELECT 1` | 30s | Verifies DB connectivity; 5 retries, 60s start period |
+| ratatoskr | SQLite `SELECT 1` | 30s | Verifies DB connectivity; 5 retries, 60s start period |
 | mobile-api | HTTP `GET /health` | 30s | Returns 200 when API is ready; 5 retries, 60s start period |
 | mcp | TCP socket on port 8200 | 30s | SSE server liveness check; 3 retries, 30s start period |
 | redis | `redis-cli ping` | 10s | Standard Redis liveness check; 5 retries |
@@ -267,8 +267,8 @@ When deploying a new version to a host that already has the service running:
 ### 1. Backup
 
 ```bash
-cd /path/to/bite-size-reader
-tar czf ~/bite-size-reader-backup-$(date +%Y%m%d%H%M).tgz data .env
+cd /path/to/ratatoskr
+tar czf ~/ratatoskr-backup-$(date +%Y%m%d%H%M).tgz data .env
 ```
 
 The container also writes automatic snapshots to `data/backups/`.
@@ -297,17 +297,17 @@ docker compose -f ops/docker/docker-compose.yml down
 docker compose -f ops/docker/docker-compose.yml up -d --build
 
 # Or manual
-docker stop bsr && docker rm bsr
-docker build -f ops/docker/Dockerfile -t bite-size-reader:latest .
+docker stop ratatoskr && docker rm ratatoskr
+docker build -f ops/docker/Dockerfile -t ratatoskr:latest .
 docker run -d --env-file .env -v $(pwd)/data:/data \
-  -p 8000:8000 --name bsr --restart unless-stopped bite-size-reader:latest
+  -p 8000:8000 --name ratatoskr --restart unless-stopped ratatoskr:latest
 ```
 
 ### 5. Verify
 
 ```bash
 docker ps
-docker logs -f bsr
+docker logs -f ratatoskr
 ```
 
 Send a test message from a whitelisted Telegram account.

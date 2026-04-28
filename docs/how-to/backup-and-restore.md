@@ -10,7 +10,7 @@ Protect your data with regular backups and restore procedures.
 
 ## What to Backup
 
-Bite-Size Reader stores data in three locations:
+Ratatoskr stores data in three locations:
 
 1. **SQLite Database** (`data/app.db`) - **CRITICAL**
    - All summaries, requests, LLM calls
@@ -126,7 +126,7 @@ chmod +x tools/scripts/backup.sh
 crontab -e
 
 # Add daily backup at 2 AM
-0 2 * * * cd /path/to/bite-size-reader && ./tools/scripts/backup.sh >> /var/log/bsr-backup.log 2>&1
+0 2 * * * cd /path/to/ratatoskr && ./tools/scripts/backup.sh >> /var/log/ratatoskr-backup.log 2>&1
 ```
 
 ### Docker Volume Backup
@@ -134,7 +134,7 @@ crontab -e
 ```bash
 # Backup Docker volume
 docker run --rm \
-  -v bite-size-reader_data:/data \
+  -v ratatoskr_data:/data \
   -v $(pwd)/backups:/backup \
   alpine tar -czf /backup/data_backup_$(date +%Y%m%d).tar.gz /data
 ```
@@ -155,7 +155,7 @@ pip install awscli
 aws configure
 
 # Sync backups to S3
-aws s3 sync backups/ s3://your-bucket/bite-size-reader-backups/
+aws s3 sync backups/ s3://your-bucket/ratatoskr-backups/
 ```
 
 **Rclone (Any Cloud Provider):**
@@ -168,14 +168,14 @@ curl https://rclone.org/install.sh | sudo bash
 rclone config
 
 # Sync backups
-rclone sync backups/ remote:bite-size-reader-backups/
+rclone sync backups/ remote:ratatoskr-backups/
 ```
 
 **rsync (Remote Server):**
 
 ```bash
 # Sync to remote server
-rsync -avz --delete backups/ user@remote:/backups/bite-size-reader/
+rsync -avz --delete backups/ user@remote:/backups/ratatoskr/
 ```
 
 ---
@@ -186,7 +186,7 @@ rsync -avz --delete backups/ user@remote:/backups/bite-size-reader/
 
 ```bash
 # Stop bot
-docker stop bite-size-reader  # or Ctrl+C if local
+docker stop ratatoskr  # or Ctrl+C if local
 
 # Backup current database (precaution)
 cp data/app.db data/app.db.before-restore
@@ -199,14 +199,14 @@ sqlite3 data/app.db "PRAGMA integrity_check;"
 # Should output: ok
 
 # Restart bot
-docker start bite-size-reader  # or python bot.py
+docker start ratatoskr  # or python bot.py
 ```
 
 ### Restore Full Backup
 
 ```bash
 # Stop bot
-docker stop bite-size-reader
+docker stop ratatoskr
 
 # Restore database
 cp backups/YYYYMMDD/app.db data/app.db
@@ -224,7 +224,7 @@ tar -xzf backups/YYYYMMDD/chroma.tar.gz -C /
 sqlite3 data/app.db "PRAGMA integrity_check;"
 
 # Restart bot
-docker start bite-size-reader
+docker start ratatoskr
 ```
 
 ### Restore to New Server
@@ -234,17 +234,17 @@ docker start bite-size-reader
 scp -r backups/YYYYMMDD/ user@new-server:/tmp/
 
 # On new server:
-# 1. Install Bite-Size Reader (see DEPLOYMENT.md)
+# 1. Install Ratatoskr (see DEPLOYMENT.md)
 # 2. Restore data
 cp /tmp/YYYYMMDD/app.db data/app.db
 cp /tmp/YYYYMMDD/.env .env
 
 # 3. Start bot
 docker run -d \
-  --name bite-size-reader \
+  --name ratatoskr \
   --env-file .env \
   -v $(pwd)/data:/data \
-  ghcr.io/po4yka/bite-size-reader:latest
+  ghcr.io/po4yka/ratatoskr:latest
 ```
 
 ---
@@ -257,7 +257,7 @@ Reclaim space after deleting records:
 
 ```bash
 # Stop bot
-docker stop bite-size-reader
+docker stop ratatoskr
 
 # Vacuum
 sqlite3 data/app.db "VACUUM;"
@@ -266,7 +266,7 @@ sqlite3 data/app.db "VACUUM;"
 ls -lh data/app.db
 
 # Restart bot
-docker start bite-size-reader
+docker start ratatoskr
 ```
 
 ### Verify Integrity
@@ -303,7 +303,7 @@ python -m app.cli.backfill_chroma_store --rebuild
 
 ```bash
 # 1. Stop bot immediately
-docker stop bite-size-reader
+docker stop ratatoskr
 
 # 2. Attempt recovery
 sqlite3 data/app.db ".recover" | sqlite3 data/app.db.recovered
@@ -316,7 +316,7 @@ mv data/app.db.recovered data/app.db
 cp backups/YYYYMMDD/app.db data/app.db
 
 # 5. Restart bot
-docker start bite-size-reader
+docker start ratatoskr
 ```
 
 ### Lost Backups

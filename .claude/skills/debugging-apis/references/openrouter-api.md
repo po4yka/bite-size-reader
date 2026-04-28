@@ -36,7 +36,7 @@
 ## Debugging Failed LLM Calls
 
 ```bash
-sqlite3 /data/app.db << EOF
+sqlite3 /data/ratatoskr.db << EOF
 .mode json
 SELECT
   id,
@@ -58,7 +58,7 @@ EOF
 
 ```bash
 # Get request messages
-sqlite3 /data/app.db "
+sqlite3 /data/ratatoskr.db "
   SELECT request_messages_json
   FROM llm_calls
   WHERE request_id = '<correlation_id>'
@@ -66,7 +66,7 @@ sqlite3 /data/app.db "
 " | python -m json.tool
 
 # Get response
-sqlite3 /data/app.db "
+sqlite3 /data/ratatoskr.db "
   SELECT response_json
   FROM llm_calls
   WHERE request_id = '<correlation_id>'

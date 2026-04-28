@@ -230,7 +230,7 @@ def _load_chroma_config(
 
 
 def main() -> int:
-    db_path = "/data/app.db"
+    db_path = "/data/ratatoskr.db"
     chroma_host = None
     chroma_token = None
     chroma_env = None
@@ -272,7 +272,7 @@ def main() -> int:
             print("Usage: python -m app.cli.backfill_chroma_store [OPTIONS]")
             print()
             print("Options:")
-            print("  --db=PATH             Database path (default: /data/app.db)")
+            print("  --db=PATH             Database path (default: /data/ratatoskr.db)")
             print("  --chroma-host=URL     Chroma host (default from environment or config)")
             print("  --chroma-env=NAME     Environment namespace for the collection")
             print("  --chroma-scope=NAME   User/tenant scope for the collection")

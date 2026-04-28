@@ -1,4 +1,4 @@
-# Model configuration for Bite-Size Reader
+# Model configuration for Ratatoskr
 #
 # Copy this file to config/models.yaml and customize.
 # Values here are overridden by environment variables when set.

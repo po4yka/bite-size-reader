@@ -102,7 +102,7 @@ def test_cli_uses_mcp_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MCP_USER_ID", "4242")
     monkeypatch.setenv("MCP_AUTH_MODE", "jwt")
     monkeypatch.setattr(server, "run_server", fake_run_server)
-    monkeypatch.setattr(sys, "argv", ["bsr-mcp-server"])
+    monkeypatch.setattr(sys, "argv", ["ratatoskr-mcp-server"])
 
     mcp_cli.main()
 
@@ -174,21 +174,21 @@ def test_create_mcp_server_registers_expected_tools_and_resources(
         "chroma_sync_gap",
     }
     assert set(mcp.registered_resources) == {
-        "bsr://aggregations/recent",
-        "bsr://aggregations/{session_id}",
-        "bsr://articles/recent",
-        "bsr://articles/favorites",
-        "bsr://articles/unread",
-        "bsr://stats",
-        "bsr://tags",
-        "bsr://entities",
-        "bsr://domains",
-        "bsr://collections",
-        "bsr://videos/recent",
-        "bsr://processing/stats",
-        "bsr://chroma/health",
-        "bsr://chroma/index-stats",
-        "bsr://chroma/sync-gap",
+        "ratatoskr://aggregations/recent",
+        "ratatoskr://aggregations/{session_id}",
+        "ratatoskr://articles/recent",
+        "ratatoskr://articles/favorites",
+        "ratatoskr://articles/unread",
+        "ratatoskr://stats",
+        "ratatoskr://tags",
+        "ratatoskr://entities",
+        "ratatoskr://domains",
+        "ratatoskr://collections",
+        "ratatoskr://videos/recent",
+        "ratatoskr://processing/stats",
+        "ratatoskr://chroma/health",
+        "ratatoskr://chroma/index-stats",
+        "ratatoskr://chroma/sync-gap",
     }
 
 

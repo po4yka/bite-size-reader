@@ -18,7 +18,7 @@ from app.core.url_utils import normalize_url
 from app.di.repositories import build_aggregation_session_repository, build_user_repository
 from app.domain.models.source import AggregationSessionStatus
 
-logger = logging.getLogger("bsr.mcp")
+logger = logging.getLogger("ratatoskr.mcp")
 
 if TYPE_CHECKING:
     from app.mcp.context import McpServerContext

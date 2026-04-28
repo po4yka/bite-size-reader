@@ -135,7 +135,7 @@ def create_backup_archive(
 
             os.makedirs(backup_dir, exist_ok=True)
             timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-            zip_path = backup_dir / f"bsr-backup-{user_id}-{timestamp}.zip"
+            zip_path = backup_dir / f"ratatoskr-backup-{user_id}-{timestamp}.zip"
 
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
                 archive.writestr("manifest.json", json.dumps(manifest, default=str, indent=2))

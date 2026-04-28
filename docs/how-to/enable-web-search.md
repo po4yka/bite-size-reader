@@ -33,7 +33,7 @@ Web search enrichment uses an LLM to:
 
 ## Prerequisites
 
-- Bite-Size Reader installed and running
+- Ratatoskr installed and running
 - Firecrawl API key (free tier supports search)
 
 ---
@@ -76,7 +76,7 @@ WEB_SEARCH_CACHE_TTL_SEC=3600
 
 ```bash
 # Docker
-docker restart bite-size-reader
+docker restart ratatoskr
 
 # Local
 # Press Ctrl+C to stop, then:
@@ -138,10 +138,10 @@ grep WEB_SEARCH_ENABLED .env
 
 # Enable debug logging to see LLM decision
 LOG_LEVEL=DEBUG
-docker restart bite-size-reader
+docker restart ratatoskr
 
 # Check logs
-docker logs bite-size-reader | grep "Web search"
+docker logs ratatoskr | grep "Web search"
 ```
 
 ---
@@ -220,7 +220,7 @@ REDIS_ENABLED=true
 WEB_SEARCH_ENABLED=false
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 ```
 
 Or use per-request override (future feature):

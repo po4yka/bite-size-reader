@@ -7,18 +7,18 @@ allowed-tools: Bash, Read
 
 # Database Inspection Skill
 
-Helps query and inspect the Bite-Size Reader SQLite database for debugging and analysis.
+Helps query and inspect the Ratatoskr SQLite database for debugging and analysis.
 
 ## Database Location
 
-- **Default path**: `/data/app.db`
+- **Default path**: `/data/ratatoskr.db`
 - **Check env**: `DB_PATH` environment variable
-- **Local dev**: Usually `./data/app.db` in project root
+- **Local dev**: Usually `./data/ratatoskr.db` in project root
 
 ## Dynamic Context
 
 ```bash
-!sqlite3 data/app.db "SELECT COUNT(*) as total, SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) as errors FROM requests"
+!sqlite3 data/ratatoskr.db "SELECT COUNT(*) as total, SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) as errors FROM requests"
 ```
 
 ## Common Query Patterns
@@ -26,82 +26,82 @@ Helps query and inspect the Bite-Size Reader SQLite database for debugging and a
 ### Find Request by Correlation ID
 
 ```bash
-sqlite3 /data/app.db "SELECT * FROM requests WHERE id = '<correlation_id>';"
+sqlite3 /data/ratatoskr.db "SELECT * FROM requests WHERE id = '<correlation_id>';"
 ```
 
 ### Check Recent Requests
 
 ```bash
-sqlite3 /data/app.db "SELECT id, type, status, input_url, created_at FROM requests ORDER BY created_at DESC LIMIT 10;"
+sqlite3 /data/ratatoskr.db "SELECT id, type, status, input_url, created_at FROM requests ORDER BY created_at DESC LIMIT 10;"
 ```
 
 ### Find Failed Requests
 
 ```bash
-sqlite3 /data/app.db "SELECT id, type, status, input_url, created_at FROM requests WHERE status = 'error' ORDER BY created_at DESC LIMIT 20;"
+sqlite3 /data/ratatoskr.db "SELECT id, type, status, input_url, created_at FROM requests WHERE status = 'error' ORDER BY created_at DESC LIMIT 20;"
 ```
 
 ### Check Crawl Results for URL
 
 ```bash
-sqlite3 /data/app.db "SELECT request_id, source_url, status, firecrawl_success, firecrawl_error_message, http_status FROM crawl_results WHERE request_id = '<correlation_id>';"
+sqlite3 /data/ratatoskr.db "SELECT request_id, source_url, status, firecrawl_success, firecrawl_error_message, http_status FROM crawl_results WHERE request_id = '<correlation_id>';"
 ```
 
 ### View LLM Calls for Request
 
 ```bash
-sqlite3 /data/app.db "SELECT id, model, status, tokens_prompt, tokens_completion, cost_usd, error_text FROM llm_calls WHERE request_id = '<correlation_id>';"
+sqlite3 /data/ratatoskr.db "SELECT id, model, status, tokens_prompt, tokens_completion, cost_usd, error_text FROM llm_calls WHERE request_id = '<correlation_id>';"
 ```
 
 ### Check Summary Output
 
 ```bash
-sqlite3 /data/app.db "SELECT request_id, lang, json_payload, version FROM summaries WHERE request_id = '<correlation_id>';"
+sqlite3 /data/ratatoskr.db "SELECT request_id, lang, json_payload, version FROM summaries WHERE request_id = '<correlation_id>';"
 ```
 
 ### View Telegram Message Snapshot
 
 ```bash
-sqlite3 /data/app.db "SELECT message_id, chat_id, text_full, forward_from_chat_title FROM telegram_messages WHERE request_id = '<correlation_id>';"
+sqlite3 /data/ratatoskr.db "SELECT message_id, chat_id, text_full, forward_from_chat_title FROM telegram_messages WHERE request_id = '<correlation_id>';"
 ```
 
 ### List All Tables
 
 ```bash
-sqlite3 /data/app.db ".tables"
+sqlite3 /data/ratatoskr.db ".tables"
 ```
 
 ### Show Table Schema
 
 ```bash
-sqlite3 /data/app.db ".schema requests"
-sqlite3 /data/app.db ".schema crawl_results"
-sqlite3 /data/app.db ".schema llm_calls"
-sqlite3 /data/app.db ".schema summaries"
+sqlite3 /data/ratatoskr.db ".schema requests"
+sqlite3 /data/ratatoskr.db ".schema crawl_results"
+sqlite3 /data/ratatoskr.db ".schema llm_calls"
+sqlite3 /data/ratatoskr.db ".schema summaries"
 ```
 
 ### Count Records by Type
 
 ```bash
-sqlite3 /data/app.db "SELECT type, COUNT(*) as count FROM requests GROUP BY type;"
+sqlite3 /data/ratatoskr.db "SELECT type, COUNT(*) as count FROM requests GROUP BY type;"
 ```
 
 ### Success Rate Statistics
 
 ```bash
-sqlite3 /data/app.db "SELECT status, COUNT(*) as count FROM requests GROUP BY status;"
+sqlite3 /data/ratatoskr.db "SELECT status, COUNT(*) as count FROM requests GROUP BY status;"
 ```
 
 ### Average Token Usage
 
 ```bash
-sqlite3 /data/app.db "SELECT AVG(tokens_prompt) as avg_prompt, AVG(tokens_completion) as avg_completion FROM llm_calls WHERE status = 'ok';"
+sqlite3 /data/ratatoskr.db "SELECT AVG(tokens_prompt) as avg_prompt, AVG(tokens_completion) as avg_completion FROM llm_calls WHERE status = 'ok';"
 ```
 
 ### Total API Costs
 
 ```bash
-sqlite3 /data/app.db "SELECT SUM(cost_usd) as total_cost FROM llm_calls WHERE cost_usd IS NOT NULL;"
+sqlite3 /data/ratatoskr.db "SELECT SUM(cost_usd) as total_cost FROM llm_calls WHERE cost_usd IS NOT NULL;"
 ```
 
 ## Usage Tips
@@ -109,7 +109,7 @@ sqlite3 /data/app.db "SELECT SUM(cost_usd) as total_cost FROM llm_calls WHERE co
 1. **Format output nicely**:
 
    ```bash
-   sqlite3 /data/app.db << EOF
+   sqlite3 /data/ratatoskr.db << EOF
    .mode column
    .headers on
    SELECT * FROM requests LIMIT 5;
@@ -119,7 +119,7 @@ sqlite3 /data/app.db "SELECT SUM(cost_usd) as total_cost FROM llm_calls WHERE co
 2. **Export to JSON**:
 
    ```bash
-   sqlite3 /data/app.db << EOF
+   sqlite3 /data/ratatoskr.db << EOF
    .mode json
    SELECT * FROM requests WHERE id = '<correlation_id>';
    EOF
@@ -128,13 +128,13 @@ sqlite3 /data/app.db "SELECT SUM(cost_usd) as total_cost FROM llm_calls WHERE co
 3. **Pretty print JSON payloads**:
 
    ```bash
-   sqlite3 /data/app.db "SELECT json_payload FROM summaries WHERE request_id = '<correlation_id>';" | python -m json.tool
+   sqlite3 /data/ratatoskr.db "SELECT json_payload FROM summaries WHERE request_id = '<correlation_id>';" | python -m json.tool
    ```
 
 4. **Search by URL pattern**:
 
    ```bash
-   sqlite3 /data/app.db "SELECT id, input_url, status FROM requests WHERE input_url LIKE '%example.com%';"
+   sqlite3 /data/ratatoskr.db "SELECT id, input_url, status FROM requests WHERE input_url LIKE '%example.com%';"
    ```
 
 ## Important Notes

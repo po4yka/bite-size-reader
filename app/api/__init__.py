@@ -1,5 +1,5 @@
 """
-Mobile API module for Bite-Size Reader.
+Mobile API module for Ratatoskr.
 
 Provides RESTful endpoints for mobile clients (Android/iOS).
 """

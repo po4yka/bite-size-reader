@@ -38,10 +38,10 @@ lsof -i :8000
 python .claude/skills/working-with-chromadb/scripts/chroma-health-check.py
 
 # Check language of query vs indexed docs
-sqlite3 data/app.db "SELECT lang, COUNT(*) FROM summaries GROUP BY lang;"
+sqlite3 data/ratatoskr.db "SELECT lang, COUNT(*) FROM summaries GROUP BY lang;"
 
 # Check if embeddings exist in SQLite
-sqlite3 data/app.db "SELECT COUNT(*) FROM summary_embeddings;"
+sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summary_embeddings;"
 
 # Check similarity threshold -- cosine distance near 1.0 means low similarity
 # Try broader query or different language
@@ -52,7 +52,7 @@ python .claude/skills/working-with-chromadb/scripts/chroma-search-test.py "test 
 **Fixes:**
 
 - Language mismatch: query language auto-detection selects a different model than what was used for indexing. Force `--lang` to match indexed language.
-- Empty collection: run backfill `python -m app.cli.backfill_chroma_store --db=data/app.db`
+- Empty collection: run backfill `python -m app.cli.backfill_chroma_store --db=data/ratatoskr.db`
 - Scope mismatch: verify `CHROMA_USER_SCOPE` and `CHROMA_ENV` match between indexing and querying
 - Model mismatch: if embeddings were generated with a different model, force re-index with `--force`
 
@@ -64,11 +64,11 @@ python .claude/skills/working-with-chromadb/scripts/chroma-search-test.py "test 
 
 ```bash
 # Compare counts
-sqlite3 data/app.db "SELECT COUNT(*) as summaries FROM summaries;"
-sqlite3 data/app.db "SELECT COUNT(*) as embeddings FROM summary_embeddings;"
+sqlite3 data/ratatoskr.db "SELECT COUNT(*) as summaries FROM summaries;"
+sqlite3 data/ratatoskr.db "SELECT COUNT(*) as embeddings FROM summary_embeddings;"
 
 # Find summaries without embeddings
-sqlite3 data/app.db << 'EOF'
+sqlite3 data/ratatoskr.db << 'EOF'
 SELECT s.id, s.lang, r.input_url
 FROM summaries s
 JOIN requests r ON s.request_id = r.id
@@ -83,9 +83,9 @@ python .claude/skills/working-with-chromadb/scripts/chroma-health-check.py
 
 **Fixes:**
 
-- Incremental backfill (skips existing): `python -m app.cli.backfill_chroma_store --db=data/app.db`
-- Force regeneration: `python -m app.cli.backfill_chroma_store --db=data/app.db --force`
-- Limit batch for testing: `python -m app.cli.backfill_chroma_store --db=data/app.db --limit=10`
+- Incremental backfill (skips existing): `python -m app.cli.backfill_chroma_store --db=data/ratatoskr.db`
+- Force regeneration: `python -m app.cli.backfill_chroma_store --db=data/ratatoskr.db --force`
+- Limit batch for testing: `python -m app.cli.backfill_chroma_store --db=data/ratatoskr.db --limit=10`
 
 ## 4. Slow Backfill Performance
 
@@ -95,7 +95,7 @@ python .claude/skills/working-with-chromadb/scripts/chroma-health-check.py
 
 ```bash
 # Check total summaries to process
-sqlite3 data/app.db "SELECT COUNT(*) FROM summaries;"
+sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summaries;"
 
 # Check current batch size
 # Default is 50, configurable via --batch-size
@@ -119,13 +119,13 @@ sqlite3 data/app.db "SELECT COUNT(*) FROM summaries;"
 
 ```bash
 # SQLite embedding count
-sqlite3 data/app.db "SELECT COUNT(*) FROM summary_embeddings;"
+sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summary_embeddings;"
 
 # Chroma doc count (from health check)
 python .claude/skills/working-with-chromadb/scripts/chroma-health-check.py
 
 # Check for chunk windows (one summary -> multiple Chroma docs)
-sqlite3 data/app.db << 'EOF'
+sqlite3 data/ratatoskr.db << 'EOF'
 SELECT se.summary_id, se.model_name, LENGTH(se.embedding_blob) as blob_size
 FROM summary_embeddings se
 ORDER BY se.created_at DESC
@@ -137,7 +137,7 @@ EOF
 
 **Fixes:**
 
-- If Chroma has orphaned documents from deleted summaries, force reconcile: `python -m app.cli.backfill_chroma_store --db=data/app.db --force`
+- If Chroma has orphaned documents from deleted summaries, force reconcile: `python -m app.cli.backfill_chroma_store --db=data/ratatoskr.db --force`
 - Check for deleted summaries that still have Chroma entries
 
 ## 6. Language-Specific Search Issues
@@ -148,10 +148,10 @@ EOF
 
 ```bash
 # Check language distribution
-sqlite3 data/app.db "SELECT lang, COUNT(*) FROM summaries GROUP BY lang;"
+sqlite3 data/ratatoskr.db "SELECT lang, COUNT(*) FROM summaries GROUP BY lang;"
 
 # Check which model was used for embeddings
-sqlite3 data/app.db "SELECT model_name, COUNT(*) FROM summary_embeddings GROUP BY model_name;"
+sqlite3 data/ratatoskr.db "SELECT model_name, COUNT(*) FROM summary_embeddings GROUP BY model_name;"
 
 # Test same query in different languages
 python .claude/skills/working-with-chromadb/scripts/chroma-search-test.py "machine learning" --lang en

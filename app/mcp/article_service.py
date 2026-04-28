@@ -12,7 +12,7 @@ from app.mcp.helpers import (
     paginated_payload,
 )
 
-logger = logging.getLogger("bsr.mcp")
+logger = logging.getLogger("ratatoskr.mcp")
 
 if TYPE_CHECKING:
     from app.mcp.context import McpServerContext

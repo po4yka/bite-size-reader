@@ -93,7 +93,7 @@ python -m app.cli.summary \
 cat test_output.json | python -m json.tool
 
 # Verify in database
-sqlite3 ./data/app.db << EOF
+sqlite3 ./data/ratatoskr.db << EOF
 .mode column
 .headers on
 SELECT id, type, status, input_url
@@ -113,7 +113,7 @@ python -m app.cli.summary --url "not-a-url"
 python -m app.cli.summary --url "https://thisurldoesnotexist12345.com"
 
 # Check errors in database
-sqlite3 ./data/app.db "
+sqlite3 ./data/ratatoskr.db "
   SELECT id, status, input_url
   FROM requests
   WHERE status = 'error'

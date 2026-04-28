@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import contextlib
+import logging
+import os
 import sqlite3
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -23,10 +25,36 @@ from app.db.runtime.maintenance import DatabaseMaintenanceService
 from app.db.runtime.operation_executor import DatabaseOperationExecutor
 from app.db.rw_lock import AsyncRWLock
 
-if TYPE_CHECKING:
-    import logging
-
 JSONValue = dict[str, Any] | list[Any] | str | None
+
+
+def _migrate_legacy_db_filename(path: str, logger: logging.Logger) -> None:
+    """Rename pre-rename `app.db` to `ratatoskr.db` if applicable.
+
+    Only fires when the configured path ends in `ratatoskr.db`, the new path
+    does not exist, and a sibling `app.db` is present in the same directory.
+    Avoids touching paths that users have customised to anything else.
+    """
+    if not path.endswith("ratatoskr.db"):
+        return
+    if os.path.exists(path):
+        return
+    directory = os.path.dirname(path) or "."
+    legacy = os.path.join(directory, "app.db")
+    if not os.path.isfile(legacy):
+        return
+    try:
+        os.rename(legacy, path)
+        logger.info(
+            "db_legacy_rename_applied",
+            extra={"from": legacy, "to": path},
+        )
+    except OSError as exc:
+        logger.warning(
+            "db_legacy_rename_failed",
+            extra={"from": legacy, "to": path, "error": str(exc)},
+        )
+
 
 DB_OPERATION_TIMEOUT = 30.0
 DB_MAX_RETRIES = 3
@@ -66,6 +94,7 @@ class DatabaseSessionManager:
     json_max_dict_keys: int = field(default=DB_JSON_MAX_DICT_KEYS)
 
     def __post_init__(self) -> None:
+        _migrate_legacy_db_filename(self.path, self._logger)
         self._database = RowSqliteDatabase(
             self.path,
             pragmas={

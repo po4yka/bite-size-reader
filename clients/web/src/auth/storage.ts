@@ -1,6 +1,6 @@
 import type { AuthTokens } from "./types";
 
-const STORAGE_KEY = "bsr_web_auth_tokens";
+const STORAGE_KEY = "ratatoskr_web_auth_tokens";
 
 type Listener = (tokens: AuthTokens | null) => void;
 

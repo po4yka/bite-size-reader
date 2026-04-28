@@ -16,7 +16,7 @@ from app.mcp.helpers import (
     safe_int,
 )
 
-logger = logging.getLogger("bsr.mcp")
+logger = logging.getLogger("ratatoskr.mcp")
 
 if TYPE_CHECKING:
     from app.mcp.article_service import ArticleReadService

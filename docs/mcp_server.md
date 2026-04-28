@@ -1,6 +1,6 @@
 # MCP Server
 
-Bite-Size Reader exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that allows external AI agents (OpenClaw, Claude Desktop, etc.) to search, retrieve, and explore stored article summaries, plus run local trusted aggregation bundles when the server is scoped to a single user.
+Ratatoskr exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that allows external AI agents (OpenClaw, Claude Desktop, etc.) to search, retrieve, and explore stored article summaries, plus run local trusted aggregation bundles when the server is scoped to a single user.
 
 The server now supports two deployment modes:
 
@@ -21,8 +21,8 @@ This phase evolves the existing MCP server rather than adding a separate MCP gat
 | `MCP_ALLOW_REMOTE_SSE` | `false` | Allow binding SSE to non-loopback hosts (also disables DNS rebinding protection) |
 | `MCP_ALLOW_UNSCOPED_SSE` | `false` | Allow SSE without `MCP_USER_ID` |
 | `MCP_AUTH_MODE` | `disabled` | Hosted auth mode: `disabled` or `jwt` |
-| `MCP_FORWARDED_ACCESS_TOKEN_HEADER` | `X-BSR-Forwarded-Access-Token` | Trusted-gateway header for forwarding the original access token |
-| `MCP_FORWARDED_SECRET_HEADER` | `X-BSR-MCP-Forwarding-Secret` | Trusted-gateway header carrying the shared forwarding secret |
+| `MCP_FORWARDED_ACCESS_TOKEN_HEADER` | `X-Ratatoskr-Forwarded-Access-Token` | Trusted-gateway header for forwarding the original access token |
+| `MCP_FORWARDED_SECRET_HEADER` | `X-Ratatoskr-MCP-Forwarding-Secret` | Trusted-gateway header carrying the shared forwarding secret |
 | `MCP_FORWARDING_SECRET` | _(none)_ | Shared secret required before trusting forwarded access-token headers |
 
 See `docs/environment_variables.md` for full config reference.
@@ -51,7 +51,7 @@ SSE safety defaults:
 
 - Binds to loopback (`127.0.0.1`) unless you explicitly enable remote bind.
 - Requires either startup scoping (`MCP_USER_ID` / `--user-id`) or hosted auth (`MCP_AUTH_MODE=jwt`).
-- DNS rebinding protection is enabled by default; when `allow_remote_sse` is set, it is disabled so Docker-internal hostnames (e.g. `bsr-mcp:8200`) are accepted.
+- DNS rebinding protection is enabled by default; when `allow_remote_sse` is set, it is disabled so Docker-internal hostnames (e.g. `ratatoskr-mcp:8200`) are accepted.
 
 Hosted auth behavior:
 
@@ -87,8 +87,8 @@ Typical local aggregation workflow:
 
 1. Call `create_aggregation_bundle(items, lang_preference, metadata)`
 2. The create call blocks until the bundle reaches a terminal status or fails
-3. Use `get_aggregation_bundle(session_id)` or `bsr://aggregations/{session_id}` to re-open the persisted result later
-4. Use `list_aggregation_bundles(limit, offset, status)` or `bsr://aggregations/recent` for recent context
+3. Use `get_aggregation_bundle(session_id)` or `ratatoskr://aggregations/{session_id}` to re-open the persisted result later
+4. Use `list_aggregation_bundles(limit, offset, status)` or `ratatoskr://aggregations/recent` for recent context
 
 This mode is for one trusted user at a time. Do not expose it publicly.
 
@@ -97,7 +97,7 @@ This mode is for one trusted user at a time. Do not expose it publicly.
 First mint an access token through the API:
 
 ```bash
-curl -X POST https://bsr.example.com/v1/auth/secret-login \
+curl -X POST https://ratatoskr.example.com/v1/auth/secret-login \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": 123456,
@@ -106,7 +106,7 @@ curl -X POST https://bsr.example.com/v1/auth/secret-login \
   }'
 ```
 
-Then point the MCP client at `https://bsr.example.com/sse` and send:
+Then point the MCP client at `https://ratatoskr.example.com/sse` and send:
 
 ```http
 Authorization: Bearer <access_token>
@@ -120,11 +120,11 @@ Hosted request-scoped mode requirements:
 
 ### Hosted Public SSE Behind a Trusted Gateway
 
-If the MCP client cannot attach bearer headers directly, terminate client auth at a trusted gateway and forward the original access token to Bite-Size Reader:
+If the MCP client cannot attach bearer headers directly, terminate client auth at a trusted gateway and forward the original access token to Ratatoskr:
 
 ```http
-X-BSR-Forwarded-Access-Token: <original-access-token>
-X-BSR-MCP-Forwarding-Secret: <shared-forwarding-secret>
+X-Ratatoskr-Forwarded-Access-Token: <original-access-token>
+X-Ratatoskr-MCP-Forwarding-Secret: <shared-forwarding-secret>
 ```
 
 Server-side requirements:
@@ -144,8 +144,8 @@ Gateway guidance:
 Current MCP aggregation execution is synchronous from the caller's perspective: `create_aggregation_bundle(...)` waits for extraction plus synthesis and normally returns a terminal session (`completed`, `partial`, or `failed`). Use the follow-up reads when you need to revisit a past run, recover after a network interruption, or browse history:
 
 1. `create_aggregation_bundle(...)`
-2. `get_aggregation_bundle(session_id)` or `bsr://aggregations/{session_id}`
-3. `list_aggregation_bundles(...)` or `bsr://aggregations/recent`
+2. `get_aggregation_bundle(session_id)` or `ratatoskr://aggregations/{session_id}`
+3. `list_aggregation_bundles(...)` or `ratatoskr://aggregations/recent`
 
 Useful fields on session reads:
 
@@ -173,7 +173,7 @@ Service definition:
 mcp:
   profiles: ["mcp"]
   build: {context: ../.., dockerfile: ops/docker/Dockerfile}
-  container_name: bsr-mcp
+  container_name: ratatoskr-mcp
   command: ["python", "-m", "app.cli.mcp_server"]
   environment:
     - MCP_ENABLED=true
@@ -193,7 +193,7 @@ Key design decisions:
 - **Opt-in profile** (`profiles: ["mcp"]`) -- keeps MCP disabled during the default compose startup path.
 - **Read-only data mount** (`./data:/data:ro`) -- this Docker profile is for read tools/resources only; aggregation write tools need a writable database path in a trusted deployment.
 - **Explicit user scoping** (`MCP_USER_ID`) -- required for SSE unless you also opt into `MCP_ALLOW_UNSCOPED_SSE=true`.
-- **`MCP_ALLOW_REMOTE_SSE=true`** -- required because `0.0.0.0` is non-loopback inside Docker. This also disables the MCP SDK's DNS rebinding protection so that Docker-internal hostnames (`bsr-mcp`, `bsr-mcp:8200`) are accepted in the `Host` header.
+- **`MCP_ALLOW_REMOTE_SSE=true`** -- required because `0.0.0.0` is non-loopback inside Docker. This also disables the MCP SDK's DNS rebinding protection so that Docker-internal hostnames (`ratatoskr-mcp`, `ratatoskr-mcp:8200`) are accepted in the `Host` header.
 - **Loopback port binding** (`127.0.0.1:8200`) -- prevents direct external access from the host network.
 
 ### Writable Trusted SSE Profile
@@ -229,16 +229,16 @@ If you terminate client auth at a trusted gateway, configure `MCP_FORWARDING_SEC
 
 ### Connecting from another Docker Compose project
 
-To connect from a service in a different compose project (e.g. OpenClaw), attach that service to the same Docker network and point the MCP client at `http://bsr-mcp:8200/sse`.
+To connect from a service in a different compose project (e.g. OpenClaw), attach that service to the same Docker network and point the MCP client at `http://ratatoskr-mcp:8200/sse`.
 
 Example mcporter config:
 
 ```json
 {
   "mcpServers": {
-    "bite-size-reader": {
+    "ratatoskr": {
       "description": "Personal knowledge base - article summaries, semantic search, collections",
-      "baseUrl": "http://bsr-mcp:8200/sse"
+      "baseUrl": "http://ratatoskr-mcp:8200/sse"
     }
   }
 }
@@ -274,21 +274,21 @@ Example mcporter config:
 
 | URI | Description |
 | ----- | ------------- |
-| `bsr://aggregations/recent` | 10 most recent aggregation bundles for the scoped MCP user |
-| `bsr://aggregations/{session_id}` | One persisted aggregation bundle for the scoped MCP user |
-| `bsr://articles/recent` | 10 most recent article summaries |
-| `bsr://articles/favorites` | All favorited summaries |
-| `bsr://articles/unread` | Up to 20 unread summaries |
-| `bsr://stats` | Database statistics snapshot |
-| `bsr://tags` | All topic tags with counts |
-| `bsr://entities` | Aggregated people, organizations, locations |
-| `bsr://domains` | Source domains with article counts |
-| `bsr://collections` | Top-level collections with item counts |
-| `bsr://videos/recent` | 10 most recent completed video downloads |
-| `bsr://processing/stats` | LLM call counts, token usage, model breakdown, video stats |
-| `bsr://chroma/health` | ChromaDB health and fallback status |
-| `bsr://chroma/index-stats` | ChromaDB index coverage statistics |
-| `bsr://chroma/sync-gap` | Sync gap report between SQLite and ChromaDB |
+| `ratatoskr://aggregations/recent` | 10 most recent aggregation bundles for the scoped MCP user |
+| `ratatoskr://aggregations/{session_id}` | One persisted aggregation bundle for the scoped MCP user |
+| `ratatoskr://articles/recent` | 10 most recent article summaries |
+| `ratatoskr://articles/favorites` | All favorited summaries |
+| `ratatoskr://articles/unread` | Up to 20 unread summaries |
+| `ratatoskr://stats` | Database statistics snapshot |
+| `ratatoskr://tags` | All topic tags with counts |
+| `ratatoskr://entities` | Aggregated people, organizations, locations |
+| `ratatoskr://domains` | Source domains with article counts |
+| `ratatoskr://collections` | Top-level collections with item counts |
+| `ratatoskr://videos/recent` | 10 most recent completed video downloads |
+| `ratatoskr://processing/stats` | LLM call counts, token usage, model breakdown, video stats |
+| `ratatoskr://chroma/health` | ChromaDB health and fallback status |
+| `ratatoskr://chroma/index-stats` | ChromaDB index coverage statistics |
+| `ratatoskr://chroma/sync-gap` | Sync gap report between SQLite and ChromaDB |
 
 ## Graceful Degradation
 
@@ -301,4 +301,4 @@ Source: `app/mcp/server.py`
 
 The server uses [FastMCP](https://github.com/modelcontextprotocol/python-sdk) and connects to the same SQLite database as the main bot. Read tools use the existing read-scoped MCP runtime; aggregation tools lazily initialize the normal API runtime so they can reuse the standard extraction and synthesis workflow.
 
-For hosted auth, the repo wraps the FastMCP SSE ASGI app with repo-owned HTTP auth middleware instead of relying on process-wide scope. That middleware validates Bite-Size Reader JWT access tokens, stores `mcp_identity` on the Starlette request, and `McpServerContext` resolves the effective user from the active low-level MCP request context before falling back to local startup scope.
+For hosted auth, the repo wraps the FastMCP SSE ASGI app with repo-owned HTTP auth middleware instead of relying on process-wide scope. That middleware validates Ratatoskr JWT access tokens, stores `mcp_identity` on the Starlette request, and `McpServerContext` resolves the effective user from the active low-level MCP request context before falling back to local startup scope.

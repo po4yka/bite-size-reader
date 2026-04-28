@@ -1,8 +1,8 @@
-# Bite-Size Reader
+# Ratatoskr
 
 Async Telegram bot that summarizes web articles, YouTube videos, forwarded Telegram posts, and mixed-source bundles into structured outputs. For articles, it uses a multi-provider scraper chain (Scrapling / self-hosted Firecrawl / Playwright / Crawlee / direct HTML) + OpenRouter; for YouTube videos, it downloads the video (1080p) and extracts transcripts; for mixed-source aggregation, it can synthesize one or many sources across X, Threads, Instagram, YouTube, web articles, and Telegram-native submissions with provenance-aware bundle output. All artifacts are stored in SQLite.
 
-**🚀 New to Bite-Size Reader?** Start with the [5-Minute Quickstart Tutorial](docs/tutorials/quickstart.md)
+**🚀 New to Ratatoskr?** Start with the [5-Minute Quickstart Tutorial](docs/tutorials/quickstart.md)
 
 **❓ Have Questions?** Check the [FAQ](docs/FAQ.md) or [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
 
@@ -154,8 +154,8 @@ For the mobile API, routers are transport-focused and delegate infrastructure or
 ## Docker
 
 - If you updated dependencies in `pyproject.toml`, generate lock files first: `make lock-uv`.
-- Build: `docker build -f ops/docker/Dockerfile -t bite-size-reader .`
-- Run: `docker run --env-file .env -v $(pwd)/data:/data --name bsr bite-size-reader`
+- Build: `docker build -f ops/docker/Dockerfile -t ratatoskr .`
+- Run: `docker run --env-file .env -v $(pwd)/data:/data --name ratatoskr ratatoskr`
 
 ## Commands and usage
 
@@ -248,7 +248,7 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 
 | Category | Key Variables | Purpose |
 | ---------- | -------------- | --------- |
-| **Runtime** | `DB_PATH=/data/app.db`<br>`LOG_LEVEL=INFO`<br>`DEBUG_PAYLOADS=0`<br>`MAX_CONCURRENT_CALLS=4` | Performance tuning |
+| **Runtime** | `DB_PATH=/data/ratatoskr.db`<br>`LOG_LEVEL=INFO`<br>`DEBUG_PAYLOADS=0`<br>`MAX_CONCURRENT_CALLS=4` | Performance tuning |
 | **LLM Providers** | `LLM_PROVIDER=openrouter`<br>`OPENAI_API_KEY`<br>`ANTHROPIC_API_KEY` | Switch LLM providers |
 | **Fallbacks** | `OPENROUTER_FALLBACK_MODELS=...`<br>`OPENAI_FALLBACK_MODELS=...` | Model fallback chains |
 

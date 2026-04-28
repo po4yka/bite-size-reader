@@ -23,7 +23,7 @@ ChromaDB enables **semantic search** over your summaries:
 
 ## Prerequisites
 
-- Bite-Size Reader installed and running
+- Ratatoskr installed and running
 - **Local provider:** Python 3.13+ with sentence-transformers support, 1-2 GB RAM for embedding model
 - **Gemini provider:** Google Gemini API key ([get one free](https://aistudio.google.com/apikey)), `pip install google-genai`
 
@@ -133,7 +133,7 @@ curl http://localhost:8000/api/v1/collections/summaries/count
 
 ```bash
 # Docker
-docker restart bite-size-reader
+docker restart ratatoskr
 
 # Local
 python bot.py
@@ -299,7 +299,7 @@ python -m app.cli.backfill_chroma_store
 
 ### Embedding Provider Selection
 
-Bite-Size Reader supports two embedding providers, controlled by `EMBEDDING_PROVIDER`:
+Ratatoskr supports two embedding providers, controlled by `EMBEDDING_PROVIDER`:
 
 | Provider | Dimensions | Latency | Cost | Multilingual | Setup |
 | ---------- | ---------- | --------- | ------ | ------------ | ------- |
@@ -531,7 +531,7 @@ docker restart chromadb
 CHROMA_REQUIRED=false
 
 # Restart bot
-docker restart bite-size-reader
+docker restart ratatoskr
 
 # Bot falls back to full-text search only (SQLite FTS5)
 ```

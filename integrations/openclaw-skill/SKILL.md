@@ -1,8 +1,8 @@
-# Bite-Size Reader — Article Knowledge Base
+# Ratatoskr — Article Knowledge Base
 
 ## Description
 
-Bite-Size Reader is a personal knowledge base of web article summaries. It ingests URLs, extracts content using Firecrawl, and generates structured summaries via LLM. It also downloads YouTube videos and extracts transcripts. This skill gives you access to search, browse, and retrieve article summaries, manage collections, explore video transcripts, and check URL processing status.
+Ratatoskr is a personal knowledge base of web article summaries. It ingests URLs, extracts content using Firecrawl, and generates structured summaries via LLM. It also downloads YouTube videos and extracts transcripts. This skill gives you access to search, browse, and retrieve article summaries, manage collections, explore video transcripts, and check URL processing status.
 
 ## Capabilities
 
@@ -130,16 +130,16 @@ Check whether a URL has already been processed and summarised. Uses the same nor
 
 | URI | Description |
 | --- | --- |
-| `bsr://articles/recent` | 10 most recent article summaries |
-| `bsr://articles/favorites` | All favorited articles (up to 50) |
-| `bsr://articles/unread` | Unread articles (up to 20) |
-| `bsr://stats` | Database statistics (totals, languages, top tags) |
-| `bsr://tags` | All topic tags with article counts |
-| `bsr://entities` | Aggregated people, organizations, locations |
-| `bsr://domains` | Source domains with article counts |
-| `bsr://collections` | All top-level collections with item counts |
-| `bsr://videos/recent` | 10 most recent completed video downloads |
-| `bsr://processing/stats` | Processing statistics: LLM calls, token usage, costs, models |
+| `ratatoskr://articles/recent` | 10 most recent article summaries |
+| `ratatoskr://articles/favorites` | All favorited articles (up to 50) |
+| `ratatoskr://articles/unread` | Unread articles (up to 20) |
+| `ratatoskr://stats` | Database statistics (totals, languages, top tags) |
+| `ratatoskr://tags` | All topic tags with article counts |
+| `ratatoskr://entities` | Aggregated people, organizations, locations |
+| `ratatoskr://domains` | Source domains with article counts |
+| `ratatoskr://collections` | All top-level collections with item counts |
+| `ratatoskr://videos/recent` | 10 most recent completed video downloads |
+| `ratatoskr://processing/stats` | Processing statistics: LLM calls, token usage, costs, models |
 
 ## Data Model
 
@@ -174,12 +174,12 @@ Each video download contains:
 ```json
 {
   "mcpServers": {
-    "bite-size-reader": {
+    "ratatoskr": {
       "command": "python",
       "args": ["-m", "app.cli.mcp_server"],
-      "cwd": "/path/to/bite-size-reader",
+      "cwd": "/path/to/ratatoskr",
       "env": {
-        "DB_PATH": "/data/app.db"
+        "DB_PATH": "/data/ratatoskr.db"
       }
     }
   }

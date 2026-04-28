@@ -182,7 +182,7 @@ async def main() -> int:
         print()
         print("Options:")
         print("  --mode=MODE           Search mode: fts, vector, or hybrid (default: hybrid)")
-        print("  --db=PATH             Database path (default: /data/app.db)")
+        print("  --db=PATH             Database path (default: /data/ratatoskr.db)")
         print("  --limit=N             Maximum results to return (default: 10)")
         print("  --no-expansion        Disable query expansion for FTS (enabled by default)")
         print("  --with-reranking      Enable cross-encoder re-ranking (disabled by default)")
@@ -210,7 +210,7 @@ async def main() -> int:
     from app.infrastructure.search.search_filters import SearchFilters
 
     query_parts = []
-    db_path = "/data/app.db"
+    db_path = "/data/ratatoskr.db"
     mode = "hybrid"
     max_results = 10
     use_expansion = True  # Query expansion enabled by default
