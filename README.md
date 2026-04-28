@@ -25,7 +25,6 @@ Async Telegram bot that summarizes web articles, YouTube videos, forwarded Teleg
 - [Carbon Web Interface](#carbon-web-interface-v1)
 - [MCP Server](#mcp-server)
 - [Redis Caching](#redis-caching)
-- [Karakeep Integration](#karakeep-integration)
 - [Local CLI Summary Runner](#local-cli-summary-runner)
 - [Development](#dev-tooling)
 - [Documentation](#documentation)
@@ -207,12 +206,6 @@ Bundle aggregation: `/aggregate` accepts one or more links, and Telegram message
 | `/subscribe @channel` | Subscribe to a Telegram channel for digests |
 | `/unsubscribe @channel` | Unsubscribe from a channel |
 
-### Integrations
-
-| Command | Description |
-| --------- | ------------- |
-| `/sync_karakeep` | Trigger Karakeep bookmark sync |
-
 ## Environment
 
 ### ✅ Required (Essential for Basic Functionality)
@@ -240,7 +233,6 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Primary LLM model
 | **Embeddings** | `EMBEDDING_PROVIDER=local`<br>`GEMINI_API_KEY`<br>`GEMINI_EMBEDDING_DIMENSIONS=768` | Switch embedding provider (local/Gemini) |
 | **MCP Server** | `MCP_ENABLED=false`<br>`MCP_TRANSPORT=stdio`<br>`MCP_PORT=8200` | AI agent integration (Claude Desktop / optional Docker `mcp` profile) |
 | **Mobile API** | `JWT_SECRET_KEY`<br>`ALLOWED_CLIENT_IDS`<br>`API_RATE_LIMIT_*` | Build mobile clients |
-| **Karakeep** | `KARAKEEP_ENABLED=false`<br>`KARAKEEP_API_URL`<br>`KARAKEEP_API_KEY` | Bookmark sync |
 | **Channel Digest** | `DIGEST_ENABLED=true`<br>`API_BASE_URL=http://localhost:8000` | Scheduled channel digests |
 | **Mixed-Source Aggregation** | `AGGREGATION_BUNDLE_ENABLED=true`<br>`AGGREGATION_META_EXTRACTORS_ENABLED=true`<br>`AGGREGATION_ARTICLE_MEDIA_ENABLED=true`<br>`AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED=true` | Enable bundle synthesis, dedicated Meta routing, multimodal article/X media, and Telegram/Meta video normalization |
 
@@ -295,7 +287,6 @@ app/
       scraper/   -- Protocol, chain, factory, providers (Scrapling, Firecrawl, Playwright, Crawlee, direct HTML)
     youtube/     -- YouTube video download and transcript extraction
     external/    -- Response formatting helpers shared by adapters
-    karakeep/    -- Karakeep bookmark sync
     llm/         -- Provider-agnostic LLM abstraction
     openrouter/  -- OpenRouter client, payload shaping, error handling
     telegram/    -- Telegram client, message routing, access control, persistence, command_handlers/
@@ -418,10 +409,6 @@ Model Context Protocol server that exposes articles and search to external AI ag
 ## Redis caching
 
 Optional caching layer for Firecrawl and LLM responses, API rate limiting, sync locks, and background task distributed locking. Degrades gracefully when unavailable. Set `REDIS_ENABLED=true`.
-
-## Karakeep integration
-
-Syncs bookmarks from Karakeep (self-hosted bookmark manager) into the summarization pipeline. Use `/sync_karakeep` to trigger manually or enable `KARAKEEP_AUTO_SYNC_ENABLED=true` for periodic sync.
 
 ## Local CLI summary runner
 

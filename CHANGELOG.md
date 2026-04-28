@@ -26,7 +26,7 @@ The project has been renamed from `bite-size-reader` to `ratatoskr`. All artifac
 - **Loki / Promtail:** `tenant_id`, `job` label, log path `/var/log/bsr/` → `ratatoskr`. If you rely on the old labels in queries, update them.
 - **Backup filenames:** SQLite dump prefix `bite_size_reader_backup_` → `ratatoskr_backup_`. ZIP archive prefix `bsr-backup-` → `ratatoskr-backup-`. Existing backups keep their old filenames; only newly created backups use the new prefix.
 - **OpenAPI server URLs:** Production `bitsizereaderapi.po4yka.com` → `ratatoskrapi.po4yka.com`. The DNS change is not part of this PR; update DNS separately.
-- **`.env.example`:** `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`, `FIRECRAWL_SELF_HOSTED_API_KEY` (default `fc-bsr-local` → `fc-ratatoskr-local`), `KARAKEEP_SYNC_TAG` (default `bsr-synced` → `ratatoskr-synced`), `REDIS_PREFIX` (default `bsr` → `ratatoskr`), and the example paths for the external Rust runtime binaries (`bsr-summary-contract`, `bsr-pipeline-shadow`, `bsr-interface-router`, `bsr-telegram-runtime`) have been updated to the new naming. **Note:** the actual Rust runtime binaries live in a separate repository and were not renamed here; if/when they are renamed, update env values accordingly. Until then, point the `*_RUST_BIN` overrides at the actual binary names on disk.
+- **`.env.example`:** `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`, `FIRECRAWL_SELF_HOSTED_API_KEY` (default `fc-bsr-local` → `fc-ratatoskr-local`), `REDIS_PREFIX` (default `bsr` → `ratatoskr`), and the example paths for the external Rust runtime binaries (`bsr-summary-contract`, `bsr-pipeline-shadow`, `bsr-interface-router`, `bsr-telegram-runtime`) have been updated to the new naming. The Karakeep block (`KARAKEEP_*` env vars) is removed entirely — the integration has been retired. **Note:** the actual Rust runtime binaries live in a separate repository and were not renamed here; if/when they are renamed, update env values accordingly. Until then, point the `*_RUST_BIN` overrides at the actual binary names on disk.
 - **Generated assets:** `app/static/digest/assets/index-*.js` is a built artifact that still encodes `bsr_library_filter` localStorage. Rebuild the digest mini-app to regenerate it.
 
 #### Migration steps for self-hosters
@@ -37,7 +37,7 @@ The project has been renamed from `bite-size-reader` to `ratatoskr`. All artifac
    docker compose -f ops/docker/docker-compose.yml build
    docker compose -f ops/docker/docker-compose.yml up -d
    ```
-2. **Update `.env`** to apply the new defaults if you previously copied the example: `FIRECRAWL_SELF_HOSTED_API_KEY`, `KARAKEEP_SYNC_TAG`, `REDIS_PREFIX`, and the `*_RUST_BIN` paths if you customized them.
+2. **Update `.env`** to apply the new defaults if you previously copied the example: `FIRECRAWL_SELF_HOSTED_API_KEY`, `REDIS_PREFIX`, and the `*_RUST_BIN` paths if you customized them. Drop any `KARAKEEP_*` lines — the Karakeep integration has been retired.
 3. **DB filename** is auto-migrated on first start when the configured `DB_PATH` ends in `ratatoskr.db` and `app.db` exists in the same directory. No action needed for the default config.
 4. **CLI users:** reinstall (`pip install -e clients/cli` or `pipx reinstall ratatoskr-cli`), then run `ratatoskr login` again to recreate the config under `~/.config/ratatoskr/`. Set `RATATOSKR_SERVER_URL` instead of `BSR_SERVER_URL` if you used the env override.
 5. **Web users:** browser sessions and saved tokens must be re-acquired (storage-key rename); just sign in again.
@@ -55,7 +55,6 @@ The project has been renamed from `bite-size-reader` to `ratatoskr`. All artifac
 - Embedded image analysis support in PDFs and web articles
 - PDF metadata extraction, table of contents parsing, and improved layout handling
 - Language filtering in SearchFilters
-- Karakeep bookmark sync command (`/sync_karakeep`) in Telegram bot menu
 - Progress tracking for PDF processing and batch operations
 - Editable progress messages for LLM and YouTube processing in Telegram
 - Typing indicators for long-running operations in Telegram bot

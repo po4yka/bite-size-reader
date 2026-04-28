@@ -12,9 +12,9 @@
 # - Promtail: Log shipping
 # - Node Exporter: Host-level metrics for Prometheus
 #
-# Note: Prometheus joins the shared `karakeep_default` network to scrape
-# `mobile-api:8000` directly instead of relying on host.docker.internal.
-# Ensure the main app stack is up first so `karakeep_default` exists.
+# Note: Prometheus needs to reach `mobile-api:8000`; either run both stacks
+# under the same Compose project or attach Prometheus to the main app's
+# network via an `external: true` entry in this file.
 
 services:
   prometheus:
@@ -37,7 +37,6 @@ services:
       - "127.0.0.1:9090:9090"
     networks:
       - monitoring
-      - karakeep
     deploy:
       resources:
         limits:
@@ -149,9 +148,6 @@ services:
 networks:
   monitoring:
     driver: bridge
-  karakeep:
-    external: true
-    name: karakeep_default
 
 volumes:
   prometheus-data:
