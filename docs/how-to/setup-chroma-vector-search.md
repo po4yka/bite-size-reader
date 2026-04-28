@@ -287,7 +287,7 @@ curl http://localhost:8000/api/v1/collections/summaries/count
 # Should be > 0
 
 # Check database has summaries
-sqlite3 data/app.db "SELECT COUNT(*) FROM summaries;"
+sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summaries;"
 
 # If count mismatch, backfill again
 python -m app.cli.backfill_chroma_store
@@ -468,7 +468,7 @@ curl http://localhost:8000/api/v1/collections/summaries
 curl http://localhost:8000/api/v1/collections/summaries/count
 
 # Check collection metadata
-sqlite3 data/app.db "
+sqlite3 data/ratatoskr.db "
   SELECT
     COUNT(*) as total_summaries,
     COUNT(CASE WHEN embedding IS NOT NULL THEN 1 END) as with_embeddings,

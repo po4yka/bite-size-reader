@@ -1134,19 +1134,19 @@ LIMIT 10;
 ### Vacuum (Reclaim Space)
 
 ```bash
-sqlite3 data/app.db "VACUUM;"
+sqlite3 data/ratatoskr.db "VACUUM;"
 ```
 
 ### Analyze (Update Query Planner Statistics)
 
 ```bash
-sqlite3 data/app.db "ANALYZE;"
+sqlite3 data/ratatoskr.db "ANALYZE;"
 ```
 
 ### Integrity Check
 
 ```bash
-sqlite3 data/app.db "PRAGMA integrity_check;"
+sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
 # Expected output: ok
 ```
 

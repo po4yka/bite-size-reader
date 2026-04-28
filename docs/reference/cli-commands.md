@@ -227,7 +227,7 @@ python -m app.cli.migrate_db --target-version 6
 
 ```bash
 # Backup first!
-cp data/app.db data/app.db.backup
+cp data/ratatoskr.db data/ratatoskr.db.backup
 
 python -m app.cli.migrate_db --rollback
 ```
@@ -788,10 +788,10 @@ python -m app.cli.summary \
   --log-level DEBUG
 
 # 2. Check database for errors
-sqlite3 data/app.db "SELECT * FROM requests WHERE url = '<URL>';"
+sqlite3 data/ratatoskr.db "SELECT * FROM requests WHERE url = '<URL>';"
 
 # 3. Check LLM calls
-sqlite3 data/app.db "SELECT error_message FROM llm_calls WHERE request_id = '<correlation_id>';"
+sqlite3 data/ratatoskr.db "SELECT error_message FROM llm_calls WHERE request_id = '<correlation_id>';"
 ```
 
 ### Testing Search Performance
@@ -814,7 +814,7 @@ time python -m app.cli.search "test query" --mode vector
 
 ```bash
 # 1. Backup database
-cp data/app.db data/app.db.backup.$(date +%Y%m%d)
+cp data/ratatoskr.db data/ratatoskr.db.backup.$(date +%Y%m%d)
 
 # 2. Apply migrations
 python -m app.cli.migrate_db
@@ -823,7 +823,7 @@ python -m app.cli.migrate_db
 python -m app.cli.add_performance_indexes
 
 # 4. Vacuum database
-sqlite3 data/app.db "VACUUM;"
+sqlite3 data/ratatoskr.db "VACUUM;"
 ```
 
 ---

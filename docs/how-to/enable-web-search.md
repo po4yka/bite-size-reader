@@ -235,7 +235,7 @@ Or use per-request override (future feature):
 
 ```bash
 # Check how often web search triggers
-sqlite3 data/app.db "
+sqlite3 data/ratatoskr.db "
   SELECT
     COUNT(*) as total_summaries,
     SUM(CASE WHEN web_search_triggered = 1 THEN 1 ELSE 0 END) as with_search,
@@ -245,7 +245,7 @@ sqlite3 data/app.db "
 "
 
 # Check search query costs
-sqlite3 data/app.db "
+sqlite3 data/ratatoskr.db "
   SELECT
     url,
     web_search_queries,

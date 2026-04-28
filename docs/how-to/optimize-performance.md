@@ -221,7 +221,7 @@ YOUTUBE_CLEANUP_AFTER_DAYS=3  # Delete after 3 days
 YOUTUBE_MAX_STORAGE_GB=5     # Max 5 GB
 
 # Database vacuum (reclaim space)
-sqlite3 data/app.db "VACUUM;"
+sqlite3 data/ratatoskr.db "VACUUM;"
 ```
 
 ---
@@ -244,7 +244,7 @@ time python -m app.cli.summary --url https://example.com/article
 
 ```bash
 # Database query performance
-sqlite3 data/app.db "
+sqlite3 data/ratatoskr.db "
   SELECT
     ROUND(AVG(total_processing_time_sec), 2) as avg_time_sec,
     MIN(total_processing_time_sec) as min_time_sec,
@@ -254,7 +254,7 @@ sqlite3 data/app.db "
 "
 
 # API costs
-sqlite3 data/app.db "
+sqlite3 data/ratatoskr.db "
   SELECT
     COUNT(*) as total_calls,
     SUM(tokens_used) as total_tokens
@@ -314,14 +314,14 @@ CHROMA_DEVICE=cuda  # If GPU available
 
 ```bash
 # Average processing time (last 7 days)
-sqlite3 data/app.db "
+sqlite3 data/ratatoskr.db "
   SELECT ROUND(AVG(total_processing_time_sec), 2) as avg_sec
   FROM requests
   WHERE created_at > datetime('now', '-7 days');
 "
 
 # Slow requests (>15s)
-sqlite3 data/app.db "
+sqlite3 data/ratatoskr.db "
   SELECT url, total_processing_time_sec
   FROM requests
   WHERE total_processing_time_sec > 15
@@ -334,7 +334,7 @@ sqlite3 data/app.db "
 
 ```bash
 # Token usage (last 30 days)
-sqlite3 data/app.db "
+sqlite3 data/ratatoskr.db "
   SELECT
     SUM(prompt_tokens) as total_prompt,
     SUM(completion_tokens) as total_completion,
@@ -398,7 +398,7 @@ htop  # or top
 
 ```bash
 # Check token usage per model
-sqlite3 data/app.db "
+sqlite3 data/ratatoskr.db "
   SELECT
     model,
     COUNT(*) as calls,

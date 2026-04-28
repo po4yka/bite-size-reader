@@ -807,7 +807,7 @@ The database may be corrupted. Please restore from backup.
 **Resolution:**
 
 - Stop bot immediately
-- Attempt recovery: `sqlite3 data/app.db ".recover" | sqlite3 data/app.db.recovered`
+- Attempt recovery: `sqlite3 data/ratatoskr.db ".recover" | sqlite3 data/ratatoskr.db.recovered`
 - Restore from backup if recovery fails
 
 See: [Backup and Restore](../how-to/backup-and-restore.md)
@@ -832,7 +832,7 @@ Error: table "collections" already exists
 **Resolution:**
 
 - Check migration script for errors
-- Verify database state: `sqlite3 data/app.db ".tables"`
+- Verify database state: `sqlite3 data/ratatoskr.db ".tables"`
 - Manually fix schema or restore from backup
 
 ---

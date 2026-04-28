@@ -22,7 +22,7 @@ Upgrade Ratatoskr to a new version safely.
 
 ```bash
 # Backup database
-cp data/app.db data/app.db.backup.$(date +%Y%m%d)
+cp data/ratatoskr.db data/ratatoskr.db.backup.$(date +%Y%m%d)
 
 # Backup environment file
 cp .env .env.backup
@@ -248,7 +248,7 @@ docker stop ratatoskr
 docker rm ratatoskr
 
 # Restore database backup
-cp data/app.db.backup.YYYYMMDD data/app.db
+cp data/ratatoskr.db.backup.YYYYMMDD data/ratatoskr.db
 
 # Run previous version
 docker run -d \
@@ -266,7 +266,7 @@ docker logs ratatoskr
 
 ```bash
 # Restore database
-cp data/app.db.backup.YYYYMMDD data/app.db
+cp data/ratatoskr.db.backup.YYYYMMDD data/ratatoskr.db
 
 # Checkout previous version
 git checkout v1.1.0
@@ -285,7 +285,7 @@ python bot.py
 Use this checklist for all upgrades:
 
 - [ ] **Read release notes and CHANGELOG.md**
-- [ ] **Backup database** (`cp data/app.db data/app.db.backup.$(date +%Y%m%d)`)
+- [ ] **Backup database** (`cp data/ratatoskr.db data/ratatoskr.db.backup.$(date +%Y%m%d)`)
 - [ ] **Backup .env file** (`cp .env .env.backup`)
 - [ ] **Backup YouTube videos** (if enabled)
 - [ ] **Pull new version** (Docker: `docker pull`, Local: `git pull`)
@@ -311,10 +311,10 @@ Use this checklist for all upgrades:
 
 ```bash
 # Check database integrity
-sqlite3 data/app.db "PRAGMA integrity_check;"
+sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
 
 # If corrupted, restore from backup
-cp data/app.db.backup.YYYYMMDD data/app.db
+cp data/ratatoskr.db.backup.YYYYMMDD data/ratatoskr.db
 
 # Retry migration
 python -m app.cli.migrate_db
@@ -356,7 +356,7 @@ python -m app.cli.rebuild_indexes
 python -m app.cli.backfill_chroma_store
 
 # Verify
-sqlite3 data/app.db "SELECT COUNT(*) FROM summaries;"
+sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summaries;"
 ```
 
 ---

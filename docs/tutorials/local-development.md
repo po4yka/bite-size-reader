@@ -167,7 +167,7 @@ ls -lh data/
 # Should see: app.db (~10KB)
 
 # Check database schema
-sqlite3 data/app.db ".schema" | head -20
+sqlite3 data/ratatoskr.db ".schema" | head -20
 ```
 
 ---
@@ -445,10 +445,10 @@ export DEBUG_PAYLOADS=1
 python -m app.cli.summary --url https://example.com --log-level DEBUG
 
 # Inspect database
-sqlite3 data/app.db
+sqlite3 data/ratatoskr.db
 
 # Check specific request by correlation ID
-sqlite3 data/app.db "SELECT * FROM requests WHERE id = '<correlation_id>';"
+sqlite3 data/ratatoskr.db "SELECT * FROM requests WHERE id = '<correlation_id>';"
 ```
 
 ---
@@ -480,7 +480,7 @@ python -m app.cli.migrate_db
 python -m app.cli.rebuild_indexes
 
 # Check database integrity
-sqlite3 data/app.db "PRAGMA integrity_check;"
+sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
 ```
 
 ### Testing Mobile API

@@ -12,7 +12,7 @@ Protect your data with regular backups and restore procedures.
 
 Ratatoskr stores data in three locations:
 
-1. **SQLite Database** (`data/app.db`) - **CRITICAL**
+1. **SQLite Database** (`data/ratatoskr.db`) - **CRITICAL**
    - All summaries, requests, LLM calls
    - User interactions, audit logs
    - Size: ~1-100 MB depending on usage
@@ -37,10 +37,10 @@ Ratatoskr stores data in three locations:
 
 ```bash
 # Backup database with timestamp
-cp data/app.db data/app.db.backup.$(date +%Y%m%d-%H%M%S)
+cp data/ratatoskr.db data/ratatoskr.db.backup.$(date +%Y%m%d-%H%M%S)
 
 # Verify backup
-ls -lh data/app.db.backup*
+ls -lh data/ratatoskr.db.backup*
 ```
 
 ### Full Backup (All Data)
@@ -50,7 +50,7 @@ ls -lh data/app.db.backup*
 mkdir -p backups/$(date +%Y%m%d)
 
 # Backup database
-cp data/app.db backups/$(date +%Y%m%d)/app.db
+cp data/ratatoskr.db backups/$(date +%Y%m%d)/app.db
 
 # Backup environment file
 cp .env backups/$(date +%Y%m%d)/.env
@@ -88,7 +88,7 @@ mkdir -p "$BACKUP_PATH"
 
 # Backup database
 echo "Backing up database..."
-cp data/app.db "$BACKUP_PATH/app.db"
+cp data/ratatoskr.db "$BACKUP_PATH/app.db"
 
 # Backup environment (exclude sensitive data from git)
 cp .env "$BACKUP_PATH/.env"
@@ -189,13 +189,13 @@ rsync -avz --delete backups/ user@remote:/backups/ratatoskr/
 docker stop ratatoskr  # or Ctrl+C if local
 
 # Backup current database (precaution)
-cp data/app.db data/app.db.before-restore
+cp data/ratatoskr.db data/ratatoskr.db.before-restore
 
 # Restore from backup
-cp backups/YYYYMMDD/app.db data/app.db
+cp backups/YYYYMMDD/app.db data/ratatoskr.db
 
 # Verify integrity
-sqlite3 data/app.db "PRAGMA integrity_check;"
+sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
 # Should output: ok
 
 # Restart bot
@@ -209,7 +209,7 @@ docker start ratatoskr  # or python bot.py
 docker stop ratatoskr
 
 # Restore database
-cp backups/YYYYMMDD/app.db data/app.db
+cp backups/YYYYMMDD/app.db data/ratatoskr.db
 
 # Restore environment
 cp backups/YYYYMMDD/.env .env
@@ -221,7 +221,7 @@ tar -xzf backups/YYYYMMDD/videos.tar.gz -C /
 tar -xzf backups/YYYYMMDD/chroma.tar.gz -C /
 
 # Verify database
-sqlite3 data/app.db "PRAGMA integrity_check;"
+sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
 
 # Restart bot
 docker start ratatoskr
@@ -236,7 +236,7 @@ scp -r backups/YYYYMMDD/ user@new-server:/tmp/
 # On new server:
 # 1. Install Ratatoskr (see DEPLOYMENT.md)
 # 2. Restore data
-cp /tmp/YYYYMMDD/app.db data/app.db
+cp /tmp/YYYYMMDD/app.db data/ratatoskr.db
 cp /tmp/YYYYMMDD/.env .env
 
 # 3. Start bot
@@ -260,10 +260,10 @@ Reclaim space after deleting records:
 docker stop ratatoskr
 
 # Vacuum
-sqlite3 data/app.db "VACUUM;"
+sqlite3 data/ratatoskr.db "VACUUM;"
 
 # Verify size reduction
-ls -lh data/app.db
+ls -lh data/ratatoskr.db
 
 # Restart bot
 docker start ratatoskr
@@ -273,7 +273,7 @@ docker start ratatoskr
 
 ```bash
 # Check database integrity
-sqlite3 data/app.db "PRAGMA integrity_check;"
+sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
 
 # Expected output: ok
 
@@ -306,14 +306,14 @@ python -m app.cli.backfill_chroma_store --rebuild
 docker stop ratatoskr
 
 # 2. Attempt recovery
-sqlite3 data/app.db ".recover" | sqlite3 data/app.db.recovered
+sqlite3 data/ratatoskr.db ".recover" | sqlite3 data/ratatoskr.db.recovered
 
 # 3. If recovery works, replace
-mv data/app.db data/app.db.corrupted
-mv data/app.db.recovered data/app.db
+mv data/ratatoskr.db data/ratatoskr.db.corrupted
+mv data/ratatoskr.db.recovered data/ratatoskr.db
 
 # 4. If recovery fails, restore from backup
-cp backups/YYYYMMDD/app.db data/app.db
+cp backups/YYYYMMDD/app.db data/ratatoskr.db
 
 # 5. Restart bot
 docker start ratatoskr
@@ -429,7 +429,7 @@ python -m app.cli.export_summaries \
 
 ```bash
 # Export summaries as CSV
-sqlite3 data/app.db -header -csv \
+sqlite3 data/ratatoskr.db -header -csv \
   "SELECT id, url, title, created_at FROM summaries;" \
   > summaries.csv
 ```

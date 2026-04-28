@@ -46,10 +46,10 @@ Logs (correlation_id = "req_abc123")
 # User reports error: "Error ID: req_abc123"
 
 # Trace full request lifecycle
-sqlite3 data/app.db "SELECT * FROM requests WHERE id = 'req_abc123';"
-sqlite3 data/app.db "SELECT * FROM crawl_results WHERE request_id = 'req_abc123';"
-sqlite3 data/app.db "SELECT * FROM llm_calls WHERE request_id = 'req_abc123';"
-sqlite3 data/app.db "SELECT * FROM summaries WHERE request_id = 'req_abc123';"
+sqlite3 data/ratatoskr.db "SELECT * FROM requests WHERE id = 'req_abc123';"
+sqlite3 data/ratatoskr.db "SELECT * FROM crawl_results WHERE request_id = 'req_abc123';"
+sqlite3 data/ratatoskr.db "SELECT * FROM llm_calls WHERE request_id = 'req_abc123';"
+sqlite3 data/ratatoskr.db "SELECT * FROM summaries WHERE request_id = 'req_abc123';"
 
 # Search logs
 grep "req_abc123" logs/bot.log
