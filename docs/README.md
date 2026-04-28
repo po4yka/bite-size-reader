@@ -129,6 +129,7 @@ You want to integrate Ratatoskr with other tools or build a client.
 
 - **Enable YouTube support** → [How to configure YouTube download](how-to/configure-youtube-download.md)
 - **Enable Twitter / X extraction** → [How to configure Twitter / X extraction](how-to/configure-twitter-extraction.md)
+- **Upgrade across the project rename** → [Migrate from bite-size-reader](how-to/migrate-from-bite-size-reader.md)
 - **Run mixed-source aggregation** → [SPEC.md § Mixed-source aggregation foundation](SPEC.md#data-model-sqlite)
 - **Onboard an external CLI or MCP client** → [External Access Quickstart](tutorials/external-access-quickstart.md)
 - **Enable web search enrichment** → [How to enable web search](how-to/enable-web-search.md)
@@ -203,6 +204,7 @@ Practical guides for accomplishing specific tasks.
 | ------- | ------------- | ---------- |
 | [Configure YouTube Download](how-to/configure-youtube-download.md) | Enable YouTube support | Users, Operators |
 | [Configure Twitter / X Extraction](how-to/configure-twitter-extraction.md) | Two-tier (Firecrawl + Playwright) tweet, thread, and X Article extraction | Users, Operators |
+| [Migrate from bite-size-reader](how-to/migrate-from-bite-size-reader.md) | Operator checklist for upgrading across the project rename | Operators |
 | [Enable Web Search](how-to/enable-web-search.md) | Add real-time web context | Users, Operators |
 | [Setup Redis Caching](how-to/setup-redis-caching.md) | Configure Redis | Operators |
 | [Setup ChromaDB](how-to/setup-chroma-vector-search.md) | Enable semantic search | Operators |

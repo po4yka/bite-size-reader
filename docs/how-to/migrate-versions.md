@@ -6,6 +6,12 @@ Upgrade Ratatoskr to a new version safely.
 **Difficulty:** Intermediate
 **Estimated Time:** 10-15 minutes
 
+> **Upgrading across the `bite-size-reader` → `ratatoskr` rename?** That
+> upgrade has a dedicated page that covers the renamed contracts
+> (Docker image, MCP URIs, Prometheus metrics, web storage keys, etc.):
+> see [Migrate from bite-size-reader](migrate-from-bite-size-reader.md).
+> Use this generic version-upgrade page for everything else.
+
 ---
 
 ## Before You Start

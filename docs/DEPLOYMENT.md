@@ -289,6 +289,12 @@ Pin to a specific tag: `git checkout tags/<tag>`
 make lock-uv
 ```
 
+> **First upgrade onto Ratatoskr from `bite-size-reader`?** Read
+> [Migrate from bite-size-reader](how-to/migrate-from-bite-size-reader.md)
+> first — it covers the renamed Docker image, MCP URIs / headers,
+> Prometheus metric names, web storage keys, and the retired Karakeep
+> integration.
+
 ### 4. Rebuild & redeploy
 
 ```bash
