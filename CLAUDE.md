@@ -151,9 +151,9 @@ tools/
 
 ## Database Models
 
-31 Peewee model classes in `app/db/models.py`:
+48 Peewee model classes registered in `ALL_MODELS` (`app/db/models.py`):
 
-`BaseModel`, `User`, `ClientSecret`, `Chat`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `TopicSearchIndex` (FTS5), `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `AudioGeneration`, `AttachmentProcessing`, `Collection`, `UserDevice`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`, `RefreshToken`, `BatchSession`, `BatchSessionItem`, `Channel`, `ChannelCategory`, `ChannelSubscription`, `ChannelPost`, `ChannelPostAnalysis`, `DigestDelivery`, `UserDigestPreference`
+`User`, `Chat`, `Request`, `AggregationSession`, `AggregationSessionItem`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `TopicSearchIndex` (FTS5), `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `AudioGeneration`, `AttachmentProcessing`, `ClientSecret`, `Collection`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`, `UserDevice`, `RefreshToken`, `BatchSession`, `BatchSessionItem`, `Channel`, `ChannelCategory`, `ChannelSubscription`, `ChannelPost`, `ChannelPostAnalysis`, `DigestDelivery`, `UserDigestPreference`, `SummaryFeedback`, `CustomDigest`, `SummaryHighlight`, `UserGoal`, `Tag`, `SummaryTag`, `WebhookSubscription`, `WebhookDelivery`, `AutomationRule`, `RuleExecutionLog`, `ImportJob`, `UserBackup`, `RSSFeed`, `RSSFeedSubscription`, `RSSFeedItem`, `RSSItemDelivery`
 
 ## Summary JSON Contract
 

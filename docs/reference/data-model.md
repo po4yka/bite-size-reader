@@ -10,7 +10,7 @@ Complete reference for Ratatoskr's SQLite database schema.
 
 ## Overview
 
-Ratatoskr uses **SQLite** as its persistence layer with 21 model classes managed by Peewee ORM.
+Ratatoskr uses **SQLite** as its persistence layer with 48 model classes managed by Peewee ORM. This page documents the core tables that drive the URL pipeline, mobile API, and audit surface; the full registered set lives in `ALL_MODELS` in `app/db/models.py` and includes additional channel-digest, RSS, webhook, automation, and user-preference tables not detailed here.
 
 **Database Location:** `DB_PATH` environment variable (default: `/data/ratatoskr.db`)
 

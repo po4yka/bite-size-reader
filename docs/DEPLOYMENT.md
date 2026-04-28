@@ -1,4 +1,4 @@
-# Bite‑Size Reader — Setup & Deployment Guide
+# Ratatoskr — Setup & Deployment Guide
 
 This guide explains how to prepare environments, configure secrets, and run the service locally and in production (Docker).
 
