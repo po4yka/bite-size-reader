@@ -13,7 +13,7 @@ import {
   TabPanels,
   Tabs,
   TextInput,
-} from "@carbon/react";
+} from "../../design";
 import { useImportFile } from "../../hooks/useImportExport";
 import { getExportUrl } from "../../api/importExport";
 import ImportJobStatus from "./ImportJobStatus";

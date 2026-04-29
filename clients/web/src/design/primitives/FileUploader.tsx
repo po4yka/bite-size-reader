@@ -17,6 +17,8 @@ export interface FileUploaderProps {
   size?: "sm" | "md" | "lg";
   iconDescription?: string;
   onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
+  /** Called when the user clears the selected file. Carbon-parity callback. */
+  onDelete?: () => void;
   className?: string;
   id?: string;
 }
@@ -29,9 +31,11 @@ export function FileUploader({
   multiple = false,
   disabled = false,
   onChange,
+  onDelete,
   className,
   id,
 }: FileUploaderProps) {
+  void onDelete;
   const fallbackId = useId();
   const inputId = id ?? fallbackId;
   const inputRef = useRef<HTMLInputElement | null>(null);

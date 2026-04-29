@@ -11,7 +11,7 @@ import {
   Switch,
   TextInput,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { useDuplicateCheck, useRequestStatus, useSubmitUrl, useRetryRequest } from "../../hooks/useRequests";
 import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
 import { useTelegramMainButton } from "../../hooks/useTelegramMainButton";

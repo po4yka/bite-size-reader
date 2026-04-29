@@ -16,8 +16,10 @@ import {
   Tabs,
   Tag,
   Tile,
-} from "@carbon/react";
-import { Play, PauseFilled, StopFilled } from "@carbon/icons-react";
+  Play,
+  PauseFilled,
+  StopFilled,
+} from "../../design";
 import { getSummaryAudioUrl, generateSummaryAudio } from "../../api/summaries";
 import {
   useExportSummaryPdf,
