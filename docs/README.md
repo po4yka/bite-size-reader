@@ -9,7 +9,7 @@ Welcome to the Ratatoskr documentation. This guide helps you find the right docu
 - Last documentation refresh: **2026-04-28**
 - This refresh aligns docs with:
   - Root namespace reorganization: `clients/`, `integrations/`, `ops/`, and `tools/`
-  - Carbon web interface architecture in `clients/web/` (routing, auth modes, deploy/static namespaces)
+  - web interface architecture in `clients/web/` (routing, auth modes, deploy/static namespaces)
   - Web static check workflow (`npm run check:static`) and CI jobs (`web-build`, `web-test`, `web-static-check`)
   - Docker and compose assets relocated under `ops/docker/`
   - FastAPI SPA serving contract (`/web`, `/web/*`) alongside Telegram Mini App static assets
@@ -45,7 +45,7 @@ You want to contribute code, customize the bot, or understand the architecture.
 
 1. [Architecture Overview](explanation/architecture-overview.md) - Component diagram, request lifecycle, subsystem index
 2. [Local Development Tutorial](tutorials/local-development.md) - Set up dev environment
-3. [Frontend Web Guide](reference/frontend-web.md) - Carbon web app architecture and workflows
+3. [Frontend Web Guide](reference/frontend-web.md) - web app architecture and workflows
 4. [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Why ports and adapters
 5. [SPEC.md](SPEC.md) - Technical specification
 6. [CLAUDE.md](../CLAUDE.md) - AI assistant guide (comprehensive codebase overview)
@@ -88,7 +88,7 @@ You want to submit pull requests or improve the project.
 - [SPEC.md](SPEC.md) - Technical specification
 - [ADRs](adr/README.md) - Understand past decisions
 - [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Code organization
-- [Frontend Web Guide](reference/frontend-web.md) - Carbon UI implementation details
+- [Frontend Web Guide](reference/frontend-web.md) - web app architecture and design shim notes
 
 ### 🔌 I'm an Integrator
 
@@ -162,7 +162,7 @@ You want to integrate Ratatoskr with other tools or build a client.
 **I want to...**
 
 - **Set up local dev environment** → [Local Development Tutorial](tutorials/local-development.md)
-- **Run Carbon web app locally** → [Frontend Web Guide](reference/frontend-web.md#local-development)
+- **Run web app locally** → [Frontend Web Guide](reference/frontend-web.md#local-development)
 - **Run tests** → [Local Development Tutorial § Running Tests](tutorials/local-development.md)
 - **Run web static checks** → [Frontend Web Guide](reference/frontend-web.md#quality-checks)
 - **Add a new feature** → [CLAUDE.md § Adding a New Feature](../CLAUDE.md#common-tasks)
@@ -225,7 +225,7 @@ Technical facts, API specs, and complete references.
 | [SPEC.md](SPEC.md) | Complete technical specification | Developers, Integrators |
 | [Environment Variables](environment_variables.md) | Full configuration reference (250+ vars) | All |
 | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) | REST API specification | Integrators |
-| [Frontend Web Guide](reference/frontend-web.md) | Carbon web app architecture, auth, and workflows | Developers, Integrators |
+| [Frontend Web Guide](reference/frontend-web.md) | web app architecture, auth, and workflows | Developers, Integrators |
 | [OpenAPI Schema](openapi/) | Machine-readable API spec | Integrators |
 | [Summary Contract](SPEC.md#summary-json-contract) | JSON output format (35+ fields) | Developers, Integrators |
 | [Database Schema](SPEC.md#database-schema) | Database tables and relationships | Developers, Integrators |
@@ -266,7 +266,7 @@ Background, context, and "why" discussions.
 | File | Description | When to Read |
 | ------ | ------------- | -------------- |
 | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) | REST API spec, including aggregation endpoints | Building mobile client |
-| [Frontend Web Guide](reference/frontend-web.md) | Carbon web routes/auth/build details | Building or debugging web UI |
+| [Frontend Web Guide](reference/frontend-web.md) | Web routes/auth/build details | Building or debugging web UI |
 | [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) | Architecture guide | Understanding code structure |
 | [multi_agent_architecture.md](multi_agent_architecture.md) | Multi-agent LLM | Understanding summarization pipeline |
 | [mcp_server.md](mcp_server.md) | MCP integration | Integrating with AI agents |
@@ -333,7 +333,7 @@ See the [Architecture Overview](explanation/architecture-overview.md) for an ann
 | **Summary contract** | [SPEC.md § Summary JSON Contract](SPEC.md#summary-json-contract), [ADR-0002](adr/0002-strict-json-summary-contract.md) |
 | **Testing** | [Local Development Tutorial § Testing](tutorials/local-development.md), [CLAUDE.md § Testing](../CLAUDE.md#testing) |
 | **Troubleshooting** | [TROUBLESHOOTING.md](TROUBLESHOOTING.md), [FAQ](FAQ.md) |
-| **Web interface** | [Frontend Web Guide](reference/frontend-web.md), [README.md § Carbon Web Interface](../README.md#carbon-web-interface-v1) |
+| **Web interface** | [Frontend Web Guide](reference/frontend-web.md), [README.md § Web Interface](../README.md#web-interface-v1) |
 | **Web search** | [How to enable web search](how-to/enable-web-search.md), [FAQ § Web Search](FAQ.md#web-search) |
 | **YouTube** | [How to configure YouTube](how-to/configure-youtube-download.md), [TROUBLESHOOTING.md § YouTube](TROUBLESHOOTING.md#youtube-issues) |
 

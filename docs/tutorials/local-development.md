@@ -16,7 +16,7 @@ By the end of this tutorial, you'll have:
 - ✅ All dependencies installed (including dev tools)
 - ✅ Pre-commit hooks configured
 - ✅ Tests running successfully
-- ✅ Carbon web interface running locally
+- ✅ web interface running locally
 - ✅ CLI summary runner working
 - ✅ Ready to make your first code change
 
@@ -241,9 +241,9 @@ tests/test_summary_contract.py ......................                    [100%]
 
 ---
 
-## Step 7.5: Run Carbon Web Interface (Optional, 3 minutes)
+## Step 7.5: Run Web Interface (Optional, 3 minutes)
 
-Use this when you work on `clients/web/` (React + TypeScript + IBM Carbon).
+Use this when you work on `clients/web/` (React + TypeScript + Vite (with the project design shim)).
 
 ```bash
 # In a new terminal from project root
@@ -496,7 +496,7 @@ curl http://localhost:8000/health
 open http://localhost:8000/docs
 ```
 
-### Testing Carbon Web Routes Through FastAPI
+### Testing Web Routes Through FastAPI
 
 ```bash
 # Build web bundle into app/static/web

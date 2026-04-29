@@ -53,7 +53,7 @@ Automatically injects helpful context based on prompt keywords:
 - **summary validate**: Links to `app/core/summary_contract.py`
 - **firecrawl / openrouter / api**: Points to adapter files and api-debugging skill
 - **test / cli**: Links to CLI runner and telegram-testing skill
-- **frontend / web / carbon / react / vite**: Points to `docs/reference/frontend-web.md`, `clients/web/src`, and web-frontend skill
+- **frontend / web / react / vite / design**: Points to `docs/reference/frontend-web.md`, `clients/web/src`, and web-frontend skill
 
 ## Customizing
 

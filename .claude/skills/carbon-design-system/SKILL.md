@@ -1,12 +1,11 @@
 ---
 name: carbon-design-system
 description: >
-  IBM Carbon Design System patterns for the Ratatoskr web frontend.
-  Component selection, import conventions, theming, layout, spacing, motion
-  tokens, and accessibility. Triggers: Carbon component, Carbon theme,
-  Carbon layout, Carbon grid, Carbon tokens, design system, UI component,
-  @carbon/react, cds tokens, dark mode, g100, white theme.
-version: 1.1.0
+  DEPRECATED: Carbon was removed from clients/web/ in favor of a project-owned
+  design shim under clients/web/src/design/. This skill is retained for
+  historical reference only — do not auto-trigger on new web work. For active
+  web frontend guidance see the `developing-web-frontend` skill.
+version: 1.2.0-deprecated
 allowed-tools: Bash, Read, Grep
 ---
 

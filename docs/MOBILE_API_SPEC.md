@@ -9,12 +9,12 @@
 This document is a developer-facing summary of the mobile API implemented by the FastAPI app.
 
 - Base API prefix: `/v1`
-- Primary clients: mobile apps (Android/iOS/KMP), Telegram Mini App, Carbon web interface (`clients/web/`)
+- Primary clients: mobile apps (Android/iOS/KMP), Telegram Mini App, web interface (`clients/web/`)
 - Envelope contract: all JSON business responses use `success`, `data`, `meta`, and standardized `error`
 - Mixed-source aggregation surface: `/v1/aggregations`
 - OpenAPI source of truth: `docs/openapi/mobile_api.yaml`
 
-The same FastAPI host also serves the Carbon web SPA:
+The same FastAPI host also serves the web SPA:
 
 - `/web` and `/web/*` -> SPA index entrypoint
 - `/static/web/*` -> built frontend assets
@@ -35,7 +35,7 @@ Most `/v1/*` endpoints require bearer auth:
 
 - Header: `Authorization: Bearer <access_token>`
 
-The Carbon web client uses a hybrid auth strategy:
+The web client uses a hybrid auth strategy:
 
 - Telegram WebApp context: `X-Telegram-Init-Data`
 - Browser JWT context: `Authorization: Bearer <access_token>` with refresh via `/v1/auth/refresh`

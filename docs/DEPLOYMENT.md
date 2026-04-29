@@ -61,17 +61,17 @@ Copy `.env.example` to `.env` and fill:
 3) Tests: `make test` (or `make lint`, `make format`, `make type` as needed).
 4) Run Telegram bot: `python bot.py`
 5) Run API host (serves `/v1/*`, `/static/*`, and `/web/*`): `uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000`
-6) Optional Carbon web frontend local loop:
+6) Optional web frontend local loop:
    - `cd clients/web && npm ci`
    - `npm run dev` (Vite dev server)
    - `npm run check:static` (lint + typecheck)
 
 ## Web Interface Serving Contract
 
-The FastAPI service serves the Carbon web frontend from a static bundle:
+The FastAPI service serves the web frontend from a static bundle:
 
-- Carbon web static files: `/static/web/*`
-- Carbon SPA entry routes: `/web` and `/web/{path:path}` (returns `app/static/web/index.html`)
+- Web static files: `/static/web/*`
+- Web SPA entry routes: `/web` and `/web/{path:path}` (returns `app/static/web/index.html`)
 
 If `/web` returns `404 "Web interface is not built"`, rebuild static assets with:
 

@@ -11,7 +11,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - Accepts forwarded channel posts and summarizes them directly
 - Returns structured JSON summaries with a strict contract
 - Stores all artifacts (Telegram messages, crawl results, video downloads, LLM calls, summaries) in SQLite
-- Exposes a Carbon web frontend (`clients/web/`) served by FastAPI on `/web/*`
+- Exposes a web frontend (`clients/web/`) served by FastAPI on `/web/*`
 - Runs as a single Docker container with owner-only access control
 
 **Tech Stack:**
@@ -33,8 +33,8 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - google-genai (optional: Gemini Embedding 2 API provider)
 - loguru, orjson (structured logging, fast JSON serialization)
 - FastAPI / uvicorn (Mobile REST API)
-- React 18 + TypeScript + Vite (Carbon web frontend)
-- IBM Carbon (`@carbon/react`, `@carbon/styles`, `@carbon/icons-react`)
+- React 18 + TypeScript + Vite (web frontend)
+- Project-owned design shim under `clients/web/src/design/` (no third-party design system)
 - @tanstack/react-query (web data fetching, caching, polling)
 - PyJWT (JWT authentication)
 - redis (optional caching and distributed locking)
@@ -96,7 +96,7 @@ app/
 clients/
 +-- cli/                # CLI tools (summary runner, search, MCP server, migrations, Chroma backfill)
 +-- browser-extension/  # Browser extension assets and docs
-+-- web/                # Carbon web interface (React + TypeScript + Vite)
++-- web/                # Web interface (React + TypeScript + Vite)
 integrations/
 +-- openclaw-skill/     # OpenClaw MCP skill bundle
 ops/
@@ -140,7 +140,7 @@ make format                # Format code (ruff format + isort)
 make lint                  # Lint code (ruff)
 make type                  # Type-check code (mypy)
 
-# Web frontend (Carbon)
+# Web frontend
 cd clients/web && npm ci
 cd clients/web && npm run dev
 cd clients/web && npm run check:static
@@ -361,8 +361,8 @@ When making changes, these are the most critical files to understand:
 - **`app/config/scraper.py`** -- Scraper chain configuration (`ScraperConfig`)
 - **`app/adapters/content/scraper/`** -- `ContentScraperProtocol`, `ContentScraperChain`, `ContentScraperFactory`, providers
 - **`app/api/main.py`** -- Mobile API entry point
-- **`docs/reference/frontend-web.md`** -- Carbon web frontend architecture, auth, and local workflow
-- **`clients/web/src/App.tsx`** -- Carbon web route map and route guards
+- **`docs/reference/frontend-web.md`** -- Web frontend architecture, auth, and local workflow
+- **`clients/web/src/App.tsx`** -- Web route map and route guards
 - **`clients/web/src/auth/AuthProvider.tsx`** -- Hybrid auth mode selection and session handling
 - **`app/mcp/server.py`** -- MCP server for AI agents
 - **`bot.py`** -- Entrypoint (wires everything together)
@@ -370,14 +370,14 @@ When making changes, these are the most critical files to understand:
 
 ## Impeccable Design Skills
 
-Curated UI/UX design skills from [impeccable](https://github.com/pbakaus/impeccable) (Apache 2.0). Available as `/i-*` commands for the Carbon web frontend.
+Curated UI/UX design skills from [impeccable](https://github.com/pbakaus/impeccable) (Apache 2.0). Available as `/i-*` commands for the web frontend.
 
 | Command | Purpose |
 |---------|---------|
 | `/i-frontend-design` | Core design framework -- run first to establish design context |
 | `/i-audit` | Technical quality checks (accessibility, performance, responsive, anti-patterns) |
 | `/i-polish` | Final refinement across alignment, typography, color, interactions |
-| `/i-normalize` | Align UI to Carbon design system tokens, spacing, patterns |
+| `/i-normalize` | Align UI to project design system tokens, spacing, patterns |
 | `/i-typeset` | Typography hierarchy, font choices, readability |
 | `/i-colorize` | Strategic color usage with 60-30-10 distribution |
 | `/i-clarify` | Improve UX copy, error messages, labels |
@@ -453,6 +453,6 @@ For questions about the codebase, always refer to:
 
 1. This file (CLAUDE.md) for AI assistant guidance
 2. docs/SPEC.md for technical specification
-3. docs/reference/frontend-web.md for Carbon web frontend contracts and workflows
+3. docs/reference/frontend-web.md for web frontend contracts and workflows
 4. README.md for user-facing documentation
 5. Code comments and docstrings for implementation details

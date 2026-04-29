@@ -28,7 +28,7 @@ everything else either auto-migrates or has a sensible default:
 3. **MCP client configs** — `bsr://` URIs and `X-BSR-*` headers → `ratatoskr` /
    `X-Ratatoskr-*`.
 4. **Web bookmarks / browser sessions** — storage keys were renamed, so
-   anyone with an open Carbon web session will be logged out and need to
+   anyone with an open web session will be logged out and need to
    sign in again.
 
 The rest of this page expands those four into a numbered checklist.
@@ -163,7 +163,7 @@ The console script renamed from `bsr` to `ratatoskr`.
 
 ### 7. Reissue web sessions
 
-The Carbon web frontend's localStorage key changed
+The web frontend's localStorage key changed
 (`bsr_web_auth_tokens` → `ratatoskr_web_auth_tokens`) and the refresh
 cookie changed (`bsr_refresh_token` → `ratatoskr_refresh_token`).
 Anyone with an existing browser session will be effectively logged
