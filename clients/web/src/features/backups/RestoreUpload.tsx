@@ -1,6 +1,6 @@
 import type { SyntheticEvent } from "react";
 import { useState } from "react";
-import { FileUploader, InlineLoading, InlineNotification } from "@carbon/react";
+import { FileUploader, InlineLoading, InlineNotification } from "../../design";
 import { useRestoreBackup } from "../../hooks/useBackups";
 import type { RestoreResult } from "../../api/backups";
 

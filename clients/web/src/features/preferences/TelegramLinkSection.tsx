@@ -1,4 +1,4 @@
-import { Button, CodeSnippet, InlineNotification, SkeletonText, Tile } from "@carbon/react";
+import { Button, CodeSnippet, InlineNotification, SkeletonText, Tile } from "../../design";
 import { useTelegramLinkStatus, useBeginTelegramLink, useUnlinkTelegram } from "../../hooks/useUser";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 

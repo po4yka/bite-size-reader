@@ -10,8 +10,8 @@ import {
   SkeletonText,
   Tag,
   Tile,
-} from "@carbon/react";
-import { TrashCan } from "@carbon/icons-react";
+  TrashCan,
+} from "../../design";
 import { useReadingGoals, useGoalsProgress, useCreateGoal, useDeleteGoal } from "../../hooks/useUser";
 import { useTags } from "../../hooks/useTags";
 import { useCollectionTree } from "../../hooks/useCollections";

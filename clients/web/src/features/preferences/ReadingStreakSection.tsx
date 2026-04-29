@@ -1,4 +1,4 @@
-import { SkeletonText, Tag, Tile } from "@carbon/react";
+import { SkeletonText, Tag, Tile } from "../../design";
 import { useReadingStreak } from "../../hooks/useUser";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 

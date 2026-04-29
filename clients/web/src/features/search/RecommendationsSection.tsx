@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { InlineLoading, Tag, Tile } from "@carbon/react";
+import { InlineLoading, Tag, Tile } from "../../design";
 import { useRecommendations } from "../../hooks/useSummaries";
 
 export function RecommendationsSection() {

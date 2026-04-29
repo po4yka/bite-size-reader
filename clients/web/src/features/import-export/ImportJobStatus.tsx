@@ -4,7 +4,7 @@ import {
   Tag,
   UnorderedList,
   ListItem,
-} from "@carbon/react";
+} from "../../design";
 import { useImportJob } from "../../hooks/useImportExport";
 
 function statusTagType(status: string): "green" | "blue" | "red" | "warm-gray" {
