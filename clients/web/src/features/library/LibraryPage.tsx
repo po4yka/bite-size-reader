@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Tag, Tile } from "@carbon/react";
+import { Button, Tag, Tile } from "../../design";
 import { useSummariesList, useToggleFavorite } from "../../hooks/useSummaries";
 import type { SummaryCompact } from "../../api/types";
 import { SummariesDataTable } from "../../components/SummariesDataTable";

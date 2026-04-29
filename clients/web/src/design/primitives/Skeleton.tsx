@@ -35,9 +35,10 @@ export function SkeletonText({
 
 export interface SkeletonPlaceholderProps {
   className?: string;
+  style?: CSSProperties;
 }
 
-export function SkeletonPlaceholder({ className }: SkeletonPlaceholderProps) {
+export function SkeletonPlaceholder({ className, style }: SkeletonPlaceholderProps) {
   return (
     <div
       className={[
@@ -47,6 +48,7 @@ export function SkeletonPlaceholder({ className }: SkeletonPlaceholderProps) {
       ]
         .filter(Boolean)
         .join(" ")}
+      style={style}
       aria-hidden
     />
   );

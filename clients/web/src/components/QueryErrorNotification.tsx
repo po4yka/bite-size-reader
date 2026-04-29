@@ -1,4 +1,4 @@
-import { InlineNotification } from "@carbon/react";
+import { InlineNotification } from "../design";
 import { getErrorMessage } from "../lib/error";
 
 interface QueryErrorNotificationProps {

@@ -1,7 +1,9 @@
 import {
+  createElement,
   forwardRef,
   type ButtonHTMLAttributes,
   type ComponentType,
+  type ElementType,
   type ReactNode,
 } from "react";
 
@@ -29,6 +31,14 @@ export interface ButtonProps
   isExpressive?: boolean;
   type?: "button" | "submit" | "reset";
   children?: ReactNode;
+  /** Optional element/component override (mirrors Carbon's `as` prop). */
+  as?: ElementType;
+  /** Pass-through href when rendering as an anchor. */
+  href?: string;
+  target?: string;
+  rel?: string;
+  /** Pass-through `to` for react-router Link integrations via `as`. */
+  to?: string;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -43,6 +53,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       type = "button",
       className,
       children,
+      as,
+      href,
       ...rest
     },
     ref,
@@ -57,18 +69,27 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ]
       .filter(Boolean)
       .join(" ");
-    return (
-      <button
-        ref={ref}
-        type={type}
-        className={classes}
-        aria-label={hasIconOnly ? iconDescription : rest["aria-label"]}
-        title={hasIconOnly ? iconDescription : rest.title}
-        {...rest}
-      >
-        {RenderIcon ? <RenderIcon size={16} aria-hidden /> : null}
-        {hasIconOnly ? null : children}
-      </button>
+
+    const renderAsElement = as != null || (href != null && as == null);
+    const Element: ElementType = renderAsElement ? (as ?? "a") : "button";
+    const elementProps: Record<string, unknown> = {
+      ref,
+      className: classes,
+      "aria-label": hasIconOnly ? iconDescription : (rest as { "aria-label"?: string })["aria-label"],
+      title: hasIconOnly ? iconDescription : (rest as { title?: string }).title,
+      ...rest,
+    };
+    if (renderAsElement) {
+      if (href != null) elementProps.href = href;
+    } else {
+      elementProps.type = type;
+    }
+
+    return createElement(
+      Element,
+      elementProps,
+      RenderIcon ? <RenderIcon size={16} aria-hidden /> : null,
+      hasIconOnly ? null : children,
     );
   },
 );

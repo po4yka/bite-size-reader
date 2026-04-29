@@ -1,4 +1,4 @@
-import { SkeletonPlaceholder, Tile } from "@carbon/react";
+import { SkeletonPlaceholder, Tile } from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useAdminJobs } from "../../hooks/useAdmin";
 

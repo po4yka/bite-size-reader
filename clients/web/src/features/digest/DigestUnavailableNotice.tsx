@@ -1,4 +1,4 @@
-import { InlineNotification } from "@carbon/react";
+import { InlineNotification } from "../../design";
 
 export function DigestUnavailableNotice() {
   return (

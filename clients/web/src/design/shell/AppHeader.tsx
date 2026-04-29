@@ -1,7 +1,9 @@
 import {
+  createElement,
   forwardRef,
   type AnchorHTMLAttributes,
   type ButtonHTMLAttributes,
+  type ElementType,
   type HTMLAttributes,
   type ReactNode,
 } from "react";
@@ -22,21 +24,25 @@ export function Header({ className, children, ...rest }: HeaderProps) {
   );
 }
 
-export interface HeaderNameProps
-  extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "prefix"> {
+export type HeaderNameProps = {
   prefix?: ReactNode;
   children?: ReactNode;
-}
+  className?: string;
+  /** Optional element/component override (mirrors Carbon's `as` prop). */
+  as?: ElementType;
+} & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "prefix" | "className">
+  & Record<string, unknown>;
 
-export function HeaderName({ prefix, className, children, ...rest }: HeaderNameProps) {
-  return (
-    <a
-      className={["rtk-header__name", className].filter(Boolean).join(" ")}
-      {...rest}
-    >
-      {prefix ? <span className="rtk-header__prefix">{prefix}</span> : null}
-      <span className="rtk-header__title">{children}</span>
-    </a>
+export function HeaderName({ prefix, className, children, as, ...rest }: HeaderNameProps) {
+  const Element: ElementType = as ?? "a";
+  return createElement(
+    Element,
+    {
+      className: ["rtk-header__name", className].filter(Boolean).join(" "),
+      ...rest,
+    },
+    prefix ? <span className="rtk-header__prefix">{prefix}</span> : null,
+    <span className="rtk-header__title">{children}</span>,
   );
 }
 
