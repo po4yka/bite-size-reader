@@ -73,7 +73,7 @@ export function CategoryManagementModal({
                 alignItems: "center",
                 gap: "0.5rem",
                 padding: "0.5rem 0",
-                borderBottom: "1px solid var(--cds-border-subtle)",
+                borderBottom: "1px solid var(--rtk-color-border-subtle, var(--cds-border-subtle))",
               }}
             >
               {editingId === cat.id ? (

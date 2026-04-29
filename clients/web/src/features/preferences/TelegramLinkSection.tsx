@@ -31,7 +31,7 @@ export default function TelegramLinkSection() {
 
       {statusQuery.data && !statusQuery.data.linked && !beginLink.data && (
         <div>
-          <p style={{ color: "var(--cds-text-secondary)", marginBottom: "1rem" }}>
+          <p style={{ color: "var(--rtk-color-text-muted, var(--cds-text-secondary))", marginBottom: "1rem" }}>
             No Telegram account linked.
           </p>
           <Button onClick={handleBeginLink} disabled={beginLink.isPending}>
@@ -60,7 +60,7 @@ export default function TelegramLinkSection() {
               Open in Telegram
             </Button>
           </div>
-          <p style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "var(--cds-text-secondary)" }}>
+          <p style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "var(--rtk-color-text-muted, var(--cds-text-secondary))" }}>
             Code expires in {Math.floor(beginLink.data.expiresIn / 60)} minutes.
           </p>
         </div>
@@ -74,7 +74,7 @@ export default function TelegramLinkSection() {
             </p>
           )}
           {statusQuery.data.linkedAt && (
-            <p style={{ fontSize: "0.75rem", color: "var(--cds-text-secondary)", marginBottom: "1rem" }}>
+            <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted, var(--cds-text-secondary))", marginBottom: "1rem" }}>
               Linked on {new Date(statusQuery.data.linkedAt).toLocaleDateString()}
             </p>
           )}

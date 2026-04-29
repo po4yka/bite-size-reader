@@ -6,7 +6,7 @@ function StatTile({ label, value, kind }: { label: string; value: number; kind?:
   return (
     <Tile style={{ textAlign: "center", minWidth: 140 }}>
       <p className="cds--label">{label}</p>
-      <p style={{ fontSize: "1.75rem", fontWeight: 600, color: kind === "danger" && value > 0 ? "var(--cds-support-error)" : undefined }}>
+      <p style={{ fontSize: "1.75rem", fontWeight: 600, color: kind === "danger" && value > 0 ? "var(--rtk-color-support-error, var(--cds-support-error))" : undefined }}>
         {value.toLocaleString()}
       </p>
     </Tile>
