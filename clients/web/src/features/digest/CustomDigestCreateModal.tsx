@@ -8,7 +8,7 @@ import {
   Modal,
   NumberInput,
   TextInput,
-} from "@carbon/react";
+} from "../../design";
 import { useDigestChannels, useCreateCustomDigest } from "../../hooks/useDigest";
 
 interface Props {
@@ -95,7 +95,7 @@ export function CustomDigestCreateModal({ open, onClose }: Props) {
             titleText="Channels"
             placeholder="Select channels"
             items={channelItems}
-            itemToString={(item: ChannelItem | null) => item?.label ?? ""}
+            itemToString={(item: ChannelItem | null | undefined) => item?.label ?? ""}
             selectedItems={selectedChannels}
             onChange={(data: { selectedItems: ChannelItem[] | null }) => {
               setSelectedChannels(data.selectedItems ?? []);

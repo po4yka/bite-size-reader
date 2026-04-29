@@ -7,7 +7,7 @@ import {
   ModalFooter,
   ModalHeader,
   TextInput,
-} from "@carbon/react";
+} from "../../design";
 import type { DigestCategory } from "../../api/digest";
 import { useCreateCategory, useDeleteCategory, useUpdateCategory } from "../../hooks/useDigest";
 

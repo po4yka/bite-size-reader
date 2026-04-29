@@ -6,11 +6,7 @@ import {
   type ReactNode,
 } from "react";
 
-interface DropdownItemBase {
-  id?: string | number;
-}
-
-export interface DropdownProps<T extends DropdownItemBase> {
+export interface DropdownProps<T> {
   id?: string;
   titleText?: ReactNode;
   helperText?: ReactNode;
@@ -31,7 +27,7 @@ export interface DropdownProps<T extends DropdownItemBase> {
   className?: string;
 }
 
-export function Dropdown<T extends DropdownItemBase>({
+export function Dropdown<T>({
   id,
   titleText,
   label,
@@ -70,6 +66,11 @@ export function Dropdown<T extends DropdownItemBase>({
     if (!isControlled) setInternal(item);
     onChange?.({ selectedItem: item });
     setOpen(false);
+  };
+
+  const itemKey = (item: T): string | number => {
+    const id = (item as { id?: string | number | null } | null | undefined)?.id;
+    return id ?? itemToString(item);
   };
 
   const cls = [
@@ -117,9 +118,8 @@ export function Dropdown<T extends DropdownItemBase>({
         {open ? (
           <ul role="listbox" className="rtk-dropdown__menu">
             {items.map((item, idx) => {
-              const key = item.id ?? itemToString(item);
-              const isCurrent =
-                current && (current.id ?? itemToString(current)) === key;
+              const key = itemKey(item);
+              const isCurrent = current != null && itemKey(current) === key;
               return (
                 <li
                   role="option"

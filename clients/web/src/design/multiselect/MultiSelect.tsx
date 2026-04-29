@@ -7,11 +7,7 @@ import {
   type ReactNode,
 } from "react";
 
-interface MultiSelectItemBase {
-  id?: string | number;
-}
-
-export interface MultiSelectProps<T extends MultiSelectItemBase> {
+export interface MultiSelectProps<T> {
   id?: string;
   titleText?: ReactNode;
   helperText?: ReactNode;
@@ -29,13 +25,13 @@ export interface MultiSelectProps<T extends MultiSelectItemBase> {
   invalidText?: ReactNode;
   light?: boolean;
   open?: boolean;
-  onChange?: (state: { selectedItems: T[] }) => void;
+  onChange?: (state: { selectedItems: T[] | null }) => void;
   onMenuChange?: (open: boolean) => void;
   className?: string;
   placeholder?: ReactNode;
 }
 
-export function MultiSelect<T extends MultiSelectItemBase>({
+export function MultiSelect<T>({
   id,
   titleText,
   label,
@@ -72,15 +68,20 @@ export function MultiSelect<T extends MultiSelectItemBase>({
     return () => document.removeEventListener("mousedown", handler);
   }, [open, onMenuChange]);
 
+  const itemKey = (item: T): string | number => {
+    const id = (item as { id?: string | number | null } | null | undefined)?.id;
+    return id ?? itemToString(item);
+  };
+
   const selectedSet = useMemo(() => {
-    return new Set(current.map((it) => it.id ?? itemToString(it)));
-  }, [current, itemToString]);
+    return new Set(current.map(itemKey));
+  }, [current, itemToString]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = (item: T) => {
-    const key = item.id ?? itemToString(item);
+    const key = itemKey(item);
     let next: T[];
     if (selectedSet.has(key)) {
-      next = current.filter((it) => (it.id ?? itemToString(it)) !== key);
+      next = current.filter((it) => itemKey(it) !== key);
     } else {
       next = [...current, item];
     }
@@ -138,7 +139,7 @@ export function MultiSelect<T extends MultiSelectItemBase>({
         {open ? (
           <ul role="listbox" aria-multiselectable className="rtk-multiselect__menu">
             {items.map((item, idx) => {
-              const key = item.id ?? itemToString(item);
+              const key = itemKey(item);
               const checked = selectedSet.has(key);
               return (
                 <li
@@ -180,7 +181,7 @@ export function MultiSelect<T extends MultiSelectItemBase>({
  * `FilterableMultiSelect` adds a typeahead filter on top of `MultiSelect`.
  * The shim implementation reuses MultiSelect with a controlled filter input.
  */
-export function FilterableMultiSelect<T extends MultiSelectItemBase>(
+export function FilterableMultiSelect<T>(
   props: MultiSelectProps<T> & {
     onInputValueChange?: (value: string) => void;
     placeholder?: ReactNode;
