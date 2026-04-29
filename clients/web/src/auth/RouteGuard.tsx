@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { InlineLoading } from "@carbon/react";
+import { InlineLoading } from "../design";
 import { canAccessProtectedRoute } from "./guard";
 import { useAuth } from "./AuthProvider";
 

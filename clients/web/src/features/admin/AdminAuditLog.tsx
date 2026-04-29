@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
   TextInput,
-} from "@carbon/react";
+} from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useAuditLog } from "../../hooks/useAdmin";
 

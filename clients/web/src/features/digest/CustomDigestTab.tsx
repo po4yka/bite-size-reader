@@ -12,7 +12,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@carbon/react";
+} from "../../design";
 import { useCustomDigests } from "../../hooks/useDigest";
 import { CustomDigestCreateModal } from "./CustomDigestCreateModal";
 
@@ -32,6 +32,7 @@ interface DigestTableRow {
   channelCount: string;
   postCount: string;
   digestId: number;
+  [key: string]: unknown;
 }
 
 export function CustomDigestTab() {

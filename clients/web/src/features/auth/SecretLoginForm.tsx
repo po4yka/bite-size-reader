@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, InlineLoading, InlineNotification, TextInput } from "@carbon/react";
+import { Button, InlineLoading, InlineNotification, TextInput } from "../../design";
 import { useAuth } from "../../auth/AuthProvider";
 
 const WEB_CLIENT_ID = "web-carbon-v1";

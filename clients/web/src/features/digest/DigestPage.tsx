@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Tab, TabList, TabPanel, TabPanels, Tabs } from "@carbon/react";
+import { Tab, TabList, TabPanel, TabPanels, Tabs } from "../../design";
 import { useAuth } from "../../auth/AuthProvider";
 import { ChannelsTab } from "./ChannelsTab";
 import { CustomDigestTab } from "./CustomDigestTab";

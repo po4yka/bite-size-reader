@@ -23,7 +23,7 @@ import {
   TableToolbarContent,
   TextInput,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import type { DigestCategory } from "../../api/digest";
 import {
   useAssignCategory,

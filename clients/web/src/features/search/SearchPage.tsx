@@ -14,7 +14,7 @@ import {
   Tag,
   TextInput,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { useSearchResults, useTrendingTopics } from "../../hooks/useSearch";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { RecommendationsSection } from "./RecommendationsSection";

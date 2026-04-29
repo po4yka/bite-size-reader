@@ -5,7 +5,7 @@ import {
   Modal,
   TextInput,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { useDeleteAccount } from "../../hooks/useUser";
 import { useAuth } from "../../auth/AuthProvider";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
@@ -42,15 +42,15 @@ export default function AccountSection() {
       {user && (
         <div style={{ marginBottom: "1rem" }}>
           <p>
-            <span style={{ color: "var(--cds-text-secondary)" }}>Username: </span>
+            <span style={{ color: "var(--rtk-color-text-muted)" }}>Username: </span>
             <strong>@{user.username}</strong>
           </p>
           <p>
-            <span style={{ color: "var(--cds-text-secondary)" }}>User ID: </span>
+            <span style={{ color: "var(--rtk-color-text-muted)" }}>User ID: </span>
             {user.userId}
           </p>
           <p>
-            <span style={{ color: "var(--cds-text-secondary)" }}>Member since: </span>
+            <span style={{ color: "var(--rtk-color-text-muted)" }}>Member since: </span>
             {new Date(user.createdAt).toLocaleDateString()}
           </p>
         </div>

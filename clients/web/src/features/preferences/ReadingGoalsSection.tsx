@@ -10,8 +10,8 @@ import {
   SkeletonText,
   Tag,
   Tile,
-} from "@carbon/react";
-import { TrashCan } from "@carbon/icons-react";
+  TrashCan,
+} from "../../design";
 import { useReadingGoals, useGoalsProgress, useCreateGoal, useDeleteGoal } from "../../hooks/useUser";
 import { useTags } from "../../hooks/useTags";
 import { useCollectionTree } from "../../hooks/useCollections";
@@ -73,7 +73,7 @@ export default function ReadingGoalsSection() {
       {goalsQuery.data && (
         <>
           {goalsQuery.data.length === 0 && (
-            <p style={{ color: "var(--cds-text-secondary)", marginBottom: "1rem" }}>
+            <p style={{ color: "var(--rtk-color-text-muted)", marginBottom: "1rem" }}>
               No goals set yet.
             </p>
           )}
@@ -131,7 +131,7 @@ export default function ReadingGoalsSection() {
             );
           })}
 
-          <hr style={{ margin: "1rem 0", border: "none", borderTop: "1px solid var(--cds-border-subtle)" }} />
+          <hr style={{ margin: "1rem 0", border: "none", borderTop: "1px solid var(--rtk-color-border-subtle)" }} />
 
           <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Add Goal</p>
 

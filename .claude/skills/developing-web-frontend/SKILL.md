@@ -1,27 +1,29 @@
 ---
 name: developing-web-frontend
 description: >
-  Develop the Carbon web frontend (`clients/web/`) -- routing, auth, API integration,
-  components, testing, and same-host FastAPI serving. Triggers: Carbon, React,
-  Vite, web frontend, web app, /web, frontend component, web route.
-version: 2.2.0
+  Develop the web frontend (`clients/web/`) -- routing, auth, API integration,
+  components, testing, and same-host FastAPI serving. Triggers: web frontend,
+  React, Vite, web app, /web, frontend component, web route, design shim.
+version: 2.3.0
 allowed-tools: Bash, Read, Grep, Write
 ---
 
 # Developing Web Frontend
 
-Implement and debug the Carbon web interface in `clients/web/`.
+Implement and debug the web interface in `clients/web/`.
 
 ## Dynamic Context
 
-!cd clients/web && node -e "const p=JSON.parse(require('fs').readFileSync('package.json'));console.log('React:',p.dependencies.react,'Carbon:',p.dependencies['@carbon/react'])"
+!cd clients/web && node -e "const p=JSON.parse(require('fs').readFileSync('package.json'));console.log('React:',p.dependencies.react)"
 
 See also: [references/route-map.md](references/route-map.md)
 
 ## Scope
 
 - React + TypeScript + Vite app in `clients/web/`
-- Carbon UI components and app shell
+- Project-owned design shim under `clients/web/src/design/` (primitives, table,
+  modal, navigation, structure, shell, icons, tokens). Feature code imports
+  exclusively from `../design`.
 - Route guards and auth flow
 - API layer (`clients/web/src/api/*`) with envelope normalization and token refresh
 - Same-host deployment contract (`/web`, `/static/web`)
@@ -130,18 +132,24 @@ Rules:
 - For viewport-sensitive layouts use `var(--tg-viewport-stable-height, 100dvh)`, not `100vh`
 - Guard Telegram-specific logic with `const { mode } = useAuth()` before calling any hook
 
-## Carbon Component Conventions
+## Design Shim Conventions
 
-Named imports only; never default import Carbon. For detailed Carbon patterns, component selection, theming, layout rules, and the full component catalog, use the **`carbon-design-system`** skill.
+Named imports only; always import from `../design`. The shim layer lives in
+`clients/web/src/design/` and is the single source of truth for primitives,
+table, modal, navigation, and icons. Add new components by extending the
+design directory; never reach for an external design system in feature code.
 
-- Components: `import { Button, DataTable } from "@carbon/react"`
-- Icons: `import { Add, TrashCan } from "@carbon/icons-react"`
-- Theme tokens: use `--cds-*` CSS custom properties; never raw hex/rgb
+- Components: `import { Button, DataTable } from "../design"` (path adjusts per file depth)
+- Icons: `import { Add, TrashCan } from "../design"` (icons are co-exported)
+- Theme tokens: use `--rtk-*` CSS custom properties from `clients/web/src/design/tokens.css`; never raw hex/rgb
 - Shell: global `Header` + `SideNav` live in `clients/web/src/components/AppShell.tsx`
 
 ## Design Skill Interaction
 
-When `emil-design-eng` and `carbon-design-system` conflict, **Carbon wins** for any component from `@carbon/react`. Emil's animation and polish principles apply to custom, non-Carbon UI elements only. Never override Carbon's built-in motion or press feedback with custom easing curves or `:active` transforms.
+Animation and polish principles from `emil-design-eng` apply to custom UI
+elements built with the design shim. The shim itself is intentionally
+minimal — feature code is free to layer transitions and microinteractions
+onto shim primitives.
 
 ## Testing Patterns
 

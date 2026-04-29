@@ -1,6 +1,6 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
-import { Button, InlineNotification } from "@carbon/react";
+import { Button, InlineNotification } from "../design";
 
 interface Props {
   children: ReactNode;

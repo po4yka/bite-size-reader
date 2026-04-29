@@ -11,11 +11,11 @@ import {
   Lightning,
   Notification,
   Rss,
-  Search as SearchIcon,
+  SearchIcon,
   Settings,
-  Tag,
+  TagIcon,
   User,
-} from "@carbon/icons-react";
+} from "../design";
 import ArticlePage from "../features/article/ArticlePage";
 import ArticlesPage from "../features/articles/ArticlesPage";
 import LibraryPage from "../features/library/LibraryPage";
@@ -101,7 +101,7 @@ const APP_ROUTE_DEFINITIONS: readonly AppRouteDefinition[] = [
     path: "tags",
     component: TagManagementPage,
     lazy: true,
-    nav: { label: "Tags", icon: Tag, group: 1 },
+    nav: { label: "Tags", icon: TagIcon, group: 1 },
   },
   {
     path: "webhooks",

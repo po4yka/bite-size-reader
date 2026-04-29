@@ -6,7 +6,7 @@ import {
   ModalBody,
   ModalFooter,
   ModalHeader,
-} from "@carbon/react";
+} from "../../design";
 import type { DigestCategory } from "../../api/digest";
 
 export function BatchCategoryModal({

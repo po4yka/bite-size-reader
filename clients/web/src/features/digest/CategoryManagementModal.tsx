@@ -7,7 +7,7 @@ import {
   ModalFooter,
   ModalHeader,
   TextInput,
-} from "@carbon/react";
+} from "../../design";
 import type { DigestCategory } from "../../api/digest";
 import { useCreateCategory, useDeleteCategory, useUpdateCategory } from "../../hooks/useDigest";
 
@@ -73,7 +73,7 @@ export function CategoryManagementModal({
                 alignItems: "center",
                 gap: "0.5rem",
                 padding: "0.5rem 0",
-                borderBottom: "1px solid var(--cds-border-subtle)",
+                borderBottom: "1px solid var(--rtk-color-border-subtle)",
               }}
             >
               {editingId === cat.id ? (

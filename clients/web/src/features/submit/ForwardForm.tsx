@@ -8,7 +8,7 @@ import {
   TextArea,
   TextInput,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { useSubmitForward } from "../../hooks/useRequests";
 import type { ForwardMetadata } from "../../api/requests";
 

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { Button, InlineLoading, InlineNotification, Tile } from "@carbon/react";
+import { Button, InlineLoading, InlineNotification, Tile } from "./design";
 import { useAuth } from "./auth/AuthProvider";
 import LoginPage from "./auth/LoginPage";
 import { sanitizeRedirectPath } from "./auth/redirect";

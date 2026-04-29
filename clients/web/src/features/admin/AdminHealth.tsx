@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useContentHealth } from "../../hooks/useAdmin";
 
@@ -64,7 +64,7 @@ export default function AdminHealth() {
             </Tile>
             <Tile style={{ textAlign: "center", minWidth: 140 }}>
               <p className="cds--label">Failed Requests</p>
-              <p style={{ fontSize: "1.75rem", fontWeight: 600, color: data.failedRequests > 0 ? "var(--cds-support-error)" : undefined }}>
+              <p style={{ fontSize: "1.75rem", fontWeight: 600, color: data.failedRequests > 0 ? "var(--rtk-color-support-error)" : undefined }}>
                 {data.failedRequests.toLocaleString()}
               </p>
             </Tile>

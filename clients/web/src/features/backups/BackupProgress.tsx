@@ -1,4 +1,4 @@
-import { InlineLoading } from "@carbon/react";
+import { InlineLoading } from "../../design";
 import { useBackupPolling } from "../../hooks/useBackups";
 import type { BackupStatus } from "../../api/backups";
 

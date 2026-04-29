@@ -90,7 +90,7 @@ this turns subscribed channels into a periodic recap.
 | Production deploy, monitoring, backups, TLS | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
 | Architecture diagram, request lifecycle, subsystem index | [docs/explanation/architecture-overview.md](docs/explanation/architecture-overview.md) |
 | Mobile REST API (JWT auth, sync, aggregations) | [docs/MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md) |
-| Carbon web frontend (`/web/*`) | [docs/reference/frontend-web.md](docs/reference/frontend-web.md) |
+| Web frontend (`/web/*`) | [docs/reference/frontend-web.md](docs/reference/frontend-web.md) |
 | MCP server for external AI agents | [docs/mcp_server.md](docs/mcp_server.md) |
 | FAQ / troubleshooting | [docs/FAQ.md](docs/FAQ.md) · [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
 | Full doc index | [docs/README.md](docs/README.md) |
@@ -118,5 +118,5 @@ Built on the shoulders of [Pyrogram](https://github.com/pyrogram/pyrogram),
 [Firecrawl](https://www.firecrawl.dev/),
 [OpenRouter](https://openrouter.ai/),
 [FastAPI](https://fastapi.tiangolo.com/),
-[Carbon Design System](https://carbondesignsystem.com/),
+a project-owned design system shim,
 and [yt-dlp](https://github.com/yt-dlp/yt-dlp).

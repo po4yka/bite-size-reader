@@ -12,8 +12,11 @@ import {
   TextArea,
   TextInput,
   Tile,
-} from "@carbon/react";
-import { Checkmark, Close, Edit, TrashCan } from "@carbon/icons-react";
+  Checkmark,
+  Close,
+  Edit,
+  TrashCan,
+} from "../../design";
 import {
   useHighlights,
   useCreateHighlight,

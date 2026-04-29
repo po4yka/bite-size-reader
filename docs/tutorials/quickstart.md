@@ -125,7 +125,7 @@ docker logs ratatoskr
 # INFO: Listening for messages...
 ```
 
-> This quickstart starts the Telegram bot runtime only. The Carbon web interface (`/web/*`) is served by the FastAPI `mobile-api` service; see [DEPLOYMENT.md](../DEPLOYMENT.md) and [Frontend Web Guide](../reference/frontend-web.md) for that setup.
+> This quickstart starts the Telegram bot runtime only. The web interface (`/web/*`) is served by the FastAPI `mobile-api` service; see [DEPLOYMENT.md](../DEPLOYMENT.md) and [Frontend Web Guide](../reference/frontend-web.md) for that setup.
 
 **Troubleshooting**: If you see errors, check:
 
@@ -212,7 +212,7 @@ Congratulations! You've successfully set up Ratatoskr. 🎉
 - 🔌 [External Access Quickstart](external-access-quickstart.md) - Onboard CLI or MCP aggregation clients
 - ⚡ [Setup Redis caching](../how-to/setup-redis-caching.md) - Faster responses
 - 🧠 [Setup ChromaDB](../how-to/setup-chroma-vector-search.md) - Semantic search
-- 🖥️ [Frontend Web Guide](../reference/frontend-web.md) - Carbon web app routes/auth/development
+- 🖥️ [Frontend Web Guide](../reference/frontend-web.md) - web app routes/auth/development
 
 **Learn more**:
 

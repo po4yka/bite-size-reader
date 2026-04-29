@@ -1,4 +1,4 @@
-import { Tab, TabList, TabPanel, TabPanels, Tabs } from "@carbon/react";
+import { Tab, TabList, TabPanel, TabPanels, Tabs } from "../../design";
 import AdminUsers from "./AdminUsers";
 import AdminJobs from "./AdminJobs";
 import AdminHealth from "./AdminHealth";

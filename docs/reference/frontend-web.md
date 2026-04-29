@@ -1,10 +1,10 @@
-# Carbon Web Frontend Guide
+# Web Frontend Guide
 
-Reference for the Carbon-based web interface implemented in `clients/web/`.
+Reference for the web interface implemented in `clients/web/`.
 
 **Audience:** Frontend developers, integrators, operators
 **Type:** Reference
-**Related:** [README.md § Carbon Web Interface](../../README.md#carbon-web-interface-v1), [Mobile API Spec](../MOBILE_API_SPEC.md), [Deployment Guide](../DEPLOYMENT.md)
+**Related:** [Mobile API Spec](../MOBILE_API_SPEC.md), [Deployment Guide](../DEPLOYMENT.md)
 
 ---
 
@@ -13,10 +13,22 @@ Reference for the Carbon-based web interface implemented in `clients/web/`.
 The web interface is the sole frontend surface — a standalone SPA built with:
 
 - React 18 + TypeScript + Vite
-- IBM Carbon (`@carbon/react`, `@carbon/styles`, `@carbon/icons-react`)
+- A project-owned design shim under `clients/web/src/design/` (no third-party design system)
 - `@tanstack/react-query` for server state and polling
 
 It is built into `app/static/web` and served by FastAPI on `/web` and `/web/*`.
+
+### Design system
+
+`clients/web/src/design/` exports primitives (`Button`, `TextInput`, `Tile`, `Tag`, …),
+navigation (`Tabs`, `Pagination`, `TreeView`, `ContentSwitcher`), tables (`DataTable` and
+the `Table*` family), modals (`Modal`, `ComposedModal`), pickers, structure widgets, the
+shell (`Header`, `SideNav`, `Theme`), and SVG icons. Feature code imports exclusively from
+`../design`. Tokens (`tokens.css`) and reset/skeleton styles (`base.css`) are imported once
+through `clients/web/src/design/index.ts` and read via `var(--rtk-*, fallback)`. Theme
+selection writes `data-theme="light" | "dark"` on `<html>` so token CSS resolves on first
+paint without a flash. Add new components by extending the design directory; never reach
+for an external design system in feature code.
 
 ---
 
@@ -28,6 +40,7 @@ clients/web/
     api/            # Typed API gateway + envelope normalization
     auth/           # Hybrid auth provider, guards, storage, redirects
     components/     # App shell + shared UI
+    design/         # Project-owned design shim: primitives, table, modal, icons, tokens
     features/       # Route-level pages (library/search/submit/collections/...)
     routes/         # Route manifest + feature flags
   vite.config.ts    # base=/static/web, outDir=../../app/static/web
@@ -133,7 +146,7 @@ Admin page (`/web/admin`) includes:
 
 ## UI Architecture
 
-- Global shell: Carbon `Header` + `SideNav` (`clients/web/src/components/AppShell.tsx`)
+- Global shell: design `Header` + `SideNav` (`clients/web/src/components/AppShell.tsx`)
 - Session UX:
   - in-app session status label
   - manual "Verify session" action

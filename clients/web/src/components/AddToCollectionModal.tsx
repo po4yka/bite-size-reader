@@ -5,7 +5,7 @@ import {
   Select,
   SelectItem,
   TextInput,
-} from "@carbon/react";
+} from "../design";
 import { createCollection } from "../api/collections";
 import { flattenCollections } from "../lib/collections";
 import { useCollectionTree, useAddToCollection } from "../hooks/useCollections";

@@ -18,9 +18,6 @@
     "generate:api": "openapi-typescript ../../docs/openapi/mobile_api.yaml -o src/api/generated.ts"
   },
   "dependencies": {
-    "@carbon/icons-react": "^11.76.0",
-    "@carbon/react": "^1.103.0",
-    "@carbon/styles": "^1.102.0",
     "@tanstack/react-query": "^5.95.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

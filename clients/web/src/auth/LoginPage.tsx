@@ -6,7 +6,7 @@ import {
   InlineLoading,
   InlineNotification,
   Tile,
-} from "@carbon/react";
+} from "../design";
 import SecretLoginForm from "../features/auth/SecretLoginForm";
 import type { TelegramAuthPayload } from "./types";
 import { useAuth } from "./AuthProvider";

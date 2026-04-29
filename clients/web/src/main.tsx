@@ -2,7 +2,6 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import "@carbon/styles/css/styles.css";
 import "./styles.css";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthProvider";
@@ -26,6 +25,7 @@ function syncTelegramWebAppVisuals(webApp: TelegramWebApp): void {
   const colorScheme = webApp.colorScheme === "dark" ? "dark" : "light";
   document.documentElement.style.colorScheme = colorScheme;
   document.documentElement.dataset.telegramColorScheme = colorScheme;
+  document.documentElement.dataset.theme = colorScheme;
 
   const theme = webApp.themeParams ?? {};
   setRootCssVar("--tg-theme-bg-color", theme.bg_color);

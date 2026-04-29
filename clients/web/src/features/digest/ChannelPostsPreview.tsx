@@ -1,4 +1,4 @@
-import { InlineLoading, InlineNotification, Tag } from "@carbon/react";
+import { InlineLoading, InlineNotification, Tag } from "../../design";
 import type { DigestChannelPost } from "../../api/digest";
 import { useChannelPosts } from "../../hooks/useDigest";
 
@@ -33,7 +33,7 @@ export function ChannelPostsPreview({ username }: { username: string }) {
           key={post.id}
           style={{
             padding: "0.5rem 0",
-            borderBottom: "1px solid var(--cds-border-subtle)",
+            borderBottom: "1px solid var(--rtk-color-border-subtle)",
           }}
         >
           <div className="digest-list-item-row">

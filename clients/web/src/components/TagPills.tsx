@@ -1,4 +1,4 @@
-import { Tag } from "@carbon/react";
+import { Tag } from "../design";
 
 type CarbonTagType =
   | "blue"

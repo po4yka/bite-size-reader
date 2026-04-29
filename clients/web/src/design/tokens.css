@@ -1,0 +1,60 @@
+/*
+ * Project-owned design tokens for the Ratatoskr web client.
+ *
+ * Variables are namespaced `--rtk-*` and consumed via `var(--rtk-X, fallback)`.
+ * The fallback should always be a literal value or another `--rtk-*` var; do
+ * not chain to external design systems.
+ */
+
+:root,
+[data-theme="light"] {
+  /* Color */
+  --rtk-color-bg: #ffffff;
+  --rtk-color-text: #161616;
+  --rtk-color-text-muted: #525252;
+  --rtk-color-text-error: #da1e28;
+  --rtk-color-support-error: #da1e28;
+  --rtk-color-layer: #f4f4f4;
+  --rtk-color-layer-hover: rgba(0, 0, 0, 0.04);
+  --rtk-color-layer-accent: #e0e0e0;
+  --rtk-color-border-subtle: #e0e0e0;
+  --rtk-color-border-strong: #8d8d8d;
+  --rtk-color-focus: #0f62fe;
+  --rtk-color-shadow: rgba(0, 0, 0, 0.1);
+
+  /* Spacing */
+  --rtk-space-1: 0.125rem;
+  --rtk-space-2: 0.25rem;
+  --rtk-space-3: 0.5rem;
+  --rtk-space-4: 0.75rem;
+  --rtk-space-5: 1rem;
+  --rtk-space-6: 1.5rem;
+  --rtk-space-7: 2rem;
+  --rtk-space-8: 2.5rem;
+
+  /* Typography */
+  --rtk-font-body-01-size: 0.875rem;
+  --rtk-font-body-02-size: 1rem;
+  --rtk-font-heading-04-size: 1.75rem;
+  --rtk-font-heading-04-tracking: 0;
+  --rtk-font-heading-04-leading: 1.29;
+
+  /* Radius */
+  --rtk-radius-sm: 0.25rem;
+  --rtk-radius-md: 0.5rem;
+}
+
+[data-theme="dark"] {
+  --rtk-color-bg: #161616;
+  --rtk-color-text: #f4f4f4;
+  --rtk-color-text-muted: #c6c6c6;
+  --rtk-color-text-error: #ff8389;
+  --rtk-color-support-error: #fa4d56;
+  --rtk-color-layer: #262626;
+  --rtk-color-layer-hover: rgba(255, 255, 255, 0.06);
+  --rtk-color-layer-accent: #393939;
+  --rtk-color-border-subtle: #393939;
+  --rtk-color-border-strong: #6f6f6f;
+  --rtk-color-focus: #ffffff;
+  --rtk-color-shadow: rgba(0, 0, 0, 0.4);
+}

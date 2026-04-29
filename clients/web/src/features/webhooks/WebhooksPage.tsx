@@ -17,7 +17,7 @@ import {
   TextInput,
   Tag,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import {
   useWebhooks,

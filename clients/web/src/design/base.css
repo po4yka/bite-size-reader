@@ -1,0 +1,52 @@
+/*
+ * Minimal reset, focus rings, and skeleton shimmer for the project shim layer.
+ * This file is the source of truth for these styles.
+ */
+
+.rtk-skeleton {
+  background-color: var(--rtk-color-layer, #e0e0e0);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 40%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.08) 60%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: ratatoskr-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--rtk-radius-sm, 0.25rem);
+  display: block;
+}
+
+.rtk-skeleton--text {
+  height: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.rtk-skeleton--placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 6rem;
+}
+
+@keyframes ratatoskr-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rtk-skeleton {
+    animation: none;
+    background-image: none;
+  }
+}
+
+.rtk-focus-ring:focus-visible {
+  outline: 2px solid var(--rtk-color-focus, #0f62fe);
+  outline-offset: 2px;
+}

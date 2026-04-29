@@ -181,7 +181,7 @@ Each subsystem has a canonical doc; this page is the entry point.
 | Mixed-source aggregation | Bundle one or more links + forwards / attachments into a single synthesised result. | [`docs/SPEC.md`](../SPEC.md) (`Mixed-source aggregation` section) |
 | Search (FTS5 + vector) | Local full-text plus optional ChromaDB semantic / hybrid search. | [`docs/how-to/setup-chroma-vector-search.md`](../how-to/setup-chroma-vector-search.md) |
 | Mobile API | FastAPI + JWT, sync v2, ratelimit, summary CRUD, aggregations. | [`docs/MOBILE_API_SPEC.md`](../MOBILE_API_SPEC.md) |
-| Carbon web frontend | React + IBM Carbon SPA served on `/web/*`; library, search, submit, collections, digest, preferences, admin. | [`docs/reference/frontend-web.md`](../reference/frontend-web.md) |
+| Web frontend | React SPA served on `/web/*`; library, search, submit, collections, digest, preferences, admin. Uses a project-owned design shim under `clients/web/src/design/`. | [`docs/reference/frontend-web.md`](../reference/frontend-web.md) |
 | MCP server | Model Context Protocol server: 22 tools and 16 resources for external AI agents (OpenClaw, Claude Desktop). | [`docs/mcp_server.md`](../mcp_server.md) |
 | Observability | Prometheus metrics, structured logs, correlation-ID tracing, Loki / Promtail / Grafana stack. | [`docs/explanation/observability-strategy.md`](observability-strategy.md) |
 | Redis (optional) | Response cache, rate-limit store, sync session locks, distributed background-task locks. | [`docs/how-to/setup-redis-caching.md`](../how-to/setup-redis-caching.md) |

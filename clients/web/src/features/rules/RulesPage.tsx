@@ -14,7 +14,7 @@ import {
   TableRow,
   Tile,
   Toggle,
-} from "@carbon/react";
+} from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import {
   useRules,

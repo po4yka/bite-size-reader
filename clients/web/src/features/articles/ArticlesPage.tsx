@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Select, SelectItem, Tag } from "@carbon/react";
+import { Select, SelectItem, Tag } from "../../design";
 import { useSummariesList } from "../../hooks/useSummaries";
 import type { SummaryCompact } from "../../api/types";
 import { SummariesDataTable } from "../../components/SummariesDataTable";

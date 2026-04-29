@@ -11,7 +11,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@carbon/react";
+} from "../../design";
 import { useSessions, useDeleteSession } from "../../hooks/useUser";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import type { AuthSession } from "../../api/auth";

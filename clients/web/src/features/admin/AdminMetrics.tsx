@@ -9,7 +9,7 @@ import {
   StructuredListRow,
   StructuredListWrapper,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useClearCache, useMetrics } from "../../hooks/useAdmin";
 
@@ -92,7 +92,7 @@ export default function AdminMetrics() {
             </div>
             <div>
               <p className="cds--label">Error Rate</p>
-              <p style={{ fontSize: "1.25rem", fontWeight: 600, color: llm.errorRate > 0.05 ? "var(--cds-support-error)" : undefined }}>
+              <p style={{ fontSize: "1.25rem", fontWeight: 600, color: llm.errorRate > 0.05 ? "var(--rtk-color-support-error)" : undefined }}>
                 {(llm.errorRate * 100).toFixed(2)}%
               </p>
             </div>

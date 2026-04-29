@@ -8,8 +8,9 @@ import {
   Select,
   SelectItem,
   TextInput,
-} from "@carbon/react";
-import { Add, TrashCan } from "@carbon/icons-react";
+  Add,
+  TrashCan,
+} from "../../design";
 
 // ---------------------------------------------------------------------------
 // Condition type / operator definitions for smart collections
@@ -92,13 +93,9 @@ function SmartConditionRow({
           id={`smart-cond-val-${index}`}
           label="Value"
           value={typeof condition.value === "number" ? condition.value : 0}
-          onChange={(
-            _e:
-              | React.MouseEvent<HTMLButtonElement>
-              | React.FocusEvent<HTMLInputElement>
-              | React.KeyboardEvent<HTMLInputElement>,
-            { value }: { value: string | number },
-          ) => onChange(index, { ...condition, value: Number(value) })}
+          onChange={(_e, { value }: { value: string | number }) =>
+            onChange(index, { ...condition, value: Number(value) })
+          }
           min={0}
           step={1}
           hideSteppers

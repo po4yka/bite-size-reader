@@ -1,0 +1,24 @@
+export { Add } from "./glyphs/Add";
+export { Book } from "./glyphs/Book";
+export { Catalog } from "./glyphs/Catalog";
+export { Checkmark } from "./glyphs/Checkmark";
+export { Close } from "./glyphs/Close";
+export { ConnectionSignal } from "./glyphs/ConnectionSignal";
+export { DataBackup } from "./glyphs/DataBackup";
+export { DocumentImport } from "./glyphs/DocumentImport";
+export { Edit } from "./glyphs/Edit";
+export { Lightning } from "./glyphs/Lightning";
+export { Logout } from "./glyphs/Logout";
+export { Notification } from "./glyphs/Notification";
+export { PauseFilled } from "./glyphs/PauseFilled";
+export { Play } from "./glyphs/Play";
+export { Renew } from "./glyphs/Renew";
+export { Rss } from "./glyphs/Rss";
+export { Search as SearchIcon } from "./glyphs/Search";
+export { Settings } from "./glyphs/Settings";
+export { StopFilled } from "./glyphs/StopFilled";
+export { Tag as TagIcon } from "./glyphs/Tag";
+export { TrashCan } from "./glyphs/TrashCan";
+export { User } from "./glyphs/User";
+
+export type { IconProps } from "./types";
