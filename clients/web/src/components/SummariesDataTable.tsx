@@ -15,7 +15,7 @@ import {
   TableToolbarContent,
   TableToolbarSearch,
   Tag,
-} from "@carbon/react";
+} from "../design";
 import type { SummaryCompact } from "../api/types";
 import { QueryErrorNotification } from "./QueryErrorNotification";
 
