@@ -1,9 +1,9 @@
 /*
  * Project-owned design tokens for the Ratatoskr web client.
  *
- * Variables are namespaced `--rtk-*`. Consumers should reference them with a
- * Carbon fallback (`var(--rtk-color-bg, var(--cds-background))`) until Carbon
- * is fully removed in a later phase.
+ * Variables are namespaced `--rtk-*` and consumed via `var(--rtk-X, fallback)`.
+ * The fallback should always be a literal value or another `--rtk-*` var; do
+ * not chain to external design systems.
  */
 
 :root,

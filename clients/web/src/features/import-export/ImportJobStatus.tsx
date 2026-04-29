@@ -51,7 +51,7 @@ export default function ImportJobStatus({ jobId }: ImportJobStatusProps) {
 
       {job.failedItems > 0 && job.errors.length > 0 && (
         <details style={{ marginTop: "0.5rem" }}>
-          <summary style={{ cursor: "pointer", fontSize: "0.875rem", color: "var(--rtk-color-text-error, var(--cds-text-error))" }}>
+          <summary style={{ cursor: "pointer", fontSize: "0.875rem", color: "var(--rtk-color-text-error)" }}>
             {job.errors.length} error(s)
           </summary>
           <UnorderedList style={{ marginTop: "0.25rem", fontSize: "0.8125rem" }}>

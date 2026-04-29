@@ -1,8 +1,8 @@
 /*
- * Project-owned design seam. Re-exports the same named symbols feature code
- * imported from `@carbon/react` and `@carbon/icons-react`. Carbon is still the
- * runtime substrate for now; this layer lets feature files migrate by import
- * path and gives us a single place to swap implementations later.
+ * Project-owned design system. Re-exports primitives, navigation widgets,
+ * tables, modals, and icons from this directory. Feature code imports from
+ * `../design` exclusively — the shim implementations underneath are plain
+ * HTML+CSS+TSX and contain no third-party design system dependencies.
  */
 
 import "./tokens.css";

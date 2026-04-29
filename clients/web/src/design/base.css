@@ -1,11 +1,10 @@
 /*
  * Minimal reset, focus rings, and skeleton shimmer for the project shim layer.
- * Carbon is still active at runtime; once removed this file is the only source
- * of truth for these styles.
+ * This file is the source of truth for these styles.
  */
 
 .rtk-skeleton {
-  background-color: var(--rtk-color-layer, var(--cds-layer-01, #e0e0e0));
+  background-color: var(--rtk-color-layer, #e0e0e0);
   background-image: linear-gradient(
     90deg,
     transparent 0%,
@@ -48,6 +47,6 @@
 }
 
 .rtk-focus-ring:focus-visible {
-  outline: 2px solid var(--rtk-color-focus, var(--cds-focus, #0f62fe));
+  outline: 2px solid var(--rtk-color-focus, #0f62fe);
   outline-offset: 2px;
 }

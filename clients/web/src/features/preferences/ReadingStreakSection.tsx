@@ -38,23 +38,23 @@ export default function ReadingStreakSection() {
             }}
           >
             <div>
-              <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted, var(--cds-text-secondary))" }}>Current streak</p>
+              <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted)" }}>Current streak</p>
               <p style={{ fontSize: "1.5rem", fontWeight: 600 }}>{streakQuery.data.currentStreak} days</p>
             </div>
             <div>
-              <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted, var(--cds-text-secondary))" }}>Longest streak</p>
+              <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted)" }}>Longest streak</p>
               <p style={{ fontSize: "1.5rem", fontWeight: 600 }}>{streakQuery.data.longestStreak} days</p>
             </div>
             <div>
-              <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted, var(--cds-text-secondary))" }}>This week</p>
+              <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted)" }}>This week</p>
               <p style={{ fontSize: "1.5rem", fontWeight: 600 }}>{streakQuery.data.weekCount}</p>
             </div>
             <div>
-              <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted, var(--cds-text-secondary))" }}>This month</p>
+              <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted)" }}>This month</p>
               <p style={{ fontSize: "1.5rem", fontWeight: 600 }}>{streakQuery.data.monthCount}</p>
             </div>
           </div>
-          <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted, var(--cds-text-secondary))" }}>
+          <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted)" }}>
             Last read: {formatDate(streakQuery.data.lastActivityDate)}
           </p>
         </>
