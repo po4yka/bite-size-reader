@@ -8,7 +8,7 @@ import {
   SkeletonText,
   Tile,
   TimePicker,
-} from "@carbon/react";
+} from "../../design";
 import { useUserPreferences, useUserStats, useUpdateUserPreferences } from "../../hooks/useUser";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
