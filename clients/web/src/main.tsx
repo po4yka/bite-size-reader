@@ -26,6 +26,7 @@ function syncTelegramWebAppVisuals(webApp: TelegramWebApp): void {
   const colorScheme = webApp.colorScheme === "dark" ? "dark" : "light";
   document.documentElement.style.colorScheme = colorScheme;
   document.documentElement.dataset.telegramColorScheme = colorScheme;
+  document.documentElement.dataset.theme = colorScheme;
 
   const theme = webApp.themeParams ?? {};
   setRootCssVar("--tg-theme-bg-color", theme.bg_color);

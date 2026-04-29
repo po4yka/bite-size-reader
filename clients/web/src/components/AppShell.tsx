@@ -16,21 +16,22 @@ import {
   SideNavLink,
   SkipToContent,
   Theme,
-} from "@carbon/react";
-import { Logout, Renew } from "@carbon/icons-react";
+  Logout,
+  Renew,
+} from "../design";
 import { useAuth } from "../auth/AuthProvider";
 import { HOME_PATH, NAV_GROUPS, NAV_ROOT_PATHS } from "../routes/manifest";
 
-type CarbonTheme = "white" | "g100";
+type AppTheme = "light" | "dark";
 
-function resolveCarbonTheme(mode: "telegram-webapp" | "jwt"): CarbonTheme {
+function resolveAppTheme(mode: "telegram-webapp" | "jwt"): AppTheme {
   if (mode !== "telegram-webapp") {
-    return "white";
+    return "light";
   }
   const colorScheme =
     (window as Window & { __tgColorScheme?: string }).__tgColorScheme ??
     window.Telegram?.WebApp?.colorScheme;
-  return colorScheme === "dark" ? "g100" : "white";
+  return colorScheme === "dark" ? "dark" : "light";
 }
 
 export default function AppShell() {
@@ -39,7 +40,7 @@ export default function AppShell() {
   const { dismissError, error, logout, mode, reloadUser, user } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [isVerifyingSession, setIsVerifyingSession] = useState(false);
-  const [theme, setTheme] = useState<CarbonTheme>(() => resolveCarbonTheme(mode));
+  const [theme, setTheme] = useState<AppTheme>(() => resolveAppTheme(mode));
 
   const activePath = useMemo(() => {
     const firstSegment = location.pathname.split("/")[1] ?? "library";
@@ -62,7 +63,7 @@ export default function AppShell() {
   }
 
   useEffect(() => {
-    setTheme(resolveCarbonTheme(mode));
+    setTheme(resolveAppTheme(mode));
 
     if (mode !== "telegram-webapp") {
       return;
@@ -74,7 +75,7 @@ export default function AppShell() {
     }
 
     const handleThemeChanged = () => {
-      setTheme(resolveCarbonTheme(mode));
+      setTheme(resolveAppTheme(mode));
     };
 
     webApp.onEvent("themeChanged", handleThemeChanged);
