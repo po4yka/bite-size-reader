@@ -1,5 +1,4 @@
 import {
-  createElement,
   forwardRef,
   type ButtonHTMLAttributes,
   type ComponentType,
@@ -71,25 +70,40 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       .join(" ");
 
     const renderAsElement = as != null || (href != null && as == null);
-    const Element: ElementType = renderAsElement ? (as ?? "a") : "button";
-    const elementProps: Record<string, unknown> = {
-      ref,
-      className: classes,
-      "aria-label": hasIconOnly ? iconDescription : (rest as { "aria-label"?: string })["aria-label"],
-      title: hasIconOnly ? iconDescription : (rest as { title?: string }).title,
-      ...rest,
-    };
+    const ariaLabel = hasIconOnly ? iconDescription : (rest as { "aria-label"?: string })["aria-label"];
+    const titleAttr = hasIconOnly ? iconDescription : (rest as { title?: string }).title;
+    const iconNode = RenderIcon ? <RenderIcon size={16} aria-hidden /> : null;
+    const innerChildren = hasIconOnly ? null : children;
+
     if (renderAsElement) {
-      if (href != null) elementProps.href = href;
-    } else {
-      elementProps.type = type;
+      const Element: ElementType = as ?? "a";
+      return (
+        <Element
+          ref={ref}
+          className={classes}
+          aria-label={ariaLabel}
+          title={titleAttr}
+          {...rest}
+          {...(href != null ? { href } : null)}
+        >
+          {iconNode}
+          {innerChildren}
+        </Element>
+      );
     }
 
-    return createElement(
-      Element,
-      elementProps,
-      RenderIcon ? <RenderIcon size={16} aria-hidden /> : null,
-      hasIconOnly ? null : children,
+    return (
+      <button
+        ref={ref}
+        type={type}
+        className={classes}
+        aria-label={ariaLabel}
+        title={titleAttr}
+        {...rest}
+      >
+        {iconNode}
+        {innerChildren}
+      </button>
     );
   },
 );

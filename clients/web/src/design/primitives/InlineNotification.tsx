@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 export type NotificationKind =
   | "error"
@@ -21,6 +21,7 @@ export interface InlineNotificationProps {
   iconDescription?: string;
   statusIconDescription?: string;
   className?: string;
+  style?: CSSProperties;
   children?: ReactNode;
 }
 
@@ -34,6 +35,7 @@ export function InlineNotification({
   onClose,
   onCloseButtonClick,
   className,
+  style,
   children,
 }: InlineNotificationProps) {
   const cls = [
@@ -52,6 +54,7 @@ export function InlineNotification({
       role={role}
       aria-live={kind === "error" ? "assertive" : "polite"}
       className={cls}
+      style={style}
     >
       <div className="rtk-inline-notification__body">
         {title ? (

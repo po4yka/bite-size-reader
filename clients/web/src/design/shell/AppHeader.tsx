@@ -1,5 +1,4 @@
 import {
-  createElement,
   forwardRef,
   type AnchorHTMLAttributes,
   type ButtonHTMLAttributes,
@@ -35,14 +34,14 @@ export type HeaderNameProps = {
 
 export function HeaderName({ prefix, className, children, as, ...rest }: HeaderNameProps) {
   const Element: ElementType = as ?? "a";
-  return createElement(
-    Element,
-    {
-      className: ["rtk-header__name", className].filter(Boolean).join(" "),
-      ...rest,
-    },
-    prefix ? <span className="rtk-header__prefix">{prefix}</span> : null,
-    <span className="rtk-header__title">{children}</span>,
+  return (
+    <Element
+      className={["rtk-header__name", className].filter(Boolean).join(" ")}
+      {...rest}
+    >
+      {prefix ? <span className="rtk-header__prefix">{prefix}</span> : null}
+      <span className="rtk-header__title">{children}</span>
+    </Element>
   );
 }
 

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 export type InlineLoadingStatus =
   | "active"
@@ -13,12 +13,14 @@ export interface InlineLoadingProps {
   successDelay?: number;
   onSuccess?: () => void;
   className?: string;
+  style?: CSSProperties;
 }
 
 export function InlineLoading({
   status = "active",
   description,
   className,
+  style,
 }: InlineLoadingProps) {
   const cls = [
     "rtk-inline-loading",
@@ -28,7 +30,7 @@ export function InlineLoading({
     .filter(Boolean)
     .join(" ");
   return (
-    <div role="status" className={cls}>
+    <div role="status" className={cls} style={style}>
       <span className="rtk-inline-loading__spinner" aria-hidden>
         {status === "active" ? "○" : status === "finished" ? "✓" : status === "error" ? "✕" : "·"}
       </span>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, InlineLoading, InlineNotification, TextInput, Tile } from "@carbon/react";
+import { Button, InlineLoading, InlineNotification, TextInput, Tile } from "../../design";
 import type { ResolvedChannel } from "../../api/digest";
 import { useResolveChannel } from "../../hooks/useDigest";
 

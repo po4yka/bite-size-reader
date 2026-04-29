@@ -5,7 +5,7 @@ import {
   Modal,
   TextInput,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { useDeleteAccount } from "../../hooks/useUser";
 import { useAuth } from "../../auth/AuthProvider";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";

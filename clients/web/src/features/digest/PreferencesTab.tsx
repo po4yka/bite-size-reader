@@ -8,7 +8,7 @@ import {
   SelectItem,
   Tile,
   TimePicker,
-} from "@carbon/react";
+} from "../../design";
 import { useDigestPreferences, useUpdateDigestPreferences } from "../../hooks/useDigest";
 
 export function PreferencesTab() {

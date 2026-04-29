@@ -1,4 +1,4 @@
-import { InlineLoading, InlineNotification, Tag } from "@carbon/react";
+import { InlineLoading, InlineNotification, Tag } from "../../design";
 import type { DigestChannelPost } from "../../api/digest";
 import { useChannelPosts } from "../../hooks/useDigest";
 
