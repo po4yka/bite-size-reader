@@ -141,7 +141,7 @@ design directory; never reach for an external design system in feature code.
 
 - Components: `import { Button, DataTable } from "../design"` (path adjusts per file depth)
 - Icons: `import { Add, TrashCan } from "../design"` (icons are co-exported)
-- Theme tokens: use `--cds-*` CSS custom properties; never raw hex/rgb
+- Theme tokens: use `--rtk-*` CSS custom properties from `clients/web/src/design/tokens.css`; never raw hex/rgb
 - Shell: global `Header` + `SideNav` live in `clients/web/src/components/AppShell.tsx`
 
 ## Design Skill Interaction
