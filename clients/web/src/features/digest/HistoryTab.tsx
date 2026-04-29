@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { HISTORY_PAGE_SIZE, useDigestHistory } from "../../hooks/useDigest";
 
 export function HistoryTab() {

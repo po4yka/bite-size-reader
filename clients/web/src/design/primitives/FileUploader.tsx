@@ -9,7 +9,7 @@ export interface FileUploaderProps {
   labelTitle?: ReactNode;
   labelDescription?: ReactNode;
   buttonLabel?: ReactNode;
-  buttonKind?: "primary" | "secondary" | "tertiary";
+  buttonKind?: "primary" | "secondary" | "tertiary" | "ghost" | "danger" | "danger--ghost" | "danger--tertiary";
   filenameStatus?: "edit" | "complete" | "uploading";
   accept?: string[] | string;
   multiple?: boolean;

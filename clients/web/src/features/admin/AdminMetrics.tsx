@@ -9,7 +9,7 @@ import {
   StructuredListRow,
   StructuredListWrapper,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useClearCache, useMetrics } from "../../hooks/useAdmin";
 

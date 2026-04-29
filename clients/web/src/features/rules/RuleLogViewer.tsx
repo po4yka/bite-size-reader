@@ -8,7 +8,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@carbon/react";
+} from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useRuleLogs } from "../../hooks/useRules";
 import type { RuleLog } from "../../api/rules";

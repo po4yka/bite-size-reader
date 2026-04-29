@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useContentHealth } from "../../hooks/useAdmin";
 

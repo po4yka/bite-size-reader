@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { InlineLoading, InlineNotification, Tag, Tile } from "@carbon/react";
+import { InlineLoading, InlineNotification, Tag, Tile } from "../../design";
 import { useCustomDigest } from "../../hooks/useDigest";
 
 export default function CustomDigestViewPage() {

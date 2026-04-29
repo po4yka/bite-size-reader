@@ -20,7 +20,7 @@ import {
   TableToolbarContent,
   TextInput,
   Tile,
-} from "@carbon/react";
+} from "../../design";
 import { exportOPML } from "../../api/rss";
 import type { RSSFeedItem } from "../../api/rss";
 import {

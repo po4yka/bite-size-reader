@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
   Tag,
-} from "@carbon/react";
+} from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useImportJobs, useDeleteImportJob } from "../../hooks/useImportExport";
 import type { ImportJob } from "../../api/importExport";

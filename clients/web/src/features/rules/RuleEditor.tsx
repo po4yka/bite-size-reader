@@ -9,8 +9,9 @@ import {
   SelectItem,
   TextInput,
   Toggle,
-} from "@carbon/react";
-import { Add, TrashCan } from "@carbon/icons-react";
+  Add,
+  TrashCan,
+} from "../../design";
 import type { Rule, Condition, Action, CreateRulePayload, UpdateRulePayload } from "../../api/rules";
 import {
   RULE_EVENT_TYPES,
@@ -81,7 +82,7 @@ function ConditionRow({
           id={`cond-val-${index}`}
           label="Value"
           value={typeof condition.value === "number" ? condition.value : 0}
-          onChange={(_e: React.MouseEvent<HTMLButtonElement> | React.FocusEvent<HTMLInputElement> | React.KeyboardEvent<HTMLInputElement>, { value }: { value: string | number }) =>
+          onChange={(_e, { value }: { value: string | number }) =>
             onChange(index, { ...condition, value: Number(value) })
           }
           min={0}
@@ -143,7 +144,7 @@ function ActionRow({
             id={`action-param-${index}`}
             label="Collection ID"
             value={Number(action.params.collection_id ?? 0)}
-            onChange={(_e: React.MouseEvent<HTMLButtonElement> | React.FocusEvent<HTMLInputElement> | React.KeyboardEvent<HTMLInputElement>, { value }: { value: string | number }) =>
+            onChange={(_e, { value }: { value: string | number }) =>
               onChange(index, { ...action, params: { ...action.params, collection_id: Number(value) } })
             }
             min={1}
@@ -360,7 +361,7 @@ export default function RuleEditor({ open, rule, onClose, onSave, onTest, isSavi
             id="rule-priority"
             label="Priority"
             value={priority}
-            onChange={(_e: React.MouseEvent<HTMLButtonElement> | React.FocusEvent<HTMLInputElement> | React.KeyboardEvent<HTMLInputElement>, { value }: { value: string | number }) => setPriority(Number(value))}
+            onChange={(_e, { value }: { value: string | number }) => setPriority(Number(value))}
             min={0}
             step={1}
             hideSteppers

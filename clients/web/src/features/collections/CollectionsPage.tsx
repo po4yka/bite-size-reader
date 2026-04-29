@@ -22,7 +22,7 @@ import {
   Tile,
   TreeNode,
   TreeView,
-} from "@carbon/react";
+} from "../../design";
 import { createCollection, moveCollectionItems } from "../../api/collections";
 import type { Collection, CollectionItem } from "../../api/types";
 import { queryKeys } from "../../api/queryKeys";

@@ -17,7 +17,7 @@ import {
   TableRow,
   Tag,
   Toggle,
-} from "@carbon/react";
+} from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import {
   useBackups,

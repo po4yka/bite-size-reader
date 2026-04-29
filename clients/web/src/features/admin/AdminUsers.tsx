@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
   Tag,
-} from "@carbon/react";
+} from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useAdminUsers } from "../../hooks/useAdmin";
 
