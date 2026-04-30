@@ -218,6 +218,44 @@ Breakpoints:
 | tablet  | 1024px   | Tablet — uses web tokens                    |
 | web     | 1440px   | Web baseline, 178-col grid                  |
 
+## Mobile
+
+Frost spans web (1440px / 178-col grid) and mobile (393px / 48-col
+grid) with a tablet (768-1199px) range that uses web tokens. The
+React frontend at `clients/web/` adapts via container queries on
+the AppShell main content area: every responsive component uses
+`@container main (max-width: 768px)` rather than `@media`,
+isolating mobile reflow from the viewport.
+
+Below 768px:
+
+- **Cell grid switches to 48 columns.** Boot script in
+  `clients/web/index.html` sets `--ch = window.innerWidth / 48`
+  (vs `/178` on desktop). Strip widths recompute live; font-size
+  derives from cell. `Math.max(ch, 6)` floors smartwatch viewports.
+- **Header collapses** to 54px (`--frost-mobile-header`); wordmark
+  + hamburger only.
+- **SideNav becomes a drawer** that slides in from the left over
+  the content with a `page@0.85` backdrop. Tap-outside or the
+  hamburger toggle closes it.
+- **Bottom tab bar** (`--frost-tab-bar-height: 56px`) replaces the
+  desktop SideNav for primary navigation: `[ QUEUE · DIGESTS ·
+  TOPICS · SETTINGS ]`. Active tab gets the 4px leading spark
+  hairline (`--frost-spark-mobile`).
+- **Modals go full-screen** (no hairline frame, no glassmorphism
+  backdrop).
+- **All interactive primitives** size their hit areas to ≥44×44px
+  via container-query overrides (visual size preserved).
+- **Per-route layouts** transform desktop tables → stacked cards,
+  multi-column grids → single column, BracketTabs → horizontal-scroll
+  segmented controls. Reading core (LibraryPage queue) becomes a
+  tap-to-open card list; cursor-row keyboard nav is suppressed.
+
+The mobile breakpoint contract: 393px is the canonical artboard
+width per Frost canon (M01-M23 in Figma). 768px is the container
+query threshold. 1024-1199px tablet uses web tokens. ≥1200px is
+desktop.
+
 ## Shapes
 
 `rounded.none = 0px` is the only radius token. There is no `sm`,

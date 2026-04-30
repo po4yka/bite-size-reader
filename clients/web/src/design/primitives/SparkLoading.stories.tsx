@@ -4,7 +4,7 @@ import { SparkLoading } from "./SparkLoading";
 const meta = {
   title: "Frost/SparkLoading",
   component: SparkLoading,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof SparkLoading>;
 
 export default meta;

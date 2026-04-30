@@ -5,7 +5,7 @@ import { Toast } from "./Toast";
 const meta = {
   title: "Frost/Toast",
   component: Toast,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof Toast>;
 
 export default meta;

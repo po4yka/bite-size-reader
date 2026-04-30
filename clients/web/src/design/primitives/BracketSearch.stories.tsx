@@ -5,7 +5,7 @@ import { BracketSearch } from "./BracketSearch";
 const meta = {
   title: "Primitives/BracketSearch",
   component: BracketSearch,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof BracketSearch>;
 
 export default meta;

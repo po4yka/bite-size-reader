@@ -4,7 +4,7 @@ import { MonoProgressBar } from "./MonoProgressBar";
 const meta = {
   title: "Frost/MonoProgressBar",
   component: MonoProgressBar,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof MonoProgressBar>;
 
 export default meta;

@@ -4,7 +4,7 @@ import { StatusBadge } from "./StatusBadge";
 const meta = {
   title: "Frost/StatusBadge",
   component: StatusBadge,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof StatusBadge>;
 
 export default meta;

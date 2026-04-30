@@ -11,7 +11,7 @@ import {
 const meta = {
   title: "Navigation/BracketTabs",
   component: BracketTabs,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof BracketTabs>;
 
 export default meta;

@@ -4,7 +4,7 @@ import { FileUploader } from "./FileUploader";
 const meta = {
   title: "Primitives/FileUploader",
   component: FileUploader,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof FileUploader>;
 
 export default meta;

@@ -4,7 +4,7 @@ import { Accordion, AccordionItem } from "./Accordion";
 const meta = {
   title: "Primitives/Accordion",
   component: Accordion,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof Accordion>;
 
 export default meta;

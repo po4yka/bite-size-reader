@@ -4,7 +4,7 @@ import { MonoInput } from "./MonoInput";
 const meta = {
   title: "Primitives/MonoInput",
   component: MonoInput,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof MonoInput>;
 
 export default meta;

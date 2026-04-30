@@ -4,7 +4,7 @@ import { Checkbox } from "./Checkbox";
 const meta = {
   title: "Primitives/Checkbox",
   component: Checkbox,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof Checkbox>;
 
 export default meta;

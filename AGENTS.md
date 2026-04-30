@@ -78,7 +78,7 @@ python -m app.cli.summary --url <URL>           # CLI test runner
 5. Update both `en/` and `ru/` prompts when changing LLM behavior
 6. Validate summary JSON with `app/core/summary_contract.py`
 7. Database changes require migration via `app/cli/migrate_db.py` + docs/SPEC.md update
-8. Web frontend changes: read `docs/reference/frontend-web.md` first, run `npm run check:static` before finalizing
+8. Web frontend changes: read `docs/reference/frontend-web.md` first, run `npm run check:static` before finalizing. Web UI must adapt to ≤768px via container queries on AppShell main; see DESIGN.md Mobile section.
 9. State scope explicitly when giving an instruction; don't expect silent generalization across items
 10. Tell the agent what to do, not what to avoid (e.g., "use `tests/db_helpers.py`" vs. "don't write new fixtures")
 11. Front-load the full task spec on the first turn; iterative refinement loses context against multi-step plans

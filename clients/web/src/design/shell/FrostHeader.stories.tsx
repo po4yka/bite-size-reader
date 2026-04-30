@@ -11,7 +11,7 @@ import {
 const meta = {
   title: "Shell/FrostHeader",
   component: FrostHeader,
-  parameters: { layout: "fullscreen" },
+  parameters: { layout: "fullscreen", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof FrostHeader>;
 
 export default meta;

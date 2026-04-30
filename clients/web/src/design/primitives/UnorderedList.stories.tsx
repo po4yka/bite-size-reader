@@ -4,7 +4,7 @@ import { UnorderedList, ListItem } from "./UnorderedList";
 const meta = {
   title: "Primitives/UnorderedList",
   component: UnorderedList,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof UnorderedList>;
 
 export default meta;

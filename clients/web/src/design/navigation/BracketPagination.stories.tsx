@@ -5,7 +5,7 @@ import { BracketPagination } from "./BracketPagination";
 const meta = {
   title: "Navigation/BracketPagination",
   component: BracketPagination,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof BracketPagination>;
 
 export default meta;

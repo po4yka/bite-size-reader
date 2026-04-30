@@ -4,7 +4,7 @@ import { CodeSnippet } from "./CodeSnippet";
 const meta = {
   title: "Primitives/CodeSnippet",
   component: CodeSnippet,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof CodeSnippet>;
 
 export default meta;

@@ -4,7 +4,7 @@ import { MonoTextArea } from "./MonoTextArea";
 const meta = {
   title: "Primitives/MonoTextArea",
   component: MonoTextArea,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof MonoTextArea>;
 
 export default meta;

@@ -4,7 +4,7 @@ import { BracketButton } from "./BracketButton";
 const meta = {
   title: "Primitives/BracketButton",
   component: BracketButton,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof BracketButton>;
 
 export default meta;

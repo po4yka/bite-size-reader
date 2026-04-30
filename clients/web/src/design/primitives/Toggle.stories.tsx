@@ -4,7 +4,7 @@ import { Toggle } from "./Toggle";
 const meta = {
   title: "Primitives/Toggle",
   component: Toggle,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof Toggle>;
 
 export default meta;

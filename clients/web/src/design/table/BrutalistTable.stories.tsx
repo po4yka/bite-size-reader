@@ -18,7 +18,7 @@ import {
 const meta = {
   title: "Frost/BrutalistTable",
   component: DataTable,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof DataTable>;
 
 export default meta;

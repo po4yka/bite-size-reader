@@ -4,7 +4,7 @@ import { Tag } from "./Tag";
 const meta = {
   title: "Primitives/Tag",
   component: Tag,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof Tag>;
 
 export default meta;

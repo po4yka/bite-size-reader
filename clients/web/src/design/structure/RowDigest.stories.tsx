@@ -16,7 +16,7 @@ import {
 const meta = {
   title: "Frost/RowDigest",
   component: RowDigestWrapper,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof RowDigestWrapper>;
 
 export default meta;

@@ -4,7 +4,7 @@ import { MonoSelect, MonoSelectItem } from "./MonoSelect";
 const meta = {
   title: "Primitives/MonoSelect",
   component: MonoSelect,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof MonoSelect>;
 
 export default meta;

@@ -5,16 +5,9 @@ import { MobileTabBar } from "./MobileTabBar";
 const meta = {
   title: "Shell/MobileTabBar",
   component: MobileTabBar,
-  decorators: [
-    (Story) => (
-      <MemoryRouter initialEntries={["/library"]}>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
   parameters: {
     viewport: {
-      defaultViewport: "frost-mobile-393",
+      defaultViewport: "frostMobile",
     },
     layout: "fullscreen",
   },
@@ -23,34 +16,25 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const QueueActive: Story = {};
+const withRouter = (initialPath: string) => (Story: () => React.ReactElement) =>
+  (
+    <MemoryRouter initialEntries={[initialPath]}>
+      <Story />
+    </MemoryRouter>
+  );
+
+export const QueueActive: Story = {
+  decorators: [withRouter("/library")],
+};
 
 export const DigestsActive: Story = {
-  decorators: [
-    (Story) => (
-      <MemoryRouter initialEntries={["/digest"]}>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
+  decorators: [withRouter("/digest")],
 };
 
 export const TopicsActive: Story = {
-  decorators: [
-    (Story) => (
-      <MemoryRouter initialEntries={["/tags"]}>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
+  decorators: [withRouter("/tags")],
 };
 
 export const SettingsActive: Story = {
-  decorators: [
-    (Story) => (
-      <MemoryRouter initialEntries={["/preferences"]}>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
+  decorators: [withRouter("/preferences")],
 };

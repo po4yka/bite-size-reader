@@ -4,7 +4,7 @@ import { Link } from "./Link";
 const meta = {
   title: "Primitives/Link",
   component: Link,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof Link>;
 
 export default meta;

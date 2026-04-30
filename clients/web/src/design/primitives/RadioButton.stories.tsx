@@ -4,7 +4,7 @@ import { RadioButton, RadioButtonGroup } from "./RadioButton";
 const meta = {
   title: "Primitives/RadioButton",
   component: RadioButton,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
   args: { value: "a" },
 } satisfies Meta<typeof RadioButton>;
 

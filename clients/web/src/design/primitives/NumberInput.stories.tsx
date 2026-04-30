@@ -4,7 +4,7 @@ import { NumberInput } from "./NumberInput";
 const meta = {
   title: "Primitives/NumberInput",
   component: NumberInput,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof NumberInput>;
 
 export default meta;

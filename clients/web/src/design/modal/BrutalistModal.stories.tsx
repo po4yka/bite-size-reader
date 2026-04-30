@@ -10,7 +10,7 @@ import {
 const meta = {
   title: "Modal/BrutalistModal",
   component: BrutalistModal,
-  parameters: { layout: "fullscreen" },
+  parameters: { layout: "fullscreen", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof BrutalistModal>;
 
 export default meta;

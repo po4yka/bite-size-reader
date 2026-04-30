@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Web frontend — mobile-responsive layouts
+
+Adds Frost mobile-artboard fidelity to the React web frontend across
+all 17 routes + AppShell. Container queries on the main content area
+(`@container main (max-width: 768px)`) drive the breakpoint, isolated
+from viewport — so embedded views (drawer, modal, side panel) reflow
+off available width.
+
+- **NEW** Mobile cell grid: 48-col below 768px (vs web's 178-col),
+  computed live by the boot script in index.html.
+- **NEW** Mobile chrome: 54px FrostHeader collapses to wordmark +
+  hamburger; FrostSideNav becomes a slide-in drawer; new
+  MobileTabBar (56px bottom strip with QUEUE · DIGESTS · TOPICS ·
+  SETTINGS, active tab has 4px leading spark).
+- **NEW** Mobile-specific tokens: `--frost-spark-mobile` 4px,
+  `--frost-tab-bar-height` 56px, `--frost-mobile-header` 54px,
+  `--frost-pad-page-mobile` 16px, `--frost-gap-ext` 10px.
+- **REWRITE** All 17 routes have designed mobile layouts: tables →
+  stacked cards, multi-column grids → single column, BracketTabs →
+  horizontal-scroll segmented controls. LibraryPage queue is a
+  stacked card list with tap-to-open. ArticlePage reader has a
+  fixed-bottom action bar above the tab bar.
+- **NEW** Touch targets ≥44×44 across all interactive primitives
+  (BracketButton, IconButton, Checkbox, RadioButton, Toggle, Tag,
+  Accordion, NumberInput, MonoInput/TextArea/Select, BracketSearch).
+- **NEW** Playwright mobile device projects (iPhone 12, Pixel 5,
+  iPad Mini) plus a desktop project; existing tests run on all
+  projects.
+- **NEW** Storybook Frost Mobile (393×690) viewport with a
+  responsive default; primitive stories render in mobile by default.
+- **FIX** `@storybook/addon-viewport` `INITIAL_VIEWPORTS` import
+  (broken since Storybook 8+ API change).
+- Bundle delta: index.js 186.09 kB → 188.78 kB (+1.4%) across the
+  whole mobile migration; CSS payload absorbs the new mobile.css
+  aggregator + 5 group-*.mobile.css per-route files.
+
 ### Web frontend — Frost design system migration
 
 Full rewrite of the React web frontend (`clients/web/`) to the Frost

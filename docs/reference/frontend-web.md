@@ -70,6 +70,36 @@ so token CSS resolves on first paint without a flash. Add new components
 by extending the design directory; never reach for an external design
 system in feature code.
 
+### Mobile responsiveness
+
+Frost spans web (1440px / 178-col grid) and mobile (393px / 48-col
+grid) with a tablet (768-1199px) range that uses web tokens. The
+React frontend adapts via container queries on the AppShell main
+content area: every responsive component uses
+`@container main (max-width: 768px)` rather than `@media`, isolating
+mobile reflow from the viewport (e.g., a drawer overlay reflows to
+match the available content width even though the viewport is
+larger).
+
+Below 768px the cell grid switches to 48 columns (boot script in
+`clients/web/index.html` sets `--ch = window.innerWidth / 48` vs
+`/178` on desktop), the FrostHeader collapses to 54px, the
+FrostSideNav becomes a slide-in drawer with a `page@0.85` backdrop,
+and a fixed-bottom 56px MobileTabBar
+(`[ QUEUE · DIGESTS · TOPICS · SETTINGS ]`) takes over primary
+navigation. Modals go full-screen. All interactive primitives size
+their hit areas to ≥44×44px via container-query overrides. Per-route
+layouts transform desktop tables → stacked cards, multi-column grids
+→ single column, `BracketTabs` → horizontal-scroll segmented
+controls.
+
+Mobile-specific tokens (in `tokens.css`): `--frost-spark-mobile`
+(4px vs web's 2px), `--frost-tab-bar-height` (56px),
+`--frost-mobile-header` (54px), `--frost-pad-page-mobile` (16px),
+`--frost-gap-ext` (10px). Per-route mobile CSS lives in dedicated
+`*.mobile.css` files imported once via the `mobile.css` aggregator
+at `clients/web/src/design/mobile.css`.
+
 ---
 
 ## Directory Layout

@@ -1,7 +1,32 @@
 import type { Preview, Decorator } from "@storybook/react-vite";
-import { INITIAL_VIEWPORTS } from "@storybook/addon-viewport";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
+
+// INITIAL_VIEWPORTS was removed from @storybook/addon-viewport in v8+.
+// Inline the small set of standard viewports we need alongside our custom
+// frostMobile viewport defined below.
+const INITIAL_VIEWPORTS = {
+  iphone6: {
+    name: "iPhone 6",
+    styles: { width: "375px", height: "667px" },
+    type: "mobile" as const,
+  },
+  iphonex: {
+    name: "iPhone X",
+    styles: { width: "375px", height: "812px" },
+    type: "mobile" as const,
+  },
+  iphone12: {
+    name: "iPhone 12",
+    styles: { width: "390px", height: "844px" },
+    type: "mobile" as const,
+  },
+  ipadmini: {
+    name: "iPad Mini",
+    styles: { width: "768px", height: "1024px" },
+    type: "tablet" as const,
+  },
+};
 
 import "../src/design/index";
 import "../src/styles.css";
@@ -60,7 +85,7 @@ const preview: Preview = {
     },
     viewport: {
       viewports: { ...customViewports, ...INITIAL_VIEWPORTS },
-      defaultViewport: "responsive",
+      defaultViewport: "frostMobile",
     },
   },
 };

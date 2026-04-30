@@ -9,7 +9,7 @@ import {
 const meta = {
   title: "Shell/FrostSideNav",
   component: FrostSideNav,
-  parameters: { layout: "fullscreen" },
+  parameters: { layout: "fullscreen", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof FrostSideNav>;
 
 export default meta;

@@ -9,7 +9,7 @@ import {
 const meta = {
   title: "Frost/BrutalistSkeleton",
   component: BrutalistSkeleton,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof BrutalistSkeleton>;
 
 export default meta;

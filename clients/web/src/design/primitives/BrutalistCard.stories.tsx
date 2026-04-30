@@ -4,7 +4,7 @@ import { BrutalistCard } from "./BrutalistCard";
 const meta = {
   title: "Frost/BrutalistCard",
   component: BrutalistCard,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
 } satisfies Meta<typeof BrutalistCard>;
 
 export default meta;

@@ -5,7 +5,7 @@ import { Close, Edit, TrashCan, Add } from "../icons";
 const meta = {
   title: "Primitives/IconButton",
   component: IconButton,
-  parameters: { layout: "padded" },
+  parameters: { layout: "padded", viewport: { defaultViewport: "frostMobile" } },
   args: { label: "Button" },
 } satisfies Meta<typeof IconButton>;
 
