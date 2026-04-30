@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Button,
-  DataTable,
   DataTableSkeleton,
   FileUploader,
   InlineNotification,
@@ -10,17 +9,17 @@ import {
   TableBody,
   TableCell,
   TableContainer,
-  TableExpandHeader,
-  TableExpandRow,
-  TableExpandedRow,
   TableHead,
   TableHeader,
   TableRow,
-  TableToolbar,
-  TableToolbarContent,
   TextInput,
   Tile,
 } from "../../design";
+import {
+  DataTable as BrutalistTable,
+  TableExpandCell,
+  TableExpandHeaderCell,
+} from "../../design/table/BrutalistTable";
 import { exportOPML } from "../../api/rss";
 import type { RSSFeedItem } from "../../api/rss";
 import {
@@ -267,31 +266,40 @@ export function RSSFeedsTab() {
         )}
 
         {!isInitialLoading && subscriptions.length > 0 && (
-          <DataTable rows={rows} headers={headers} isSortable={false}>
-            {({ rows, headers, getHeaderProps, getRowProps, getTableProps, getTableContainerProps }) => (
+          <BrutalistTable rows={rows} headers={headers} isSortable={false}>
+            {({ rows, headers, getHeaderProps, getRowProps, getTableProps, getTableContainerProps, getExpandedRowProps }) => (
               <TableContainer title="Subscribed feeds" {...getTableContainerProps()}>
-                <TableToolbar>
-                  <TableToolbarContent>
-                    <Button kind="ghost" size="sm" onClick={handleExportOPML}>
-                      Export OPML
-                    </Button>
-                    <FileUploader
-                      accept={[".opml", ".xml"]}
-                      buttonLabel="Import OPML"
-                      buttonKind="ghost"
-                      size="sm"
-                      filenameStatus="complete"
-                      onChange={handleImportOPML}
-                      disabled={importMutation.isPending}
-                    />
-                  </TableToolbarContent>
-                </TableToolbar>
+                {/* Frost-styled toolbar */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "flex-end",
+                    padding: "8px 16px",
+                    borderBottom: "1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent)",
+                    backgroundColor: "var(--frost-page)",
+                    gap: "8px",
+                  }}
+                >
+                  <Button kind="ghost" size="sm" onClick={handleExportOPML}>
+                    Export OPML
+                  </Button>
+                  <FileUploader
+                    accept={[".opml", ".xml"]}
+                    buttonLabel="Import OPML"
+                    buttonKind="ghost"
+                    size="sm"
+                    filenameStatus="complete"
+                    onChange={handleImportOPML}
+                    disabled={importMutation.isPending}
+                  />
+                </div>
                 <Table {...getTableProps()}>
                   <TableHead>
                     <TableRow>
-                      <TableExpandHeader />
+                      <TableExpandHeaderCell />
                       {headers.map((header) => (
-                        <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
+                        <TableHeader key={header.key} {...getHeaderProps({ header })}>{header.header}</TableHeader>
                       ))}
                     </TableRow>
                   </TableHead>
@@ -299,9 +307,15 @@ export function RSSFeedsTab() {
                     {rows.map((row) => {
                       const subId = Number(row.id);
                       const feedId = feedIdLookup.get(row.id) ?? 0;
+                      const expandedProps = getExpandedRowProps({ row });
+                      const rowProps = getRowProps({ row });
                       return (
                         <React.Fragment key={row.id}>
-                          <TableExpandRow {...getRowProps({ row })}>
+                          <TableRow {...rowProps}>
+                            <TableExpandCell
+                              isExpanded={row.isExpanded ?? false}
+                              onToggle={expandedProps.onToggle as () => void}
+                            />
                             {row.cells.map((cell) => {
                               if (cell.info.header === "actions") {
                                 return (
@@ -328,10 +342,17 @@ export function RSSFeedsTab() {
                               }
                               return <TableCell key={cell.id}>{String(cell.value)}</TableCell>;
                             })}
-                          </TableExpandRow>
-                          <TableExpandedRow colSpan={headers.length + 1}>
-                            <FeedItemsPreview feedId={feedId} />
-                          </TableExpandedRow>
+                          </TableRow>
+                          {row.isExpanded && (
+                            <TableRow>
+                              <TableCell
+                                colSpan={headers.length + 1}
+                                style={{ padding: "16px" }}
+                              >
+                                <FeedItemsPreview feedId={feedId} />
+                              </TableCell>
+                            </TableRow>
+                          )}
                         </React.Fragment>
                       );
                     })}
@@ -339,7 +360,7 @@ export function RSSFeedsTab() {
                 </Table>
               </TableContainer>
             )}
-          </DataTable>
+          </BrutalistTable>
         )}
       </Tile>
     </div>

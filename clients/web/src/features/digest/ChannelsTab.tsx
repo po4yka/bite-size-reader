@@ -1,29 +1,26 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Button,
-  DataTable,
   DataTableSkeleton,
   Dropdown,
   InlineNotification,
   Table,
-  TableBatchAction,
-  TableBatchActions,
   TableBody,
   TableCell,
   TableContainer,
-  TableExpandHeader,
-  TableExpandRow,
-  TableExpandedRow,
   TableHead,
   TableHeader,
   TableRow,
-  TableSelectAll,
-  TableSelectRow,
-  TableToolbar,
-  TableToolbarContent,
   TextInput,
   Tile,
 } from "../../design";
+import {
+  DataTable as BrutalistTable,
+  TableExpandCell,
+  TableExpandHeaderCell,
+  TableSelectCell,
+  TableSelectHeaderCell,
+} from "../../design/table/BrutalistTable";
 import type { DigestCategory } from "../../api/digest";
 import {
   useAssignCategory,
@@ -189,7 +186,7 @@ export function ChannelsTab({ isOwner, isActive }: { isOwner: boolean; isActive:
         {isChannelsInitialLoading && <DataTableSkeleton columnCount={headers.length} rowCount={6} showToolbar={false} />}
 
         {!isChannelsInitialLoading && (
-          <DataTable rows={rows} headers={headers} radio={false} isSortable={false}>
+          <BrutalistTable rows={rows} headers={headers} radio={false} isSortable={false}>
             {({
               rows,
               headers,
@@ -199,59 +196,103 @@ export function ChannelsTab({ isOwner, isActive }: { isOwner: boolean; isActive:
               getSelectionProps,
               getTableContainerProps,
               getBatchActionProps,
+              getExpandedRowProps,
               selectedRows,
             }) => {
               const batchActionProps = getBatchActionProps();
+              const allSelProps = getSelectionProps();
               return (
                 <TableContainer title="Digest channels" {...getTableContainerProps()}>
-                  <TableToolbar>
-                    <TableBatchActions {...batchActionProps}>
-                      <TableBatchAction
-                        tabIndex={batchActionProps.shouldShowBatchActions ? 0 : -1}
-                        onClick={() => handleBulkUnsubscribe(selectedRows)}
-                      >
-                        Unsubscribe Selected
-                      </TableBatchAction>
-                      <TableBatchAction
-                        tabIndex={batchActionProps.shouldShowBatchActions ? 0 : -1}
-                        onClick={() => {
-                          setBatchSelectedIds(selectedRows.map((r) => r.id));
-                          setBatchCategoryModalOpen(true);
+                  {/* Frost-styled toolbar */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 16px",
+                      borderBottom: "1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent)",
+                      backgroundColor: "var(--frost-page)",
+                      gap: "8px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {/* Batch action bar — shown when rows are selected */}
+                    {batchActionProps.shouldShowBatchActions && (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          fontFamily: "var(--frost-font-mono)",
+                          fontSize: "var(--frost-type-mono-xs-size)",
                         }}
                       >
-                        Set Category
-                      </TableBatchAction>
-                    </TableBatchActions>
-                    <TableToolbarContent>
-                      <Dropdown
-                        id="category-filter"
-                        titleText=""
-                        label="Filter by category"
-                        size="sm"
-                        items={categoryFilterItems}
-                        itemToString={(item) => item?.label ?? ""}
-                        onChange={({ selectedItem }) => {
-                          if (!selectedItem || selectedItem.id === "all") {
-                            setCategoryFilter("all");
-                          } else if (selectedItem.id === "none") {
-                            setCategoryFilter(null);
-                          } else {
-                            setCategoryFilter(Number(selectedItem.id));
-                          }
-                        }}
-                      />
-                      <Button kind="ghost" size="sm" onClick={() => setCategoryModalOpen(true)}>
-                        Manage Categories
-                      </Button>
-                    </TableToolbarContent>
-                  </TableToolbar>
+                        <span style={{ color: "var(--frost-ink)", opacity: 0.7 }}>
+                          {batchActionProps.totalSelected} selected
+                        </span>
+                        <Button
+                          kind="danger--ghost"
+                          size="sm"
+                          onClick={() => handleBulkUnsubscribe(selectedRows)}
+                        >
+                          Unsubscribe Selected
+                        </Button>
+                        <Button
+                          kind="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setBatchSelectedIds(selectedRows.map((r) => r.id));
+                            setBatchCategoryModalOpen(true);
+                          }}
+                        >
+                          Set Category
+                        </Button>
+                        <Button
+                          kind="ghost"
+                          size="sm"
+                          onClick={batchActionProps.onCancel}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
+                    {/* Normal toolbar content */}
+                    {!batchActionProps.shouldShowBatchActions && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto" }}>
+                        <Dropdown
+                          id="category-filter"
+                          titleText=""
+                          label="Filter by category"
+                          size="sm"
+                          items={categoryFilterItems}
+                          itemToString={(item) => item?.label ?? ""}
+                          onChange={({ selectedItem }) => {
+                            if (!selectedItem || selectedItem.id === "all") {
+                              setCategoryFilter("all");
+                            } else if (selectedItem.id === "none") {
+                              setCategoryFilter(null);
+                            } else {
+                              setCategoryFilter(Number(selectedItem.id));
+                            }
+                          }}
+                        />
+                        <Button kind="ghost" size="sm" onClick={() => setCategoryModalOpen(true)}>
+                          Manage Categories
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   <Table {...getTableProps()}>
                     <TableHead>
                       <TableRow>
-                        <TableSelectAll {...getSelectionProps()} />
-                        <TableExpandHeader />
+                        <TableSelectHeaderCell
+                          checked={allSelProps.checked as boolean}
+                          onSelect={allSelProps.onSelect as () => void}
+                          id={allSelProps.id as string}
+                        />
+                        <TableExpandHeaderCell />
                         {headers.map((header) => (
-                          <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
+                          <TableHeader key={header.key} {...getHeaderProps({ header })}>{header.header}</TableHeader>
                         ))}
                       </TableRow>
                     </TableHead>
@@ -259,10 +300,22 @@ export function ChannelsTab({ isOwner, isActive }: { isOwner: boolean; isActive:
                       {rows.map((row) => {
                         const username = row.cells.find((cell) => cell.info.header === "actions")?.value as string;
                         const subscriptionId = Number(row.id);
+                        const rowSelProps = getSelectionProps({ row });
+                        const expandedProps = getExpandedRowProps({ row });
+                        const rowProps = getRowProps({ row });
                         return (
                           <React.Fragment key={row.id}>
-                            <TableExpandRow {...getRowProps({ row })}>
-                              <TableSelectRow {...getSelectionProps({ row })} />
+                            <TableRow {...rowProps}>
+                              <TableSelectCell
+                                id={rowSelProps.id as string}
+                                name={rowSelProps.name as string}
+                                checked={rowSelProps.checked as boolean}
+                                onSelect={rowSelProps.onSelect as () => void}
+                              />
+                              <TableExpandCell
+                                isExpanded={row.isExpanded ?? false}
+                                onToggle={expandedProps.onToggle as () => void}
+                              />
                               {row.cells.map((cell) => {
                                 if (cell.info.header === "actions") {
                                   return (
@@ -315,10 +368,17 @@ export function ChannelsTab({ isOwner, isActive }: { isOwner: boolean; isActive:
                                 }
                                 return <TableCell key={cell.id}>{String(cell.value)}</TableCell>;
                               })}
-                            </TableExpandRow>
-                            <TableExpandedRow colSpan={headers.length + 2}>
-                              <ChannelPostsPreview username={username} />
-                            </TableExpandedRow>
+                            </TableRow>
+                            {row.isExpanded && (
+                              <TableRow>
+                                <TableCell
+                                  colSpan={headers.length + 2}
+                                  style={{ padding: "16px" }}
+                                >
+                                  <ChannelPostsPreview username={username} />
+                                </TableCell>
+                              </TableRow>
+                            )}
                           </React.Fragment>
                         );
                       })}
@@ -327,7 +387,7 @@ export function ChannelsTab({ isOwner, isActive }: { isOwner: boolean; isActive:
                 </TableContainer>
               );
             }}
-          </DataTable>
+          </BrutalistTable>
         )}
 
         <div className="form-actions">
