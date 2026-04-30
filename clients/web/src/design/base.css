@@ -35,6 +35,11 @@
   50%       { opacity: 1; }
 }
 
+@keyframes frost-toast {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* ─── Reduced-motion ───────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
