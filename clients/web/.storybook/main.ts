@@ -8,7 +8,7 @@ const config: StorybookConfig = {
     "@storybook/addon-onboarding",
     // @storybook/addon-viewport removed in Storybook 9.0+ — viewport
     // controls are built-in via parameters.viewport on individual stories.
-    "@chromatic-com/storybook",
+
   ],
   framework: {
     name: "@storybook/react-vite",

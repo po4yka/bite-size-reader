@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Web frontend — visual regression CI (Phase 9)
+### Web frontend — local-only Playwright visual regression (Phase 10)
 
-Adds Chromatic (component-level, Storybook-based) and Playwright (route-level,
-screenshot diff) visual-regression CI jobs to the Frost web frontend pipeline;
-see `docs/reference/visual-regression.md` for setup and baseline workflow.
+Replaces Chromatic with a fully local Playwright visual-regression solution.
+Route-level coverage (`mobile-routes.spec.ts`, 16 routes × 4 device profiles)
+is joined by component-level coverage (`storybook-visual.spec.ts`, one
+screenshot per Storybook story). All baselines are committed to the repo — no
+third-party service or account required. See
+`docs/reference/visual-regression.md` for baseline workflow and CI behavior.
 
 ### Web frontend — mobile-responsive layouts
 
