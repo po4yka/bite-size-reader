@@ -55,6 +55,7 @@ from app.db._models_rules import (
     WebhookDelivery,
     WebhookSubscription,
 )
+from app.db._models_signal import FeedItem, Source, Subscription, Topic, UserSignal
 from app.db._models_user_content import (
     CustomDigest,
     SummaryFeedback,
@@ -90,6 +91,7 @@ __all__ = [
     "CrawlResult",
     "CustomDigest",
     "DigestDelivery",
+    "FeedItem",
     "ImportJob",
     "LLMCall",
     "RSSFeed",
@@ -99,6 +101,8 @@ __all__ = [
     "RefreshToken",
     "Request",
     "RuleExecutionLog",
+    "Source",
+    "Subscription",
     "Summary",
     "SummaryEmbedding",
     "SummaryFeedback",
@@ -106,6 +110,7 @@ __all__ = [
     "SummaryTag",
     "Tag",
     "TelegramMessage",
+    "Topic",
     "TopicSearchIndex",
     "User",
     "UserBackup",
@@ -113,6 +118,7 @@ __all__ = [
     "UserDigestPreference",
     "UserGoal",
     "UserInteraction",
+    "UserSignal",
     "VideoDownload",
     "WebhookDelivery",
     "WebhookSubscription",
@@ -171,4 +177,9 @@ ALL_MODELS = (
     RSSFeedSubscription,
     RSSFeedItem,
     RSSItemDelivery,
+    Source,
+    Subscription,
+    FeedItem,
+    Topic,
+    UserSignal,
 )

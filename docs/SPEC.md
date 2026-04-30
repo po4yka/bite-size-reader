@@ -393,6 +393,81 @@ sequenceDiagram
   updated_at
   ```
 
+- **sources** *(generic signal-source identity; Phase 3)*:
+
+  ```
+  id (PK)
+  kind                    -- 'rss' | 'telegram_channel'
+  external_id             -- feed URL or channel username
+  url
+  title
+  description
+  site_url
+  is_active
+  fetch_error_count
+  last_error
+  last_fetched_at
+  last_successful_at
+  metadata_json
+  legacy_rss_feed_id      -- cross-reference to rss_feeds
+  legacy_channel_id       -- cross-reference to channels
+  created_at
+  updated_at
+  ```
+
+- **subscriptions** *(single-user generic source subscription; Phase 3)*:
+
+  ```
+  id (PK)
+  user_id (FK)
+  source_id (FK)
+  is_active
+  cadence_seconds
+  next_fetch_at
+  topic_constraints_json
+  metadata_json
+  legacy_rss_subscription_id
+  legacy_channel_subscription
+  created_at
+  updated_at
+  ```
+
+- **feed_items / topics / user_signals** *(signal scoring v0; Phase 3)*:
+
+  ```
+  feed_items:
+    source_id (FK)
+    external_id
+    canonical_url
+    title
+    content_text
+    author
+    published_at
+    views | forwards | comments | engagement_score
+    legacy_rss_item_id | legacy_channel_post_id
+
+  topics:
+    user_id (FK)
+    name
+    description
+    weight
+    embedding_ref
+    is_active
+
+  user_signals:
+    user_id (FK)
+    feed_item_id (FK)
+    topic_id (FK, nullable)
+    status
+    heuristic_score | llm_score | final_score
+    filter_stage
+    evidence_json
+    llm_judge_json
+    llm_cost_usd
+  ```
+
+  Migration `app/cli/migrations/015_add_signal_sources.py` backfills RSS and Telegram channel data into these generic tables without dropping legacy tables. Existing bot/API routes continue to read legacy RSS/channel tables until source worker and API integrations are completed. Deterministic pre-LLM signal scoring requires Chroma-backed topic similarity and fails closed when Chroma is unavailable.
+
 - **telegram_messages** *(full snapshot)*:
 
   ```

@@ -10,7 +10,7 @@ Complete reference for Ratatoskr's SQLite database schema.
 
 ## Overview
 
-Ratatoskr uses **SQLite** as its persistence layer with 48 model classes managed by Peewee ORM. This page documents the core tables that drive the URL pipeline, mobile API, and audit surface; the full registered set lives in `ALL_MODELS` in `app/db/models.py` and includes additional channel-digest, RSS, webhook, automation, and user-preference tables not detailed here.
+Ratatoskr uses **SQLite** as its persistence layer with 53 model classes managed by Peewee ORM. This page documents the core tables that drive the URL pipeline, mobile API, signal scoring, and audit surface; the full registered set lives in `ALL_MODELS` in `app/db/models.py` and includes additional channel-digest, RSS, webhook, automation, and user-preference tables not detailed here.
 
 **Database Location:** `DB_PATH` environment variable (default: `/data/ratatoskr.db`)
 
@@ -284,6 +284,175 @@ CREATE INDEX idx_aggregation_session_items_status ON aggregation_session_items(s
 - URL-backed sources dedupe on normalized URL unless a stronger platform identifier exists (`external_id` such as tweet ID or YouTube video ID).
 - Telegram-native sources dedupe on `(telegram_chat_id, telegram_message_id)` or `(telegram_chat_id, telegram_media_group_id)`.
 - Duplicates are preserved as rows with `status='duplicate'` so callers can surface that input was received but merged.
+
+---
+
+### sources
+
+**Purpose:** Generic Phase 3 source table for proactive signal scoring. It coexists with the legacy `rss_feeds` and `channels` tables while callers are migrated.
+
+**Schema summary:**
+
+```sql
+CREATE TABLE sources (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind                  TEXT NOT NULL, -- rss | telegram_channel
+    external_id           TEXT,
+    url                   TEXT,
+    title                 TEXT,
+    description           TEXT,
+    site_url              TEXT,
+    is_active             INTEGER NOT NULL DEFAULT 1,
+    fetch_error_count     INTEGER NOT NULL DEFAULT 0,
+    last_error            TEXT,
+    last_fetched_at       TIMESTAMP,
+    last_successful_at    TIMESTAMP,
+    metadata_json         JSON,
+    legacy_rss_feed_id    INTEGER UNIQUE REFERENCES rss_feeds(id) ON DELETE SET NULL,
+    legacy_channel_id     INTEGER UNIQUE REFERENCES channels(id) ON DELETE SET NULL,
+    updated_at            TIMESTAMP NOT NULL,
+    created_at            TIMESTAMP NOT NULL
+);
+```
+
+**Indexes and constraints:**
+
+- Unique `(kind, external_id)` for natural source identity.
+- Non-unique `(kind, is_active)` for ingestion scans.
+- `legacy_rss_feed_id` and `legacy_channel_id` preserve backward compatibility and allow rollback to the old RSS/channel surfaces.
+
+---
+
+### subscriptions
+
+**Purpose:** Single-user subscription link from `users` to generic `sources`.
+
+**Schema summary:**
+
+```sql
+CREATE TABLE subscriptions (
+    id                              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id                         INTEGER NOT NULL REFERENCES users(telegram_user_id) ON DELETE CASCADE,
+    source_id                       INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    is_active                       INTEGER NOT NULL DEFAULT 1,
+    cadence_seconds                 INTEGER,
+    next_fetch_at                   TIMESTAMP,
+    topic_constraints_json          JSON,
+    metadata_json                   JSON,
+    legacy_rss_subscription_id      INTEGER UNIQUE REFERENCES rss_feed_subscriptions(id) ON DELETE SET NULL,
+    legacy_channel_subscription     INTEGER UNIQUE,
+    updated_at                      TIMESTAMP NOT NULL,
+    created_at                      TIMESTAMP NOT NULL
+);
+```
+
+**Indexes and constraints:**
+
+- Unique `(user_id, source_id)`.
+- Non-unique `(user_id, is_active)` and `next_fetch_at`.
+
+---
+
+### feed_items
+
+**Purpose:** Generic ingested item table for RSS items and Telegram channel posts before user-specific signal scoring.
+
+**Schema summary:**
+
+```sql
+CREATE TABLE feed_items (
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id                INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    external_id              TEXT NOT NULL,
+    canonical_url            TEXT,
+    title                    TEXT,
+    content_text             TEXT,
+    author                   TEXT,
+    published_at             TIMESTAMP,
+    views                    INTEGER,
+    forwards                 INTEGER,
+    comments                 INTEGER,
+    engagement_score         REAL,
+    metadata_json            JSON,
+    legacy_rss_item_id       INTEGER UNIQUE REFERENCES rss_feed_items(id) ON DELETE SET NULL,
+    legacy_channel_post_id   INTEGER UNIQUE REFERENCES channel_posts(id) ON DELETE SET NULL,
+    updated_at               TIMESTAMP NOT NULL,
+    created_at               TIMESTAMP NOT NULL
+);
+```
+
+**Indexes and constraints:**
+
+- Unique `(source_id, external_id)`.
+- Non-unique `published_at` and `canonical_url`.
+
+---
+
+### topics
+
+**Purpose:** Single-user interest topics used by signal scoring and Chroma-backed personalization.
+
+**Schema summary:**
+
+```sql
+CREATE TABLE topics (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(telegram_user_id) ON DELETE CASCADE,
+    name            TEXT NOT NULL,
+    description     TEXT,
+    weight          REAL NOT NULL DEFAULT 1.0,
+    embedding_ref   TEXT,
+    metadata_json   JSON,
+    is_active       INTEGER NOT NULL DEFAULT 1,
+    updated_at      TIMESTAMP NOT NULL,
+    created_at      TIMESTAMP NOT NULL
+);
+```
+
+**Indexes and constraints:**
+
+- Unique `(user_id, name)`.
+- Non-unique `(user_id, is_active)`.
+
+---
+
+### user_signals
+
+**Purpose:** Per-user scoring decision for a `feed_items` row. It records deterministic evidence and, once the LLM judge is wired, bounded judge metadata and cost.
+
+**Schema summary:**
+
+```sql
+CREATE TABLE user_signals (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id            INTEGER NOT NULL REFERENCES users(telegram_user_id) ON DELETE CASCADE,
+    feed_item_id       INTEGER NOT NULL REFERENCES feed_items(id) ON DELETE CASCADE,
+    topic_id           INTEGER REFERENCES topics(id) ON DELETE SET NULL,
+    status             TEXT NOT NULL DEFAULT 'candidate',
+    heuristic_score    REAL,
+    llm_score          REAL,
+    final_score        REAL,
+    filter_stage       TEXT NOT NULL DEFAULT 'heuristic',
+    evidence_json      JSON,
+    llm_judge_json     JSON,
+    llm_cost_usd       REAL,
+    decided_at         TIMESTAMP,
+    updated_at         TIMESTAMP NOT NULL,
+    created_at         TIMESTAMP NOT NULL
+);
+```
+
+**Indexes and constraints:**
+
+- Unique `(user_id, feed_item_id)`.
+- Non-unique `(user_id, status)` and `final_score`.
+- Signal scoring fails closed when Chroma topic similarity is unavailable; it does not silently degrade to SQLite-only matching.
+
+**Migration and rollback notes:**
+
+- `app/cli/migrations/015_add_signal_sources.py` creates these five tables and backfills from `rss_feeds`, `rss_feed_subscriptions`, `rss_feed_items`, `channels`, `channel_subscriptions`, and `channel_posts`.
+- Legacy RSS/channel tables are preserved and remain the runtime source for existing API and bot paths until worker/API integration is complete.
+- Downgrade drops only `user_signals`, `topics`, `feed_items`, `subscriptions`, and `sources`; it does not mutate or drop legacy tables. Take a normal SQLite backup before applying the migration on a live host.
 
 ---
 

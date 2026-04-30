@@ -37,6 +37,7 @@ from .search import (
     TopicSearchResultPort,
     VectorSearchPort,
 )
+from .signal_sources import SignalSourceRepositoryPort
 from .summaries import SummaryRepositoryPort, TagRepositoryPort
 from .users import UserRepositoryPort
 
@@ -59,6 +60,7 @@ __all__ = [
     "RuleContextPort",
     "RuleRateLimiterPort",
     "RuleRepositoryPort",
+    "SignalSourceRepositoryPort",
     "SummaryRepositoryPort",
     "TTSProviderPort",
     "TagRepositoryPort",

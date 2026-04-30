@@ -222,37 +222,37 @@ Acceptance evidence:
 
 ### 3.1 Generic source schema
 
-- [ ] Design `Source`, `Subscription`, `FeedItem`, `Topic`, and `UserSignal` Peewee models.
-- [ ] Put new migration under `app/cli/migrations/`.
-- [ ] Map existing `RSSFeed` to `Source(kind="rss")`.
-- [ ] Map existing `Channel` to `Source(kind="telegram_channel")`.
-- [ ] Map existing `RSSFeedSubscription` and `ChannelSubscription` to generic `Subscription`.
-- [ ] Map existing `RSSFeedItem` and `ChannelPost` to generic `FeedItem`.
-- [ ] Preserve existing IDs or add cross-reference fields for backward compatibility.
-- [ ] Decide whether old tables become compatibility views, deprecated tables, or are copied then dropped.
-- [ ] Add data migration tests with RSS and channel fixtures.
-- [ ] Add rollback/backup notes for table merge.
-- [ ] Update `docs/reference/data-model.md`.
+- [x] Design `Source`, `Subscription`, `FeedItem`, `Topic`, and `UserSignal` Peewee models.
+- [x] Put new migration under `app/cli/migrations/`.
+- [x] Map existing `RSSFeed` to `Source(kind="rss")`.
+- [x] Map existing `Channel` to `Source(kind="telegram_channel")`.
+- [x] Map existing `RSSFeedSubscription` and `ChannelSubscription` to generic `Subscription`.
+- [x] Map existing `RSSFeedItem` and `ChannelPost` to generic `FeedItem`.
+- [x] Preserve existing IDs or add cross-reference fields for backward compatibility.
+- [x] Decide whether old tables become compatibility views, deprecated tables, or are copied then dropped.
+- [x] Add data migration tests with RSS and channel fixtures.
+- [x] Add rollback/backup notes for table merge.
+- [x] Update `docs/reference/data-model.md`.
 
 Acceptance evidence:
 
-- [ ] Existing RSS subscriptions and channel digest data survive migration.
-- [ ] New code can query all sources through generic models.
-- [ ] Old API routes either still work or have documented migration behavior.
+- [x] Existing RSS subscriptions and channel digest data survive migration.
+- [x] New code can query all sources through generic models.
+- [x] Old API routes still use legacy tables; generic tables are a compatibility/backfill layer until worker/API integration lands.
 
 ### 3.2 Source and subscription repositories
 
-- [ ] Add domain models under `app/domain/models/` or extend existing source models without confusing aggregation `SourceItem`.
-- [ ] Add repository ports under `app/application/ports/`.
-- [ ] Add SQLite repository implementations under `app/infrastructure/persistence/sqlite/repositories/`.
-- [ ] Add unit tests for create/update/list/disable source.
-- [ ] Add ownership checks even though the service is single-user.
+- [x] Add domain models under `app/domain/models/` or extend existing source models without confusing aggregation `SourceItem`.
+- [x] Add repository ports under `app/application/ports/`.
+- [x] Add SQLite repository implementations under `app/infrastructure/persistence/sqlite/repositories/`.
+- [x] Add unit tests for create/update/list/disable source.
+- [x] Add ownership checks even though the service is single-user.
 - [ ] Add import/export support if OPML or backup flows should include sources.
 
 Acceptance evidence:
 
-- [ ] Application services do not import Peewee models directly.
-- [ ] Repositories support RSS and Telegram channel source kinds.
+- [x] Application services do not import Peewee models directly.
+- [x] Repositories support RSS and Telegram channel source kinds.
 
 ### 3.3 Continuous ingestion worker
 
@@ -275,22 +275,23 @@ Acceptance evidence:
 
 ### 3.4 Cheap filter pipeline
 
-- [ ] Add `app/application/services/signal_scoring.py`.
-- [ ] Define scoring input/output DTOs with evidence fields.
-- [ ] Implement recency score.
-- [ ] Implement engagement score for HN/Reddit/Telegram where data exists.
-- [ ] Implement source diversity penalty.
-- [ ] Implement canonical URL/title dedupe.
+- [x] Add `app/application/services/signal_scoring.py`.
+- [x] Define scoring input/output DTOs with evidence fields.
+- [x] Implement recency score.
+- [x] Implement engagement score for HN/Reddit/Telegram where data exists.
+- [x] Implement source diversity penalty.
+- [x] Implement canonical URL/title dedupe.
 - [ ] Implement MinHash near-duplicate detection.
-- [ ] Implement Chroma topic similarity scoring.
-- [ ] Add hard pre-LLM cap so at most 10% of observed items reach judge stage.
+- [x] Define required Chroma-backed topic similarity port and fail-closed readiness check.
+- [ ] Implement concrete Chroma topic similarity adapter.
+- [x] Add hard pre-LLM cap so at most 10% of observed items reach judge stage.
 - [ ] Persist per-stage evidence in `UserSignal`.
-- [ ] Add fixture-based tests proving rejection behavior.
+- [x] Add fixture-based tests proving rejection behavior.
 
 Acceptance evidence:
 
-- [ ] Test fixture rejects at least 90% before LLM.
-- [ ] Scoring fails closed or disables signal worker when Chroma is unavailable, per final startup decision.
+- [x] Test fixture rejects at least 90% before LLM.
+- [x] Scoring fails closed or disables signal worker when Chroma is unavailable, per final startup decision.
 
 ### 3.5 Chroma-required personalization
 
@@ -300,11 +301,11 @@ Acceptance evidence:
 - [ ] Add liked-item embedding backfill.
 - [ ] Add health check for Chroma readiness before signal scoring starts.
 - [ ] Add admin/status API fields for Chroma signal-scoring health.
-- [ ] Document behavior when Chroma is down.
+- [x] Document behavior when Chroma is down.
 
 Acceptance evidence:
 
-- [ ] Signal scoring does not silently degrade to SQLite-only similarity.
+- [x] Signal scoring does not silently degrade to SQLite-only similarity.
 - [ ] Admin/status surface shows Chroma readiness.
 
 ### 3.6 LLM-as-judge
