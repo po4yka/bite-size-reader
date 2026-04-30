@@ -44,7 +44,8 @@ def test_build_scraper_diagnostics_disabled_state() -> None:
     assert diagnostics["status"] == "disabled"
 
 
-def test_firecrawl_diagnostics_report_cloud_mode_when_api_key_configured() -> None:
+def test_firecrawl_diagnostics_report_disabled_when_only_cloud_key_set() -> None:
+    """Cloud Firecrawl was removed; a stale FIRECRAWL_API_KEY must NOT show as enabled."""
     cfg = make_test_app_config(
         scraper=ScraperConfig(firecrawl_self_hosted_enabled=False),
         firecrawl=FirecrawlConfig(api_key="fc-test-cloud-key"),
@@ -53,10 +54,10 @@ def test_firecrawl_diagnostics_report_cloud_mode_when_api_key_configured() -> No
     diagnostics = build_scraper_diagnostics(cfg)
     firecrawl = diagnostics["providers"]["firecrawl"]
 
-    assert firecrawl["enabled"] is True
-    assert firecrawl["mode"] == "cloud"
-    assert firecrawl["cloud_api_key_configured"] is True
+    assert firecrawl["enabled"] is False
+    assert firecrawl["mode"] == "disabled"
     assert firecrawl["self_hosted_enabled"] is False
+    assert firecrawl["cloud_api_key_present_but_unused"] is True
 
 
 def test_firecrawl_diagnostics_report_self_hosted_mode_preference() -> None:
@@ -70,7 +71,6 @@ def test_firecrawl_diagnostics_report_self_hosted_mode_preference() -> None:
 
     assert firecrawl["enabled"] is True
     assert firecrawl["mode"] == "self_hosted"
-    assert firecrawl["cloud_api_key_configured"] is True
     assert firecrawl["self_hosted_enabled"] is True
 
 
@@ -85,4 +85,4 @@ def test_firecrawl_diagnostics_report_disabled_without_any_endpoint() -> None:
 
     assert firecrawl["enabled"] is False
     assert firecrawl["mode"] == "disabled"
-    assert firecrawl["cloud_api_key_configured"] is False
+    assert firecrawl["cloud_api_key_present_but_unused"] is False

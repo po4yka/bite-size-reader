@@ -1,11 +1,21 @@
-"""Crawl4AI REST API content extraction provider."""
+"""Crawl4AI REST API content extraction provider.
+
+Upstream wire contract (Crawl4AI Docker server):
+  POST /crawl/sync  ->  {"success": bool, "results": [{"success": bool, "markdown": ..., ...}]}
+  POST /crawl       ->  {"task_id": ...}  (async task; requires polling /task/{id})
+
+We use /crawl/sync exclusively so results are available in a single round-trip.
+"""
 
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
@@ -21,7 +31,7 @@ _DEFAULT_API_BASE_URL = "http://crawl4ai:11235"
 class Crawl4AIProvider:
     """Content extraction via the Crawl4AI REST API (self-hosted Docker sidecar).
 
-    Sends a crawl request to the Crawl4AI service and extracts markdown content.
+    Sends a crawl request to POST /crawl/sync and extracts markdown content.
     Returns a FirecrawlResult with the extracted content or an error description.
     """
 
@@ -34,6 +44,7 @@ class Crawl4AIProvider:
         min_content_length: int = 400,
         profile: str = "balanced",
         js_heavy_hosts: tuple[str, ...] = (),
+        audit: Callable[[str, str, dict[str, Any]], None] | None = None,
     ) -> None:
         self._url = url.rstrip("/")
         self._token = token
@@ -41,6 +52,7 @@ class Crawl4AIProvider:
         self._min_content_length = min_content_length
         self._profile = profile
         self._js_heavy_hosts = js_heavy_hosts
+        self._audit = audit
         self._client: httpx.AsyncClient | None = None
 
     @property
@@ -91,7 +103,9 @@ class Crawl4AIProvider:
             },
         }
 
-        crawl_endpoint = f"{self._url}/crawl"
+        # Use /crawl/sync — returns results immediately.
+        # /crawl is the async endpoint that returns {task_id} for polling.
+        crawl_endpoint = f"{self._url}/crawl/sync"
 
         try:
             client = self._get_client()
@@ -103,12 +117,18 @@ class Crawl4AIProvider:
             )
             resp.raise_for_status()
             data = resp.json()
-        except TimeoutError:
+        except (TimeoutError, httpx.TimeoutException):
             latency = int((time.perf_counter() - started) * 1000)
             logger.warning(
                 "crawl4ai_timeout",
                 extra={"url": url, "timeout_sec": effective_timeout, "request_id": request_id},
             )
+            if self._audit:
+                self._audit(
+                    "ERROR",
+                    "crawl4ai_failure",
+                    {"url": url, "error": "timeout", "timeout_sec": effective_timeout, "request_id": request_id},
+                )
             return FirecrawlResult(
                 status=CallStatus.ERROR,
                 error_text=f"Crawl4AI timeout after {effective_timeout:.0f}s",
@@ -126,6 +146,12 @@ class Crawl4AIProvider:
                     "request_id": request_id,
                 },
             )
+            if self._audit:
+                self._audit(
+                    "ERROR",
+                    "crawl4ai_failure",
+                    {"url": url, "error": f"HTTP {exc.response.status_code}", "request_id": request_id},
+                )
             return FirecrawlResult(
                 status=CallStatus.ERROR,
                 error_text=f"Crawl4AI HTTP {exc.response.status_code}",
@@ -145,6 +171,12 @@ class Crawl4AIProvider:
                     "request_id": request_id,
                 },
             )
+            if self._audit:
+                self._audit(
+                    "ERROR",
+                    "crawl4ai_failure",
+                    {"url": url, "error": str(exc), "error_type": type(exc).__name__, "request_id": request_id},
+                )
             return FirecrawlResult(
                 status=CallStatus.ERROR,
                 error_text=f"Crawl4AI fetch failed: {exc}",
@@ -211,6 +243,18 @@ class Crawl4AIProvider:
             )
 
         metadata = first.get("metadata") or {}
+
+        if self._audit:
+            self._audit(
+                "INFO",
+                "crawl4ai_request",
+                {
+                    "url": url,
+                    "latency_ms": latency,
+                    "content_len": len(content_markdown.strip()),
+                    "request_id": request_id,
+                },
+            )
 
         return FirecrawlResult(
             status=CallStatus.OK,

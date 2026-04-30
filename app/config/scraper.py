@@ -119,6 +119,11 @@ class ScraperConfig(BaseModel):
         default="http://defuddle-api:3003",
         validation_alias="SCRAPER_DEFUDDLE_API_BASE_URL",
     )
+    defuddle_token: str = Field(
+        default="",
+        validation_alias="SCRAPER_DEFUDDLE_TOKEN",
+        description="Bearer token for self-hosted Defuddle sidecar; empty disables auth",
+    )
 
     firecrawl_self_hosted_enabled: bool = Field(
         default=False,

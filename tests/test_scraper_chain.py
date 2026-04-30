@@ -391,10 +391,13 @@ class TestContentScraperChain:
 class TestContentScraperFactory:
     """Tests for the factory that builds a scraper chain from config."""
 
-    def test_default_config_creates_chain_with_all_eight_providers(
+    def test_default_config_creates_chain_with_seven_providers_when_firecrawl_disabled(
         self,
     ):
-        """Default config enables all 8 providers in the new default order."""
+        """Default config (firecrawl self-hosted off) yields a 7-rung chain.
+
+        The 8th rung activates only when FIRECRAWL_SELF_HOSTED_ENABLED=true.
+        """
         cfg = make_test_app_config(scraper=ScraperConfig())
 
         with (
@@ -429,6 +432,58 @@ class TestContentScraperFactory:
             "scrapegraph_ai",
         ]
         # firecrawl builder was called but returned None (self-hosted disabled)
+        mock_firecrawl.assert_called_once()
+
+    def test_default_config_creates_chain_with_all_eight_providers_when_firecrawl_enabled(
+        self,
+    ):
+        """When FIRECRAWL_SELF_HOSTED_ENABLED=true, all 8 providers appear in the chain.
+
+        The factory registers firecrawl (builder key 'firecrawl') but the provider's
+        provider_name is 'firecrawl_self_hosted' because _build_firecrawl always sets
+        name='firecrawl_self_hosted' on the returned FirecrawlProvider.
+        """
+        cfg = make_test_app_config(
+            scraper=ScraperConfig(
+                firecrawl_self_hosted_enabled=True,
+                firecrawl_self_hosted_url="http://firecrawl-api:3002",
+                firecrawl_self_hosted_api_key="fc-test",
+            )
+        )
+
+        with (
+            patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
+            patch("app.adapters.content.scraper.factory._build_crawl4ai") as mock_crawl4ai,
+            patch("app.adapters.content.scraper.factory._build_firecrawl") as mock_firecrawl,
+            patch("app.adapters.content.scraper.factory._build_defuddle") as mock_defuddle,
+            patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
+            patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
+            patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
+            patch("app.adapters.content.scraper.factory._build_scrapegraph") as mock_scrapegraph,
+        ):
+            mock_scrapling.return_value = _MockProvider(name="scrapling")
+            mock_crawl4ai.return_value = _MockProvider(name="crawl4ai")
+            # _build_firecrawl always sets provider_name='firecrawl_self_hosted'
+            mock_firecrawl.return_value = _MockProvider(name="firecrawl_self_hosted")
+            mock_defuddle.return_value = _MockProvider(name="defuddle")
+            mock_playwright.return_value = _MockProvider(name="playwright")
+            mock_crawlee.return_value = _MockProvider(name="crawlee")
+            mock_direct.return_value = _MockProvider(name="direct_html")
+            mock_scrapegraph.return_value = _MockProvider(name="scrapegraph_ai")
+
+            chain = ContentScraperFactory.create_from_config(cfg)
+
+        names = [p.provider_name for p in chain.providers]
+        assert names == [
+            "scrapling",
+            "crawl4ai",
+            "firecrawl_self_hosted",
+            "defuddle",
+            "playwright",
+            "crawlee",
+            "direct_html",
+            "scrapegraph_ai",
+        ]
         mock_firecrawl.assert_called_once()
 
     def test_scrapling_disabled_skipped(self):

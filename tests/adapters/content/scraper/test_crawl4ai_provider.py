@@ -231,3 +231,58 @@ class TestCrawl4AIProvider:
         call_kwargs = mock_client.post.call_args
         headers = call_kwargs.kwargs.get("headers", {})
         assert "Authorization" not in headers
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_request_payload_pins_wire_format(self):
+        """POST URL ends with /crawl/sync and body JSON matches the expected wire format.
+
+        Pins the synchronous endpoint contract so regressions are caught immediately.
+        The provider uses /crawl/sync (single round-trip) rather than /crawl (async,
+        requires polling).
+        """
+        payload = _make_crawl_response(markdown="A" * 500)
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=5)
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = _make_httpx_response(payload)
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            await provider.scrape_markdown("https://example.com/article")
+
+        call_args = mock_client.post.call_args
+        # URL must use the synchronous endpoint
+        assert call_args.args[0].endswith("/crawl/sync"), (
+            f"Expected POST URL ending in '/crawl/sync', got: {call_args.args[0]!r}"
+        )
+        # Body JSON must match the exact wire format the provider sends
+        expected_json = {
+            "urls": ["https://example.com/article"],
+            "browser_config": {
+                "headless": True,
+                "user_agent_mode": "random",
+            },
+            "crawler_config": {
+                "stream": False,
+                "cache_mode": "BYPASS",
+            },
+        }
+        assert call_args.kwargs["json"] == expected_json
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_httpx_timeout_exception_is_caught_as_timeout(self):
+        """httpx.TimeoutException (not just stdlib TimeoutError) is caught and returns ERROR.
+
+        Pins the (TimeoutError, httpx.TimeoutException) exception tuple in the provider
+        so that network-level timeouts raised by httpx are handled gracefully.
+        """
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=5)
+
+        mock_client = AsyncMock()
+        mock_client.post.side_effect = httpx.TimeoutException("read timeout")
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert result.endpoint == "crawl4ai"
+        assert "timeout" in (result.error_text or "").lower()

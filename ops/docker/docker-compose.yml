@@ -31,6 +31,8 @@ services:
       - FIRECRAWL_SELF_HOSTED_URL=${FIRECRAWL_SELF_HOSTED_URL:-http://firecrawl-api:3002}
       - SCRAPER_DEFUDDLE_API_BASE_URL=${SCRAPER_DEFUDDLE_API_BASE_URL:-http://defuddle-api:3003}
       - SCRAPER_CRAWL4AI_URL=${SCRAPER_CRAWL4AI_URL:-http://crawl4ai:11235}
+      # Auth token forwarded to defuddle sidecar — empty by default (auth is opt-in)
+      - SCRAPER_DEFUDDLE_TOKEN=${DEFUDDLE_AUTH_TOKEN:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434/v1}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-ollama}
@@ -59,6 +61,13 @@ services:
       chroma:
         condition: service_healthy
         required: false # Allow bot to start without ChromaDB (graceful degradation)
+      # only enforced when --profile with-scrapers or with-firecrawl is active
+      crawl4ai:
+        condition: service_healthy
+        required: false
+      defuddle-api:
+        condition: service_healthy
+        required: false
     logging:
       driver: "json-file"
       options:
@@ -98,6 +107,8 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - SCRAPER_DEFUDDLE_API_BASE_URL=${SCRAPER_DEFUDDLE_API_BASE_URL:-http://defuddle-api:3003}
       - SCRAPER_CRAWL4AI_URL=${SCRAPER_CRAWL4AI_URL:-http://crawl4ai:11235}
+      # Auth token forwarded to defuddle sidecar — empty by default (auth is opt-in)
+      - SCRAPER_DEFUDDLE_TOKEN=${DEFUDDLE_AUTH_TOKEN:-}
     volumes:
       - ../../data:/data
       - ../../config:/app/config:ro
@@ -110,6 +121,13 @@ services:
       chroma:
         condition: service_healthy
         required: false # Allow API to start without ChromaDB (graceful degradation)
+      # only enforced when --profile with-scrapers or with-firecrawl is active
+      crawl4ai:
+        condition: service_healthy
+        required: false
+      defuddle-api:
+        condition: service_healthy
+        required: false
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
@@ -490,12 +508,18 @@ services:
     profiles:
       - with-firecrawl
       - with-scrapers
-    image: unclecode/crawl4ai:latest
+    # Pinned to 0.6.3 (known-stable). To upgrade: check https://hub.docker.com/r/unclecode/crawl4ai/tags
+    image: unclecode/crawl4ai:0.6.3
     container_name: ratatoskr-crawl4ai
     environment:
       - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_TOKEN:-}
       - INSTALL_TYPE=all
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:11235/health || exit 1"]
       interval: 30s
@@ -517,7 +541,15 @@ services:
     build:
       context: ./defuddle
     container_name: ratatoskr-defuddle-api
+    environment:
+      # Set DEFUDDLE_AUTH_TOKEN in .env to enable Bearer auth (empty = auth disabled)
+      - DEFUDDLE_AUTH_TOKEN=${DEFUDDLE_AUTH_TOKEN:-}
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "0.5"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health || exit 1"]
       interval: 30s

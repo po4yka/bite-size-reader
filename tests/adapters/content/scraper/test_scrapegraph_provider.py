@@ -44,7 +44,7 @@ class TestScrapeGraphAIProvider:
         module_stub = _make_graph_stub(graph_result)
         provider = _make_provider(timeout_sec=30)
 
-        with patch("importlib.import_module", return_value=module_stub):
+        with patch("app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",return_value=module_stub):
             result = await provider.scrape_markdown("https://example.com")
 
         assert result.status == "ok"
@@ -60,7 +60,7 @@ class TestScrapeGraphAIProvider:
         module_stub = _make_graph_stub(graph_result)
         provider = _make_provider(timeout_sec=30)
 
-        with patch("importlib.import_module", return_value=module_stub):
+        with patch("app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",return_value=module_stub):
             result = await provider.scrape_markdown("https://example.com")
 
         assert result.status == "error"
@@ -73,7 +73,7 @@ class TestScrapeGraphAIProvider:
         module_stub = _make_graph_stub(graph_result)
         provider = _make_provider(timeout_sec=30, min_content_length=400)
 
-        with patch("importlib.import_module", return_value=module_stub):
+        with patch("app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",return_value=module_stub):
             result = await provider.scrape_markdown("https://example.com")
 
         assert result.status == "error"
@@ -88,7 +88,8 @@ class TestScrapeGraphAIProvider:
         provider = _make_provider(timeout_sec=30)
 
         with patch(
-            "importlib.import_module", side_effect=ImportError("No module named 'scrapegraphai'")
+            "app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",
+            side_effect=ImportError("No module named 'scrapegraphai'"),
         ):
             result = await provider.scrape_markdown("https://example.com")
 
@@ -112,7 +113,7 @@ class TestScrapeGraphAIProvider:
         module_stub.SmartScraperGraph = MagicMock(return_value=graph_instance)
 
         with (
-            patch("importlib.import_module", return_value=module_stub),
+            patch("app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",return_value=module_stub),
             patch(
                 "asyncio.wait_for",
                 side_effect=TimeoutError("scrapegraph timed out"),
@@ -134,7 +135,7 @@ class TestScrapeGraphAIProvider:
         module_stub = MagicMock()
         module_stub.SmartScraperGraph = MagicMock(return_value=graph_instance)
 
-        with patch("importlib.import_module", return_value=module_stub):
+        with patch("app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",return_value=module_stub):
             result = await provider.scrape_markdown("https://example.com")
 
         assert result.status == "error"
@@ -151,3 +152,51 @@ class TestScrapeGraphAIProvider:
         """aclose() completes without error (no persistent resources)."""
         provider = _make_provider()
         await provider.aclose()  # Should not raise
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_model_string_is_prefixed_with_openai_for_scrapegraphai_split_compatibility(
+        self,
+    ):
+        """The config passed to SmartScraperGraph has model prefixed with 'openai/'.
+
+        scrapegraphai splits model on '/' once to derive model_provider: split[0].
+        Passing model='deepseek/deepseek-v3.2' would set model_provider='deepseek',
+        which is not in its provider registry. Prefixing with 'openai/' makes the lib
+        parse model_provider='openai' and passes the remainder (original slash-form
+        string) to OpenRouter, which accepts the full model identifier unchanged.
+        """
+        provider = ScrapeGraphAIProvider(
+            openrouter_api_key="sk-or-test",
+            openrouter_model="deepseek/deepseek-v3.2",
+            timeout_sec=30,
+        )
+
+        graph_result = {
+            "title": "Test",
+            "language": "en",
+            "body_markdown": _LONG_BODY,
+        }
+        graph_instance = MagicMock()
+        graph_instance.run.return_value = graph_result
+        captured_configs: list[dict] = []
+
+        def _capture_graph(prompt: str, source: str, config: dict) -> MagicMock:
+            captured_configs.append(config)
+            return graph_instance
+
+        graph_class = MagicMock(side_effect=_capture_graph)
+        module_stub = MagicMock()
+        module_stub.SmartScraperGraph = graph_class
+
+        with patch(
+            "app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",
+            return_value=module_stub,
+        ):
+            await provider.scrape_markdown("https://example.com")
+
+        assert len(captured_configs) == 1
+        llm_cfg = captured_configs[0]["llm"]
+        # Model must be prefixed with 'openai/' so scrapegraphai parses provider correctly
+        assert llm_cfg["model"] == "openai/deepseek/deepseek-v3.2"
+        # 'model_provider' must NOT be present; the prefix supplies it via scrapegraphai's split
+        assert "model_provider" not in llm_cfg

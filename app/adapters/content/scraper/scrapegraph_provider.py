@@ -79,12 +79,16 @@ class ScrapeGraphAIProvider:
                 endpoint="scrapegraph_ai",
             )
 
+        # scrapegraphai splits model on "/" to derive model_provider: split[0].
+        # Passing model="deepseek/deepseek-v3.2" would set model_provider="deepseek",
+        # which is not in its registry. Prepending "openai/" makes the lib parse
+        # model_provider="openai" and passes the remainder (original slash-form string)
+        # to OpenRouter, which accepts the full model identifier unchanged.
         graph_config: dict = {
             "llm": {
                 "api_key": self._openrouter_api_key,
-                "model": self._openrouter_model,
+                "model": f"openai/{self._openrouter_model}",
                 "base_url": "https://openrouter.ai/api/v1",
-                "model_provider": "openai",
             },
             "verbose": False,
             "headless": True,
@@ -118,7 +122,7 @@ class ScrapeGraphAIProvider:
             )
         except Exception as exc:
             latency = int((time.perf_counter() - started) * 1000)
-            logger.debug(
+            logger.warning(
                 "scrapegraph_ai_run_failed",
                 extra={
                     "url": url,

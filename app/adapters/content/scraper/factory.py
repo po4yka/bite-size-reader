@@ -54,7 +54,7 @@ class ContentScraperFactory:
             "playwright": lambda: _build_playwright(scraper_cfg),
             "crawlee": lambda: _build_crawlee(scraper_cfg),
             "direct_html": lambda: _build_direct_html(scraper_cfg),
-            "crawl4ai": lambda: _build_crawl4ai(scraper_cfg),
+            "crawl4ai": lambda: _build_crawl4ai(scraper_cfg, audit),
             "scrapegraph_ai": lambda: _build_scrapegraph(cfg),
         }
 
@@ -140,6 +140,7 @@ def _build_defuddle(scraper_cfg: object) -> ContentScraperProtocol | None:
             timeout_sec=timeout_sec,
             min_content_length=getattr(scraper_cfg, "min_content_length", 400),
             api_base_url=getattr(scraper_cfg, "defuddle_api_base_url", "https://defuddle.md"),
+            api_token=getattr(scraper_cfg, "defuddle_token", ""),
         )
     except Exception as exc:
         logger.warning(
@@ -293,7 +294,10 @@ def _build_crawlee(scraper_cfg: object) -> ContentScraperProtocol | None:
         return None
 
 
-def _build_crawl4ai(scraper_cfg: object) -> ContentScraperProtocol | None:
+def _build_crawl4ai(
+    scraper_cfg: object,
+    audit: Callable[[str, str, dict], None] | None,
+) -> ContentScraperProtocol | None:
     if not getattr(scraper_cfg, "crawl4ai_enabled", True):
         return None
     crawl4ai_url = getattr(scraper_cfg, "crawl4ai_url", "")
@@ -309,6 +313,7 @@ def _build_crawl4ai(scraper_cfg: object) -> ContentScraperProtocol | None:
             min_content_length=getattr(scraper_cfg, "min_content_length", 400),
             profile=getattr(scraper_cfg, "profile", "balanced"),
             js_heavy_hosts=getattr(scraper_cfg, "js_heavy_hosts", ()),
+            audit=audit,
         )
     except Exception as exc:
         logger.warning(

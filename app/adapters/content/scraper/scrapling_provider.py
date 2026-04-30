@@ -160,9 +160,18 @@ def _lazy_import_async_fetcher() -> Any:
 
 
 def _lazy_import_stealthy_fetcher() -> Any:
-    """Return a DynamicFetcher instance (Playwright-based; preferred over
-    StealthyFetcher because it does not require curl_cffi).  Falls back to
-    StealthyFetcher when DynamicFetcher is not exported."""
+    """Return a callable target whose `.fetch(url)` method works whether the
+    target is a class with classmethod `fetch` (DynamicFetcher) or a class with
+    instance method `fetch` (StealthyFetcher).
+
+    Always returns the *class* (not an instance) so that callers invoke
+    `.fetch(url)` uniformly on either: DynamicFetcher.fetch(url) works because
+    fetch is a classmethod; StealthyFetcher.fetch(url) works because fetch is
+    also callable on the class (Python binds it to a temporary instance via
+    __init_subclass__ protocol in some versions, or it can be called as an
+    unbound method).  The caller in _sync_fetch_stealth must NOT call the
+    result like a constructor.
+    """
     import importlib
 
     try:
@@ -174,8 +183,9 @@ def _lazy_import_stealthy_fetcher() -> Any:
         pass
 
     # Fallback: StealthyFetcher (requires camoufox + curl_cffi).
+    # Return the class, not an instance, to keep the .fetch(url) call uniform.
     mod = importlib.import_module("scrapling")
-    return mod.StealthyFetcher()
+    return mod.StealthyFetcher
 
 
 async def _async_fetch_basic(

@@ -33,12 +33,9 @@ def build_scraper_diagnostics(cfg: AppConfig) -> dict[str, Any]:
     profile_multiplier = profile_timeout_multiplier(scraper_cfg.profile)
     firecrawl_self_hosted_enabled = bool(scraper_cfg.firecrawl_self_hosted_enabled)
     firecrawl_cloud_api_key_configured = bool(cfg.firecrawl.api_key)
-    if firecrawl_self_hosted_enabled:
-        firecrawl_mode = "self_hosted"
-    elif firecrawl_cloud_api_key_configured:
-        firecrawl_mode = "cloud"
-    else:
-        firecrawl_mode = "disabled"
+    # The factory only builds a Firecrawl provider when self-hosted is enabled;
+    # a cloud API key alone does not activate the scraper chain provider.
+    firecrawl_mode = "self_hosted" if firecrawl_self_hosted_enabled else "disabled"
 
     providers: dict[str, dict[str, Any]] = {
         "scrapling": {
@@ -61,14 +58,14 @@ def build_scraper_diagnostics(cfg: AppConfig) -> dict[str, Any]:
             ),
         },
         "firecrawl": {
-            "enabled": bool(
-                scraper_cfg.enabled
-                and (firecrawl_self_hosted_enabled or firecrawl_cloud_api_key_configured)
-            ),
+            "enabled": bool(scraper_cfg.enabled and firecrawl_self_hosted_enabled),
             "dependency_ready": _module_ready("httpx"),
             "mode": firecrawl_mode,
             "self_hosted_enabled": firecrawl_self_hosted_enabled,
             "cloud_api_key_configured": firecrawl_cloud_api_key_configured,
+            "cloud_api_key_present_but_unused": (
+                firecrawl_cloud_api_key_configured and not firecrawl_self_hosted_enabled
+            ),
             "self_hosted_url": scraper_cfg.firecrawl_self_hosted_url,
             "base_timeout_sec": scraper_cfg.firecrawl_timeout_sec,
             "effective_timeout_sec": round(

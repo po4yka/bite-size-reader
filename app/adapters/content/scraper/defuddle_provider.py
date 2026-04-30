@@ -35,10 +35,12 @@ class DefuddleProvider:
         *,
         min_content_length: int = 400,
         api_base_url: str = _DEFAULT_API_BASE_URL,
+        api_token: str = "",
     ) -> None:
         self._timeout_sec = timeout_sec
         self._min_content_length = min_content_length
         self._api_base_url = api_base_url.rstrip("/")
+        self._api_token = api_token
         if self._api_base_url.lower().rstrip("/") == "https://defuddle.md":
             logger.warning(
                 "defuddle_provider_cloud_url_deprecated",
@@ -157,13 +159,16 @@ class DefuddleProvider:
 
     async def _fetch_raw(self, url: str) -> str:
         defuddle_url = f"{self._api_base_url}/{url}"
+        headers = dict(_HEADERS)
+        if self._api_token:
+            headers["Authorization"] = f"Bearer {self._api_token}"
         overall_timeout = self._timeout_sec + 5
         async with asyncio.timeout(overall_timeout):
             async with httpx.AsyncClient(
                 follow_redirects=True,
                 timeout=self._timeout_sec,
             ) as client:
-                resp = await client.get(defuddle_url, headers=_HEADERS)
+                resp = await client.get(defuddle_url, headers=headers)
                 resp.raise_for_status()
                 return resp.text
 
