@@ -271,3 +271,170 @@ export {
   User,
 } from "./icons";
 export type { IconProps } from "./icons";
+
+// =============================================================================
+// Frost components (Phase 2 of the Frost migration)
+//
+// These coexist with the legacy primitives above until Phase 4 deletes the
+// legacy. Phase 3 page rewrites import only Frost names. Where a Frost
+// component reuses a legacy export name internally (DataTable, ModalHeader,
+// StructuredList*), the export below uses an `as` alias so both surfaces
+// remain importable until Phase 4.
+// =============================================================================
+
+// Frost primitives
+export { BracketButton } from "./primitives/BracketButton";
+export type {
+  BracketButtonProps,
+  BracketButtonKind,
+  BracketButtonSize,
+} from "./primitives/BracketButton";
+
+export { BracketSearch } from "./primitives/BracketSearch";
+export type { BracketSearchProps } from "./primitives/BracketSearch";
+
+export { BrutalistCard } from "./primitives/BrutalistCard";
+export type { BrutalistCardProps } from "./primitives/BrutalistCard";
+
+export {
+  BrutalistSkeleton,
+  BrutalistSkeletonText,
+  BrutalistSkeletonPlaceholder,
+  BrutalistDataTableSkeleton,
+} from "./primitives/BrutalistSkeleton";
+export type {
+  BrutalistSkeletonProps,
+  BrutalistSkeletonTextProps,
+  BrutalistSkeletonPlaceholderProps,
+  BrutalistDataTableSkeletonProps,
+} from "./primitives/BrutalistSkeleton";
+
+export { MonoInput } from "./primitives/MonoInput";
+export type { MonoInputProps } from "./primitives/MonoInput";
+
+export { MonoProgressBar } from "./primitives/MonoProgressBar";
+export type {
+  MonoProgressBarProps,
+  MonoProgressBarStatus,
+} from "./primitives/MonoProgressBar";
+
+export { MonoSelect, MonoSelectItem } from "./primitives/MonoSelect";
+export type {
+  MonoSelectProps,
+  MonoSelectItemProps,
+} from "./primitives/MonoSelect";
+
+export { MonoTextArea } from "./primitives/MonoTextArea";
+export type { MonoTextAreaProps } from "./primitives/MonoTextArea";
+
+export { SparkLoading } from "./primitives/SparkLoading";
+export type {
+  SparkLoadingProps,
+  SparkLoadingStatus,
+} from "./primitives/SparkLoading";
+
+export { StatusBadge } from "./primitives/StatusBadge";
+export type {
+  StatusBadgeProps,
+  StatusBadgeSeverity,
+} from "./primitives/StatusBadge";
+
+export { Toast } from "./primitives/Toast";
+export type {
+  ToastProps,
+  ToastSeverity,
+  ToastPosition,
+} from "./primitives/Toast";
+
+// Frost navigation
+export {
+  BracketTabs,
+  BracketTabList,
+  BracketTab,
+  BracketTabPanels,
+  BracketTabPanel,
+} from "./navigation/BracketTabs";
+export type {
+  BracketTabsProps,
+  BracketTabListProps,
+  BracketTabProps,
+  BracketTabPanelsProps,
+  BracketTabPanelProps,
+} from "./navigation/BracketTabs";
+
+export { BracketPagination } from "./navigation/BracketPagination";
+export type {
+  BracketPaginationProps,
+  BracketPaginationChangeEvent,
+} from "./navigation/BracketPagination";
+
+// Frost table — aliased so the new family doesn't collide with the legacy
+// DataTable / TableContainer exports above.
+export {
+  DataTable as BrutalistTable,
+  TableContainer as BrutalistTableContainer,
+} from "./table/BrutalistTable";
+export type {
+  DataTableProps as BrutalistTableProps,
+  DataTableHeader as BrutalistTableHeader,
+  DataTableRow as BrutalistTableRow,
+  DataTableRowInput as BrutalistTableRowInput,
+  DataTableCell as BrutalistTableCell,
+  DataTableRenderProps as BrutalistTableRenderProps,
+  DataTableSortDirection as BrutalistTableSortDirection,
+  TableContainerProps as BrutalistTableContainerProps,
+} from "./table/BrutalistTable";
+
+// Frost modal — header/body/footer aliased so they don't collide with the
+// legacy ComposedModal sub-components above.
+export { BrutalistModal } from "./modal/BrutalistModal";
+export type { BrutalistModalProps } from "./modal/BrutalistModal";
+export {
+  ModalHeader as BrutalistModalHeader,
+  ModalBody as BrutalistModalBody,
+  ModalFooter as BrutalistModalFooter,
+} from "./modal/BrutalistModal";
+export type {
+  ModalHeaderProps as BrutalistModalHeaderProps,
+  ModalBodyProps as BrutalistModalBodyProps,
+  ModalFooterProps as BrutalistModalFooterProps,
+} from "./modal/BrutalistModal";
+
+// Frost structure — only RowDigest* aliases are re-exported here; the new
+// file also exports StructuredList* for back-compat but those collide with
+// the legacy ./structure/StructuredList path above.
+export {
+  RowDigestWrapper,
+  RowDigestHead,
+  RowDigestBody,
+  RowDigestRow,
+  RowDigestCell,
+} from "./structure/RowDigest";
+
+// Frost shell
+export {
+  FrostHeader,
+  FrostHeaderName,
+  FrostHeaderMenuButton,
+  FrostHeaderGlobalBar,
+  FrostHeaderGlobalAction,
+} from "./shell/FrostHeader";
+export type {
+  FrostHeaderProps,
+  FrostHeaderNameProps,
+  FrostHeaderMenuButtonProps,
+  FrostHeaderGlobalBarProps,
+  FrostHeaderGlobalActionProps,
+} from "./shell/FrostHeader";
+
+export {
+  FrostSideNav,
+  FrostSideNavItems,
+  FrostSideNavLink,
+  FrostSideNavDivider,
+} from "./shell/FrostSideNav";
+export type {
+  FrostSideNavProps,
+  FrostSideNavItemsProps,
+  FrostSideNavLinkProps,
+} from "./shell/FrostSideNav";
