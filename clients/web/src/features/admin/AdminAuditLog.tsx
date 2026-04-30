@@ -114,7 +114,7 @@ export default function AdminAuditLog() {
             <Button kind="ghost" size="sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
               Previous
             </Button>
-            <span className="cds--label" style={{ margin: 0 }}>
+            <span className="rtk-label" style={{ margin: 0 }}>
               Page {page + 1} of {totalPages}
             </span>
             <Button kind="ghost" size="sm" disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>

@@ -21,13 +21,13 @@ export interface NumberInputProps {
   disabled?: boolean;
   size?: "sm" | "md" | "lg";
   className?: string;
-  /** Carbon-style: (event, { value, direction }) */
+  /** Change callback with the parsed value and optional step direction. */
   onChange?: (
     event: ChangeEvent<HTMLInputElement> | null,
     state: { value: number | string; direction?: "up" | "down" },
   ) => void;
   onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void;
-  /** Some Carbon callers pass `iconDescription`; accepted but unused */
+  /** Accepted for icon-only accessibility parity; currently unused. */
   iconDescription?: string;
   hideSteppers?: boolean;
   allowEmpty?: boolean;

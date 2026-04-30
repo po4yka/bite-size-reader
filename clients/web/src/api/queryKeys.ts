@@ -31,6 +31,12 @@ export const queryKeys = {
     subscriptions: () => ["rss", "subscriptions"] as const,
     items: (feedId: number) => ["rss", "items", feedId] as const,
   },
+  signals: {
+    all: ["signals"] as const,
+    list: () => ["signals", "list"] as const,
+    health: ["signals", "health"] as const,
+    sources: ["signals", "sources", "health"] as const,
+  },
   digest: {
     all: ["digest"] as const,
     channels: ["digest", "channels"] as const,

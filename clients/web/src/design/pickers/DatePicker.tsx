@@ -81,7 +81,7 @@ export interface DatePickerInputProps
   invalidText?: ReactNode;
   size?: "sm" | "md" | "lg";
   hideLabel?: boolean;
-  /** Carbon flatpickr placeholder; ignored. */
+  /** Native date input placeholder; accepted for API consistency. */
   placeholder?: string;
 }
 

@@ -88,8 +88,8 @@ export interface DataTableProps<
 }
 
 /**
- * Render-prop DataTable mirroring the subset of the Carbon API used by the
- * existing call sites. Cell IDs use the `${row.id}:${header.key}` format so
+ * Render-prop DataTable for the subset of table interactions used by feature
+ * pages. Cell IDs use the `${row.id}:${header.key}` format so
  * `cell.id.split(":").pop()` extracts the header key.
  */
 export function DataTable<

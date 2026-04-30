@@ -22,7 +22,7 @@ export interface DropdownProps<T> {
   disabled?: boolean;
   invalid?: boolean;
   invalidText?: ReactNode;
-  /** Carbon style: ({ selectedItem }) */
+  /** Change callback with the selected item. */
   onChange?: (state: { selectedItem: T | null }) => void;
   className?: string;
 }

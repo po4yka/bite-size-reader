@@ -6186,6 +6186,166 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /v1/signals:
+    get:
+      tags:
+      - Signals
+      summary: List Signals
+      description: List scored signal candidates for the authenticated user.
+      operationId: list_signals_v1_signals_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Signal queue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalListResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/signals/health:
+    get:
+      tags:
+      - Signals
+      summary: Signal Health
+      description: Return Chroma readiness and source health counts for signal scoring.
+      operationId: signal_health_v1_signals_health_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Signal scoring health
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalHealthResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/signals/sources/health:
+    get:
+      tags:
+      - Signals
+      summary: Signal Source Health
+      description: List signal source health rows visible to the authenticated user.
+      operationId: source_health_v1_signals_sources_health_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Source health rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalSourceHealthResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/signals/sources/{source_id}/active:
+    post:
+      tags:
+      - Signals
+      summary: Set Signal Source Active
+      description: Enable or pause a signal source if the authenticated user is subscribed to it.
+      operationId: set_source_active_v1_signals_sources_source_id_active_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: source_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceActiveRequest'
+      responses:
+        '200':
+          description: Source active state updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalSourceActiveResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/signals/{signal_id}/feedback:
+    post:
+      tags:
+      - Signals
+      summary: Update Signal Feedback
+      description: Write feedback for one signal candidate.
+      operationId: update_signal_feedback_v1_signals_signal_id_feedback_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: signal_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalFeedbackRequest'
+      responses:
+        '200':
+          description: Feedback recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalFeedbackResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/signals/topics:
+    post:
+      tags:
+      - Signals
+      summary: Upsert Signal Topic
+      description: Create or update a single-user topic preference for signal scoring.
+      operationId: upsert_topic_v1_signals_topics_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopicPreferenceRequest'
+      responses:
+        '200':
+          description: Topic preference saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalTopicResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 components:
   securitySchemes:
     HTTPBearer:
@@ -7469,6 +7629,223 @@ components:
         properties:
           data:
             type: object
+    SignalFeedbackRequest:
+      type: object
+      required:
+      - action
+      properties:
+        action:
+          type: string
+          enum:
+          - like
+          - dislike
+          - skip
+          - hide_source
+          - queue
+          - boost_topic
+    SourceActiveRequest:
+      type: object
+      required:
+      - is_active
+      properties:
+        is_active:
+          type: boolean
+    TopicPreferenceRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        description:
+          type: string
+          nullable: true
+          maxLength: 500
+        weight:
+          type: number
+          minimum: 0
+          maximum: 5
+          default: 1
+    SignalItem:
+      type: object
+      additionalProperties: true
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        heuristic_score:
+          type: number
+          nullable: true
+        llm_score:
+          type: number
+          nullable: true
+        final_score:
+          type: number
+          nullable: true
+        filter_stage:
+          type: string
+          nullable: true
+        feed_item_title:
+          type: string
+          nullable: true
+        feed_item_url:
+          type: string
+          nullable: true
+        source_kind:
+          type: string
+          nullable: true
+        source_title:
+          type: string
+          nullable: true
+        topic_name:
+          type: string
+          nullable: true
+    SignalSourceHealth:
+      type: object
+      additionalProperties: true
+      properties:
+        id:
+          type: integer
+        kind:
+          type: string
+        external_id:
+          type: string
+          nullable: true
+        url:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        fetch_error_count:
+          type: integer
+        last_error:
+          type: string
+          nullable: true
+        last_fetched_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_successful_at:
+          type: string
+          format: date-time
+          nullable: true
+        subscription_id:
+          type: integer
+        subscription_active:
+          type: boolean
+        cadence_seconds:
+          type: integer
+          nullable: true
+        next_fetch_at:
+          type: string
+          format: date-time
+          nullable: true
+    SignalListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            type: object
+            required:
+            - signals
+            properties:
+              signals:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SignalItem'
+    SignalHealthResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            type: object
+            properties:
+              chroma:
+                type: object
+                properties:
+                  ready:
+                    type: boolean
+                  required:
+                    type: boolean
+                  collection:
+                    type: string
+                    nullable: true
+              sources:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  active:
+                    type: integer
+                  errored:
+                    type: integer
+    SignalSourceHealthResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            type: object
+            required:
+            - sources
+            properties:
+              sources:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SignalSourceHealth'
+    SignalFeedbackResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            type: object
+            properties:
+              updated:
+                type: boolean
+    SignalSourceActiveResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            type: object
+            properties:
+              updated:
+                type: boolean
+              is_active:
+                type: boolean
+    SignalTopicResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            type: object
+            properties:
+              topic:
+                type: object
+                additionalProperties: true
     Collection:
       type: object
       required:

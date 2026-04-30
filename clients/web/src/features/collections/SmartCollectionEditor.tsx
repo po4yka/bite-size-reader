@@ -198,8 +198,8 @@ export default function SmartCollectionEditor({
           <RadioButton labelText="Any condition" value="any" id="smart-match-any" />
         </RadioButtonGroup>
 
-        <fieldset className="cds--fieldset">
-          <legend className="cds--label">Conditions</legend>
+        <fieldset className="rtk-fieldset">
+          <legend className="rtk-label">Conditions</legend>
           {conditions.map((cond, i) => (
             <SmartConditionRow
               key={i}

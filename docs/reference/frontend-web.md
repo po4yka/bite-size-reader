@@ -12,7 +12,7 @@ Reference for the web interface implemented in `clients/web/`.
 
 The web interface is the sole frontend surface — a standalone SPA built with:
 
-- React 18 + TypeScript + Vite
+- React 19 + TypeScript + Vite
 - A project-owned design shim under `clients/web/src/design/` (no third-party design system)
 - `@tanstack/react-query` for server state and polling
 
@@ -25,10 +25,12 @@ navigation (`Tabs`, `Pagination`, `TreeView`, `ContentSwitcher`), tables (`DataT
 the `Table*` family), modals (`Modal`, `ComposedModal`), pickers, structure widgets, the
 shell (`Header`, `SideNav`, `Theme`), and SVG icons. Feature code imports exclusively from
 `../design`. Tokens (`tokens.css`) and reset/skeleton styles (`base.css`) are imported once
-through `clients/web/src/design/index.ts` and read via `var(--rtk-*, fallback)`. Theme
-selection writes `data-theme="light" | "dark"` on `<html>` so token CSS resolves on first
-paint without a flash. Add new components by extending the design directory; never reach
-for an external design system in feature code.
+through `clients/web/src/design/index.ts` and read via `var(--rtk-*, fallback)`.
+The mobile-consumable token source is `clients/web/tokens/tokens.json`; update
+that JSON first, then keep `clients/web/src/design/tokens.css` in sync. Theme
+selection writes `data-theme="light" | "dark"` on `<html>` so token CSS resolves
+on first paint without a flash. Add new components by extending the design
+directory; never reach for an external design system in feature code.
 
 ---
 
@@ -71,6 +73,8 @@ Build output contract:
 - `/web/submit`
 - `/web/collections`
 - `/web/collections/:id`
+- `/web/feeds`
+- `/web/signals`
 - `/web/digest`
 - `/web/preferences`
 - `/web/admin`
@@ -137,6 +141,14 @@ Digest flow parity (web route `/web/digest`) includes:
 - Delivery history
 
 Note: digest endpoints require Telegram WebApp auth context.
+
+Signals flow (`/web/signals`) includes:
+
+- Ranked signal queue from `GET /v1/signals`
+- Chroma/source readiness from `GET /v1/signals/health`
+- Source health and pause/resume controls from `/v1/signals/sources/*`
+- Feedback actions: like, queue, skip, hide source
+- Topic preference creation via `POST /v1/signals/topics`
 
 Admin page (`/web/admin`) includes:
 
@@ -242,4 +254,4 @@ Clear stored tokens (login page has "Clear local session") and sign in again.
 
 ---
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-30

@@ -127,7 +127,7 @@ export default function ImportExportPage() {
               />
 
               {detectedFormat && (
-                <p className="cds--label">
+                <p className="rtk-label">
                   Detected format: <strong>{detectedFormat}</strong>
                 </p>
               )}

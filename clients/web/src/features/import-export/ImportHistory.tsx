@@ -54,7 +54,7 @@ export default function ImportHistory() {
 
   if (isLoading) return <DataTableSkeleton columnCount={HEADERS.length} rowCount={3} showToolbar={false} />;
   if (error) return <QueryErrorNotification error={error} title="Failed to load import history" />;
-  if (rows.length === 0) return <p className="cds--label">No import history.</p>;
+  if (rows.length === 0) return <p className="rtk-label">No import history.</p>;
 
   return (
     <DataTable rows={rows} headers={HEADERS}>

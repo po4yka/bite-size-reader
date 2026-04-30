@@ -71,27 +71,27 @@ export default function AdminMetrics() {
           <h4>LLM (last 7 days)</h4>
           <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
             <div>
-              <p className="cds--label">Total Calls</p>
+              <p className="rtk-label">Total Calls</p>
               <p style={{ fontSize: "1.25rem", fontWeight: 600 }}>{llm.totalCalls.toLocaleString()}</p>
             </div>
             <div>
-              <p className="cds--label">Avg Latency</p>
+              <p className="rtk-label">Avg Latency</p>
               <p style={{ fontSize: "1.25rem", fontWeight: 600 }}>{llm.avgLatencyMs.toLocaleString()} ms</p>
             </div>
             <div>
-              <p className="cds--label">Prompt Tokens</p>
+              <p className="rtk-label">Prompt Tokens</p>
               <p style={{ fontSize: "1.25rem", fontWeight: 600 }}>{llm.totalPromptTokens.toLocaleString()}</p>
             </div>
             <div>
-              <p className="cds--label">Completion Tokens</p>
+              <p className="rtk-label">Completion Tokens</p>
               <p style={{ fontSize: "1.25rem", fontWeight: 600 }}>{llm.totalCompletionTokens.toLocaleString()}</p>
             </div>
             <div>
-              <p className="cds--label">Total Cost</p>
+              <p className="rtk-label">Total Cost</p>
               <p style={{ fontSize: "1.25rem", fontWeight: 600 }}>${llm.totalCostUsd.toFixed(4)}</p>
             </div>
             <div>
-              <p className="cds--label">Error Rate</p>
+              <p className="rtk-label">Error Rate</p>
               <p style={{ fontSize: "1.25rem", fontWeight: 600, color: llm.errorRate > 0.05 ? "var(--rtk-color-support-error)" : undefined }}>
                 {(llm.errorRate * 100).toFixed(2)}%
               </p>

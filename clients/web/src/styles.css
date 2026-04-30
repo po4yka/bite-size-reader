@@ -233,6 +233,192 @@ body {
   overflow-wrap: anywhere;
 }
 
+.section-heading-row {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.section-heading-row h2 {
+  margin: 0;
+}
+
+.signal-page {
+  --signal-grid-min: minmax(0, 1fr);
+}
+
+.signal-health-strip {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+}
+
+.signal-health-strip .rtk-tile {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.signal-health-strip strong {
+  font-size: 1.35rem;
+}
+
+.signal-layout {
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 72rem) {
+  .signal-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem);
+  }
+}
+
+.signal-queue,
+.signal-sidebar,
+.signal-card-list,
+.source-health-list,
+.signal-history-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.signal-card {
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 56rem) {
+  .signal-card {
+    grid-template-columns: minmax(0, 1fr) 6.5rem;
+  }
+
+  .signal-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+.signal-card__main {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.signal-card__main h2 {
+  font-size: 1rem;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.signal-card__meta,
+.source-health-row__meta {
+  color: var(--rtk-color-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  gap: 0.45rem;
+}
+
+.signal-card__url {
+  color: var(--rtk-color-accent);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.signal-card__url:hover {
+  text-decoration: underline;
+}
+
+.signal-score {
+  border-left: 2px solid var(--rtk-color-accent);
+  display: grid;
+  gap: 0.15rem;
+  padding-left: 0.75rem;
+}
+
+.signal-score strong {
+  font-size: 1.25rem;
+}
+
+.signal-score span:last-child {
+  color: var(--rtk-color-text-muted);
+  font-size: 0.75rem;
+}
+
+.signal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.signal-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.topic-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.source-health-row {
+  border-top: 1px solid var(--rtk-color-border-subtle);
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+.source-health-row__title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.source-health-row__error {
+  color: var(--rtk-color-text-error);
+  font-size: 0.8125rem;
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.source-health-row__status {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.empty-panel {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.empty-panel h3 {
+  margin: 0;
+}
+
+.signal-history {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.signal-history-row {
+  align-items: center;
+  border-top: 1px solid var(--rtk-color-border-subtle);
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding-top: 0.75rem;
+}
+
+.signal-history-row span:first-child {
+  overflow-wrap: anywhere;
+}
+
 .muted {
   color: var(--rtk-color-text-muted);
   margin: 0;
@@ -546,13 +732,10 @@ body {
 }
 
 /*
- * Skeleton shimmer keyframes live in `./design/base.css` (`@keyframes
- * ratatoskr-shimmer`). Both `.rtk-skeleton` (project) and `.cds--skeleton`
- * (Carbon-issued) inherit the same animation so visuals stay identical
- * during the migration.
+ * Skeleton shimmer keyframes live in `./design/base.css`
+ * (`@keyframes ratatoskr-shimmer`).
  */
-.rtk-skeleton,
-.cds--skeleton {
+.rtk-skeleton {
   background-image: linear-gradient(
     90deg,
     transparent 0%,
@@ -566,8 +749,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rtk-skeleton,
-  .cds--skeleton {
+  .rtk-skeleton {
     animation: none;
     background-image: none;
   }

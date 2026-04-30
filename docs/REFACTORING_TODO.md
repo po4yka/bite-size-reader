@@ -373,60 +373,60 @@ Acceptance evidence:
 
 ### 4.1 Design shim rename
 
-- [ ] Remove IBM Carbon terminology from comments and type names under `clients/web/src/design/`.
-- [ ] Rename `CarbonTagType` and related helpers in `clients/web/src/components/TagPills.tsx`.
-- [ ] Rename `.cds--*` CSS compatibility classes in `clients/web/src/styles.css`.
-- [ ] Replace `web-carbon-v1` tests with `web-v1`.
-- [ ] Update `docs/reference/frontend-web.md` to describe Ratatoskr primitives, not Carbon parity.
-- [ ] Keep feature imports through `clients/web/src/design/`.
+- [x] Remove IBM Carbon terminology from comments and type names under `clients/web/src/design/`.
+- [x] Rename `CarbonTagType` and related helpers in `clients/web/src/components/TagPills.tsx`.
+- [x] Rename `.cds--*` CSS compatibility classes in `clients/web/src/styles.css`.
+- [x] Replace `web-carbon-v1` tests with `web-v1`.
+- [x] Update `docs/reference/frontend-web.md` to describe Ratatoskr primitives, not Carbon parity.
+- [x] Keep feature imports through `clients/web/src/design/`.
 
 Acceptance evidence:
 
-- [ ] `rg -n "Carbon|carbon|cds-|web-carbon-v1" clients/web docs/reference/frontend-web.md` is empty or only contains documented migration notes.
-- [ ] `cd clients/web && npm run check:static && npm run test` passes.
+- [x] `rg -n "Carbon|carbon|cds-|web-carbon-v1" clients/web docs/reference/frontend-web.md` is empty or only contains documented migration notes.
+- [x] `cd clients/web && npm run check:static && npm run test` passes.
 
 ### 4.2 Token source
 
-- [ ] Choose token file path: `clients/web/tokens/tokens.json` or repo-level `design/tokens.json`.
-- [ ] Define color tokens.
-- [ ] Define spacing tokens.
-- [ ] Define radius tokens.
-- [ ] Define typography tokens.
-- [ ] Generate or hand-maintain `clients/web/src/design/tokens.css`.
-- [ ] Export mobile-consumable JSON shape for future mobile repo use.
-- [ ] Document token update process.
+- [x] Choose token file path: `clients/web/tokens/tokens.json` or repo-level `design/tokens.json`.
+- [x] Define color tokens.
+- [x] Define spacing tokens.
+- [x] Define radius tokens.
+- [x] Define typography tokens.
+- [x] Generate or hand-maintain `clients/web/src/design/tokens.css`.
+- [x] Export mobile-consumable JSON shape for future mobile repo use.
+- [x] Document token update process.
 
 Acceptance evidence:
 
-- [ ] Light/dark web themes still render correctly.
-- [ ] Token JSON can be consumed outside web without parsing CSS.
+- [x] Light/dark web themes still render correctly.
+- [x] Token JSON can be consumed outside web without parsing CSS.
 
 ### 4.3 Feed/topics UI
 
-- [ ] Add route manifest entries for signal feed and topics.
-- [ ] Generate/update API types from `docs/openapi/mobile_api.yaml`.
-- [ ] Build ranked queue view.
-- [ ] Build source health view.
-- [ ] Build topic preferences view.
-- [ ] Build feedback controls for like/dislike/skip/hide.
-- [ ] Add loading, empty, error, and Chroma-unavailable states.
-- [ ] Add tests for route rendering and feedback calls.
-- [ ] Verify layout at mobile and desktop widths.
+- [x] Add route manifest entries for signal feed and topics.
+- [x] Generate/update API types from `docs/openapi/mobile_api.yaml`.
+- [x] Build ranked queue view.
+- [x] Build source health view.
+- [x] Build topic preferences view.
+- [x] Build feedback controls for like/dislike/skip/hide.
+- [x] Add loading, empty, error, and Chroma-unavailable states.
+- [x] Add tests for route rendering and feedback calls.
+- [x] Verify layout at mobile and desktop widths.
 
 Acceptance evidence:
 
-- [ ] User can triage top signals from `/web`.
-- [ ] UI handles no signals, broken source, and Chroma-down states.
+- [x] User can triage top signals from `/web`.
+- [x] UI handles no signals, broken source, and Chroma-down states.
 
 ### 4.4 Browser extension token follow-up
 
-- [ ] Decide whether browser extension should share tokens in this phase.
-- [ ] If yes, add build/copy path for token CSS or variables into `clients/browser-extension/`.
-- [ ] If no, document deferral and avoid partial token duplication.
+- [x] Decide whether browser extension should share tokens in this phase.
+- [x] N/A: browser extension token sharing is deferred until the extension has a build step.
+- [x] If no, document deferral and avoid partial token duplication.
 
 Acceptance evidence:
 
-- [ ] Browser extension styling decision is recorded.
+- [x] Browser extension styling decision is recorded.
 
 ## Phase 5 — X / Reddit / HN / Substack ingestors
 

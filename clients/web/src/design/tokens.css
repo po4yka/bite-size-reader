@@ -9,17 +9,20 @@
 :root,
 [data-theme="light"] {
   /* Color */
-  --rtk-color-bg: #ffffff;
-  --rtk-color-text: #161616;
-  --rtk-color-text-muted: #525252;
-  --rtk-color-text-error: #da1e28;
-  --rtk-color-support-error: #da1e28;
-  --rtk-color-layer: #f4f4f4;
-  --rtk-color-layer-hover: rgba(0, 0, 0, 0.04);
-  --rtk-color-layer-accent: #e0e0e0;
-  --rtk-color-border-subtle: #e0e0e0;
-  --rtk-color-border-strong: #8d8d8d;
-  --rtk-color-focus: #0f62fe;
+  --rtk-color-bg: oklch(98.6% 0.012 96);
+  --rtk-color-text: oklch(22% 0.025 72);
+  --rtk-color-text-muted: oklch(45% 0.03 72);
+  --rtk-color-text-error: oklch(51% 0.18 28);
+  --rtk-color-support-error: oklch(51% 0.18 28);
+  --rtk-color-layer: oklch(96.2% 0.015 95);
+  --rtk-color-layer-hover: oklch(92.5% 0.018 95);
+  --rtk-color-layer-accent: oklch(88.2% 0.025 88);
+  --rtk-color-border-subtle: oklch(86.5% 0.024 88);
+  --rtk-color-border-strong: oklch(52% 0.045 80);
+  --rtk-color-focus: oklch(49% 0.145 31);
+  --rtk-color-accent: oklch(49% 0.145 31);
+  --rtk-color-success: oklch(44% 0.105 150);
+  --rtk-color-warning: oklch(63% 0.13 74);
   --rtk-color-shadow: rgba(0, 0, 0, 0.1);
 
   /* Spacing */
@@ -35,6 +38,7 @@
   /* Typography */
   --rtk-font-body-01-size: 0.875rem;
   --rtk-font-body-02-size: 1rem;
+  --rtk-font-label-size: 0.75rem;
   --rtk-font-heading-04-size: 1.75rem;
   --rtk-font-heading-04-tracking: 0;
   --rtk-font-heading-04-leading: 1.29;
@@ -45,16 +49,19 @@
 }
 
 [data-theme="dark"] {
-  --rtk-color-bg: #161616;
-  --rtk-color-text: #f4f4f4;
-  --rtk-color-text-muted: #c6c6c6;
-  --rtk-color-text-error: #ff8389;
-  --rtk-color-support-error: #fa4d56;
-  --rtk-color-layer: #262626;
-  --rtk-color-layer-hover: rgba(255, 255, 255, 0.06);
-  --rtk-color-layer-accent: #393939;
-  --rtk-color-border-subtle: #393939;
-  --rtk-color-border-strong: #6f6f6f;
-  --rtk-color-focus: #ffffff;
+  --rtk-color-bg: oklch(19% 0.018 78);
+  --rtk-color-text: oklch(93% 0.014 96);
+  --rtk-color-text-muted: oklch(74% 0.02 92);
+  --rtk-color-text-error: oklch(70% 0.16 26);
+  --rtk-color-support-error: oklch(70% 0.16 26);
+  --rtk-color-layer: oklch(25% 0.02 78);
+  --rtk-color-layer-hover: oklch(31% 0.022 78);
+  --rtk-color-layer-accent: oklch(35% 0.027 84);
+  --rtk-color-border-subtle: oklch(37% 0.026 84);
+  --rtk-color-border-strong: oklch(62% 0.035 88);
+  --rtk-color-focus: oklch(72% 0.15 48);
+  --rtk-color-accent: oklch(72% 0.15 48);
+  --rtk-color-success: oklch(71% 0.12 152);
+  --rtk-color-warning: oklch(76% 0.13 76);
   --rtk-color-shadow: rgba(0, 0, 0, 0.4);
 }

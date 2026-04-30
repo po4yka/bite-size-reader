@@ -50,3 +50,20 @@
   outline: 2px solid var(--rtk-color-focus, #0f62fe);
   outline-offset: 2px;
 }
+
+.rtk-label {
+  color: var(--rtk-color-text-muted);
+  font-size: var(--rtk-font-label-size, 0.75rem);
+  font-weight: 600;
+  line-height: 1.333;
+  margin: 0;
+}
+
+.rtk-fieldset {
+  border: 0;
+  display: grid;
+  gap: var(--rtk-space-4, 0.75rem);
+  margin: 0;
+  min-inline-size: 0;
+  padding: 0;
+}

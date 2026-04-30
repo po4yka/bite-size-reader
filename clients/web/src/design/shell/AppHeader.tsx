@@ -27,7 +27,7 @@ export type HeaderNameProps = {
   prefix?: ReactNode;
   children?: ReactNode;
   className?: string;
-  /** Optional element/component override (mirrors Carbon's `as` prop). */
+  /** Optional element/component override. */
   as?: ElementType;
 } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "prefix" | "className">
   & Record<string, unknown>;

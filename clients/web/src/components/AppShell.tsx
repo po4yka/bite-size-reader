@@ -124,8 +124,8 @@ export default function AppShell() {
             onClick={() => setExpanded((prev) => !prev)}
             isActive={expanded}
           />
-          <HeaderName as={Link} to={HOME_PATH} prefix="Bite-Size">
-            Reader
+          <HeaderName as={Link} to={HOME_PATH} prefix="">
+            Ratatoskr
           </HeaderName>
           <HeaderGlobalBar>
             {user?.username && <span className="app-shell-user">@{user.username}</span>}

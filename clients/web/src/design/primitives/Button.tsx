@@ -30,7 +30,7 @@ export interface ButtonProps
   isExpressive?: boolean;
   type?: "button" | "submit" | "reset";
   children?: ReactNode;
-  /** Optional element/component override (mirrors Carbon's `as` prop). */
+  /** Optional element/component override. */
   as?: ElementType;
   /** Pass-through href when rendering as an anchor. */
   href?: string;

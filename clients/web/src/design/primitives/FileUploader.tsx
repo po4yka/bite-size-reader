@@ -17,7 +17,7 @@ export interface FileUploaderProps {
   size?: "sm" | "md" | "lg";
   iconDescription?: string;
   onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
-  /** Called when the user clears the selected file. Carbon-parity callback. */
+  /** Called when the user clears the selected file. */
   onDelete?: () => void;
   className?: string;
   id?: string;

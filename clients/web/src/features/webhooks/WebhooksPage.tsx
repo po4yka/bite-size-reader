@@ -62,8 +62,8 @@ function EventCheckboxGroup({
   onChange: (events: WebhookEventType[]) => void;
 }) {
   return (
-    <fieldset className="cds--fieldset">
-      <legend className="cds--label">Event types</legend>
+    <fieldset className="rtk-fieldset">
+      <legend className="rtk-label">Event types</legend>
       {WEBHOOK_EVENT_TYPES.map((evt) => (
         <Checkbox
           key={evt}
@@ -90,7 +90,7 @@ function DeliveryLog({ webhookId }: { webhookId: number }) {
   if (isLoading) return <InlineLoading description="Loading deliveries..." />;
   if (error) return <QueryErrorNotification error={error} title="Failed to load deliveries" />;
   if (deliveries.length === 0) {
-    return <p className="cds--label">No deliveries yet.</p>;
+    return <p className="rtk-label">No deliveries yet.</p>;
   }
 
   const headers = [

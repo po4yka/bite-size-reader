@@ -1,6 +1,6 @@
 import { Tag } from "../design";
 
-type CarbonTagType =
+type RatatoskrTagTone =
   | "blue"
   | "red"
   | "green"
@@ -13,7 +13,7 @@ type CarbonTagType =
   | "cool-gray"
   | "high-contrast";
 
-const COLOR_TO_TAG_TYPE: Record<string, CarbonTagType> = {
+const COLOR_TO_TAG_TONE: Record<string, RatatoskrTagTone> = {
   blue: "blue",
   red: "red",
   green: "green",
@@ -30,10 +30,10 @@ const COLOR_TO_TAG_TYPE: Record<string, CarbonTagType> = {
   indigo: "blue",
 };
 
-function mapColorToTagType(color: string | null): CarbonTagType {
+function mapColorToTagTone(color: string | null): RatatoskrTagTone {
   if (!color) return "cool-gray";
   const lower = color.toLowerCase();
-  for (const [key, type] of Object.entries(COLOR_TO_TAG_TYPE)) {
+  for (const [key, type] of Object.entries(COLOR_TO_TAG_TONE)) {
     if (lower.includes(key)) return type;
   }
   return "cool-gray";
@@ -59,7 +59,7 @@ export default function TagPills({ tags, onRemove }: TagPillsProps) {
       {tags.map((tag) => (
         <Tag
           key={tag.id}
-          type={mapColorToTagType(tag.color)}
+          type={mapColorToTagTone(tag.color)}
           size="sm"
           filter={Boolean(onRemove)}
           onClose={() => onRemove?.(tag.id)}

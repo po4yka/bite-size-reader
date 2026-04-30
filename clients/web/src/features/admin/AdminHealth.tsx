@@ -55,15 +55,15 @@ export default function AdminHealth() {
         <>
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
             <Tile style={{ textAlign: "center", minWidth: 140 }}>
-              <p className="cds--label">Total Requests</p>
+              <p className="rtk-label">Total Requests</p>
               <p style={{ fontSize: "1.75rem", fontWeight: 600 }}>{data.totalRequests.toLocaleString()}</p>
             </Tile>
             <Tile style={{ textAlign: "center", minWidth: 140 }}>
-              <p className="cds--label">Total Summaries</p>
+              <p className="rtk-label">Total Summaries</p>
               <p style={{ fontSize: "1.75rem", fontWeight: 600 }}>{data.totalSummaries.toLocaleString()}</p>
             </Tile>
             <Tile style={{ textAlign: "center", minWidth: 140 }}>
-              <p className="cds--label">Failed Requests</p>
+              <p className="rtk-label">Failed Requests</p>
               <p style={{ fontSize: "1.75rem", fontWeight: 600, color: data.failedRequests > 0 ? "var(--rtk-color-support-error)" : undefined }}>
                 {data.failedRequests.toLocaleString()}
               </p>

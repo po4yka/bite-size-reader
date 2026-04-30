@@ -25,7 +25,7 @@ describe("TagPills", () => {
     const tags = [{ id: 7, name: "removable", color: null }];
     render(<TagPills tags={tags} onRemove={handleRemove} />);
 
-    // Carbon Tag with filter=true renders a dismiss/close button
+    // Filter tags render a dismiss/close button.
     const closeButton = screen.getByRole("button");
     await user.click(closeButton);
     expect(handleRemove).toHaveBeenCalledWith(7);

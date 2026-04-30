@@ -96,7 +96,7 @@ The bottom of the popup shows your last 5 saved pages with relative timestamps.
 
 ## Icons
 
-Source SVG: `icons/icon.svg` (IBM Blue rounded square with "B" letter)
+Source SVG: `icons/icon.svg`.
 
 To regenerate PNGs from the SVG:
 
@@ -105,6 +105,13 @@ python icons/generate-icons.py
 ```
 
 Requires `cairosvg` (`pip install cairosvg`) or use any SVG-to-PNG converter at 16x16, 48x48, and 128x128.
+
+## Design Tokens
+
+The browser extension does not consume the web token source in Phase 4. The
+shared token JSON lives at `clients/web/tokens/tokens.json`; extension CSS stays
+hand-maintained until the extension has a build step that can copy or transform
+those tokens without duplicating partial values.
 
 ## Project Structure
 

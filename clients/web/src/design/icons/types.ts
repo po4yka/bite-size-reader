@@ -2,7 +2,7 @@ import type { SVGAttributes } from "react";
 
 export interface IconProps extends SVGAttributes<SVGSVGElement> {
   size?: number | string;
-  /** Carbon `aria-label` parity. */
+  /** Accessible label passthrough. */
   "aria-label"?: string;
 }
 

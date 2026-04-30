@@ -2800,6 +2800,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Signals
+         * @description List scored signal candidates for the authenticated user.
+         */
+        get: operations["list_signals_v1_signals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/signals/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Signal Health
+         * @description Return Chroma readiness and source health counts for signal scoring.
+         */
+        get: operations["signal_health_v1_signals_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/signals/sources/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Signal Source Health
+         * @description List signal source health rows visible to the authenticated user.
+         */
+        get: operations["source_health_v1_signals_sources_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/signals/sources/{source_id}/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Signal Source Active
+         * @description Enable or pause a signal source if the authenticated user is subscribed to it.
+         */
+        post: operations["set_source_active_v1_signals_sources_source_id_active_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/signals/{signal_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update Signal Feedback
+         * @description Write feedback for one signal candidate.
+         */
+        post: operations["update_signal_feedback_v1_signals_signal_id_feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/signals/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upsert Signal Topic
+         * @description Create or update a single-user topic preference for signal scoring.
+         */
+        post: operations["upsert_topic_v1_signals_topics_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3306,6 +3426,97 @@ export interface components {
         };
         SuccessResponse: components["schemas"]["BaseSuccessResponse"] & {
             data: Record<string, never>;
+        };
+        SignalFeedbackRequest: {
+            /** @enum {string} */
+            action: "like" | "dislike" | "skip" | "hide_source" | "queue" | "boost_topic";
+        };
+        SourceActiveRequest: {
+            is_active: boolean;
+        };
+        TopicPreferenceRequest: {
+            name: string;
+            description?: string | null;
+            /** @default 1 */
+            weight: number;
+        };
+        SignalItem: {
+            id?: number;
+            status?: string;
+            heuristic_score?: number | null;
+            llm_score?: number | null;
+            final_score?: number | null;
+            filter_stage?: string | null;
+            feed_item_title?: string | null;
+            feed_item_url?: string | null;
+            source_kind?: string | null;
+            source_title?: string | null;
+            topic_name?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        SignalSourceHealth: {
+            id?: number;
+            kind?: string;
+            external_id?: string | null;
+            url?: string | null;
+            title?: string | null;
+            is_active?: boolean;
+            fetch_error_count?: number;
+            last_error?: string | null;
+            /** Format: date-time */
+            last_fetched_at?: string | null;
+            /** Format: date-time */
+            last_successful_at?: string | null;
+            subscription_id?: number;
+            subscription_active?: boolean;
+            cadence_seconds?: number | null;
+            /** Format: date-time */
+            next_fetch_at?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        SignalListResponseEnvelope: components["schemas"]["BaseSuccessResponse"] & {
+            data: {
+                signals: components["schemas"]["SignalItem"][];
+            };
+        };
+        SignalHealthResponseEnvelope: components["schemas"]["BaseSuccessResponse"] & {
+            data: {
+                chroma?: {
+                    ready?: boolean;
+                    required?: boolean;
+                    collection?: string | null;
+                };
+                sources?: {
+                    total?: number;
+                    active?: number;
+                    errored?: number;
+                };
+            };
+        };
+        SignalSourceHealthResponseEnvelope: components["schemas"]["BaseSuccessResponse"] & {
+            data: {
+                sources: components["schemas"]["SignalSourceHealth"][];
+            };
+        };
+        SignalFeedbackResponseEnvelope: components["schemas"]["BaseSuccessResponse"] & {
+            data: {
+                updated?: boolean;
+            };
+        };
+        SignalSourceActiveResponseEnvelope: components["schemas"]["BaseSuccessResponse"] & {
+            data: {
+                updated?: boolean;
+                is_active?: boolean;
+            };
+        };
+        SignalTopicResponseEnvelope: components["schemas"]["BaseSuccessResponse"] & {
+            data: {
+                topic?: {
+                    [key: string]: unknown;
+                };
+            };
         };
         Collection: {
             id: number;
@@ -8809,6 +9020,159 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    list_signals_v1_signals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signal queue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalListResponseEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    signal_health_v1_signals_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signal scoring health */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalHealthResponseEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    source_health_v1_signals_sources_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Source health rows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalSourceHealthResponseEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    set_source_active_v1_signals_sources_source_id_active_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceActiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Source active state updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalSourceActiveResponseEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            404: components["responses"]["NotFoundError"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    update_signal_feedback_v1_signals_signal_id_feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                signal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignalFeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Feedback recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalFeedbackResponseEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            404: components["responses"]["NotFoundError"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    upsert_topic_v1_signals_topics_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopicPreferenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Topic preference saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalTopicResponseEnvelope"];
                 };
             };
             401: components["responses"]["UnauthorizedError"];

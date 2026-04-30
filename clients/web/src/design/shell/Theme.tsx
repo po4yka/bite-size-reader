@@ -12,17 +12,7 @@ function mapThemeName(theme: ThemeName | undefined): "light" | "dark" {
   return "light";
 }
 
-/**
- * Project shim for Carbon's `<Theme>` provider.
- *
- * Accepts both the legacy Carbon vocabulary (`"white" | "g100"` etc.) AND the
- * new project vocabulary (`"light" | "dark"`). The chosen value is written to
- * `document.documentElement.dataset.theme` so token CSS selectors
- * (`[data-theme="dark"] { ... }`) take effect on first paint.
- *
- * The shim renders children inline (no wrapper element) so existing callers
- * relying on Carbon's wrapper-less behaviour stay unaffected.
- */
+/** Project theme provider for writing the active light/dark token mode. */
 export function Theme({ theme, children }: ThemeProps) {
   const mapped = mapThemeName(theme);
   useEffect(() => {

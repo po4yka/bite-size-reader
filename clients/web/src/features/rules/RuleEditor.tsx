@@ -314,8 +314,8 @@ export default function RuleEditor({ open, rule, onClose, onSave, onTest, isSavi
           </RadioButtonGroup>
 
           {/* Conditions */}
-          <fieldset className="cds--fieldset">
-            <legend className="cds--label">Conditions</legend>
+          <fieldset className="rtk-fieldset">
+            <legend className="rtk-label">Conditions</legend>
             {conditions.map((cond, i) => (
               <ConditionRow
                 key={i}
@@ -336,8 +336,8 @@ export default function RuleEditor({ open, rule, onClose, onSave, onTest, isSavi
           </fieldset>
 
           {/* Actions */}
-          <fieldset className="cds--fieldset">
-            <legend className="cds--label">Actions</legend>
+          <fieldset className="rtk-fieldset">
+            <legend className="rtk-label">Actions</legend>
             {actions.map((act, i) => (
               <ActionRow
                 key={i}

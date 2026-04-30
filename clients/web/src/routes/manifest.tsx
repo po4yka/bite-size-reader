@@ -26,6 +26,7 @@ const CollectionsPage = lazy(() => import("../features/collections/CollectionsPa
 const DigestPage = lazy(() => import("../features/digest/DigestPage"));
 const CustomDigestViewPage = lazy(() => import("../features/digest/CustomDigestViewPage"));
 const SearchPage = lazy(() => import("../features/search/SearchPage"));
+const SignalsPage = lazy(() => import("../features/signals/SignalsPage"));
 const TagManagementPage = lazy(() => import("../features/tags/TagManagementPage"));
 const WebhooksPage = lazy(() => import("../features/webhooks/WebhooksPage"));
 const RulesPage = lazy(() => import("../features/rules/RulesPage"));
@@ -132,6 +133,12 @@ const APP_ROUTE_DEFINITIONS: readonly AppRouteDefinition[] = [
     component: FeedsPage,
     lazy: true,
     nav: { label: "Feeds", icon: Rss, group: 1 },
+  },
+  {
+    path: "signals",
+    component: SignalsPage,
+    lazy: true,
+    nav: { label: "Signals", icon: ConnectionSignal, group: 1 },
   },
   {
     path: "digest",

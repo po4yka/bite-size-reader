@@ -11,7 +11,7 @@ export interface CheckboxProps
   id?: string;
   labelText?: ReactNode;
   hideLabel?: boolean;
-  /** Carbon-style: (event, { checked, id }) */
+  /** Change callback with the checked state and resolved input id. */
   onChange?: (
     event: ChangeEvent<HTMLInputElement>,
     state: { checked: boolean; id: string },

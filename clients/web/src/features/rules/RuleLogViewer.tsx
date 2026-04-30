@@ -20,7 +20,7 @@ export default function RuleLogViewer({ ruleId }: { ruleId: number }) {
   if (isLoading) return <InlineLoading description="Loading logs..." />;
   if (error) return <QueryErrorNotification error={error} title="Failed to load rule logs" />;
   if (logs.length === 0) {
-    return <p className="cds--label">No execution logs yet.</p>;
+    return <p className="rtk-label">No execution logs yet.</p>;
   }
 
   const headers = [
