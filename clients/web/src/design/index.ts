@@ -73,39 +73,6 @@ export type {
   TableHeaderProps,
 } from "./table/Table";
 
-// Table sub-components still used by digest pages (TableToolbar/Expand/Select/Batch)
-// NOTE: These remain until ChannelsTab and RSSFeedsTab are migrated to BrutalistTable.
-export {
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
-} from "./table/TableToolbar";
-export type {
-  TableToolbarProps,
-  TableToolbarContentProps,
-  TableToolbarSearchProps,
-} from "./table/TableToolbar";
-export {
-  TableExpandHeader,
-  TableExpandRow,
-  TableExpandedRow,
-} from "./table/TableExpand";
-export type {
-  TableExpandHeaderProps,
-  TableExpandRowProps,
-  TableExpandedRowProps,
-} from "./table/TableExpand";
-export { TableSelectAll, TableSelectRow } from "./table/TableSelect";
-export type {
-  TableSelectAllProps,
-  TableSelectRowProps,
-} from "./table/TableSelect";
-export { TableBatchActions, TableBatchAction } from "./table/TableBatch";
-export type {
-  TableBatchActionsProps,
-  TableBatchActionProps,
-} from "./table/TableBatch";
-
 // Multiselect / Dropdown (in-place rewrites)
 export { MultiSelect, FilterableMultiSelect } from "./multiselect/MultiSelect";
 export type { MultiSelectProps } from "./multiselect/MultiSelect";

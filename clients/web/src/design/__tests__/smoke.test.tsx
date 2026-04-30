@@ -20,16 +20,6 @@ import {
   RadioButton,
   RadioButtonGroup,
   Switch,
-  TableBatchAction,
-  TableBatchActions,
-  TableExpandHeader,
-  TableExpandRow,
-  TableExpandedRow,
-  TableSelectAll,
-  TableSelectRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
   Tag,
   Theme,
   TimePicker,
@@ -55,8 +45,6 @@ import {
   BrutalistSkeleton,
   BrutalistSkeletonPlaceholder,
   BrutalistSkeletonText,
-  BrutalistTable,
-  BrutalistTableContainer,
   FrostHeader,
   FrostHeaderGlobalAction,
   FrostHeaderGlobalBar,
@@ -144,58 +132,6 @@ describe("design layer smoke renders", () => {
           <Switch name="a" text="A" />
           <Switch name="b" text="B" />
         </ContentSwitcher>
-      </>,
-    );
-    expect(true).toBe(true);
-    unmount();
-  });
-
-  it("legacy table sub-components mount (pending migration of digest pages)", () => {
-    const headers = [
-      { key: "name", header: "Name" },
-      { key: "domain", header: "Domain" },
-    ];
-    const rows = [{ id: "r1", name: "n", domain: "d" }];
-    const { unmount } = render(
-      <>
-        <BrutalistTable rows={rows} headers={headers}>
-          {({ rows: r, headers: h, getHeaderProps, getRowProps, getTableProps }) => (
-            <BrutalistTableContainer title="t">
-              <TableToolbar>
-                <TableToolbarContent>
-                  <TableToolbarSearch />
-                </TableToolbarContent>
-              </TableToolbar>
-              <table {...getTableProps()}>
-                <thead>
-                  <tr>
-                    <TableSelectAll />
-                    <TableExpandHeader />
-                    {h.map((header) => (
-                      <th key={header.key} {...getHeaderProps({ header })}>
-                        {header.header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.map((row) => (
-                    <TableExpandRow key={row.id} {...getRowProps({ row })}>
-                      <TableSelectRow id={`s-${row.id}`} />
-                      {row.cells.map((cell) => (
-                        <td key={cell.id}>{String(cell.value)}</td>
-                      ))}
-                    </TableExpandRow>
-                  ))}
-                  <TableExpandedRow colSpan={3}>x</TableExpandedRow>
-                </tbody>
-              </table>
-              <TableBatchActions shouldShowBatchActions totalSelected={1} onCancel={() => {}}>
-                <TableBatchAction>Do</TableBatchAction>
-              </TableBatchActions>
-            </BrutalistTableContainer>
-          )}
-        </BrutalistTable>
       </>,
     );
     expect(true).toBe(true);

@@ -11,9 +11,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TableToolbar,
-  TableToolbarContent,
-  TableToolbarSearch,
   Tag,
 } from "../design";
 import type { SummaryCompact } from "../api/types";
@@ -97,17 +94,36 @@ export function SummariesDataTable({
       ) : (
         <>
           <DataTable rows={rows} headers={headers}>
-            {({ rows, headers, getHeaderProps, getRowProps, getTableProps, getToolbarProps }) => (
+            {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
               <TableContainer title={title}>
-                <TableToolbar {...getToolbarProps()}>
-                  <TableToolbarContent>
-                    <TableToolbarSearch
-                      persistent
-                      onInput={(event) => onSearchChange((event.target as HTMLInputElement).value)}
-                      value={searchTerm}
-                    />
-                  </TableToolbarContent>
-                </TableToolbar>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "flex-end",
+                    padding: "8px 16px",
+                    borderBottom: "1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent)",
+                    backgroundColor: "var(--frost-page)",
+                  }}
+                >
+                  <input
+                    type="search"
+                    placeholder="Search"
+                    value={searchTerm}
+                    onChange={(event) => onSearchChange(event.target.value)}
+                    style={{
+                      fontFamily: "var(--frost-font-mono)",
+                      fontSize: "var(--frost-type-mono-body-size)",
+                      color: "var(--frost-ink)",
+                      backgroundColor: "var(--frost-page)",
+                      border: "var(--frost-hairline) solid var(--frost-ink)",
+                      padding: "4px 8px",
+                      outline: "none",
+                      width: "240px",
+                    }}
+                    aria-label="Search summaries"
+                  />
+                </div>
                 <Table {...getTableProps()}>
                   <TableHead>
                     <TableRow>
