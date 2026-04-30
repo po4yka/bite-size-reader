@@ -78,6 +78,11 @@ python -m app.cli.summary --url <URL>           # CLI test runner
 6. Validate summary JSON with `app/core/summary_contract.py`
 7. Database changes require migration via `app/cli/migrate_db.py` + docs/SPEC.md update
 8. Web frontend changes: read `docs/reference/frontend-web.md` first, run `npm run check:static` before finalizing
+9. State scope explicitly when giving an instruction; don't expect silent generalization across items
+10. Tell the agent what to do, not what to avoid (e.g., "use `tests/db_helpers.py`" vs. "don't write new fixtures")
+11. Front-load the full task spec on the first turn; iterative refinement loses context against multi-step plans
+12. Make independent tool calls in parallel; sequence only when one result determines the next call's parameters
+13. Read code before asserting its behavior; cite `file:line` for non-obvious claims
 
 ## Database
 

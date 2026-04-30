@@ -23,7 +23,7 @@
 
 ```json
 {
-  "model": "openai/gpt-4",
+  "model": "openai/gpt-5.5",
   "messages": [
     {"role": "system", "content": "You are a helpful assistant..."},
     {"role": "user", "content": "Summarize this article..."}
@@ -108,7 +108,7 @@ curl -X POST https://openrouter.ai/api/v1/chat/completions \
   -H "HTTP-Referer: $OPENROUTER_HTTP_REFERER" \
   -H "X-Title: $OPENROUTER_X_TITLE" \
   -d '{
-    "model": "openai/gpt-4",
+    "model": "openai/gpt-5.5",
     "messages": [
       {"role": "user", "content": "Hello, world!"}
     ]

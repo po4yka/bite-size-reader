@@ -5,9 +5,9 @@ user-invocable: true
 argument-hint: "[area (feature, page, component...)]"
 ---
 
-## MANDATORY PREPARATION
+## Preparation
 
-Invoke /i-frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow the protocol before proceeding — if no design context exists yet, you MUST run /i-teach-impeccable first.
+Invoke /i-frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow the protocol before proceeding — if no design context exists yet, ask the user for purpose, audience, tone, and constraints before continuing.
 
 ---
 

@@ -7,9 +7,9 @@ argument-hint: "[target]"
 
 Strategically introduce color to designs that are too monochromatic, gray, or lacking in visual warmth and personality.
 
-## MANDATORY PREPARATION
+## Preparation
 
-Invoke /i-frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow the protocol before proceeding — if no design context exists yet, you MUST run /i-teach-impeccable first. Additionally gather: existing brand colors.
+Invoke /i-frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow the protocol before proceeding — if no design context exists yet, ask the user for purpose, audience, tone, and constraints before continuing. Additionally gather: existing brand colors.
 
 ---
 

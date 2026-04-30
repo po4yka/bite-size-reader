@@ -398,6 +398,11 @@ Most skills require `/i-frontend-design` context first. Skills are in `.claude/s
 8. **Persist everything** -- Firecrawl responses, LLM calls, Telegram messages (observability is key)
 9. **Use structured logging** -- include correlation IDs and context in all logs
 10. **Respect async patterns** -- use `await` properly, don't block the event loop
+11. **State scope explicitly when you give an instruction** -- "apply this to every section, not just the first." Don't rely on the model generalizing silently
+12. **Tell the model what to do, not what to avoid** -- prefer "use the existing helper in `tests/db_helpers.py`" over "don't create new test fixtures"
+13. **Keep tool/skill guidance in the tool's own description** -- not in CLAUDE.md prose. CLAUDE.md is for project context; per-tool semantics belong with the tool
+14. **Make independent tool calls in parallel** -- only sequence when one result determines the next call's parameters
+15. **Investigate before claiming** -- never assert behavior of code you haven't read; cite `file:line` for each non-obvious claim
 
 ## Quick Reference: Environment Variables
 
