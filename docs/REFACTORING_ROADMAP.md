@@ -1,6 +1,7 @@
 # Ratatoskr Refactoring Roadmap
 
 Status: planning artifact for future work committed directly to `main`.
+Execution checklist: [REFACTORING_TODO.md](REFACTORING_TODO.md).
 Scope: backend, web, CLI, browser extension, Docker/ops, and public documentation in this repository. The separate `ratatoskr-client` mobile repository is out of scope except where backend API contracts change.
 
 ## 1. Executive summary
