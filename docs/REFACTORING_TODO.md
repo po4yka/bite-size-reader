@@ -66,83 +66,83 @@ Acceptance evidence:
 
 ### 1.1 Config inventory and categorization
 
-- [ ] Generate a table of all uncommented `.env.example` assignments.
-- [ ] Map each variable to the owning Pydantic model in `app/config/`.
-- [ ] Mark each variable as `required`, `optional-defaulted`, `yaml-only`, or `deprecated/removable`.
-- [ ] Required target: Telegram `API_ID`, `API_HASH`, `BOT_TOKEN`, `ALLOWED_USER_IDS`, primary OpenRouter key, and auth secret only when web/API/browser-extension auth is enabled.
-- [ ] Confirm Firecrawl Cloud key is optional because self-hosted Firecrawl and other scraper providers exist.
-- [ ] Confirm Twitter/X variables are optional and disabled-by-default after Phase 5 cost gate.
-- [ ] Confirm migration shadow-mode variables are deprecated/removable unless a live code path still reads them.
-- [ ] Record all defaults from code, not from `.env.example`.
+- [x] Generate a table of all uncommented `.env.example` assignments.
+- [x] Map each variable to the owning Pydantic model in `app/config/`.
+- [x] Mark each variable as `required`, `optional-defaulted`, `yaml-only`, or `deprecated/removable`.
+- [x] Required target: Telegram `API_ID`, `API_HASH`, `BOT_TOKEN`, `ALLOWED_USER_IDS`, primary OpenRouter key, and auth secret only when web/API/browser-extension auth is enabled.
+- [x] Confirm Firecrawl Cloud key is optional because self-hosted Firecrawl and other scraper providers exist.
+- [x] Confirm Twitter/X variables are optional and disabled-by-default after Phase 5 cost gate.
+- [x] Confirm migration shadow-mode variables are deprecated/removable unless a live code path still reads them.
+- [x] Record all defaults from code, not from `.env.example`.
 
 Acceptance evidence:
 
-- [ ] Inventory table added to `docs/environment_variables.md` or a generated config reference.
-- [ ] Every current `.env.example` variable is categorized.
-- [ ] No category uses vague labels like "advanced maybe"; each has a concrete action.
+- [x] Inventory table added to `docs/environment_variables.md` or a generated config reference.
+- [x] Every current `.env.example` variable is categorized.
+- [x] No category uses vague labels like "advanced maybe"; each has a concrete action.
 
 ### 1.2 Minimal `.env.example`
 
-- [ ] Reduce `.env.example` to the required first-run variables plus comments pointing to `ratatoskr.yaml` for optional power-user settings.
-- [ ] Keep examples safe and non-secret-looking.
-- [ ] Remove default scraper, YouTube, Twitter, DB tuning, streaming, MCP, and Grafana variables from `.env.example`.
-- [ ] Update `README.md` quickstart required vars to match `.env.example`.
-- [ ] Update `docs/tutorials/quickstart.md` and `docs/DEPLOYMENT.md`.
-- [ ] Ensure `JWT_SECRET_KEY` docs say it is required only when web/API/browser-extension auth is enabled.
-- [ ] Add startup error copy for missing required variables with exact names and docs links.
+- [x] Reduce `.env.example` to the required first-run variables plus comments pointing to `ratatoskr.yaml` for optional power-user settings.
+- [x] Keep examples safe and non-secret-looking.
+- [x] Remove default scraper, YouTube, Twitter, DB tuning, streaming, MCP, and Grafana variables from `.env.example`.
+- [x] Update `README.md` quickstart required vars to match `.env.example`.
+- [x] Update `docs/tutorials/quickstart.md` and `docs/DEPLOYMENT.md`.
+- [x] Ensure `JWT_SECRET_KEY` docs say it is required only when web/API/browser-extension auth is enabled.
+- [x] Add startup error copy for missing required variables with exact names and docs links.
 
 Acceptance evidence:
 
-- [ ] `.env.example` has seven or fewer active assignments.
-- [ ] Quickstart and README list the same required vars.
-- [ ] Missing-secret startup tests assert actionable error text.
+- [x] `.env.example` has seven or fewer active assignments.
+- [x] Quickstart and README list the same required vars.
+- [x] Missing-secret startup tests assert actionable error text.
 
 ### 1.3 `ratatoskr.yaml` optional config
 
-- [ ] Pick YAML parser: `PyYAML` for load-only simplicity or `ruamel.yaml` if comment-preserving output is required.
-- [ ] Define config file search order, for example `RATATOSKR_CONFIG`, `./ratatoskr.yaml`, `/app/config/ratatoskr.yaml`.
-- [ ] Extend `app/config/settings.py` merge precedence to `code defaults < ratatoskr.yaml < .env < process env`.
-- [ ] Fold or replace the existing `config/models.yaml` loader in `app/config/models_file.py`.
-- [ ] Add a typed schema example under `docs/reference/config-file.md`.
-- [ ] Add validation tests for nested YAML sections.
-- [ ] Add tests proving env vars override YAML.
-- [ ] Add tests proving absent YAML falls back to code defaults.
-- [ ] Add redacted effective-config logging on startup.
+- [x] Pick YAML parser: `PyYAML` for load-only simplicity or `ruamel.yaml` if comment-preserving output is required.
+- [x] Define config file search order, for example `RATATOSKR_CONFIG`, `./ratatoskr.yaml`, `/app/config/ratatoskr.yaml`.
+- [x] Extend `app/config/settings.py` merge precedence to `code defaults < ratatoskr.yaml < .env < process env`.
+- [x] Fold or replace the existing `config/models.yaml` loader in `app/config/models_file.py`.
+- [x] Add a typed schema example under `docs/reference/config-file.md`.
+- [x] Add validation tests for nested YAML sections.
+- [x] Add tests proving env vars override YAML.
+- [x] Add tests proving absent YAML falls back to code defaults.
+- [x] Add redacted effective-config logging on startup.
 
 Acceptance evidence:
 
-- [ ] New config tests pass.
-- [ ] `ratatoskr.yaml` can configure scraper, YouTube, Twitter, MCP, monitoring, and provider settings without env vars.
-- [ ] No secrets are printed in effective-config logs.
+- [x] New config tests pass.
+- [x] `ratatoskr.yaml` can configure scraper, YouTube, Twitter, MCP, monitoring, and provider settings without env vars.
+- [x] No secrets are printed in effective-config logs.
 
 ### 1.4 Env deprecation and compatibility
 
-- [ ] Extend deprecated env detection in `app/config/settings.py`.
-- [ ] Convert old scraper aliases into deterministic warnings or errors.
-- [ ] Add deprecation handling for migration shadow variables if they are no longer active.
-- [ ] Add deprecation handling for old rename-related env names such as `REDIS_PREFIX=bsr` if still accepted.
-- [ ] Add tests for deprecated env in process environment.
-- [ ] Add tests for deprecated env in `.env`.
-- [ ] Add docs showing how to move deprecated env values into `ratatoskr.yaml`.
+- [x] Extend deprecated env detection in `app/config/settings.py`.
+- [x] Convert old scraper aliases into deterministic warnings or errors.
+- [x] Add deprecation handling for migration shadow variables if they are no longer active.
+- [x] N/A: no `REDIS_PREFIX=bsr` runtime alias is present in active config.
+- [x] Add tests for deprecated env in process environment.
+- [x] Add tests for deprecated env in `.env`.
+- [x] Add docs showing how to move deprecated env values into `ratatoskr.yaml`.
 
 Acceptance evidence:
 
-- [ ] Deprecated variables never silently alter runtime behavior.
-- [ ] User-facing deprecation messages include replacement names.
+- [x] Deprecated variables never silently alter runtime behavior.
+- [x] User-facing deprecation messages include replacement names.
 
 ### 1.5 Cloud Ollama provider configuration
 
-- [ ] Add config model fields for optional cloud Ollama/Ollama-compatible endpoints.
-- [ ] Keep OpenRouter as default provider in docs and code.
-- [ ] Define structured-output caveats for cloud Ollama.
-- [ ] Add provider selection validation so users cannot accidentally configure two primary providers without an explicit choice.
-- [ ] Add smoke test or mocked adapter test for cloud Ollama request/response shape.
-- [ ] Document tested cloud Ollama endpoint(s) and models once chosen.
+- [x] Add config model fields for optional cloud Ollama/Ollama-compatible endpoints.
+- [x] Keep OpenRouter as default provider in docs and code.
+- [x] Define structured-output caveats for cloud Ollama.
+- [x] Add provider selection validation so users cannot accidentally configure two primary providers without an explicit choice.
+- [x] Add smoke test or mocked adapter test for cloud Ollama request/response shape.
+- [x] Document tested cloud Ollama endpoint(s) and models once chosen.
 
 Acceptance evidence:
 
-- [ ] OpenRouter remains the first quickstart path.
-- [ ] Cloud Ollama config is optional and documented as a secondary path.
+- [x] OpenRouter remains the first quickstart path.
+- [x] Cloud Ollama config is optional and documented as a secondary path.
 
 ## Phase 2 — Reference deployment as code
 

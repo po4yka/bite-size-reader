@@ -83,7 +83,7 @@ class RuntimeConfig(BaseModel):
     @classmethod
     def _validate_llm_provider(cls, value: Any) -> str:
         provider = str(value or "openrouter").lower().strip()
-        valid_providers = {"openrouter", "openai", "anthropic"}
+        valid_providers = {"openrouter", "openai", "anthropic", "ollama"}
         if provider not in valid_providers:
             msg = f"Invalid LLM provider: {provider}. Must be one of {sorted(valid_providers)}"
             raise ValueError(msg)

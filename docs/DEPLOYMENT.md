@@ -42,17 +42,14 @@ See `docs/environment_variables.md` for the full multi-provider scraper chain co
 
 ## Environment Variables (essentials)
 
-Copy `.env.example` to `.env` and fill:
+Copy `.env.example` to `.env` and fill only the first-run required values:
 
 - Telegram: `API_ID`, `API_HASH`, `BOT_TOKEN`, `ALLOWED_USER_IDS`
-- OpenRouter: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (e.g., `deepseek/deepseek-v3.2`), optional `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`
-- Firecrawl: `FIRECRAWL_API_KEY`
-- Runtime: `DB_PATH=/data/ratatoskr.db`, `LOG_LEVEL=INFO| DEBUG`, `REQUEST_TIMEOUT_SEC=60`, `PREFERRED_LANG=auto | en | ru`, `DEBUG_PAYLOADS=0 |1` (keep 0 in prod)
-- YouTube: `YOUTUBE_DOWNLOAD_ENABLED=true`, `YOUTUBE_PREFERRED_QUALITY=1080p`, `YOUTUBE_STORAGE_PATH=/data/videos`, size/retention knobs as needed
-- Mixed-source aggregation: `AGGREGATION_BUNDLE_ENABLED=true`, `AGGREGATION_ROLLOUT_STAGE=enabled`, optional extractor flags (`AGGREGATION_META_EXTRACTORS_ENABLED`, `AGGREGATION_ARTICLE_MEDIA_ENABLED`, `AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED`)
-- API (mobile): `JWT_SECRET_KEY` (>=32 chars), `API_HOST`, `API_PORT` (default 8000), optional `ALLOWED_CLIENT_IDS`
-- Web frontend (JWT mode login widget, optional for `clients/web/` local build/dev): `VITE_TELEGRAM_BOT_USERNAME`
-- Redis (rate limit/sync, optional): `REDIS_ENABLED`, `REDIS_URL` or host/port/db, `REDIS_PREFIX=ratatoskr`, `REDIS_REQUIRED=false`, `API_RATE_LIMIT_*` caps, `SYNC_DEFAULT_CHUNK_SIZE`, `SYNC_EXPIRY_HOURS`
+- OpenRouter: `OPENROUTER_API_KEY`
+
+Optional runtime, scraper, YouTube, Twitter/X, MCP, and model tuning belongs in
+`ratatoskr.yaml`; see `docs/reference/config-file.md`. `JWT_SECRET_KEY` is
+required only when web/API/browser-extension JWT auth is enabled.
 
 ## Local Development
 
@@ -108,7 +105,7 @@ Notes
 
 - SQLite at `/data/ratatoskr.db`; backups under `/data/backups`. Mount `/data` for durability.
 - Set `ALLOWED_USER_IDS`; keep `DEBUG_PAYLOADS=0` in prod.
-- If using mobile API, ensure `JWT_SECRET_KEY` is set and port 8000 exposed.
+- If using web/API/browser-extension JWT auth, ensure `JWT_SECRET_KEY` is set and port 8000 exposed.
 - Docker build includes the `clients/web/` bundle and publishes it under `/static/web/*`.
 
 ## Docker Compose (recommended)

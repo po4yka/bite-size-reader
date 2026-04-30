@@ -61,6 +61,8 @@ class OpenAIClient:
         *,
         model: str = "gpt-4o",
         fallback_models: list[str] | tuple[str, ...] | None = None,
+        base_url: str = "https://api.openai.com/v1",
+        provider_name: str = "openai",
         organization: str | None = None,
         timeout_sec: int = 60,
         max_retries: int = 3,
@@ -76,11 +78,12 @@ class OpenAIClient:
     ) -> None:
         self._validate_api_key(api_key)
 
+        self._provider_name = provider_name
         self._api_key = api_key
         self._model = model
         self._fallback_models = list(fallback_models) if fallback_models else []
         self._timeout = httpx.Timeout(timeout_sec, connect=10.0, read=timeout_sec)
-        self._base_url = "https://api.openai.com/v1"
+        self._base_url = base_url.rstrip("/")
         self._max_retries = max_retries
         self._backoff_base = backoff_base
         self._debug_payloads = debug_payloads

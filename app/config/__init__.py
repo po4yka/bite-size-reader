@@ -10,7 +10,7 @@ from .content import ContentLimitsConfig
 from .database import DatabaseConfig
 from .firecrawl import FirecrawlConfig
 from .integrations import ChromaConfig, EmbeddingConfig, McpConfig, WebSearchConfig
-from .llm import AnthropicConfig, ModelRoutingConfig, OpenAIConfig, OpenRouterConfig
+from .llm import AnthropicConfig, ModelRoutingConfig, OllamaConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
@@ -43,6 +43,7 @@ __all__ = [
     "FirecrawlConfig",
     "McpConfig",
     "ModelRoutingConfig",
+    "OllamaConfig",
     "OpenAIConfig",
     "OpenRouterConfig",
     "PushNotificationConfig",

@@ -30,7 +30,7 @@ from .integrations import (
     McpConfig,
     WebSearchConfig,
 )
-from .llm import AnthropicConfig, ModelRoutingConfig, OpenAIConfig, OpenRouterConfig
+from .llm import AnthropicConfig, ModelRoutingConfig, OllamaConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
@@ -52,12 +52,23 @@ _DEPRECATED_SCRAPER_ENV_RENAMES = {
     "SCRAPER_DIRECT_HTTP_ENABLED": "SCRAPER_DIRECT_HTML_ENABLED",
 }
 
+_DEPRECATED_PHASE1_ENV_VARS = {
+    "MIGRATION_SHADOW_MODE_ENABLED": "removed; M3 runtime bridge is authoritative",
+    "MIGRATION_SHADOW_MODE_TIMEOUT_MS": "removed; M3 runtime bridge is authoritative",
+    "MIGRATION_SHADOW_MODE_SAMPLE_RATE": "removed; M3 runtime bridge is authoritative",
+    "MIGRATION_SHADOW_MODE_MAX_DIFFS": "removed; M3 runtime bridge is authoritative",
+    "MIGRATION_SHADOW_MODE_EMIT_MATCH_LOGS": "removed; M3 runtime bridge is authoritative",
+}
+
 
 def raise_on_deprecated_scraper_env_vars() -> None:
     present: dict[str, str] = {}
     for old_name, new_name in _DEPRECATED_SCRAPER_ENV_RENAMES.items():
         if old_name in os.environ:
             present[old_name] = new_name
+    for name, replacement in _DEPRECATED_PHASE1_ENV_VARS.items():
+        if name in os.environ:
+            present[name] = replacement
 
     env_file_path = Path(".env")
     if env_file_path.exists():
@@ -68,13 +79,62 @@ def raise_on_deprecated_scraper_env_vars() -> None:
             key = stripped.split("=", 1)[0].strip()
             if key in _DEPRECATED_SCRAPER_ENV_RENAMES:
                 present[key] = _DEPRECATED_SCRAPER_ENV_RENAMES[key]
+            if key in _DEPRECATED_PHASE1_ENV_VARS:
+                present[key] = _DEPRECATED_PHASE1_ENV_VARS[key]
 
     if not present:
         return
 
     details = "; ".join(f"{old} -> {new}" for old, new in sorted(present.items()))
-    msg = f"Deprecated scraper environment variables detected. Use the new names only: {details}"
+    msg = f"Deprecated environment variables detected. Remove or replace these variables: {details}"
     raise RuntimeError(msg)
+
+
+_FIRST_RUN_REQUIRED_ENV = (
+    "API_ID",
+    "API_HASH",
+    "BOT_TOKEN",
+    "ALLOWED_USER_IDS",
+    "OPENROUTER_API_KEY",
+)
+
+
+def _read_dotenv_keys(path: Path = Path(".env")) -> set[str]:
+    if not path.is_file():
+        return set()
+    keys: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        keys.add(stripped.split("=", 1)[0].strip())
+    return keys
+
+
+def _format_required_config_error(missing: tuple[str, ...]) -> str:
+    joined = ", ".join(missing)
+    return (
+        f"Missing required first-run configuration: {joined}. "
+        "Copy .env.example to .env and fill these names. "
+        "Optional power-user settings belong in ratatoskr.yaml; see "
+        "docs/reference/config-file.md."
+    )
+
+
+def _effective_config_summary(config: AppConfig) -> dict[str, Any]:
+    """Return a small, redacted startup summary of effective config choices."""
+    return {
+        "llm_provider": config.runtime.llm_provider,
+        "openrouter_model": config.openrouter.model,
+        "ollama_base_url": config.ollama.base_url,
+        "scraper_profile": config.scraper.profile,
+        "scraper_provider_order": list(config.scraper.provider_order),
+        "youtube_enabled": config.youtube.enabled,
+        "twitter_enabled": config.twitter.enabled,
+        "mcp_enabled": config.mcp.enabled,
+        "jwt_auth_configured": bool(config.runtime.jwt_secret_key),
+        "db_path": config.runtime.db_path,
+    }
 
 
 @dataclass(frozen=True)
@@ -83,6 +143,7 @@ class AppConfig:
     firecrawl: FirecrawlConfig
     openrouter: OpenRouterConfig
     openai: OpenAIConfig
+    ollama: OllamaConfig
     anthropic: AnthropicConfig
     youtube: YouTubeConfig
     attachment: AttachmentConfig
@@ -131,6 +192,7 @@ class Settings(BaseSettings):
     firecrawl: FirecrawlConfig
     openrouter: OpenRouterConfig
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
+    ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     anthropic: AnthropicConfig = Field(default_factory=AnthropicConfig)
     youtube: YouTubeConfig = Field(default_factory=YouTubeConfig)
     attachment: AttachmentConfig = Field(default_factory=AttachmentConfig)
@@ -173,17 +235,19 @@ class Settings(BaseSettings):
         result = dict(data)
 
         # Load YAML model config (lowest priority layer)
+        from app.config.config_file import load_ratatoskr_yaml
         from app.config.models_file import load_models_yaml
 
         yaml_data = load_models_yaml()
+        config_file_data = load_ratatoskr_yaml(cls)
 
         # Merge: YAML < .env / constructor args < os.environ
         # ``data`` includes .env file values loaded by pydantic-settings, so
         # os.environ must come last to preserve the standard precedence
         # (env vars override .env file).
         env_data: dict[str, Any] = dict(os.environ)
-        merged_source = {**yaml_data, **data, **env_data}
-        cls._fail_on_deprecated_scraper_envs(merged_source)
+        merged_source = {**yaml_data, **config_file_data, **data, **env_data}
+        cls._fail_on_deprecated_envs(merged_source)
 
         for field_name, field_info in cls.model_fields.items():
             if field_name in ("allow_stub_telegram",):
@@ -210,16 +274,19 @@ class Settings(BaseSettings):
         return result
 
     @staticmethod
-    def _fail_on_deprecated_scraper_envs(source: dict[str, Any]) -> None:
+    def _fail_on_deprecated_envs(source: dict[str, Any]) -> None:
         deprecated: list[str] = []
         for old_name, new_name in _DEPRECATED_SCRAPER_ENV_RENAMES.items():
             if old_name in source:
                 deprecated.append(f"{old_name} -> {new_name}")
+        for name, replacement in _DEPRECATED_PHASE1_ENV_VARS.items():
+            if name in source:
+                deprecated.append(f"{name} -> {replacement}")
         if not deprecated:
             return
         msg = (
-            "Deprecated scraper environment variables detected. "
-            "Use the new names only: " + "; ".join(deprecated)
+            "Deprecated environment variables detected. "
+            "Remove or replace these variables: " + "; ".join(deprecated)
         )
         raise RuntimeError(msg)
 
@@ -258,6 +325,7 @@ class Settings(BaseSettings):
             firecrawl=self.firecrawl,
             openrouter=self.openrouter,
             openai=self.openai,
+            ollama=self.ollama,
             anthropic=self.anthropic,
             youtube=self.youtube,
             attachment=self.attachment,
@@ -303,6 +371,12 @@ def _build_config(*, allow_stub_telegram: bool) -> AppConfig:
     using_stub_telegram = False
     raise_on_deprecated_scraper_env_vars()
 
+    if not allow_stub_telegram:
+        available = set(os.environ) | _read_dotenv_keys()
+        missing = tuple(name for name in _FIRST_RUN_REQUIRED_ENV if name not in available)
+        if missing:
+            raise RuntimeError(_format_required_config_error(missing))
+
     if allow_stub_telegram:
         telegram_overrides: dict[str, Any] = {}
         if not os.getenv("API_ID"):
@@ -320,15 +394,27 @@ def _build_config(*, allow_stub_telegram: bool) -> AppConfig:
     try:
         settings = Settings(**overrides)
     except (ValidationError, RuntimeError) as exc:  # pragma: no cover - defensive
-        msg = f"Configuration validation failed: {exc}"
+        missing = tuple(
+            name
+            for name in _FIRST_RUN_REQUIRED_ENV
+            if name in str(exc) or name == "ALLOWED_USER_IDS"
+        )
+        if missing:
+            msg = _format_required_config_error(missing)
+        else:
+            msg = f"Configuration validation failed: {exc}"
         raise RuntimeError(msg) from exc
+
+    config = settings.as_app_config()
+
+    logger.info("effective_config_loaded", extra={"config": _effective_config_summary(config)})
 
     if using_stub_telegram:
         logger.warning(
             "Using stub Telegram credentials: real API_ID/API_HASH/BOT_TOKEN were not provided"
         )
 
-    return settings.as_app_config()
+    return config
 
 
 def load_config(*, allow_stub_telegram: bool = False) -> AppConfig:

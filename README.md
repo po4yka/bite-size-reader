@@ -35,7 +35,7 @@ Docker container, stores everything in SQLite.
 ```sh
 git clone https://github.com/po4yka/ratatoskr.git
 cd ratatoskr
-cp .env.example .env                  # set the 3 required keys
+cp .env.example .env                  # set the 5 required values
 docker compose -f ops/docker/docker-compose.yml up -d
 ```
 
@@ -48,6 +48,10 @@ BOT_TOKEN=             # @BotFather
 ALLOWED_USER_IDS=      # your Telegram user ID
 OPENROUTER_API_KEY=    # https://openrouter.ai
 ```
+
+Optional scraper, YouTube, Twitter/X, MCP, and provider tuning now live in
+`ratatoskr.yaml`; see [Optional YAML Configuration](docs/reference/config-file.md).
+`JWT_SECRET_KEY` is required only when enabling web/API/browser-extension JWT auth.
 
 For the guided walkthrough, see the
 [5-minute Quickstart Tutorial](docs/tutorials/quickstart.md). For the
@@ -86,7 +90,7 @@ this turns subscribed channels into a periodic recap.
 
 | What | Where |
 | --- | --- |
-| Every env var, with defaults and validation rules | [docs/environment_variables.md](docs/environment_variables.md) |
+| First-run env and optional YAML config | [docs/environment_variables.md](docs/environment_variables.md) · [docs/reference/config-file.md](docs/reference/config-file.md) |
 | Production deploy, monitoring, backups, TLS | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
 | Architecture diagram, request lifecycle, subsystem index | [docs/explanation/architecture-overview.md](docs/explanation/architecture-overview.md) |
 | Mobile REST API (JWT auth, sync, aggregations) | [docs/MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md) |

@@ -3331,6 +3331,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyrotgfork" },
     { name = "pytgcrypto" },
+    { name = "pyyaml" },
     { name = "redis" },
     { name = "scrapling" },
     { name = "spacy" },
@@ -3436,6 +3437,7 @@ requires-dist = [
     { name = "pymupdf", marker = "extra == 'attachment'", specifier = ">=1.25.0" },
     { name = "pyrotgfork", specifier = ">=2.2.18" },
     { name = "pytgcrypto", specifier = ">=1.2.12" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "python-multipart", marker = "extra == 'api'", specifier = ">=0.0.26" },
     { name = "ratatoskr", extras = ["browser-scraper"], marker = "extra == 'api'" },
     { name = "ratatoskr", extras = ["inference-core"], marker = "extra == 'api'" },
@@ -3468,7 +3470,6 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "pytest-benchmark", specifier = ">=5.0.0" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "ruff", specifier = ">=0.14.14" },
 ]
 

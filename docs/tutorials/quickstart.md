@@ -20,7 +20,7 @@ By the end of this tutorial, you'll have:
 
 ## Step 1: Get API Keys (3 minutes)
 
-You'll need API keys from three services:
+You'll need credentials from Telegram plus one LLM provider:
 
 ### 1.1 Telegram Bot Token
 
@@ -41,16 +41,7 @@ You'll need API keys from three services:
 1. Message [@userinfobot](https://t.me/userinfobot) on Telegram
 2. Copy the numeric user ID (e.g., `123456789`)
 
-### 1.4 Firecrawl API Key
-
-1. Go to https://firecrawl.dev/
-2. Sign up for free account
-3. Navigate to **API Keys** in dashboard
-4. Copy your API key (starts with `fc-`)
-
-**Note**: Free tier gives 500 credits/month (~500 articles)
-
-### 1.5 OpenRouter API Key
+### 1.4 OpenRouter API Key
 
 1. Go to https://openrouter.ai/
 2. Sign up (Google/GitHub login works)
@@ -77,18 +68,8 @@ API_HASH=your_api_hash_here
 BOT_TOKEN=your_bot_token_here
 ALLOWED_USER_IDS=your_telegram_user_id_here
 
-# Content Extraction
-FIRECRAWL_API_KEY=your_firecrawl_key_here
-
 # LLM Summarization
 OPENROUTER_API_KEY=your_openrouter_key_here
-OPENROUTER_MODEL=deepseek/deepseek-v3.2
-
-# Database
-DB_PATH=/data/ratatoskr.db
-
-# Logging
-LOG_LEVEL=INFO
 EOF
 ```
 
@@ -98,8 +79,11 @@ EOF
 - `your_api_hash_here` → API hash from Step 1.2
 - `your_bot_token_here` → Bot token from Step 1.1
 - `your_telegram_user_id_here` → User ID from Step 1.3
-- `your_firecrawl_key_here` → Firecrawl key from Step 1.4
-- `your_openrouter_key_here` → OpenRouter key from Step 1.5
+- `your_openrouter_key_here` → OpenRouter key from Step 1.4
+
+Firecrawl Cloud, YouTube storage, Twitter/X extraction, MCP, logging, and model
+tuning are optional. Put those in `ratatoskr.yaml` when you need them; see
+[Optional YAML Configuration](../reference/config-file.md).
 
 ---
 

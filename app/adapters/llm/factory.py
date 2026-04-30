@@ -1,7 +1,7 @@
 """LLM client factory for creating provider-specific clients.
 
 This module provides a factory for creating LLM clients based on the configured
-provider (openrouter, openai, anthropic).
+provider (openrouter, openai, anthropic, ollama).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 # Valid provider names
-VALID_PROVIDERS = frozenset({"openrouter", "openai", "anthropic"})
+VALID_PROVIDERS = frozenset({"openrouter", "openai", "anthropic", "ollama"})
 
 
 class LLMClientFactory:
@@ -45,7 +45,7 @@ class LLMClientFactory:
         """Create an LLM client for the specified provider.
 
         Args:
-            provider: Provider name ("openrouter", "openai", "anthropic").
+            provider: Provider name ("openrouter", "openai", "anthropic", "ollama").
             config: Application configuration.
             circuit_breaker: Optional circuit breaker for fault tolerance.
             audit: Optional audit callback function.
@@ -73,6 +73,8 @@ class LLMClientFactory:
             return LLMClientFactory._create_openai(config, circuit_breaker, audit)
         if provider == "anthropic":
             return LLMClientFactory._create_anthropic(config, circuit_breaker, audit)
+        if provider == "ollama":
+            return LLMClientFactory._create_ollama(config, circuit_breaker, audit)
         # Should never reach here due to validation above
         msg = f"Unhandled provider: {provider}"
         raise ValueError(msg)
@@ -129,6 +131,31 @@ class LLMClientFactory:
             timeout_sec=config.runtime.request_timeout_sec,
             debug_payloads=config.runtime.debug_payloads,
             enable_structured_outputs=anthropic_config.enable_structured_outputs,
+            circuit_breaker=circuit_breaker,
+            audit=audit,
+        )
+
+    @staticmethod
+    def _create_ollama(
+        config: AppConfig,
+        circuit_breaker: CircuitBreaker | None,
+        audit: Callable[[str, str, dict[str, Any]], None] | None,
+    ) -> LLMClientProtocol:
+        """Create an OpenAI-compatible cloud Ollama client."""
+        from app.adapters.llm.openai import OpenAIClient
+
+        ollama_config = config.ollama
+
+        return OpenAIClient(
+            api_key=ollama_config.api_key,
+            model=ollama_config.model,
+            fallback_models=list(ollama_config.fallback_models),
+            base_url=ollama_config.base_url,
+            provider_name="ollama",
+            timeout_sec=config.runtime.request_timeout_sec,
+            debug_payloads=config.runtime.debug_payloads,
+            enable_structured_outputs=ollama_config.enable_structured_outputs,
+            max_response_size_mb=ollama_config.max_response_size_mb,
             circuit_breaker=circuit_breaker,
             audit=audit,
         )

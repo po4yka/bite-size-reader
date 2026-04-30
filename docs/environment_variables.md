@@ -2,105 +2,103 @@
 
 Complete reference for all Ratatoskr configuration. Source of truth: `app/config/` (entrypoint `app/config/settings.py`).
 
-**Total Variables**: 250+
-**Last Updated**: 2026-04-12
+**Phase 1 status**: `.env.example` is intentionally minimal. Optional
+power-user settings should move to `ratatoskr.yaml`; see
+[Optional YAML Configuration](reference/config-file.md).
+
+**Last Updated**: 2026-04-30
 
 ---
 
-## Variable Tiers
+## First-Run Required Variables
 
-Variables are categorized by priority:
+Only these assignments remain active in `.env.example`:
 
-- **[REQUIRED]** - Essential for basic functionality, bot won't start without these
-- **[OPTIONAL]** - Enable specific features (YouTube, web search, caching, etc.)
-- **[ADVANCED]** - Fine-tuning and optimization, safe to use defaults
+| Variable | Required when | Owner |
+| --- | --- | --- |
+| `API_ID` | Always for Telegram bot runtime | `app/config/telegram.py::TelegramConfig` |
+| `API_HASH` | Always for Telegram bot runtime | `app/config/telegram.py::TelegramConfig` |
+| `BOT_TOKEN` | Always for Telegram bot runtime | `app/config/telegram.py::TelegramConfig` |
+| `ALLOWED_USER_IDS` | Always for owner-only access | `app/config/telegram.py::TelegramConfig` |
+| `OPENROUTER_API_KEY` | Always for the default OpenRouter quickstart path | `app/config/llm.py::OpenRouterConfig` |
 
-**New to Ratatoskr?** Start with [Quick Configuration Profiles](#quick-configuration-profiles) below.
+`JWT_SECRET_KEY` is required only when web/API/browser-extension JWT auth is
+enabled. Firecrawl Cloud is optional; self-hosted Firecrawl and non-Firecrawl
+scraper providers exist.
+
+## Phase 1 `.env.example` Inventory
+
+This table categorizes every uncommented assignment that existed in
+`.env.example` before Phase 1 consolidation. The action column describes how
+the variable is handled after this change.
+
+| Variable | Owner | Category | Phase 1 action |
+| --- | --- | --- | --- |
+| `API_ID` | `app/config/telegram.py::TelegramConfig` | required | Keep in `.env.example` |
+| `API_HASH` | `app/config/telegram.py::TelegramConfig` | required | Keep in `.env.example` |
+| `BOT_TOKEN` | `app/config/telegram.py::TelegramConfig` | required | Keep in `.env.example` |
+| `ALLOWED_USER_IDS` | `app/config/telegram.py::TelegramConfig` | required | Keep in `.env.example` |
+| `ALLOWED_CLIENT_IDS` | `app/config/runtime.py::RuntimeConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code default |
+| `JWT_SECRET_KEY` | `app/config/runtime.py::RuntimeConfig` | required only when web/API/browser-extension auth is enabled | Keep commented in `.env.example` |
+| `FIRECRAWL_API_KEY` | `app/config/firecrawl.py::FirecrawlConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code default |
+| `SCRAPER_*` / `FIRECRAWL_SELF_HOSTED_*` | `app/config/scraper.py::ScraperConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
+| `OPENROUTER_API_KEY` | `app/config/llm.py::OpenRouterConfig` | required | Keep in `.env.example` |
+| `OPENROUTER_MODEL`, `OPENROUTER_FALLBACK_MODELS`, `OPENROUTER_LONG_CONTEXT_MODEL`, `OPENROUTER_FLASH_MODEL`, `OPENROUTER_FLASH_FALLBACK_MODELS`, `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE` | `app/config/llm.py::OpenRouterConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
+| `YOUTUBE_*` | `app/config/media.py::YouTubeConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
+| `TWITTER_*` | `app/config/twitter.py::TwitterConfig` | optional-defaulted | Move to `ratatoskr.yaml`; keep disabled unless explicitly needed |
+| `DB_PATH`, `DB_OPERATION_TIMEOUT`, `DB_MAX_RETRIES`, `DB_JSON_*` | `app/config/runtime.py::RuntimeConfig`, `app/config/database.py::DatabaseConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
+| `SUMMARY_CONTRACT_BACKEND`, `MIGRATION_SHADOW_MODE_*`, `MIGRATION_INTERFACE_*`, `MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS`, `MIGRATION_CUTOVER_EVENTS_FILE`, `MIGRATION_RELEASE_WINDOW_DAYS` | legacy migration runtime controls | deprecated/removable | Remove; Phase 1 startup rejects deprecated shadow-mode env vars |
+| `LOG_LEVEL`, `DEBUG_PAYLOADS`, `REQUEST_TIMEOUT_SEC`, `PREFERRED_LANG`, `MAX_CONCURRENT_CALLS`, `SUMMARY_STREAMING_*` | `app/config/runtime.py::RuntimeConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
+| `TELEGRAM_MAX_*`, `TELEGRAM_MIN_MESSAGE_INTERVAL_MS`, `TELEGRAM_DRAFT_*` | `app/config/telegram.py::TelegramLimitsConfig`, `TelegramConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
+| `MAX_TEXT_LENGTH_KB` | `app/config/content.py::ContentLimitsConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code default |
+| `MCP_*` | `app/config/integrations.py::McpConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
+| `GRAFANA_ADMIN_PASSWORD` | `ops/docker/docker-compose.monitoring.yml` | optional-defaulted | Keep in monitoring deployment override, not first-run `.env.example` |
+
+The grouped rows above cover all 106 pre-consolidation active assignments:
+Telegram/access (6), Firecrawl/scraper (30), OpenRouter (8), YouTube (8),
+Twitter/X (12), database/runtime/migration (34), MCP (5), monitoring (1), and
+content limits (1).
 
 ---
 
 ## Quick Configuration Profiles
 
-### Minimal Setup (Local Development)
+### Minimal Setup
 
 ```bash
-# [REQUIRED] - Telegram
 API_ID=your_api_id
 API_HASH=your_api_hash
 BOT_TOKEN=your_bot_token
 ALLOWED_USER_IDS=your_user_id
-
-# [OPTIONAL] - Content Extraction (only needed for cloud Firecrawl or web search)
-FIRECRAWL_API_KEY=your_firecrawl_key
 OPENROUTER_API_KEY=your_openrouter_key
-OPENROUTER_MODEL=deepseek/deepseek-v3.2
-
-# [OPTIONAL] - Database
-DB_PATH=/data/ratatoskr.db
-LOG_LEVEL=INFO
 ```
 
-**Use case**: Testing locally, minimal API costs, no optional features.
+**Use case**: first Telegram summary through the default OpenRouter path.
 
-### Production (No Optional Features)
+### Optional Runtime Tuning
 
-```bash
-# All Minimal Setup variables above, plus:
-
-# [OPTIONAL] - Performance
-MAX_CONCURRENT_CALLS=4
-RATE_LIMIT_WINDOW_SECONDS=60
-
-# [OPTIONAL] - Logging
-LOG_LEVEL=INFO
-DEBUG_PAYLOADS=0
-REQUEST_TIMEOUT_SEC=60
-
-# [OPTIONAL] - Database
-DB_OPERATION_TIMEOUT=30
+```yaml
+runtime:
+  log_level: INFO
+  request_timeout_sec: 60
+scraper:
+  profile: balanced
 ```
 
-**Use case**: Stable production deployment, no caching/search/YouTube.
+**Use case**: production tuning without expanding `.env`.
 
-### Full-Featured Production
+### Optional Feature Configuration
 
-```bash
-# All Production variables above, plus:
-
-# [OPTIONAL] - YouTube Support
-YOUTUBE_DOWNLOAD_ENABLED=true
-YOUTUBE_PREFERRED_QUALITY=1080p
-YOUTUBE_STORAGE_PATH=/data/videos
-YOUTUBE_CLEANUP_AFTER_DAYS=7
-
-# [OPTIONAL] - Web Search Enrichment
-WEB_SEARCH_ENABLED=true
-WEB_SEARCH_MAX_QUERIES=3
-WEB_SEARCH_TIMEOUT_SEC=10
-
-# [OPTIONAL] - Redis Caching
-REDIS_ENABLED=true
-REDIS_URL=redis://localhost:6379/0
-REDIS_LLM_TTL_SECONDS=3600
-
-# [OPTIONAL] - ChromaDB Search
-CHROMA_HOST=http://localhost:8000
-CHROMA_COLLECTION_VERSION=v1
-CHROMA_REQUIRED=false
-
-# [OPTIONAL] - Mobile API
-JWT_SECRET_KEY=your_secret_key
-API_RATE_LIMIT_DEFAULT=100
-
-# [OPTIONAL] - Mixed-Source Aggregation
-AGGREGATION_BUNDLE_ENABLED=true
-AGGREGATION_ROLLOUT_STAGE=enabled
-AGGREGATION_META_EXTRACTORS_ENABLED=true
-AGGREGATION_ARTICLE_MEDIA_ENABLED=true
-AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED=true
+```yaml
+youtube:
+  enabled: true
+twitter:
+  enabled: false
+mcp:
+  enabled: false
 ```
 
-**Use case**: Full features, high performance, multi-device access.
+**Use case**: optional surfaces and power-user knobs.
 
 ---
 
@@ -112,7 +110,6 @@ AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED=true
 | `API_HASH` | Telegram API hash |
 | `BOT_TOKEN` | Telegram bot token (from BotFather) |
 | `ALLOWED_USER_IDS` | Comma-separated Telegram user IDs for allowlist-gated bot/API/MCP paths. When empty, JWT API and hosted MCP auth run fail-open, while Telegram bot access and some onboarding paths remain separately constrained. |
-| `FIRECRAWL_API_KEY` | Firecrawl API key (optional -- only required for cloud Firecrawl or web search enrichment; defaults to empty) |
 | `OPENROUTER_API_KEY` | OpenRouter API key |
 
 ## [OPTIONAL] LLM Provider Selection

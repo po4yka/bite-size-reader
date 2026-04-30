@@ -384,6 +384,87 @@ class OpenAIConfig(_FallbackModelsMixin, BaseModel):
         return org
 
 
+class OllamaConfig(_FallbackModelsMixin, BaseModel):
+    """OpenAI-compatible cloud Ollama endpoint configuration.
+
+    This is intentionally optional. OpenRouter remains the default provider;
+    setting ``LLM_PROVIDER=ollama`` selects this secondary path.
+    """
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    base_url: str = Field(
+        default="http://localhost:11434/v1",
+        validation_alias="OLLAMA_BASE_URL",
+        description="OpenAI-compatible Ollama endpoint URL",
+    )
+    api_key: str = Field(
+        default="ollama",
+        validation_alias="OLLAMA_API_KEY",
+        description="Bearer token for cloud Ollama endpoints; local Ollama accepts any value",
+    )
+    model: str = Field(default="llama3.3", validation_alias="OLLAMA_MODEL")
+    fallback_models: tuple[str, ...] = Field(
+        default_factory=tuple,
+        validation_alias="OLLAMA_FALLBACK_MODELS",
+    )
+    enable_structured_outputs: bool = Field(
+        default=False,
+        validation_alias="OLLAMA_ENABLE_STRUCTURED_OUTPUTS",
+        description="Structured output support varies by model/provider; disabled by default",
+    )
+    max_response_size_mb: int = Field(
+        default=10,
+        validation_alias="OLLAMA_MAX_RESPONSE_SIZE_MB",
+    )
+
+    @field_validator("base_url", mode="before")
+    @classmethod
+    def _validate_base_url(cls, value: Any) -> str:
+        url = str(value or "http://localhost:11434/v1").strip().rstrip("/")
+        if not url.startswith(("http://", "https://")):
+            msg = "OLLAMA_BASE_URL must start with http:// or https://"
+            raise ValueError(msg)
+        if not url.endswith("/v1"):
+            msg = "OLLAMA_BASE_URL must point at an OpenAI-compatible /v1 endpoint"
+            raise ValueError(msg)
+        return url
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def _validate_api_key(cls, value: Any) -> str:
+        key = str(value or "ollama").strip()
+        if not key:
+            return "ollama"
+        if len(key) > 500:
+            msg = "OLLAMA_API_KEY appears too long"
+            raise ValueError(msg)
+        return key
+
+    @field_validator("model", mode="before")
+    @classmethod
+    def _validate_model(cls, value: Any) -> str:
+        model = str(value or "llama3.3").strip()
+        if not model:
+            return "llama3.3"
+        return validate_model_name(model)
+
+    @field_validator("max_response_size_mb", mode="before")
+    @classmethod
+    def _validate_max_response_size_mb(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 10
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "OLLAMA_MAX_RESPONSE_SIZE_MB must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 100:
+            msg = "OLLAMA_MAX_RESPONSE_SIZE_MB must be between 1 and 100"
+            raise ValueError(msg)
+        return parsed
+
+
 class AnthropicConfig(_FallbackModelsMixin, BaseModel):
     """Anthropic API configuration for direct API access."""
 

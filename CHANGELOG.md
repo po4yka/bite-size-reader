@@ -50,6 +50,10 @@ not drift from the operational guide.
 - Update pyjwt 2.11.0 to 2.12.1 (CVE-2026-32597)
 
 ### Changed
+- Reduce `.env.example` to the five first-run Telegram/OpenRouter values and move optional power-user settings to `ratatoskr.yaml`.
+- Add optional `RATATOSKR_CONFIG` / `ratatoskr.yaml` loading with precedence below `.env` and process environment.
+- Add OpenAI-compatible cloud Ollama configuration (`LLM_PROVIDER=ollama`) while keeping OpenRouter as the default provider.
+- Reject deprecated migration shadow-mode environment variables at startup instead of silently accepting them.
 - Rename the active web client ID from `web-carbon-v1` to `web-v1`; existing web/browser sessions may need to sign in again.
 - Rename Prometheus alert rule names from the historical `BSR*` prefix to `Ratatoskr*`.
 - Clarify that current Docker Compose points at an externally managed self-hosted Firecrawl API via `firecrawl-api:host-gateway`; the in-compose Firecrawl profile is planned separately.
