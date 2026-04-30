@@ -15,7 +15,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "generate:api": "openapi-typescript ../../docs/openapi/mobile_api.yaml -o src/api/generated.ts"
+    "generate:api": "openapi-typescript ../../docs/openapi/mobile_api.yaml -o src/api/generated.ts",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.95.2",
@@ -45,6 +47,16 @@
     "typescript": "^6.0.2",
     "typescript-eslint": "^8.57.2",
     "vite": "^8.0.2",
-    "vitest": "^4.1.1"
+    "vitest": "^4.1.1",
+    "storybook": "^10.3.6",
+    "@storybook/react-vite": "^10.3.6",
+    "@chromatic-com/storybook": "^5.1.2",
+    "@storybook/addon-vitest": "^10.3.6",
+    "@storybook/addon-a11y": "^10.3.6",
+    "@storybook/addon-docs": "^10.3.6",
+    "@storybook/addon-onboarding": "^10.3.6",
+    "eslint-plugin-storybook": "^10.3.6",
+    "playwright": "^1.59.1",
+    "@vitest/browser-playwright": "^4.1.1"
   }
 }

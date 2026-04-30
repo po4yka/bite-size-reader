@@ -137,6 +137,37 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  web-storybook-build:
+    name: Web Storybook Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: clients/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: clients/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Storybook
+        run: npm run build-storybook
+
+      - name: Upload Storybook artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: storybook-static
+          path: clients/web/storybook-static
+          retention-days: 7
+
   web-build:
     name: Web Build
     runs-on: ubuntu-latest
