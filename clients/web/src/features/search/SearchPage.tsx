@@ -1,19 +1,18 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Button,
-  InlineLoading,
-  InlineNotification,
+  BracketButton,
+  BracketPagination,
+  BracketSearch,
+  BrutalistCard,
+  BrutalistSkeletonText,
+  MonoSelect,
+  MonoSelectItem,
   MultiSelect,
   NumberInput,
-  Pagination,
-  Search,
-  Select,
-  SelectItem,
-  SkeletonText,
+  SparkLoading,
+  StatusBadge,
   Tag,
-  TextInput,
-  Tile,
 } from "../../design";
 import { useSearchResults, useTrendingTopics } from "../../hooks/useSearch";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
@@ -106,10 +105,11 @@ export default function SearchPage() {
     favoriteState !== "all",
     Boolean(startDate),
     Boolean(endDate),
-    semanticMode && minSimilarity > 0.2, // 0.2 is the default; > means user changed it
+    semanticMode && minSimilarity > 0.2,
     selectedTags.length > 0,
     selectedDomains.length > 0,
   ].filter(Boolean).length;
+
   const showInitialResultsSkeleton =
     searchQuery.isFetching && !searchQuery.data && query.trim().length > 1;
 
@@ -132,9 +132,30 @@ export default function SearchPage() {
   }
 
   return (
-    <section className="page-section">
-      <h1>Search</h1>
-      <Search
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-7)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section)",
+      }}
+    >
+      <h1
+        style={{
+          fontFamily: "var(--frost-font-mono)",
+          fontSize: "var(--frost-type-mono-emph-size)",
+          fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+          letterSpacing: "var(--frost-type-mono-emph-tracking)",
+          textTransform: "uppercase",
+          color: "var(--frost-ink)",
+          margin: 0,
+        }}
+      >
+        Search
+      </h1>
+
+      <BracketSearch
         id="search-input"
         labelText="Search summaries"
         placeholder="Search by keyword, topic, domain…"
@@ -146,24 +167,52 @@ export default function SearchPage() {
         }}
       />
 
-      <Tile className="search-power-tile">
-        <div className="search-power-header">
-          <h3>Power filters</h3>
-          <div className="form-actions search-power-actions">
+      <BrutalistCard>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "var(--frost-gap-row)",
+            marginBottom: "var(--frost-gap-section)",
+          }}
+        >
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-xs-size)",
+              fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+              letterSpacing: "var(--frost-type-mono-emph-tracking)",
+              textTransform: "uppercase",
+              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+              margin: 0,
+            }}
+          >
+            § FILTERS
+          </p>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
             <Tag type={activeFilterCount > 0 ? "blue" : "gray"}>
               {activeFilterCount > 0 ? `${activeFilterCount} active` : "No active filters"}
             </Tag>
-            <Button kind="ghost" size="sm" onClick={resetFilters}>
+            <BracketButton kind="ghost" size="sm" onClick={resetFilters}>
               Reset filters
-            </Button>
-            <Button kind="ghost" size="sm" onClick={clearSearch}>
+            </BracketButton>
+            <BracketButton kind="ghost" size="sm" onClick={clearSearch}>
               Clear all
-            </Button>
+            </BracketButton>
           </div>
         </div>
 
-        <div className="search-filter-grid">
-          <Select
+        <div
+          className="search-filter-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+            gap: "var(--frost-gap-row)",
+          }}
+        >
+          <MonoSelect
             id="search-mode"
             labelText="Search mode"
             value={mode}
@@ -172,13 +221,13 @@ export default function SearchPage() {
               setPage(1);
             }}
           >
-            <SelectItem value="auto" text="Auto" />
-            <SelectItem value="keyword" text="Keyword" />
-            <SelectItem value="semantic" text="Semantic" />
-            <SelectItem value="hybrid" text="Hybrid" />
-          </Select>
+            <MonoSelectItem value="auto" text="Auto" />
+            <MonoSelectItem value="keyword" text="Keyword" />
+            <MonoSelectItem value="semantic" text="Semantic" />
+            <MonoSelectItem value="hybrid" text="Hybrid" />
+          </MonoSelect>
 
-          <Select
+          <MonoSelect
             id="search-language"
             labelText="Language"
             value={language}
@@ -187,13 +236,13 @@ export default function SearchPage() {
               setPage(1);
             }}
           >
-            <SelectItem value="" text="All languages" />
-            <SelectItem value="en" text="English" />
-            <SelectItem value="ru" text="Russian" />
-            <SelectItem value="auto" text="Auto-detected" />
-          </Select>
+            <MonoSelectItem value="" text="All languages" />
+            <MonoSelectItem value="en" text="English" />
+            <MonoSelectItem value="ru" text="Russian" />
+            <MonoSelectItem value="auto" text="Auto-detected" />
+          </MonoSelect>
 
-          <Select
+          <MonoSelect
             id="search-read-state"
             labelText="Read state"
             value={readState}
@@ -202,12 +251,12 @@ export default function SearchPage() {
               setPage(1);
             }}
           >
-            <SelectItem value="all" text="All" />
-            <SelectItem value="read" text="Read" />
-            <SelectItem value="unread" text="Unread" />
-          </Select>
+            <MonoSelectItem value="all" text="All" />
+            <MonoSelectItem value="read" text="Read" />
+            <MonoSelectItem value="unread" text="Unread" />
+          </MonoSelect>
 
-          <Select
+          <MonoSelect
             id="search-favorite-state"
             labelText="Favorite state"
             value={favoriteState}
@@ -216,32 +265,34 @@ export default function SearchPage() {
               setPage(1);
             }}
           >
-            <SelectItem value="all" text="All" />
-            <SelectItem value="favorited" text="Favorited" />
-            <SelectItem value="not-favorited" text="Not favorited" />
-          </Select>
+            <MonoSelectItem value="all" text="All" />
+            <MonoSelectItem value="favorited" text="Favorited" />
+            <MonoSelectItem value="not-favorited" text="Not favorited" />
+          </MonoSelect>
 
-          <TextInput
+          <MonoSelect
             id="search-start-date"
             labelText="From date"
-            type="date"
             value={startDate}
             onChange={(event) => {
               setStartDate(event.currentTarget.value);
               setPage(1);
             }}
-          />
+          >
+            <MonoSelectItem value="" text="Any date" />
+          </MonoSelect>
 
-          <TextInput
+          <MonoSelect
             id="search-end-date"
             labelText="To date"
-            type="date"
             value={endDate}
             onChange={(event) => {
               setEndDate(event.currentTarget.value);
               setPage(1);
             }}
-          />
+          >
+            <MonoSelectItem value="" text="Any date" />
+          </MonoSelect>
 
           <NumberInput
             id="search-min-similarity"
@@ -260,9 +311,9 @@ export default function SearchPage() {
             }}
           />
         </div>
-      </Tile>
+      </BrutalistCard>
 
-      <div className="multiselect-row">
+      <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
         <MultiSelect
           id="search-tags"
           titleText="Filter by topics"
@@ -292,150 +343,302 @@ export default function SearchPage() {
       </div>
 
       {searchQuery.data && (
-        <Tile>
-          <div className="search-meta-row">
-            <p className="muted">
-              {searchQuery.data.pagination.total} results · intent {searchQuery.data.intent ?? "unknown"} · mode{" "}
-              {searchQuery.data.mode ?? mode}
-            </p>
-          </div>
+        <BrutalistCard>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-xs-size)",
+              fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+              letterSpacing: "var(--frost-type-mono-emph-tracking)",
+              textTransform: "uppercase",
+              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+              margin: "0 0 var(--frost-gap-section) 0",
+            }}
+          >
+            § RESULTS
+          </p>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-body-size)",
+              color: "color-mix(in oklch, var(--frost-ink) 60%, transparent)",
+              margin: "0 0 var(--frost-gap-section) 0",
+            }}
+          >
+            {searchQuery.data.pagination.total} results · intent {searchQuery.data.intent ?? "unknown"} · mode{" "}
+            {searchQuery.data.mode ?? mode}
+          </p>
 
-          <div className="search-facet-grid">
+          <div
+            className="search-facet-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+              gap: "var(--frost-gap-section)",
+            }}
+          >
             <div>
-              <p className="muted">Top domains</p>
-              <div className="tag-row" role="group" aria-label="Filter by domain">
+              <p
+                style={{
+                  fontFamily: "var(--frost-font-mono)",
+                  fontSize: "var(--frost-type-mono-xs-size)",
+                  color: "color-mix(in oklch, var(--frost-ink) 60%, transparent)",
+                  margin: "0 0 var(--frost-gap-row) 0",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                }}
+              >
+                Top domains
+              </p>
+              <div
+                className="tag-row"
+                role="group"
+                aria-label="Filter by domain"
+                style={{ display: "flex", flexWrap: "wrap", gap: "var(--frost-gap-inline)" }}
+              >
                 {(searchQuery.data.facets?.domains ?? []).slice(0, 10).map((facet) => (
-                  <Button
+                  <BracketButton
                     key={`domain-${facet.value}`}
                     kind="ghost"
                     size="sm"
-                    className="filter-chip"
                     aria-pressed={selectedDomains.includes(facet.value)}
+                    style={
+                      selectedDomains.includes(facet.value)
+                        ? { background: "var(--frost-ink)", color: "var(--frost-page)" }
+                        : undefined
+                    }
                     onClick={() => {
                       setSelectedDomains((prev) => toggleValue(prev, facet.value));
                       setPage(1);
                     }}
                   >
-                    <Tag type={selectedDomains.includes(facet.value) ? "blue" : "gray"}>
-                      {facet.value} ({facet.count})
-                    </Tag>
-                  </Button>
+                    {facet.value} ({facet.count})
+                  </BracketButton>
                 ))}
               </div>
             </div>
 
             <div>
-              <p className="muted">Top tags</p>
-              <div className="tag-row" role="group" aria-label="Filter by topic tag">
+              <p
+                style={{
+                  fontFamily: "var(--frost-font-mono)",
+                  fontSize: "var(--frost-type-mono-xs-size)",
+                  color: "color-mix(in oklch, var(--frost-ink) 60%, transparent)",
+                  margin: "0 0 var(--frost-gap-row) 0",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                }}
+              >
+                Top tags
+              </p>
+              <div
+                className="tag-row"
+                role="group"
+                aria-label="Filter by topic tag"
+                style={{ display: "flex", flexWrap: "wrap", gap: "var(--frost-gap-inline)" }}
+              >
                 {(searchQuery.data.facets?.tags ?? []).slice(0, 10).map((facet) => (
-                  <Button
+                  <BracketButton
                     key={`tag-${facet.value}`}
                     kind="ghost"
                     size="sm"
-                    className="filter-chip"
                     aria-pressed={selectedTags.includes(facet.value)}
+                    style={
+                      selectedTags.includes(facet.value)
+                        ? { background: "var(--frost-ink)", color: "var(--frost-page)" }
+                        : undefined
+                    }
                     onClick={() => {
                       setSelectedTags((prev) => toggleValue(prev, facet.value));
                       setPage(1);
                     }}
                   >
-                    <Tag type={selectedTags.includes(facet.value) ? "teal" : "gray"}>
-                      {facet.value} ({facet.count})
-                    </Tag>
-                  </Button>
+                    {facet.value} ({facet.count})
+                  </BracketButton>
                 ))}
               </div>
             </div>
 
             <div>
-              <p className="muted">Language mix</p>
-              <div className="tag-row" role="group" aria-label="Filter by language">
+              <p
+                style={{
+                  fontFamily: "var(--frost-font-mono)",
+                  fontSize: "var(--frost-type-mono-xs-size)",
+                  color: "color-mix(in oklch, var(--frost-ink) 60%, transparent)",
+                  margin: "0 0 var(--frost-gap-row) 0",
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                }}
+              >
+                Language mix
+              </p>
+              <div
+                className="tag-row"
+                role="group"
+                aria-label="Filter by language"
+                style={{ display: "flex", flexWrap: "wrap", gap: "var(--frost-gap-inline)" }}
+              >
                 {(searchQuery.data.facets?.languages ?? []).slice(0, 6).map((facet) => (
-                  <Button
+                  <BracketButton
                     key={`lang-${facet.value}`}
                     kind="ghost"
                     size="sm"
-                    className="filter-chip"
                     aria-pressed={language === facet.value}
+                    style={
+                      language === facet.value
+                        ? { background: "var(--frost-ink)", color: "var(--frost-page)" }
+                        : undefined
+                    }
                     onClick={() => {
                       setLanguage((prev) => (prev === facet.value ? "" : facet.value));
                       setPage(1);
                     }}
                   >
-                    <Tag type={language === facet.value ? "cyan" : "gray"}>
-                      {facet.value} ({facet.count})
-                    </Tag>
-                  </Button>
+                    {facet.value} ({facet.count})
+                  </BracketButton>
                 ))}
               </div>
             </div>
           </div>
-        </Tile>
+        </BrutalistCard>
       )}
 
       {!query.trim() && (
-        <Tile>
-          <h3>Trending topics</h3>
-          <div className="tag-row">
+        <BrutalistCard>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-xs-size)",
+              fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+              letterSpacing: "var(--frost-type-mono-emph-tracking)",
+              textTransform: "uppercase",
+              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+              margin: "0 0 var(--frost-gap-row) 0",
+            }}
+          >
+            § TRENDING TOPICS
+          </p>
+          <div
+            className="tag-row"
+            style={{ display: "flex", flexWrap: "wrap", gap: "var(--frost-gap-inline)" }}
+          >
             {(trendingQuery.data ?? []).map((topic) => (
-              <Button
+              <BracketButton
                 key={topic.tag}
                 kind="ghost"
                 size="sm"
-                className="filter-chip"
                 onClick={() => {
                   setQuery(topic.tag.replace(/^#/, ""));
                   setPage(1);
                 }}
               >
-                <Tag type="teal">{topic.tag} ({topic.count})</Tag>
-              </Button>
+                {topic.tag} ({topic.count})
+              </BracketButton>
             ))}
           </div>
-        </Tile>
+        </BrutalistCard>
       )}
 
       {!query.trim() && <RecommendationsSection />}
 
       {query.trim().length > 0 && query.trim().length < 2 && (
-        <InlineNotification
-          kind="info"
-          title="Enter at least 2 characters"
-          subtitle="Search API requires 2+ characters for query."
-          hideCloseButton
-        />
+        <StatusBadge severity="info">
+          Enter at least 2 characters — Search API requires 2+ characters for query.
+        </StatusBadge>
       )}
 
-      {searchQuery.isFetching && searchQuery.data && <InlineLoading description="Refreshing results…" />}
+      {searchQuery.isFetching && searchQuery.data && (
+        <SparkLoading description="Refreshing results…" status="active" />
+      )}
       <QueryErrorNotification error={searchQuery.error} title="Search failed" />
 
       {showInitialResultsSkeleton ? (
-        <div className="result-grid">
+        <div
+          className="result-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: "var(--frost-gap-row)",
+          }}
+        >
           {Array.from({ length: 3 }).map((_, index) => (
-            <Tile key={`result-skeleton-${index}`} className="result-tile">
-              <SkeletonText heading width="65%" />
-              <SkeletonText paragraph lineCount={2} />
-              <SkeletonText paragraph lineCount={1} width="40%" />
-            </Tile>
+            <BrutalistCard key={`result-skeleton-${index}`}>
+              <BrutalistSkeletonText heading width="65%" />
+              <BrutalistSkeletonText paragraph lineCount={2} />
+              <BrutalistSkeletonText paragraph lineCount={1} width="40%" />
+            </BrutalistCard>
           ))}
         </div>
       ) : (
-        <div className="result-grid">
+        <div
+          className="result-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: "var(--frost-gap-row)",
+          }}
+        >
           {(searchQuery.data?.results ?? []).map((result) => (
-            <Tile key={result.id} className="result-tile">
-              <Link to={`/library/${result.id}`} className="result-tile-link">
-                <h3>{result.title}</h3>
-                <div className="tag-row">
+            <BrutalistCard key={result.id}>
+              <Link
+                to={`/library/${result.id}`}
+                style={{ textDecoration: "none", color: "inherit", display: "block" }}
+              >
+                <h3
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-body-size)",
+                    fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                    color: "var(--frost-ink)",
+                    margin: "0 0 var(--frost-gap-row) 0",
+                  }}
+                >
+                  {result.title}
+                </h3>
+                <div
+                  className="tag-row"
+                  style={{ display: "flex", flexWrap: "wrap", gap: "var(--frost-gap-inline)", marginBottom: "var(--frost-gap-row)" }}
+                >
                   <Tag type="blue">Score {(result.score * 100).toFixed(0)}%</Tag>
                   <Tag type={result.isRead ? "green" : "cool-gray"}>{result.isRead ? "Read" : "Unread"}</Tag>
                   <Tag type="gray">{result.domain || "Unknown domain"}</Tag>
                 </div>
-                <p>{result.tldr || result.snippet || "No preview available."}</p>
-                <p className="muted">
+                <p
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-body-size)",
+                    color: "var(--frost-ink)",
+                    margin: "0 0 var(--frost-gap-row) 0",
+                  }}
+                >
+                  {result.tldr || result.snippet || "No preview available."}
+                </p>
+                <p
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-xs-size)",
+                    color: "color-mix(in oklch, var(--frost-ink) 60%, transparent)",
+                    margin: "0 0 var(--frost-gap-row) 0",
+                  }}
+                >
                   Added {result.createdAt ? new Date(result.createdAt).toLocaleString() : "Unknown date"}
                 </p>
-                {result.matchExplanation && <p className="muted">{result.matchExplanation}</p>}
-                <div className="tag-row">
+                {result.matchExplanation && (
+                  <p
+                    style={{
+                      fontFamily: "var(--frost-font-mono)",
+                      fontSize: "var(--frost-type-mono-xs-size)",
+                      color: "color-mix(in oklch, var(--frost-ink) 60%, transparent)",
+                      margin: "0 0 var(--frost-gap-row) 0",
+                    }}
+                  >
+                    {result.matchExplanation}
+                  </p>
+                )}
+                <div
+                  className="tag-row"
+                  style={{ display: "flex", flexWrap: "wrap", gap: "var(--frost-gap-inline)" }}
+                >
                   {result.topicTags.slice(0, 4).map((topic) => (
                     <Tag key={topic} type="cyan">
                       {topic}
@@ -448,29 +651,50 @@ export default function SearchPage() {
                   ))}
                 </div>
               </Link>
-            </Tile>
+            </BrutalistCard>
           ))}
         </div>
       )}
 
       {searchQuery.data && searchQuery.data.results.length === 0 && (
-        <Tile>
+        <BrutalistCard>
           <div className="page-heading-group">
-            <h3>No matches found</h3>
-            <p className="muted">Try broadening filters, switching mode to Hybrid, or lowering similarity.</p>
+            <h3
+              style={{
+                fontFamily: "var(--frost-font-mono)",
+                fontSize: "var(--frost-type-mono-emph-size)",
+                fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                textTransform: "uppercase",
+                letterSpacing: "var(--frost-type-mono-emph-tracking)",
+                color: "var(--frost-ink)",
+                margin: "0 0 var(--frost-gap-row) 0",
+              }}
+            >
+              No matches found
+            </h3>
+            <p
+              style={{
+                fontFamily: "var(--frost-font-mono)",
+                fontSize: "var(--frost-type-mono-body-size)",
+                color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                margin: 0,
+              }}
+            >
+              Try broadening filters, switching mode to Hybrid, or lowering similarity.
+            </p>
           </div>
           {activeFilterCount > 0 && (
-            <div className="form-actions">
-              <Button kind="ghost" size="sm" onClick={resetFilters}>
+            <div style={{ display: "flex", gap: 16, marginTop: "var(--frost-gap-row)" }}>
+              <BracketButton kind="ghost" size="sm" onClick={resetFilters}>
                 Clear all filters
-              </Button>
+              </BracketButton>
             </div>
           )}
-        </Tile>
+        </BrutalistCard>
       )}
 
       {searchQuery.data && (
-        <Pagination
+        <BracketPagination
           page={page}
           pageSize={pageSize}
           pageSizes={[10, 20, 50, 100]}
@@ -481,6 +705,6 @@ export default function SearchPage() {
           }}
         />
       )}
-    </section>
+    </main>
   );
 }

@@ -1,21 +1,24 @@
 import { useMemo, useState } from "react";
 import {
-  Button,
+  BracketButton,
+  BrutalistDataTableSkeleton,
+  BrutalistModal,
+  BrutalistModalBody,
+  BrutalistModalFooter,
+  BrutalistModalHeader,
+  BrutalistTable,
+  BrutalistTableContainer,
   Checkbox,
-  DataTable,
-  DataTableSkeleton,
-  InlineNotification,
-  Modal,
-  Select,
-  SelectItem,
+  MonoInput,
+  MonoSelect,
+  MonoSelectItem,
+  StatusBadge,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
-  TextInput,
 } from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import {
@@ -148,11 +151,31 @@ export default function TagManagementPage() {
   const canMerge = mergeSourceIds.size > 0 && Boolean(mergeTargetId) && !mergeMutation.isPending;
 
   return (
-    <section className="page-section">
-      <h1>Tags</h1>
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-7)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section)",
+      }}
+    >
+      <h1
+        style={{
+          fontFamily: "var(--frost-font-mono)",
+          fontSize: "var(--frost-type-mono-emph-size)",
+          fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+          letterSpacing: "var(--frost-type-mono-emph-tracking)",
+          textTransform: "uppercase",
+          color: "var(--frost-ink)",
+          margin: 0,
+        }}
+      >
+        Tags
+      </h1>
 
-      <div className="form-actions">
-        <TextInput
+      <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap", alignItems: "flex-end" }}>
+        <MonoInput
           id="new-tag-name"
           labelText="Tag name"
           value={newTagName}
@@ -161,39 +184,36 @@ export default function TagManagementPage() {
             if (e.key === "Enter" && canCreate) handleCreate();
           }}
         />
-        <TextInput
+        <MonoInput
           id="new-tag-color"
           labelText="Color (optional hex)"
           value={newTagColor}
           onChange={(e) => setNewTagColor(e.currentTarget.value)}
           placeholder="#3b82f6"
         />
-        <Button kind="secondary" onClick={handleCreate} disabled={!canCreate}>
+        <BracketButton kind="secondary" onClick={handleCreate} disabled={!canCreate}>
           Create tag
-        </Button>
-        <Button kind="tertiary" onClick={() => setMergeOpen(true)} disabled={tags.length < 2}>
+        </BracketButton>
+        <BracketButton kind="tertiary" onClick={() => setMergeOpen(true)} disabled={tags.length < 2}>
           Merge tags
-        </Button>
+        </BracketButton>
       </div>
 
       {firstMutationError && (
-        <InlineNotification
-          kind="error"
-          title="Tag action failed"
-          subtitle={firstMutationError.message}
-          hideCloseButton
-        />
+        <StatusBadge severity="alarm">
+          Tag action failed: {firstMutationError.message}
+        </StatusBadge>
       )}
 
       {tagsQuery.isLoading && (
-        <DataTableSkeleton columnCount={headers.length} rowCount={6} showToolbar={false} />
+        <BrutalistDataTableSkeleton columnCount={headers.length} rowCount={6} showToolbar={false} />
       )}
       <QueryErrorNotification error={tagsQuery.error} title="Failed to load tags" />
 
       {!tagsQuery.isLoading && (
-        <DataTable rows={rows} headers={headers}>
+        <BrutalistTable rows={rows} headers={headers}>
           {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-            <TableContainer title="Tags">
+            <BrutalistTableContainer title="Tags">
               <Table {...getTableProps()}>
                 <TableHead>
                   <TableRow>
@@ -214,7 +234,7 @@ export default function TagManagementPage() {
                           if (cell.info.header === "name" && isEditing) {
                             return (
                               <TableCell key={cell.id}>
-                                <TextInput
+                                <MonoInput
                                   id={`edit-name-${tagId}`}
                                   labelText=""
                                   hideLabel
@@ -230,7 +250,7 @@ export default function TagManagementPage() {
                             if (isEditing) {
                               return (
                                 <TableCell key={cell.id}>
-                                  <TextInput
+                                  <MonoInput
                                     id={`edit-color-${tagId}`}
                                     labelText=""
                                     hideLabel
@@ -251,7 +271,6 @@ export default function TagManagementPage() {
                                         display: "inline-block",
                                         width: "1rem",
                                         height: "1rem",
-                                        borderRadius: "50%",
                                         backgroundColor: colorValue,
                                       }}
                                     />
@@ -266,42 +285,42 @@ export default function TagManagementPage() {
                           if (cell.info.header === "actions") {
                             return (
                               <TableCell key={cell.id}>
-                                <div className="table-actions">
+                                <div className="table-actions" style={{ display: "flex", gap: "var(--frost-gap-row)" }}>
                                   {isEditing ? (
                                     <>
-                                      <Button
+                                      <BracketButton
                                         kind="secondary"
                                         size="sm"
                                         onClick={handleSaveEdit}
                                         disabled={updateMutation.isPending}
                                       >
                                         Save
-                                      </Button>
-                                      <Button
+                                      </BracketButton>
+                                      <BracketButton
                                         kind="ghost"
                                         size="sm"
                                         onClick={() => setEditingTagId(null)}
                                       >
                                         Cancel
-                                      </Button>
+                                      </BracketButton>
                                     </>
                                   ) : (
                                     <>
-                                      <Button
+                                      <BracketButton
                                         kind="ghost"
                                         size="sm"
                                         onClick={() => handleStartEdit(tagId)}
                                       >
                                         Edit
-                                      </Button>
-                                      <Button
+                                      </BracketButton>
+                                      <BracketButton
                                         kind="danger--ghost"
                                         size="sm"
                                         onClick={() => setDeleteTagId(tagId)}
                                         disabled={deleteMutation.isPending}
                                       >
                                         Delete
-                                      </Button>
+                                      </BracketButton>
                                     </>
                                   )}
                                 </div>
@@ -315,16 +334,13 @@ export default function TagManagementPage() {
                   })}
                 </TableBody>
               </Table>
-            </TableContainer>
+            </BrutalistTableContainer>
           )}
-        </DataTable>
+        </BrutalistTable>
       )}
 
-      <Modal
+      <BrutalistModal
         open={deleteTagId != null}
-        modalHeading="Delete tag"
-        primaryButtonText={deleteMutation.isPending ? "Deleting..." : "Delete"}
-        secondaryButtonText="Cancel"
         danger
         onRequestClose={() => {
           if (!deleteMutation.isPending) setDeleteTagId(null);
@@ -337,19 +353,39 @@ export default function TagManagementPage() {
           }
         }}
       >
-        <p>
-          {deleteTagObj
-            ? `Delete tag "${deleteTagObj.name}"? Summaries will keep their other tags.`
-            : "Delete this tag?"}
-        </p>
-      </Modal>
+        <BrutalistModalHeader title="Delete tag" />
+        <BrutalistModalBody>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-body-size)",
+              color: "var(--frost-ink)",
+              margin: 0,
+            }}
+          >
+            {deleteTagObj
+              ? `Delete tag "${deleteTagObj.name}"? Summaries will keep their other tags.`
+              : "Delete this tag?"}
+          </p>
+        </BrutalistModalBody>
+        <BrutalistModalFooter
+          primaryButtonText={deleteMutation.isPending ? "Deleting..." : "Delete"}
+          secondaryButtonText="Cancel"
+          onRequestClose={() => {
+            if (!deleteMutation.isPending) setDeleteTagId(null);
+          }}
+          onRequestSubmit={() => {
+            if (deleteTagId != null) {
+              deleteMutation.mutate(deleteTagId, {
+                onSuccess: () => setDeleteTagId(null),
+              });
+            }
+          }}
+        />
+      </BrutalistModal>
 
-      <Modal
+      <BrutalistModal
         open={mergeOpen}
-        modalHeading="Merge tags"
-        primaryButtonText={mergeMutation.isPending ? "Merging..." : "Merge"}
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={!canMerge}
         onRequestClose={() => {
           if (!mergeMutation.isPending) {
             setMergeOpen(false);
@@ -359,35 +395,68 @@ export default function TagManagementPage() {
         }}
         onRequestSubmit={handleMergeSubmit}
       >
-        <p style={{ marginBottom: "1rem" }}>
-          Select source tags to merge into a target tag. Source tags will be deleted
-          and their summaries reassigned.
-        </p>
-        <div style={{ marginBottom: "1rem" }}>
-          <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Source tags (select one or more):</p>
-          {tags.map((tag) => (
-            <Checkbox
-              key={tag.id}
-              id={`merge-source-${tag.id}`}
-              labelText={`${tag.name} (${tag.summaryCount})`}
-              checked={mergeSourceIds.has(tag.id)}
-              onChange={() => handleToggleMergeSource(tag.id)}
-            />
-          ))}
-        </div>
-        <Select
-          id="merge-target"
-          labelText="Target tag"
-          value={mergeTargetId}
-          onChange={(e) => setMergeTargetId(e.currentTarget.value)}
-          disabled={mergeTargetOptions.length === 0}
-        >
-          <SelectItem value="" text="Choose target..." />
-          {mergeTargetOptions.map((tag) => (
-            <SelectItem key={tag.id} value={String(tag.id)} text={tag.name} />
-          ))}
-        </Select>
-      </Modal>
-    </section>
+        <BrutalistModalHeader title="Merge tags" />
+        <BrutalistModalBody>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-body-size)",
+              color: "var(--frost-ink)",
+              margin: "0 0 var(--frost-line) 0",
+            }}
+          >
+            Select source tags to merge into a target tag. Source tags will be deleted
+            and their summaries reassigned.
+          </p>
+          <div style={{ marginBottom: "var(--frost-line)" }}>
+            <p
+              style={{
+                fontFamily: "var(--frost-font-mono)",
+                fontSize: "var(--frost-type-mono-body-size)",
+                fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                color: "var(--frost-ink)",
+                margin: "0 0 var(--frost-gap-row) 0",
+              }}
+            >
+              Source tags (select one or more):
+            </p>
+            {tags.map((tag) => (
+              <Checkbox
+                key={tag.id}
+                id={`merge-source-${tag.id}`}
+                labelText={`${tag.name} (${tag.summaryCount})`}
+                checked={mergeSourceIds.has(tag.id)}
+                onChange={() => handleToggleMergeSource(tag.id)}
+              />
+            ))}
+          </div>
+          <MonoSelect
+            id="merge-target"
+            labelText="Target tag"
+            value={mergeTargetId}
+            onChange={(e) => setMergeTargetId(e.currentTarget.value)}
+            disabled={mergeTargetOptions.length === 0}
+          >
+            <MonoSelectItem value="" text="Choose target..." />
+            {mergeTargetOptions.map((tag) => (
+              <MonoSelectItem key={tag.id} value={String(tag.id)} text={tag.name} />
+            ))}
+          </MonoSelect>
+        </BrutalistModalBody>
+        <BrutalistModalFooter
+          primaryButtonText={mergeMutation.isPending ? "Merging..." : "Merge"}
+          primaryButtonDisabled={!canMerge}
+          secondaryButtonText="Cancel"
+          onRequestClose={() => {
+            if (!mergeMutation.isPending) {
+              setMergeOpen(false);
+              setMergeSourceIds(new Set());
+              setMergeTargetId("");
+            }
+          }}
+          onRequestSubmit={handleMergeSubmit}
+        />
+      </BrutalistModal>
+    </main>
   );
 }

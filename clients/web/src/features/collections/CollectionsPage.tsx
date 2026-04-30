@@ -2,26 +2,29 @@ import { Fragment, useEffect, useMemo, useState, type KeyboardEvent } from "reac
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Button,
-  DataTable,
-  DataTableSkeleton,
-  InlineLoading,
-  InlineNotification,
-  Modal,
-  Select,
-  SelectItem,
+  BracketButton,
+  BrutalistCard,
+  BrutalistDataTableSkeleton,
+  BrutalistModal,
+  BrutalistModalBody,
+  BrutalistModalFooter,
+  BrutalistModalHeader,
+  BrutalistTable,
+  BrutalistTableContainer,
+  MonoInput,
+  MonoSelect,
+  MonoSelectItem,
+  SparkLoading,
+  StatusBadge,
+  Tag,
+  TreeNode,
+  TreeView,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
-  Tag,
-  TextInput,
-  Tile,
-  TreeNode,
-  TreeView,
 } from "../../design";
 import { createCollection, moveCollectionItems } from "../../api/collections";
 import type { Collection, CollectionItem } from "../../api/types";
@@ -296,306 +299,418 @@ export default function CollectionsPage() {
   }
 
   return (
-    <section className="page-section collections-layout">
-      <div className="collections-tree">
-        <h1>Collections</h1>
-
-        <div className="form-actions">
-          <TextInput
-            id="new-collection"
-            labelText="New collection"
-            value={newCollectionName}
-            onChange={(event) => setNewCollectionName(event.currentTarget.value)}
-          />
-          <Select
-            id="new-collection-parent"
-            labelText="Create location"
-            value={createParentMode}
-            onChange={(event) => setCreateParentMode(event.currentTarget.value as "root" | "selected")}
-          >
-            <SelectItem value="root" text="Top level" />
-            <SelectItem
-              value="selected"
-              text={
-                selectedCollection
-                  ? `Inside ${selectedCollection.name}`
-                  : "Inside selected collection (pick one first)"
-              }
-              disabled={!selectedCollection}
-            />
-          </Select>
-          <Button
-            kind="secondary"
-            onClick={() =>
-              createMutation.mutate(
-                {
-                  name: newCollectionName.trim(),
-                  parentId: createParentMode === "selected" ? selectedCollectionId ?? undefined : undefined,
-                },
-                {
-                  onSuccess: (collection) => {
-                    setNewCollectionName("");
-                    setSelectedCollectionId(collection.id);
-                    navigate(`/collections/${collection.id}`);
-                  },
-                },
-              )
-            }
-            disabled={!canCreate || createMutation.isPending}
-          >
-            Create
-          </Button>
-          <Button
-            kind="tertiary"
-            onClick={() => {
-              setSmartEditMode(false);
-              setSmartEditorOpen(true);
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-7)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-page)",
+      }}
+    >
+      <div
+        className="collections-layout"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "var(--frost-strip-3) 1fr",
+          gap: "var(--frost-gap-section)",
+          alignItems: "start",
+        }}
+      >
+        {/* Tree panel */}
+        <div
+          className="collections-tree"
+          style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-section)" }}
+        >
+          <h1
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-emph-size)",
+              fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+              letterSpacing: "var(--frost-type-mono-emph-tracking)",
+              textTransform: "uppercase",
+              color: "var(--frost-ink)",
+              margin: 0,
             }}
           >
-            Create smart collection
-          </Button>
-        </div>
+            Collections
+          </h1>
 
-        {treeQuery.isLoading && <InlineLoading description="Loading collections…" />}
-        <QueryErrorNotification error={treeQuery.error} title="Failed to load collections" />
-
-        {firstMutationError && (
-          <InlineNotification
-            kind="error"
-            title="Collection action failed"
-            subtitle={firstMutationError.message}
-            hideCloseButton
-          />
-        )}
-
-        {selectedCollection && (
-          <div className="form-actions">
-            <TextInput
-              id="rename-collection"
-              labelText="Rename selected collection"
-              value={renameCollectionName}
-              onChange={(event) => setRenameCollectionName(event.currentTarget.value)}
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-row)" }}>
+            <MonoInput
+              id="new-collection"
+              labelText="New collection"
+              value={newCollectionName}
+              onChange={(event) => setNewCollectionName(event.currentTarget.value)}
             />
-            <Button
-              kind="secondary"
-              onClick={() =>
-                selectedCollectionId &&
-                renameMutation.mutate({
-                  collectionId: selectedCollectionId,
-                  name: renameCollectionName.trim(),
-                })
-              }
-              disabled={!canRename || renameMutation.isPending}
+            <MonoSelect
+              id="new-collection-parent"
+              labelText="Create location"
+              value={createParentMode}
+              onChange={(event) => setCreateParentMode(event.currentTarget.value as "root" | "selected")}
             >
-              Save name
-            </Button>
-            <Button
-              kind="danger--ghost"
-              onClick={() => setDeleteModalOpen(true)}
-              disabled={deleteMutation.isPending}
-            >
-              Delete
-            </Button>
-          </div>
-        )}
-
-        {treeQuery.isSuccess && (treeQuery.data ?? []).length === 0 && (
-          <Tile>
-            <div className="page-heading-group">
-              <h3>No collections yet</h3>
-              <p className="page-subtitle">
-                Collections let you organise your saved articles into named groups. Create your first one above.
-              </p>
-            </div>
-          </Tile>
-        )}
-
-        {(treeQuery.data ?? []).length > 0 && (
-          <TreeView
-            label="Collections"
-            hideLabel
-            active={selectedCollectionId != null ? String(selectedCollectionId) : undefined}
-          >
-            {(treeQuery.data ?? []).map((collection) => (
-              <Fragment key={collection.id}>
-                <RenderTree collection={collection} onSelect={handleCollectionSelect} />
-              </Fragment>
-            ))}
-          </TreeView>
-        )}
-      </div>
-
-      <div className="collections-items">
-        <h2>{selectedCollection ? selectedCollection.name : "Select a collection"}</h2>
-
-        {selectedCollection && isSmartCollection && (
-          <div style={{ marginBottom: "1rem" }}>
-            <Tag type="blue" size="sm" style={{ marginBottom: "0.5rem" }}>
-              Smart collection
-            </Tag>
-            {selectedCollection.queryMatchMode && (
-              <p style={{ margin: "0.25rem 0" }}>
-                Match mode: <strong>{selectedCollection.queryMatchMode === "all" ? "All conditions" : "Any condition"}</strong>
-              </p>
-            )}
-            {selectedCollection.queryConditions && selectedCollection.queryConditions.length > 0 && (
-              <ul style={{ margin: "0.25rem 0 0.5rem 1rem", fontSize: "0.875rem" }}>
-                {selectedCollection.queryConditions.map((cond, i) => (
-                  <li key={i}>
-                    {cond.type} {cond.operator} {String(cond.value)}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {selectedCollection.lastEvaluatedAt && (
-              <p style={{ margin: "0.25rem 0", fontSize: "0.875rem", color: "#525252" }}>
-                Last evaluated: {new Date(selectedCollection.lastEvaluatedAt).toLocaleString()}
-              </p>
-            )}
-            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-              <Button
+              <MonoSelectItem value="root" text="Top level" />
+              <MonoSelectItem
+                value="selected"
+                text={
+                  selectedCollection
+                    ? `Inside ${selectedCollection.name}`
+                    : "Inside selected collection (pick one first)"
+                }
+                disabled={!selectedCollection}
+              />
+            </MonoSelect>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <BracketButton
+                kind="secondary"
+                onClick={() =>
+                  createMutation.mutate(
+                    {
+                      name: newCollectionName.trim(),
+                      parentId: createParentMode === "selected" ? selectedCollectionId ?? undefined : undefined,
+                    },
+                    {
+                      onSuccess: (collection) => {
+                        setNewCollectionName("");
+                        setSelectedCollectionId(collection.id);
+                        navigate(`/collections/${collection.id}`);
+                      },
+                    },
+                  )
+                }
+                disabled={!canCreate || createMutation.isPending}
+              >
+                Create
+              </BracketButton>
+              <BracketButton
                 kind="tertiary"
-                size="sm"
                 onClick={() => {
-                  setSmartEditMode(true);
+                  setSmartEditMode(false);
                   setSmartEditorOpen(true);
                 }}
               >
-                Edit conditions
-              </Button>
-              <Button
-                kind="secondary"
-                size="sm"
-                onClick={() => selectedCollectionId && evaluateMutation.mutate(selectedCollectionId)}
-                disabled={evaluateMutation.isPending}
-              >
-                {evaluateMutation.isPending ? "Evaluating..." : "Re-evaluate"}
-              </Button>
+                Create smart collection
+              </BracketButton>
             </div>
           </div>
-        )}
 
-        {itemsQuery.isLoading && selectedCollectionId && (
-          <DataTableSkeleton columnCount={headers.length} rowCount={6} showToolbar={false} />
-        )}
-        <QueryErrorNotification error={itemsQuery.error} title="Failed to load collection items" />
+          {treeQuery.isLoading && (
+            <SparkLoading description="Loading collections…" status="active" />
+          )}
+          <QueryErrorNotification error={treeQuery.error} title="Failed to load collections" />
 
-        {selectedCollectionId && !itemsQuery.isLoading && rows.length === 0 && !itemsQuery.error && (
-          <Tile>
-            <div className="page-heading-group">
-              <h3>This collection is empty</h3>
-              <p className="page-subtitle">
-                Add articles to this collection from the Library using the &#34;Add to collection&#34; action.
-              </p>
+          {firstMutationError && (
+            <StatusBadge severity="alarm">
+              Collection action failed: {firstMutationError.message}
+            </StatusBadge>
+          )}
+
+          {selectedCollection && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-row)" }}>
+              <MonoInput
+                id="rename-collection"
+                labelText="Rename selected collection"
+                value={renameCollectionName}
+                onChange={(event) => setRenameCollectionName(event.currentTarget.value)}
+              />
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                <BracketButton
+                  kind="secondary"
+                  onClick={() =>
+                    selectedCollectionId &&
+                    renameMutation.mutate({
+                      collectionId: selectedCollectionId,
+                      name: renameCollectionName.trim(),
+                    })
+                  }
+                  disabled={!canRename || renameMutation.isPending}
+                >
+                  Save name
+                </BracketButton>
+                <BracketButton
+                  kind="danger--ghost"
+                  onClick={() => setDeleteModalOpen(true)}
+                  disabled={deleteMutation.isPending}
+                >
+                  Delete
+                </BracketButton>
+              </div>
             </div>
-          </Tile>
-        )}
+          )}
 
-        {selectedCollectionId && rows.length > 0 && (
-          <DataTable rows={rows} headers={headers}>
-            {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-              <TableContainer title="Collection items">
-                <Table {...getTableProps()}>
-                  <TableHead>
-                    <TableRow>
-                      {headers.map((header) => (
-                        <TableHeader {...getHeaderProps({ header })}>
-                          {header.header}
-                        </TableHeader>
-                      ))}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {rows.map((row) => {
-                      const item = row.cells.find((cell) => cell.info.header === "Actions")?.value as {
-                        summaryId: number;
-                        index: number;
-                      };
-                      return (
-                        <TableRow
-                          {...getRowProps({ row })}
-                          onClick={() => navigate(`/library/${item.summaryId}`)}
-                          onKeyDown={(event) => handleRowKeyDown(event, item.summaryId)}
-                          role="link"
-                          tabIndex={0}
-                          className="clickable-row"
-                        >
-                          {row.cells.map((cell) => {
-                            if (cell.info.header === "Actions") {
-                              return (
-                                <TableCell key={cell.id}>
-                                  {!isSmartCollection && (
-                                    <div className="table-actions">
-                                      <Button
-                                        kind="ghost"
-                                        size="sm"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          handleReorder(item.summaryId, -1);
-                                        }}
-                                        disabled={item.index === 0 || reorderMutation.isPending}
-                                      >
-                                        Up
-                                      </Button>
-                                      <Button
-                                        kind="ghost"
-                                        size="sm"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          handleReorder(item.summaryId, 1);
-                                        }}
-                                        disabled={item.index === rows.length - 1 || reorderMutation.isPending}
-                                      >
-                                        Down
-                                      </Button>
-                                      <Button
-                                        kind="tertiary"
-                                        size="sm"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          handleMoveItem(item.summaryId);
-                                        }}
-                                      >
-                                        Move
-                                      </Button>
-                                      <Button
-                                        kind="danger--ghost"
-                                        size="sm"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          removeMutation.mutate({
-                                            collectionId: selectedCollectionId,
-                                            summaryId: item.summaryId,
-                                          });
-                                        }}
-                                        disabled={removeMutation.isPending}
-                                      >
-                                        Remove
-                                      </Button>
-                                    </div>
-                                  )}
-                                </TableCell>
-                              );
-                            }
-                            return <TableCell key={cell.id}>{cell.value as string}</TableCell>;
-                          })}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </DataTable>
-        )}
+          {treeQuery.isSuccess && (treeQuery.data ?? []).length === 0 && (
+            <BrutalistCard>
+              <div className="page-heading-group">
+                <h3
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-emph-size)",
+                    fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                    textTransform: "uppercase",
+                    letterSpacing: "var(--frost-type-mono-emph-tracking)",
+                    color: "var(--frost-ink)",
+                    margin: "0 0 var(--frost-gap-row) 0",
+                  }}
+                >
+                  No collections yet
+                </h3>
+                <p
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-body-size)",
+                    color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                    margin: 0,
+                  }}
+                >
+                  Collections let you organise your saved articles into named groups. Create your first one above.
+                </p>
+              </div>
+            </BrutalistCard>
+          )}
+
+          {(treeQuery.data ?? []).length > 0 && (
+            <TreeView
+              label="Collections"
+              hideLabel
+              active={selectedCollectionId != null ? String(selectedCollectionId) : undefined}
+            >
+              {(treeQuery.data ?? []).map((collection) => (
+                <Fragment key={collection.id}>
+                  <RenderTree collection={collection} onSelect={handleCollectionSelect} />
+                </Fragment>
+              ))}
+            </TreeView>
+          )}
+        </div>
+
+        {/* Items panel */}
+        <div
+          className="collections-items"
+          style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-section)" }}
+        >
+          <h2
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-emph-size)",
+              fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+              letterSpacing: "var(--frost-type-mono-emph-tracking)",
+              textTransform: "uppercase",
+              color: "var(--frost-ink)",
+              margin: 0,
+            }}
+          >
+            {selectedCollection ? selectedCollection.name : "Select a collection"}
+          </h2>
+
+          {selectedCollection && isSmartCollection && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-row)" }}>
+              <Tag type="blue" size="sm">
+                Smart collection
+              </Tag>
+              {selectedCollection.queryMatchMode && (
+                <p
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-body-size)",
+                    color: "var(--frost-ink)",
+                    margin: 0,
+                  }}
+                >
+                  Match mode:{" "}
+                  <strong>
+                    {selectedCollection.queryMatchMode === "all" ? "All conditions" : "Any condition"}
+                  </strong>
+                </p>
+              )}
+              {selectedCollection.queryConditions && selectedCollection.queryConditions.length > 0 && (
+                <ul
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-body-size)",
+                    color: "var(--frost-ink)",
+                    margin: 0,
+                    paddingLeft: "var(--frost-line)",
+                  }}
+                >
+                  {selectedCollection.queryConditions.map((cond, i) => (
+                    <li key={i}>
+                      {cond.type} {cond.operator} {String(cond.value)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {selectedCollection.lastEvaluatedAt && (
+                <p
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-xs-size)",
+                    color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                    margin: 0,
+                  }}
+                >
+                  Last evaluated: {new Date(selectedCollection.lastEvaluatedAt).toLocaleString()}
+                </p>
+              )}
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                <BracketButton
+                  kind="tertiary"
+                  size="sm"
+                  onClick={() => {
+                    setSmartEditMode(true);
+                    setSmartEditorOpen(true);
+                  }}
+                >
+                  Edit conditions
+                </BracketButton>
+                <BracketButton
+                  kind="secondary"
+                  size="sm"
+                  onClick={() => selectedCollectionId && evaluateMutation.mutate(selectedCollectionId)}
+                  disabled={evaluateMutation.isPending}
+                >
+                  {evaluateMutation.isPending ? "Evaluating..." : "Re-evaluate"}
+                </BracketButton>
+              </div>
+            </div>
+          )}
+
+          {itemsQuery.isLoading && selectedCollectionId && (
+            <BrutalistDataTableSkeleton columnCount={headers.length} rowCount={6} showToolbar={false} />
+          )}
+          <QueryErrorNotification error={itemsQuery.error} title="Failed to load collection items" />
+
+          {selectedCollectionId && !itemsQuery.isLoading && rows.length === 0 && !itemsQuery.error && (
+            <BrutalistCard>
+              <div className="page-heading-group">
+                <h3
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-emph-size)",
+                    fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                    textTransform: "uppercase",
+                    letterSpacing: "var(--frost-type-mono-emph-tracking)",
+                    color: "var(--frost-ink)",
+                    margin: "0 0 var(--frost-gap-row) 0",
+                  }}
+                >
+                  This collection is empty
+                </h3>
+                <p
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-body-size)",
+                    color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                    margin: 0,
+                  }}
+                >
+                  Add articles to this collection from the Library using the &#34;Add to collection&#34; action.
+                </p>
+              </div>
+            </BrutalistCard>
+          )}
+
+          {selectedCollectionId && rows.length > 0 && (
+            <BrutalistTable rows={rows} headers={headers}>
+              {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
+                <BrutalistTableContainer title="Collection items">
+                  <Table {...getTableProps()}>
+                    <TableHead>
+                      <TableRow>
+                        {headers.map((header) => (
+                          <TableHeader {...getHeaderProps({ header })}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row) => {
+                        const item = row.cells.find((cell) => cell.info.header === "actions")?.value as {
+                          summaryId: number;
+                          index: number;
+                        };
+                        return (
+                          <TableRow
+                            {...getRowProps({ row })}
+                            onClick={() => navigate(`/library/${item.summaryId}`)}
+                            onKeyDown={(event) => handleRowKeyDown(event, item.summaryId)}
+                            role="link"
+                            tabIndex={0}
+                            className="clickable-row"
+                          >
+                            {row.cells.map((cell) => {
+                              if (cell.info.header === "actions") {
+                                return (
+                                  <TableCell key={cell.id}>
+                                    {!isSmartCollection && (
+                                      <div className="table-actions" style={{ display: "flex", gap: "var(--frost-gap-row)" }}>
+                                        <BracketButton
+                                          kind="ghost"
+                                          size="sm"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            handleReorder(item.summaryId, -1);
+                                          }}
+                                          disabled={item.index === 0 || reorderMutation.isPending}
+                                        >
+                                          Up
+                                        </BracketButton>
+                                        <BracketButton
+                                          kind="ghost"
+                                          size="sm"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            handleReorder(item.summaryId, 1);
+                                          }}
+                                          disabled={item.index === rows.length - 1 || reorderMutation.isPending}
+                                        >
+                                          Down
+                                        </BracketButton>
+                                        <BracketButton
+                                          kind="tertiary"
+                                          size="sm"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            handleMoveItem(item.summaryId);
+                                          }}
+                                        >
+                                          Move
+                                        </BracketButton>
+                                        <BracketButton
+                                          kind="danger--ghost"
+                                          size="sm"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            removeMutation.mutate({
+                                              collectionId: selectedCollectionId,
+                                              summaryId: item.summaryId,
+                                            });
+                                          }}
+                                          disabled={removeMutation.isPending}
+                                        >
+                                          Remove
+                                        </BracketButton>
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                );
+                              }
+                              return <TableCell key={cell.id}>{cell.value as string}</TableCell>;
+                            })}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </BrutalistTableContainer>
+              )}
+            </BrutalistTable>
+          )}
+        </div>
       </div>
 
-      <Modal
+      <BrutalistModal
         open={moveSummaryId != null}
-        modalHeading="Move item to collection"
-        primaryButtonText={moveItemMutation.isPending ? "Moving…" : "Move"}
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={!canMoveSubmit}
         onRequestClose={() => {
           if (!moveItemMutation.isPending) {
             setMoveSummaryId(null);
@@ -603,31 +718,45 @@ export default function CollectionsPage() {
         }}
         onRequestSubmit={() => moveItemMutation.mutate()}
       >
-        <div className="digest-form-grid">
-          <Select
-            id="move-item-target"
-            labelText="Target collection"
-            value={moveTargetCollectionId}
-            onChange={(event) => setMoveTargetCollectionId(event.currentTarget.value)}
-            disabled={moveTargetOptions.length === 0}
-          >
-            {moveTargetOptions.length === 0 ? (
-              <SelectItem value="" text="No other collections available" />
-            ) : (
-              moveTargetOptions.map((collection) => (
-                <SelectItem key={collection.id} value={String(collection.id)} text={collection.name} />
-              ))
-            )}
-          </Select>
-          <TextInput
-            id="move-item-create-target"
-            labelText="Or create target collection"
-            value={moveNewCollectionName}
-            onChange={(event) => setMoveNewCollectionName(event.currentTarget.value)}
-            placeholder="Collection name…"
-          />
-        </div>
-      </Modal>
+        <BrutalistModalHeader title="Move item to collection" />
+        <BrutalistModalBody>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-row)" }}>
+            <MonoSelect
+              id="move-item-target"
+              labelText="Target collection"
+              value={moveTargetCollectionId}
+              onChange={(event) => setMoveTargetCollectionId(event.currentTarget.value)}
+              disabled={moveTargetOptions.length === 0}
+            >
+              {moveTargetOptions.length === 0 ? (
+                <MonoSelectItem value="" text="No other collections available" />
+              ) : (
+                moveTargetOptions.map((collection) => (
+                  <MonoSelectItem key={collection.id} value={String(collection.id)} text={collection.name} />
+                ))
+              )}
+            </MonoSelect>
+            <MonoInput
+              id="move-item-create-target"
+              labelText="Or create target collection"
+              value={moveNewCollectionName}
+              onChange={(event) => setMoveNewCollectionName(event.currentTarget.value)}
+              placeholder="Collection name…"
+            />
+          </div>
+        </BrutalistModalBody>
+        <BrutalistModalFooter
+          primaryButtonText={moveItemMutation.isPending ? "Moving…" : "Move"}
+          primaryButtonDisabled={!canMoveSubmit}
+          secondaryButtonText="Cancel"
+          onRequestClose={() => {
+            if (!moveItemMutation.isPending) {
+              setMoveSummaryId(null);
+            }
+          }}
+          onRequestSubmit={() => moveItemMutation.mutate()}
+        />
+      </BrutalistModal>
 
       <SmartCollectionEditor
         key={smartEditMode ? `edit-${selectedCollectionId}` : "create"}
@@ -677,11 +806,8 @@ export default function CollectionsPage() {
         isSaving={createMutation.isPending || updateSmartMutation.isPending}
       />
 
-      <Modal
+      <BrutalistModal
         open={deleteModalOpen}
-        modalHeading="Delete collection"
-        primaryButtonText={deleteMutation.isPending ? "Deleting…" : "Delete"}
-        secondaryButtonText="Cancel"
         danger
         onRequestClose={() => {
           if (!deleteMutation.isPending) {
@@ -702,12 +828,44 @@ export default function CollectionsPage() {
           }
         }}
       >
-        <p>
-          {selectedCollection
-            ? `Delete "${selectedCollection.name}"? This action cannot be undone.`
-            : "Delete selected collection?"}
-        </p>
-      </Modal>
-    </section>
+        <BrutalistModalHeader title="Delete collection" />
+        <BrutalistModalBody>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-body-size)",
+              color: "var(--frost-ink)",
+              margin: 0,
+            }}
+          >
+            {selectedCollection
+              ? `Delete "${selectedCollection.name}"? This action cannot be undone.`
+              : "Delete selected collection?"}
+          </p>
+        </BrutalistModalBody>
+        <BrutalistModalFooter
+          primaryButtonText={deleteMutation.isPending ? "Deleting…" : "Delete"}
+          secondaryButtonText="Cancel"
+          onRequestClose={() => {
+            if (!deleteMutation.isPending) {
+              setDeleteModalOpen(false);
+            }
+          }}
+          onRequestSubmit={() => {
+            if (selectedCollectionId) {
+              deleteMutation.mutate(selectedCollectionId, {
+                onSuccess: (_, collectionId) => {
+                  if (selectedCollectionId === collectionId) {
+                    setSelectedCollectionId(null);
+                    navigate("/collections");
+                  }
+                  setDeleteModalOpen(false);
+                },
+              });
+            }
+          }}
+        />
+      </BrutalistModal>
+    </main>
   );
 }
