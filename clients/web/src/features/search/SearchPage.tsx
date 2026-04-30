@@ -599,8 +599,8 @@ export default function SearchPage() {
                   className="tag-row"
                   style={{ display: "flex", flexWrap: "wrap", gap: "var(--frost-gap-inline)", marginBottom: "var(--frost-gap-row)" }}
                 >
-                  <Tag type="blue">Score {(result.score * 100).toFixed(0)}%</Tag>
-                  <Tag type={result.isRead ? "green" : "cool-gray"}>{result.isRead ? "Read" : "Unread"}</Tag>
+                  <Tag>Score {(result.score * 100).toFixed(0)}%</Tag>
+                  <Tag>{result.isRead ? "Read" : "Unread"}</Tag>
                   <Tag type="gray">{result.domain || "Unknown domain"}</Tag>
                 </div>
                 <p
@@ -640,12 +640,12 @@ export default function SearchPage() {
                   style={{ display: "flex", flexWrap: "wrap", gap: "var(--frost-gap-inline)" }}
                 >
                   {result.topicTags.slice(0, 4).map((topic) => (
-                    <Tag key={topic} type="cyan">
+                    <Tag key={topic}>
                       {topic}
                     </Tag>
                   ))}
                   {(result.matchSignals ?? []).slice(0, 3).map((signal) => (
-                    <Tag key={`${result.id}-${signal}`} type="warm-gray">
+                    <Tag key={`${result.id}-${signal}`}>
                       {signal}
                     </Tag>
                   ))}

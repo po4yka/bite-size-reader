@@ -138,9 +138,10 @@ export const BracketButton = forwardRef<HTMLButtonElement, BracketButtonProps>(
     );
 
     const handleMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
-      (e.currentTarget as HTMLButtonElement).style.transform = "translateY(1px)";
+      const btn = e.currentTarget as HTMLButtonElement;
+      btn.style.transform = "translateY(1px)";
       const onMouseUp = () => {
-        (e.currentTarget as HTMLButtonElement).style.transform = "";
+        if (btn != null) btn.style.transform = "";
         window.removeEventListener("mouseup", onMouseUp);
       };
       window.addEventListener("mouseup", onMouseUp);

@@ -134,7 +134,7 @@ export function SummariesDataTable({
                                 <TableCell key={cell.id}>
                                   <div className="tag-row">
                                     {summary.topicTags.slice(0, 3).map((topic) => (
-                                      <Tag key={topic} type="teal">{topic}</Tag>
+                                      <Tag key={topic} >{topic}</Tag>
                                     ))}
                                   </div>
                                 </TableCell>

@@ -586,14 +586,14 @@ export default function ArticlePage() {
                 <BrutalistCard>
                   <div className="tag-row">
                     {detail.topicTags.map((topic) => (
-                      <Tag key={topic} type="cyan">
+                      <Tag key={topic}>
                         {topic}
                       </Tag>
                     ))}
                   </div>
                   <div className="tag-row">
                     {entityTags.map((entity) => (
-                      <Tag key={`${entity.type}-${entity.name}`} type="warm-gray">
+                      <Tag key={`${entity.type}-${entity.name}`}>
                         {entity.name} ({entity.type})
                       </Tag>
                     ))}

@@ -347,7 +347,7 @@ export default function SignalsPage() {
         <div className="signal-queue" style={{ flex: 2, display: "flex", flexDirection: "column", gap: "var(--frost-gap-section)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "var(--frost-gap-row)" }}>
             <p style={sectionLabelStyle}>§ QUEUE</p>
-            <Tag type="blue" size="sm">{queuedSignals.length}</Tag>
+            <Tag size="sm">{queuedSignals.length}</Tag>
           </div>
           {signalsQuery.isLoading ? <SparkLoading description="Loading signals..." /> : null}
           {!signalsQuery.isLoading && queuedSignals.length === 0 ? (

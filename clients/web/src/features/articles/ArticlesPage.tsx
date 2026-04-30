@@ -105,10 +105,10 @@ export default function ArticlesPage() {
         title="All article summaries"
         renderStatusColumn={(summary: SummaryCompact) => (
           <div className="tag-row">
-            <Tag type={summary.isRead ? "green" : "gray"}>
+            <Tag>
               {summary.isRead ? "Read" : "Unread"}
             </Tag>
-            {summary.isFavorited && <Tag type="magenta">Favorited</Tag>}
+            {summary.isFavorited && <Tag>Favorited</Tag>}
           </div>
         )}
       />

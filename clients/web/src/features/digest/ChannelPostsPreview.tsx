@@ -37,7 +37,7 @@ export function ChannelPostsPreview({ username }: { username: string }) {
             <span className="muted digest-text-xs">
               {new Date(post.date).toLocaleString()}
             </span>
-            <Tag type="blue" size="sm">
+            <Tag size="sm">
               {post.contentType}
             </Tag>
             {post.views != null && (

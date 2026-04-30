@@ -56,7 +56,7 @@ function RenderTree({
     <span>
       {collection.name} ({collection.itemCount})
       {isSmart && (
-        <Tag size="sm" type="blue" style={{ marginLeft: "0.25rem" }}>
+        <Tag size="sm" style={{ marginLeft: "0.25rem" }}>
           Smart
         </Tag>
       )}
@@ -504,7 +504,7 @@ export default function CollectionsPage() {
 
           {selectedCollection && isSmartCollection && (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-row)" }}>
-              <Tag type="blue" size="sm">
+              <Tag size="sm">
                 Smart collection
               </Tag>
               {selectedCollection.queryMatchMode && (

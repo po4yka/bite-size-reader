@@ -45,7 +45,7 @@ function SessionRow({
       <TableCell>{session.ipAddress ?? "-"}</TableCell>
       <TableCell>{formatDate(session.lastUsedAt)}</TableCell>
       <TableCell>
-        {session.isCurrent ? <Tag type="green">Current</Tag> : null}
+        {session.isCurrent ? <Tag>Current</Tag> : null}
       </TableCell>
       <TableCell>
         <Button

@@ -1,6 +1,6 @@
 import type { SyntheticEvent } from "react";
 import { useState } from "react";
-import { FileUploader, InlineLoading, InlineNotification } from "../../design";
+import { FileUploader, SparkLoading, StatusBadge } from "../../design";
 import { useRestoreBackup } from "../../hooks/useBackups";
 import type { RestoreResult } from "../../api/backups";
 
@@ -34,25 +34,23 @@ export default function RestoreUpload() {
       />
 
       {restoreMutation.isPending && (
-        <InlineLoading description="Restoring..." style={{ marginTop: "0.5rem" }} />
+        <SparkLoading description="Restoring..." style={{ marginTop: "0.5rem" }} />
       )}
 
       {restoreMutation.error && (
-        <InlineNotification
-          kind="error"
+        <StatusBadge
+          severity="alarm"
           title="Restore failed"
           subtitle={(restoreMutation.error as Error).message}
-          hideCloseButton
           style={{ marginTop: "0.5rem" }}
         />
       )}
 
       {result && (
-        <InlineNotification
-          kind={result.errors.length > 0 ? "warning" : "success"}
+        <StatusBadge
+          severity={result.errors.length > 0 ? "warn" : "info"}
           title="Restore complete"
           subtitle={formatRestoreResult(result)}
-          hideCloseButton
           style={{ marginTop: "0.5rem" }}
         />
       )}

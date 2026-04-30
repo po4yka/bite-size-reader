@@ -30,7 +30,7 @@ export default function ReadingStreakSection() {
       >
         § Reading Streak
         {streakQuery.data && (
-          <Tag type="warm-gray" size="md">
+          <Tag size="md">
             {streakQuery.data.currentStreak} days
           </Tag>
         )}

@@ -29,6 +29,25 @@ export const Variants: Story = {
   ),
 };
 
+export const Sizes: Story = {
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 480 }}>
+      <div>
+        <div style={{ fontFamily: "var(--frost-font-mono)", fontSize: 11, opacity: 0.55, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>
+          Medium (default) — 8px track
+        </div>
+        <MonoProgressBar label="Medium" value={60} size="medium" helperText="8px tall" />
+      </div>
+      <div>
+        <div style={{ fontFamily: "var(--frost-font-mono)", fontSize: 11, opacity: 0.55, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>
+          Small — 4px track
+        </div>
+        <MonoProgressBar label="Small" value={60} size="small" helperText="4px tall" />
+      </div>
+    </div>
+  ),
+};
+
 export const StatusStates: Story = {
   render: () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 480 }}>

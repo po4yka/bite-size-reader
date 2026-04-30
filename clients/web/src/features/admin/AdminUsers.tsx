@@ -69,11 +69,11 @@ export default function AdminUsers() {
                           return (
                             <TableCell key={cell.id}>
                               {cell.value ? (
-                                <Tag type="blue" size="sm">
+                                <Tag size="sm">
                                   Owner
                                 </Tag>
                               ) : (
-                                <Tag type="warm-gray" size="sm">
+                                <Tag size="sm">
                                   User
                                 </Tag>
                               )}

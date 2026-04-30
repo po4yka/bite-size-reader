@@ -56,7 +56,7 @@ const dismissStyle: CSSProperties = {
 };
 
 function glyphForSeverity(severity: StatusBadgeSeverity): string | null {
-  if (severity === "warn") return "! ";
+  if (severity === "warn") return "!";
   return null;
 }
 
@@ -103,7 +103,9 @@ export function StatusBadge({
       <div style={bodyStyle}>
         {title != null ? (
           <span>
-            {glyph}
+            {glyph != null ? (
+              <span aria-hidden="true" style={{ marginRight: "4px" }}>{glyph}</span>
+            ) : null}
             {title}
           </span>
         ) : null}

@@ -110,11 +110,11 @@ export default function ReadingGoalsSection() {
                   marginBottom: "0.75rem",
                 }}
               >
-                <Tag type="blue" size="md" style={{ minWidth: "5rem", justifyContent: "center" }}>
+                <Tag size="md" style={{ minWidth: "5rem", justifyContent: "center" }}>
                   {goal.goalType}
                 </Tag>
                 {goal.scopeType !== "global" && goal.scopeName && (
-                  <Tag type="teal" size="md">
+                  <Tag size="md">
                     {goal.scopeType === "tag" ? "Tag" : "Collection"}: {goal.scopeName}
                   </Tag>
                 )}

@@ -61,7 +61,7 @@ export default function CustomDigestViewPage() {
         <h3>Channels</h3>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
           {digest.channels.map((channel) => (
-            <Tag key={channel.id} type="blue">
+            <Tag key={channel.id}>
               {channel.title || `@${channel.username}`}
             </Tag>
           ))}
@@ -82,7 +82,7 @@ export default function CustomDigestViewPage() {
               padding: "1rem 0",
             }}
           >
-            <Tag type="warm-gray">{channelMap.get(post.channelId) ?? `Channel ${post.channelId}`}</Tag>
+            <Tag>{channelMap.get(post.channelId) ?? `Channel ${post.channelId}`}</Tag>
             <p style={{ marginTop: "0.5rem", whiteSpace: "pre-wrap" }}>{post.text}</p>
             <span style={{ fontSize: "0.75rem", color: "color-mix(in oklch, var(--frost-ink) 60%, transparent)" }}>
               {new Date(post.createdAt).toLocaleString()}

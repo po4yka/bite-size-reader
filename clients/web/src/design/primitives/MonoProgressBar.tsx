@@ -9,6 +9,8 @@ export interface MonoProgressBarProps {
   value?: number;
   max?: number;
   status?: MonoProgressBarStatus;
+  /** "medium" (default) = 8px tall; "small" = 4px tall. Matches legacy ProgressBar API. */
+  size?: "small" | "medium";
   className?: string;
   style?: CSSProperties;
 }
@@ -69,6 +71,7 @@ export function MonoProgressBar({
   value,
   max = 100,
   status = "active",
+  size = "medium",
   className,
   style,
 }: MonoProgressBarProps) {
@@ -79,6 +82,7 @@ export function MonoProgressBar({
 
   const isError = status === "error";
   const isFinished = status === "finished";
+  const trackHeight = size === "small" ? "4px" : "8px";
 
   const fillStyle: CSSProperties = {
     height: "100%",
@@ -112,7 +116,7 @@ export function MonoProgressBar({
           aria-valuemin={0}
           aria-valuemax={max}
           aria-valuenow={isIndeterminate ? undefined : value}
-          style={trackStyle}
+          style={{ ...trackStyle, height: trackHeight }}
         >
           <div
             className="frost-mono-progress-bar__fill"

@@ -1,4 +1,4 @@
-import { InlineLoading } from "../../design";
+import { SparkLoading } from "../../design";
 import { useBackupPolling } from "../../hooks/useBackups";
 import type { BackupStatus } from "../../api/backups";
 
@@ -18,12 +18,12 @@ export default function BackupProgress({ backupId, onComplete }: BackupProgressP
   }
 
   if (status === "failed") {
-    return <InlineLoading status="error" description={`Backup failed: ${data?.error ?? "unknown error"}`} />;
+    return <SparkLoading status="error" description={`Backup failed: ${data?.error ?? "unknown error"}`} />;
   }
 
   if (status === "completed") {
-    return <InlineLoading status="finished" description="Backup completed" />;
+    return <SparkLoading status="finished" description="Backup completed" />;
   }
 
-  return <InlineLoading description="Creating backup..." />;
+  return <SparkLoading description="Creating backup..." />;
 }
