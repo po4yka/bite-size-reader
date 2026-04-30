@@ -46,7 +46,8 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 - `app/config/scraper.py` -- Scraper chain configuration
 - `bot.py` -- Entrypoint
 - `docs/SPEC.md` -- Full technical specification (canonical reference)
-- `docs/reference/frontend-web.md` -- Carbon web frontend contracts
+- `docs/reference/frontend-web.md` -- Web frontend contracts
+- `DESIGN.md` -- Frost design system spec (DESIGN.md format). Canonical for web UI tokens, typography, components, and anti-patterns. The `--rtk-*` tokens in `clients/web/src/design/tokens.css` are legacy Carbon-derived seed values pending migration to Frost.
 
 ## Development Commands
 
@@ -83,6 +84,7 @@ python -m app.cli.summary --url <URL>           # CLI test runner
 11. Front-load the full task spec on the first turn; iterative refinement loses context against multi-step plans
 12. Make independent tool calls in parallel; sequence only when one result determines the next call's parameters
 13. Read code before asserting its behavior; cite `file:line` for non-obvious claims
+14. Web UI design: read `DESIGN.md` (Frost) before adding tokens, components, colors, or motion. Don't bind new code to legacy Carbon-derived `--rtk-*` colors (`#0F62FE`, `#24A148`, etc.) — they're migration debt
 
 ## Database
 

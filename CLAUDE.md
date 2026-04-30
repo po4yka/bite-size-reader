@@ -367,6 +367,7 @@ When making changes, these are the most critical files to understand:
 - **`app/mcp/server.py`** -- MCP server for AI agents
 - **`bot.py`** -- Entrypoint (wires everything together)
 - **`docs/SPEC.md`** -- Full technical specification (canonical reference)
+- **`DESIGN.md`** -- Frost design system specification (DESIGN.md format, https://github.com/google-labs-code/design.md). Canonical reference for tokens, typography, layout, and component rules for the web client. The `--rtk-*` tokens in `clients/web/src/design/tokens.css` are legacy Carbon-derived seed values pending migration to Frost.
 
 ## Impeccable Design Skills
 
@@ -459,5 +460,6 @@ For questions about the codebase, always refer to:
 1. This file (CLAUDE.md) for AI assistant guidance
 2. docs/SPEC.md for technical specification
 3. docs/reference/frontend-web.md for web frontend contracts and workflows
-4. README.md for user-facing documentation
-5. Code comments and docstrings for implementation details
+4. DESIGN.md for the Frost design system (tokens, typography, components, anti-patterns). Read before any web UI change.
+5. README.md for user-facing documentation
+6. Code comments and docstrings for implementation details
