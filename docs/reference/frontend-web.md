@@ -285,6 +285,9 @@ CI jobs in `.github/workflows/ci.yml`:
 - `web-build`
 - `web-test`
 - `web-static-check`
+- `web-storybook-build`
+- `web-chromatic` — publishes Storybook to Chromatic for component visual diff (requires `CHROMATIC_PROJECT_TOKEN` secret; soft-fails until configured)
+- `web-playwright-visual` — full-page route screenshots across 4 device profiles; see `docs/reference/visual-regression.md`
 
 ---
 

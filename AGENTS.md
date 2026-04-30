@@ -30,7 +30,7 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 | Core | `app/core/` | URL normalization, JSON parsing, summary contract, logging |
 | Database | `app/db/` | Peewee ORM models (48 classes), `DatabaseSessionManager` (`session.py`) is sole DB entry point |
 | API | `app/api/` | FastAPI REST API with JWT auth |
-| Web | `clients/web/` | Frost web interface (React + TypeScript + Vite) |
+| Web | `clients/web/` | Frost web interface (React + TypeScript + Vite); visual regression via Chromatic (component) + Playwright (route screenshots) |
 | Search | `app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/` | Search workflows, vector search, and embedding services |
 | MCP | `app/mcp/` | Model Context Protocol server |
 
