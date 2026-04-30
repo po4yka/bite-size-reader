@@ -86,6 +86,22 @@ twitter:
   prefer_firecrawl: true
   playwright_enabled: false
 
+signal_ingestion:
+  enabled: true
+  max_items_per_source: 30
+  hn_enabled: true
+  hn_feeds:
+    - top
+    - best
+  reddit_enabled: true
+  reddit_subreddits:
+    - selfhosted
+    - python
+  reddit_listing: hot
+  reddit_requests_per_minute: 60
+  twitter_enabled: false
+  twitter_ack_cost: false
+
 mcp:
   enabled: false
   transport: stdio
@@ -104,5 +120,13 @@ mcp:
 - Firecrawl Cloud is optional. The scraper chain can run with Scrapling,
   Defuddle, Playwright, Crawlee, and direct HTML providers; Phase 2 adds an
   in-compose self-hosted Firecrawl profile.
+- Signal ingestion optional sources are disabled unless `signal_ingestion.enabled`
+  and the per-source flag are both true. Hacker News uses the official Firebase
+  API and has no credentials. Reddit uses public subreddit JSON with a default
+  60 requests/minute guard, below the free-tier 100 requests/minute ceiling.
+  Substack is handled as RSS via `/feed`; use existing RSS subscription flows.
 - Twitter/X extraction is optional and should stay disabled unless explicitly
-  needed. X/Twitter ingestion remains out of signal-scoring v0.
+  needed. X/Twitter proactive ingestion is also disabled by default and requires
+  explicit `twitter_ack_cost: true` / `TWITTER_INGESTION_ACK_COST=true`; the
+  Basic tier is approximately $200/month and the project uses a bring-your-own
+  token model for any future polling adapter.

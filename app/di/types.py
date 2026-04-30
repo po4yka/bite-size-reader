@@ -151,6 +151,7 @@ class SchedulerDependencies:
     rss_bot_client_factory: Callable[[], Any] | None = None
     rss_delivery_factory: Callable[[], Any] | None = None
     signal_worker_factory: Callable[[], Any] | None = None
+    source_ingestion_runner_factory: Callable[[], Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)

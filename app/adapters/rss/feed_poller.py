@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from app.adapters.rss.feed_fetcher import fetch_feed
+from app.adapters.rss.signal_ingester import RssSignalIngester
+from app.adapters.rss.substack import is_substack_url
 from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
     SqliteRSSFeedRepositoryAdapter,
@@ -34,9 +36,10 @@ async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
     for feed in feeds:
         signal_source: dict | None = None
         try:
+            feed_url = str(feed.get("url") or "")
             signal_source = await signal_repo.async_upsert_source(
-                kind="rss",
-                external_id=str(feed.get("url") or ""),
+                kind="substack" if is_substack_url(feed_url) else "rss",
+                external_id=feed_url,
                 url=feed.get("url"),
                 title=feed.get("title"),
                 description=feed.get("description"),
@@ -47,10 +50,16 @@ async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
                     "legacy_rss_feed_id": feed.get("id"),
                 },
             )
-            result = fetch_feed(
-                str(feed.get("url") or ""),
-                etag=feed.get("etag"),
-                last_modified=feed.get("last_modified"),
+            ingester = RssSignalIngester(feed, fetcher=fetch_feed)
+            result = await ingester.fetch()
+            signal_source = await signal_repo.async_upsert_source(
+                kind=result.source.kind,
+                external_id=result.source.external_id,
+                url=result.source.url,
+                title=result.source.title,
+                description=result.source.description,
+                site_url=result.source.site_url,
+                metadata=result.source.metadata,
             )
 
             if result.not_modified:
@@ -60,42 +69,30 @@ async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
 
             # Store new items
             new_count = 0
-            signal_source = await signal_repo.async_upsert_source(
-                kind="rss",
-                external_id=str(feed.get("url") or ""),
-                url=feed.get("url"),
-                title=feed.get("title"),
-                description=feed.get("description"),
-                site_url=feed.get("site_url"),
-                metadata={
-                    "etag": feed.get("etag"),
-                    "last_modified": feed.get("last_modified"),
-                    "legacy_rss_feed_id": feed.get("id"),
-                },
-            )
-            for entry in result.entries:
+            for item_result in result.items:
                 try:
                     item = await repo.async_create_feed_item(
                         feed_id=int(feed["id"]),
-                        guid=entry.guid,
-                        title=entry.title,
-                        url=entry.url,
-                        content=entry.content,
-                        author=entry.author,
-                        published_at=entry.published_at,
+                        guid=item_result.external_id,
+                        title=item_result.title,
+                        url=item_result.canonical_url,
+                        content=item_result.content_text,
+                        author=item_result.author,
+                        published_at=item_result.published_at,
                     )
                     if item is not None:
                         new_count += 1
                         new_item_ids.append(int(item["id"]))
                         await signal_repo.async_upsert_feed_item(
                             source_id=int(signal_source["id"]),
-                            external_id=entry.guid,
-                            canonical_url=entry.url,
-                            title=entry.title,
-                            content_text=entry.content,
-                            author=entry.author,
-                            published_at=entry.published_at,
-                            metadata={"legacy_rss_item_id": item["id"]},
+                            external_id=item_result.external_id,
+                            canonical_url=item_result.canonical_url,
+                            title=item_result.title,
+                            content_text=item_result.content_text,
+                            author=item_result.author,
+                            published_at=item_result.published_at,
+                            engagement=item_result.engagement,
+                            metadata={**item_result.metadata, "legacy_rss_item_id": item["id"]},
                         )
                         targets = await repo.async_list_delivery_targets([int(item["id"])])
                         for target in targets:
@@ -107,18 +104,18 @@ async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
                 except Exception:
                     logger.warning(
                         "rss_item_create_failed",
-                        extra={"feed_id": feed["id"], "guid": entry.guid},
+                        extra={"feed_id": feed["id"], "guid": item_result.external_id},
                         exc_info=True,
                     )
 
             # Update feed metadata
             await repo.async_update_feed_fetch_success(
                 feed_id=int(feed["id"]),
-                title=result.title or feed.get("title"),
-                description=result.description or feed.get("description"),
-                site_url=result.site_url or feed.get("site_url"),
-                etag=result.etag,
-                last_modified=result.last_modified,
+                title=result.source.title,
+                description=result.source.description,
+                site_url=result.source.site_url,
+                etag=result.source.metadata.get("etag"),
+                last_modified=result.source.metadata.get("last_modified"),
             )
             await signal_repo.async_record_source_fetch_success(int(signal_source["id"]))
 

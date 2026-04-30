@@ -432,74 +432,74 @@ Acceptance evidence:
 
 ### 5.1 Ingester contract
 
-- [ ] Add ingester protocol under `app/application/ports/`.
-- [ ] Define lifecycle: configure, fetch, normalize, dedupe, persist, backoff.
-- [ ] Define rate-limit behavior.
-- [ ] Define auth error behavior.
-- [ ] Define permanent versus transient error semantics.
-- [ ] Define normalized `FeedItem` metadata contract.
-- [ ] Convert RSS/Substack to the contract first.
-- [ ] Add contract tests shared by all ingestors.
+- [x] Add ingester protocol under `app/application/ports/`.
+- [x] Define lifecycle: configure, fetch, normalize, dedupe, persist, backoff.
+- [x] Define rate-limit behavior.
+- [x] Define auth error behavior.
+- [x] Define permanent versus transient error semantics.
+- [x] Define normalized `FeedItem` metadata contract.
+- [x] Convert RSS/Substack to the contract first.
+- [x] Add contract tests shared by all ingestors.
 
 Acceptance evidence:
 
-- [ ] RSS/Substack use the same interface as HN/Reddit/X.
-- [ ] Adding a new ingester does not require touching signal scoring internals.
+- [x] RSS/Substack use the same interface as HN/Reddit/X.
+- [x] Adding a new ingester does not require touching signal scoring internals.
 
 ### 5.2 HN ingester
 
-- [ ] Choose HN API endpoint(s).
-- [ ] Implement source config for front page, best, newest, or keyword paths.
-- [ ] Normalize URL, title, author, score, comments, and timestamp.
-- [ ] Add rate-limit/backoff even if HN is free.
-- [ ] Add tests with recorded/mocked HN payloads.
-- [ ] Document zero-cost setup.
+- [x] Choose HN API endpoint(s).
+- [x] Implement source config for front page, best, newest, or keyword paths.
+- [x] Normalize URL, title, author, score, comments, and timestamp.
+- [x] Add rate-limit/backoff even if HN is free.
+- [x] Add tests with recorded/mocked HN payloads.
+- [x] Document zero-cost setup.
 
 Acceptance evidence:
 
-- [ ] HN items become generic `FeedItem`s with engagement metadata.
+- [x] HN items become generic `FeedItem`s with engagement metadata.
 
 ### 5.3 Reddit ingester
 
-- [ ] Decide Reddit auth mode and required credentials.
-- [ ] Keep credentials optional/YAML-only unless maintainer decides otherwise.
-- [ ] Implement subreddit polling.
-- [ ] Enforce 100 req/min free-tier guard and lower default.
-- [ ] Normalize score, comments, author, permalink, outbound URL, and timestamp.
-- [ ] Add backoff for 429 and auth failures.
-- [ ] Add tests with mocked Reddit payloads.
-- [ ] Document free-tier limits.
+- [x] Decide Reddit auth mode and required credentials.
+- [x] Keep credentials optional/YAML-only unless maintainer decides otherwise.
+- [x] Implement subreddit polling.
+- [x] Enforce 100 req/min free-tier guard and lower default.
+- [x] Normalize score, comments, author, permalink, outbound URL, and timestamp.
+- [x] Add backoff for 429 and auth failures.
+- [x] Add tests with mocked Reddit payloads.
+- [x] Document free-tier limits.
 
 Acceptance evidence:
 
-- [ ] Reddit adapter respects per-source and global rate budgets.
+- [x] Reddit adapter respects per-source and global rate budgets.
 
 ### 5.4 Substack ingester
 
-- [ ] Keep Substack as RSS specialization.
-- [ ] Reuse `app/adapters/rss/substack.py` URL resolver.
-- [ ] Add tests for publication name, subdomain, post URL, and custom domain.
-- [ ] Normalize through generic RSS ingester.
-- [ ] Document setup as zero-cost.
+- [x] Keep Substack as RSS specialization.
+- [x] Reuse `app/adapters/rss/substack.py` URL resolver.
+- [x] Add tests for publication name, subdomain, post URL, and custom domain.
+- [x] Normalize through generic RSS ingester.
+- [x] Document setup as zero-cost.
 
 Acceptance evidence:
 
-- [ ] Substack source produces generic `FeedItem`s through RSS path.
+- [x] Substack source produces generic `FeedItem`s through RSS path.
 
 ### 5.5 X/Twitter ingester
 
-- [ ] Keep X/Twitter disabled by default.
-- [ ] Require explicit cost acknowledgment such as `TWITTER_INGESTION_ACK_COST=true`.
-- [ ] Reuse existing `app/adapters/twitter/` extraction where possible.
-- [ ] Document Basic tier cost warning and bring-your-own-token model.
-- [ ] Isolate X worker if needed to avoid cost/account-risk spillover.
-- [ ] Add startup warning if enabled without credentials/budget acknowledgment.
-- [ ] Add tests for disabled-by-default behavior.
+- [x] Keep X/Twitter disabled by default.
+- [x] Require explicit cost acknowledgment such as `TWITTER_INGESTION_ACK_COST=true`.
+- [x] Reuse existing `app/adapters/twitter/` extraction where possible.
+- [x] Document Basic tier cost warning and bring-your-own-token model.
+- [x] Isolate X worker if needed to avoid cost/account-risk spillover.
+- [x] Add startup warning if enabled without credentials/budget acknowledgment.
+- [x] Add tests for disabled-by-default behavior.
 
 Acceptance evidence:
 
-- [ ] Default install never starts X ingestion.
-- [ ] Enabling X requires explicit cost acknowledgment.
+- [x] Default install never starts X ingestion.
+- [x] Enabling X requires explicit cost acknowledgment.
 
 ## Phase 6 — Pyrogram/PyroTGFork to Telethon migration
 

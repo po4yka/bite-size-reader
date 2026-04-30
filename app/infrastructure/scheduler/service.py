@@ -68,18 +68,23 @@ class SchedulerService:
         else:
             logger.info("scheduler_digest_job_skipped", extra={"enabled": False})
 
-        if self.cfg.rss.enabled:
+        signal_sources_enabled = bool(getattr(self.cfg.signal_ingestion, "any_enabled", False))
+        if self.cfg.rss.enabled or signal_sources_enabled:
             self._scheduler.add_job(
                 self._run_rss_poll,
                 trigger=IntervalTrigger(minutes=self.cfg.rss.poll_interval_minutes),
                 id="rss_feed_poll",
-                name="RSS Feed Poll",
+                name="Source Feed Poll",
                 replace_existing=True,
                 max_instances=1,
             )
             logger.info(
                 "scheduler_rss_job_added",
-                extra={"interval_min": self.cfg.rss.poll_interval_minutes},
+                extra={
+                    "interval_min": self.cfg.rss.poll_interval_minutes,
+                    "rss_enabled": self.cfg.rss.enabled,
+                    "signal_sources_enabled": signal_sources_enabled,
+                },
             )
         else:
             logger.info("scheduler_rss_job_skipped", extra={"enabled": False})
@@ -169,7 +174,8 @@ class SchedulerService:
         logger.info("rss_poll_starting", extra={"cid": correlation_id})
 
         try:
-            stats = await poll_all_feeds(self.db)
+            stats = await poll_all_feeds(self.db) if self.cfg.rss.enabled else {"new_item_ids": []}
+            await self._run_optional_source_ingestors(correlation_id)
             new_item_ids: list[int] = stats.get("new_item_ids", [])
             logger.info(
                 "rss_poll_fetched",
@@ -227,6 +233,21 @@ class SchedulerService:
         except Exception as exc:
             logger.exception(
                 "signal_ingestion_failed",
+                extra={"cid": correlation_id, "error": str(exc)},
+            )
+
+    async def _run_optional_source_ingestors(self, correlation_id: str) -> None:
+        runner_factory = getattr(self._deps, "source_ingestion_runner_factory", None)
+        if not runner_factory:
+            logger.info("source_ingestion_skipped", extra={"cid": correlation_id})
+            return
+        try:
+            runner = runner_factory()
+            stats = await runner.run_once()
+            logger.info("source_ingestion_complete", extra={"cid": correlation_id, **stats})
+        except Exception as exc:
+            logger.exception(
+                "source_ingestion_failed",
                 extra={"cid": correlation_id, "error": str(exc)},
             )
 

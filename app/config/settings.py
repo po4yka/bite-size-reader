@@ -37,6 +37,7 @@ from .redis import RedisConfig
 from .rss import RSSConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
+from .signal_ingestion import SignalIngestionConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig
 from .tts import ElevenLabsConfig
 from .twitter import TwitterConfig
@@ -170,6 +171,7 @@ class AppConfig:
     push: PushNotificationConfig = field(default_factory=PushNotificationConfig)
     model_routing: ModelRoutingConfig = field(default_factory=ModelRoutingConfig)
     rss: RSSConfig = field(default_factory=RSSConfig)
+    signal_ingestion: SignalIngestionConfig = field(default_factory=SignalIngestionConfig)
 
 
 class Settings(BaseSettings):
@@ -219,6 +221,7 @@ class Settings(BaseSettings):
     push: PushNotificationConfig = Field(default_factory=PushNotificationConfig)
     model_routing: ModelRoutingConfig = Field(default_factory=ModelRoutingConfig)
     rss: RSSConfig = Field(default_factory=RSSConfig)
+    signal_ingestion: SignalIngestionConfig = Field(default_factory=SignalIngestionConfig)
 
     @model_validator(mode="before")
     @classmethod

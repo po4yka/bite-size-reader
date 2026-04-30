@@ -15,6 +15,7 @@ from .media import AttachmentConfig, YouTubeConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
 from .rss import RSSConfig
+from .signal_ingestion import SignalIngestionConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
 from .settings import AppConfig, Config, ConfigHelper, Settings, clear_config_cache, load_config
@@ -52,6 +53,7 @@ __all__ = [
     "RuntimeConfig",
     "ScraperConfig",
     "Settings",
+    "SignalIngestionConfig",
     "SyncConfig",
     "TelegramConfig",
     "TelegramLimitsConfig",

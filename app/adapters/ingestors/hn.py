@@ -1,0 +1,115 @@
+"""Hacker News source ingester."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+import httpx
+
+from app.application.ports.source_ingestors import (
+    IngestedFeedItem,
+    IngestedSource,
+    RateLimitedSourceError,
+    SourceFetchResult,
+    TransientSourceError,
+)
+from app.core.url_utils import normalize_url
+
+_FEEDS = {
+    "top": "topstories",
+    "best": "beststories",
+    "new": "newstories",
+    "newest": "newstories",
+}
+
+
+class HackerNewsIngester:
+    """Poll one Hacker News listing through the official Firebase API."""
+
+    def __init__(
+        self,
+        *,
+        feed: str = "top",
+        limit: int = 30,
+        enabled: bool = True,
+        client: Any | None = None,
+        base_url: str = "https://hacker-news.firebaseio.com/v0",
+    ) -> None:
+        key = feed.strip().lower()
+        if key not in _FEEDS:
+            msg = f"Unsupported Hacker News feed: {feed}"
+            raise ValueError(msg)
+        self.feed = key
+        self.limit = max(1, min(int(limit), 100))
+        self.enabled = enabled
+        self.client = client or httpx.Client(timeout=20.0)
+        self.base_url = base_url.rstrip("/")
+        self.name = f"hacker_news:{self.feed}"
+
+    def is_enabled(self) -> bool:
+        return self.enabled
+
+    async def fetch(self) -> SourceFetchResult:
+        ids = self._get_json(f"{self.base_url}/{_FEEDS[self.feed]}.json")
+        if not isinstance(ids, list):
+            raise TransientSourceError("Hacker News listing response was not a list")
+
+        items: list[IngestedFeedItem] = []
+        for item_id in ids[: self.limit]:
+            raw = self._get_json(f"{self.base_url}/item/{int(item_id)}.json")
+            if not isinstance(raw, dict) or raw.get("type") != "story" or raw.get("deleted"):
+                continue
+            items.append(self._normalize_item(raw))
+
+        return SourceFetchResult(
+            source=IngestedSource(
+                kind="hacker_news",
+                external_id=f"hn:{self.feed}",
+                url=f"https://news.ycombinator.com/{self.feed if self.feed != 'newest' else 'new'}",
+                title=f"Hacker News {self.feed}",
+                metadata={"api": "firebase", "feed": self.feed},
+            ),
+            items=items,
+        )
+
+    def _get_json(self, url: str) -> Any:
+        response = self.client.get(url)
+        if response.status_code == 429:
+            raise RateLimitedSourceError("Hacker News API returned 429")
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise TransientSourceError(f"Hacker News API error: {response.status_code}") from exc
+        return response.json()
+
+    @staticmethod
+    def _normalize_item(raw: dict[str, Any]) -> IngestedFeedItem:
+        item_id = int(raw["id"])
+        url = raw.get("url") or f"https://news.ycombinator.com/item?id={item_id}"
+        try:
+            canonical_url = normalize_url(str(url))
+        except ValueError:
+            canonical_url = str(url)
+        score = raw.get("score")
+        comments = raw.get("descendants")
+        timestamp = raw.get("time")
+        published_at = (
+            datetime.fromtimestamp(int(timestamp), tz=UTC) if timestamp is not None else None
+        )
+        return IngestedFeedItem(
+            external_id=f"hn:{item_id}",
+            canonical_url=canonical_url,
+            title=raw.get("title"),
+            author=raw.get("by"),
+            published_at=published_at,
+            engagement={
+                "score": float(score) if score is not None else None,
+                "comments": int(comments) if comments is not None else None,
+            },
+            metadata={
+                "provider": "hacker_news",
+                "hn_id": item_id,
+                "hn_comments_url": f"https://news.ycombinator.com/item?id={item_id}",
+            },
+        )

@@ -30,10 +30,14 @@ def build_scheduler_dependencies(
     rss_bot_factory = None
     rss_delivery_factory = None
     signal_worker_factory = None
+    source_ingestion_runner_factory = None
     if cfg.rss.enabled:
         rss_bot_factory = lambda: _create_digest_bot_client(cfg)  # noqa: E731
         rss_delivery_factory = lambda: _create_rss_delivery_service(cfg, db)  # noqa: E731
+    if cfg.rss.enabled or cfg.signal_ingestion.any_enabled:
         signal_worker_factory = lambda: _create_signal_ingestion_worker(cfg, db)  # noqa: E731
+    if cfg.signal_ingestion.any_enabled:
+        source_ingestion_runner_factory = lambda: _create_source_ingestion_runner(cfg, db)  # noqa: E731
 
     return SchedulerDependencies(
         digest_userbot_factory=lambda: _create_digest_userbot(cfg),
@@ -48,6 +52,7 @@ def build_scheduler_dependencies(
         rss_bot_client_factory=rss_bot_factory,
         rss_delivery_factory=rss_delivery_factory,
         signal_worker_factory=signal_worker_factory,
+        source_ingestion_runner_factory=source_ingestion_runner_factory,
     )
 
 
@@ -193,4 +198,53 @@ def _create_signal_ingestion_worker(cfg: AppConfig, db: DatabaseSessionManager) 
                 embedding_service=embedding_service,
             )
         ),
+    )
+
+
+def _create_source_ingestion_runner(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
+    from app.adapters.ingestors.hn import HackerNewsIngester
+    from app.adapters.ingestors.reddit import RedditIngester, RequestRateBudget
+    from app.adapters.ingestors.runner import SourceIngestionRunner
+    from app.adapters.ingestors.twitter import TwitterIngester, TwitterIngestionConfig
+    from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
+        SqliteSignalSourceRepositoryAdapter,
+    )
+
+    ingestion_cfg = cfg.signal_ingestion
+    ingesters: list[Any] = []
+    reddit_rate_budget = RequestRateBudget(
+        max_requests_per_minute=ingestion_cfg.reddit_requests_per_minute
+    )
+    if ingestion_cfg.enabled and ingestion_cfg.hn_enabled:
+        ingesters.extend(
+            HackerNewsIngester(
+                feed=feed,
+                limit=ingestion_cfg.max_items_per_source,
+                enabled=True,
+            )
+            for feed in ingestion_cfg.hn_feed_names()
+        )
+    if ingestion_cfg.enabled and ingestion_cfg.reddit_enabled:
+        ingesters.extend(
+            RedditIngester(
+                subreddit=subreddit,
+                listing=ingestion_cfg.reddit_listing,
+                limit=ingestion_cfg.max_items_per_source,
+                enabled=True,
+                rate_budget=reddit_rate_budget,
+            )
+            for subreddit in ingestion_cfg.reddit_names()
+        )
+    ingesters.append(
+        TwitterIngester(
+            TwitterIngestionConfig(
+                enabled=ingestion_cfg.enabled and ingestion_cfg.twitter_enabled,
+                ack_cost=ingestion_cfg.twitter_ack_cost,
+            )
+        )
+    )
+    return SourceIngestionRunner(
+        repository=SqliteSignalSourceRepositoryAdapter(db),
+        ingesters=ingesters,
+        subscriber_user_ids=cfg.telegram.allowed_user_ids,
     )
