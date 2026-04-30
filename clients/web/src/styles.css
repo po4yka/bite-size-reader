@@ -1,5 +1,6 @@
 @import "./design/tokens.css";
 @import "./design/base.css";
+@import "./design/queue.css";
 
 :root {
   color-scheme: light;

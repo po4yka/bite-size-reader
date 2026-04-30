@@ -62,6 +62,31 @@
   outline-offset: 2px;
 }
 
+:focus-visible {
+  outline: 2px solid var(--ink, var(--frost-ink));
+  outline-offset: 1px;
+}
+
+/* ─── Typography registers (prototype aliases) ─────────────────────────────── */
+/* Matches /tmp/ratatoskr-proto/styles.css .r-body / .r-label / .r-emph */
+
+.r-body  { font-variation-settings: "wght" 500; letter-spacing: 0.4px; }
+.r-label { font-variation-settings: "wght" 500; letter-spacing: 1px; text-transform: uppercase; }
+.r-emph  { font-variation-settings: "wght" 720; font-weight: 720; }
+
+/* ─── Prototype keyframe aliases ───────────────────────────────────────────── */
+/* Named blinker / pulse to match prototype references in queue CSS. */
+
+@keyframes blinker {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 1; }
+}
+
 /* ─── Label utility ────────────────────────────────────────────────────────── */
 
 .rtk-label {

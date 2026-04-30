@@ -1,0 +1,357 @@
+/*
+ * Queue view styles — ported from /tmp/ratatoskr-proto/styles.css lines 168–388.
+ * Provides .queue-toolbar, .queue-cols, .queue, .sig-* classes, cursor states,
+ * ingest line, and the blinker/pulse keyframe consumers.
+ *
+ * Depends on: --char, --line, --ink, --page, --spark tokens (set by boot script).
+ */
+
+/* ─── Queue toolbar ─────────────────────────────────────────────────────────── */
+
+.queue-toolbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  padding-bottom: var(--line);
+  border-bottom: 1px solid var(--ink, var(--frost-ink));
+  gap: calc(var(--char, 8px) * 2);
+}
+
+.queue-toolbar .meta {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: flex;
+  gap: calc(var(--char, 8px) * 2);
+  align-items: baseline;
+}
+.queue-toolbar .meta .dot { opacity: 0.4; user-select: none; }
+.queue-toolbar .meta .pending {
+  font-variation-settings: "wght" 720;
+  font-weight: 720;
+}
+
+.queue-toolbar .filters {
+  display: flex;
+  gap: calc(var(--char, 8px) * 2);
+  align-items: baseline;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.queue-toolbar .filters button {
+  opacity: 0.5;
+}
+.queue-toolbar .filters button.active {
+  opacity: 1;
+  font-variation-settings: "wght" 720;
+  font-weight: 720;
+}
+
+/* ─── Column header ─────────────────────────────────────────────────────────── */
+
+.queue-cols {
+  display: grid;
+  grid-template-columns:
+    calc(var(--char, 8px) * 18)
+    calc(var(--char, 8px) * 4)
+    calc(var(--char, 8px) * 24)
+    calc(var(--char, 8px) * 4)
+    1fr
+    calc(var(--char, 8px) * 24)
+    calc(var(--char, 8px) * 10);
+  align-items: baseline;
+  padding: var(--line, 16px) 0 calc(var(--line, 16px) * 0.5);
+  border-bottom: 1px dashed var(--ink, var(--frost-ink));
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.55;
+  font-size: 11px;
+}
+
+.queue-cols > *:nth-child(7) { text-align: right; }
+
+/* ─── Row list ──────────────────────────────────────────────────────────────── */
+
+.queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.queue li.row {
+  display: grid;
+  grid-template-columns:
+    calc(var(--char, 8px) * 18)
+    calc(var(--char, 8px) * 4)
+    calc(var(--char, 8px) * 24)
+    calc(var(--char, 8px) * 4)
+    1fr
+    calc(var(--char, 8px) * 24)
+    calc(var(--char, 8px) * 10);
+  align-items: baseline;
+  height: var(--line, 16px);
+  position: relative;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+
+.queue li.row .timestamp {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.6;
+}
+
+.queue li.row .source {
+  letter-spacing: 1px;
+  text-transform: lowercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue li.row .title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: calc(var(--char, 8px) * 2);
+}
+
+.queue li.row .topics {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue li.row .signal {
+  text-align: right;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.queue li.row .dot {
+  opacity: 0.4;
+  user-select: none;
+}
+
+/* ─── Signal levels ─────────────────────────────────────────────────────────── */
+
+.queue li.row.sig-low .title,
+.queue li.row.sig-low .topics,
+.queue li.row.sig-low .signal {
+  opacity: 0.5;
+  font-variation-settings: "wght" 400;
+  font-weight: 400;
+}
+
+.queue li.row.sig-mid .title {
+  font-variation-settings: "wght" 500;
+  font-weight: 500;
+}
+
+.queue li.row.sig-high .title {
+  font-variation-settings: "wght" 720;
+  font-weight: 720;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.queue li.row.sig-critical .title {
+  font-variation-settings: "wght" 720;
+  font-weight: 720;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* 2px leading spark hairline for critical rows */
+.queue li.row.sig-critical::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--char, 8px) * -2);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--spark, var(--frost-spark));
+}
+
+/* ─── Hover / cursor states ─────────────────────────────────────────────────── */
+
+.queue li.row:hover {
+  background: var(--ink, var(--frost-ink));
+  color: var(--page, var(--frost-page));
+}
+.queue li.row:hover .dot,
+.queue li.row:hover .timestamp,
+.queue li.row:hover .topics {
+  opacity: 1;
+}
+
+.queue li.row.cursor {
+  background: var(--ink, var(--frost-ink));
+  color: var(--page, var(--frost-page));
+}
+.queue li.row.cursor .dot,
+.queue li.row.cursor .timestamp,
+.queue li.row.cursor .topics {
+  opacity: 1;
+}
+
+/* Blinking block cursor indicator */
+.queue li.row.cursor::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--char, 8px) * -3);
+  top: 0;
+  width: var(--char, 8px);
+  height: var(--line, 16px);
+  background: currentColor;
+  animation: blinker 0.6s steps(2, start) infinite;
+}
+
+/* ─── Ingest status line ────────────────────────────────────────────────────── */
+
+.ingest {
+  display: flex;
+  gap: calc(var(--char, 8px) * 2);
+  align-items: baseline;
+  padding: var(--line, 16px) 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.7;
+}
+.ingest .blink {
+  display: inline-block;
+  width: var(--char, 8px);
+  height: calc(var(--line, 16px) * 0.8);
+  background: var(--ink, var(--frost-ink));
+  vertical-align: text-bottom;
+  animation: blinker 0.6s steps(2, start) infinite;
+}
+.ingest .pulse {
+  display: inline-block;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ─── Detail view ───────────────────────────────────────────────────────────── */
+
+.detail {
+  display: grid;
+  grid-template-columns:
+    calc(var(--char, 8px) * 22)
+    calc(var(--char, 8px) * 6)
+    minmax(0, 40em)
+    1fr;
+  gap: calc(var(--char, 8px) * 4);
+  padding: calc(var(--line, 16px) * 2) 0;
+}
+
+.detail .meta {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.detail .meta dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--line, 16px);
+}
+.detail .meta dt {
+  opacity: 0.5;
+  font-size: calc(var(--font-size, 13px) * 0.92);
+}
+.detail .meta dd {
+  margin: 0;
+  font-variation-settings: "wght" 720;
+  font-weight: 720;
+}
+
+.detail .anchors {
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  opacity: 0.5;
+  font-size: calc(var(--font-size, 13px) * 0.92);
+}
+.detail .anchors ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--line, 16px);
+}
+
+/* Article body — Source Serif 4 italic */
+.detail .body {
+  font-family: "Source Serif 4", "Source Serif Pro", Georgia, serif;
+  font-style: italic;
+  font-size: calc(var(--font-size, 13px) * 1.23);
+  line-height: 1.55;
+  letter-spacing: 0;
+  text-align: justify;
+  hyphens: auto;
+  font-variant-numeric: normal;
+}
+
+.detail .body h1 {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-style: normal;
+  font-size: var(--font-size, 13px);
+  font-variation-settings: "wght" 720;
+  font-weight: 720;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  line-height: 1.3;
+  margin: 0 0 var(--line, 16px);
+}
+.detail .body h2 {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-style: normal;
+  font-size: var(--font-size, 13px);
+  font-variation-settings: "wght" 500;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: calc(var(--line, 16px) * 1.5) 0 calc(var(--line, 16px) * 0.5);
+}
+.detail .body p {
+  margin: 0 0 var(--line, 16px);
+}
+.detail .body p:first-of-type::first-letter {
+  font-style: normal;
+  font-variation-settings: "wght" 720;
+  font-weight: 720;
+  text-transform: uppercase;
+}
+.detail .body blockquote {
+  margin: var(--line, 16px) 0;
+  padding-left: calc(var(--char, 8px) * 2);
+  border-left: 1px solid var(--ink, var(--frost-ink));
+  font-style: italic;
+  opacity: 0.85;
+}
+
+/* ─── Detail back / actions bar ─────────────────────────────────────────────── */
+
+.detail-back {
+  display: flex;
+  gap: calc(var(--char, 8px) * 2);
+  align-items: baseline;
+  padding: var(--line, 16px) 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.7;
+  border-bottom: 1px solid var(--ink, var(--frost-ink));
+}
+.detail-back .dot { opacity: 0.4; }
+
+.detail-actions {
+  display: flex;
+  gap: calc(var(--char, 8px) * 2);
+  align-items: baseline;
+  padding: var(--line, 16px) 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-top: 1px solid var(--ink, var(--frost-ink));
+}
+.detail-actions .dot { opacity: 0.4; }

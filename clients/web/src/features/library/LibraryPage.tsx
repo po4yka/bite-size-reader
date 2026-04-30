@@ -1,183 +1,173 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BracketButton, BrutalistCard } from "../../design";
-import { useSummariesList, useToggleFavorite } from "../../hooks/useSummaries";
+import { useSummariesList } from "../../hooks/useSummaries";
 import type { SummaryCompact } from "../../api/types";
-import { SummariesDataTable } from "../../components/SummariesDataTable";
-import AddToCollectionModal from "../../components/AddToCollectionModal";
 
 const FILTERS = [
-  { key: "all", label: "All" },
-  { key: "unread", label: "Unread" },
-  { key: "favorites", label: "Favorites" },
+  { key: "ALL", label: "ALL" },
+  { key: "HIGH", label: "HIGH SIGNAL" },
+  { key: "SAVED", label: "SAVED" },
 ] as const;
 
 type FilterKey = (typeof FILTERS)[number]["key"];
 
-const HEADERS: Array<{ key: string; header: string }> = [
-  { key: "title", header: "Title" },
-  { key: "domain", header: "Domain" },
-  { key: "readingTimeMin", header: "Read Time" },
-  { key: "topicTags", header: "Topics" },
-  { key: "createdAt", header: "Created" },
-  { key: "actions", header: "Actions" },
-];
+/** Map a 0–1 confidence score to a sig-* class, mirroring the prototype's sigClass(). */
+function sigClass(score: number): string {
+  if (score >= 0.9) return "sig-critical";
+  if (score >= 0.7) return "sig-high";
+  if (score >= 0.3) return "sig-mid";
+  return "sig-low";
+}
+
+/** Format ISO timestamp to short time string, e.g. "14:32" or "MON 09:15". */
+function fmtTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  if (sameDay) return `${hh}:${mm}`;
+  const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+  return `${days[d.getDay()]} ${hh}:${mm}`;
+}
 
 export default function LibraryPage() {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<FilterKey>("all");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [collectionModalSummaryId, setCollectionModalSummaryId] = useState<number | null>(null);
+  const [filter, setFilter] = useState<FilterKey>("ALL");
+  const [cursor, setCursor] = useState(0);
 
   const summariesQuery = useSummariesList({
-    limit: pageSize,
-    offset: (page - 1) * pageSize,
-    isRead: filter === "unread" ? false : undefined,
-    isFavorited: filter === "favorites" ? true : undefined,
+    limit: 100,
+    offset: 0,
+    isRead: filter === "HIGH" ? undefined : undefined,
+    isFavorited: filter === "SAVED" ? true : undefined,
     sort: "created_at_desc",
   });
 
-  const favoriteMutation = useToggleFavorite();
+  const summaries: SummaryCompact[] = summariesQuery.data?.summaries ?? [];
+
+  // Filter by HIGH SIGNAL: items with confidence >= 0.7
+  const visible =
+    filter === "HIGH"
+      ? summaries.filter((s) => (s as SummaryCompact & { confidence?: number }).confidence !== undefined
+          ? ((s as SummaryCompact & { confidence?: number }).confidence ?? 0) >= 0.7
+          : true)
+      : summaries;
+
+  const total = summariesQuery.data?.pagination.total ?? visible.length;
+  const pending = visible.filter((s) => !s.isRead).length;
+
+  // Clamp cursor on data changes
+  useEffect(() => {
+    if (visible.length > 0) {
+      setCursor((c) => Math.min(c, visible.length - 1));
+    }
+  }, [visible.length]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        setCursor((c) => Math.min(c + 1, visible.length - 1));
+      } else if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        setCursor((c) => Math.max(c - 1, 0));
+      } else if (e.key === "Enter" && visible[cursor]) {
+        navigate(`/article/${visible[cursor].id}`);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [cursor, visible, navigate]);
 
   return (
-    <main
-      style={{
-        maxWidth: "var(--frost-strip-7)",
-        padding: "0 var(--frost-pad-page)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--frost-gap-section)",
-      }}
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-page)" }}>
-        <h1
-          style={{
-            fontFamily: "var(--frost-font-mono)",
-            fontSize: "var(--frost-type-mono-emph-size)",
-            fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
-            letterSpacing: "var(--frost-type-mono-emph-tracking)",
-            textTransform: "uppercase",
-            color: "var(--frost-ink)",
-            margin: 0,
-          }}
-        >
-          Library
-        </h1>
-
-        <div
-          className="filter-row"
-          role="radiogroup"
-          aria-label="Filter articles"
-          style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}
-        >
-          {FILTERS.map((entry) => (
-            <BracketButton
-              key={entry.key}
-              kind="ghost"
-              size="sm"
-              role="radio"
-              aria-checked={entry.key === filter}
-              style={entry.key === filter ? { background: "var(--frost-ink)", color: "var(--frost-page)" } : undefined}
-              onClick={() => {
-                setFilter(entry.key);
-                setPage(1);
-              }}
-            >
-              {entry.label}
-            </BracketButton>
+    <main style={{ maxWidth: "var(--strip-7, var(--frost-strip-7))", padding: "0 calc(var(--char, 8px) * 4)" }}>
+      {/* Toolbar */}
+      <div className="queue-toolbar">
+        <div className="meta">
+          <span>INBOX</span>
+          <span className="dot">∙</span>
+          <span className="pending">{String(pending).padStart(3, " ").trim()} PENDING</span>
+          <span className="dot">∙</span>
+          <span>{total} TOTAL</span>
+        </div>
+        <div className="filters">
+          {FILTERS.map((f, i) => (
+            <span key={f.key} style={{ display: "contents" }}>
+              {i > 0 && <span className="dot">∙</span>}
+              <button
+                className={filter === f.key ? "active" : undefined}
+                onClick={() => {
+                  setFilter(f.key);
+                  setCursor(0);
+                }}
+              >
+                {f.label}
+              </button>
+            </span>
           ))}
         </div>
       </div>
 
-      {!summariesQuery.isLoading &&
-      !summariesQuery.error &&
-      (summariesQuery.data?.summaries.length ?? 0) === 0 ? (
-        <BrutalistCard>
-          <div className="page-heading-group">
-            <h3
-              style={{
-                fontFamily: "var(--frost-font-mono)",
-                fontSize: "var(--frost-type-mono-emph-size)",
-                fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
-                textTransform: "uppercase",
-                letterSpacing: "var(--frost-type-mono-emph-tracking)",
-                color: "var(--frost-ink)",
-                margin: 0,
-              }}
-            >
-              No articles yet
-            </h3>
-            <p
-              style={{
-                fontFamily: "var(--frost-font-mono)",
-                fontSize: "var(--frost-type-mono-body-size)",
-                color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
-                margin: 0,
-              }}
-            >
-              Submit a URL or forward a Telegram message to start building your library.
-            </p>
-          </div>
-          <div className="form-actions">
-            <BracketButton kind="primary" size="sm" onClick={() => navigate("/submit")}>
-              Submit your first article
-            </BracketButton>
-          </div>
-        </BrutalistCard>
+      {/* Column header */}
+      <div className="queue-cols">
+        <div>CAPTURED</div>
+        <div></div>
+        <div>SOURCE</div>
+        <div></div>
+        <div>TITLE</div>
+        <div>TOPICS</div>
+        <div>SIGNAL</div>
+      </div>
+
+      {/* Row list */}
+      {summariesQuery.isLoading && !summariesQuery.data ? (
+        <div style={{ padding: "var(--line, 16px) 0", opacity: 0.5, textTransform: "uppercase", letterSpacing: "1px" }}>
+          LOADING…
+        </div>
+      ) : visible.length === 0 ? (
+        <div style={{ padding: "var(--line, 16px) 0", opacity: 0.5, textTransform: "uppercase", letterSpacing: "1px" }}>
+          INBOX ZERO
+        </div>
       ) : (
-        <SummariesDataTable
-          summaries={summariesQuery.data?.summaries ?? []}
-          headers={HEADERS}
-          pagination={{
-            total: summariesQuery.data?.pagination.total ?? 0,
-            page,
-            pageSize,
-            pageSizes: [10, 20, 50],
-            onChange: (event) => {
-              setPage(event.page);
-              setPageSize(event.pageSize);
-            },
-          }}
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          isLoading={summariesQuery.isLoading && !summariesQuery.data}
-          error={summariesQuery.error}
-          title="Article summaries"
-          renderActions={(summary: SummaryCompact) => (
-            <div className="table-actions">
-              <BracketButton
-                kind={summary.isFavorited ? "primary" : "ghost"}
-                size="sm"
-                style={summary.isFavorited ? { background: "var(--frost-ink)", color: "var(--frost-page)" } : undefined}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  favoriteMutation.mutate(summary.id);
-                }}
+        <ul className="queue" id="queue-list">
+          {visible.map((item, idx) => {
+            const conf = (item as SummaryCompact & { confidence?: number }).confidence ?? 0.5;
+            const sig = sigClass(conf);
+            const isCursor = idx === cursor;
+            return (
+              <li
+                key={item.id}
+                className={`row ${sig}${isCursor ? " cursor" : ""}`}
+                data-id={item.id}
+                data-idx={idx}
+                onClick={() => navigate(`/article/${item.id}`)}
+                onMouseEnter={() => setCursor(idx)}
               >
-                {summary.isFavorited ? "Favorited" : "Favorite"}
-              </BracketButton>
-              <BracketButton
-                kind="tertiary"
-                size="sm"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setCollectionModalSummaryId(summary.id);
-                }}
-              >
-                Add to collection
-              </BracketButton>
-            </div>
-          )}
-        />
+                <span className="timestamp">{fmtTime(item.createdAt)}</span>
+                <span className="dot">∙</span>
+                <span className="source">{item.domain}</span>
+                <span className="dot">∙</span>
+                <span className="title">{item.title}</span>
+                <span className="topics">{item.topicTags.join(" ∙ ")}</span>
+                <span className="signal">{conf.toFixed(3)}</span>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
-      <AddToCollectionModal
-        open={collectionModalSummaryId != null}
-        summaryId={collectionModalSummaryId}
-        onClose={() => setCollectionModalSummaryId(null)}
-      />
+      {/* Ingest status */}
+      <div className="ingest">
+        <span>INGEST</span>
+        <span className="dot">∙</span>
+        <span className="pulse">SYNC ACTIVE</span>
+        <span className="blink"></span>
+      </div>
     </main>
   );
 }

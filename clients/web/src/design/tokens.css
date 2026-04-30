@@ -9,7 +9,8 @@
 /* ─── Frost primitives ─────────────────────────────────────────────────────── */
 
 :root,
-[data-theme="light"] {
+[data-theme="light"],
+html.light {
   /* Color — two-color rule: ink + page invert in dark mode; spark stays */
   --frost-ink: #1C242C;
   --frost-page: #F0F2F5;
@@ -92,11 +93,43 @@
   --frost-type-serif-reader-zoom-weight: 500;
   --frost-type-serif-reader-zoom-line-height: 1.55;
 
+  /* ── Prototype aliases ─────────────────────────────────────────────────── */
+  /* Bare token names matching /tmp/ratatoskr-proto/styles.css. Coexist with
+     the --frost-* surface above — do not remove either set. */
+
+  --ink:       var(--frost-ink);
+  --page:      var(--frost-page);
+  --spark:     var(--frost-spark);
+  --ink-pure:  var(--frost-ink-pure);
+  --page-pure: var(--frost-page-pure);
+
+  /* Cell grid — runtime-recomputed by boot script in index.html.
+     Static fallbacks guard against FOUC on first paint. */
+  --ch:        8px;
+  --char:      8px;
+  --col:       8px;
+  --line:      16px;
+  --font-size: 13px;
+
+  /* Strip widths via cell math — scales live with viewport */
+  --strip-1:   calc(var(--char) * 22);
+  --strip-2:   calc(var(--char) * 44);
+  --strip-3:   calc(var(--char) * 66);
+  --strip-4:   calc(var(--char) * 88);
+  --strip-5:   calc(var(--char) * 110);
+  --strip-6:   calc(var(--char) * 132);
+  --strip-7:   calc(var(--char) * 154);
+  --strip-8:   calc(var(--char) * 176);
 }
 
-[data-theme="dark"] {
+[data-theme="dark"],
+html.dark {
   /* Color — ink and page flip; spark stays */
   --frost-ink: #E8ECF0;
   --frost-page: #12161C;
   /* --frost-spark: #DC3545 — unchanged in dark mode */
+
+  /* Prototype aliases — dark flips */
+  --ink:  var(--frost-ink);
+  --page: var(--frost-page);
 }

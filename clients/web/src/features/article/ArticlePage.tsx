@@ -1,29 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   BracketButton,
-  BracketTab,
-  BracketTabList,
-  BracketTabPanel,
-  BracketTabPanels,
-  BracketTabs,
-  BrutalistCard,
   BrutalistSkeletonText,
-  MonoProgressBar,
-  MonoSelect,
-  MonoSelectItem,
   SparkLoading,
   StatusBadge,
-  Tag,
-  Play,
-  PauseFilled,
-  StopFilled,
 } from "../../design";
 import { getSummaryAudioUrl, generateSummaryAudio } from "../../api/summaries";
 import {
-  useExportSummaryPdf,
   useMarkRead,
-  useSaveReadingPosition,
   useSummaryContent,
   useSummaryDetail,
   useToggleFavorite,
@@ -31,9 +16,6 @@ import {
 import AddToCollectionModal from "../../components/AddToCollectionModal";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import HighlightsPanel from "./HighlightsPanel";
-
-type ReaderTextScale = "sm" | "md" | "lg";
-type ReaderDensity = "compact" | "comfortable";
 
 function useSummaryId(): number {
   const params = useParams();
@@ -47,13 +29,20 @@ function splitParagraphs(text: string): string[] {
     .filter(Boolean);
 }
 
+/** Map 0–1 confidence to sig label. */
+function sigLabel(conf: number): string {
+  if (conf >= 0.9) return "CRITICAL";
+  if (conf >= 0.7) return "HIGH";
+  if (conf >= 0.3) return "MID";
+  return "LOW";
+}
+
 export default function ArticlePage() {
   const summaryId = useSummaryId();
+  const navigate = useNavigate();
 
   const [showContent, setShowContent] = useState(false);
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
-  const [readerTextScale, setReaderTextScale] = useState<ReaderTextScale>("md");
-  const [readerDensity, setReaderDensity] = useState<ReaderDensity>("comfortable");
   const [copyState, setCopyState] = useState<"idle" | "success" | "error">("idle");
   const [readProgress, setReadProgress] = useState(0);
   const [audioState, setAudioState] = useState<"idle" | "loading" | "playing" | "paused" | "error">("idle");
@@ -64,8 +53,6 @@ export default function ArticlePage() {
   const contentQuery = useSummaryContent(summaryId, showContent);
   const readMutation = useMarkRead(summaryId);
   const favoriteMutation = useToggleFavorite(summaryId);
-  const savePositionMutation = useSaveReadingPosition();
-  const exportPdfMutation = useExportSummaryPdf();
 
   useEffect(() => {
     readMutation.reset();
@@ -81,25 +68,14 @@ export default function ArticlePage() {
 
   useEffect(() => {
     let rafId: number | null = null;
-
     const updateProgress = () => {
       rafId = null;
       const doc = document.documentElement;
       const scrollHeight = doc.scrollHeight - window.innerHeight;
-      if (scrollHeight <= 0) {
-        setReadProgress(0);
-        return;
-      }
-      const nextProgress = Math.round((window.scrollY / scrollHeight) * 100);
-      setReadProgress(Math.max(0, Math.min(100, nextProgress)));
+      if (scrollHeight <= 0) { setReadProgress(0); return; }
+      setReadProgress(Math.max(0, Math.min(100, Math.round((window.scrollY / scrollHeight) * 100))));
     };
-
-    const onScroll = () => {
-      if (rafId === null) {
-        rafId = requestAnimationFrame(updateProgress);
-      }
-    };
-
+    const onScroll = () => { if (rafId === null) rafId = requestAnimationFrame(updateProgress); };
     updateProgress();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", updateProgress);
@@ -109,27 +85,6 @@ export default function ArticlePage() {
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [showContent, summaryId]);
-
-  const restoredRef = useRef(false);
-  useEffect(() => {
-    const offset = summaryQuery.data?.lastReadOffset;
-    if (!restoredRef.current && offset && offset > 100) {
-      restoredRef.current = true;
-      window.scrollTo({ top: offset, behavior: "instant" });
-    }
-  }, [summaryQuery.data?.lastReadOffset]);
-
-  useEffect(() => {
-    if (summaryId <= 0) return;
-    const timer = setTimeout(() => {
-      savePositionMutation.mutate({
-        summaryId,
-        progress: readProgress,
-        lastReadOffset: Math.round(window.scrollY),
-      });
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [readProgress, summaryId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const detail = summaryQuery.data;
 
@@ -142,9 +97,7 @@ export default function ArticlePage() {
     if (!detail) return;
     try {
       const payload = [detail.tldr, detail.summary250, detail.summary1000]
-        .map((part) => part.trim())
-        .filter(Boolean)
-        .join("\n\n");
+        .map((p) => p.trim()).filter(Boolean).join("\n\n");
       await navigator.clipboard.writeText(payload);
       setCopyState("success");
     } catch {
@@ -174,10 +127,7 @@ export default function ArticlePage() {
       }
       const audio = new Audio(getSummaryAudioUrl(summaryId));
       audio.onended = () => setAudioState("idle");
-      audio.onerror = () => {
-        setAudioState("error");
-        setAudioError("Failed to play audio");
-      };
+      audio.onerror = () => { setAudioState("error"); setAudioError("Failed to play audio"); };
       audioRef.current = audio;
       await audio.play();
       setAudioState("playing");
@@ -200,11 +150,7 @@ export default function ArticlePage() {
     if (!detail?.url) return;
     try {
       if (navigator.share) {
-        await navigator.share({
-          title: detail.title,
-          text: detail.tldr || detail.summary250,
-          url: detail.url,
-        });
+        await navigator.share({ title: detail.title, text: detail.tldr || detail.summary250, url: detail.url });
         return;
       }
       await navigator.clipboard.writeText(detail.url);
@@ -215,404 +161,264 @@ export default function ArticlePage() {
   }
 
   return (
-    <main
-      style={{
-        maxWidth: "var(--frost-strip-5)",
-        padding: "0 var(--frost-pad-page)",
-        display: "flex",
-        flexDirection: "column",
-        gap: "var(--frost-gap-section)",
-      }}
-    >
+    <main style={{ maxWidth: "var(--strip-5, var(--frost-strip-5))", padding: "0 calc(var(--char, 8px) * 4)" }}>
+      {/* Back nav */}
+      <div className="detail-back">
+        <button onClick={() => navigate(-1)}>← QUEUE</button>
+        {detail && (
+          <>
+            <span className="dot">∙</span>
+            <span>ITEM {String(detail.id).padStart(4, "0")}</span>
+          </>
+        )}
+      </div>
+
+      {/* Loading */}
       {summaryQuery.isPending && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "var(--line, 16px) 0" }}>
           <BrutalistSkeletonText heading width="60%" />
           <BrutalistSkeletonText paragraph lineCount={1} width="40%" />
-          <BrutalistSkeletonText paragraph lineCount={5} />
           <BrutalistSkeletonText paragraph lineCount={5} />
         </div>
       )}
       <QueryErrorNotification error={summaryQuery.error} title="Failed to load article" />
 
       {detail && (
-        <>
-          {/* Title block */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-page)" }}>
-            <div>
-              <h1
-                style={{
-                  fontFamily: "var(--frost-font-mono)",
-                  fontSize: "var(--frost-type-mono-emph-size)",
-                  fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
-                  letterSpacing: "var(--frost-type-mono-emph-tracking)",
-                  textTransform: "uppercase",
-                  color: "var(--frost-ink)",
-                  margin: "0 0 8px 0",
-                }}
-              >
-                {detail.title}
-              </h1>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                  fontFamily: "var(--frost-font-mono)",
-                  fontSize: "11px",
-                  fontWeight: 500,
-                  letterSpacing: "1px",
-                  textTransform: "uppercase",
-                  color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
-                }}
-              >
-                <span>{detail.domain}</span>
-                <span aria-hidden>·</span>
-                <span>{detail.readingTimeMin} min read</span>
-                <span aria-hidden>·</span>
-                <span>Confidence {(detail.confidence * 100).toFixed(0)}%</span>
-                <span aria-hidden>·</span>
-                <span>Risk {detail.hallucinationRisk}</span>
-                <span aria-hidden>·</span>
-                <span>{readProgress}% read</span>
+        <article className="detail">
+          {/* Left sidebar — meta */}
+          <aside className="meta">
+            <dl>
+              <div>
+                <dt>SIGNAL</dt>
+                <dd>{detail.confidence.toFixed(3)} ∙ {sigLabel(detail.confidence)}</dd>
               </div>
-            </div>
+              <div>
+                <dt>SOURCE</dt>
+                <dd>{detail.domain}</dd>
+              </div>
+              <div>
+                <dt>TOPICS</dt>
+                <dd>{detail.topicTags.join(" ∙ ")}</dd>
+              </div>
+              <div>
+                <dt>READ TIME</dt>
+                <dd>~{detail.readingTimeMin} MIN</dd>
+              </div>
+              <div>
+                <dt>CONFIDENCE</dt>
+                <dd>{(detail.confidence * 100).toFixed(0)}%</dd>
+              </div>
+              <div>
+                <dt>RISK</dt>
+                <dd>{detail.hallucinationRisk}</dd>
+              </div>
+              <div>
+                <dt>PROGRESS</dt>
+                <dd>{readProgress}%</dd>
+              </div>
+            </dl>
+          </aside>
 
-            <MonoProgressBar
-              label="Reading progress"
-              value={readProgress}
-              helperText={`${readProgress}% scrolled`}
-            />
-          </div>
+          {/* Anchors sidebar */}
+          <aside className="anchors" aria-label="Section anchors">
+            <ol>
+              <li>I</li>
+              <li>II</li>
+              <li>III</li>
+              {detail.summary1000 && <li>IV</li>}
+            </ol>
+          </aside>
 
-          {/* Reader controls card */}
-          <BrutalistCard>
-            <div
+          {/* Main body */}
+          <div className="body">
+            {/* Title — mono ExtraBold uppercase, font-variation "wght" 720 */}
+            <h1>{detail.title}</h1>
+
+            {/* Meta line — mono uppercase 11px alpha 0.55 */}
+            <h2
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "var(--frost-gap-row)",
+                fontFamily: "var(--frost-font-mono)",
+                fontSize: "11px",
+                fontVariationSettings: '"wght" 500',
+                fontWeight: 500,
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                opacity: 0.55,
+                margin: "0 0 var(--line, 16px)",
+                fontStyle: "normal",
               }}
             >
-              <MonoSelect
-                id="reader-text-scale"
-                labelText="Text size"
-                value={readerTextScale}
-                onChange={(event) => setReaderTextScale(event.currentTarget.value as ReaderTextScale)}
-              >
-                <MonoSelectItem value="sm" text="Compact" />
-                <MonoSelectItem value="md" text="Default" />
-                <MonoSelectItem value="lg" text="Large" />
-              </MonoSelect>
-              <MonoSelect
-                id="reader-density"
-                labelText="Line density"
-                value={readerDensity}
-                onChange={(event) => setReaderDensity(event.currentTarget.value as ReaderDensity)}
-              >
-                <MonoSelectItem value="compact" text="Compact" />
-                <MonoSelectItem value="comfortable" text="Comfortable" />
-              </MonoSelect>
-            </div>
-            <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
-              <BracketButton kind="ghost" size="sm" onClick={() => void handleCopySummary()}>
-                Copy summary
-              </BracketButton>
-              <BracketButton kind="ghost" size="sm" onClick={() => void handleShare()}>
-                Share
-              </BracketButton>
-            </div>
-            {copyState === "success" && (
-              <StatusBadge
-                severity="info"
-                title="✓ Copied"
-                subtitle="Summary text or URL copied to clipboard."
-              />
-            )}
-            {copyState === "error" && (
-              <StatusBadge
-                severity="warn"
-                title="Copy failed"
-                subtitle="Clipboard access is blocked in this browser context."
-              />
-            )}
-          </BrutalistCard>
+              {detail.domain}
+              {detail.tldr ? ` ∙ ${detail.tldr.slice(0, 80)}…` : ""}
+            </h2>
 
-          {/* Action buttons */}
-          <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
-            <BracketButton
-              kind="secondary"
-              disabled={readMutation.isSuccess || readMutation.isPending}
-              onClick={() => readMutation.mutate()}
-            >
-              {readMutation.isSuccess ? "Marked as read" : "Mark as read"}
-            </BracketButton>
-            <BracketButton kind="secondary" onClick={() => favoriteMutation.mutate(undefined)}>
-              Toggle favorite
-            </BracketButton>
-            <BracketButton kind="secondary" onClick={() => setIsCollectionModalOpen(true)}>
-              Add to collection
-            </BracketButton>
-            <BracketButton
-              kind="secondary"
-              renderIcon={audioState === "playing" ? PauseFilled : Play}
-              disabled={audioState === "loading"}
-              onClick={() => void handleListenToggle()}
-            >
-              {audioState === "loading"
-                ? "Generating..."
-                : audioState === "playing"
-                  ? "Pause"
-                  : audioState === "paused"
-                    ? "Resume"
-                    : "Listen"}
-            </BracketButton>
-            {(audioState === "playing" || audioState === "paused") && (
-              <BracketButton kind="ghost" renderIcon={StopFilled} onClick={handleStopAudio}>
-                Stop
-              </BracketButton>
+            {/* Summary body — Source Serif 4 italic at reader scale */}
+            {splitParagraphs(detail.summary250).map((part) => (
+              <p key={`s250-${part.slice(0, 32)}`}>{part}</p>
+            ))}
+
+            {detail.summary1000 && (
+              <>
+                <h2>Detailed Summary</h2>
+                {splitParagraphs(detail.summary1000).map((part) => (
+                  <p key={`s1000-${part.slice(0, 32)}`}>{part}</p>
+                ))}
+              </>
+            )}
+
+            {/* Key ideas */}
+            {detail.keyIdeas.length > 0 && (
+              <>
+                <h2>Key Ideas</h2>
+                {detail.keyIdeas.map((idea) => (
+                  <p key={idea}>— {idea}</p>
+                ))}
+              </>
+            )}
+
+            {/* Highlights panel (high-confidence items get spark hairline via queue.css) */}
+            <HighlightsPanel summaryId={summaryId} />
+
+            {/* Entities */}
+            {entityTags.length > 0 && (
+              <>
+                <h2>Entities</h2>
+                <p style={{ fontStyle: "normal", opacity: 0.7 }}>
+                  {entityTags.map((e) => `${e.name} (${e.type})`).join(" ∙ ")}
+                </p>
+              </>
+            )}
+
+            {/* Source content toggle */}
+            {showContent && (
+              <>
+                <h2>Source Content</h2>
+                {contentQuery.isFetching && <SparkLoading status="active" description="Loading source content…" />}
+                <QueryErrorNotification error={contentQuery.error} title="Could not load source content" />
+                {contentQuery.data?.content && (
+                  <pre
+                    style={{
+                      fontStyle: "normal",
+                      fontFamily: "var(--frost-font-mono)",
+                      margin: 0,
+                      whiteSpace: "pre-wrap",
+                      opacity: 0.85,
+                    }}
+                  >
+                    {contentQuery.data.content}
+                  </pre>
+                )}
+              </>
             )}
           </div>
+        </article>
+      )}
 
-          {/* Secondary actions */}
-          <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
-            <BracketButton
-              kind="tertiary"
-              size="sm"
-              onClick={() => window.open(detail.url, "_blank", "noopener,noreferrer")}
-            >
-              Open original
-            </BracketButton>
-            <BracketButton
-              kind="ghost"
-              size="sm"
-              onClick={() => setShowContent((prev) => !prev)}
-            >
-              {showContent ? "Hide full content" : "Show full content"}
-            </BracketButton>
-            {exportPdfMutation.isPending ? (
-              <SparkLoading status="active" description="Exporting PDF…" />
-            ) : (
-              <BracketButton kind="ghost" size="sm" onClick={() => exportPdfMutation.mutate(summaryId)}>
-                Export PDF
-              </BracketButton>
-            )}
-          </div>
+      {/* Audio error */}
+      {audioState === "error" && audioError && (
+        <StatusBadge
+          severity="alarm"
+          title="Audio error"
+          subtitle={audioError}
+          dismissible
+          onDismiss={() => { setAudioState("idle"); setAudioError(null); }}
+        />
+      )}
 
-          {audioState === "error" && audioError && (
-            <StatusBadge
-              severity="alarm"
-              title="Audio error"
-              subtitle={audioError}
-              dismissible
-              onDismiss={() => {
-                setAudioState("idle");
-                setAudioError(null);
-              }}
-            />
+      {/* Copy feedback */}
+      {copyState === "success" && (
+        <StatusBadge severity="info" title="Copied" subtitle="Summary text or URL copied to clipboard." />
+      )}
+      {copyState === "error" && (
+        <StatusBadge severity="warn" title="Copy failed" subtitle="Clipboard access is blocked in this browser context." />
+      )}
+
+      {/* Action toolbar — prototype style: [ OPEN ] [ ARCHIVE ] [ TAG ] */}
+      {detail && (
+        <div className="detail-actions">
+          <BracketButton
+            kind="tertiary"
+            size="sm"
+            onClick={() => window.open(detail.url, "_blank", "noopener,noreferrer")}
+          >
+            OPEN SOURCE
+          </BracketButton>
+          <span className="dot">∙</span>
+          <BracketButton
+            kind="secondary"
+            size="sm"
+            disabled={readMutation.isSuccess || readMutation.isPending}
+            onClick={() => readMutation.mutate()}
+          >
+            {readMutation.isSuccess ? "ARCHIVED" : "ARCHIVE"}
+          </BracketButton>
+          <span className="dot">∙</span>
+          <BracketButton
+            kind="secondary"
+            size="sm"
+            onClick={() => favoriteMutation.mutate(undefined)}
+          >
+            SAVE
+          </BracketButton>
+          <span className="dot">∙</span>
+          <BracketButton
+            kind="ghost"
+            size="sm"
+            onClick={() => setIsCollectionModalOpen(true)}
+          >
+            TAG
+          </BracketButton>
+          <span className="dot">∙</span>
+          <BracketButton
+            kind="ghost"
+            size="sm"
+            onClick={() => void handleCopySummary()}
+          >
+            COPY
+          </BracketButton>
+          <span className="dot">∙</span>
+          <BracketButton
+            kind="ghost"
+            size="sm"
+            onClick={() => void handleShare()}
+          >
+            SHARE
+          </BracketButton>
+          <span className="dot">∙</span>
+          <BracketButton
+            kind="ghost"
+            size="sm"
+            disabled={audioState === "loading"}
+            onClick={() => void handleListenToggle()}
+          >
+            {audioState === "loading" ? "GENERATING…"
+              : audioState === "playing" ? "PAUSE"
+              : audioState === "paused" ? "RESUME"
+              : "LISTEN"}
+          </BracketButton>
+          {(audioState === "playing" || audioState === "paused") && (
+            <>
+              <span className="dot">∙</span>
+              <BracketButton kind="ghost" size="sm" onClick={handleStopAudio}>STOP</BracketButton>
+            </>
           )}
+          <span className="dot">∙</span>
+          <BracketButton
+            kind="ghost"
+            size="sm"
+            onClick={() => setShowContent((p) => !p)}
+          >
+            {showContent ? "HIDE SOURCE" : "SHOW SOURCE"}
+          </BracketButton>
+        </div>
+      )}
 
-          {/* Tabs */}
-          <BracketTabs>
-            <BracketTabList aria-label="Article tabs" contained>
-              <BracketTab>Summary</BracketTab>
-              <BracketTab>Details</BracketTab>
-              <BracketTab>Entities</BracketTab>
-              <BracketTab>Highlights</BracketTab>
-            </BracketTabList>
-            <BracketTabPanels>
-              <BracketTabPanel>
-                {/* Article body — Source Serif 4 italic, reader-size */}
-                <article
-                  className={`article-text-${readerTextScale} article-density-${readerDensity}`}
-                  style={{
-                    fontFamily: "var(--frost-font-serif)",
-                    fontSize: "var(--frost-type-serif-reader-size, 16px)",
-                    fontWeight: 500,
-                    fontStyle: "italic",
-                    lineHeight: 1.55,
-                    color: "var(--frost-ink)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "16px",
-                  }}
-                >
-                  {splitParagraphs(detail.summary250).map((part) => (
-                    <p key={`summary250-${part.slice(0, 32)}`} style={{ margin: 0 }}>{part}</p>
-                  ))}
-                  {detail.summary1000 && (
-                    <>
-                      <h3
-                        style={{
-                          fontFamily: "var(--frost-font-mono)",
-                          fontSize: "var(--frost-type-mono-emph-size)",
-                          fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
-                          textTransform: "uppercase",
-                          letterSpacing: "var(--frost-type-mono-emph-tracking)",
-                          color: "var(--frost-ink)",
-                          fontStyle: "normal",
-                          margin: 0,
-                        }}
-                      >
-                        Detailed Summary
-                      </h3>
-                      {splitParagraphs(detail.summary1000).map((part) => (
-                        <p key={`summary1000-${part.slice(0, 32)}`} style={{ margin: 0 }}>{part}</p>
-                      ))}
-                    </>
-                  )}
-                  {showContent && (
-                    <>
-                      <h3
-                        style={{
-                          fontFamily: "var(--frost-font-mono)",
-                          fontSize: "var(--frost-type-mono-emph-size)",
-                          fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
-                          textTransform: "uppercase",
-                          letterSpacing: "var(--frost-type-mono-emph-tracking)",
-                          color: "var(--frost-ink)",
-                          fontStyle: "normal",
-                          margin: 0,
-                        }}
-                      >
-                        Source Content
-                      </h3>
-                      {contentQuery.isFetching && (
-                        <SparkLoading status="active" description="Loading source content…" />
-                      )}
-                      <QueryErrorNotification error={contentQuery.error} title="Could not load source content" />
-                      {contentQuery.data?.content && (
-                        <pre
-                          className={`content-preview article-content-preview article-text-${readerTextScale} article-density-${readerDensity}`}
-                          style={{ fontStyle: "normal", fontFamily: "var(--frost-font-mono)", margin: 0 }}
-                        >
-                          {contentQuery.data.content}
-                        </pre>
-                      )}
-                    </>
-                  )}
-                </article>
-              </BracketTabPanel>
-
-              <BracketTabPanel>
-                <BrutalistCard>
-                  <h3
-                    style={{
-                      fontFamily: "var(--frost-font-mono)",
-                      fontSize: "var(--frost-type-mono-emph-size)",
-                      fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
-                      textTransform: "uppercase",
-                      letterSpacing: "var(--frost-type-mono-emph-tracking)",
-                      color: "var(--frost-ink)",
-                      margin: 0,
-                    }}
-                  >
-                    Key ideas
-                  </h3>
-                  <ul style={{ margin: 0, paddingLeft: "1.2em" }}>
-                    {detail.keyIdeas.map((idea) => (
-                      <li
-                        key={idea}
-                        style={{
-                          fontFamily: "var(--frost-font-mono)",
-                          fontSize: "var(--frost-type-mono-body-size)",
-                          color: "var(--frost-ink)",
-                        }}
-                      >
-                        {idea}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <h3
-                    style={{
-                      fontFamily: "var(--frost-font-mono)",
-                      fontSize: "var(--frost-type-mono-emph-size)",
-                      fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
-                      textTransform: "uppercase",
-                      letterSpacing: "var(--frost-type-mono-emph-tracking)",
-                      color: "var(--frost-ink)",
-                      margin: 0,
-                    }}
-                  >
-                    Key stats
-                  </h3>
-                  <div className="article-stats-grid">
-                    {detail.keyStats.map((stat) => (
-                      <article key={`${stat.label}-${stat.value}`} className="article-stat">
-                        <p
-                          style={{
-                            fontFamily: "var(--frost-font-mono)",
-                            fontSize: "11px",
-                            color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
-                            margin: 0,
-                          }}
-                        >
-                          {stat.label}
-                        </p>
-                        <p style={{ fontFamily: "var(--frost-font-mono)", margin: 0 }}>
-                          <strong>{stat.value}</strong>
-                        </p>
-                        {stat.sourceExcerpt && (
-                          <p
-                            style={{
-                              fontFamily: "var(--frost-font-mono)",
-                              fontSize: "11px",
-                              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
-                              margin: 0,
-                            }}
-                          >
-                            {stat.sourceExcerpt}
-                          </p>
-                        )}
-                      </article>
-                    ))}
-                    {detail.keyStats.length === 0 && (
-                      <p
-                        style={{
-                          fontFamily: "var(--frost-font-mono)",
-                          color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
-                          margin: 0,
-                        }}
-                      >
-                        No structured stats extracted.
-                      </p>
-                    )}
-                  </div>
-                </BrutalistCard>
-              </BracketTabPanel>
-
-              <BracketTabPanel>
-                <BrutalistCard>
-                  <div className="tag-row">
-                    {detail.topicTags.map((topic) => (
-                      <Tag key={topic}>
-                        {topic}
-                      </Tag>
-                    ))}
-                  </div>
-                  <div className="tag-row">
-                    {entityTags.map((entity) => (
-                      <Tag key={`${entity.type}-${entity.name}`}>
-                        {entity.name} ({entity.type})
-                      </Tag>
-                    ))}
-                  </div>
-                </BrutalistCard>
-              </BracketTabPanel>
-
-              <BracketTabPanel>
-                <HighlightsPanel summaryId={summaryId} />
-              </BracketTabPanel>
-            </BracketTabPanels>
-          </BracketTabs>
-
-          <AddToCollectionModal
-            open={isCollectionModalOpen}
-            summaryId={summaryId}
-            onClose={() => setIsCollectionModalOpen(false)}
-          />
-        </>
+      {detail && (
+        <AddToCollectionModal
+          open={isCollectionModalOpen}
+          summaryId={summaryId}
+          onClose={() => setIsCollectionModalOpen(false)}
+        />
       )}
     </main>
   );
