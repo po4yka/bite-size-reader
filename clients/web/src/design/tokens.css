@@ -53,6 +53,14 @@ html.light {
   --frost-spark-web: 2px;
   --frost-spark-mobile: 4px;
 
+  /* Mobile-specific Frost tokens */
+  --frost-gap-ext:                10px;
+  --frost-pad-page-mobile:        16px;
+  --frost-tab-bar-height:         56px;
+  --frost-mobile-header:          54px;
+  --frost-mobile-status-bar:      42px;
+  --frost-mobile-home-indicator:  21px;
+
   /* Typography — font families */
   --frost-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --frost-font-serif: "Source Serif 4", "Source Serif Pro", Georgia, serif;

@@ -8,8 +8,10 @@
     <script>
       (function () {
         function computeCellGrid() {
-          var targetCols = 178;
-          var ch = window.innerWidth / targetCols;
+          // Mobile cell grid: 48 cols below 768px (Frost canon).
+          // Tablet+desktop: 178 cols.
+          var targetCols = window.innerWidth < 768 ? 48 : 178;
+          var ch = Math.max(window.innerWidth / targetCols, 6); // clamp at 6px floor for very narrow viewports
           var r = document.documentElement.style;
           r.setProperty('--ch',        ch + 'px');
           r.setProperty('--char',      ch + 'px');

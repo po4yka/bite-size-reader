@@ -1,4 +1,5 @@
 import type { Preview, Decorator } from "@storybook/react-vite";
+import { INITIAL_VIEWPORTS } from "@storybook/addon-viewport";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 
@@ -39,6 +40,14 @@ const withThemeAndProvider: Decorator = (Story, ctx) => {
   );
 };
 
+const customViewports = {
+  frostMobile: {
+    name: "Frost Mobile (393×690)",
+    styles: { width: "393px", height: "690px" },
+    type: "mobile" as const,
+  },
+};
+
 const preview: Preview = {
   decorators: [withThemeAndProvider],
   parameters: {
@@ -48,6 +57,10 @@ const preview: Preview = {
         color: /(background|color)$/i,
         date: /Date$/i,
       },
+    },
+    viewport: {
+      viewports: { ...customViewports, ...INITIAL_VIEWPORTS },
+      defaultViewport: "responsive",
     },
   },
 };

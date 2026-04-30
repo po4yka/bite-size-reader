@@ -95,6 +95,8 @@ body {
 }
 
 .app-content {
+  container-type: inline-size;
+  container-name: main;
   padding-top: calc(3rem + var(--safe-area-top));
   padding-right: calc(1rem + var(--safe-area-right));
   padding-bottom: calc(2rem + var(--safe-area-bottom));
