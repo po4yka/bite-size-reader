@@ -1,4 +1,11 @@
-"""Playwright-based fallback provider for JS-rendered pages."""
+"""Playwright-based fallback provider for JS-rendered pages.
+
+The ``slim`` constructor flag is forwarded to ``FingerprintGenerator(slim=slim,
+...)`` (browserforge) to generate lighter fingerprints with fewer JS property
+overrides.  This reduces per-launch memory and init cost and is a sensible
+default for sites that are not strongly bot-protected.  Set ``slim=False``
+(the default) to keep the full fingerprint for maximum stealth on hard sites.
+"""
 
 from __future__ import annotations
 
@@ -27,12 +34,14 @@ class PlaywrightProvider:
         min_text_length: int = 400,
         profile: str = "balanced",
         js_heavy_hosts: tuple[str, ...] = (),
+        slim: bool = False,
     ) -> None:
         self._timeout_sec = timeout_sec
         self._headless = headless
         self._min_text_length = min_text_length
         self._profile = profile
         self._js_heavy_hosts = js_heavy_hosts
+        self._slim = slim
 
     @property
     def provider_name(self) -> str:
@@ -181,12 +190,14 @@ class PlaywrightProvider:
                         browser=["chrome"],
                         device=["mobile"],
                         os=["android"],
+                        slim=self._slim,
                     ).generate()
                 else:
                     fingerprint = _fp_generator_cls(
                         browser=["chrome"],
                         device=["desktop"],
                         os=["windows"],
+                        slim=self._slim,
                     ).generate()
                 context = _new_context_fn(browser, fingerprint=fingerprint)
             elif mobile:

@@ -258,6 +258,7 @@ def _build_playwright(scraper_cfg: object) -> ContentScraperProtocol | None:
             min_text_length=getattr(scraper_cfg, "min_content_length", 400),
             profile=getattr(scraper_cfg, "profile", "balanced"),
             js_heavy_hosts=getattr(scraper_cfg, "js_heavy_hosts", ()),
+            slim=getattr(scraper_cfg, "playwright_fingerprint_slim", False),
         )
     except Exception as exc:
         logger.warning(
@@ -313,6 +314,7 @@ def _build_crawl4ai(
             min_content_length=getattr(scraper_cfg, "min_content_length", 400),
             profile=getattr(scraper_cfg, "profile", "balanced"),
             js_heavy_hosts=getattr(scraper_cfg, "js_heavy_hosts", ()),
+            cache_mode=getattr(scraper_cfg, "crawl4ai_cache_mode", "BYPASS"),
             audit=audit,
         )
     except Exception as exc:

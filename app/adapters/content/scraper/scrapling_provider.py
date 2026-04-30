@@ -1,4 +1,23 @@
-"""Scrapling-based content extraction provider (in-process, zero external deps)."""
+"""Scrapling-based content extraction provider (in-process, zero external deps).
+
+Session lifecycle
+-----------------
+``ScraplingProvider`` holds a long-lived ``FetcherSession`` for the async basic
+(curl_cffi) path.  The session is constructed lazily on the first request and
+reused for the lifetime of the provider, giving connection-pool and TLS-handshake
+reuse across burst traffic.  ``aclose()`` tears the session down cleanly.
+
+For the stealth (Playwright-backed) path, ``StealthyFetcher`` / ``DynamicFetcher``
+are browser-process launchers: each fetch necessarily creates a fresh browser
+context.  The fetcher *class* reference is cached on ``self._stealth_fetcher_cls``
+so the import only happens once.
+
+Compatibility
+-------------
+Requires scrapling>=0.4.7.  Older releases lack ``FetcherSession`` and the
+``StealthySession``/``AsyncStealthySession`` variants; the provider degrades
+gracefully to per-call ``AsyncFetcher`` if the session import fails.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +34,14 @@ logger = get_logger(__name__)
 
 
 class ScraplingProvider:
-    """Primary scraper using Scrapling library with TLS impersonation."""
+    """Primary scraper using Scrapling library with TLS impersonation.
+
+    A single ``FetcherSession`` (async curl_cffi session) is constructed lazily
+    on the first call to ``_fetch`` and reused for all subsequent requests.
+    The stealth Playwright path keeps the fetcher class reference cached but
+    always opens a fresh browser context per fetch (required by Playwright).
+    Call ``aclose()`` when the provider is no longer needed to release resources.
+    """
 
     def __init__(
         self,
@@ -31,6 +57,15 @@ class ScraplingProvider:
         self._min_content_length = min_content_length
         self._profile = profile
         self._js_heavy_hosts = js_heavy_hosts
+
+        # Lazily initialised async session (FetcherSession context, held open).
+        # None = not yet opened; set to the active _ASyncSessionLogic on first use.
+        self._async_session: Any = None
+        # The FetcherSession context-manager object (kept so __aexit__ can close it).
+        self._fetcher_session_ctx: Any = None
+
+        # Cached stealth fetcher class reference (import once, reuse across calls).
+        self._stealth_fetcher_cls: Any = None
 
     @property
     def provider_name(self) -> str:
@@ -114,16 +149,42 @@ class ScraplingProvider:
             options_json={"provider": "scrapling"},
         )
 
+    async def _ensure_async_session(self) -> Any:
+        """Return the active async session, opening it lazily on first call.
+
+        Tries ``FetcherSession`` (scrapling>=0.4.7) first.  Falls back to the
+        module-level ``AsyncFetcher`` singleton (which already pools connections
+        internally via curl_cffi) if the import fails.
+        """
+        if self._async_session is not None:
+            return self._async_session
+
+        try:
+            import importlib
+
+            mod = importlib.import_module("scrapling.fetchers.requests")
+            FetcherSession = getattr(mod, "FetcherSession", None)  # noqa: N806
+            if FetcherSession is not None:
+                ctx = FetcherSession()
+                session = await ctx.__aenter__()
+                self._fetcher_session_ctx = ctx
+                self._async_session = session
+                return self._async_session
+        except Exception:
+            pass
+
+        # Fallback: module-level AsyncFetcher (already a connection-pooling singleton).
+        async_fetcher_cls = _lazy_import_async_fetcher()
+        self._async_session = async_fetcher_cls  # class itself; callers use .get(url)
+        return self._async_session
+
     async def _fetch(self, url: str) -> tuple[str | None, str | None]:
         """Fetch URL using Scrapling, with optional stealth fallback."""
         loop = asyncio.get_running_loop()
 
-        # AsyncFetcher (curl_cffi-based) is preferred for the basic path but
-        # requires curl_cffi. Fall back to the sync Fetcher via executor when
-        # unavailable.
-        async_fetcher_cls = _lazy_import_async_fetcher()
-        if async_fetcher_cls is not None:
-            html, text = await _async_fetch_basic(url, async_fetcher_cls)
+        session = await self._ensure_async_session()
+        if session is not None:
+            html, text = await _async_fetch_basic(url, session)
         else:
             html, text = await loop.run_in_executor(None, _sync_fetch_basic, url)
 
@@ -132,12 +193,23 @@ class ScraplingProvider:
 
         if self._stealth_fallback:
             logger.debug("scrapling_stealth_fallback", extra={"url": url})
-            html, text = await loop.run_in_executor(None, _sync_fetch_stealth, url)
+            # Resolve stealth class once; browser context is always per-fetch.
+            if self._stealth_fetcher_cls is None:
+                self._stealth_fetcher_cls = _lazy_import_stealthy_fetcher()
+            stealth_cls = self._stealth_fetcher_cls
+            html, text = await loop.run_in_executor(None, _sync_fetch_stealth, url, stealth_cls)
 
         return html, text
 
     async def aclose(self) -> None:
-        pass
+        """Release the long-lived async session (if any)."""
+        if self._fetcher_session_ctx is not None:
+            try:
+                await self._fetcher_session_ctx.__aexit__(None, None, None)
+            except Exception:
+                pass
+            self._fetcher_session_ctx = None
+        self._async_session = None
 
 
 def _lazy_import_fetcher() -> Any:
@@ -189,11 +261,17 @@ def _lazy_import_stealthy_fetcher() -> Any:
 
 
 async def _async_fetch_basic(
-    url: str, async_fetcher_cls: Any
+    url: str, session_or_cls: Any
 ) -> tuple[str | None, str | None]:
-    """Async basic fetch using AsyncFetcher.get (curl_cffi path)."""
-    fetcher = async_fetcher_cls()
-    resp = await fetcher.get(url)
+    """Async basic fetch.
+
+    ``session_or_cls`` is either:
+    - an active ``_ASyncSessionLogic`` (from ``FetcherSession.__aenter__``), or
+    - the ``AsyncFetcher`` class (module-level singleton fallback).
+
+    Both expose a ``get(url)`` awaitable with the same return shape.
+    """
+    resp = await session_or_cls.get(url)
     html = resp.text if resp.status == 200 else None
     text = _extract_text(html) if html else None
     return html, text
@@ -208,10 +286,17 @@ def _sync_fetch_basic(url: str) -> tuple[str | None, str | None]:
     return html, text
 
 
-def _sync_fetch_stealth(url: str) -> tuple[str | None, str | None]:
-    """Stealth fetch for JS-heavy sites via DynamicFetcher (Playwright-based)."""
-    stealthy_fetcher = _lazy_import_stealthy_fetcher()
-    resp = stealthy_fetcher.fetch(url)
+def _sync_fetch_stealth(
+    url: str, stealth_cls: Any | None = None
+) -> tuple[str | None, str | None]:
+    """Stealth fetch for JS-heavy sites via DynamicFetcher (Playwright-based).
+
+    ``stealth_cls`` is the cached fetcher class (resolved once by the provider).
+    Falls back to a fresh import if not supplied.
+    """
+    if stealth_cls is None:
+        stealth_cls = _lazy_import_stealthy_fetcher()
+    resp = stealth_cls.fetch(url, solve_cloudflare=True)
     html = resp.text if resp.status == 200 else None
     text = _extract_text(html) if html else None
     return html, text

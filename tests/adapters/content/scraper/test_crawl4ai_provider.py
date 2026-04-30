@@ -234,11 +234,11 @@ class TestCrawl4AIProvider:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_request_payload_pins_wire_format(self):
-        """POST URL ends with /crawl/sync and body JSON matches the expected wire format.
+        """POST URL ends with /crawl and body JSON matches the expected wire format.
 
-        Pins the synchronous endpoint contract so regressions are caught immediately.
-        The provider uses /crawl/sync (single round-trip) rather than /crawl (async,
-        requires polling).
+        Pins the v0.8.x endpoint contract so regressions are caught immediately.
+        The provider uses POST /crawl with stream=False (single round-trip) and
+        wraps nested configs in {type, params} envelopes as required by the v0.8.x API.
         """
         payload = _make_crawl_response(markdown="A" * 500)
         provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=5)
@@ -250,23 +250,40 @@ class TestCrawl4AIProvider:
             await provider.scrape_markdown("https://example.com/article")
 
         call_args = mock_client.post.call_args
-        # URL must use the synchronous endpoint
-        assert call_args.args[0].endswith("/crawl/sync"), (
-            f"Expected POST URL ending in '/crawl/sync', got: {call_args.args[0]!r}"
+        # URL must use the synchronous /crawl endpoint (NOT /crawl/sync)
+        assert call_args.args[0].endswith("/crawl"), (
+            f"Expected POST URL ending in '/crawl', got: {call_args.args[0]!r}"
         )
         # Body JSON must match the exact wire format the provider sends
         expected_json = {
             "urls": ["https://example.com/article"],
             "browser_config": {
-                "headless": True,
-                "user_agent_mode": "random",
+                "type": "BrowserConfig",
+                "params": {"headless": True, "user_agent_mode": "random"},
             },
             "crawler_config": {
-                "stream": False,
-                "cache_mode": "BYPASS",
+                "type": "CrawlerRunConfig",
+                "params": {"cache_mode": "BYPASS", "stream": False},
             },
         }
         assert call_args.kwargs["json"] == expected_json
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_cache_mode_propagates_to_request_body(self):
+        """cache_mode kwarg is forwarded into crawler_config.params in the request body."""
+        payload = _make_crawl_response(markdown="A" * 500)
+        provider = Crawl4AIProvider(
+            url="http://crawl4ai:11235", timeout_sec=5, cache_mode="ENABLED"
+        )
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = _make_httpx_response(payload)
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            await provider.scrape_markdown("https://example.com/article")
+
+        call_args = mock_client.post.call_args
+        assert call_args.kwargs["json"]["crawler_config"]["params"]["cache_mode"] == "ENABLED"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_httpx_timeout_exception_is_caught_as_timeout(self):

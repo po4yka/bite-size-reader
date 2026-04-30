@@ -205,6 +205,7 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 | `SCRAPER_CRAWL4AI_URL` | `http://crawl4ai:11235` | Crawl4AI service base URL |
 | `SCRAPER_CRAWL4AI_TOKEN` | _(empty)_ | Crawl4AI bearer token (optional, for secured instances) |
 | `SCRAPER_CRAWL4AI_TIMEOUT_SEC` | `60` | Crawl4AI request timeout (seconds) |
+| `SCRAPER_CRAWL4AI_CACHE_MODE` | `BYPASS` | Crawl4AI cache mode: `ENABLED`, `DISABLED`, `BYPASS`, `READ_ONLY`, `WRITE_ONLY` |
 | `SCRAPER_DEFUDDLE_ENABLED` | `true` | Enable Defuddle HTTP API provider (self-hosted) |
 | `SCRAPER_DEFUDDLE_TIMEOUT_SEC` | `20` | Defuddle request timeout (seconds) |
 | `SCRAPER_DEFUDDLE_API_BASE_URL` | `http://defuddle-api:3003` | Defuddle API base URL (self-hosted Docker Compose service). Pointing at `https://defuddle.md` logs a deprecation warning. |
@@ -221,6 +222,7 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 | `SCRAPER_PLAYWRIGHT_ENABLED` | `true` | Enable Playwright rendering fallback provider |
 | `SCRAPER_PLAYWRIGHT_HEADLESS` | `true` | Run Playwright browser headless in scraper fallback |
 | `SCRAPER_PLAYWRIGHT_TIMEOUT_SEC` | `30` | Playwright render timeout (seconds) |
+| `SCRAPER_PLAYWRIGHT_FINGERPRINT_SLIM` | `false` | Use smaller, lower-overhead Browserforge fingerprints for the Playwright provider |
 | `SCRAPER_CRAWLEE_ENABLED` | `true` | Enable Crawlee advanced fallback provider |
 | `SCRAPER_CRAWLEE_TIMEOUT_SEC` | `45` | Crawlee stage timeout budget (seconds) |
 | `SCRAPER_CRAWLEE_HEADLESS` | `true` | Run Crawlee Playwright stage in headless mode |

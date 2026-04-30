@@ -84,6 +84,7 @@ class ScrapeGraphAIProvider:
         # which is not in its registry. Prepending "openai/" makes the lib parse
         # model_provider="openai" and passes the remainder (original slash-form string)
         # to OpenRouter, which accepts the full model identifier unchanged.
+        # TODO: drop the "openai/" prefix once https://github.com/ScrapeGraphAI/Scrapegraph-ai/issues/560 lands and exposes `override_provider` for OpenAI-compatible base URLs.
         graph_config: dict = {
             "llm": {
                 "api_key": self._openrouter_api_key,

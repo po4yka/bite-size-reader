@@ -1,6 +1,11 @@
 /**
  * Ratatoskr Defuddle sidecar — minimal Fastify server.
  *
+ * Uses defuddle/node (async Node.js API) with linkedom for DOM parsing.
+ * Flow: Playwright fetches HTML → linkedom builds a Document → Defuddle
+ * parses it with markdown:true → response is text/markdown with YAML
+ * frontmatter and a Markdown body (no HTML).
+ *
  * Routes:
  *   GET /health       → 200 {"status":"ok"}
  *   GET /*            → fetch URL via Playwright, parse with Defuddle,
@@ -15,13 +20,19 @@
  *   author: ...
  *   description: ...
  *   url: ...
+ *   domain: ...
+ *   language: ...
+ *   published: ...
+ *   image: ...
+ *   wordCount: ...
  *   ---
  *
  *   <markdown body>
  */
 
 import { chromium } from 'playwright';
-import { Defuddle } from 'defuddle';
+import { Defuddle } from 'defuddle/node';
+import { parseHTML } from 'linkedom';
 import Fastify from 'fastify';
 import pLimit from 'p-limit';
 
@@ -182,9 +193,8 @@ fastify.get('/*', { config: { rawBody: false } }, async (req, reply) => {
 
   let parsed;
   try {
-    // Defuddle 0.x API: new Defuddle(document, options).parse()
-    // In Node (no real DOM) we pass the HTML string; Defuddle uses its own parser.
-    parsed = new Defuddle(html, { url: targetUrl }).parse();
+    const { document } = parseHTML(html);
+    parsed = await Defuddle(document, targetUrl, { markdown: true });
   } catch (err) {
     return reply.code(502).send({ error: `Defuddle parse error: ${err.message}` });
   }
@@ -194,6 +204,11 @@ fastify.get('/*', { config: { rawBody: false } }, async (req, reply) => {
     author: parsed.author ?? '',
     description: parsed.description ?? '',
     url: targetUrl,
+    domain: parsed.domain ?? '',
+    language: parsed.language ?? '',
+    published: parsed.published ?? '',
+    image: parsed.image ?? '',
+    wordCount: parsed.wordCount ?? '',
   });
 
   const body = parsed.content ?? '';

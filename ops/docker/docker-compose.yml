@@ -508,8 +508,9 @@ services:
     profiles:
       - with-firecrawl
       - with-scrapers
-    # Pinned to 0.6.3 (known-stable). To upgrade: check https://hub.docker.com/r/unclecode/crawl4ai/tags
-    image: unclecode/crawl4ai:0.6.3
+    # Pinned to 0.8.0 (stable; "latest" tag tracks this version per upstream).
+    # To upgrade: check https://hub.docker.com/r/unclecode/crawl4ai/tags
+    image: unclecode/crawl4ai:0.8.0
     container_name: ratatoskr-crawl4ai
     environment:
       - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_TOKEN:-}

@@ -190,6 +190,11 @@ sidecar returns an error result and the chain continues. The
 `scrapegraph_ai` provider is the only one that contacts an external
 endpoint (OpenRouter), and only as a last resort.
 
+### Operator surfaces (Crawl4AI sidecar)
+
+- **Interactive playground** — `http://crawl4ai:11235/playground` lets you test crawl requests against the live sidecar from a browser UI.
+- **Real-time dashboard** — `http://crawl4ai:11235/dashboard` shows active crawl jobs, queue depth, and resource usage.
+
 ---
 
 ## Quality gates per rung

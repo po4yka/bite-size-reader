@@ -226,6 +226,17 @@ class ScraperConfig(BaseModel):
         default=60,
         validation_alias="SCRAPER_CRAWL4AI_TIMEOUT_SEC",
     )
+    crawl4ai_cache_mode: str = Field(
+        default="BYPASS",
+        validation_alias="SCRAPER_CRAWL4AI_CACHE_MODE",
+        description="Crawl4AI cache mode: ENABLED, DISABLED, BYPASS, READ_ONLY, WRITE_ONLY",
+    )
+
+    playwright_fingerprint_slim: bool = Field(
+        default=False,
+        validation_alias="SCRAPER_PLAYWRIGHT_FINGERPRINT_SLIM",
+        description="Use smaller, lower-overhead fingerprints for the Playwright provider",
+    )
 
     scrapegraph_enabled: bool = Field(
         default=True,
@@ -244,6 +255,17 @@ class ScraperConfig(BaseModel):
             msg = "SCRAPER_PROFILE must be one of: fast, balanced, robust"
             raise ValueError(msg)
         return profile
+
+    @field_validator("crawl4ai_cache_mode", mode="before")
+    @classmethod
+    def _validate_crawl4ai_cache_mode(cls, value: Any) -> str:
+        allowed = {"ENABLED", "DISABLED", "BYPASS", "READ_ONLY", "WRITE_ONLY"}
+        mode = str(value or "BYPASS").strip().upper()
+        if mode not in allowed:
+            allowed_str = ", ".join(sorted(allowed))
+            msg = f"SCRAPER_CRAWL4AI_CACHE_MODE must be one of: {allowed_str}"
+            raise ValueError(msg)
+        return mode
 
     @field_validator("force_provider", mode="before")
     @classmethod

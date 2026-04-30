@@ -1,10 +1,12 @@
 """Crawl4AI REST API content extraction provider.
 
-Upstream wire contract (Crawl4AI Docker server):
-  POST /crawl/sync  ->  {"success": bool, "results": [{"success": bool, "markdown": ..., ...}]}
-  POST /crawl       ->  {"task_id": ...}  (async task; requires polling /task/{id})
+Upstream wire contract (Crawl4AI Docker server v0.8.x):
+  POST /crawl  ->  {"success": bool, "results": [{"success": bool, "markdown": ..., ...}]}
 
-We use /crawl/sync exclusively so results are available in a single round-trip.
+Reference: https://github.com/unclecode/crawl4ai/blob/main/deploy/docker/README.md
+
+We use POST /crawl with stream=False so results are available in a single round-trip.
+The body envelopes nested configs in {type, params} wrappers as required by the v0.8.x API.
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ class Crawl4AIProvider:
         min_content_length: int = 400,
         profile: str = "balanced",
         js_heavy_hosts: tuple[str, ...] = (),
+        cache_mode: str = "BYPASS",
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
     ) -> None:
         self._url = url.rstrip("/")
@@ -52,6 +55,7 @@ class Crawl4AIProvider:
         self._min_content_length = min_content_length
         self._profile = profile
         self._js_heavy_hosts = js_heavy_hosts
+        self._cache_mode = cache_mode
         self._audit = audit
         self._client: httpx.AsyncClient | None = None
 
@@ -94,18 +98,20 @@ class Crawl4AIProvider:
         payload: dict[str, Any] = {
             "urls": [url],
             "browser_config": {
-                "headless": True,
-                "user_agent_mode": "random",
+                "type": "BrowserConfig",
+                "params": {"headless": True, "user_agent_mode": "random"},
             },
             "crawler_config": {
-                "stream": False,
-                "cache_mode": "BYPASS",
+                "type": "CrawlerRunConfig",
+                "params": {
+                    "cache_mode": self._cache_mode,
+                    "stream": False,
+                },
             },
         }
 
-        # Use /crawl/sync — returns results immediately.
-        # /crawl is the async endpoint that returns {task_id} for polling.
-        crawl_endpoint = f"{self._url}/crawl/sync"
+        # POST /crawl with stream=False returns results immediately (v0.8.x API).
+        crawl_endpoint = f"{self._url}/crawl"
 
         try:
             client = self._get_client()
