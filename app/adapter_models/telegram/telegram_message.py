@@ -17,14 +17,14 @@ from app.core.logging_utils import get_logger, log_exception
 logger = get_logger(__name__)
 
 
-def _pyrogram_to_dict(obj: Any) -> dict[str, Any]:
-    """Convert a Pyrogram object to a dictionary, handling nested objects.
+def _telegram_obj_to_dict(obj: Any) -> dict[str, Any]:
+    """Convert a Telegram client object to a dictionary, handling nested objects.
 
-    This function recursively converts nested Pyrogram objects (like ChatPhoto,
+    This function recursively converts nested Telegram objects (like ChatPhoto,
     User, etc.) to dictionaries suitable for Pydantic model validation.
 
     Args:
-        obj: A Pyrogram object or any object with __dict__ attribute
+        obj: A Telegram object or any object with __dict__ attribute
 
     Returns:
         A dictionary representation of the object with all nested objects converted
@@ -82,7 +82,7 @@ def _coerce_non_negative_int(value: Any, *, default: int = 0) -> int:
 
 def _parse_message_entity(entity: Any, *, label: str) -> MessageEntity:
     """Parse a MessageEntity while preserving a safe fallback."""
-    entity_dict = _pyrogram_to_dict(entity)
+    entity_dict = _telegram_obj_to_dict(entity)
     try:
         return MessageEntity.from_dict(entity_dict)
     except Exception as exc:
@@ -183,11 +183,11 @@ def _detect_media_type(media_objects: dict[str, Any]) -> MediaType | None:
 
 
 def _parse_user(value: Any) -> TelegramUser | None:
-    return TelegramUser.from_dict(_pyrogram_to_dict(value)) if value else None
+    return TelegramUser.from_dict(_telegram_obj_to_dict(value)) if value else None
 
 
 def _parse_chat(value: Any) -> TelegramChat | None:
-    return TelegramChat.from_dict(_pyrogram_to_dict(value)) if value else None
+    return TelegramChat.from_dict(_telegram_obj_to_dict(value)) if value else None
 
 
 def _build_parsed_message_kwargs(message: Any) -> dict[str, Any]:
@@ -247,12 +247,12 @@ def _build_parsed_message_kwargs(message: Any) -> dict[str, Any]:
         "via_bot": _parse_user(getattr(message, "via_bot", None)),
         "has_protected_content": getattr(message, "has_protected_content", None),
         "connected_website": getattr(message, "connected_website", None),
-        "reply_markup": _pyrogram_to_dict(reply_markup) if reply_markup is not None else None,
+        "reply_markup": _telegram_obj_to_dict(reply_markup) if reply_markup is not None else None,
         "views": getattr(message, "views", None),
         "via_bot_user_id": getattr(message, "via_bot_user_id", None),
         "effect_id": getattr(message, "effect_id", None),
         "link_preview_options": (
-            _pyrogram_to_dict(link_preview_options) if link_preview_options is not None else None
+            _telegram_obj_to_dict(link_preview_options) if link_preview_options is not None else None
         ),
         "show_caption_above_media": getattr(message, "show_caption_above_media", None),
         "media_type": media_type,
@@ -403,8 +403,8 @@ class TelegramMessage(BaseModel):
     has_caption: bool = False
 
     @classmethod
-    def from_pyrogram_message(cls, message: Any) -> TelegramMessage:
-        """Create TelegramMessage from Pyrogram Message object."""
+    def from_telegram_message(cls, message: Any) -> TelegramMessage:
+        """Create TelegramMessage from a Telegram client message object."""
         try:
             return cls(**_build_parsed_message_kwargs(message))
         except Exception as exc:

@@ -114,7 +114,7 @@ class ResponseSenderEditFlow:
     @staticmethod
     def _get_flood_wait_seconds(exc: Exception) -> float | None:
         """Extract the wait duration from a FloodWait-style exception."""
-        # Pyrogram FloodWait stores the delay in exc.value
+        # Telegram FloodWait-style exceptions commonly store the delay in exc.value.
         value = getattr(exc, "value", None)
         if isinstance(value, (int, float)) and value > 0:
             return float(value)

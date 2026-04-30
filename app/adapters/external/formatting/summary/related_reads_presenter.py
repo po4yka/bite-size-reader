@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.telegram.telethon_compat import InlineKeyboardButton, InlineKeyboardMarkup
 from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
 
@@ -24,8 +25,6 @@ def build_related_reads_keyboard(
     if not items:
         return None
     try:
-        from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
         buttons: list[list[Any]] = []
         for item in items:
             title = item.title
@@ -34,9 +33,6 @@ def build_related_reads_keyboard(
             label = f"{title} ({item.age_label})" if item.age_label else title
             buttons.append([InlineKeyboardButton(label, callback_data=f"rel:{item.request_id}")])
         return InlineKeyboardMarkup(buttons)
-    except ImportError:
-        logger.debug("pyrogram_not_available_for_related_reads")
-        return None
     except Exception as exc:
         logger.warning("build_related_reads_keyboard_failed", extra={"error": str(exc)})
         return None

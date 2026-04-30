@@ -39,7 +39,7 @@ class MessageRouteContextBuilder:
         if self._should_skip_message(message, correlation_id):
             return None
 
-        telegram_message = TelegramMessage.from_pyrogram_message(message)
+        telegram_message = TelegramMessage.from_telegram_message(message)
         self._log_validation_errors(telegram_message, correlation_id)
 
         uid = await self._resolve_user_id(telegram_message, message, correlation_id)

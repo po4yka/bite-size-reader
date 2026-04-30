@@ -1,10 +1,11 @@
-"""Pyrogram userbot client for reading Telegram channel histories."""
+"""Telethon userbot client for reading Telegram channel histories."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.telegram.telethon_compat import TelethonUserClient
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 
@@ -17,48 +18,36 @@ logger = get_logger(__name__)
 
 
 class UserbotClient:
-    """Thin wrapper around a Pyrogram userbot session for channel reading.
-
-    Uses the same API credentials as the main bot but authenticates as a user
-    (no bot_token) so it can read channel histories via get_chat_history().
-    """
+    """Thin wrapper around a Telethon user session for channel reading."""
 
     def __init__(self, cfg: AppConfig, session_dir: Path) -> None:
         self._cfg = cfg
         self._session_dir = session_dir
-        self._client: Any = None  # pyrogram.Client
+        self._client: TelethonUserClient | None = None
 
     async def start(self) -> None:
-        """Start the userbot Pyrogram session.
-
-        Raises:
-            FileNotFoundError: If the session file does not exist.
-                The user must run ``/init_session`` first.
-        """
-        from pyrogram import Client
-
+        """Start the Telethon user session created by /init_session."""
         session_path = self._session_dir / self._cfg.digest.session_name
         session_file = session_path.with_suffix(".session")
         if not session_file.exists():
             msg = (
-                f"Userbot session file not found: {session_file}\n"
+                f"Telethon userbot session file not found: {session_file}\n"
                 "Run /init_session first to authenticate the userbot."
             )
             raise FileNotFoundError(msg)
 
-        self._client = Client(
-            name=str(session_path),
+        self._client = TelethonUserClient(
+            session_path=str(session_path),
             api_id=self._cfg.telegram.api_id,
             api_hash=self._cfg.telegram.api_hash,
-            # No bot_token -- this is a user session
         )
         await self._client.start()
         logger.info("digest_userbot_started", extra={"session": self._cfg.digest.session_name})
 
     async def stop(self) -> None:
-        """Stop the userbot Pyrogram session."""
+        """Stop the Telethon user session."""
         if self._client:
-            await self._client.stop()
+            await self._client.disconnect()
             self._client = None
             logger.info("digest_userbot_stopped")
 
@@ -68,17 +57,7 @@ class UserbotClient:
         hours_lookback: int = 24,
         min_length: int = 100,
     ) -> list[dict[str, Any]]:
-        """Fetch recent posts from a public channel.
-
-        Args:
-            channel_username: Channel username (without @).
-            hours_lookback: How many hours back to fetch.
-            min_length: Minimum text length to include a post.
-
-        Returns:
-            List of post dicts with keys: message_id, text, date, views,
-            forwards, media_type, url.
-        """
+        """Fetch recent posts from a public channel."""
         if not self._client:
             msg = "UserbotClient not started"
             raise RuntimeError(msg)
@@ -93,22 +72,13 @@ class UserbotClient:
                     msg_date = msg_date.replace(tzinfo=UTC)
 
                 if msg_date and msg_date < cutoff:
-                    break  # Messages are in reverse chronological order
+                    break
 
-                text = message.text or message.caption or ""
+                text = getattr(message, "message", None) or getattr(message, "text", None) or ""
                 if len(text) < min_length:
                     continue
 
-                media_type = None
-                if message.photo:
-                    media_type = "photo"
-                elif message.video:
-                    media_type = "video"
-                elif message.document:
-                    media_type = "document"
-                elif message.audio:
-                    media_type = "audio"
-
+                media_type = _telethon_media_type(getattr(message, "media", None))
                 posts.append(
                     {
                         "message_id": message.id,
@@ -135,14 +105,7 @@ class UserbotClient:
         return posts
 
     async def resolve_channel(self, username: str) -> dict[str, Any]:
-        """Resolve a Telegram channel by username and return its metadata.
-
-        Returns:
-            Dict with keys: username, title, description, member_count.
-
-        Raises:
-            ValueError: If the channel cannot be found.
-        """
+        """Resolve a Telegram channel by username and return its metadata."""
         if not self._client:
             msg = "UserbotClient not started"
             raise RuntimeError(msg)
@@ -160,11 +123,23 @@ class UserbotClient:
         return {
             "username": getattr(chat, "username", username) or username,
             "title": getattr(chat, "title", None),
-            "description": getattr(chat, "description", None),
-            "member_count": getattr(chat, "members_count", None),
+            "description": getattr(chat, "about", None) or getattr(chat, "description", None),
+            "member_count": getattr(chat, "participants_count", None)
+            or getattr(chat, "members_count", None),
         }
 
     @property
     def is_connected(self) -> bool:
         """Check if the userbot client is currently connected."""
         return self._client is not None and self._client.is_connected
+
+
+def _telethon_media_type(media: Any) -> str | None:
+    if media is None:
+        return None
+    name = type(media).__name__.lower()
+    if "photo" in name:
+        return "photo"
+    if "document" in name:
+        return "document"
+    return "media"

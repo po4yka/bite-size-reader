@@ -20,7 +20,8 @@ class SessionInitState:
 
     phone_number: str = ""
     phone_code_hash: str = ""
-    client: Any = None  # pyrogram.Client (unauthenticated)
+    client: Any = None  # Telethon user client (unauthenticated)
+    pending_session_name: str = ""
     message_ids: list[int] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
     step: Literal["waiting_contact", "waiting_otp", "waiting_2fa"] = "waiting_contact"

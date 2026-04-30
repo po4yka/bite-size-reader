@@ -54,7 +54,7 @@
 - [Appendix — API Specifics (Quick References)](#appendix--api-specifics-quick-references)
   - [Firecrawl (/scrape)](#firecrawl-scrape)
   - [OpenRouter (Chat Completions)](#openrouter-chat-completions)
-  - [PyroTGFork / Pyrogram](#pyrotgfork--pyrogram)
+  - [Telethon](#telethon)
 
 ---
 
@@ -103,11 +103,9 @@ Everything runs in one Docker container; code lives on GitHub. Access is restric
   Chat Completions — https://openrouter.ai/docs/api-reference/chat-completion
   Quickstart — https://openrouter.ai/docs/quickstart
 
-- **PyroTGFork (Pyrogram fork)** — async MTProto framework for Telegram (user/bot).
-  Fork site — https://telegramplayground.github.io/pyrogram/
-  Setup/Updates/Examples — `start/` pages on the same site (e.g., `/start/setup.html`, `/start/updates.html`, `/start/examples/`).
-
-> Note: Pyrogram upstream is no longer maintained; this project uses the **PyroTGFork** mirror/documentation while keeping APIs compatible.
+- **Telethon** — async MTProto framework for Telegram (user/bot).
+  Project — https://github.com/LonamiWebs/Telethon
+  Docs — https://docs.telethon.dev/
 
 - **yt-dlp** — YouTube video downloader (actively maintained fork of youtube-dl).
   Documentation — https://github.com/yt-dlp/yt-dlp#readme
@@ -1155,6 +1153,6 @@ Operational controls include `SCRAPER_ENABLED`, `SCRAPER_PROFILE`, `SCRAPER_BROW
   - Chat: https://openrouter.ai/docs/api-reference/chat-completion
   - Quickstart: https://openrouter.ai/docs/quickstart
 
-### PyroTGFork / Pyrogram
+### Telethon
 
-- Client, handlers, updates, examples: https://telegramplayground.github.io/pyrogram/
+- Client, handlers, updates, examples: https://docs.telethon.dev/

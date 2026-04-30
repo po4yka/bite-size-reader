@@ -21,11 +21,8 @@ class TelegramComponentWiring:
         client_cls: Any,
         filters_obj: Any,
     ) -> None:
-        """Route runtime/test pyrogram shims into telegram client module."""
-        setattr(telegram_client_module, "Client", client_cls)  # noqa: B010
-        setattr(telegram_client_module, "filters", filters_obj)  # noqa: B010
-        if client_cls is object:
-            telegram_client_module.PYROGRAM_AVAILABLE = False
+        """Retained for old tests; Telethon runtime no longer needs client shims."""
+        _ = telegram_client_module, client_cls, filters_obj
 
     def bind_runtime_components(
         self,

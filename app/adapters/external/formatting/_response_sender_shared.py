@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.external.formatting.html_repair import repair_html_chunk
+from app.adapters.telegram.telethon_compat import normalize_parse_mode as _normalize_parse_mode
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
@@ -33,24 +34,8 @@ class ResponseSenderSharedState:
 
 
 def normalize_parse_mode(mode: str | None) -> Any:
-    """Convert string parse mode to Pyrogram enum."""
-    if mode is None:
-        return None
-    if not isinstance(mode, str):
-        return mode
-    try:
-        from pyrogram import enums
-
-        mode_upper = mode.upper()
-        if mode_upper == "HTML":
-            return enums.ParseMode.HTML
-        if mode_upper in ("MARKDOWN", "MD"):
-            return enums.ParseMode.MARKDOWN
-        if mode_upper == "DISABLED":
-            return enums.ParseMode.DISABLED
-        return mode
-    except ImportError:
-        return mode
+    """Normalize string parse modes for Telethon send methods."""
+    return _normalize_parse_mode(mode)
 
 
 def validate_and_truncate(

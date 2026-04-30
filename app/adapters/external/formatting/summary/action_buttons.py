@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.adapters.telegram.telethon_compat import InlineKeyboardButton, InlineKeyboardMarkup
 from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
 
@@ -40,16 +41,13 @@ def create_inline_keyboard(
     lang: str = "en",
 ) -> Any:
     try:
-        from pyrogram import enums
-        from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
         summary_id_str = str(summary_id)
         keyboard = [
             [
                 InlineKeyboardButton(
                     t("btn_more", lang),
                     callback_data=f"more:{summary_id_str}",
-                    style=enums.ButtonStyle.PRIMARY,
+                    style="primary",
                 ),
                 InlineKeyboardButton(
                     t("btn_pdf", lang), callback_data=f"export:{summary_id_str}:pdf"
@@ -68,7 +66,7 @@ def create_inline_keyboard(
                 InlineKeyboardButton(
                     t("btn_save", lang),
                     callback_data=f"save:{summary_id_str}",
-                    style=enums.ButtonStyle.SUCCESS,
+                    style="success",
                 ),
                 InlineKeyboardButton(
                     t("btn_similar", lang), callback_data=f"similar:{summary_id_str}"
@@ -79,19 +77,16 @@ def create_inline_keyboard(
                 InlineKeyboardButton(
                     "+1",
                     callback_data=f"rate:{summary_id_str}:1",
-                    style=enums.ButtonStyle.SUCCESS,
+                    style="success",
                 ),
                 InlineKeyboardButton(
                     "-1",
                     callback_data=f"rate:{summary_id_str}:-1",
-                    style=enums.ButtonStyle.DANGER,
+                    style="danger",
                 ),
             ],
         ]
         return InlineKeyboardMarkup(keyboard)
-    except ImportError:
-        logger.debug("pyrogram_not_available_for_action_buttons")
-        return None
     except Exception as exc:
         logger.warning(
             "create_action_buttons_failed",

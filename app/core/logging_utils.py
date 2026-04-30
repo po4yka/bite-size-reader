@@ -157,9 +157,9 @@ def setup_json_logging(
 
     # Reduce noise from verbose third-party loggers
     for noisy_logger in (
-        "pyrogram",
-        "pyrogram.session",
-        "pyrogram.session.session",
+        "telethon",
+        "telethon.network",
+        "telethon.extensions",
     ):
         logging.getLogger(noisy_logger).setLevel(logging.INFO)
 

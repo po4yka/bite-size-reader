@@ -71,7 +71,7 @@ See: [Summary Contract Design](summary-contract-design.md), [ADR-0002](../adr/00
 
 **Applied:**
 
-- Pyrogram async Telegram client
+- Telethon async Telegram client
 - httpx async HTTP client (Firecrawl, OpenRouter)
 - Semaphore-based rate limiting (`MAX_CONCURRENT_CALLS`)
 - Optional uvloop for 30-40% performance boost
@@ -171,7 +171,7 @@ See: [Summary Contract Design](summary-contract-design.md), [ADR-0002](../adr/00
 - Test core logic without mocking Telegram/Firecrawl/OpenRouter
 - Swap LLM providers (OpenRouter → Anthropic → OpenAI) with zero domain code changes
 - Add new interfaces (CLI runner, Mobile API, gRPC) without touching core
-- Framework independence (could replace Pyrogram with python-telegram-bot)
+- Framework independence (Telegram adapter can change without domain changes)
 
 See: [ADR-0004 Hexagonal Architecture](../adr/0004-hexagonal-architecture.md)
 
@@ -289,9 +289,9 @@ See: [ADR-0001 Firecrawl](../adr/0001-use-firecrawl-for-content-extraction.md)
 
 ---
 
-### Why Pyrogram Over python-telegram-bot?
+### Why Telethon Over python-telegram-bot?
 
-**Chosen:** Pyrogram (MTProto async client)
+**Chosen:** Telethon (MTProto async client)
 **Rejected:** python-telegram-bot, aiogram
 
 **Rationale:**

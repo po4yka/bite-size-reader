@@ -31,7 +31,7 @@ class CommandExecutionContext:
     reducing repetitive parameter lists and providing a single point for shared data.
 
     Attributes:
-        message: The Pyrogram message object.
+        message: The Telegram message object.
         text: The message text content.
         uid: The user ID who sent the message.
         chat_id: The chat ID where the message was sent (may be None).
@@ -77,7 +77,7 @@ class CommandExecutionContext:
         a fully populated context object.
 
         Args:
-            message: The Pyrogram message object.
+            message: The Telegram message object.
             uid: The user ID.
             correlation_id: Request correlation ID.
             interaction_id: Database interaction ID.

@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 from app.api.models.responses import success_response
+from app.adapters.telegram.telethon_compat import InlineKeyboardButton, InlineKeyboardMarkup
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
 
@@ -52,16 +53,11 @@ class ResponseSenderPayloadFlow:
     @staticmethod
     def create_inline_keyboard(buttons: list[dict[str, str]]) -> Any:
         try:
-            from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
             keyboard_buttons = [
                 [InlineKeyboardButton(btn["text"], callback_data=btn["callback_data"])]
                 for btn in buttons
             ]
             return InlineKeyboardMarkup(keyboard_buttons)
-        except ImportError:
-            logger.warning("pyrogram_not_available_for_inline_keyboard")
-            return None
         except Exception as exc:
             logger.error("failed_to_create_inline_keyboard", extra={"error": str(exc)})
             return None

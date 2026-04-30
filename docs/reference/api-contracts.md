@@ -14,7 +14,7 @@ Ratatoskr integrates with four primary external services:
 
 1. **Firecrawl** - Content extraction
 2. **OpenRouter** - LLM completions
-3. **Pyrogram** - Telegram MTProto
+3. **Telethon** - Telegram MTProto
 4. **yt-dlp** - YouTube video downloads
 
 ---
@@ -301,28 +301,27 @@ cost_usd = (prompt_tokens * pricing["prompt"] + completion_tokens * pricing["com
 
 ---
 
-## Pyrogram (Telegram)
+## Telethon (Telegram)
 
-**Library:** PyroTGFork (fork of Pyrogram)
+**Library:** Telethon
 **Protocol:** Telegram MTProto
-**Documentation:** https://telegramplayground.github.io/pyrogram/
+**Documentation:** https://docs.telethon.dev/
 
 ### Authentication
 
 **Bot Token Authentication:**
 
 ```python
-# app/adapters/telegram/telegram_bot.py
-from pyrogram import Client
+# app/adapters/telegram/telegram_client.py
+from telethon import TelegramClient
 
-app = Client(
-    "ratatoskr",
+app = TelegramClient(
+    "ratatoskr_bot",
     api_id=API_ID,  # From my.telegram.org
     api_hash=API_HASH,  # From my.telegram.org
-    bot_token=BOT_TOKEN  # From @BotFather
 )
 
-await app.start()
+await app.start(bot_token=BOT_TOKEN)
 ```
 
 **Environment Variables:**
@@ -402,7 +401,7 @@ await client.send_document(
 **Error Handling:**
 
 ```python
-from pyrogram.errors import FloodWait, MessageNotModified
+from telethon.errors import FloodWaitError, MessageNotModifiedError
 
 try:
     await message.reply_text("Response")
@@ -550,7 +549,7 @@ except TranscriptsDisabled:
 | --------- | --------- | ----------- | ------------- | ---------- |
 | Firecrawl | Content extraction | 500 req/month | 10 req/min | Trafilatura |
 | OpenRouter | LLM completions | Yes (free models) | Varies by model | Model fallback chain |
-| Pyrogram | Telegram client | Unlimited | 30 msg/sec | Built-in FloodWait handling |
+| Telethon | Telegram client | Unlimited | 30 msg/sec | FloodWait handling via MTProto errors |
 | yt-dlp | YouTube download | Unlimited | YouTube rate limits | youtube-transcript-api |
 
 ---

@@ -709,7 +709,7 @@ python -m app.cli.add_performance_indexes
 
 **Command:** `python -m app.cli.init_userbot_session`
 
-**Purpose:** Initialize a Pyrogram userbot session for the channel digest subsystem.
+**Purpose:** Initialize a Telethon userbot session for the channel digest subsystem.
 
 ### Basic Usage
 
@@ -723,6 +723,27 @@ python -m app.cli.init_userbot_session
 - This CLI tool requires interactive terminal input (phone number, OTP code, optional 2FA password)
 - The preferred alternative is the `/init_session` bot command, which uses a Telegram Mini App to securely relay OTP/2FA codes without exposing them in chat
 - The session file is stored at the path configured by `DIGEST_SESSION_NAME` (default: `digest_userbot`)
+- Sessions created before the Telethon migration must be recreated. Existing
+  legacy `.session` files are preserved as `<DIGEST_SESSION_NAME>.legacy.bak.session`
+  after a new Telethon session authenticates successfully.
+
+## Check Userbot Session
+
+**Command:** `python -m app.cli.check_userbot_session`
+
+**Purpose:** Verify that the Telethon digest userbot session exists and can connect.
+
+### Basic Usage
+
+```bash
+python -m app.cli.check_userbot_session
+```
+
+### Exit Codes
+
+- `0`: session exists and `get_me()` succeeds
+- `1`: connection/auth check failed
+- `2`: session file is missing
 - Only needs to be run once; the session persists across restarts
 
 ---

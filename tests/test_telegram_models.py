@@ -212,10 +212,10 @@ class TestTelegramMessage(unittest.TestCase):
         """Set up test fixtures."""
         self.mock_message = self.SimpleMockMessage()
 
-    def test_from_pyrogram_message_basic(self):
-        """Test creating TelegramMessage from basic Pyrogram message."""
+    def test_from_telegram_message_basic(self):
+        """Test creating TelegramMessage from basic Telegram message."""
 
-        # Create a simple object that mimics Pyrogram message structure
+        # Create a simple object that mimics Telegram message structure
         class MockMessage:
             def __init__(self):
                 self.id = 12345
@@ -281,7 +281,7 @@ class TestTelegramMessage(unittest.TestCase):
         mock_message.from_user = MockUser()
         mock_message.chat = MockChat()
 
-        message = TelegramMessage.from_pyrogram_message(mock_message)
+        message = TelegramMessage.from_telegram_message(mock_message)
 
         assert message.message_id == 12345
         assert message.from_user is not None
@@ -292,7 +292,7 @@ class TestTelegramMessage(unittest.TestCase):
         assert not message.has_media
         assert message.has_text
 
-    def test_from_pyrogram_message_with_photo(self):
+    def test_from_telegram_message_with_photo(self):
         """Test creating TelegramMessage with photo media."""
 
         # Use simple classes instead of Mock for proper __dict__ behavior
@@ -308,14 +308,14 @@ class TestTelegramMessage(unittest.TestCase):
         ]
         self.mock_message.photo = mock_photo
 
-        message = TelegramMessage.from_pyrogram_message(self.mock_message)
+        message = TelegramMessage.from_telegram_message(self.mock_message)
 
         assert message.media_type == MediaType.PHOTO
         assert message.has_media
         assert message.photo is not None
         assert len(message.photo) == 2
 
-    def test_from_pyrogram_message_with_entities(self):
+    def test_from_telegram_message_with_entities(self):
         """Test creating TelegramMessage with entities."""
 
         # Use simple classes instead of Mock for proper __dict__ behavior
@@ -329,16 +329,16 @@ class TestTelegramMessage(unittest.TestCase):
         mock_entity2 = MockEntity("bold", 10, 5)
         self.mock_message.entities = [mock_entity1, mock_entity2]
 
-        message = TelegramMessage.from_pyrogram_message(self.mock_message)
+        message = TelegramMessage.from_telegram_message(self.mock_message)
 
         assert len(message.entities) == 2
         assert message.entities[0].type == MessageEntityType.URL
         assert message.entities[1].type == MessageEntityType.BOLD
 
-    def test_from_pyrogram_message_forwarded(self):
+    def test_from_telegram_message_forwarded(self):
         """Test creating TelegramMessage with forward information."""
 
-        # Create a simple object that mimics Pyrogram message structure
+        # Create a simple object that mimics Telegram message structure
         class MockMessage:
             def __init__(self):
                 self.id = 12345
@@ -394,14 +394,14 @@ class TestTelegramMessage(unittest.TestCase):
         mock_message.forward_from_chat = MockForwardChat()
         mock_message.forward_from_message_id = 54321
 
-        message = TelegramMessage.from_pyrogram_message(mock_message)
+        message = TelegramMessage.from_telegram_message(mock_message)
 
         assert message.is_forwarded
         assert message.forward_from_chat is not None
         assert message.forward_from_chat.id == -10012345
         assert message.forward_from_message_id == 54321
 
-    def test_from_pyrogram_message_forwarded_with_reply_markup(self):
+    def test_from_telegram_message_forwarded_with_reply_markup(self):
         """Forwarded messages with inline buttons should parse without crashing."""
 
         class MockMessage:
@@ -469,13 +469,13 @@ class TestTelegramMessage(unittest.TestCase):
         mock_message.forward_from_message_id = 54321
         mock_message.reply_markup = MockReplyMarkup([[MockButton("Test", "https://example.com")]])
 
-        message = TelegramMessage.from_pyrogram_message(mock_message)
+        message = TelegramMessage.from_telegram_message(mock_message)
 
         assert message.is_forwarded
         assert isinstance(message.reply_markup, dict)
         assert message.reply_markup["inline_keyboard"][0][0]["text"] == "Test"
 
-    def test_from_pyrogram_message_forwarded_with_linked_chat_cycle(self):
+    def test_from_telegram_message_forwarded_with_linked_chat_cycle(self):
         """Ensure channel forwards don't crash when Chat.linked_chat forms a cycle."""
         import types
 
@@ -506,14 +506,14 @@ class TestTelegramMessage(unittest.TestCase):
         mock_message.forward_from_chat = channel
         mock_message.forward_from_message_id = 54321
 
-        message = TelegramMessage.from_pyrogram_message(mock_message)
+        message = TelegramMessage.from_telegram_message(mock_message)
 
         assert message.is_forwarded
         assert message.forward_from_chat is not None
         assert message.forward_from_chat.id == -1001
         assert message.forward_from_message_id == 54321
 
-    def test_from_pyrogram_message_forwarded_sender_name(self):
+    def test_from_telegram_message_forwarded_sender_name(self):
         """Test that privacy-protected forwards (forward_sender_name only) are detected."""
 
         class MockMessage:
@@ -562,14 +562,14 @@ class TestTelegramMessage(unittest.TestCase):
                 self.show_caption_above_media = None
 
         mock_message = MockMessage()
-        message = TelegramMessage.from_pyrogram_message(mock_message)
+        message = TelegramMessage.from_telegram_message(mock_message)
 
         assert message.is_forwarded
         assert message.forward_sender_name == "Hidden User"
         assert message.forward_from is None
         assert message.forward_from_chat is None
 
-    def test_from_pyrogram_message_forwarded_from_user(self):
+    def test_from_telegram_message_forwarded_from_user(self):
         """Test that user forwards (no channel) are detected as forwarded."""
 
         class MockMessage:
@@ -629,7 +629,7 @@ class TestTelegramMessage(unittest.TestCase):
         mock_message = MockMessage()
         mock_message.forward_from = MockUser()
 
-        message = TelegramMessage.from_pyrogram_message(mock_message)
+        message = TelegramMessage.from_telegram_message(mock_message)
 
         assert message.is_forwarded
         assert message.forward_from is not None

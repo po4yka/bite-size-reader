@@ -479,7 +479,7 @@ CREATE TABLE telegram_messages (
     forward_from_chat_title   TEXT,
     forward_from_message_id   INTEGER,
     forward_date_ts           INTEGER,
-    message_snapshot          TEXT,  -- Full Pyrogram Message JSON
+    message_snapshot          TEXT,  -- Full Telegram message JSON
     created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -501,7 +501,7 @@ CREATE TABLE telegram_messages (
 - `forward_from_chat_title` (str, nullable) - Forwarded from chat title
 - `forward_from_message_id` (int, nullable) - Forwarded message ID
 - `forward_date_ts` (int, nullable) - Original forward timestamp
-- `message_snapshot` (str) - Full Pyrogram Message object as JSON
+- `message_snapshot` (str) - Full Telegram message object as JSON
 - `created_at` (datetime) - Record creation timestamp
 
 **Indexes:**

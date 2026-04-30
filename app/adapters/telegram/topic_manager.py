@@ -1,7 +1,7 @@
 """Forum topic management for private chat DM topics.
 
 Organizes summaries into categorized topics within private bot conversations.
-Requires PyroTGFork >=2.2.18 (Telegram Bot API 9.3+ DM topics support).
+Requires Telegram Bot API support for DM topics.
 """
 
 from __future__ import annotations
@@ -11,7 +11,10 @@ from typing import TYPE_CHECKING, Any
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
-    from pyrogram import Client
+    from typing import Protocol
+
+    class Client(Protocol):
+        pass
 
 logger = get_logger(__name__)
 

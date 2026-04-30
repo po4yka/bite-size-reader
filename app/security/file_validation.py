@@ -57,15 +57,15 @@ class SecureFileValidator:
             logger.warning("failed_to_resolve_temp_dir", extra={"error": str(e)})
             return allowed
 
-        # Pyrogram download directory (if exists)
-        pyrogram_temp = Path.home() / "Downloads" / "pyrogram"
-        if pyrogram_temp.exists():
+        # Legacy Telegram download directory (if exists)
+        telegram_temp = Path.home() / "Downloads" / "telegram"
+        if telegram_temp.exists():
             try:
-                allowed.append(pyrogram_temp.resolve())
+                allowed.append(telegram_temp.resolve())
             except (OSError, ValueError, RuntimeError) as e:
                 logger.warning(
-                    "failed_to_resolve_pyrogram_temp_dir",
-                    extra={"error": str(e), "path": str(pyrogram_temp)},
+                    "failed_to_resolve_telegram_temp_dir",
+                    extra={"error": str(e), "path": str(telegram_temp)},
                 )
 
         return allowed

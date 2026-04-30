@@ -23,6 +23,16 @@ The migration page is the canonical source — historical-record
 discipline keeps this entry short so the breaking-change list does
 not drift from the operational guide.
 
+### Breaking — Telegram runtime migrated to Telethon
+
+Ratatoskr now uses Telethon for both the BotFather-token bot adapter and the
+channel-digest userbot session. `pyrotgfork`/Pyrogram and `pytgcrypto` are no
+longer runtime dependencies. Existing digest userbot sessions must be recreated
+with `/init_session` or `python -m app.cli.init_userbot_session`; the migration
+flow keeps the previous `.session` file untouched until a new Telethon session
+authenticates successfully, then stores the old file as
+`<DIGEST_SESSION_NAME>.legacy.bak.session`.
+
 ### Added
 - Channel digest subsystem with userbot, scheduler, and commands (`/digest`, `/channels`, `/subscribe`, `/unsubscribe`)
 - Bot-mediated userbot session initialization via `/init_session` with Telegram Mini App OTP/2FA flow
@@ -40,6 +50,7 @@ not drift from the operational guide.
 - Optional manual live smoke script for X article links (`scripts/twitter_article_live_smoke.py`) with per-link JSON diagnostics
 
 ### Removed
+- `pyrotgfork`/Pyrogram and `pytgcrypto` runtime dependencies; Telethon is now the only Telegram client stack.
 - `nlp` optional extra group and spaCy trained model dependencies (en_core_web_sm, ru_core_news_sm) -- codebase only uses `spacy.blank()` + sentencizer
 - `lock-piptools` Makefile target -- `lock-uv` is the canonical dependency locking path
 - `PROMPT.md` -- referenced non-existent migration docs

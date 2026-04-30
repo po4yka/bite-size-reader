@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
-import types
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -132,7 +130,10 @@ async def test_run_digest_task_executes_digest_service_and_closes_resources(
         "app.adapters.digest.digest_service.DigestService",
         MagicMock(return_value=digest_service_instance),
     )
-    monkeypatch.setitem(sys.modules, "pyrogram", types.SimpleNamespace(Client=FakePyroClient))
+    monkeypatch.setattr(
+        "app.adapters.telegram.telethon_compat.TelethonBotClient",
+        FakePyroClient,
+    )
 
     result = await digest_service._run_digest_task(
         user_id=1,

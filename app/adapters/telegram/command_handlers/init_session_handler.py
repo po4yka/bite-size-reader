@@ -17,6 +17,14 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.telegram.command_handlers.decorators import audit_command, track_interaction
 from app.adapters.telegram.session_init_state import SESSION_INIT_TTL_SECONDS, SessionInitState
+from app.adapters.telegram.telethon_compat import (
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    SessionPasswordNeededError,
+    TelethonUserClient,
+    WebAppInfo,
+)
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
 
@@ -91,8 +99,6 @@ class InitSessionHandler:
         self._sessions[ctx.uid] = SessionInitState(step="waiting_contact")
 
         # Send contact keyboard
-        from pyrogram.types import KeyboardButton, ReplyKeyboardMarkup
-
         keyboard = ReplyKeyboardMarkup(
             [[KeyboardButton("Share phone number", request_contact=True)]],
             resize_keyboard=True,
@@ -150,14 +156,13 @@ class InitSessionHandler:
         )
 
         try:
-            from pyrogram import Client
-
             session_dir = Path("/data")
             session_dir.mkdir(parents=True, exist_ok=True)
-            session_path = session_dir / self._cfg.digest.session_name
+            pending_session_name = f"{self._cfg.digest.session_name}.telethon_pending"
+            pending_session_path = session_dir / pending_session_name
 
-            client = Client(
-                name=str(session_path),
+            client = TelethonUserClient(
+                session_path=str(pending_session_path),
                 api_id=self._cfg.telegram.api_id,
                 api_hash=self._cfg.telegram.api_hash,
             )
@@ -167,6 +172,7 @@ class InitSessionHandler:
 
             state.client = client
             state.phone_code_hash = sent_code.phone_code_hash
+            state.pending_session_name = pending_session_name
             state.step = "waiting_otp"
 
             # Send Mini App button for OTP entry
@@ -224,17 +230,15 @@ class InitSessionHandler:
 
     async def _handle_otp(self, message: Any, state: SessionInitState, uid: int, code: str) -> None:
         """Process OTP code via sign_in()."""
-        from pyrogram.errors import SessionPasswordNeeded
-
         try:
             await state.client.sign_in(
                 phone_number=state.phone_number,
                 phone_code_hash=state.phone_code_hash,
                 phone_code=code,
             )
-            # Success
             me = await state.client.get_me()
             await state.client.disconnect()
+            await self._promote_pending_session(state)
             state.client = None
 
             await self._reply_and_track(
@@ -249,7 +253,7 @@ class InitSessionHandler:
             )
             await self._cleanup(uid, message, delete_messages=True)
 
-        except SessionPasswordNeeded:
+        except SessionPasswordNeededError:
             state.step = "waiting_2fa"
             await self._send_webapp_button(message, state, mode="2fa")
 
@@ -274,6 +278,7 @@ class InitSessionHandler:
             await state.client.check_password(password)
             me = await state.client.get_me()
             await state.client.disconnect()
+            await self._promote_pending_session(state)
             state.client = None
 
             await self._reply_and_track(
@@ -309,8 +314,6 @@ class InitSessionHandler:
         self, message: Any, state: SessionInitState, *, mode: str
     ) -> None:
         """Send a ReplyKeyboardMarkup with a web_app button."""
-        from pyrogram.types import KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
-
         api_base = self._cfg.telegram.api_base_url
         if not api_base:
             await self._reply_and_track(
@@ -358,8 +361,6 @@ class InitSessionHandler:
 
         # Remove reply keyboard
         try:
-            from pyrogram.types import ReplyKeyboardRemove
-
             await message.reply_text(".", reply_markup=ReplyKeyboardRemove())
             # Delete the "." message immediately
         except Exception as exc:
@@ -371,7 +372,6 @@ class InitSessionHandler:
             try:
                 chat_id = message.chat.id if message.chat else None
                 if chat_id is not None:
-                    # Pyrogram bot can delete messages in private chats
                     client = message._client
                     await client.delete_messages(chat_id, state.message_ids)
             except Exception as exc:
@@ -390,7 +390,7 @@ class InitSessionHandler:
                 self._expire_session(uid, state)
 
     async def _disconnect_state_client(self, uid: int, state: SessionInitState) -> None:
-        """Disconnect a session-scoped Pyrogram client if one is attached."""
+        """Disconnect a session-scoped Telethon client if one is attached."""
         if state.client is None:
             return
 
@@ -404,6 +404,22 @@ class InitSessionHandler:
             )
         finally:
             state.client = None
+
+    async def _promote_pending_session(self, state: SessionInitState) -> None:
+        """Move a freshly authenticated Telethon session into the runtime path."""
+        if not state.pending_session_name:
+            return
+        session_dir = Path("/data")
+        pending = session_dir / f"{state.pending_session_name}.session"
+        final = session_dir / f"{self._cfg.digest.session_name}.session"
+        if not pending.exists():
+            return
+        if final.exists():
+            backup = session_dir / f"{self._cfg.digest.session_name}.legacy.bak.session"
+            if backup.exists():
+                backup.unlink()
+            final.rename(backup)
+        pending.rename(final)
 
     def _expire_session(self, uid: int, state: SessionInitState) -> None:
         """Remove expired session state and disconnect its client in the background."""

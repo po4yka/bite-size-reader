@@ -120,13 +120,12 @@ class DigestTriggerService:
         """Build runtime dependencies and execute a digest task."""
         from pathlib import Path
 
-        from pyrogram import Client as PyroClient
-
         from app.adapters.digest.analyzer import DigestAnalyzer
         from app.adapters.digest.channel_reader import ChannelReader
         from app.adapters.digest.digest_service import DigestService
         from app.adapters.digest.formatter import DigestFormatter
         from app.adapters.digest.userbot_client import UserbotClient
+        from app.adapters.telegram.telethon_compat import TelethonBotClient
         from app.adapters.openrouter.openrouter_client import OpenRouterClient
         from app.config import load_config
 
@@ -146,12 +145,12 @@ class DigestTriggerService:
             analyzer = DigestAnalyzer(app_cfg, llm_client)
             formatter = DigestFormatter()
 
-            bot = PyroClient(
+            bot = TelethonBotClient(
                 name=f"digest_api_sender_{correlation_id[:8]}",
                 api_id=app_cfg.telegram.api_id,
                 api_hash=app_cfg.telegram.api_hash,
                 bot_token=app_cfg.telegram.bot_token,
-                in_memory=True,
+                session_dir="/tmp",
             )
 
             async with bot:

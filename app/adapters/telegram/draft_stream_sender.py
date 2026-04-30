@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -239,15 +238,11 @@ class DraftStreamSender:
             msg = "telegram_client_invoke_unavailable"
             raise RuntimeError(msg)
 
-        from pyrogram.raw.functions.bots import SendCustomRequest
-        from pyrogram.raw.types import DataJSON
-
-        payload = json.dumps(params, ensure_ascii=False)
-        request = SendCustomRequest(
-            custom_method="sendMessageDraft",
-            params=DataJSON(data=payload),
-        )
-        await client.invoke(request)
+        if hasattr(client, "send_custom_request"):
+            await client.send_custom_request("sendMessageDraft", params)
+            return
+        msg = "telegram_client_custom_request_unavailable"
+        raise RuntimeError(msg)
 
     @staticmethod
     def _classify_failure_reason(exc: Exception) -> str:

@@ -945,7 +945,7 @@ class TestTelegramMessageIsForwarded(unittest.TestCase):
     """Tests for is_forwarded detection across all forward types."""
 
     def _make_mock_message(self, **overrides) -> SimpleNamespace:
-        """Create a mock Pyrogram message with overridable forward fields."""
+        """Create a mock Telegram message with overridable forward fields."""
         from datetime import datetime
 
         defaults = {
@@ -1002,7 +1002,7 @@ class TestTelegramMessageIsForwarded(unittest.TestCase):
         from app.adapter_models.telegram.telegram_message import TelegramMessage
 
         msg = self._make_mock_message()
-        tm = TelegramMessage.from_pyrogram_message(msg)
+        tm = TelegramMessage.from_telegram_message(msg)
         assert not tm.is_forwarded
 
     def test_forward_from_user_detected(self) -> None:
@@ -1019,7 +1019,7 @@ class TestTelegramMessageIsForwarded(unittest.TestCase):
                 language_code=None,
             )
         )
-        tm = TelegramMessage.from_pyrogram_message(msg)
+        tm = TelegramMessage.from_telegram_message(msg)
         assert tm.is_forwarded
 
     def test_forward_from_chat_detected(self) -> None:
@@ -1030,7 +1030,7 @@ class TestTelegramMessageIsForwarded(unittest.TestCase):
             forward_from_chat=SimpleNamespace(id=-100, type="channel", title="Ch"),
             forward_from_message_id=42,
         )
-        tm = TelegramMessage.from_pyrogram_message(msg)
+        tm = TelegramMessage.from_telegram_message(msg)
         assert tm.is_forwarded
 
     def test_forward_sender_name_only_detected(self) -> None:
@@ -1038,7 +1038,7 @@ class TestTelegramMessageIsForwarded(unittest.TestCase):
         from app.adapter_models.telegram.telegram_message import TelegramMessage
 
         msg = self._make_mock_message(forward_sender_name="Hidden")
-        tm = TelegramMessage.from_pyrogram_message(msg)
+        tm = TelegramMessage.from_telegram_message(msg)
         assert tm.is_forwarded
 
     def test_forward_date_only_detected(self) -> None:
@@ -1048,7 +1048,7 @@ class TestTelegramMessageIsForwarded(unittest.TestCase):
         from app.adapter_models.telegram.telegram_message import TelegramMessage
 
         msg = self._make_mock_message(forward_date=datetime(2024, 1, 1))
-        tm = TelegramMessage.from_pyrogram_message(msg)
+        tm = TelegramMessage.from_telegram_message(msg)
         assert tm.is_forwarded
 
 

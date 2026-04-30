@@ -505,64 +505,64 @@ Acceptance evidence:
 
 ### 6.1 Usage audit and protocol design
 
-- [ ] Run `rg -n "pyrogram|pyrotgfork|Pyro|Client\\(|filters|raw\\.functions|SessionPasswordNeeded" app tests docs`.
-- [ ] List every Pyrogram import and runtime usage.
-- [ ] Design internal bot protocol for message send/edit/delete, callbacks, commands, media, albums, forwards, topics, and draft/status updates.
-- [ ] Design internal userbot protocol for login/session, channel fetch, metadata, posts, and digest reads.
-- [ ] Add characterization tests around current Telegram behavior before swapping implementation.
-- [ ] Identify Telethon gaps for raw draft streaming.
+- [x] Run `rg -n "pyrogram|pyrotgfork|Pyro|Client\\(|filters|raw\\.functions|SessionPasswordNeeded" app tests docs`.
+- [x] List every Pyrogram import and runtime usage.
+- [x] Design internal bot protocol for message send/edit/delete, callbacks, commands, media, albums, forwards, topics, and draft/status updates.
+- [x] Design internal userbot protocol for login/session, channel fetch, metadata, posts, and digest reads.
+- [x] Add characterization tests around current Telegram behavior before swapping implementation.
+- [x] Identify Telethon gaps for raw draft streaming.
 
 Acceptance evidence:
 
-- [ ] Migration scope covers all Telegram code, not only userbot.
-- [ ] Protocols isolate app logic from Telethon-specific types.
+- [x] Migration scope covers all Telegram code, not only userbot.
+- [x] Protocols isolate app logic from Telethon-specific types.
 
 ### 6.2 Bot adapter migration
 
-- [ ] Replace `app/adapters/telegram/telegram_client.py` internals with Telethon.
-- [ ] Replace `app/adapters/telegram/telegram_bot.py` internals with Telethon.
-- [ ] Update command registration and filters.
-- [ ] Update callback query handling.
-- [ ] Update forwarded post handling.
-- [ ] Update URL submission flow.
-- [ ] Update album/media group handling.
-- [ ] Update forum topic manager behavior.
-- [ ] Update draft/status streaming or fallback behavior.
-- [ ] Update tests under `tests/adapters/telegram/`.
+- [x] Replace `app/adapters/telegram/telegram_client.py` internals with Telethon.
+- [x] Replace `app/adapters/telegram/telegram_bot.py` internals with Telethon.
+- [x] Update command registration and filters.
+- [x] Update callback query handling.
+- [x] Update forwarded post handling.
+- [x] Update URL submission flow.
+- [x] Update album/media group handling.
+- [x] Update forum topic manager behavior.
+- [x] Update draft/status streaming or fallback behavior.
+- [x] Update tests under `tests/adapters/telegram/`.
 
 Acceptance evidence:
 
-- [ ] Bot commands, callbacks, forwards, URL submissions, albums, and status updates pass tests.
-- [ ] No active bot adapter imports Pyrogram.
+- [x] Bot commands, callbacks, forwards, URL submissions, albums, and status updates pass tests.
+- [x] No active bot adapter imports Pyrogram.
 
 ### 6.3 Userbot/digest migration
 
-- [ ] Replace digest userbot client implementation with Telethon.
-- [ ] Update `/init_session` flow in `app/adapters/telegram/command_handlers/init_session_handler.py`.
-- [ ] Update `app/adapters/telegram/session_init_state.py`.
-- [ ] Add migration or re-auth instructions for existing Pyrogram session files.
-- [ ] Keep old session files untouched until Telethon auth succeeds.
-- [ ] Add preflight checker CLI for session readiness.
-- [ ] Update digest handler tests.
+- [x] Replace digest userbot client implementation with Telethon.
+- [x] Update `/init_session` flow in `app/adapters/telegram/command_handlers/init_session_handler.py`.
+- [x] Update `app/adapters/telegram/session_init_state.py`.
+- [x] Add migration or re-auth instructions for existing Pyrogram session files.
+- [x] Keep old session files untouched until Telethon auth succeeds.
+- [x] Add preflight checker CLI for session readiness.
+- [x] Update digest handler tests.
 
 Acceptance evidence:
 
-- [ ] `/init_session` and channel digest fetch work through Telethon.
-- [ ] Existing self-hosters have a documented migration path.
+- [x] `/init_session` and channel digest fetch work through Telethon.
+- [x] Existing self-hosters have a documented migration path.
 
 ### 6.4 Dependency and docs cleanup
 
-- [ ] Add Telethon dependency to `pyproject.toml`.
-- [ ] Remove `pyrotgfork` and Pyrogram-specific dependency assumptions once all imports are gone.
-- [ ] Regenerate lockfiles.
-- [ ] Update `docs/reference/api-contracts.md`, `docs/reference/cli-commands.md`, `docs/SPEC.md`, `docs/tutorials/local-development.md`, and `CHANGELOG.md`.
-- [ ] Add release note calling this a breaking Telegram runtime/session migration.
-- [ ] Run `rg -n "pyrogram|pyrotgfork|PyroTGFork" app docs tests pyproject.toml`.
+- [x] Add Telethon dependency to `pyproject.toml`.
+- [x] Remove `pyrotgfork` and Pyrogram-specific dependency assumptions once all imports are gone.
+- [x] Regenerate lockfiles.
+- [x] Update `docs/reference/api-contracts.md`, `docs/reference/cli-commands.md`, `docs/SPEC.md`, `docs/tutorials/local-development.md`, and `CHANGELOG.md`.
+- [x] Add release note calling this a breaking Telegram runtime/session migration.
+- [x] Run `rg -n "pyrogram|pyrotgfork|PyroTGFork" app docs tests pyproject.toml`.
 
 Acceptance evidence:
 
-- [ ] Active runtime docs mention Telethon.
-- [ ] Any remaining Pyrogram text is migration-history only.
+- [x] Active runtime docs mention Telethon.
+- [x] Any remaining Pyrogram text is migration-history only.
 
 ## Release readiness TODO
 
@@ -575,7 +575,7 @@ Acceptance evidence:
 - [ ] Document OpenRouter primary and cloud Ollama optional provider paths.
 - [ ] Document migration from each prior public version in `CHANGELOG.md`.
 - [ ] Test backup and restore for SQLite, Chroma, Redis expectations, downloaded videos, and config.
-- [ ] Complete all-Telethon migration.
+- [x] Complete all-Telethon migration.
 - [ ] Document MCP read/write/search contract for Hermes.
 - [ ] Complete multi-agent adaptation plan.
 - [ ] Remove unintentional Carbon names from active web code.

@@ -75,8 +75,6 @@ class TestSettingsHandler:
 
     @pytest.mark.asyncio
     async def test_handle_settings_sends_digest_webapp_button(self) -> None:
-        pytest.importorskip("pyrogram")
-
         ctx, safe_reply = _make_settings_ctx()
         handler = SettingsHandler(
             verbosity_resolver=None,
@@ -115,8 +113,6 @@ class TestInitSessionHandler:
     async def test_handle_contact_send_code_failure_does_not_leak_exception_text(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        pytest.importorskip("pyrogram")
-
         handler = _make_init_handler()
         uid = 303
         handler._sessions[uid] = SessionInitState(step="waiting_contact")
@@ -135,7 +131,10 @@ class TestInitSessionHandler:
             async def disconnect(self) -> None:
                 return None
 
-        monkeypatch.setattr("pyrogram.Client", _FailingClient)
+        monkeypatch.setattr(
+            "app.adapters.telegram.command_handlers.init_session_handler.TelethonUserClient",
+            _FailingClient,
+        )
         cleanup = AsyncMock()
         cast("Any", handler)._cleanup = cleanup
 
@@ -164,8 +163,6 @@ class TestInitSessionHandler:
 
     @pytest.mark.asyncio
     async def test_handle_otp_failure_does_not_leak_exception_text(self) -> None:
-        pytest.importorskip("pyrogram.errors")
-
         handler = _make_init_handler()
         uid = 404
         state = SessionInitState(

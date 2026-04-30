@@ -43,7 +43,7 @@ class CLIUser:
 
 
 class CLIMessage:
-    """Message adapter that mimics the Pyrogram interface for CLI usage."""
+    """Message adapter that mimics the Telegram message interface for CLI usage."""
 
     def __init__(self, text: str, *, json_output_path: Path | None = None) -> None:
         self.text = text

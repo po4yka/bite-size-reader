@@ -103,7 +103,7 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
             assert any("access denied" in reply.lower() for reply in msg3._replies)
 
     async def test_telegram_message_parsing_with_enum_objects(self):
-        """Test TelegramMessage parsing with Pyrogram enum objects."""
+        """Test TelegramMessage parsing with Telegram enum objects."""
 
         # Test ChatType enum object parsing
         class MockChatType:
@@ -202,7 +202,7 @@ class TestUserValidationFixes(unittest.IsolatedAsyncioTestCase):
         mock_message.chat = MockChat()
 
         # Test parsing
-        telegram_message = TelegramMessage.from_pyrogram_message(mock_message)
+        telegram_message = TelegramMessage.from_telegram_message(mock_message)
 
         # Should parse successfully
         assert telegram_message.message_id == 12345

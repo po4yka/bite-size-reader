@@ -176,16 +176,16 @@ class TestMessageEntityTypeEnumParsing(unittest.TestCase):
         entity = MessageEntity.from_dict(data)
         assert entity.type == MessageEntityType.HASHTAG
 
-    def test_from_dict_pyrogram_enum_simulation(self):
-        """Test parsing simulated Pyrogram enum objects."""
+    def test_from_dict_telegram_enum_simulation(self):
+        """Test parsing simulated Telegram enum objects."""
 
-        class PyrogramEnum:
+        class TelegramEnum:
             def __init__(self, name):
                 self.name = name
                 self.value = name.lower()
 
         data = {
-            "type": PyrogramEnum("BOT_COMMAND"),
+            "type": TelegramEnum("BOT_COMMAND"),
             "offset": 0,
             "length": 6,
         }

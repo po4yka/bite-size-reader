@@ -73,14 +73,14 @@ def _create_digest_llm_client(cfg: AppConfig) -> Any:
 
 
 def _create_digest_bot_client(cfg: AppConfig) -> Any:
-    from pyrogram import Client as PyroClient
+    from app.adapters.telegram.telethon_compat import TelethonBotClient
 
-    return PyroClient(
+    return TelethonBotClient(
         name="digest_bot_sender",
         api_id=cfg.telegram.api_id,
         api_hash=cfg.telegram.api_hash,
         bot_token=cfg.telegram.bot_token,
-        in_memory=True,
+        session_dir="/tmp",
     )
 
 

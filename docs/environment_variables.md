@@ -418,7 +418,7 @@ Controls which embedding backend generates vectors for semantic search.
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
 | `DIGEST_ENABLED` | `false` | Enable channel digest subsystem |
-| `DIGEST_SESSION_NAME` | `digest_userbot` | Pyrogram session name for the userbot |
+| `DIGEST_SESSION_NAME` | `digest_userbot` | Telethon session name for the userbot |
 | `DIGEST_TIME` | `09:00` | Daily digest delivery time (HH:MM) |
 | `DIGEST_TIMEZONE` | `UTC` | Timezone for digest scheduling |
 | `DIGEST_MAX_POSTS` | `50` | Max posts per channel to include in digest |

@@ -314,7 +314,7 @@ ORDER BY total_tokens DESC;
 
 **Stored Fields:**
 
-- `telegram_messages.message_snapshot` - Full message JSON from Pyrogram
+- `telegram_messages.message_snapshot` - Full Telegram message JSON
 - `telegram_messages.user_id` - Sender ID
 - `telegram_messages.chat_id` - Chat ID
 - `telegram_messages.message_id` - Telegram message ID

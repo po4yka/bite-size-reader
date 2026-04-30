@@ -5,6 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, TypedDict, cast
 
 from app.adapters.telegram.command_handlers.decorators import combined_handler
+from app.adapters.telegram.telethon_compat import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    WebAppInfo,
+)
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
@@ -76,8 +81,6 @@ class SettingsHandler:
                 "API base URL not configured. Set `API_BASE_URL` in your environment.",
             )
             return
-
-        from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
         url = f"{api_base.rstrip('/')}{_DIGEST_WEB_PATH}"
         keyboard = InlineKeyboardMarkup(

@@ -133,7 +133,7 @@ class MessagePersistence:
                 return int(val.timestamp())
             if val is None:
                 return None
-            # Some libraries expose pyrogram types with .timestamp or int-like
+            # Some Telegram clients expose date values with .timestamp or int-like APIs.
             if hasattr(val, "timestamp"):
                 try:
                     ts_val = val.timestamp
@@ -179,7 +179,7 @@ class MessagePersistence:
             photo = getattr(message, "photo", None)
             if photo is not None:
                 media_type = "photo"
-                # Pyrogram photos are lists of PhotoSize objects; get the largest one (last)
+                # Some Telegram clients expose photos as PhotoSize lists; use the largest one.
                 if isinstance(photo, list) and photo:
                     fid = getattr(photo[-1], "file_id", None)
                     if fid:

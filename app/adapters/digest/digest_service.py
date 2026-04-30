@@ -337,9 +337,9 @@ def _deduplicate_posts(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _build_inline_keyboard(
     button_rows: list[list[dict[str, str]]],
 ) -> Any:
-    """Build a Pyrogram InlineKeyboardMarkup from button dicts."""
+    """Build an InlineKeyboardMarkup from button dicts."""
     try:
-        from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        from app.adapters.telegram.telethon_compat import InlineKeyboardButton, InlineKeyboardMarkup
 
         keyboard = []
         for row in button_rows:

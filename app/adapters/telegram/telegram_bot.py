@@ -9,22 +9,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.telegram import telegram_client as telegram_client_module
 from app.adapters.telegram.component_wiring import TelegramComponentWiring
 from app.adapters.telegram.lifecycle_manager import TelegramLifecycleManager
+from app.adapters.telegram.telethon_compat import normalize_parse_mode
 from app.bootstrap.telegram_runtime import build_bot_runtime, create_bot_audit_repository
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import generate_correlation_id, get_logger, setup_json_logging
 from app.core.time_utils import UTC, format_iso_z
-
-try:
-    from pyrogram import Client as _PyroClient, filters as _pyro_filters
-
-    _PYRO_CLIENT_CLS: Any = _PyroClient
-    _PYRO_FILTERS: Any = _pyro_filters
-except ImportError:
-    _PYRO_CLIENT_CLS = object
-    _PYRO_FILTERS = None
 
 if TYPE_CHECKING:
     from app.config import AppConfig
@@ -65,11 +56,6 @@ class TelegramBot:
         )
 
         self._component_wiring = TelegramComponentWiring(cfg=self.cfg)
-        self._component_wiring.apply_client_shims(
-            telegram_client_module=telegram_client_module,
-            client_cls=_PYRO_CLIENT_CLS,
-            filters_obj=_PYRO_FILTERS,
-        )
 
         self._audit_tasks: set[asyncio.Task[Any]] = set()
         self.audit_repo = create_bot_audit_repository(self.db)
@@ -546,17 +532,7 @@ class TelegramBot:
             if hasattr(message, "reply_text"):
                 kwargs: dict[str, Any] = {}
                 if parse_mode is not None:
-                    # Pyrogram requires enums.ParseMode, not plain strings
-                    try:
-                        from pyrogram import enums as _enums
-
-                        _pm_map = {
-                            "html": _enums.ParseMode.HTML,
-                            "markdown": _enums.ParseMode.MARKDOWN,
-                        }
-                        kwargs["parse_mode"] = _pm_map.get(parse_mode.lower(), parse_mode)
-                    except Exception:
-                        kwargs["parse_mode"] = parse_mode
+                    kwargs["parse_mode"] = normalize_parse_mode(parse_mode)
                 if reply_markup is not None:
                     kwargs["reply_markup"] = reply_markup
                 if extra_kwargs:

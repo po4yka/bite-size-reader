@@ -127,7 +127,7 @@ Released under the terms of [LICENSE](LICENSE). Bug reports, feature
 requests, and pull requests are welcome at
 [github.com/po4yka/ratatoskr/issues](https://github.com/po4yka/ratatoskr/issues).
 
-Built on the shoulders of [Pyrogram](https://github.com/pyrogram/pyrogram),
+Built on the shoulders of [Telethon](https://github.com/LonamiWebs/Telethon),
 [Scrapling](https://github.com/D4Vinci/Scrapling),
 [Firecrawl](https://www.firecrawl.dev/),
 [OpenRouter](https://openrouter.ai/),
