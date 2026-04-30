@@ -9,6 +9,9 @@ export interface LinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
   children?: ReactNode;
 }
 
+/** Frost Link — mono inherit-size, hairline underline 1px ink @ 0.4.
+ * On hover: underline becomes 1px ink @ 1.0. No color shift.
+ */
 export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
   {
     inline: _inline,
@@ -17,6 +20,7 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
     disabled = false,
     renderIcon: RenderIcon,
     className,
+    style,
     children,
     ...rest
   },
@@ -25,18 +29,38 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
   void _inline;
   void _visited;
   void _size;
+
   const cls = [
-    "rtk-link",
-    disabled ? "rtk-link--disabled" : null,
+    "frost-link",
+    disabled ? "frost-link--disabled" : null,
     className,
   ]
     .filter(Boolean)
     .join(" ");
+
   return (
     <a
       ref={ref}
       className={cls}
       aria-disabled={disabled || undefined}
+      style={{
+        fontFamily: "var(--frost-font-mono)",
+        fontSize: "inherit",
+        fontWeight: "inherit",
+        letterSpacing: "inherit",
+        color: "var(--frost-ink)",
+        textDecoration: "underline",
+        textDecorationColor: "color-mix(in oklch, var(--frost-ink) 40%, transparent)",
+        textDecorationThickness: "1px",
+        textUnderlineOffset: "2px",
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? "not-allowed" : "pointer",
+        pointerEvents: disabled ? "none" : undefined,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--frost-gap-inline)",
+        ...style,
+      }}
       {...rest}
     >
       {children}
@@ -44,3 +68,21 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
     </a>
   );
 });
+
+/*
+ * Hover style: underline goes from alpha 0.4 to 1.0 on hover.
+ * Injected once so we don't repeat in every render.
+ */
+if (typeof document !== "undefined") {
+  const STYLE_ID = "frost-link-styles";
+  if (!document.getElementById(STYLE_ID)) {
+    const el = document.createElement("style");
+    el.id = STYLE_ID;
+    el.textContent = `
+.frost-link:not(.frost-link--disabled):hover {
+  text-decoration-color: var(--frost-ink);
+}
+    `.trim();
+    document.head.appendChild(el);
+  }
+}

@@ -33,6 +33,125 @@ export interface NumberInputProps {
   allowEmpty?: boolean;
 }
 
+const numberInputCSS = `
+  .frost-number-input-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .frost-number-input-label {
+    font-family: var(--frost-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    line-height: 1.3;
+    text-transform: uppercase;
+    color: color-mix(in oklch, var(--frost-ink) 55%, transparent);
+    margin: 0;
+  }
+  .frost-number-input-row {
+    display: flex;
+    align-items: stretch;
+    border-top: 1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent);
+    border-bottom: 1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent);
+  }
+  .frost-number-input-row--error {
+    border-bottom: 2px solid var(--frost-spark);
+  }
+  .frost-number-input__input {
+    font-family: var(--frost-font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    line-height: 1.3;
+    color: var(--frost-ink);
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 8px 0;
+    flex: 1;
+    min-width: 0;
+    -moz-appearance: textfield;
+  }
+  .frost-number-input__input::-webkit-inner-spin-button,
+  .frost-number-input__input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .frost-number-input__input:focus-visible {
+    outline: none;
+    border-bottom: 1px solid var(--frost-ink);
+  }
+  .frost-number-input__steppers {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    flex-shrink: 0;
+  }
+  .frost-number-input__stepper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    align-self: center;
+    border: 1px solid var(--frost-ink);
+    border-radius: 0;
+    background: var(--frost-page);
+    color: var(--frost-ink);
+    font-family: var(--frost-font-mono);
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.08s linear, color 0.08s linear;
+    margin-left: 4px;
+    flex-shrink: 0;
+  }
+  .frost-number-input__stepper:first-child {
+    margin-left: 8px;
+  }
+  .frost-number-input__stepper:not(:disabled):hover {
+    background: var(--frost-ink);
+    color: var(--frost-page);
+  }
+  .frost-number-input__stepper:not(:disabled):active {
+    transform: translateY(1px);
+  }
+  .frost-number-input__stepper:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .frost-number-input__stepper:focus-visible {
+    outline: 1px solid var(--frost-ink);
+    outline-offset: 2px;
+  }
+  .frost-number-input__helper {
+    font-family: var(--frost-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    line-height: 1.3;
+    color: color-mix(in oklch, var(--frost-ink) 55%, transparent);
+    margin: 0;
+  }
+  .frost-number-input__error {
+    font-family: var(--frost-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    line-height: 1.3;
+    color: var(--frost-spark);
+    margin: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .frost-number-input__stepper {
+      transition-duration: 0.001s !important;
+    }
+  }
+`;
+
 export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
   function NumberInput(
     {
@@ -83,75 +202,76 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
       onChange?.(null, { value: clamped, direction });
     };
 
-    const cls = [
-      "rtk-number-input",
-      invalid ? "rtk-number-input--invalid" : null,
-      className,
-    ]
-      .filter(Boolean)
-      .join(" ");
-
     return (
-      <div className="rtk-form-field">
-        {label ? (
-          <label
-            htmlFor={inputId}
-            className={
-              hideLabel
-                ? "rtk-form-field__label rtk-visually-hidden"
-                : "rtk-form-field__label"
-            }
+      <>
+        <style>{numberInputCSS}</style>
+        <div className={["frost-number-input-wrap", className].filter(Boolean).join(" ")}>
+          {label ? (
+            <label
+              htmlFor={inputId}
+              className="frost-number-input-label"
+              style={
+                hideLabel
+                  ? { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap" }
+                  : undefined
+              }
+            >
+              {label}
+            </label>
+          ) : null}
+          <div
+            className={[
+              "frost-number-input-row",
+              invalid ? "frost-number-input-row--error" : null,
+            ]
+              .filter(Boolean)
+              .join(" ")}
           >
-            {label}
-          </label>
-        ) : null}
-        <div className={cls}>
-          <input
-            ref={ref}
-            id={inputId}
-            type="number"
-            min={min}
-            max={max}
-            step={step}
-            value={value ?? ""}
-            defaultValue={defaultValue}
-            disabled={disabled}
-            onChange={handleChange}
-            onBlur={onBlur}
-            aria-invalid={invalid || undefined}
-            className="rtk-number-input__input"
-          />
-          {hideSteppers ? null : (
-            <div className="rtk-number-input__steppers">
-              <button
-                type="button"
-                aria-label="Decrement"
-                disabled={disabled}
-                onClick={() => step1("down")}
-                className="rtk-number-input__stepper"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                aria-label="Increment"
-                disabled={disabled}
-                onClick={() => step1("up")}
-                className="rtk-number-input__stepper"
-              >
-                +
-              </button>
-            </div>
-          )}
-        </div>
-        {invalid && invalidText ? (
-          <div className="rtk-form-field__message rtk-form-field__message--error">
-            {invalidText}
+            <input
+              ref={ref}
+              id={inputId}
+              type="number"
+              min={min}
+              max={max}
+              step={step}
+              value={value ?? ""}
+              defaultValue={defaultValue}
+              disabled={disabled}
+              onChange={handleChange}
+              onBlur={onBlur}
+              aria-invalid={invalid || undefined}
+              className="frost-number-input__input"
+            />
+            {hideSteppers ? null : (
+              <div className="frost-number-input__steppers">
+                <button
+                  type="button"
+                  aria-label="Decrement"
+                  disabled={disabled}
+                  onClick={() => step1("down")}
+                  className="frost-number-input__stepper"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  aria-label="Increment"
+                  disabled={disabled}
+                  onClick={() => step1("up")}
+                  className="frost-number-input__stepper"
+                >
+                  +
+                </button>
+              </div>
+            )}
           </div>
-        ) : helperText ? (
-          <div className="rtk-form-field__helper">{helperText}</div>
-        ) : null}
-      </div>
+          {invalid && invalidText ? (
+            <div className="frost-number-input__error">{invalidText}</div>
+          ) : helperText ? (
+            <div className="frost-number-input__helper">{helperText}</div>
+          ) : null}
+        </div>
+      </>
     );
   },
 );
