@@ -188,14 +188,45 @@ def _build_firecrawl_client(
     cfg: AppConfig,
     audit: Callable[[str, str, dict[str, Any]], None],
 ) -> FirecrawlClient | None:
-    if not cfg.firecrawl.api_key:
+    """Build a FirecrawlClient for the self-hosted instance; returns None when disabled."""
+    if not cfg.scraper.firecrawl_self_hosted_enabled:
         return None
 
-    return FirecrawlClient.from_config(
-        cfg.firecrawl,
-        audit=audit,
+    from app.adapters.external.firecrawl.client import FirecrawlClientConfig
+
+    client_cfg = FirecrawlClientConfig(
+        timeout_sec=cfg.scraper.firecrawl_timeout_sec,
+        max_retries=cfg.scraper.firecrawl_max_retries,
+        backoff_base=cfg.firecrawl.retry_initial_delay,
         debug_payloads=cfg.runtime.debug_payloads,
         log_truncate_length=cfg.runtime.log_truncate_length,
+        max_connections=cfg.scraper.firecrawl_max_connections,
+        max_keepalive_connections=cfg.scraper.firecrawl_max_keepalive_connections,
+        keepalive_expiry=cfg.scraper.firecrawl_keepalive_expiry,
+        max_response_size_mb=cfg.scraper.firecrawl_max_response_size_mb,
+        max_age_seconds=cfg.firecrawl.max_age_seconds,
+        remove_base64_images=cfg.firecrawl.remove_base64_images,
+        block_ads=cfg.firecrawl.block_ads,
+        skip_tls_verification=cfg.firecrawl.skip_tls_verification,
+        include_markdown_format=cfg.firecrawl.include_markdown_format,
+        include_html_format=cfg.firecrawl.include_html_format,
+        include_links_format=cfg.firecrawl.include_links_format,
+        include_summary_format=cfg.firecrawl.include_summary_format,
+        include_images_format=cfg.firecrawl.include_images_format,
+        enable_screenshot_format=cfg.firecrawl.enable_screenshot_format,
+        screenshot_full_page=cfg.firecrawl.screenshot_full_page,
+        screenshot_quality=cfg.firecrawl.screenshot_quality,
+        screenshot_viewport_width=cfg.firecrawl.screenshot_viewport_width,
+        screenshot_viewport_height=cfg.firecrawl.screenshot_viewport_height,
+        json_prompt=cfg.firecrawl.json_prompt,
+        json_schema=cfg.firecrawl.json_schema or {},
+        wait_for_ms=cfg.scraper.firecrawl_wait_for_ms,
+    )
+    return FirecrawlClient(
+        cfg.scraper.firecrawl_self_hosted_api_key,
+        client_cfg,
+        audit=audit,
+        base_url=cfg.scraper.firecrawl_self_hosted_url,
     )
 
 

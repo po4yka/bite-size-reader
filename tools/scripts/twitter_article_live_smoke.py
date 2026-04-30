@@ -82,15 +82,19 @@ def _collect_urls(cli_urls: list[str], urls_arg: str, urls_env: str) -> list[str
 _is_low_quality_article_content = is_low_quality_article_content
 
 
-def _build_firecrawl_client(api_key: str, timeout_sec: float) -> FirecrawlClient | None:
-    key = api_key.strip()
-    if not key:
+def _build_firecrawl_client(
+    base_url: str, token: str, timeout_sec: float
+) -> FirecrawlClient | None:
+    """Build a FirecrawlClient pointed at a self-hosted instance."""
+    url = base_url.strip()
+    if not url:
         return None
     return FirecrawlClient(
-        api_key=key,
+        api_key=token.strip() or "fc-local",
         timeout_sec=max(10, int(timeout_sec)),
         max_retries=1,
         wait_for_ms=3_000,
+        base_url=url,
     )
 
 
@@ -225,11 +229,12 @@ async def run_smoke(
     *,
     urls: list[str],
     timeout_sec: float,
-    firecrawl_api_key: str,
+    firecrawl_base_url: str,
+    firecrawl_token: str,
     cookies_path: Path | None,
     headless: bool,
 ) -> tuple[list[SmokeResult], int]:
-    firecrawl = _build_firecrawl_client(firecrawl_api_key, timeout_sec)
+    firecrawl = _build_firecrawl_client(firecrawl_base_url, firecrawl_token, timeout_sec)
     exit_code = 0
     results: list[SmokeResult] = []
     try:
@@ -287,9 +292,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run Playwright in headless mode.",
     )
     parser.add_argument(
-        "--firecrawl-api-key",
-        default=os.getenv("FIRECRAWL_API_KEY", ""),
-        help="Firecrawl API key (falls back to FIRECRAWL_API_KEY env var).",
+        "--firecrawl-base-url",
+        default=os.getenv("FIRECRAWL_SELF_HOSTED_URL", ""),
+        help=(
+            "Base URL of the self-hosted Firecrawl instance "
+            "(e.g. http://localhost:3002). Falls back to FIRECRAWL_SELF_HOSTED_URL env var."
+        ),
+    )
+    parser.add_argument(
+        "--firecrawl-token",
+        default=os.getenv("FIRECRAWL_SELF_HOSTED_API_KEY", ""),
+        help=(
+            "API token for the self-hosted Firecrawl instance. "
+            "Falls back to FIRECRAWL_SELF_HOSTED_API_KEY env var."
+        ),
     )
     return parser
 
@@ -323,7 +339,8 @@ def main() -> None:
         run_smoke(
             urls=urls,
             timeout_sec=max(0.1, float(args.timeout_sec)),
-            firecrawl_api_key=str(args.firecrawl_api_key or ""),
+            firecrawl_base_url=str(args.firecrawl_base_url or ""),
+            firecrawl_token=str(args.firecrawl_token or ""),
             cookies_path=cookies_path,
             headless=bool(args.headless),
         )

@@ -391,36 +391,45 @@ class TestContentScraperChain:
 class TestContentScraperFactory:
     """Tests for the factory that builds a scraper chain from config."""
 
-    def test_default_config_creates_chain_with_scrapling_firecrawl_playwright_crawlee_and_direct_html(
+    def test_default_config_creates_chain_with_all_eight_providers(
         self,
     ):
-        """Default config enables scrapling + cloud Firecrawl + browser + direct_html."""
+        """Default config enables all 8 providers in the new default order."""
         cfg = make_test_app_config(scraper=ScraperConfig())
 
         with (
             patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
-            patch("app.adapters.content.scraper.factory._build_defuddle") as mock_defuddle,
+            patch("app.adapters.content.scraper.factory._build_crawl4ai") as mock_crawl4ai,
             patch("app.adapters.content.scraper.factory._build_firecrawl") as mock_firecrawl,
+            patch("app.adapters.content.scraper.factory._build_defuddle") as mock_defuddle,
             patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
             patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
             patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
+            patch("app.adapters.content.scraper.factory._build_scrapegraph") as mock_scrapegraph,
         ):
             mock_scrapling.return_value = _MockProvider(name="scrapling")
+            mock_crawl4ai.return_value = _MockProvider(name="crawl4ai")
+            mock_firecrawl.return_value = None  # self-hosted disabled by default
             mock_defuddle.return_value = _MockProvider(name="defuddle")
-            mock_firecrawl.return_value = _MockProvider(name="firecrawl")
             mock_playwright.return_value = _MockProvider(name="playwright")
             mock_crawlee.return_value = _MockProvider(name="crawlee")
             mock_direct.return_value = _MockProvider(name="direct_html")
+            mock_scrapegraph.return_value = _MockProvider(name="scrapegraph_ai")
 
             chain = ContentScraperFactory.create_from_config(cfg)
 
-        assert len(chain.providers) == 5
-        assert chain.providers[0].provider_name == "scrapling"
-        assert chain.providers[1].provider_name == "firecrawl"
-        assert chain.providers[2].provider_name == "playwright"
-        assert chain.providers[3].provider_name == "crawlee"
-        assert chain.providers[4].provider_name == "direct_html"
-        mock_defuddle.assert_not_called()
+        names = [p.provider_name for p in chain.providers]
+        assert names == [
+            "scrapling",
+            "crawl4ai",
+            "defuddle",
+            "playwright",
+            "crawlee",
+            "direct_html",
+            "scrapegraph_ai",
+        ]
+        # firecrawl builder was called but returned None (self-hosted disabled)
+        mock_firecrawl.assert_called_once()
 
     def test_scrapling_disabled_skipped(self):
         """When scrapling_enabled=False, the scrapling provider is skipped."""
@@ -528,18 +537,24 @@ class TestContentScraperFactory:
         assert "crawlee" in names
         assert len(chain.providers) == 5
 
-    def test_firecrawl_cloud_api_key_included_when_self_hosted_disabled(self):
-        """When FIRECRAWL_API_KEY is configured, cloud Firecrawl is in the chain."""
-        scraper_cfg = ScraperConfig(provider_order=["firecrawl"])
+    def test_firecrawl_cloud_api_key_alone_does_not_include_firecrawl(self):
+        """Cloud Firecrawl is removed; even with api_key set, provider is skipped unless self-hosted."""
+        scraper_cfg = ScraperConfig(
+            provider_order=["firecrawl", "direct_html"],
+            firecrawl_self_hosted_enabled=False,
+        )
         cfg = make_test_app_config(
             scraper=scraper_cfg,
             firecrawl=FirecrawlConfig(api_key="fc-test-cloud-key"),
         )
 
-        chain = ContentScraperFactory.create_from_config(cfg)
+        with patch(
+            "app.adapters.content.scraper.factory._build_direct_html",
+            return_value=_MockProvider(name="direct_html"),
+        ):
+            chain = ContentScraperFactory.create_from_config(cfg)
 
-        assert len(chain.providers) == 1
-        assert chain.providers[0].provider_name == "firecrawl"
+        assert [p.provider_name for p in chain.providers] == ["direct_html"]
 
     def test_firecrawl_without_cloud_key_or_self_hosting_is_skipped(self):
         scraper_cfg = ScraperConfig(provider_order=["firecrawl", "direct_html"])
@@ -653,8 +668,8 @@ class TestContentScraperFactory:
 
         assert chain._audit is audit
 
-    def test_defuddle_absent_from_default_chain(self):
-        """defuddle is opt-in because the public default sends URLs to defuddle.md."""
+    def test_defuddle_in_default_chain_when_enabled(self):
+        """defuddle is enabled by default and present in the default provider order."""
         cfg = make_test_app_config()
         with (
             patch(
@@ -662,10 +677,14 @@ class TestContentScraperFactory:
                 return_value=_MockProvider("scrapling"),
             ),
             patch(
+                "app.adapters.content.scraper.factory._build_crawl4ai",
+                return_value=_MockProvider("crawl4ai"),
+            ),
+            patch("app.adapters.content.scraper.factory._build_firecrawl", return_value=None),
+            patch(
                 "app.adapters.content.scraper.factory._build_defuddle",
                 return_value=_MockProvider("defuddle"),
             ),
-            patch("app.adapters.content.scraper.factory._build_firecrawl", return_value=None),
             patch(
                 "app.adapters.content.scraper.factory._build_playwright",
                 return_value=_MockProvider("playwright"),
@@ -678,10 +697,14 @@ class TestContentScraperFactory:
                 "app.adapters.content.scraper.factory._build_direct_html",
                 return_value=_MockProvider("direct_html"),
             ),
+            patch(
+                "app.adapters.content.scraper.factory._build_scrapegraph",
+                return_value=_MockProvider("scrapegraph_ai"),
+            ),
         ):
             chain = ContentScraperFactory.create_from_config(cfg)
         names = [p.provider_name for p in chain.providers]
-        assert "defuddle" not in names
+        assert "defuddle" in names
 
     def test_defuddle_included_when_enabled_and_ordered(self):
         """defuddle appears only when explicitly enabled and present in order."""
@@ -718,10 +741,14 @@ class TestContentScraperFactory:
                 return_value=_MockProvider("scrapling"),
             ),
             patch(
+                "app.adapters.content.scraper.factory._build_crawl4ai",
+                return_value=_MockProvider("crawl4ai"),
+            ),
+            patch("app.adapters.content.scraper.factory._build_firecrawl", return_value=None),
+            patch(
                 "app.adapters.content.scraper.factory._build_defuddle",
                 return_value=None,
             ),
-            patch("app.adapters.content.scraper.factory._build_firecrawl", return_value=None),
             patch(
                 "app.adapters.content.scraper.factory._build_playwright",
                 return_value=_MockProvider("playwright"),
@@ -733,6 +760,10 @@ class TestContentScraperFactory:
             patch(
                 "app.adapters.content.scraper.factory._build_direct_html",
                 return_value=_MockProvider("direct_html"),
+            ),
+            patch(
+                "app.adapters.content.scraper.factory._build_scrapegraph",
+                return_value=_MockProvider("scrapegraph_ai"),
             ),
         ):
             chain = ContentScraperFactory.create_from_config(cfg)

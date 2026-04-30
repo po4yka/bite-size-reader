@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, cast
 
 from app.adapters.content.scraper.runtime_tuning import is_js_heavy_url, tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
@@ -15,15 +14,6 @@ from app.core.logging_utils import get_logger
 logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT_SEC = 30
-
-_DESKTOP_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/125.0.0.0 Safari/537.36"
-)
-
-_MOBILE_VIEWPORT = {"width": 390, "height": 844}
-_DESKTOP_VIEWPORT = {"width": 1366, "height": 768}
 
 
 class PlaywrightProvider:
@@ -166,6 +156,18 @@ class PlaywrightProvider:
             )
             raise ImportError(msg) from exc
 
+        # Lazy imports so environments without browserforge still load the module.
+        try:
+            import importlib
+
+            _bf_fp_mod = importlib.import_module("browserforge.fingerprints")
+            _bf_inj_mod = importlib.import_module("browserforge.injectors.playwright")
+            _fp_generator_cls = _bf_fp_mod.FingerprintGenerator
+            _new_context_fn = _bf_inj_mod.NewContext
+            _bf_available = True
+        except Exception:
+            _bf_available = False
+
         effective_timeout_sec = timeout_sec if timeout_sec is not None else self._timeout_sec
         timeout_ms = max(1_000, int(effective_timeout_sec * 1000))
         with sync_playwright() as p:
@@ -173,17 +175,39 @@ class PlaywrightProvider:
                 headless=self._headless,
                 args=["--disable-blink-features=AutomationControlled"],
             )
-            if mobile:
+            if _bf_available:
+                if mobile:
+                    fingerprint = _fp_generator_cls(
+                        browser=["chrome"],
+                        device=["mobile"],
+                        os=["android"],
+                    ).generate()
+                else:
+                    fingerprint = _fp_generator_cls(
+                        browser=["chrome"],
+                        device=["desktop"],
+                        os=["windows"],
+                    ).generate()
+                context = _new_context_fn(browser, fingerprint=fingerprint)
+            elif mobile:
                 context = browser.new_context(
-                    user_agent=_DESKTOP_USER_AGENT,
-                    viewport=cast("Any", _MOBILE_VIEWPORT),
+                    user_agent=(
+                        "Mozilla/5.0 (Linux; Android 11; Pixel 5) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/125.0.0.0 Mobile Safari/537.36"
+                    ),
+                    viewport={"width": 390, "height": 844},
                     is_mobile=True,
                     has_touch=True,
                 )
             else:
                 context = browser.new_context(
-                    user_agent=_DESKTOP_USER_AGENT,
-                    viewport=cast("Any", _DESKTOP_VIEWPORT),
+                    user_agent=(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/125.0.0.0 Safari/537.36"
+                    ),
+                    viewport={"width": 1366, "height": 768},
                 )
             page = context.new_page()
             try:

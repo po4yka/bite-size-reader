@@ -1,0 +1,233 @@
+"""Tests for Crawl4AIProvider."""
+
+from __future__ import annotations
+
+import json
+from unittest.mock import AsyncMock, patch
+
+import httpx
+import pytest
+
+from app.adapters.content.scraper.crawl4ai_provider import Crawl4AIProvider
+
+
+def _make_crawl_response(
+    *,
+    success: bool = True,
+    markdown: str | dict | None = "A" * 500,
+    error: str = "unknown",
+) -> dict:
+    """Build a minimal Crawl4AI /crawl response payload."""
+    result: dict = {"success": success}
+    if success:
+        result["markdown"] = markdown
+        result["metadata"] = {"title": "Test Article"}
+    else:
+        result["error"] = error
+    return {"results": [result]}
+
+
+def _make_httpx_response(payload: dict, status_code: int = 200) -> httpx.Response:
+    return httpx.Response(
+        status_code,
+        content=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+        request=httpx.Request("POST", "http://crawl4ai:11235/crawl"),
+    )
+
+
+class TestCrawl4AIProvider:
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_successful_response_with_markdown_string(self):
+        """Successful /crawl response with markdown as string -> OK result."""
+        payload = _make_crawl_response(markdown="A" * 500)
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=5)
+
+        mock_client = AsyncMock()
+        mock_response = _make_httpx_response(payload)
+        mock_client.post.return_value = mock_response
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.endpoint == "crawl4ai"
+        assert result.content_markdown is not None
+        assert len(result.content_markdown) >= 400
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_successful_response_with_markdown_dict_raw_markdown(self):
+        """Successful response with markdown as dict (raw_markdown key) -> extracts content."""
+        md_dict = {"raw_markdown": "B" * 500, "fit_markdown": ""}
+        payload = _make_crawl_response(markdown=md_dict)
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=5)
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = _make_httpx_response(payload)
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.endpoint == "crawl4ai"
+        assert "B" in (result.content_markdown or "")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_successful_response_with_markdown_dict_fit_markdown(self):
+        """fit_markdown takes precedence over raw_markdown in dict shape."""
+        md_dict = {"fit_markdown": "C" * 500, "raw_markdown": "D" * 500}
+        payload = _make_crawl_response(markdown=md_dict)
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=5)
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = _make_httpx_response(payload)
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown is not None
+        assert result.content_markdown.startswith("C")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_empty_markdown_returns_error(self):
+        """Empty/short markdown -> ERROR with min_content_length message."""
+        payload = _make_crawl_response(markdown="tiny")
+        provider = Crawl4AIProvider(
+            url="http://crawl4ai:11235", timeout_sec=5, min_content_length=400
+        )
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = _make_httpx_response(payload)
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert result.endpoint == "crawl4ai"
+        assert "too short" in (result.error_text or "").lower() or "content" in (
+            result.error_text or ""
+        ).lower()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_http_500_returns_error(self):
+        """HTTP 500 from Crawl4AI -> ERROR result with status code."""
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=5)
+
+        mock_client = AsyncMock()
+        req = httpx.Request("POST", "http://crawl4ai:11235/crawl")
+        resp = httpx.Response(500, request=req)
+        mock_client.post.side_effect = httpx.HTTPStatusError(
+            "500 Internal Server Error", request=req, response=resp
+        )
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert result.endpoint == "crawl4ai"
+        assert "500" in (result.error_text or "")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_timeout_returns_error(self):
+        """Timeout -> ERROR result."""
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=1)
+
+        mock_client = AsyncMock()
+        mock_client.post.side_effect = TimeoutError("timed out")
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert result.endpoint == "crawl4ai"
+        assert "timeout" in (result.error_text or "").lower()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aclose_closes_underlying_client(self):
+        """aclose() closes the underlying httpx client."""
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=5)
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        provider._client = mock_client
+
+        await provider.aclose()
+
+        mock_client.aclose.assert_awaited_once()
+        assert provider._client is None
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aclose_noop_when_no_client(self):
+        """aclose() does not raise when client was never created."""
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=5)
+        await provider.aclose()  # Should not raise
+
+    def test_provider_name(self):
+        """provider_name returns 'crawl4ai'."""
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235")
+        assert provider.provider_name == "crawl4ai"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_result_not_success_returns_error(self):
+        """When result has success=false, returns ERROR with reported error detail."""
+        payload = _make_crawl_response(success=False, error="fetch failed")
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=5)
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = _make_httpx_response(payload)
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert result.endpoint == "crawl4ai"
+        assert "fetch failed" in (result.error_text or "")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_empty_results_array_returns_error(self):
+        """Empty results array -> ERROR."""
+        payload = {"results": []}
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", timeout_sec=5)
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = _make_httpx_response(payload)
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            result = await provider.scrape_markdown("https://example.com")
+
+        assert result.status == "error"
+        assert result.endpoint == "crawl4ai"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_authorization_header_set_when_token_provided(self):
+        """Authorization header is sent when a token is configured."""
+        payload = _make_crawl_response(markdown="A" * 500)
+        provider = Crawl4AIProvider(
+            url="http://crawl4ai:11235", token="secret-token", timeout_sec=5
+        )
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = _make_httpx_response(payload)
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            await provider.scrape_markdown("https://example.com")
+
+        call_kwargs = mock_client.post.call_args
+        headers = call_kwargs.kwargs.get("headers", {})
+        assert headers.get("Authorization") == "Bearer secret-token"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_no_authorization_header_when_no_token(self):
+        """No Authorization header when token is empty."""
+        payload = _make_crawl_response(markdown="A" * 500)
+        provider = Crawl4AIProvider(url="http://crawl4ai:11235", token="", timeout_sec=5)
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = _make_httpx_response(payload)
+
+        with patch.object(provider, "_get_client", return_value=mock_client):
+            await provider.scrape_markdown("https://example.com")
+
+        call_kwargs = mock_client.post.call_args
+        headers = call_kwargs.kwargs.get("headers", {})
+        assert "Authorization" not in headers

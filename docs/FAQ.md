@@ -623,15 +623,17 @@ See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
    OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1:free
    ```
 
-2. **Use free content extraction** (no Firecrawl costs):
+2. **Use free content extraction** (no cloud API costs):
    - Scrapling is the default provider (free, in-process, no API key)
+   - Crawl4AI and Defuddle are self-hosted sidecars included in Docker Compose
    - Self-hosted Firecrawl is another free option (`FIRECRAWL_SELF_HOSTED_ENABLED=true`)
-   - Cloud Firecrawl is used as an article fallback only when `FIRECRAWL_API_KEY` is configured
+   - Cloud Firecrawl is no longer used in the article scraper chain
 
    ```bash
    SCRAPER_ENABLED=true
    SCRAPER_SCRAPLING_ENABLED=true
-   SCRAPER_PROVIDER_ORDER=["scrapling", "direct_html"]  # Skip cloud Firecrawl entirely
+   # Minimal lightweight chain — skip browser and LLM providers
+   SCRAPER_PROVIDER_ORDER=["scrapling", "defuddle", "direct_html"]
    ```
 
 3. **Cache aggressively**:
@@ -685,7 +687,7 @@ Yes, but requires setup:
 
    ```bash
    FIRECRAWL_SELF_HOSTED_ENABLED=false
-   SCRAPER_PROVIDER_ORDER=["scrapling", "playwright", "crawlee", "direct_html"]
+   SCRAPER_PROVIDER_ORDER=["scrapling", "crawl4ai", "defuddle", "playwright", "crawlee", "direct_html"]
    ```
 
 **Breaking rename note**: legacy scraper vars `SCRAPLING_*` and `SCRAPER_DIRECT_HTTP_ENABLED` now fail fast at startup.

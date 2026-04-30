@@ -118,32 +118,22 @@ class ScraplingProvider:
         """Fetch URL using Scrapling, with optional stealth fallback."""
         loop = asyncio.get_running_loop()
 
-        html, text = await loop.run_in_executor(None, self._sync_fetch_basic, url)
+        # AsyncFetcher (curl_cffi-based) is preferred for the basic path but
+        # requires curl_cffi. Fall back to the sync Fetcher via executor when
+        # unavailable.
+        async_fetcher_cls = _lazy_import_async_fetcher()
+        if async_fetcher_cls is not None:
+            html, text = await _async_fetch_basic(url, async_fetcher_cls)
+        else:
+            html, text = await loop.run_in_executor(None, _sync_fetch_basic, url)
+
         if text and len(text) >= self._min_content_length:
             return html, text
 
         if self._stealth_fallback:
             logger.debug("scrapling_stealth_fallback", extra={"url": url})
-            html, text = await loop.run_in_executor(None, self._sync_fetch_stealth, url)
+            html, text = await loop.run_in_executor(None, _sync_fetch_stealth, url)
 
-        return html, text
-
-    @staticmethod
-    def _sync_fetch_basic(url: str) -> tuple[str | None, str | None]:
-        """Basic fetch via Scrapling Fetcher (TLS impersonation, fastest)."""
-        scrapling_fetcher = _lazy_import_fetcher()
-        resp = scrapling_fetcher.get(url)
-        html = resp.text if resp.status == 200 else None
-        text = _extract_text(html) if html else None
-        return html, text
-
-    @staticmethod
-    def _sync_fetch_stealth(url: str) -> tuple[str | None, str | None]:
-        """Stealth fetch for JS-heavy sites."""
-        stealthy_fetcher = _lazy_import_stealthy_fetcher()
-        resp = stealthy_fetcher.fetch(url)
-        html = resp.text if resp.status == 200 else None
-        text = _extract_text(html) if html else None
         return html, text
 
     async def aclose(self) -> None:
@@ -151,17 +141,70 @@ class ScraplingProvider:
 
 
 def _lazy_import_fetcher() -> Any:
+    """Return a basic Fetcher instance (requires curl_cffi)."""
     import importlib
 
     mod = importlib.import_module("scrapling")
     return mod.Fetcher()
 
 
-def _lazy_import_stealthy_fetcher() -> Any:
+def _lazy_import_async_fetcher() -> Any:
+    """Return the AsyncFetcher class, or None if curl_cffi is unavailable."""
     import importlib
 
+    try:
+        mod = importlib.import_module("scrapling.fetchers.requests")
+        return getattr(mod, "AsyncFetcher", None)
+    except Exception:
+        return None
+
+
+def _lazy_import_stealthy_fetcher() -> Any:
+    """Return a DynamicFetcher instance (Playwright-based; preferred over
+    StealthyFetcher because it does not require curl_cffi).  Falls back to
+    StealthyFetcher when DynamicFetcher is not exported."""
+    import importlib
+
+    try:
+        chrome_mod = importlib.import_module("scrapling.fetchers.chrome")
+        cls = getattr(chrome_mod, "DynamicFetcher", None)
+        if cls is not None:
+            return cls
+    except Exception:
+        pass
+
+    # Fallback: StealthyFetcher (requires camoufox + curl_cffi).
     mod = importlib.import_module("scrapling")
     return mod.StealthyFetcher()
+
+
+async def _async_fetch_basic(
+    url: str, async_fetcher_cls: Any
+) -> tuple[str | None, str | None]:
+    """Async basic fetch using AsyncFetcher.get (curl_cffi path)."""
+    fetcher = async_fetcher_cls()
+    resp = await fetcher.get(url)
+    html = resp.text if resp.status == 200 else None
+    text = _extract_text(html) if html else None
+    return html, text
+
+
+def _sync_fetch_basic(url: str) -> tuple[str | None, str | None]:
+    """Basic fetch via Scrapling Fetcher (TLS impersonation, fastest)."""
+    scrapling_fetcher = _lazy_import_fetcher()
+    resp = scrapling_fetcher.get(url)
+    html = resp.text if resp.status == 200 else None
+    text = _extract_text(html) if html else None
+    return html, text
+
+
+def _sync_fetch_stealth(url: str) -> tuple[str | None, str | None]:
+    """Stealth fetch for JS-heavy sites via DynamicFetcher (Playwright-based)."""
+    stealthy_fetcher = _lazy_import_stealthy_fetcher()
+    resp = stealthy_fetcher.fetch(url)
+    html = resp.text if resp.status == 200 else None
+    text = _extract_text(html) if html else None
+    return html, text
 
 
 def _extract_text(html: str) -> str | None:

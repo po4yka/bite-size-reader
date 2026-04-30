@@ -13,17 +13,31 @@ def test_provider_order_accepts_csv() -> None:
     assert cfg.provider_order == ["scrapling", "firecrawl", "playwright", "direct_html"]
 
 
-def test_default_provider_order_excludes_external_defuddle() -> None:
+def test_default_provider_order_has_eight_entries() -> None:
     cfg = ScraperConfig()
 
     assert cfg.provider_order == [
         "scrapling",
+        "crawl4ai",
         "firecrawl",
+        "defuddle",
         "playwright",
         "crawlee",
         "direct_html",
+        "scrapegraph_ai",
     ]
-    assert cfg.defuddle_enabled is False
+
+
+def test_defuddle_enabled_by_default() -> None:
+    cfg = ScraperConfig()
+    assert cfg.defuddle_enabled is True
+
+
+def test_new_provider_tokens_in_token_set() -> None:
+    from app.config.scraper import SCRAPER_PROVIDER_TOKENS
+
+    assert "crawl4ai" in SCRAPER_PROVIDER_TOKENS
+    assert "scrapegraph_ai" in SCRAPER_PROVIDER_TOKENS
 
 
 def test_provider_order_accepts_json_array_string() -> None:

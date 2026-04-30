@@ -207,12 +207,33 @@ class CrawleeProvider:
             )
             raise ImportError(msg) from exc
 
+        # Use browserforge-backed fingerprint generation (Crawlee's default) and
+        # augment with a freshly generated fingerprint's HTTP headers so each
+        # request gets a rotated, consistent UA + Sec-CH-UA set.
+        try:
+            import importlib as _il
+
+            _bf_fp = _il.import_module("browserforge.fingerprints")
+            _fp = _bf_fp.FingerprintGenerator(
+                browser=["chrome"], device=["desktop"], os=["windows"]
+            ).generate()
+            _extra_headers = {
+                k: v for k, v in (_fp.headers or {}).items() if k.lower() != "user-agent"
+            }
+            _new_context_opts: dict = {
+                "user_agent": _fp.navigator.userAgent,
+                "extra_http_headers": _extra_headers,
+            }
+        except Exception:
+            _new_context_opts = {}
+
         extracted_html: str | None = None
         crawler = PlaywrightCrawler(
             headless=self._headless,
             max_request_retries=self._max_retries,
             request_handler_timeout=timedelta(seconds=timeout_sec),
             max_requests_per_crawl=1,
+            browser_new_context_options=_new_context_opts or None,
         )
 
         @crawler.router.default_handler

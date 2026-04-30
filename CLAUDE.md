@@ -198,7 +198,7 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
    - Respect URL normalization (`app/core/url_utils.py`) -- all URLs must be normalized before deduplication
    - Preserve `dedupe_hash` (sha256) for idempotence
    - Always persist scraper responses in `crawl_results` table (`FirecrawlResult` is the universal output model)
-   - Content extraction uses `ContentScraperChain` (ordered fallback: Scrapling -> Defuddle -> self-hosted Firecrawl -> Playwright -> Crawlee -> direct HTTP). See `app/adapters/content/scraper/` for protocol, chain, factory, and providers
+   - Content extraction uses `ContentScraperChain` (ordered fallback: Scrapling -> Crawl4AI -> Firecrawl (self-hosted) -> Defuddle (self-hosted) -> Playwright -> Crawlee -> Direct HTML -> Scrapegraph-AI). See `app/adapters/content/scraper/` for protocol, chain, factory, and providers
    - Check `app/adapters/content/url_processor.py` for orchestration logic
    - **URL Flow models** (`app/adapters/content/url_flow_models.py`):
      - `URLFlowRequest` -- request envelope: wraps the Telegram message, raw URL text, correlation ID, and Telegram-specific callbacks (progress tracker, phase-change callback)
@@ -418,20 +418,27 @@ OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Default model
 OPENROUTER_FALLBACK_MODELS=qwen/qwen3.5-plus-02-15,google/gemini-3.1-flash-lite-preview,moonshotai/kimi-k2.5
 
 # Scraper chain (all optional -- defaults enable full fallback chain)
-FIRECRAWL_API_KEY=                  # Optional; enables cloud Firecrawl for TopicSearchService web search
+# Default order: scrapling -> crawl4ai -> firecrawl -> defuddle -> playwright -> crawlee -> direct_html -> scrapegraph_ai
+FIRECRAWL_API_KEY=                  # Optional; used only by TopicSearchService web search (NOT the scraper chain)
 FIRECRAWL_SELF_HOSTED_ENABLED=false
-FIRECRAWL_SELF_HOSTED_URL=http://firecrawl:3002  # Self-hosted Firecrawl URL (Docker Compose service)
+FIRECRAWL_SELF_HOSTED_URL=http://firecrawl-api:3002  # Self-hosted Firecrawl (Docker Compose service)
 SCRAPER_ENABLED=true
 SCRAPER_PROFILE=balanced
 SCRAPER_BROWSER_ENABLED=true
-SCRAPER_SCRAPLING_ENABLED=true      # Enable Scrapling provider (primary)
-SCRAPER_DEFUDDLE_ENABLED=true       # Enable Defuddle API provider (second in chain)
-SCRAPER_DEFUDDLE_TIMEOUT_SEC=20     # Defuddle request timeout in seconds
-SCRAPER_DEFUDDLE_API_BASE_URL=https://defuddle.md  # Defuddle API base URL
+SCRAPER_SCRAPLING_ENABLED=true      # Enable Scrapling provider (primary, in-process)
+SCRAPER_CRAWL4AI_ENABLED=true       # Enable Crawl4AI provider (self-hosted Docker sidecar)
+SCRAPER_CRAWL4AI_URL=http://crawl4ai:11235
+SCRAPER_CRAWL4AI_TOKEN=             # Bearer token for secured Crawl4AI instances (optional)
+SCRAPER_CRAWL4AI_TIMEOUT_SEC=60
+SCRAPER_DEFUDDLE_ENABLED=true       # Enable Defuddle API provider (self-hosted, default on)
+SCRAPER_DEFUDDLE_TIMEOUT_SEC=20
+SCRAPER_DEFUDDLE_API_BASE_URL=http://defuddle-api:3003  # Self-hosted Defuddle (Docker Compose service)
 SCRAPER_FIRECRAWL_TIMEOUT_SEC=90
 SCRAPER_PLAYWRIGHT_ENABLED=true
 SCRAPER_CRAWLEE_ENABLED=true
 SCRAPER_DIRECT_HTML_ENABLED=true
+SCRAPER_SCRAPEGRAPH_ENABLED=true    # Enable ScrapeGraph-AI last-resort provider (requires scrapegraphai pkg)
+SCRAPER_SCRAPEGRAPH_TIMEOUT_SEC=90
 
 # Channel Digest (optional)
 DIGEST_ENABLED=false                # Enable channel digest subsystem
@@ -453,7 +460,7 @@ Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-04-28
+**Last Updated:** 2026-04-30
 
 For questions about the codebase, always refer to:
 

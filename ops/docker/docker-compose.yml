@@ -29,6 +29,8 @@ services:
       - REQUEST_TIMEOUT_SEC=${REQUEST_TIMEOUT_SEC:-60}
       - FIRECRAWL_SELF_HOSTED_ENABLED=${FIRECRAWL_SELF_HOSTED_ENABLED:-0}
       - FIRECRAWL_SELF_HOSTED_URL=${FIRECRAWL_SELF_HOSTED_URL:-http://firecrawl-api:3002}
+      - SCRAPER_DEFUDDLE_API_BASE_URL=${SCRAPER_DEFUDDLE_API_BASE_URL:-http://defuddle-api:3003}
+      - SCRAPER_CRAWL4AI_URL=${SCRAPER_CRAWL4AI_URL:-http://crawl4ai:11235}
       - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434/v1}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-ollama}
@@ -94,6 +96,8 @@ services:
       - REDIS_PORT=6379
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
+      - SCRAPER_DEFUDDLE_API_BASE_URL=${SCRAPER_DEFUDDLE_API_BASE_URL:-http://defuddle-api:3003}
+      - SCRAPER_CRAWL4AI_URL=${SCRAPER_CRAWL4AI_URL:-http://crawl4ai:11235}
     volumes:
       - ../../data:/data
       - ../../config:/app/config:ro
@@ -474,6 +478,52 @@ services:
     restart: unless-stopped
     volumes:
       - firecrawl_postgres_data:/var/lib/postgresql/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+
+  crawl4ai:
+    profiles:
+      - with-firecrawl
+      - with-scrapers
+    image: unclecode/crawl4ai:latest
+    container_name: ratatoskr-crawl4ai
+    environment:
+      - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_TOKEN:-}
+      - INSTALL_TYPE=all
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11235/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+
+  defuddle-api:
+    profiles:
+      - with-firecrawl
+      - with-scrapers
+    build:
+      context: ./defuddle
+    container_name: ratatoskr-defuddle-api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     logging:
       driver: "json-file"
       options:

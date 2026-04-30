@@ -54,6 +54,8 @@ class ContentScraperFactory:
             "playwright": lambda: _build_playwright(scraper_cfg),
             "crawlee": lambda: _build_crawlee(scraper_cfg),
             "direct_html": lambda: _build_direct_html(scraper_cfg),
+            "crawl4ai": lambda: _build_crawl4ai(scraper_cfg),
+            "scrapegraph_ai": lambda: _build_scrapegraph(cfg),
         }
 
         for name in provider_order:
@@ -151,10 +153,9 @@ def _build_firecrawl(
     cfg: AppConfig,
     audit: Callable[[str, str, dict], None] | None,
 ) -> ContentScraperProtocol | None:
+    """Build Firecrawl provider for self-hosted instance only; cloud is not supported."""
     scraper_cfg = cfg.scraper
-    self_hosted_enabled = getattr(scraper_cfg, "firecrawl_self_hosted_enabled", False)
-    cloud_api_key = getattr(cfg.firecrawl, "api_key", "")
-    if not self_hosted_enabled and not cloud_api_key:
+    if not getattr(scraper_cfg, "firecrawl_self_hosted_enabled", False):
         return None
     try:
         from app.adapters.external.firecrawl.client import FirecrawlClient, FirecrawlClientConfig
@@ -200,24 +201,15 @@ def _build_firecrawl(
             json_schema=cfg.firecrawl.json_schema or {},
             wait_for_ms=getattr(scraper_cfg, "firecrawl_wait_for_ms", 3000),
         )
-        if self_hosted_enabled:
-            api_key = scraper_cfg.firecrawl_self_hosted_api_key
-            base_url = scraper_cfg.firecrawl_self_hosted_url
-            provider_name = "firecrawl_self_hosted"
-        else:
-            api_key = cloud_api_key
-            base_url = None
-            provider_name = "firecrawl"
-
         client = FirecrawlClient(
-            api_key,
+            scraper_cfg.firecrawl_self_hosted_api_key,
             client_cfg,
             audit=audit,
-            base_url=base_url,
+            base_url=scraper_cfg.firecrawl_self_hosted_url,
         )
         return FirecrawlProvider(
             client,
-            name=provider_name,
+            name="firecrawl_self_hosted",
             wait_for_ms=getattr(scraper_cfg, "firecrawl_wait_for_ms", 3000),
             js_heavy_hosts=getattr(scraper_cfg, "js_heavy_hosts", ()),
             min_content_length=getattr(scraper_cfg, "min_content_length", 400),
@@ -228,7 +220,7 @@ def _build_firecrawl(
             extra={
                 "error": str(exc),
                 "error_type": type(exc).__name__,
-                "mode": "self_hosted" if self_hosted_enabled else "cloud",
+                "mode": "self_hosted",
             },
         )
         return None
@@ -296,6 +288,55 @@ def _build_crawlee(scraper_cfg: object) -> ContentScraperProtocol | None:
     except Exception as exc:
         logger.warning(
             "crawlee_provider_init_failed",
+            extra={"error": str(exc), "error_type": type(exc).__name__},
+        )
+        return None
+
+
+def _build_crawl4ai(scraper_cfg: object) -> ContentScraperProtocol | None:
+    if not getattr(scraper_cfg, "crawl4ai_enabled", True):
+        return None
+    crawl4ai_url = getattr(scraper_cfg, "crawl4ai_url", "")
+    if not crawl4ai_url:
+        return None
+    try:
+        from app.adapters.content.scraper.crawl4ai_provider import Crawl4AIProvider
+
+        return Crawl4AIProvider(
+            url=crawl4ai_url,
+            token=getattr(scraper_cfg, "crawl4ai_token", ""),
+            timeout_sec=getattr(scraper_cfg, "crawl4ai_timeout_sec", 60),
+            min_content_length=getattr(scraper_cfg, "min_content_length", 400),
+            profile=getattr(scraper_cfg, "profile", "balanced"),
+            js_heavy_hosts=getattr(scraper_cfg, "js_heavy_hosts", ()),
+        )
+    except Exception as exc:
+        logger.warning(
+            "crawl4ai_provider_init_failed",
+            extra={"error": str(exc), "error_type": type(exc).__name__},
+        )
+        return None
+
+
+def _build_scrapegraph(cfg: AppConfig) -> ContentScraperProtocol | None:
+    scraper_cfg = cfg.scraper
+    if not getattr(scraper_cfg, "scrapegraph_enabled", True):
+        return None
+    openrouter_api_key = getattr(cfg.openrouter, "api_key", "")
+    if not openrouter_api_key:
+        return None
+    try:
+        from app.adapters.content.scraper.scrapegraph_provider import ScrapeGraphAIProvider
+
+        return ScrapeGraphAIProvider(
+            openrouter_api_key=openrouter_api_key,
+            openrouter_model=getattr(cfg.openrouter, "model", ""),
+            timeout_sec=getattr(scraper_cfg, "scrapegraph_timeout_sec", 90),
+            min_content_length=getattr(scraper_cfg, "min_content_length", 400),
+        )
+    except Exception as exc:
+        logger.warning(
+            "scrapegraph_provider_init_failed",
             extra={"error": str(exc), "error_type": type(exc).__name__},
         )
         return None

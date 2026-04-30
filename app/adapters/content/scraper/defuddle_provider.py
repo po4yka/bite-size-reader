@@ -1,4 +1,4 @@
-"""Defuddle HTTP API content extraction provider."""
+"""Defuddle (self-hosted) HTTP content extraction provider."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from app.core.logging_utils import get_logger
 logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT_SEC = 20
-_DEFAULT_API_BASE_URL = "https://defuddle.md"
+_DEFAULT_API_BASE_URL = "http://defuddle-api:3003"
 _FRONTMATTER_MARKER = "---"
 
 _HEADERS = {
@@ -39,6 +39,11 @@ class DefuddleProvider:
         self._timeout_sec = timeout_sec
         self._min_content_length = min_content_length
         self._api_base_url = api_base_url.rstrip("/")
+        if self._api_base_url.lower().rstrip("/") == "https://defuddle.md":
+            logger.warning(
+                "defuddle_provider_cloud_url_deprecated",
+                extra={"url": api_base_url},
+            )
 
     @property
     def provider_name(self) -> str:

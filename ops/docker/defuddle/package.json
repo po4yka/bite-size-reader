@@ -1,0 +1,12 @@
+{
+  "name": "ratatoskr-defuddle-sidecar",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "defuddle": "^0.18.1",
+    "fastify": "^5.8.5",
+    "playwright": "^1.49.0"
+  }
+}

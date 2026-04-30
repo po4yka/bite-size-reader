@@ -120,6 +120,25 @@ def build_scraper_diagnostics(cfg: AppConfig) -> dict[str, Any]:
             ),
             "max_response_mb": scraper_cfg.direct_html_max_response_mb,
         },
+        "crawl4ai": {
+            "enabled": bool(scraper_cfg.enabled and scraper_cfg.crawl4ai_enabled),
+            "dependency_ready": _module_ready("httpx"),
+            "url": scraper_cfg.crawl4ai_url,
+            "token_configured": bool(scraper_cfg.crawl4ai_token),
+            "base_timeout_sec": scraper_cfg.crawl4ai_timeout_sec,
+            "effective_timeout_sec": round(
+                scraper_cfg.crawl4ai_timeout_sec * profile_multiplier, 2
+            ),
+        },
+        "scrapegraph_ai": {
+            "enabled": bool(scraper_cfg.enabled and scraper_cfg.scrapegraph_enabled),
+            "dependency_ready": _module_ready("scrapegraphai"),
+            "model": getattr(cfg.openrouter, "model", ""),
+            "base_timeout_sec": scraper_cfg.scrapegraph_timeout_sec,
+            "effective_timeout_sec": round(
+                scraper_cfg.scrapegraph_timeout_sec * profile_multiplier, 2
+            ),
+        },
     }
 
     active_ready = [

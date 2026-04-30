@@ -202,7 +202,7 @@ def _prepare_config(args: argparse.Namespace) -> AppConfig:
     except RuntimeError as exc:
         msg = (
             "Configuration error: "
-            f"{exc}. Set FIRECRAWL_API_KEY and OPENROUTER_API_KEY before running the CLI."
+            f"{exc}. Set FIRECRAWL_SELF_HOSTED_ENABLED=true (and OPENROUTER_API_KEY) before running the CLI."
         )
         raise SystemExit(msg) from exc
     runtime = cfg.runtime

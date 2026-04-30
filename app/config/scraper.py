@@ -14,15 +14,20 @@ SCRAPER_PROVIDER_TOKENS = {
     "playwright",
     "crawlee",
     "direct_html",
+    "crawl4ai",
+    "scrapegraph_ai",
 }
 
 SCRAPER_PROFILES = {"fast", "balanced", "robust"}
 DEFAULT_SCRAPER_PROVIDER_ORDER = [
     "scrapling",
+    "crawl4ai",
     "firecrawl",
+    "defuddle",
     "playwright",
     "crawlee",
     "direct_html",
+    "scrapegraph_ai",
 ]
 
 _PROFILE_TIMEOUT_MULTIPLIERS = {
@@ -103,7 +108,7 @@ class ScraperConfig(BaseModel):
     )
 
     defuddle_enabled: bool = Field(
-        default=False,
+        default=True,
         validation_alias="SCRAPER_DEFUDDLE_ENABLED",
     )
     defuddle_timeout_sec: int = Field(
@@ -111,7 +116,7 @@ class ScraperConfig(BaseModel):
         validation_alias="SCRAPER_DEFUDDLE_TIMEOUT_SEC",
     )
     defuddle_api_base_url: str = Field(
-        default="https://defuddle.md",
+        default="http://defuddle-api:3003",
         validation_alias="SCRAPER_DEFUDDLE_API_BASE_URL",
     )
 
@@ -198,6 +203,32 @@ class ScraperConfig(BaseModel):
     direct_html_max_response_mb: int = Field(
         default=10,
         validation_alias="SCRAPER_DIRECT_HTML_MAX_RESPONSE_MB",
+    )
+
+    crawl4ai_enabled: bool = Field(
+        default=True,
+        validation_alias="SCRAPER_CRAWL4AI_ENABLED",
+    )
+    crawl4ai_url: str = Field(
+        default="http://crawl4ai:11235",
+        validation_alias="SCRAPER_CRAWL4AI_URL",
+    )
+    crawl4ai_token: str = Field(
+        default="",
+        validation_alias="SCRAPER_CRAWL4AI_TOKEN",
+    )
+    crawl4ai_timeout_sec: int = Field(
+        default=60,
+        validation_alias="SCRAPER_CRAWL4AI_TIMEOUT_SEC",
+    )
+
+    scrapegraph_enabled: bool = Field(
+        default=True,
+        validation_alias="SCRAPER_SCRAPEGRAPH_ENABLED",
+    )
+    scrapegraph_timeout_sec: int = Field(
+        default=90,
+        validation_alias="SCRAPER_SCRAPEGRAPH_TIMEOUT_SEC",
     )
 
     @field_validator("profile", mode="before")
@@ -297,6 +328,8 @@ class ScraperConfig(BaseModel):
         "crawlee_max_retries",
         "direct_html_timeout_sec",
         "direct_html_max_response_mb",
+        "crawl4ai_timeout_sec",
+        "scrapegraph_timeout_sec",
         mode="before",
     )
     @classmethod
@@ -324,6 +357,8 @@ class ScraperConfig(BaseModel):
             "crawlee_max_retries": (0, 10),
             "direct_html_timeout_sec": (1, 300),
             "direct_html_max_response_mb": (1, 200),
+            "crawl4ai_timeout_sec": (1, 300),
+            "scrapegraph_timeout_sec": (1, 600),
         }
         min_val, max_val = bounds[info.field_name]
         if parsed < min_val or parsed > max_val:

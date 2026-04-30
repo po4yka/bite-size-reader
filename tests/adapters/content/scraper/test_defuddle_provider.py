@@ -125,9 +125,24 @@ class TestDefuddleProvider:
     async def test_aclose_is_noop(self):
         await DefuddleProvider().aclose()
 
+    def test_default_api_base_url_is_self_hosted(self):
+        """Default URL is the self-hosted Docker Compose service, not defuddle.md."""
+        p = DefuddleProvider()
+        assert p._api_base_url == "http://defuddle-api:3003"
+
     def test_api_base_url_trailing_slash_stripped(self):
         p = DefuddleProvider(api_base_url="https://self-hosted.internal/")
         assert not p._api_base_url.endswith("/")
+
+    def test_cloud_url_logs_deprecation_warning(self, caplog):
+        """Pointing at https://defuddle.md logs a deprecation warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            DefuddleProvider(api_base_url="https://defuddle.md")
+
+        warning_events = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("defuddle_provider_cloud_url_deprecated" in msg for msg in warning_events)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_no_frontmatter_still_ok_when_long_enough(self):
