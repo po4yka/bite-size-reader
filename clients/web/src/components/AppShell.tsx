@@ -2,19 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import ErrorBoundary from "./ErrorBoundary";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  Button,
+  BracketButton,
   Content,
-  Header,
-  HeaderGlobalBar,
-  HeaderGlobalAction,
-  HeaderMenuButton,
-  HeaderName,
-  InlineNotification,
-  SideNav,
-  SideNavDivider,
-  SideNavItems,
-  SideNavLink,
+  FrostHeader,
+  FrostHeaderGlobalBar,
+  FrostHeaderGlobalAction,
+  FrostHeaderMenuButton,
+  FrostHeaderName,
+  FrostSideNav,
+  FrostSideNavDivider,
+  FrostSideNavItems,
+  FrostSideNavLink,
   SkipToContent,
+  StatusBadge,
   Theme,
   Logout,
   Renew,
@@ -118,43 +118,43 @@ export default function AppShell() {
     <Theme theme={theme}>
       <div className="app-shell">
         <SkipToContent />
-        <Header aria-label="Ratatoskr Web">
-          <HeaderMenuButton
+        <FrostHeader aria-label="Ratatoskr Web">
+          <FrostHeaderMenuButton
             aria-label={expanded ? "Close navigation menu" : "Open navigation menu"}
             onClick={() => setExpanded((prev) => !prev)}
             isActive={expanded}
           />
-          <HeaderName as={Link} to={HOME_PATH} prefix="">
+          <FrostHeaderName as={Link} to={HOME_PATH} prefix="">
             Ratatoskr
-          </HeaderName>
-          <HeaderGlobalBar>
+          </FrostHeaderName>
+          <FrostHeaderGlobalBar>
             {user?.username && <span className="app-shell-user">@{user.username}</span>}
             <span className="app-shell-session">{sessionLabel}</span>
-            <HeaderGlobalAction
+            <FrostHeaderGlobalAction
               aria-label={isVerifyingSession ? "Verifying session" : "Verify session"}
               onClick={() => void handleSessionVerify()}
             >
               <Renew size={20} />
-            </HeaderGlobalAction>
-            <HeaderGlobalAction aria-label="Sign out" onClick={logout}>
+            </FrostHeaderGlobalAction>
+            <FrostHeaderGlobalAction aria-label="Sign out" onClick={logout}>
               <Logout size={20} />
-            </HeaderGlobalAction>
-          </HeaderGlobalBar>
-        </Header>
+            </FrostHeaderGlobalAction>
+          </FrostHeaderGlobalBar>
+        </FrostHeader>
 
-        <SideNav
+        <FrostSideNav
           aria-label="Main navigation"
           expanded={expanded}
           onOverlayClick={() => setExpanded(false)}
           onSideNavBlur={() => setExpanded(false)}
           isFixedNav
         >
-          <SideNavItems>
+          <FrostSideNavItems>
             {NAV_GROUPS.map((group, groupIndex) => (
               <span key={groupIndex}>
-                {groupIndex > 0 && <SideNavDivider />}
+                {groupIndex > 0 && <FrostSideNavDivider />}
                 {group.map((item) => (
-                  <SideNavLink
+                  <FrostSideNavLink
                     key={item.path}
                     href={`/web${item.path}`}
                     isActive={activePath === item.path}
@@ -167,34 +167,31 @@ export default function AppShell() {
                     }}
                   >
                     {item.label}
-                  </SideNavLink>
+                  </FrostSideNavLink>
                 ))}
               </span>
             ))}
-          </SideNavItems>
-        </SideNav>
+          </FrostSideNavItems>
+        </FrostSideNav>
 
         <Content id="main-content" className="app-content">
           {error && (
             <section className="app-session-alert">
-              <InlineNotification
-                kind="warning"
-                title="Session requires attention"
-                subtitle={error}
-                onCloseButtonClick={() => dismissError()}
-              />
+              <StatusBadge severity="warn" title="Session requires attention" dismissible onDismiss={() => dismissError()}>
+                {error}
+              </StatusBadge>
               <div className="form-actions app-session-actions">
-                <Button
-                  kind="tertiary"
+                <BracketButton
+                  kind="secondary"
                   size="sm"
                   onClick={() => void handleSessionVerify()}
                   disabled={isVerifyingSession}
                 >
                   {isVerifyingSession ? "Verifying…" : "Verify session"}
-                </Button>
-                <Button kind="ghost" size="sm" onClick={logout}>
+                </BracketButton>
+                <BracketButton kind="ghost" size="sm" onClick={logout}>
                   Sign in again
-                </Button>
+                </BracketButton>
               </div>
             </section>
           )}

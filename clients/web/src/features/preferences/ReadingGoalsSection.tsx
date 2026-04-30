@@ -1,21 +1,23 @@
 import { useState } from "react";
 import {
-  Button,
+  BracketButton,
+  BrutalistCard,
+  BrutalistSkeletonText,
+  MonoProgressBar,
+  MonoSelect,
+  MonoSelectItem,
   NumberInput,
-  ProgressBar,
-  RadioButtonGroup,
   RadioButton,
-  Select,
-  SelectItem,
-  SkeletonText,
+  RadioButtonGroup,
   Tag,
-  Tile,
   TrashCan,
 } from "../../design";
 import { useReadingGoals, useGoalsProgress, useCreateGoal, useDeleteGoal } from "../../hooks/useUser";
 import { useTags } from "../../hooks/useTags";
 import { useCollectionTree } from "../../hooks/useCollections";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
+
+const MUTED = "color-mix(in oklch, var(--frost-ink) 55%, transparent)";
 
 const GOAL_TYPES = ["daily", "weekly", "monthly"] as const;
 type GoalType = (typeof GOAL_TYPES)[number];
@@ -63,17 +65,29 @@ export default function ReadingGoalsSection() {
     newScopeType === "global" || (newScopeId !== null && newScopeId > 0);
 
   return (
-    <Tile>
-      <h3 style={{ marginBottom: "1rem" }}>Reading Goals</h3>
+    <BrutalistCard>
+      <p
+        style={{
+          fontFamily: "var(--frost-font-mono)",
+          fontSize: "11px",
+          fontWeight: 800,
+          textTransform: "uppercase",
+          letterSpacing: "1px",
+          color: MUTED,
+          marginBottom: "1rem",
+        }}
+      >
+        § Reading Goals
+      </p>
 
       <QueryErrorNotification error={goalsQuery.error ?? progressQuery.error} title="Failed to load goals" />
 
-      {isLoading && <SkeletonText paragraph lineCount={4} />}
+      {isLoading && <BrutalistSkeletonText paragraph lineCount={4} />}
 
       {goalsQuery.data && (
         <>
           {goalsQuery.data.length === 0 && (
-            <p style={{ color: "var(--rtk-color-text-muted)", marginBottom: "1rem" }}>
+            <p style={{ color: MUTED, marginBottom: "1rem" }}>
               No goals set yet.
             </p>
           )}
@@ -105,15 +119,14 @@ export default function ReadingGoalsSection() {
                   </Tag>
                 )}
                 <div style={{ flex: 1 }}>
-                  <ProgressBar
+                  <MonoProgressBar
                     label={`${current} / ${target}`}
                     value={pct}
                     max={100}
-                    size="small"
                     status={achieved ? "finished" : "active"}
                   />
                 </div>
-                <Button
+                <BracketButton
                   kind="ghost"
                   size="sm"
                   iconDescription="Delete goal"
@@ -136,7 +149,7 @@ export default function ReadingGoalsSection() {
           <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Add Goal</p>
 
           <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap" }}>
-            <Select
+            <MonoSelect
               id="new-goal-type"
               labelText="Goal type"
               value={newGoalType}
@@ -144,9 +157,9 @@ export default function ReadingGoalsSection() {
               style={{ minWidth: "8rem" }}
             >
               {GOAL_TYPES.map((t) => (
-                <SelectItem key={t} value={t} text={t.charAt(0).toUpperCase() + t.slice(1)} />
+                <MonoSelectItem key={t} value={t} text={t.charAt(0).toUpperCase() + t.slice(1)} />
               ))}
-            </Select>
+            </MonoSelect>
 
             <NumberInput
               id="new-goal-target"
@@ -170,46 +183,46 @@ export default function ReadingGoalsSection() {
             </RadioButtonGroup>
 
             {newScopeType === "tag" && (
-              <Select
+              <MonoSelect
                 id="new-goal-scope-tag"
                 labelText="Tag"
                 value={newScopeId?.toString() ?? ""}
                 onChange={(e) => setNewScopeId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}
                 style={{ minWidth: "10rem" }}
               >
-                <SelectItem value="" text="Select a tag..." />
+                <MonoSelectItem value="" text="Select a tag..." />
                 {(tagsQuery.data ?? []).map((tag) => (
-                  <SelectItem key={tag.id} value={tag.id.toString()} text={tag.name} />
+                  <MonoSelectItem key={tag.id} value={tag.id.toString()} text={tag.name} />
                 ))}
-              </Select>
+              </MonoSelect>
             )}
 
             {newScopeType === "collection" && (
-              <Select
+              <MonoSelect
                 id="new-goal-scope-collection"
                 labelText="Collection"
                 value={newScopeId?.toString() ?? ""}
                 onChange={(e) => setNewScopeId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}
                 style={{ minWidth: "10rem" }}
               >
-                <SelectItem value="" text="Select a collection..." />
+                <MonoSelectItem value="" text="Select a collection..." />
                 {(collectionsQuery.data ?? []).map((col) => (
-                  <SelectItem key={col.id} value={col.id.toString()} text={col.name} />
+                  <MonoSelectItem key={col.id} value={col.id.toString()} text={col.name} />
                 ))}
-              </Select>
+              </MonoSelect>
             )}
 
-            <Button
+            <BracketButton
               onClick={handleAddGoal}
               disabled={createGoal.isPending || !canAdd}
             >
               Add Goal
-            </Button>
+            </BracketButton>
           </div>
 
           <QueryErrorNotification error={createGoal.error ?? deleteGoal.error} title="Goal action failed" />
         </>
       )}
-    </Tile>
+    </BrutalistCard>
   );
 }

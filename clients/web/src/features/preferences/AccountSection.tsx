@@ -1,14 +1,16 @@
 import { useState } from "react";
 import {
-  Button,
-  InlineNotification,
-  Modal,
-  TextInput,
-  Tile,
+  BracketButton,
+  BrutalistCard,
+  BrutalistModal,
+  MonoInput,
+  StatusBadge,
 } from "../../design";
 import { useDeleteAccount } from "../../hooks/useUser";
 import { useAuth } from "../../auth/AuthProvider";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
+
+const MUTED = "color-mix(in oklch, var(--frost-ink) 55%, transparent)";
 
 export default function AccountSection() {
   const { user } = useAuth();
@@ -36,21 +38,33 @@ export default function AccountSection() {
   };
 
   return (
-    <Tile>
-      <h3 style={{ marginBottom: "1rem" }}>Account</h3>
+    <BrutalistCard>
+      <p
+        style={{
+          fontFamily: "var(--frost-font-mono)",
+          fontSize: "11px",
+          fontWeight: 800,
+          textTransform: "uppercase",
+          letterSpacing: "1px",
+          color: MUTED,
+          marginBottom: "1rem",
+        }}
+      >
+        § Account
+      </p>
 
       {user && (
         <div style={{ marginBottom: "1rem" }}>
           <p>
-            <span style={{ color: "var(--rtk-color-text-muted)" }}>Username: </span>
+            <span style={{ color: MUTED }}>Username: </span>
             <strong>@{user.username}</strong>
           </p>
           <p>
-            <span style={{ color: "var(--rtk-color-text-muted)" }}>User ID: </span>
+            <span style={{ color: MUTED }}>User ID: </span>
             {user.userId}
           </p>
           <p>
-            <span style={{ color: "var(--rtk-color-text-muted)" }}>Member since: </span>
+            <span style={{ color: MUTED }}>Member since: </span>
             {new Date(user.createdAt).toLocaleDateString()}
           </p>
         </div>
@@ -58,11 +72,11 @@ export default function AccountSection() {
 
       <QueryErrorNotification error={deleteAccount.error} title="Failed to delete account" />
 
-      <Button kind="danger" onClick={handleOpenModal} disabled={deleteAccount.isPending}>
+      <BracketButton kind="danger" onClick={handleOpenModal} disabled={deleteAccount.isPending}>
         Delete Account
-      </Button>
+      </BracketButton>
 
-      <Modal
+      <BrutalistModal
         open={modalOpen}
         danger
         modalHeading="Delete Account"
@@ -73,17 +87,13 @@ export default function AccountSection() {
         onSecondarySubmit={handleCloseModal}
         onRequestSubmit={handleDelete}
       >
-        <InlineNotification
-          kind="warning"
-          title="This action is irreversible"
-          subtitle="All your data, articles, collections, and history will be permanently deleted."
-          hideCloseButton
-          style={{ marginBottom: "1rem" }}
-        />
-        <p style={{ marginBottom: "1rem" }}>
+        <StatusBadge severity="warn" title="This action is irreversible">
+          All your data, articles, collections, and history will be permanently deleted.
+        </StatusBadge>
+        <p style={{ marginTop: "1rem", marginBottom: "1rem" }}>
           Type <strong>@{expectedUsername}</strong> to confirm deletion.
         </p>
-        <TextInput
+        <MonoInput
           id="confirm-username"
           labelText="Confirm username"
           placeholder={`@${expectedUsername}`}
@@ -92,7 +102,7 @@ export default function AccountSection() {
           invalid={confirmUsername !== "" && !canDelete}
           invalidText="Username does not match"
         />
-      </Modal>
-    </Tile>
+      </BrutalistModal>
+    </BrutalistCard>
   );
 }

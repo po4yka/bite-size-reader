@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Tab, TabList, TabPanel, TabPanels, Tabs } from "../../design";
+import { BracketTab, BracketTabList, BracketTabPanel, BracketTabPanels, BracketTabs } from "../../design";
 import { useAuth } from "../../auth/AuthProvider";
 import { ChannelsTab } from "./ChannelsTab";
 import { CustomDigestTab } from "./CustomDigestTab";
@@ -15,36 +15,45 @@ export default function DigestPage() {
   const isTelegramMode = mode === "telegram-webapp";
 
   return (
-    <section className="page-section">
+    <section
+      className="page-section"
+      style={{
+        maxWidth: "var(--frost-strip-7, 1232px)",
+        padding: "var(--frost-pad-page, 32px)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section, 48px)",
+      }}
+    >
       <h1>Digest</h1>
 
       {isTelegramMode ? (
-        <Tabs selectedIndex={selectedTabIndex} onChange={({ selectedIndex }) => setSelectedTabIndex(selectedIndex)}>
-          <TabList aria-label="Digest tabs" contained>
-            <Tab>Channels</Tab>
-            <Tab>RSS Feeds</Tab>
-            <Tab>Preferences</Tab>
-            <Tab>History</Tab>
-            <Tab>Custom Digests</Tab>
-          </TabList>
-          <TabPanels>
-            <TabPanel>
+        <BracketTabs selectedIndex={selectedTabIndex} onChange={({ selectedIndex }) => setSelectedTabIndex(selectedIndex)}>
+          <BracketTabList aria-label="Digest tabs" contained>
+            <BracketTab>Channels</BracketTab>
+            <BracketTab>RSS Feeds</BracketTab>
+            <BracketTab>Preferences</BracketTab>
+            <BracketTab>History</BracketTab>
+            <BracketTab>Custom Digests</BracketTab>
+          </BracketTabList>
+          <BracketTabPanels>
+            <BracketTabPanel>
               <ChannelsTab isOwner={Boolean(user?.isOwner)} isActive={selectedTabIndex === 0} />
-            </TabPanel>
-            <TabPanel>
+            </BracketTabPanel>
+            <BracketTabPanel>
               <RSSFeedsTab />
-            </TabPanel>
-            <TabPanel>
+            </BracketTabPanel>
+            <BracketTabPanel>
               <PreferencesTab />
-            </TabPanel>
-            <TabPanel>
+            </BracketTabPanel>
+            <BracketTabPanel>
               <HistoryTab />
-            </TabPanel>
-            <TabPanel>
+            </BracketTabPanel>
+            <BracketTabPanel>
               <CustomDigestTab />
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
+            </BracketTabPanel>
+          </BracketTabPanels>
+        </BracketTabs>
       ) : (
         <>
           <DigestUnavailableNotice />

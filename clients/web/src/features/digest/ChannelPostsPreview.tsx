@@ -1,4 +1,4 @@
-import { InlineLoading, InlineNotification, Tag } from "../../design";
+import { SparkLoading, StatusBadge, Tag } from "../../design";
 import type { DigestChannelPost } from "../../api/digest";
 import { useChannelPosts } from "../../hooks/useDigest";
 
@@ -6,17 +6,14 @@ export function ChannelPostsPreview({ username }: { username: string }) {
   const postsQuery = useChannelPosts(username);
 
   if (postsQuery.isLoading) {
-    return <InlineLoading description="Loading posts..." />;
+    return <SparkLoading description="Loading posts..." />;
   }
 
   if (postsQuery.error) {
     return (
-      <InlineNotification
-        kind="error"
-        title="Failed to load posts"
-        subtitle={postsQuery.error instanceof Error ? postsQuery.error.message : "Unknown error"}
-        hideCloseButton
-      />
+      <StatusBadge severity="alarm" title="Failed to load posts">
+        {postsQuery.error instanceof Error ? postsQuery.error.message : "Unknown error"}
+      </StatusBadge>
     );
   }
 

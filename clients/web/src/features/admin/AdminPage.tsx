@@ -1,4 +1,4 @@
-import { Tab, TabList, TabPanel, TabPanels, Tabs } from "../../design";
+import { BracketTab, BracketTabList, BracketTabPanel, BracketTabPanels, BracketTabs } from "../../design";
 import AdminUsers from "./AdminUsers";
 import AdminJobs from "./AdminJobs";
 import AdminHealth from "./AdminHealth";
@@ -7,35 +7,44 @@ import AdminAuditLog from "./AdminAuditLog";
 
 export default function AdminPage() {
   return (
-    <section className="page-section">
+    <section
+      className="page-section"
+      style={{
+        maxWidth: "var(--frost-strip-7, 1232px)",
+        padding: "var(--frost-pad-page, 32px)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section, 48px)",
+      }}
+    >
       <h1>Admin</h1>
 
-      <Tabs>
-        <TabList aria-label="Admin tabs">
-          <Tab>Users</Tab>
-          <Tab>Jobs</Tab>
-          <Tab>Health</Tab>
-          <Tab>Metrics</Tab>
-          <Tab>Audit Log</Tab>
-        </TabList>
-        <TabPanels>
-          <TabPanel>
+      <BracketTabs>
+        <BracketTabList aria-label="Admin tabs">
+          <BracketTab>Users</BracketTab>
+          <BracketTab>Jobs</BracketTab>
+          <BracketTab>Health</BracketTab>
+          <BracketTab>Metrics</BracketTab>
+          <BracketTab>Audit Log</BracketTab>
+        </BracketTabList>
+        <BracketTabPanels>
+          <BracketTabPanel>
             <AdminUsers />
-          </TabPanel>
-          <TabPanel>
+          </BracketTabPanel>
+          <BracketTabPanel>
             <AdminJobs />
-          </TabPanel>
-          <TabPanel>
+          </BracketTabPanel>
+          <BracketTabPanel>
             <AdminHealth />
-          </TabPanel>
-          <TabPanel>
+          </BracketTabPanel>
+          <BracketTabPanel>
             <AdminMetrics />
-          </TabPanel>
-          <TabPanel>
+          </BracketTabPanel>
+          <BracketTabPanel>
             <AdminAuditLog />
-          </TabPanel>
-        </TabPanels>
-      </Tabs>
+          </BracketTabPanel>
+        </BracketTabPanels>
+      </BracketTabs>
     </section>
   );
 }

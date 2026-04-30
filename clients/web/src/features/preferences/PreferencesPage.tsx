@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Button,
-  InlineNotification,
+  BracketButton,
+  BrutalistCard,
+  BrutalistSkeletonText,
+  MonoSelect,
+  MonoSelectItem,
   NumberInput,
-  Select,
-  SelectItem,
-  SkeletonText,
-  Tile,
+  StatusBadge,
   TimePicker,
 } from "../../design";
 import { useUserPreferences, useUserStats, useUpdateUserPreferences } from "../../hooks/useUser";
@@ -91,40 +91,61 @@ export default function PreferencesPage() {
   });
 
   return (
-    <section className="page-section">
+    <section
+      className="page-section"
+      style={{
+        maxWidth: "var(--frost-strip-5, 880px)",
+        padding: "var(--frost-pad-page, 32px)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section, 48px)",
+      }}
+    >
       <h1>Preferences</h1>
 
       {isInitialLoading && (
         <>
-          <Tile>
-            <SkeletonText heading width="30%" />
-            <SkeletonText paragraph lineCount={3} />
-            <SkeletonText paragraph lineCount={5} />
-          </Tile>
-          <Tile>
-            <SkeletonText heading width="28%" />
-            <SkeletonText paragraph lineCount={5} />
-          </Tile>
+          <BrutalistCard>
+            <BrutalistSkeletonText heading width="30%" />
+            <BrutalistSkeletonText paragraph lineCount={3} />
+            <BrutalistSkeletonText paragraph lineCount={5} />
+          </BrutalistCard>
+          <BrutalistCard>
+            <BrutalistSkeletonText heading width="28%" />
+            <BrutalistSkeletonText paragraph lineCount={5} />
+          </BrutalistCard>
         </>
       )}
 
       <QueryErrorNotification error={preferencesQuery.error ?? statsQuery.error} title="Failed to load preferences" />
 
       {preferencesQuery.data && (
-        <Tile>
-          <h3>Profile</h3>
+        <BrutalistCard>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "11px",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "1px",
+              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+              marginBottom: "1rem",
+            }}
+          >
+            § Profile
+          </p>
           <p>User: @{preferencesQuery.data.telegramUsername ?? "unknown"}</p>
 
-          <Select
+          <MonoSelect
             id="lang-preference"
             labelText="Preferred language"
             value={langPreference}
             onChange={(event) => setLangPreference(event.currentTarget.value as "auto" | "en" | "ru")}
           >
-            <SelectItem value="auto" text="Auto" />
-            <SelectItem value="en" text="English" />
-            <SelectItem value="ru" text="Russian" />
-          </Select>
+            <MonoSelectItem value="auto" text="Auto" />
+            <MonoSelectItem value="en" text="English" />
+            <MonoSelectItem value="ru" text="Russian" />
+          </MonoSelect>
 
           <TimePicker
             id="delivery-time"
@@ -142,26 +163,35 @@ export default function PreferencesPage() {
             onChange={(_, { value }) => setDailyTarget(Number(value))}
           />
 
-          <Button onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
+          <BracketButton onClick={handleSave} disabled={!isDirty || saveMutation.isPending}>
             Save preferences
-          </Button>
+          </BracketButton>
 
           <QueryErrorNotification error={saveMutation.error} title="Save failed" />
 
           {saveMutation.isSuccess && (
-            <InlineNotification
-              kind="success"
-              title="Saved"
-              subtitle="Preferences have been updated."
-              hideCloseButton
-            />
+            <StatusBadge severity="info" title="Saved ✓">
+              Preferences have been updated.
+            </StatusBadge>
           )}
-        </Tile>
+        </BrutalistCard>
       )}
 
       {statsQuery.data && (
-        <Tile>
-          <h3>Reading stats</h3>
+        <BrutalistCard>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "11px",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "1px",
+              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+              marginBottom: "1rem",
+            }}
+          >
+            § Reading stats
+          </p>
           <ul>
             <li>Total summaries: {statsQuery.data.totalSummaries}</li>
             <li>Unread: {statsQuery.data.unreadCount}</li>
@@ -169,7 +199,7 @@ export default function PreferencesPage() {
             <li>Total reading time: {statsQuery.data.totalReadingTimeMin} minutes</li>
             <li>Average reading time: {statsQuery.data.averageReadingTimeMin} minutes</li>
           </ul>
-        </Tile>
+        </BrutalistCard>
       )}
 
       <ReadingStreakSection />

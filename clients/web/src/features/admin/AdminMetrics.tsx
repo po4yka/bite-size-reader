@@ -1,14 +1,14 @@
 import { useState } from "react";
 import {
-  Button,
-  InlineNotification,
-  SkeletonText,
-  StructuredListBody,
-  StructuredListCell,
-  StructuredListHead,
-  StructuredListRow,
-  StructuredListWrapper,
-  Tile,
+  BracketButton,
+  BrutalistCard,
+  BrutalistSkeletonText,
+  RowDigestBody,
+  RowDigestCell,
+  RowDigestHead,
+  RowDigestRow,
+  RowDigestWrapper,
+  StatusBadge,
 } from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useClearCache, useMetrics } from "../../hooks/useAdmin";
@@ -21,7 +21,7 @@ export default function AdminMetrics() {
     (err) => setCacheMessage({ kind: "error", text: err instanceof Error ? err.message : "Failed to clear cache" }),
   );
 
-  if (isLoading) return <SkeletonText paragraph lineCount={6} />;
+  if (isLoading) return <BrutalistSkeletonText paragraph lineCount={6} />;
 
   const db = data?.database;
   const llm = data?.llm7d;
@@ -36,8 +36,20 @@ export default function AdminMetrics() {
       <QueryErrorNotification error={error} title="Failed to load metrics" />
 
       {db && (
-        <Tile style={{ marginBottom: "1rem" }}>
-          <h4>Database</h4>
+        <BrutalistCard style={{ marginBottom: "1rem" }}>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "11px",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "1px",
+              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+              marginBottom: "0.75rem",
+            }}
+          >
+            § Database
+          </p>
           <p>
             <strong>Path:</strong> {db.dbPath}
           </p>
@@ -47,28 +59,40 @@ export default function AdminMetrics() {
             <strong>Tables:</strong> {Object.keys(db.tableCounts).length}
           </p>
 
-          <StructuredListWrapper>
-            <StructuredListHead>
-              <StructuredListRow head>
-                <StructuredListCell head>Table</StructuredListCell>
-                <StructuredListCell head>Rows</StructuredListCell>
-              </StructuredListRow>
-            </StructuredListHead>
-            <StructuredListBody>
+          <RowDigestWrapper>
+            <RowDigestHead>
+              <RowDigestRow head>
+                <RowDigestCell head>Table</RowDigestCell>
+                <RowDigestCell head>Rows</RowDigestCell>
+              </RowDigestRow>
+            </RowDigestHead>
+            <RowDigestBody>
               {Object.entries(db.tableCounts).map(([table, count]) => (
-                <StructuredListRow key={table}>
-                  <StructuredListCell>{table}</StructuredListCell>
-                  <StructuredListCell>{count >= 0 ? count.toLocaleString() : "error"}</StructuredListCell>
-                </StructuredListRow>
+                <RowDigestRow key={table}>
+                  <RowDigestCell>{table}</RowDigestCell>
+                  <RowDigestCell>{count >= 0 ? count.toLocaleString() : "error"}</RowDigestCell>
+                </RowDigestRow>
               ))}
-            </StructuredListBody>
-          </StructuredListWrapper>
-        </Tile>
+            </RowDigestBody>
+          </RowDigestWrapper>
+        </BrutalistCard>
       )}
 
       {llm && (
-        <Tile style={{ marginBottom: "1rem" }}>
-          <h4>LLM (last 7 days)</h4>
+        <BrutalistCard style={{ marginBottom: "1rem" }}>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "11px",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "1px",
+              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+              marginBottom: "0.75rem",
+            }}
+          >
+            § LLM (last 7 days)
+          </p>
           <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
             <div>
               <p className="rtk-label">Total Calls</p>
@@ -92,45 +116,77 @@ export default function AdminMetrics() {
             </div>
             <div>
               <p className="rtk-label">Error Rate</p>
-              <p style={{ fontSize: "1.25rem", fontWeight: 600, color: llm.errorRate > 0.05 ? "var(--rtk-color-support-error)" : undefined }}>
+              <p
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: 600,
+                  color: llm.errorRate > 0.05
+                    ? "var(--frost-spark)"
+                    : undefined,
+                }}
+              >
                 {(llm.errorRate * 100).toFixed(2)}%
               </p>
             </div>
           </div>
-        </Tile>
+        </BrutalistCard>
       )}
 
       {scraper && Object.keys(scraper).length > 0 && (
-        <Tile style={{ marginBottom: "1rem" }}>
-          <h4>Scraper (last 7 days)</h4>
-          <StructuredListWrapper>
-            <StructuredListHead>
-              <StructuredListRow head>
-                <StructuredListCell head>Provider</StructuredListCell>
-                <StructuredListCell head>Total</StructuredListCell>
-                <StructuredListCell head>Success</StructuredListCell>
-                <StructuredListCell head>Success Rate</StructuredListCell>
-              </StructuredListRow>
-            </StructuredListHead>
-            <StructuredListBody>
+        <BrutalistCard style={{ marginBottom: "1rem" }}>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "11px",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "1px",
+              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+              marginBottom: "0.75rem",
+            }}
+          >
+            § Scraper (last 7 days)
+          </p>
+          <RowDigestWrapper>
+            <RowDigestHead>
+              <RowDigestRow head>
+                <RowDigestCell head>Provider</RowDigestCell>
+                <RowDigestCell head>Total</RowDigestCell>
+                <RowDigestCell head>Success</RowDigestCell>
+                <RowDigestCell head>Success Rate</RowDigestCell>
+              </RowDigestRow>
+            </RowDigestHead>
+            <RowDigestBody>
               {Object.entries(scraper).map(([provider, stats]) => (
-                <StructuredListRow key={provider}>
-                  <StructuredListCell>{provider}</StructuredListCell>
-                  <StructuredListCell>{stats.total.toLocaleString()}</StructuredListCell>
-                  <StructuredListCell>{stats.success.toLocaleString()}</StructuredListCell>
-                  <StructuredListCell>{(stats.successRate * 100).toFixed(1)}%</StructuredListCell>
-                </StructuredListRow>
+                <RowDigestRow key={provider}>
+                  <RowDigestCell>{provider}</RowDigestCell>
+                  <RowDigestCell>{stats.total.toLocaleString()}</RowDigestCell>
+                  <RowDigestCell>{stats.success.toLocaleString()}</RowDigestCell>
+                  <RowDigestCell>{(stats.successRate * 100).toFixed(1)}%</RowDigestCell>
+                </RowDigestRow>
               ))}
-            </StructuredListBody>
-          </StructuredListWrapper>
-        </Tile>
+            </RowDigestBody>
+          </RowDigestWrapper>
+        </BrutalistCard>
       )}
 
-      <Tile>
-        <h4>Cache</h4>
+      <BrutalistCard>
+        <p
+          style={{
+            fontFamily: "var(--frost-font-mono)",
+            fontSize: "11px",
+            fontWeight: 800,
+            textTransform: "uppercase",
+            letterSpacing: "1px",
+            color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+            marginBottom: "0.75rem",
+          }}
+        >
+          § Cache
+        </p>
         <p>Clear the Redis URL cache. This forces fresh content extraction on the next request.</p>
 
-        <Button
+        <BracketButton
           kind="danger"
           onClick={() => {
             setCacheMessage(null);
@@ -139,19 +195,21 @@ export default function AdminMetrics() {
           disabled={cacheMutation.isPending}
         >
           {cacheMutation.isPending ? "Clearing..." : "Clear URL Cache"}
-        </Button>
+        </BracketButton>
 
         {cacheMessage && (
           <div className="digest-inline-margin-top">
-            <InlineNotification
-              kind={cacheMessage.kind}
-              title={cacheMessage.kind === "success" ? "Cache cleared" : "Error"}
-              subtitle={cacheMessage.text}
-              onCloseButtonClick={() => setCacheMessage(null)}
-            />
+            <StatusBadge
+              severity={cacheMessage.kind === "success" ? "info" : "alarm"}
+              title={cacheMessage.kind === "success" ? "Cache cleared ✓" : "Error"}
+              dismissible
+              onDismiss={() => setCacheMessage(null)}
+            >
+              {cacheMessage.text}
+            </StatusBadge>
           </div>
         )}
-      </Tile>
+      </BrutalistCard>
     </>
   );
 }

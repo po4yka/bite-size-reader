@@ -1,15 +1,23 @@
-import { SkeletonPlaceholder, Tile } from "../../design";
+import { BrutalistCard, BrutalistSkeletonPlaceholder } from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useAdminJobs } from "../../hooks/useAdmin";
 
-function StatTile({ label, value, kind }: { label: string; value: number; kind?: "danger" }) {
+const ALARM = "var(--frost-spark)";
+
+function StatCard({ label, value, kind }: { label: string; value: number; kind?: "danger" }) {
   return (
-    <Tile style={{ textAlign: "center", minWidth: 140 }}>
+    <BrutalistCard style={{ textAlign: "center", minWidth: 140 }}>
       <p className="rtk-label">{label}</p>
-      <p style={{ fontSize: "1.75rem", fontWeight: 600, color: kind === "danger" && value > 0 ? "var(--rtk-color-support-error)" : undefined }}>
+      <p
+        style={{
+          fontSize: "1.75rem",
+          fontWeight: 600,
+          color: kind === "danger" && value > 0 ? ALARM : undefined,
+        }}
+      >
         {value.toLocaleString()}
       </p>
-    </Tile>
+    </BrutalistCard>
   );
 }
 
@@ -20,7 +28,7 @@ export default function AdminJobs() {
     return (
       <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
         {Array.from({ length: 4 }, (_, i) => (
-          <SkeletonPlaceholder key={i} style={{ width: 140, height: 80 }} />
+          <BrutalistSkeletonPlaceholder key={i} style={{ width: 140, height: 80 }} />
         ))}
       </div>
     );
@@ -34,16 +42,16 @@ export default function AdminJobs() {
         <>
           <h4 style={{ marginBottom: "0.75rem" }}>Pipeline</h4>
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
-            <StatTile label="Pending" value={data.pipeline.pending} />
-            <StatTile label="Processing" value={data.pipeline.processing} />
-            <StatTile label="Completed today" value={data.pipeline.completedToday} />
-            <StatTile label="Failed today" value={data.pipeline.failedToday} kind="danger" />
+            <StatCard label="Pending" value={data.pipeline.pending} />
+            <StatCard label="Processing" value={data.pipeline.processing} />
+            <StatCard label="Completed today" value={data.pipeline.completedToday} />
+            <StatCard label="Failed today" value={data.pipeline.failedToday} kind="danger" />
           </div>
 
           <h4 style={{ marginBottom: "0.75rem" }}>Import Jobs</h4>
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-            <StatTile label="Active" value={data.imports.active} />
-            <StatTile label="Completed today" value={data.imports.completedToday} />
+            <StatCard label="Active" value={data.imports.active} />
+            <StatCard label="Completed today" value={data.imports.completedToday} />
           </div>
         </>
       )}

@@ -1,19 +1,21 @@
 import { useMemo } from "react";
 import {
-  DataTable,
-  DataTableSkeleton,
-  SkeletonText,
+  BrutalistCard,
+  BrutalistDataTableSkeleton,
+  BrutalistSkeletonText,
+  BrutalistTable,
+  BrutalistTableContainer,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
-  Tile,
 } from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import { useContentHealth } from "../../hooks/useAdmin";
+
+const ALARM = "var(--frost-spark)";
 
 const failureHeaders = [
   { key: "id", header: "Request ID" },
@@ -41,8 +43,8 @@ export default function AdminHealth() {
   if (isLoading) {
     return (
       <>
-        <SkeletonText paragraph lineCount={2} />
-        <DataTableSkeleton columnCount={failureHeaders.length} rowCount={5} showToolbar={false} />
+        <BrutalistSkeletonText paragraph lineCount={2} />
+        <BrutalistDataTableSkeleton columnCount={failureHeaders.length} rowCount={5} showToolbar={false} />
       </>
     );
   }
@@ -54,37 +56,43 @@ export default function AdminHealth() {
       {data && (
         <>
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
-            <Tile style={{ textAlign: "center", minWidth: 140 }}>
+            <BrutalistCard style={{ textAlign: "center", minWidth: 140 }}>
               <p className="rtk-label">Total Requests</p>
               <p style={{ fontSize: "1.75rem", fontWeight: 600 }}>{data.totalRequests.toLocaleString()}</p>
-            </Tile>
-            <Tile style={{ textAlign: "center", minWidth: 140 }}>
+            </BrutalistCard>
+            <BrutalistCard style={{ textAlign: "center", minWidth: 140 }}>
               <p className="rtk-label">Total Summaries</p>
               <p style={{ fontSize: "1.75rem", fontWeight: 600 }}>{data.totalSummaries.toLocaleString()}</p>
-            </Tile>
-            <Tile style={{ textAlign: "center", minWidth: 140 }}>
+            </BrutalistCard>
+            <BrutalistCard style={{ textAlign: "center", minWidth: 140 }}>
               <p className="rtk-label">Failed Requests</p>
-              <p style={{ fontSize: "1.75rem", fontWeight: 600, color: data.failedRequests > 0 ? "var(--rtk-color-support-error)" : undefined }}>
+              <p
+                style={{
+                  fontSize: "1.75rem",
+                  fontWeight: 600,
+                  color: data.failedRequests > 0 ? ALARM : undefined,
+                }}
+              >
                 {data.failedRequests.toLocaleString()}
               </p>
-            </Tile>
+            </BrutalistCard>
           </div>
 
           {Object.keys(data.failedByErrorType).length > 0 && (
-            <Tile style={{ marginBottom: "1.5rem" }}>
+            <BrutalistCard style={{ marginBottom: "1.5rem" }}>
               <h4 style={{ marginBottom: "0.5rem" }}>Failures by Error Type</h4>
               {Object.entries(data.failedByErrorType).map(([type, count]) => (
                 <p key={type}>
                   <strong>{type}:</strong> {count}
                 </p>
               ))}
-            </Tile>
+            </BrutalistCard>
           )}
 
           {failureRows.length > 0 && (
-            <DataTable rows={failureRows} headers={failureHeaders}>
+            <BrutalistTable rows={failureRows} headers={failureHeaders}>
               {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-                <TableContainer title="Recent Failures">
+                <BrutalistTableContainer title="Recent Failures">
                   <Table {...getTableProps()} size="sm">
                     <TableHead>
                       <TableRow>
@@ -103,9 +111,9 @@ export default function AdminHealth() {
                       ))}
                     </TableBody>
                   </Table>
-                </TableContainer>
+                </BrutalistTableContainer>
               )}
-            </DataTable>
+            </BrutalistTable>
           )}
 
           {failureRows.length === 0 && <p>No recent failures.</p>}

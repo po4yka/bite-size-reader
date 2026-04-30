@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Accordion,
   AccordionItem,
-  Button,
-  InlineLoading,
-  InlineNotification,
-  Tile,
+  BracketButton,
+  BrutalistCard,
+  SparkLoading,
+  StatusBadge,
 } from "../design";
 import SecretLoginForm from "../features/auth/SecretLoginForm";
 import type { TelegramAuthPayload } from "./types";
@@ -104,25 +104,48 @@ export default function LoginPage() {
   const displayError = localError ?? error;
 
   return (
-    <div className="login-page">
-      <Tile className="login-card">
-        <div className="login-header">
-          <h2>Ratatoskr</h2>
-          <p className="page-subtitle">Sign in to access your summaries.</p>
+    <div
+      className="login-page"
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "100vh",
+        padding: "var(--frost-pad-page, 32px)",
+      }}
+    >
+      <BrutalistCard
+        className="login-card"
+        style={{ maxWidth: "var(--frost-strip-3, 528px)", width: "100%" }}
+      >
+        <div className="login-header" style={{ marginBottom: "1.5rem" }}>
+          <h2
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "13px",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "2px",
+            }}
+          >
+            Ratatoskr
+          </h2>
+          <p
+            className="page-subtitle"
+            style={{ color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)", marginTop: "0.5rem" }}
+          >
+            Sign in to access your summaries.
+          </p>
         </div>
 
-        <div className="login-hero">
+        <div className="login-hero" style={{ marginBottom: "1rem" }}>
           {!botUsername && (
-            <InlineNotification
-              kind="error"
-              title="Unavailable"
-              subtitle="Telegram login is temporarily unavailable. Please try again later."
-              hideCloseButton
-              style={{ width: "100%" }}
-            />
+            <StatusBadge severity="alarm" title="Unavailable">
+              Telegram login is temporarily unavailable. Please try again later.
+            </StatusBadge>
           )}
 
-          {loading && <InlineLoading description="Verifying Telegram credentials..." />}
+          {loading && <SparkLoading description="Verifying Telegram credentials..." />}
 
           <div
             ref={widgetRef}
@@ -130,42 +153,40 @@ export default function LoginPage() {
           />
 
           {botUsername && !widgetReady && !loading && (
-            <InlineLoading description="Loading Telegram widget..." />
+            <SparkLoading description="Loading Telegram widget..." />
           )}
         </div>
 
         {displayError && (
-          <InlineNotification
-            kind="error"
-            title="Authentication failed"
-            subtitle={displayError}
-            onClose={clearErrors}
-          />
+          <StatusBadge severity="alarm" title="Authentication failed" dismissible onDismiss={clearErrors}>
+            {displayError}
+          </StatusBadge>
         )}
 
-        <div className="form-actions">
-          <Button kind="ghost" size="sm" onClick={logout}>
+        <div className="form-actions" style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+          <BracketButton kind="ghost" size="sm" onClick={logout}>
             Clear local session
-          </Button>
-          <Button
+          </BracketButton>
+          <BracketButton
             kind="ghost"
             size="sm"
             href="https://core.telegram.org/widgets/login"
+            as="a"
             target="_blank"
             rel="noreferrer"
           >
             About Telegram Login
-          </Button>
+          </BracketButton>
         </div>
 
-        <hr className="login-divider" />
+        <hr className="login-divider" style={{ margin: "1rem 0", border: "none", borderTop: "1px solid color-mix(in oklch, var(--frost-ink) 25%, transparent)" }} />
 
         <Accordion>
           <AccordionItem title="Developer Access">
             <SecretLoginForm />
           </AccordionItem>
         </Accordion>
-      </Tile>
+      </BrutalistCard>
     </div>
   );
 }

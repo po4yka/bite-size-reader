@@ -1,8 +1,9 @@
-import { Button, CodeSnippet, InlineNotification, SkeletonText, Tile } from "../../design";
+import { BracketButton, BrutalistCard, BrutalistSkeletonText, CodeSnippet, StatusBadge } from "../../design";
 import { useTelegramLinkStatus, useBeginTelegramLink, useUnlinkTelegram } from "../../hooks/useUser";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 
 const BOT_NAME = "YourBotName";
+const MUTED = "color-mix(in oklch, var(--frost-ink) 55%, transparent)";
 
 export default function TelegramLinkSection() {
   const statusQuery = useTelegramLinkStatus();
@@ -18,49 +19,57 @@ export default function TelegramLinkSection() {
   };
 
   return (
-    <Tile>
-      <h3 style={{ marginBottom: "1rem" }}>Telegram Account</h3>
+    <BrutalistCard>
+      <p
+        style={{
+          fontFamily: "var(--frost-font-mono)",
+          fontSize: "11px",
+          fontWeight: 800,
+          textTransform: "uppercase",
+          letterSpacing: "1px",
+          color: MUTED,
+          marginBottom: "1rem",
+        }}
+      >
+        § Telegram Account
+      </p>
 
       <QueryErrorNotification error={statusQuery.error} title="Failed to load Telegram link status" />
       <QueryErrorNotification error={beginLink.error} title="Failed to start linking" />
       <QueryErrorNotification error={unlink.error} title="Failed to unlink Telegram" />
 
       {statusQuery.isLoading && !statusQuery.data && (
-        <SkeletonText paragraph lineCount={3} />
+        <BrutalistSkeletonText paragraph lineCount={3} />
       )}
 
       {statusQuery.data && !statusQuery.data.linked && !beginLink.data && (
         <div>
-          <p style={{ color: "var(--rtk-color-text-muted)", marginBottom: "1rem" }}>
+          <p style={{ color: MUTED, marginBottom: "1rem" }}>
             No Telegram account linked.
           </p>
-          <Button onClick={handleBeginLink} disabled={beginLink.isPending}>
+          <BracketButton onClick={handleBeginLink} disabled={beginLink.isPending}>
             Link Telegram Account
-          </Button>
+          </BracketButton>
         </div>
       )}
 
       {beginLink.data && !statusQuery.data?.linked && (
         <div>
-          <InlineNotification
-            kind="info"
-            title="Linking started"
-            subtitle={`Send this code to @${BOT_NAME} in Telegram to complete linking.`}
-            hideCloseButton
-            style={{ marginBottom: "1rem" }}
-          />
-          <p style={{ marginBottom: "0.5rem" }}>Your linking code:</p>
+          <StatusBadge severity="info" title="Linking started">
+            {`Send this code to @${BOT_NAME} in Telegram to complete linking.`}
+          </StatusBadge>
+          <p style={{ marginTop: "1rem", marginBottom: "0.5rem" }}>Your linking code:</p>
           <CodeSnippet type="single">{beginLink.data.nonce}</CodeSnippet>
           <div style={{ marginTop: "1rem" }}>
-            <Button
-              kind="tertiary"
+            <BracketButton
+              kind="secondary"
               href={`tg://resolve?domain=${BOT_NAME}&start=${beginLink.data.nonce}`}
               as="a"
             >
               Open in Telegram
-            </Button>
+            </BracketButton>
           </div>
-          <p style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: "var(--rtk-color-text-muted)" }}>
+          <p style={{ marginTop: "0.75rem", fontSize: "0.75rem", color: MUTED }}>
             Code expires in {Math.floor(beginLink.data.expiresIn / 60)} minutes.
           </p>
         </div>
@@ -74,23 +83,20 @@ export default function TelegramLinkSection() {
             </p>
           )}
           {statusQuery.data.linkedAt && (
-            <p style={{ fontSize: "0.75rem", color: "var(--rtk-color-text-muted)", marginBottom: "1rem" }}>
+            <p style={{ fontSize: "0.75rem", color: MUTED, marginBottom: "1rem" }}>
               Linked on {new Date(statusQuery.data.linkedAt).toLocaleDateString()}
             </p>
           )}
-          <Button kind="danger--ghost" onClick={handleUnlink} disabled={unlink.isPending}>
+          <BracketButton kind="danger" onClick={handleUnlink} disabled={unlink.isPending}>
             Unlink
-          </Button>
+          </BracketButton>
           {unlink.isSuccess && (
-            <InlineNotification
-              kind="success"
-              title="Unlinked"
-              subtitle="Telegram account has been unlinked."
-              hideCloseButton
-            />
+            <StatusBadge severity="info" title="Unlinked ✓">
+              Telegram account has been unlinked.
+            </StatusBadge>
           )}
         </div>
       )}
-    </Tile>
+    </BrutalistCard>
   );
 }
