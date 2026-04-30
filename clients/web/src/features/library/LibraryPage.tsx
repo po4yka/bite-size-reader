@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Tag, Tile } from "../../design";
+import { BracketButton, BrutalistCard } from "../../design";
 import { useSummariesList, useToggleFavorite } from "../../hooks/useSummaries";
 import type { SummaryCompact } from "../../api/types";
 import { SummariesDataTable } from "../../components/SummariesDataTable";
@@ -42,44 +42,90 @@ export default function LibraryPage() {
   const favoriteMutation = useToggleFavorite();
 
   return (
-    <section className="page-section">
-      <h1>Library</h1>
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-7)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section)",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-page)" }}>
+        <h1
+          style={{
+            fontFamily: "var(--frost-font-mono)",
+            fontSize: "var(--frost-type-mono-emph-size)",
+            fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+            letterSpacing: "var(--frost-type-mono-emph-tracking)",
+            textTransform: "uppercase",
+            color: "var(--frost-ink)",
+            margin: 0,
+          }}
+        >
+          Library
+        </h1>
 
-      <div className="filter-row" role="radiogroup" aria-label="Filter articles">
-        {FILTERS.map((entry) => (
-          <Button
-            key={entry.key}
-            kind="ghost"
-            size="sm"
-            className="filter-chip"
-            role="radio"
-            aria-checked={entry.key === filter}
-            onClick={() => {
-              setFilter(entry.key);
-              setPage(1);
-            }}
-          >
-            <Tag type={entry.key === filter ? "blue" : "gray"}>{entry.label}</Tag>
-          </Button>
-        ))}
+        <div
+          className="filter-row"
+          role="radiogroup"
+          aria-label="Filter articles"
+          style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}
+        >
+          {FILTERS.map((entry) => (
+            <BracketButton
+              key={entry.key}
+              kind="ghost"
+              size="sm"
+              role="radio"
+              aria-checked={entry.key === filter}
+              style={entry.key === filter ? { background: "var(--frost-ink)", color: "var(--frost-page)" } : undefined}
+              onClick={() => {
+                setFilter(entry.key);
+                setPage(1);
+              }}
+            >
+              {entry.label}
+            </BracketButton>
+          ))}
+        </div>
       </div>
 
       {!summariesQuery.isLoading &&
       !summariesQuery.error &&
       (summariesQuery.data?.summaries.length ?? 0) === 0 ? (
-        <Tile>
+        <BrutalistCard>
           <div className="page-heading-group">
-            <h3>No articles yet</h3>
-            <p className="page-subtitle">
+            <h3
+              style={{
+                fontFamily: "var(--frost-font-mono)",
+                fontSize: "var(--frost-type-mono-emph-size)",
+                fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                textTransform: "uppercase",
+                letterSpacing: "var(--frost-type-mono-emph-tracking)",
+                color: "var(--frost-ink)",
+                margin: 0,
+              }}
+            >
+              No articles yet
+            </h3>
+            <p
+              style={{
+                fontFamily: "var(--frost-font-mono)",
+                fontSize: "var(--frost-type-mono-body-size)",
+                color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                margin: 0,
+              }}
+            >
               Submit a URL or forward a Telegram message to start building your library.
             </p>
           </div>
           <div className="form-actions">
-            <Button kind="primary" size="sm" onClick={() => navigate("/submit")}>
+            <BracketButton kind="primary" size="sm" onClick={() => navigate("/submit")}>
               Submit your first article
-            </Button>
+            </BracketButton>
           </div>
-        </Tile>
+        </BrutalistCard>
       ) : (
         <SummariesDataTable
           summaries={summariesQuery.data?.summaries ?? []}
@@ -101,17 +147,18 @@ export default function LibraryPage() {
           title="Article summaries"
           renderActions={(summary: SummaryCompact) => (
             <div className="table-actions">
-              <Button
+              <BracketButton
                 kind={summary.isFavorited ? "primary" : "ghost"}
                 size="sm"
+                style={summary.isFavorited ? { background: "var(--frost-ink)", color: "var(--frost-page)" } : undefined}
                 onClick={(event) => {
                   event.stopPropagation();
                   favoriteMutation.mutate(summary.id);
                 }}
               >
                 {summary.isFavorited ? "Favorited" : "Favorite"}
-              </Button>
-              <Button
+              </BracketButton>
+              <BracketButton
                 kind="tertiary"
                 size="sm"
                 onClick={(event) => {
@@ -120,7 +167,7 @@ export default function LibraryPage() {
                 }}
               >
                 Add to collection
-              </Button>
+              </BracketButton>
             </div>
           )}
         />
@@ -131,6 +178,6 @@ export default function LibraryPage() {
         summaryId={collectionModalSummaryId}
         onClose={() => setCollectionModalSummaryId(null)}
       />
-    </section>
+    </main>
   );
 }

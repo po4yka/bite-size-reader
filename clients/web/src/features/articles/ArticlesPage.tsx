@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Select, SelectItem, Tag } from "../../design";
+import { MonoSelect, MonoSelectItem, Tag } from "../../design";
 import { useSummariesList } from "../../hooks/useSummaries";
 import type { SummaryCompact } from "../../api/types";
 import { SummariesDataTable } from "../../components/SummariesDataTable";
@@ -32,24 +32,57 @@ export default function ArticlesPage() {
   });
 
   return (
-    <section className="page-section">
-      <h1>All Articles</h1>
-      <p className="page-subtitle">Browse all saved article summaries and sort the list.</p>
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-7)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section)",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-page)" }}>
+        <div>
+          <h1
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-emph-size)",
+              fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+              letterSpacing: "var(--frost-type-mono-emph-tracking)",
+              textTransform: "uppercase",
+              color: "var(--frost-ink)",
+              margin: "0 0 8px 0",
+            }}
+          >
+            All Articles
+          </h1>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-body-size)",
+              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+              margin: 0,
+            }}
+          >
+            Browse all saved article summaries and sort the list.
+          </p>
+        </div>
 
-      <div className="articles-controls">
-        <Select
-          id="articles-sort"
-          labelText="Sort"
-          value={sort}
-          onChange={(event) => {
-            setSort(event.currentTarget.value as SortOption);
-            setPage(1);
-          }}
-        >
-          {SORT_OPTIONS.map((option) => (
-            <SelectItem key={option.value} value={option.value} text={option.label} />
-          ))}
-        </Select>
+        <div style={{ maxWidth: "240px" }}>
+          <MonoSelect
+            id="articles-sort"
+            labelText="Sort"
+            value={sort}
+            onChange={(event) => {
+              setSort(event.currentTarget.value as SortOption);
+              setPage(1);
+            }}
+          >
+            {SORT_OPTIONS.map((option) => (
+              <MonoSelectItem key={option.value} value={option.value} text={option.label} />
+            ))}
+          </MonoSelect>
+        </div>
       </div>
 
       <SummariesDataTable
@@ -79,6 +112,6 @@ export default function ArticlesPage() {
           </div>
         )}
       />
-    </section>
+    </main>
   );
 }

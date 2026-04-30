@@ -1,21 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
-  Button,
-  ButtonSet,
-  InlineLoading,
-  InlineNotification,
-  ProgressBar,
-  Select,
-  SelectItem,
-  SkeletonText,
-  Tab,
-  TabList,
-  TabPanel,
-  TabPanels,
-  Tabs,
+  BracketButton,
+  BracketTab,
+  BracketTabList,
+  BracketTabPanel,
+  BracketTabPanels,
+  BracketTabs,
+  BrutalistCard,
+  BrutalistSkeletonText,
+  MonoProgressBar,
+  MonoSelect,
+  MonoSelectItem,
+  SparkLoading,
+  StatusBadge,
   Tag,
-  Tile,
   Play,
   PauseFilled,
   StopFilled,
@@ -48,13 +47,6 @@ function splitParagraphs(text: string): string[] {
     .filter(Boolean);
 }
 
-function riskTagType(risk: string): "green" | "red" | "gray" | "warm-gray" {
-  if (risk === "low") return "green";
-  if (risk === "medium") return "warm-gray";
-  if (risk === "high") return "red";
-  return "gray";
-}
-
 export default function ArticlePage() {
   const summaryId = useSummaryId();
 
@@ -81,7 +73,6 @@ export default function ArticlePage() {
     setReadProgress(0);
     setAudioState("idle");
     setAudioError(null);
-    // Cleanup audio on summary change
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
@@ -119,7 +110,6 @@ export default function ArticlePage() {
     };
   }, [showContent, summaryId]);
 
-  // Restore scroll position from the last saved offset on initial load.
   const restoredRef = useRef(false);
   useEffect(() => {
     const offset = summaryQuery.data?.lastReadOffset;
@@ -129,7 +119,6 @@ export default function ArticlePage() {
     }
   }, [summaryQuery.data?.lastReadOffset]);
 
-  // Debounce-save reading position 500ms after scroll stops.
   useEffect(() => {
     if (summaryId <= 0) return;
     const timer = setTimeout(() => {
@@ -174,7 +163,6 @@ export default function ArticlePage() {
       setAudioState("playing");
       return;
     }
-    // Generate + play
     setAudioState("loading");
     setAudioError(null);
     try {
@@ -227,197 +215,375 @@ export default function ArticlePage() {
   }
 
   return (
-    <section className="page-section article-reader-shell">
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-5)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section)",
+      }}
+    >
       {summaryQuery.isPending && (
-        <div className="article-skeleton">
-          <SkeletonText heading width="60%" />
-          <SkeletonText paragraph lineCount={1} width="40%" />
-          <SkeletonText paragraph lineCount={5} />
-          <SkeletonText paragraph lineCount={5} />
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <BrutalistSkeletonText heading width="60%" />
+          <BrutalistSkeletonText paragraph lineCount={1} width="40%" />
+          <BrutalistSkeletonText paragraph lineCount={5} />
+          <BrutalistSkeletonText paragraph lineCount={5} />
         </div>
       )}
       <QueryErrorNotification error={summaryQuery.error} title="Failed to load article" />
 
       {detail && (
         <>
-          <h1>{detail.title}</h1>
-          <div className="article-meta-row">
-            <p className="page-subtitle">
-              {detail.domain} · {detail.readingTimeMin} min read
-            </p>
-            <Tag type="blue">Confidence {(detail.confidence * 100).toFixed(0)}%</Tag>
-            <Tag type={riskTagType(detail.hallucinationRisk)}>Risk {detail.hallucinationRisk}</Tag>
-            <Tag type="gray">{readProgress}% read</Tag>
+          {/* Title block */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-page)" }}>
+            <div>
+              <h1
+                style={{
+                  fontFamily: "var(--frost-font-mono)",
+                  fontSize: "var(--frost-type-mono-emph-size)",
+                  fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                  letterSpacing: "var(--frost-type-mono-emph-tracking)",
+                  textTransform: "uppercase",
+                  color: "var(--frost-ink)",
+                  margin: "0 0 8px 0",
+                }}
+              >
+                {detail.title}
+              </h1>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                  fontFamily: "var(--frost-font-mono)",
+                  fontSize: "11px",
+                  fontWeight: 500,
+                  letterSpacing: "1px",
+                  textTransform: "uppercase",
+                  color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                }}
+              >
+                <span>{detail.domain}</span>
+                <span aria-hidden>·</span>
+                <span>{detail.readingTimeMin} min read</span>
+                <span aria-hidden>·</span>
+                <span>Confidence {(detail.confidence * 100).toFixed(0)}%</span>
+                <span aria-hidden>·</span>
+                <span>Risk {detail.hallucinationRisk}</span>
+                <span aria-hidden>·</span>
+                <span>{readProgress}% read</span>
+              </div>
+            </div>
+
+            <MonoProgressBar
+              label="Reading progress"
+              value={readProgress}
+              helperText={`${readProgress}% scrolled`}
+            />
           </div>
 
-          <ProgressBar
-            className="article-reader-progress"
-            label="Reading progress"
-            value={readProgress}
-            helperText={`${readProgress}% scrolled`}
-          />
-
-          <Tile className="reader-controls">
-            <div className="reader-control-grid">
-              <Select
+          {/* Reader controls card */}
+          <BrutalistCard>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "var(--frost-gap-row)",
+              }}
+            >
+              <MonoSelect
                 id="reader-text-scale"
                 labelText="Text size"
                 value={readerTextScale}
                 onChange={(event) => setReaderTextScale(event.currentTarget.value as ReaderTextScale)}
               >
-                <SelectItem value="sm" text="Compact" />
-                <SelectItem value="md" text="Default" />
-                <SelectItem value="lg" text="Large" />
-              </Select>
-              <Select
+                <MonoSelectItem value="sm" text="Compact" />
+                <MonoSelectItem value="md" text="Default" />
+                <MonoSelectItem value="lg" text="Large" />
+              </MonoSelect>
+              <MonoSelect
                 id="reader-density"
                 labelText="Line density"
                 value={readerDensity}
                 onChange={(event) => setReaderDensity(event.currentTarget.value as ReaderDensity)}
               >
-                <SelectItem value="compact" text="Compact" />
-                <SelectItem value="comfortable" text="Comfortable" />
-              </Select>
+                <MonoSelectItem value="compact" text="Compact" />
+                <MonoSelectItem value="comfortable" text="Comfortable" />
+              </MonoSelect>
             </div>
-            <div className="form-actions">
-              <Button kind="ghost" size="sm" onClick={() => void handleCopySummary()}>
+            <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
+              <BracketButton kind="ghost" size="sm" onClick={() => void handleCopySummary()}>
                 Copy summary
-              </Button>
-              <Button kind="ghost" size="sm" onClick={() => void handleShare()}>
+              </BracketButton>
+              <BracketButton kind="ghost" size="sm" onClick={() => void handleShare()}>
                 Share
-              </Button>
+              </BracketButton>
             </div>
             {copyState === "success" && (
-              <InlineNotification
-                kind="success"
-                title="Copied"
+              <StatusBadge
+                severity="info"
+                title="✓ Copied"
                 subtitle="Summary text or URL copied to clipboard."
-                hideCloseButton
               />
             )}
             {copyState === "error" && (
-              <InlineNotification
-                kind="warning"
+              <StatusBadge
+                severity="warn"
                 title="Copy failed"
                 subtitle="Clipboard access is blocked in this browser context."
-                hideCloseButton
               />
             )}
-          </Tile>
+          </BrutalistCard>
 
-          <ButtonSet>
-            <Button kind="secondary" disabled={readMutation.isSuccess || readMutation.isPending} onClick={() => readMutation.mutate()}>
-              {readMutation.isSuccess ? "Marked as read" : "Mark as read"}
-            </Button>
-            <Button kind="secondary" onClick={() => favoriteMutation.mutate(undefined)}>
-              Toggle favorite
-            </Button>
-            <Button kind="secondary" onClick={() => setIsCollectionModalOpen(true)}>
-              Add to collection
-            </Button>
-            <Button
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
+            <BracketButton
               kind="secondary"
-              renderIcon={audioState === "playing" ? PauseFilled : audioState === "paused" ? Play : Play}
+              disabled={readMutation.isSuccess || readMutation.isPending}
+              onClick={() => readMutation.mutate()}
+            >
+              {readMutation.isSuccess ? "Marked as read" : "Mark as read"}
+            </BracketButton>
+            <BracketButton kind="secondary" onClick={() => favoriteMutation.mutate(undefined)}>
+              Toggle favorite
+            </BracketButton>
+            <BracketButton kind="secondary" onClick={() => setIsCollectionModalOpen(true)}>
+              Add to collection
+            </BracketButton>
+            <BracketButton
+              kind="secondary"
+              renderIcon={audioState === "playing" ? PauseFilled : Play}
               disabled={audioState === "loading"}
               onClick={() => void handleListenToggle()}
             >
-              {audioState === "loading" ? "Generating..." : audioState === "playing" ? "Pause" : audioState === "paused" ? "Resume" : "Listen"}
-            </Button>
+              {audioState === "loading"
+                ? "Generating..."
+                : audioState === "playing"
+                  ? "Pause"
+                  : audioState === "paused"
+                    ? "Resume"
+                    : "Listen"}
+            </BracketButton>
             {(audioState === "playing" || audioState === "paused") && (
-              <Button kind="ghost" renderIcon={StopFilled} onClick={handleStopAudio}>
+              <BracketButton kind="ghost" renderIcon={StopFilled} onClick={handleStopAudio}>
                 Stop
-              </Button>
+              </BracketButton>
             )}
-          </ButtonSet>
+          </div>
 
-          <div className="form-actions">
-            <Button kind="tertiary" size="sm" onClick={() => window.open(detail.url, "_blank", "noopener,noreferrer")}>
+          {/* Secondary actions */}
+          <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
+            <BracketButton
+              kind="tertiary"
+              size="sm"
+              onClick={() => window.open(detail.url, "_blank", "noopener,noreferrer")}
+            >
               Open original
-            </Button>
-            <Button kind="ghost" size="sm" onClick={() => setShowContent((prev) => !prev)}>
+            </BracketButton>
+            <BracketButton
+              kind="ghost"
+              size="sm"
+              onClick={() => setShowContent((prev) => !prev)}
+            >
               {showContent ? "Hide full content" : "Show full content"}
-            </Button>
+            </BracketButton>
             {exportPdfMutation.isPending ? (
-              <InlineLoading description="Exporting PDF…" />
+              <SparkLoading status="active" description="Exporting PDF…" />
             ) : (
-              <Button kind="ghost" size="sm" onClick={() => exportPdfMutation.mutate(summaryId)}>
+              <BracketButton kind="ghost" size="sm" onClick={() => exportPdfMutation.mutate(summaryId)}>
                 Export PDF
-              </Button>
+              </BracketButton>
             )}
           </div>
 
           {audioState === "error" && audioError && (
-            <InlineNotification
-              kind="error"
+            <StatusBadge
+              severity="alarm"
               title="Audio error"
               subtitle={audioError}
-              onCloseButtonClick={() => { setAudioState("idle"); setAudioError(null); }}
+              dismissible
+              onDismiss={() => {
+                setAudioState("idle");
+                setAudioError(null);
+              }}
             />
           )}
 
-          <Tabs>
-            <TabList aria-label="Article tabs" contained>
-              <Tab>Summary</Tab>
-              <Tab>Details</Tab>
-              <Tab>Entities</Tab>
-              <Tab>Highlights</Tab>
-            </TabList>
-            <TabPanels>
-              <TabPanel>
-                <Tile className={`article-summary-tile article-text-${readerTextScale} article-density-${readerDensity}`}>
+          {/* Tabs */}
+          <BracketTabs>
+            <BracketTabList aria-label="Article tabs" contained>
+              <BracketTab>Summary</BracketTab>
+              <BracketTab>Details</BracketTab>
+              <BracketTab>Entities</BracketTab>
+              <BracketTab>Highlights</BracketTab>
+            </BracketTabList>
+            <BracketTabPanels>
+              <BracketTabPanel>
+                {/* Article body — Source Serif 4 italic, reader-size */}
+                <article
+                  className={`article-text-${readerTextScale} article-density-${readerDensity}`}
+                  style={{
+                    fontFamily: "var(--frost-font-serif)",
+                    fontSize: "var(--frost-type-serif-reader-size, 16px)",
+                    fontWeight: 500,
+                    fontStyle: "italic",
+                    lineHeight: 1.55,
+                    color: "var(--frost-ink)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "16px",
+                  }}
+                >
                   {splitParagraphs(detail.summary250).map((part) => (
-                    <p key={`summary250-${part.slice(0, 32)}`}>{part}</p>
+                    <p key={`summary250-${part.slice(0, 32)}`} style={{ margin: 0 }}>{part}</p>
                   ))}
                   {detail.summary1000 && (
                     <>
-                      <h3>Detailed Summary</h3>
+                      <h3
+                        style={{
+                          fontFamily: "var(--frost-font-mono)",
+                          fontSize: "var(--frost-type-mono-emph-size)",
+                          fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                          textTransform: "uppercase",
+                          letterSpacing: "var(--frost-type-mono-emph-tracking)",
+                          color: "var(--frost-ink)",
+                          fontStyle: "normal",
+                          margin: 0,
+                        }}
+                      >
+                        Detailed Summary
+                      </h3>
                       {splitParagraphs(detail.summary1000).map((part) => (
-                        <p key={`summary1000-${part.slice(0, 32)}`}>{part}</p>
+                        <p key={`summary1000-${part.slice(0, 32)}`} style={{ margin: 0 }}>{part}</p>
                       ))}
                     </>
                   )}
                   {showContent && (
                     <>
-                      <h3>Source Content</h3>
-                      {contentQuery.isFetching && <InlineLoading description="Loading source content…" />}
+                      <h3
+                        style={{
+                          fontFamily: "var(--frost-font-mono)",
+                          fontSize: "var(--frost-type-mono-emph-size)",
+                          fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                          textTransform: "uppercase",
+                          letterSpacing: "var(--frost-type-mono-emph-tracking)",
+                          color: "var(--frost-ink)",
+                          fontStyle: "normal",
+                          margin: 0,
+                        }}
+                      >
+                        Source Content
+                      </h3>
+                      {contentQuery.isFetching && (
+                        <SparkLoading status="active" description="Loading source content…" />
+                      )}
                       <QueryErrorNotification error={contentQuery.error} title="Could not load source content" />
                       {contentQuery.data?.content && (
                         <pre
                           className={`content-preview article-content-preview article-text-${readerTextScale} article-density-${readerDensity}`}
+                          style={{ fontStyle: "normal", fontFamily: "var(--frost-font-mono)", margin: 0 }}
                         >
                           {contentQuery.data.content}
                         </pre>
                       )}
                     </>
                   )}
-                </Tile>
-              </TabPanel>
-              <TabPanel>
-                <Tile>
-                  <h3>Key ideas</h3>
-                  <ul>
+                </article>
+              </BracketTabPanel>
+
+              <BracketTabPanel>
+                <BrutalistCard>
+                  <h3
+                    style={{
+                      fontFamily: "var(--frost-font-mono)",
+                      fontSize: "var(--frost-type-mono-emph-size)",
+                      fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                      textTransform: "uppercase",
+                      letterSpacing: "var(--frost-type-mono-emph-tracking)",
+                      color: "var(--frost-ink)",
+                      margin: 0,
+                    }}
+                  >
+                    Key ideas
+                  </h3>
+                  <ul style={{ margin: 0, paddingLeft: "1.2em" }}>
                     {detail.keyIdeas.map((idea) => (
-                      <li key={idea}>{idea}</li>
+                      <li
+                        key={idea}
+                        style={{
+                          fontFamily: "var(--frost-font-mono)",
+                          fontSize: "var(--frost-type-mono-body-size)",
+                          color: "var(--frost-ink)",
+                        }}
+                      >
+                        {idea}
+                      </li>
                     ))}
                   </ul>
 
-                  <h3>Key stats</h3>
+                  <h3
+                    style={{
+                      fontFamily: "var(--frost-font-mono)",
+                      fontSize: "var(--frost-type-mono-emph-size)",
+                      fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                      textTransform: "uppercase",
+                      letterSpacing: "var(--frost-type-mono-emph-tracking)",
+                      color: "var(--frost-ink)",
+                      margin: 0,
+                    }}
+                  >
+                    Key stats
+                  </h3>
                   <div className="article-stats-grid">
                     {detail.keyStats.map((stat) => (
                       <article key={`${stat.label}-${stat.value}`} className="article-stat">
-                        <p className="muted">{stat.label}</p>
-                        <p>
+                        <p
+                          style={{
+                            fontFamily: "var(--frost-font-mono)",
+                            fontSize: "11px",
+                            color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                            margin: 0,
+                          }}
+                        >
+                          {stat.label}
+                        </p>
+                        <p style={{ fontFamily: "var(--frost-font-mono)", margin: 0 }}>
                           <strong>{stat.value}</strong>
                         </p>
-                        {stat.sourceExcerpt && <p className="muted">{stat.sourceExcerpt}</p>}
+                        {stat.sourceExcerpt && (
+                          <p
+                            style={{
+                              fontFamily: "var(--frost-font-mono)",
+                              fontSize: "11px",
+                              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                              margin: 0,
+                            }}
+                          >
+                            {stat.sourceExcerpt}
+                          </p>
+                        )}
                       </article>
                     ))}
-                    {detail.keyStats.length === 0 && <p className="muted">No structured stats extracted.</p>}
+                    {detail.keyStats.length === 0 && (
+                      <p
+                        style={{
+                          fontFamily: "var(--frost-font-mono)",
+                          color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                          margin: 0,
+                        }}
+                      >
+                        No structured stats extracted.
+                      </p>
+                    )}
                   </div>
-                </Tile>
-              </TabPanel>
-              <TabPanel>
-                <Tile>
+                </BrutalistCard>
+              </BracketTabPanel>
+
+              <BracketTabPanel>
+                <BrutalistCard>
                   <div className="tag-row">
                     {detail.topicTags.map((topic) => (
                       <Tag key={topic} type="cyan">
@@ -432,13 +598,14 @@ export default function ArticlePage() {
                       </Tag>
                     ))}
                   </div>
-                </Tile>
-              </TabPanel>
-              <TabPanel>
+                </BrutalistCard>
+              </BracketTabPanel>
+
+              <BracketTabPanel>
                 <HighlightsPanel summaryId={summaryId} />
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
+              </BracketTabPanel>
+            </BracketTabPanels>
+          </BracketTabs>
 
           <AddToCollectionModal
             open={isCollectionModalOpen}
@@ -447,6 +614,6 @@ export default function ArticlePage() {
           />
         </>
       )}
-    </section>
+    </main>
   );
 }
