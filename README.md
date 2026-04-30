@@ -55,7 +55,7 @@ Optional scraper, YouTube, Twitter/X, MCP, and provider tuning now live in
 
 Compose profiles:
 
-- `with-firecrawl` starts self-hosted Firecrawl and its dependencies; set `FIRECRAWL_SELF_HOSTED_ENABLED=true` to route Ratatoskr through it.
+- `with-firecrawl` starts self-hosted Firecrawl and its dependencies; set `FIRECRAWL_SELF_HOSTED_ENABLED=true` to route Ratatoskr through it. Without self-hosting, the article scraper uses cloud Firecrawl as a fallback when `FIRECRAWL_API_KEY` is configured.
 - `with-cloud-ollama` adds a remote OpenAI-compatible Ollama reachability check; set `LLM_PROVIDER=ollama` and `OLLAMA_*` values to use it. It does not start a local model server.
 - `with-monitoring` starts Prometheus, Grafana, Loki, Promtail, and node-exporter.
 - `mcp`, `mcp-write`, and `mcp-public` start the optional MCP server variants.
@@ -71,10 +71,11 @@ The Phase 2 onboarding script is tracked in
 ## What it does
 
 **Web articles.** A multi-provider scraper chain — Scrapling →
-Defuddle → self-hosted Firecrawl → Playwright → Crawlee → direct HTML
-— extracts clean content, then OpenRouter generates a summary against
-the strict JSON contract. JS-heavy hosts can be configured to skip
-straight to a browser-based provider.
+Firecrawl (self-hosted when enabled, cloud when configured) → Playwright →
+Crawlee → direct HTML — extracts clean content, then OpenRouter generates a
+summary against the strict JSON contract. Defuddle is available as an explicit
+opt-in provider, and JS-heavy hosts can be configured to skip straight to a
+browser-based provider.
 
 **YouTube videos.** Detects every common URL form (watch, shorts,
 live, embed, music, mobile). Pulls transcripts via
@@ -130,6 +131,7 @@ requests, and pull requests are welcome at
 Built on the shoulders of [Telethon](https://github.com/LonamiWebs/Telethon),
 [Scrapling](https://github.com/D4Vinci/Scrapling),
 [Firecrawl](https://www.firecrawl.dev/),
+[Defuddle](https://defuddle.md/) when explicitly enabled,
 [OpenRouter](https://openrouter.ai/),
 [FastAPI](https://fastapi.tiangolo.com/),
 a project-owned design system shim,

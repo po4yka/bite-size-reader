@@ -61,7 +61,7 @@ def _apply_normalization(content_text: str, cfg: Any) -> str:
 
 
 class ContentExtractorCrawlMixin:
-    """Firecrawl cache/processing and HTML salvage behavior."""
+    """Scraper cache/processing and HTML salvage behavior."""
 
     # Explicit host contract: these members are provided by URLProcessor.
     _audit: Callable[..., None]
@@ -69,6 +69,7 @@ class ContentExtractorCrawlMixin:
     _schedule_crawl_persistence: Callable[..., asyncio.Task[None] | None]
     _sem: Callable[..., Any]
     cfg: Any
+    scraper: Any
     firecrawl: Any
     message_persistence: Any
     response_formatter: ResponseFormatter
@@ -83,7 +84,7 @@ class ContentExtractorCrawlMixin:
         interaction_id: int | None,
         silent: bool = False,
     ) -> tuple[str, str, str | None, list[str]]:
-        """Extract content from Firecrawl or reuse existing crawl result."""
+        """Extract content from the scraper chain or reuse an existing crawl result."""
         existing_crawl = (
             await self.message_persistence.crawl_repo.async_get_crawl_result_by_request(req_id)
         )
@@ -203,7 +204,7 @@ class ContentExtractorCrawlMixin:
         interaction_id: int | None,
         silent: bool = False,
     ) -> tuple[str, str, str | None, list[str]]:
-        """Perform new Firecrawl extraction."""
+        """Perform new content extraction through the scraper chain."""
         persist_task: asyncio.Task[None] | None = None
 
         cached_crawl = await self._get_cached_crawl(dedupe_hash, correlation_id)
@@ -244,7 +245,7 @@ class ContentExtractorCrawlMixin:
         from app.utils.typing_indicator import typing_indicator
 
         async with typing_indicator(self.response_formatter, message, action="typing"), self._sem():
-            crawl = await self.firecrawl.scrape_markdown(url_text, request_id=req_id)
+            crawl = await self.scraper.scrape_markdown(url_text, request_id=req_id)
 
         quality_issue = await self._apply_low_value_guard(
             crawl=crawl,
@@ -514,13 +515,14 @@ class ContentExtractorCrawlMixin:
         has_html: bool,
         silent: bool = False,
     ) -> None:
-        """Handle Firecrawl extraction errors."""
+        """Handle content extraction errors."""
         await self.message_persistence.request_repo.async_update_request_status(
             req_id, RequestStatus.ERROR
         )
+        provider = crawl.endpoint or "scraper_chain"
         details = (
             f"🔗 URL: {crawl.source_url or 'unknown'}\n"
-            f"🧭 Stage: Firecrawl scrape ({crawl.endpoint or '/v2/scrape'})\n"
+            f"🧭 Stage: Content extraction ({provider})\n"
             f"📶 HTTP: {crawl.http_status or 'n/a'}\n"
             f"⚠️ Error: {crawl.error_text or 'unknown'}\n"
             f"🧩 Content received: md:{int(has_markdown)} html:{int(has_html)}"
@@ -552,9 +554,9 @@ class ContentExtractorCrawlMixin:
             request_id=req_id,
             correlation_id=correlation_id,
             stage="extraction",
-            component="firecrawl",
+            component="scraper",
             reason_code=reason_code,
-            error=ValueError(crawl.error_text or "Firecrawl extraction failed"),
+            error=ValueError(crawl.error_text or "Content extraction failed"),
             retryable=True,
             http_status=crawl.http_status,
             latency_ms=crawl.latency_ms,

@@ -61,11 +61,11 @@ scraper:
   profile: balanced
   provider_order:
     - scrapling
-    - defuddle
     - firecrawl
     - playwright
     - crawlee
     - direct_html
+  defuddle_enabled: false
   firecrawl_self_hosted_enabled: false
 
 firecrawl:
@@ -117,10 +117,18 @@ mcp:
   remote provider, the provider times out on long articles, or the model returns
   weak/invalid JSON. Prefer models that advertise OpenAI-compatible chat
   completions and test summaries before using them unattended.
-- Firecrawl Cloud is optional. The scraper chain can run with Scrapling,
-  Defuddle, Playwright, Crawlee, and direct HTML providers; the
-  `with-firecrawl` Docker Compose profile starts an in-compose self-hosted
-  Firecrawl stack at `http://firecrawl-api:3002`.
+- Firecrawl Cloud is optional. The default scraper order is Scrapling,
+  Firecrawl, Playwright, Crawlee, then direct HTML. The `firecrawl` provider uses
+  cloud Firecrawl when `firecrawl.api_key` is configured and self-hosted
+  Firecrawl is disabled.
+- Defuddle is opt-in because the default service sends URLs to
+  `https://defuddle.md`. To use it, set `scraper.defuddle_enabled: true` and add
+  `defuddle` to `scraper.provider_order`.
+- The `with-firecrawl` Docker Compose profile starts an in-compose self-hosted
+  Firecrawl stack at `http://firecrawl-api:3002`. Set
+  `scraper.firecrawl_self_hosted_enabled: true` to use it; self-hosted
+  Firecrawl takes precedence when both self-hosted and cloud Firecrawl are
+  configured.
 - Signal ingestion optional sources are disabled unless `signal_ingestion.enabled`
   and the per-source flag are both true. Hacker News uses the official Firebase
   API and has no credentials. Reddit uses public subreddit JSON with a default

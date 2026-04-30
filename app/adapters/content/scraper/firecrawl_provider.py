@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.adapters.content.quality_filters import best_content_text
 from app.adapters.content.scraper.runtime_tuning import tuned_firecrawl_wait_for_ms
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
-from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
@@ -58,11 +58,7 @@ class FirecrawlProvider:
         )
 
         if result.status == CallStatus.OK:
-            text = ""
-            if result.content_markdown:
-                text = clean_markdown_article_text(result.content_markdown)
-            elif result.content_html:
-                text = html_to_text(result.content_html)
+            text = best_content_text(result)
 
             if len(text) < self._min_content_length:
                 logger.info(

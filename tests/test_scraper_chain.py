@@ -12,6 +12,7 @@ from app.adapters.content.scraper.chain import ContentScraperChain
 from app.adapters.content.scraper.factory import ContentScraperFactory
 from app.adapters.content.scraper.firecrawl_provider import FirecrawlProvider
 from app.adapters.external.firecrawl.models import FirecrawlResult
+from app.config import FirecrawlConfig
 from app.config.scraper import ScraperConfig
 from app.core.call_status import CallStatus
 
@@ -126,8 +127,8 @@ class TestContentScraperChain:
         assert len(p2.calls) == 1
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_all_providers_fail_returns_last_result(self):
-        """When every provider returns an error, the chain returns the last failed result."""
+    async def test_all_providers_fail_returns_aggregate_error(self):
+        """When every provider fails, the chain returns all provider failure reasons."""
         p1 = _MockProvider(name="first", result=_error_result(error="p1 fail"))
         p2 = _MockProvider(name="second", result=_error_result(error="p2 fail"))
 
@@ -135,7 +136,12 @@ class TestContentScraperChain:
         result = await chain.scrape_markdown("https://example.com")
 
         assert result.status == "error"
-        assert result.error_text == "p2 fail"
+        assert result.error_text is not None
+        assert "All providers failed" in result.error_text
+        assert "first: p1 fail" in result.error_text
+        assert "second: p2 fail" in result.error_text
+        assert result.source_url == "https://example.com"
+        assert result.endpoint == "chain"
         assert len(p1.calls) == 1
         assert len(p2.calls) == 1
 
@@ -167,13 +173,68 @@ class TestContentScraperChain:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_single_provider_chain_failure(self):
-        """A chain with a single provider returns its error result on failure."""
+        """A chain with one failing provider still reports the aggregate chain error."""
         p = _MockProvider(name="solo", result=_error_result(error="solo fail"))
         chain = ContentScraperChain([p])
         result = await chain.scrape_markdown("https://example.com")
 
         assert result.status == "error"
-        assert result.error_text == "solo fail"
+        assert result.error_text is not None
+        assert "All providers failed" in result.error_text
+        assert "solo: solo fail" in result.error_text
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_low_value_ok_content_falls_through_to_next_provider(self):
+        """Long OK content that is low-value should not stop the fallback chain."""
+        repeated_stub = "cookie " * 120
+        p1 = _MockProvider(name="first", result=_ok_result(markdown=repeated_stub))
+        fallback_content = (
+            "This fallback provider returned a useful article with enough body text, "
+            "context, and complete sentences for downstream extraction. " * 3
+        )
+        p2 = _MockProvider(name="second", result=_ok_result(markdown=fallback_content))
+
+        chain = ContentScraperChain([p1, p2], min_content_length=100)
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown == fallback_content
+        assert len(p1.calls) == 1
+        assert len(p2.calls) == 1
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_html_candidate_can_rescue_low_value_markdown(self):
+        """Rich HTML should be considered before rejecting thin or low-value markdown."""
+        thin_markdown = "cookie cookie cookie"
+        rich_html = (
+            "<article><p>"
+            + (
+                "This article contains detailed reporting with enough context and supporting "
+                "sentences to be treated as useful extracted content. " * 8
+            )
+            + "</p></article>"
+        )
+        p1 = _MockProvider(
+            name="first",
+            result=FirecrawlResult(
+                status=CallStatus.OK,
+                http_status=200,
+                content_markdown=thin_markdown,
+                content_html=rich_html,
+                source_url="https://example.com",
+                endpoint="mock",
+            ),
+        )
+        p2 = _MockProvider(name="second", result=_ok_result(markdown="# Should not be used"))
+
+        chain = ContentScraperChain([p1, p2], min_content_length=400)
+        result = await chain.scrape_markdown("https://example.com")
+
+        assert result.status == "ok"
+        assert result.content_markdown == thin_markdown
+        assert result.content_html == rich_html
+        assert len(p1.calls) == 1
+        assert len(p2.calls) == 0
 
     def test_empty_providers_raises_value_error(self):
         """Constructing a chain with no providers raises ValueError."""
@@ -330,21 +391,23 @@ class TestContentScraperChain:
 class TestContentScraperFactory:
     """Tests for the factory that builds a scraper chain from config."""
 
-    def test_default_config_creates_chain_with_scrapling_defuddle_playwright_crawlee_and_direct_html(
+    def test_default_config_creates_chain_with_scrapling_firecrawl_playwright_crawlee_and_direct_html(
         self,
     ):
-        """Default config enables scrapling + defuddle + playwright + crawlee + direct_html."""
+        """Default config enables scrapling + cloud Firecrawl + browser + direct_html."""
         cfg = make_test_app_config(scraper=ScraperConfig())
 
         with (
             patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
             patch("app.adapters.content.scraper.factory._build_defuddle") as mock_defuddle,
+            patch("app.adapters.content.scraper.factory._build_firecrawl") as mock_firecrawl,
             patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
             patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
             patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
         ):
             mock_scrapling.return_value = _MockProvider(name="scrapling")
             mock_defuddle.return_value = _MockProvider(name="defuddle")
+            mock_firecrawl.return_value = _MockProvider(name="firecrawl")
             mock_playwright.return_value = _MockProvider(name="playwright")
             mock_crawlee.return_value = _MockProvider(name="crawlee")
             mock_direct.return_value = _MockProvider(name="direct_html")
@@ -353,10 +416,11 @@ class TestContentScraperFactory:
 
         assert len(chain.providers) == 5
         assert chain.providers[0].provider_name == "scrapling"
-        assert chain.providers[1].provider_name == "defuddle"
+        assert chain.providers[1].provider_name == "firecrawl"
         assert chain.providers[2].provider_name == "playwright"
         assert chain.providers[3].provider_name == "crawlee"
         assert chain.providers[4].provider_name == "direct_html"
+        mock_defuddle.assert_not_called()
 
     def test_scrapling_disabled_skipped(self):
         """When scrapling_enabled=False, the scrapling provider is skipped."""
@@ -365,11 +429,13 @@ class TestContentScraperFactory:
 
         with (
             patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
+            patch("app.adapters.content.scraper.factory._build_firecrawl") as mock_firecrawl,
             patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
             patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
             patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
         ):
             mock_scrapling.return_value = None  # disabled
+            mock_firecrawl.return_value = None
             mock_playwright.return_value = _MockProvider(name="playwright")
             mock_crawlee.return_value = _MockProvider(name="crawlee")
             mock_direct.return_value = _MockProvider(name="direct_html")
@@ -389,11 +455,13 @@ class TestContentScraperFactory:
 
         with (
             patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
+            patch("app.adapters.content.scraper.factory._build_firecrawl") as mock_firecrawl,
             patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
             patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
             patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
         ):
             mock_scrapling.return_value = _MockProvider(name="scrapling")
+            mock_firecrawl.return_value = None
             mock_playwright.return_value = None
             mock_crawlee.return_value = _MockProvider(name="crawlee")
             mock_direct.return_value = _MockProvider(name="direct_html")
@@ -412,11 +480,13 @@ class TestContentScraperFactory:
 
         with (
             patch("app.adapters.content.scraper.factory._build_scrapling") as mock_scrapling,
+            patch("app.adapters.content.scraper.factory._build_firecrawl") as mock_firecrawl,
             patch("app.adapters.content.scraper.factory._build_playwright") as mock_playwright,
             patch("app.adapters.content.scraper.factory._build_crawlee") as mock_crawlee,
             patch("app.adapters.content.scraper.factory._build_direct_html") as mock_direct,
         ):
             mock_scrapling.return_value = _MockProvider(name="scrapling")
+            mock_firecrawl.return_value = None
             mock_playwright.return_value = _MockProvider(name="playwright")
             mock_crawlee.return_value = None
             mock_direct.return_value = _MockProvider(name="direct_html")
@@ -457,6 +527,49 @@ class TestContentScraperFactory:
         assert "playwright" in names
         assert "crawlee" in names
         assert len(chain.providers) == 5
+
+    def test_firecrawl_cloud_api_key_included_when_self_hosted_disabled(self):
+        """When FIRECRAWL_API_KEY is configured, cloud Firecrawl is in the chain."""
+        scraper_cfg = ScraperConfig(provider_order=["firecrawl"])
+        cfg = make_test_app_config(
+            scraper=scraper_cfg,
+            firecrawl=FirecrawlConfig(api_key="fc-test-cloud-key"),
+        )
+
+        chain = ContentScraperFactory.create_from_config(cfg)
+
+        assert len(chain.providers) == 1
+        assert chain.providers[0].provider_name == "firecrawl"
+
+    def test_firecrawl_without_cloud_key_or_self_hosting_is_skipped(self):
+        scraper_cfg = ScraperConfig(provider_order=["firecrawl", "direct_html"])
+        cfg = make_test_app_config(
+            scraper=scraper_cfg,
+            firecrawl=FirecrawlConfig(api_key=""),
+        )
+
+        with patch(
+            "app.adapters.content.scraper.factory._build_direct_html",
+            return_value=_MockProvider(name="direct_html"),
+        ):
+            chain = ContentScraperFactory.create_from_config(cfg)
+
+        assert [p.provider_name for p in chain.providers] == ["direct_html"]
+
+    def test_firecrawl_self_hosted_preferred_over_cloud_api_key(self):
+        scraper_cfg = ScraperConfig(
+            firecrawl_self_hosted_enabled=True,
+            provider_order=["firecrawl"],
+        )
+        cfg = make_test_app_config(
+            scraper=scraper_cfg,
+            firecrawl=FirecrawlConfig(api_key="fc-test-cloud-key"),
+        )
+
+        chain = ContentScraperFactory.create_from_config(cfg)
+
+        assert len(chain.providers) == 1
+        assert chain.providers[0].provider_name == "firecrawl_self_hosted"
 
     def test_empty_provider_order_falls_back_to_direct_html(self):
         """When provider_order is empty, the factory falls back to direct_html."""
@@ -540,8 +653,8 @@ class TestContentScraperFactory:
 
         assert chain._audit is audit
 
-    def test_defuddle_included_in_default_chain(self):
-        """defuddle appears in chain when enabled (default)."""
+    def test_defuddle_absent_from_default_chain(self):
+        """defuddle is opt-in because the public default sends URLs to defuddle.md."""
         cfg = make_test_app_config()
         with (
             patch(
@@ -568,8 +681,33 @@ class TestContentScraperFactory:
         ):
             chain = ContentScraperFactory.create_from_config(cfg)
         names = [p.provider_name for p in chain.providers]
-        assert "defuddle" in names
-        assert names.index("defuddle") > names.index("scrapling")
+        assert "defuddle" not in names
+
+    def test_defuddle_included_when_enabled_and_ordered(self):
+        """defuddle appears only when explicitly enabled and present in order."""
+        cfg = make_test_app_config(
+            scraper=ScraperConfig(
+                defuddle_enabled=True,
+                provider_order=["scrapling", "defuddle", "direct_html"],
+            )
+        )
+        with (
+            patch(
+                "app.adapters.content.scraper.factory._build_scrapling",
+                return_value=_MockProvider("scrapling"),
+            ),
+            patch(
+                "app.adapters.content.scraper.factory._build_defuddle",
+                return_value=_MockProvider("defuddle"),
+            ),
+            patch(
+                "app.adapters.content.scraper.factory._build_direct_html",
+                return_value=_MockProvider("direct_html"),
+            ),
+        ):
+            chain = ContentScraperFactory.create_from_config(cfg)
+        names = [p.provider_name for p in chain.providers]
+        assert names == ["scrapling", "defuddle", "direct_html"]
 
     def test_defuddle_disabled_absent_from_chain(self):
         """When _build_defuddle returns None, defuddle is absent."""
@@ -1086,7 +1224,11 @@ class TestChainMinContentLength:
     async def test_chain_rejects_thin_content_and_falls_through(self):
         """Chain with min_content_length rejects short OK result, tries next provider."""
         thin = _ok_result(markdown="nav stub only")
-        good = _ok_result(markdown="A " * 300)  # 600 chars
+        good_content = (
+            "This fallback article contains useful context, complete sentences, "
+            "and enough distinct words to pass the content quality guard. " * 5
+        )
+        good = _ok_result(markdown=good_content)
 
         p1 = _MockProvider(name="firecrawl", result=thin)
         p2 = _MockProvider(name="playwright", result=good)
@@ -1102,7 +1244,11 @@ class TestChainMinContentLength:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_chain_accepts_sufficient_content(self):
         """Chain with min_content_length accepts result meeting threshold."""
-        good = _ok_result(markdown="A " * 300)
+        good_content = (
+            "This article contains useful context, complete sentences, and enough "
+            "distinct words to pass the content quality guard. " * 5
+        )
+        good = _ok_result(markdown=good_content)
 
         p1 = _MockProvider(name="firecrawl", result=good)
         p2 = _MockProvider(name="playwright", result=_ok_result())

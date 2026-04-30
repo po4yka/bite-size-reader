@@ -28,7 +28,7 @@ Since ADR-0001, the landscape has changed:
 We will introduce a `ContentScraperChain` with ordered fallback providers:
 
 1. **Scrapling** (primary) -- in-process extraction, zero cost, no external dependency
-2. **Self-hosted Firecrawl** (secondary) -- runs in the same Docker Compose stack
+2. **Firecrawl** (secondary) -- self-hosted when enabled, otherwise cloud when `FIRECRAWL_API_KEY` is configured
 3. **Playwright browser rendering** (tertiary) -- JavaScript-heavy fallback before direct fetch
 4. **Crawlee hybrid extraction** (quaternary) -- `BeautifulSoupCrawler` followed by `PlaywrightCrawler` for difficult pages
 5. **Direct HTML fetch** via httpx + trafilatura (last resort) -- lightweight final fallback
@@ -38,8 +38,9 @@ The chain follows the existing `LLMClientProtocol` pattern (Protocol + Factory +
 Key design decisions:
 
 - **Keep `FirecrawlResult` as the universal output model.** It is referenced in 16+ files across the codebase. All providers normalize their output into this model, avoiding a disruptive refactor.
-- **Make `FIRECRAWL_API_KEY` optional.** It is only required when using the cloud Firecrawl provider or the web search API. The bot can now run with zero external API keys for basic content extraction.
-- **Preserve cloud Firecrawl for TopicSearchService.** The search API has no in-process alternative, so `TopicSearchService` still calls cloud Firecrawl directly.
+- **Make `FIRECRAWL_API_KEY` optional.** It is required only when using cloud Firecrawl for article extraction or the web search API. The bot can run without Firecrawl Cloud by using Scrapling, self-hosted Firecrawl, browser providers, and direct HTML.
+- **Prefer self-hosted Firecrawl when enabled.** When both self-hosted Firecrawl and `FIRECRAWL_API_KEY` are configured, the article scraper uses the self-hosted endpoint; `TopicSearchService` still calls cloud Firecrawl directly.
+- **Keep Defuddle opt-in.** Defuddle is supported by the provider token set but is disabled by default because the public service receives submitted URLs.
 - **Remove `_attempt_direct_html_salvage()`.** This ad-hoc fallback is now handled by `DirectHTMLProvider`, eliminating duplicate logic.
 
 ## Consequences
@@ -59,7 +60,7 @@ Key design decisions:
 
 ### Neutral
 
-- Cloud Firecrawl remains available as a provider option and can be added to the chain
+- Cloud Firecrawl remains available as the default Firecrawl mode when `FIRECRAWL_API_KEY` is configured and self-hosted Firecrawl is disabled
 - TopicSearchService (web search enrichment) still requires a cloud Firecrawl API key
 
 ## Alternatives Considered

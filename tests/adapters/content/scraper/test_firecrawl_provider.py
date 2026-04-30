@@ -85,6 +85,35 @@ class TestFirecrawlProviderContentLength:
         assert result.endpoint == "/v1/scrape"
 
     @pytest.mark.asyncio(loop_scope="function")
+    async def test_firecrawl_provider_accepts_rich_html_when_markdown_is_thin(self) -> None:
+        """Firecrawl responses with thin markdown but useful HTML should pass through."""
+        thin_markdown = "Short."
+        rich_html = (
+            "<html><body><article><p>"
+            + (
+                "This article includes enough extracted body text to be summarized reliably, "
+                "with several complete sentences and useful context for downstream processing. " * 8
+            )
+            + "</p></article></body></html>"
+        )
+        ok_result = FirecrawlResult(
+            status=CallStatus.OK,
+            http_status=200,
+            content_markdown=thin_markdown,
+            content_html=rich_html,
+            source_url="https://example.com/article",
+            endpoint="/v1/scrape",
+            latency_ms=120,
+        )
+        client = _make_client(ok_result)
+        provider = FirecrawlProvider(client, min_content_length=400)
+
+        result = await provider.scrape_markdown("https://example.com/article")
+
+        assert result.status == CallStatus.OK
+        assert result is ok_result
+
+    @pytest.mark.asyncio(loop_scope="function")
     async def test_firecrawl_provider_passes_through_errors(self) -> None:
         """Upstream errors should be returned unchanged."""
         error_result = FirecrawlResult(

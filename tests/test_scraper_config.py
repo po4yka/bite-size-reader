@@ -13,6 +13,19 @@ def test_provider_order_accepts_csv() -> None:
     assert cfg.provider_order == ["scrapling", "firecrawl", "playwright", "direct_html"]
 
 
+def test_default_provider_order_excludes_external_defuddle() -> None:
+    cfg = ScraperConfig()
+
+    assert cfg.provider_order == [
+        "scrapling",
+        "firecrawl",
+        "playwright",
+        "crawlee",
+        "direct_html",
+    ]
+    assert cfg.defuddle_enabled is False
+
+
 def test_provider_order_accepts_json_array_string() -> None:
     cfg = ScraperConfig(provider_order='["scrapling", "crawlee", "direct_html"]')  # type: ignore[arg-type]
     assert cfg.provider_order == ["scrapling", "crawlee", "direct_html"]

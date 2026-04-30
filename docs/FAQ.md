@@ -49,7 +49,7 @@ Ratatoskr is an AI-powered Telegram bot that transforms long web articles, YouTu
 
 The software is **free and open-source** (BSD 3-Clause license), but you'll need API keys:
 
-- **Content extraction**: Scrapling (default, free, in-process) or self-hosted Firecrawl (free). Cloud Firecrawl is optional: 500 free credits/month (~500 articles), then $25/month for 5,000 credits
+- **Content extraction**: Scrapling (default, free, in-process), self-hosted Firecrawl (free), or cloud Firecrawl when `FIRECRAWL_API_KEY` is configured. Defuddle is opt-in because the public service receives submitted URLs.
 - **OpenRouter**: Pay-per-use ($0.01-0.05 per summary depending on model)
   - Alternative: Use free models (Google Gemini 2.0, some DeepSeek R1 providers offer free tier)
 - **YouTube**: Free (uses yt-dlp, no API costs)
@@ -626,7 +626,7 @@ See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
 2. **Use free content extraction** (no Firecrawl costs):
    - Scrapling is the default provider (free, in-process, no API key)
    - Self-hosted Firecrawl is another free option (`FIRECRAWL_SELF_HOSTED_ENABLED=true`)
-   - Cloud Firecrawl is only needed for sites that resist local scraping
+   - Cloud Firecrawl is used as an article fallback only when `FIRECRAWL_API_KEY` is configured
 
    ```bash
    SCRAPER_ENABLED=true

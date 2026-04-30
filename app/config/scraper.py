@@ -17,6 +17,13 @@ SCRAPER_PROVIDER_TOKENS = {
 }
 
 SCRAPER_PROFILES = {"fast", "balanced", "robust"}
+DEFAULT_SCRAPER_PROVIDER_ORDER = [
+    "scrapling",
+    "firecrawl",
+    "playwright",
+    "crawlee",
+    "direct_html",
+]
 
 _PROFILE_TIMEOUT_MULTIPLIERS = {
     "fast": 0.75,
@@ -77,7 +84,7 @@ class ScraperConfig(BaseModel):
     )
 
     provider_order: list[str] = Field(
-        default=["scrapling", "defuddle", "firecrawl", "playwright", "crawlee", "direct_html"],
+        default_factory=lambda: list(DEFAULT_SCRAPER_PROVIDER_ORDER),
         validation_alias="SCRAPER_PROVIDER_ORDER",
         description="Ordered list of scraping providers to try",
     )
@@ -96,7 +103,7 @@ class ScraperConfig(BaseModel):
     )
 
     defuddle_enabled: bool = Field(
-        default=True,
+        default=False,
         validation_alias="SCRAPER_DEFUDDLE_ENABLED",
     )
     defuddle_timeout_sec: int = Field(
@@ -218,7 +225,7 @@ class ScraperConfig(BaseModel):
     @classmethod
     def _parse_provider_order(cls, value: Any) -> list[str]:
         if value in (None, ""):
-            return ["scrapling", "defuddle", "firecrawl", "playwright", "crawlee", "direct_html"]
+            return list(DEFAULT_SCRAPER_PROVIDER_ORDER)
 
         raw_items: list[Any]
         if isinstance(value, str):

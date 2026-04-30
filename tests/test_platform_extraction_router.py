@@ -70,7 +70,8 @@ def _make_extractor() -> ContentExtractor:
     firecrawl_scrape_mock = AsyncMock(
         return_value=SimpleNamespace(
             status="ok",
-            content_markdown="# Title\n\nBody",
+            content_markdown="# Title\n\n"
+            + ("Substantial article body with enough useful content. " * 20),
             content_html=None,
             error_text=None,
             http_status=200,
@@ -104,7 +105,8 @@ def _make_extractor_with_cfg(
     firecrawl_scrape_mock = AsyncMock(
         return_value=SimpleNamespace(
             status="ok",
-            content_markdown="# Title\n\nBody",
+            content_markdown="# Title\n\n"
+            + ("Substantial article body with enough useful content. " * 20),
             content_html=None,
             error_text=None,
             http_status=200,
@@ -189,6 +191,25 @@ async def test_extract_content_pure_routes_twitter_urls_through_platform_router(
     assert content_source == "twitter_graphql"
     assert metadata["source"] == "twitter"
     router.extract.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_extract_content_pure_passes_request_id_to_generic_scraper() -> None:
+    extractor = _make_extractor()
+
+    content_text, content_source, metadata = await extractor.extract_content_pure(
+        "https://example.com/article",
+        correlation_id="cid-req",
+        request_id=777,
+    )
+
+    assert content_text
+    assert content_source == "markdown"
+    assert metadata["request_id"] == 777
+    extractor.scraper.scrape_markdown.assert_awaited_once_with(
+        "https://example.com/article",
+        request_id=777,
+    )
 
 
 @pytest.mark.asyncio

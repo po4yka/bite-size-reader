@@ -5,9 +5,9 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from app.adapters.content.quality_filters import best_content_text, detect_low_value_content
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
-from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
@@ -96,7 +96,6 @@ class ContentScraperChain:
         mobile: bool = True,
         request_id: int | None = None,
     ) -> FirecrawlResult:
-        last_result: FirecrawlResult | None = None
         errors: list[str] = []
 
         for provider in self._effective_providers(url):
@@ -124,16 +123,11 @@ class ContentScraperChain:
             )
 
             if has_content:
-                text = ""
-                if result.content_markdown:
-                    text = clean_markdown_article_text(result.content_markdown)
-                elif result.content_html:
-                    text = html_to_text(result.content_html)
+                text = best_content_text(result)
 
                 if _is_error_page(text):
                     error_msg = f"{name}: error page detected ({len(text)} chars)"
                     errors.append(error_msg)
-                    last_result = result
                     logger.info(
                         "scraper_chain_error_page",
                         extra={
@@ -152,7 +146,6 @@ class ContentScraperChain:
                         f" ({len(text)} < {self._min_content_length} chars)"
                     )
                     errors.append(error_msg)
-                    last_result = result
                     logger.info(
                         "scraper_chain_thin_content",
                         extra={
@@ -160,6 +153,31 @@ class ContentScraperChain:
                             "url": url,
                             "content_len": len(text),
                             "threshold": self._min_content_length,
+                            "request_id": request_id,
+                        },
+                    )
+                    continue
+
+                quality_issue = (
+                    detect_low_value_content(result) if self._min_content_length > 0 else None
+                )
+                if quality_issue is not None:
+                    reason = quality_issue["reason"]
+                    metrics = quality_issue["metrics"]
+                    error_msg = (
+                        f"{name}: low-value content detected"
+                        f" ({reason}, chars={metrics['char_length']},"
+                        f" words={metrics['word_count']})"
+                    )
+                    errors.append(error_msg)
+                    logger.info(
+                        "scraper_chain_low_value_content",
+                        extra={
+                            "provider": name,
+                            "url": url,
+                            "reason": reason,
+                            "metrics": metrics,
+                            "preview": quality_issue["preview"],
                             "request_id": request_id,
                         },
                     )
@@ -191,7 +209,6 @@ class ContentScraperChain:
 
             error_msg = f"{name}: {result.error_text or 'no content'}"
             errors.append(error_msg)
-            last_result = result
             logger.info(
                 "scraper_chain_provider_failed",
                 extra={
@@ -212,9 +229,6 @@ class ContentScraperChain:
                 "request_id": request_id,
             },
         )
-
-        if last_result is not None:
-            return last_result
 
         return FirecrawlResult(
             status=CallStatus.ERROR,

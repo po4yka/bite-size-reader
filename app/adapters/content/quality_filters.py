@@ -28,16 +28,24 @@ LowValueReason = Literal[
 ]
 
 
-def detect_low_value_content(crawl: FirecrawlResult) -> dict[str, Any] | None:
-    """Detect low-value Firecrawl responses that should halt processing."""
-
+def extract_content_text_candidates(crawl: FirecrawlResult) -> list[str]:
+    """Return cleaned text candidates derived from markdown and HTML content."""
     text_candidates: list[str] = []
     if crawl.content_markdown and crawl.content_markdown.strip():
         text_candidates.append(clean_markdown_article_text(crawl.content_markdown))
     if crawl.content_html and crawl.content_html.strip():
         text_candidates.append(html_to_text(crawl.content_html))
+    return text_candidates
 
-    primary_text = next((t for t in text_candidates if t and t.strip()), "")
+
+def best_content_text(crawl: FirecrawlResult) -> str:
+    """Return the richest available text candidate for threshold checks."""
+    candidates = [t for t in extract_content_text_candidates(crawl) if t and t.strip()]
+    return max(candidates, key=len, default="")
+
+
+def _detect_low_value_text(text: str) -> dict[str, Any] | None:
+    primary_text = text
     normalized = re.sub(r"\s+", " ", primary_text).strip()
 
     words_raw = re.findall(r"[\w']+", normalized)
@@ -102,6 +110,27 @@ def detect_low_value_content(crawl: FirecrawlResult) -> dict[str, Any] | None:
             },
         }
     return None
+
+
+def detect_low_value_content(crawl: FirecrawlResult) -> dict[str, Any] | None:
+    """Detect low-value Firecrawl responses that should halt processing.
+
+    Markdown and HTML are evaluated as separate extraction candidates. A useful
+    HTML body can therefore rescue a thin or low-value markdown field.
+    """
+
+    candidates = [t for t in extract_content_text_candidates(crawl) if t and t.strip()]
+    if not candidates:
+        return _detect_low_value_text("")
+
+    issues: list[dict[str, Any]] = []
+    for candidate in candidates:
+        issue = _detect_low_value_text(candidate)
+        if issue is None:
+            return None
+        issues.append(issue)
+
+    return max(issues, key=lambda item: item["metrics"]["char_length"], default=None)
 
 
 def is_gray_zone_for_llm_check(reason: LowValueReason, metrics: dict[str, Any]) -> bool:

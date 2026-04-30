@@ -152,7 +152,9 @@ def _build_firecrawl(
     audit: Callable[[str, str, dict], None] | None,
 ) -> ContentScraperProtocol | None:
     scraper_cfg = cfg.scraper
-    if not getattr(scraper_cfg, "firecrawl_self_hosted_enabled", False):
+    self_hosted_enabled = getattr(scraper_cfg, "firecrawl_self_hosted_enabled", False)
+    cloud_api_key = getattr(cfg.firecrawl, "api_key", "")
+    if not self_hosted_enabled and not cloud_api_key:
         return None
     try:
         from app.adapters.external.firecrawl.client import FirecrawlClient, FirecrawlClientConfig
@@ -198,23 +200,36 @@ def _build_firecrawl(
             json_schema=cfg.firecrawl.json_schema or {},
             wait_for_ms=getattr(scraper_cfg, "firecrawl_wait_for_ms", 3000),
         )
+        if self_hosted_enabled:
+            api_key = scraper_cfg.firecrawl_self_hosted_api_key
+            base_url = scraper_cfg.firecrawl_self_hosted_url
+            provider_name = "firecrawl_self_hosted"
+        else:
+            api_key = cloud_api_key
+            base_url = None
+            provider_name = "firecrawl"
+
         client = FirecrawlClient(
-            scraper_cfg.firecrawl_self_hosted_api_key,
+            api_key,
             client_cfg,
             audit=audit,
-            base_url=scraper_cfg.firecrawl_self_hosted_url,
+            base_url=base_url,
         )
         return FirecrawlProvider(
             client,
-            name="firecrawl_self_hosted",
+            name=provider_name,
             wait_for_ms=getattr(scraper_cfg, "firecrawl_wait_for_ms", 3000),
             js_heavy_hosts=getattr(scraper_cfg, "js_heavy_hosts", ()),
             min_content_length=getattr(scraper_cfg, "min_content_length", 400),
         )
     except Exception as exc:
         logger.warning(
-            "firecrawl_self_hosted_init_failed",
-            extra={"error": str(exc), "error_type": type(exc).__name__},
+            "firecrawl_provider_init_failed",
+            extra={
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+                "mode": "self_hosted" if self_hosted_enabled else "cloud",
+            },
         )
         return None
 

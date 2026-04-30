@@ -197,23 +197,23 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 | `SCRAPER_FORCE_PROVIDER` | _(none)_ | Force single provider token (`scrapling`, `defuddle`, `firecrawl`, `playwright`, `crawlee`, `direct_html`) |
 | `SCRAPER_JS_HEAVY_HOSTS` | _(none)_ | CSV host list for JS-heavy heuristic overlays |
 | `SCRAPER_MIN_CONTENT_LENGTH` | `400` | Minimum extracted text length to accept content |
-| `SCRAPER_PROVIDER_ORDER` | `["scrapling", "defuddle", "firecrawl", "playwright", "crawlee", "direct_html"]` | Ordered list of scraping providers to try |
+| `SCRAPER_PROVIDER_ORDER` | `["scrapling", "firecrawl", "playwright", "crawlee", "direct_html"]` | Ordered list of scraping providers to try |
 | `SCRAPER_SCRAPLING_ENABLED` | `true` | Enable Scrapling in-process provider |
 | `SCRAPER_SCRAPLING_TIMEOUT_SEC` | `30` | Scrapling fetch timeout (seconds) |
 | `SCRAPER_SCRAPLING_STEALTH_FALLBACK` | `true` | Try stealth fetch if basic fetch returns thin content |
-| `SCRAPER_DEFUDDLE_ENABLED` | `true` | Enable Defuddle HTTP API provider (second in chain) |
+| `SCRAPER_DEFUDDLE_ENABLED` | `false` | Enable Defuddle HTTP API provider. Also add `defuddle` to `SCRAPER_PROVIDER_ORDER` to use it |
 | `SCRAPER_DEFUDDLE_TIMEOUT_SEC` | `20` | Defuddle request timeout (seconds) |
 | `SCRAPER_DEFUDDLE_API_BASE_URL` | `https://defuddle.md` | Defuddle API base URL |
 | `FIRECRAWL_SELF_HOSTED_ENABLED` | `false` | Enable self-hosted Firecrawl provider |
 | `FIRECRAWL_SELF_HOSTED_URL` | `http://firecrawl-api:3002` | Self-hosted Firecrawl base URL |
 | `FIRECRAWL_SELF_HOSTED_API_KEY` | `fc-ratatoskr-local` | Self-hosted Firecrawl API key |
-| `SCRAPER_FIRECRAWL_TIMEOUT_SEC` | `90` | Self-hosted Firecrawl timeout for article chain |
-| `SCRAPER_FIRECRAWL_WAIT_FOR_MS` | `3000` | Self-hosted Firecrawl wait-for milliseconds for article chain |
-| `SCRAPER_FIRECRAWL_MAX_RETRIES` | `3` | Self-hosted Firecrawl retries for article chain |
-| `SCRAPER_FIRECRAWL_MAX_CONNECTIONS` | `10` | Self-hosted Firecrawl connection pool size for article chain |
-| `SCRAPER_FIRECRAWL_MAX_KEEPALIVE_CONNECTIONS` | `5` | Self-hosted Firecrawl keepalive pool size for article chain |
-| `SCRAPER_FIRECRAWL_KEEPALIVE_EXPIRY` | `30.0` | Self-hosted Firecrawl keepalive expiry (seconds) for article chain |
-| `SCRAPER_FIRECRAWL_MAX_RESPONSE_SIZE_MB` | `50` | Self-hosted Firecrawl max response size for article chain |
+| `SCRAPER_FIRECRAWL_TIMEOUT_SEC` | `90` | Firecrawl timeout for article chain |
+| `SCRAPER_FIRECRAWL_WAIT_FOR_MS` | `3000` | Firecrawl wait-for milliseconds for article chain |
+| `SCRAPER_FIRECRAWL_MAX_RETRIES` | `3` | Firecrawl retries for article chain |
+| `SCRAPER_FIRECRAWL_MAX_CONNECTIONS` | `10` | Firecrawl connection pool size for article chain |
+| `SCRAPER_FIRECRAWL_MAX_KEEPALIVE_CONNECTIONS` | `5` | Firecrawl keepalive pool size for article chain |
+| `SCRAPER_FIRECRAWL_KEEPALIVE_EXPIRY` | `30.0` | Firecrawl keepalive expiry (seconds) for article chain |
+| `SCRAPER_FIRECRAWL_MAX_RESPONSE_SIZE_MB` | `50` | Firecrawl max response size for article chain |
 | `SCRAPER_PLAYWRIGHT_ENABLED` | `true` | Enable Playwright rendering fallback provider |
 | `SCRAPER_PLAYWRIGHT_HEADLESS` | `true` | Run Playwright browser headless in scraper fallback |
 | `SCRAPER_PLAYWRIGHT_TIMEOUT_SEC` | `30` | Playwright render timeout (seconds) |
@@ -228,11 +228,12 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 **Notes**:
 
 - Scrapling is a free, in-process scraper that requires no API key. It is tried first by default.
-- Defuddle is a free HTTP API for content extraction. It is tried second in the default chain, after Scrapling.
-- Self-hosted Firecrawl runs as the `with-firecrawl` Docker Compose profile (`firecrawl-api` on port 3002) and also requires no cloud API key.
+- Defuddle is opt-in because the default `SCRAPER_DEFUDDLE_API_BASE_URL` sends URLs to `https://defuddle.md`. To use it, set `SCRAPER_DEFUDDLE_ENABLED=true` and include `defuddle` in `SCRAPER_PROVIDER_ORDER`.
+- Firecrawl is the second default provider token. It uses cloud Firecrawl when `FIRECRAWL_API_KEY` is set and `FIRECRAWL_SELF_HOSTED_ENABLED=false`.
+- Self-hosted Firecrawl runs as the `with-firecrawl` Docker Compose profile (`firecrawl-api` on port 3002), requires no cloud API key, and takes precedence over cloud Firecrawl when `FIRECRAWL_SELF_HOSTED_ENABLED=true`.
 - Playwright fallback is useful for JS-heavy pages that fail in HTTP-only extractors.
 - Crawlee fallback is a single-page advanced fallback (BeautifulSoup stage, then Playwright stage); it is not broad multi-page site crawling in this pipeline.
-- Cloud Firecrawl (`FIRECRAWL_API_KEY`) is only needed when it appears in `SCRAPER_PROVIDER_ORDER` as `"firecrawl"` or when web search enrichment is enabled.
+- Cloud Firecrawl (`FIRECRAWL_API_KEY`) is used by the article scraper when the `firecrawl` provider token is present and self-hosted Firecrawl is disabled. It is also used when web search enrichment is enabled.
 - `direct_html` is a lightweight fallback using trafilatura for simple pages.
 - `SCRAPER_PROFILE` multipliers: `fast=0.75`, `balanced=1.0`, `robust=1.35`; retry tuning uses `fast -> max 1`, `robust -> +1 (cap 5)`.
 - **Breaking rename (fail-fast)**: startup now errors if legacy variables are present (`SCRAPLING_ENABLED`, `SCRAPLING_TIMEOUT_SEC`, `SCRAPLING_STEALTH_FALLBACK`, `SCRAPER_DIRECT_HTTP_ENABLED`).

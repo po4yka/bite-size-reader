@@ -81,6 +81,10 @@ class ContentExtractor(
     ) -> None:
         self.cfg = cfg
         self.db = db
+        self.scraper = firecrawl
+        # Backwards-compatible alias for existing platform extractors/tests. The
+        # object is normally the generic multi-provider scraper chain, not only
+        # the Firecrawl client.
         self.firecrawl = firecrawl
         self.response_formatter = response_formatter
         self._audit = audit_func
@@ -154,7 +158,7 @@ class ContentExtractor(
         return TwitterPlatformExtractor(
             cfg=self.cfg,
             db=self.db,
-            firecrawl=self.firecrawl,
+            firecrawl=self.scraper,
             response_formatter=self.response_formatter,
             message_persistence=self.message_persistence,
             firecrawl_sem=self._sem,
@@ -167,7 +171,7 @@ class ContentExtractor(
 
         return MetaPlatformExtractor(
             cfg=self.cfg,
-            scraper=self.firecrawl,
+            scraper=self.scraper,
             firecrawl_sem=self._sem,
             lifecycle=self._platform_request_lifecycle,
         )
@@ -214,7 +218,7 @@ class ContentExtractor(
         )
 
         async with self._sem():
-            crawl = await self.firecrawl.scrape_markdown(url, request_id=None)
+            crawl = await self.scraper.scrape_markdown(url, request_id=request_id)
 
         quality_issue = detect_low_value_content(crawl)
         if quality_issue:
@@ -229,7 +233,7 @@ class ContentExtractor(
                     request_id=request_id,
                     correlation_id=correlation_id,
                     stage="extraction",
-                    component="firecrawl",
+                    component="scraper",
                     reason_code=REASON_FIRECRAWL_LOW_VALUE,
                     error=ValueError(f"Low-value content detected: {reason}"),
                     retryable=True,
@@ -253,7 +257,7 @@ class ContentExtractor(
                     request_id=request_id,
                     correlation_id=correlation_id,
                     stage="extraction",
-                    component="firecrawl",
+                    component="scraper",
                     reason_code=REASON_FIRECRAWL_ERROR,
                     error=ValueError(f"Extraction failed: {error_msg}"),
                     retryable=True,
@@ -282,6 +286,8 @@ class ContentExtractor(
             "content_length": len(content_text),
             "source_format": content_source,
         }
+        if request_id is not None:
+            metadata["request_id"] = request_id
 
         if crawl.metadata_json:
             metadata["firecrawl_metadata"] = crawl.metadata_json
