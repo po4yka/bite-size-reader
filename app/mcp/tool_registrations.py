@@ -30,8 +30,8 @@ def register_tools(
     semantic_service: SemanticSearchService,
     signal_service: SignalMcpService | None = None,
 ) -> None:
-    if signal_service is None:
-        signal_service = _NullSignalService()
+    signal_runtime: Any = signal_service if signal_service is not None else _NullSignalService()
+
     def _status_from_result(result: Any) -> str:
         return "error" if isinstance(result, dict) and "error" in result else "success"
 
@@ -279,14 +279,12 @@ def register_tools(
     @mcp.tool()
     def list_signal_sources(limit: int = 50) -> str:
         """List signal sources for the scoped MCP user."""
-        return to_json(_call_sync("list_signal_sources", signal_service.list_sources, limit))
+        return to_json(_call_sync("list_signal_sources", signal_runtime.list_sources, limit))
 
     @mcp.tool()
     def list_user_signals(limit: int = 20, status: str | None = None) -> str:
         """List scored signal candidates for the scoped MCP user."""
-        return to_json(
-            _call_sync("list_user_signals", signal_service.list_signals, limit, status)
-        )
+        return to_json(_call_sync("list_user_signals", signal_runtime.list_signals, limit, status))
 
     @mcp.tool()
     async def update_signal_feedback(signal_id: int, action: str) -> str:
@@ -294,7 +292,7 @@ def register_tools(
         return to_json(
             await _call_async(
                 "update_signal_feedback",
-                signal_service.update_signal_feedback,
+                signal_runtime.update_signal_feedback,
                 signal_id,
                 action,
             )
@@ -306,7 +304,7 @@ def register_tools(
         return to_json(
             await _call_async(
                 "set_signal_source_active",
-                signal_service.set_source_active,
+                signal_runtime.set_source_active,
                 source_id,
                 is_active,
             )

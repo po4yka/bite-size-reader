@@ -1,456 +1,361 @@
 # How to Backup and Restore
 
-Protect your data with regular backups and restore procedures.
+Protect a Ratatoskr instance by backing up the durable host paths used by the
+current Docker Compose deployment.
 
 **Audience:** Operators
-**Difficulty:** Beginner
-**Estimated Time:** 10 minutes
+**Difficulty:** Intermediate
+**Estimated Time:** 20 minutes
 
 ---
 
-## What to Backup
+## Scope
 
-Ratatoskr stores data in three locations:
+The default Compose file is `ops/docker/docker-compose.yml`. Run these commands
+from the repository root.
 
-1. **SQLite Database** (`data/ratatoskr.db`) - **CRITICAL**
-   - All summaries, requests, LLM calls
-   - User interactions, audit logs
-   - Size: ~1-100 MB depending on usage
+Durable data is split across these locations:
 
-2. **Environment File** (`.env`) - **IMPORTANT**
-   - API keys, configuration
-   - Size: ~5 KB
+| Data | Default path | Source |
+| ---- | ------------ | ------ |
+| SQLite database | `data/ratatoskr.db` on the host, `/data/ratatoskr.db` in containers | `DB_PATH=/data/ratatoskr.db` |
+| Automatic SQLite snapshots | `data/backups/` unless `DB_BACKUP_DIR` is set | bot backup loop |
+| ChromaDB vector store | `chroma_data/` on the host, `/data` in the Chroma container | Chroma `PERSIST_DIRECTORY=/data` |
+| YouTube downloads | `data/videos/` | `YOUTUBE_STORAGE_PATH` default `/data/videos` |
+| Attachments and non-YouTube media | `data/attachments/`, `data/video-sources/` | attachment defaults |
+| TTS audio cache | `data/audio/` | `ELEVENLABS_AUDIO_PATH` default `/data/audio` |
+| Config and secrets | `.env`, `ratatoskr.yaml`, `config/ratatoskr.yaml`, `config/models.yaml` when present | config search order |
+| Redis | no durable backup expected in default Compose | `redis-server --save "" --appendonly no` |
 
-3. **YouTube Videos** (`data/videos/`) - **OPTIONAL**
-   - Downloaded videos and metadata
-   - Size: Can be 100 GB+
-
-4. **ChromaDB Data** (`chroma_data/`) - **OPTIONAL**
-   - Vector embeddings (can be regenerated)
-   - Size: ~10-500 MB
-
----
-
-## Manual Backup
-
-### Quick Backup (Database Only)
-
-```bash
-# Backup database with timestamp
-cp data/ratatoskr.db data/ratatoskr.db.backup.$(date +%Y%m%d-%H%M%S)
-
-# Verify backup
-ls -lh data/ratatoskr.db.backup*
-```
-
-### Full Backup (All Data)
-
-```bash
-# Create backup directory
-mkdir -p backups/$(date +%Y%m%d)
-
-# Backup database
-cp data/ratatoskr.db backups/$(date +%Y%m%d)/app.db
-
-# Backup environment file
-cp .env backups/$(date +%Y%m%d)/.env
-
-# Backup YouTube videos (if enabled)
-tar -czf backups/$(date +%Y%m%d)/videos.tar.gz data/videos/
-
-# Backup ChromaDB (if enabled)
-tar -czf backups/$(date +%Y%m%d)/chroma.tar.gz chroma_data/
-
-# Verify backups
-ls -lh backups/$(date +%Y%m%d)/
-```
+The API `/v1/backups` and Telegram `/backup` flows create per-user export ZIPs
+under `data/backups/<user_id>/`. They are useful for user data export, but they
+are not a full instance backup because they do not include Chroma, media files,
+all operational tables, or config.
 
 ---
 
-## Automated Backup
+## Before You Start
 
-### Daily Backup Script
-
-Create `tools/scripts/backup.sh`:
+Set a backup timestamp once so every archive has matching names:
 
 ```bash
-#!/bin/bash
-set -e
-
-# Configuration
-BACKUP_DIR="/path/to/backups"
-RETENTION_DAYS=30
-
-# Create backup directory with date
-BACKUP_DATE=$(date +%Y%m%d-%H%M%S)
-BACKUP_PATH="$BACKUP_DIR/$BACKUP_DATE"
-mkdir -p "$BACKUP_PATH"
-
-# Backup database
-echo "Backing up database..."
-cp data/ratatoskr.db "$BACKUP_PATH/app.db"
-
-# Backup environment (exclude sensitive data from git)
-cp .env "$BACKUP_PATH/.env"
-
-# Backup YouTube videos (if exists)
-if [ -d "data/videos" ]; then
-    echo "Backing up YouTube videos..."
-    tar -czf "$BACKUP_PATH/videos.tar.gz" data/videos/
-fi
-
-# Backup ChromaDB (if exists)
-if [ -d "chroma_data" ]; then
-    echo "Backing up ChromaDB..."
-    tar -czf "$BACKUP_PATH/chroma.tar.gz" chroma_data/
-fi
-
-# Cleanup old backups (older than RETENTION_DAYS)
-echo "Cleaning up old backups (>$RETENTION_DAYS days)..."
-find "$BACKUP_DIR" -type d -mtime +$RETENTION_DAYS -exec rm -rf {} +
-
-echo "Backup complete: $BACKUP_PATH"
+export BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)"
+export BACKUP_DIR="backups/$BACKUP_TS"
+mkdir -p "$BACKUP_DIR"
 ```
 
-Make executable and test:
+Check the effective Compose services:
 
 ```bash
-chmod +x tools/scripts/backup.sh
-./tools/scripts/backup.sh
+docker compose -f ops/docker/docker-compose.yml ps
 ```
 
-### Schedule with Cron
+For the most consistent backup, stop services that can write to SQLite or
+Chroma:
 
 ```bash
-# Edit crontab
-crontab -e
-
-# Add daily backup at 2 AM
-0 2 * * * cd /path/to/ratatoskr && ./tools/scripts/backup.sh >> /var/log/ratatoskr-backup.log 2>&1
+docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write chroma
 ```
 
-### Docker Volume Backup
-
-```bash
-# Backup Docker volume
-docker run --rm \
-  -v ratatoskr_data:/data \
-  -v $(pwd)/backups:/backup \
-  alpine tar -czf /backup/data_backup_$(date +%Y%m%d).tar.gz /data
-```
+If you need a low-downtime SQLite-only backup, use the `.backup` command in the
+next section while services keep running, then archive Chroma/media during a
+maintenance window.
 
 ---
 
-## Remote Backup
+## Backup
 
-### Sync to Cloud Storage
+### SQLite
 
-**AWS S3:**
+Preferred SQLite backup, safe while readers/writers exist:
 
 ```bash
-# Install AWS CLI
-pip install awscli
-
-# Configure
-aws configure
-
-# Sync backups to S3
-aws s3 sync backups/ s3://your-bucket/ratatoskr-backups/
+sqlite3 data/ratatoskr.db ".backup '$BACKUP_DIR/ratatoskr.db'"
+sqlite3 "$BACKUP_DIR/ratatoskr.db" "PRAGMA integrity_check;"
 ```
 
-**Rclone (Any Cloud Provider):**
+Expected output:
 
-```bash
-# Install rclone
-curl https://rclone.org/install.sh | sudo bash
-
-# Configure remote (interactive)
-rclone config
-
-# Sync backups
-rclone sync backups/ remote:ratatoskr-backups/
+```text
+ok
 ```
 
-**rsync (Remote Server):**
+If the application is fully stopped, a plain copy is also acceptable:
 
 ```bash
-# Sync to remote server
-rsync -avz --delete backups/ user@remote:/backups/ratatoskr/
+cp data/ratatoskr.db "$BACKUP_DIR/ratatoskr.db"
+sqlite3 "$BACKUP_DIR/ratatoskr.db" "PRAGMA integrity_check;"
 ```
 
----
+Ratatoskr also creates automatic SQLite snapshots from the bot process when
+`DB_BACKUP_ENABLED=true` (default). The default interval is
+`DB_BACKUP_INTERVAL_MINUTES=360`, and `DB_BACKUP_RETENTION=14` keeps the newest
+14 snapshot files, not 14 days. Without `DB_BACKUP_DIR`, snapshots land in
+`data/backups/`.
 
-## Restore Procedures
+### ChromaDB
 
-### Restore Database Only
+The default Chroma service persists its database through the host bind mount
+`chroma_data:/data`. Back it up after stopping `chroma`:
 
 ```bash
-# Stop bot
-docker stop ratatoskr  # or Ctrl+C if local
-
-# Backup current database (precaution)
-cp data/ratatoskr.db data/ratatoskr.db.before-restore
-
-# Restore from backup
-cp backups/YYYYMMDD/app.db data/ratatoskr.db
-
-# Verify integrity
-sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
-# Should output: ok
-
-# Restart bot
-docker start ratatoskr  # or python bot.py
+tar -C . -czf "$BACKUP_DIR/chroma_data.tar.gz" chroma_data
 ```
 
-### Restore Full Backup
+Chroma data is rebuildable from SQLite for summaries that have enough stored
+text and embedding inputs:
 
 ```bash
-# Stop bot
-docker stop ratatoskr
-
-# Restore database
-cp backups/YYYYMMDD/app.db data/ratatoskr.db
-
-# Restore environment
-cp backups/YYYYMMDD/.env .env
-
-# Restore YouTube videos (if needed)
-tar -xzf backups/YYYYMMDD/videos.tar.gz -C /
-
-# Restore ChromaDB (if needed)
-tar -xzf backups/YYYYMMDD/chroma.tar.gz -C /
-
-# Verify database
-sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
-
-# Restart bot
-docker start ratatoskr
-```
-
-### Restore to New Server
-
-```bash
-# Copy backups to new server
-scp -r backups/YYYYMMDD/ user@new-server:/tmp/
-
-# On new server:
-# 1. Install Ratatoskr (see DEPLOYMENT.md)
-# 2. Restore data
-cp /tmp/YYYYMMDD/app.db data/ratatoskr.db
-cp /tmp/YYYYMMDD/.env .env
-
-# 3. Start bot
-docker run -d \
-  --name ratatoskr \
-  --env-file .env \
-  -v $(pwd)/data:/data \
-  ghcr.io/po4yka/ratatoskr:latest
-```
-
----
-
-## Database Maintenance
-
-### Vacuum Database
-
-Reclaim space after deleting records:
-
-```bash
-# Stop bot
-docker stop ratatoskr
-
-# Vacuum
-sqlite3 data/ratatoskr.db "VACUUM;"
-
-# Verify size reduction
-ls -lh data/ratatoskr.db
-
-# Restart bot
-docker start ratatoskr
-```
-
-### Verify Integrity
-
-```bash
-# Check database integrity
-sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
-
-# Expected output: ok
-
-# If corrupted:
-# Restore from latest backup
-```
-
-### Rebuild Indexes
-
-```bash
-# Rebuild search indexes
-python -m app.cli.rebuild_indexes
-
-# Rebuild ChromaDB embeddings
 python -m app.cli.backfill_chroma_store --rebuild
 ```
 
+Backing up `chroma_data/` is still faster and preserves the exact current vector
+store. Rebuild when the archive is missing, corrupted, or intentionally stale
+after an embedding model or namespace change.
+
+### Redis
+
+Default Redis is internal-only and configured without RDB or AOF persistence:
+
+```yaml
+command: ["redis-server", "--save", "", "--appendonly", "no"]
+```
+
+Do not expect Redis data to survive container recreation, and do not include the
+`redis_data` volume in release-critical backups. Ratatoskr uses Redis for
+ephemeral caches, auth/sync/session TTLs, rate-limit state, batch progress, and
+similar recoverable data. After restore, users may need to sign in again, sync
+sessions may be gone, and caches will warm naturally.
+
+If you run an external persistent Redis with custom settings, use that
+deployment's normal `BGSAVE`, AOF, or managed snapshot process. That is outside
+the default Ratatoskr Compose contract.
+
+### Media Files
+
+Back up media directories that exist. The SQLite `video_downloads` table stores
+paths to downloaded YouTube videos, subtitles, and thumbnails, so restoring the
+files keeps cached video results usable.
+
+```bash
+for path in data/videos data/attachments data/video-sources data/audio; do
+  if [ -d "$path" ]; then
+    tar -C . -czf "$BACKUP_DIR/$(echo "$path" | tr / _).tar.gz" "$path"
+  fi
+done
+```
+
+Notes:
+
+- `data/videos/` can be large. It is optional if you accept re-downloading or
+  losing cached video files.
+- `data/attachments/` and `data/video-sources/` are temporary by default, but
+  include them for a byte-for-byte instance restore.
+- `data/audio/` is a cache for generated audio and can be regenerated if the
+  provider and source text are still available.
+
+### Config And Secrets
+
+Back up config files separately from the database. These files may contain API
+keys and should be encrypted at rest.
+
+```bash
+CONFIG_FILES=()
+for path in .env ratatoskr.yaml config/ratatoskr.yaml config/models.yaml; do
+  [ -f "$path" ] && CONFIG_FILES+=("$path")
+done
+[ "${#CONFIG_FILES[@]}" -gt 0 ] && tar -C . -czf "$BACKUP_DIR/config.tar.gz" "${CONFIG_FILES[@]}"
+```
+
+For a single encrypted archive:
+
+```bash
+tar -C backups -czf - "$BACKUP_TS" | \
+  openssl enc -aes-256-cbc -pbkdf2 -salt -out "backups/$BACKUP_TS.tar.gz.enc"
+```
+
+Store the passphrase outside the host. Do not commit backup archives or copied
+`.env` files.
+
+### Verify The Backup
+
+```bash
+find "$BACKUP_DIR" -maxdepth 1 -type f -print -exec ls -lh {} \;
+sqlite3 "$BACKUP_DIR/ratatoskr.db" "PRAGMA quick_check;"
+[ ! -f "$BACKUP_DIR/chroma_data.tar.gz" ] || tar -tzf "$BACKUP_DIR/chroma_data.tar.gz" >/dev/null
+[ ! -f "$BACKUP_DIR/config.tar.gz" ] || tar -tzf "$BACKUP_DIR/config.tar.gz" >/dev/null
+```
+
+Restart services after the backup:
+
+```bash
+docker compose -f ops/docker/docker-compose.yml up -d
+```
+
 ---
 
-## Disaster Recovery
+## Restore
 
-### Database Corruption
+### Restore On The Same Host
 
-**Symptom:** "Database disk image is malformed"
-
-**Recovery:**
+Stop all services that can read or write restored state:
 
 ```bash
-# 1. Stop bot immediately
-docker stop ratatoskr
-
-# 2. Attempt recovery
-sqlite3 data/ratatoskr.db ".recover" | sqlite3 data/ratatoskr.db.recovered
-
-# 3. If recovery works, replace
-mv data/ratatoskr.db data/ratatoskr.db.corrupted
-mv data/ratatoskr.db.recovered data/ratatoskr.db
-
-# 4. If recovery fails, restore from backup
-cp backups/YYYYMMDD/app.db data/ratatoskr.db
-
-# 5. Restart bot
-docker start ratatoskr
+docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write chroma redis
 ```
 
-### Lost Backups
-
-**Prevention:**
-
-- Multiple backup locations (local + cloud)
-- Test restores regularly (monthly)
-- Monitor backup script execution
-
-**If no backups:**
-
-- Database is unrecoverable
-- Must start fresh (lose all summaries)
-- Lesson: Set up automated backups immediately
-
----
-
-## Backup Best Practices
-
-### Frequency
-
-- **Database**: Daily (critical data)
-- **Videos**: Weekly or on-demand (regenerable via re-download)
-- **ChromaDB**: Weekly (regenerable from database)
-- **Environment**: On every config change
-
-### Retention
+Keep a pre-restore copy of the current state:
 
 ```bash
-# Suggested retention policy
-Daily backups: Keep 7 days
-Weekly backups: Keep 4 weeks
-Monthly backups: Keep 12 months
+mkdir -p "restore-safety/$BACKUP_TS"
+[ -f data/ratatoskr.db ] && cp data/ratatoskr.db "restore-safety/$BACKUP_TS/ratatoskr.db.before-restore"
+[ -d chroma_data ] && tar -C . -czf "restore-safety/$BACKUP_TS/chroma_data.before-restore.tar.gz" chroma_data
 ```
 
-### Testing
+Restore SQLite:
 
 ```bash
-# Monthly restore test
-# 1. Restore to test environment
-# 2. Verify bot starts
-# 3. Verify summaries accessible
-# 4. Delete test environment
+cp "$BACKUP_DIR/ratatoskr.db" data/ratatoskr.db
+sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
 ```
 
-### Security
+Restore Chroma if you backed it up:
 
 ```bash
-# Encrypt backups containing API keys
-tar -czf - backups/YYYYMMDD/ | \
-  openssl enc -aes-256-cbc -salt -out backups/YYYYMMDD.tar.gz.enc
-
-# Decrypt when needed
-openssl enc -aes-256-cbc -d -in backups/YYYYMMDD.tar.gz.enc | \
-  tar -xz
-```
-
----
-
-## Monitoring Backups
-
-### Check Backup Age
-
-```bash
-# Find latest backup
-ls -lt backups/ | head -5
-
-# Alert if backup older than 48 hours
-LATEST=$(ls -t backups/ | head -1)
-AGE=$(( ($(date +%s) - $(stat -f %m "backups/$LATEST")) / 3600 ))
-
-if [ $AGE -gt 48 ]; then
-    echo "WARNING: Latest backup is $AGE hours old!"
+if [ -f "$BACKUP_DIR/chroma_data.tar.gz" ]; then
+  rm -rf chroma_data
+  tar -C . -xzf "$BACKUP_DIR/chroma_data.tar.gz"
 fi
 ```
 
-### Backup Size Monitoring
+Restore media archives that exist:
 
 ```bash
-# Track backup size growth
-du -sh backups/*
-
-# Alert if backup size >10 GB (unexpected)
-SIZE=$(du -s backups/ | awk '{print $1}')
-if [ $SIZE -gt 10485760 ]; then  # 10 GB in KB
-    echo "WARNING: Backups larger than 10 GB!"
-fi
+for archive in "$BACKUP_DIR"/data_*.tar.gz; do
+  [ -e "$archive" ] || continue
+  tar -C . -xzf "$archive"
+done
 ```
+
+Restore config files deliberately. Review before overwriting production secrets:
+
+```bash
+[ -f "$BACKUP_DIR/config.tar.gz" ] && tar -C . -xzf "$BACKUP_DIR/config.tar.gz"
+```
+
+Start the stack:
+
+```bash
+docker compose -f ops/docker/docker-compose.yml up -d
+docker compose -f ops/docker/docker-compose.yml ps
+```
+
+Run migrations for the restored image if needed:
+
+```bash
+python -m app.cli.migrate_db --status
+python -m app.cli.migrate_db data/ratatoskr.db
+```
+
+If Chroma was not restored, rebuild it after Chroma is healthy:
+
+```bash
+python -m app.cli.backfill_chroma_store --rebuild
+```
+
+### Restore To A New Host
+
+On the new host:
+
+```bash
+git clone <repo-url> ratatoskr
+cd ratatoskr
+mkdir -p data config backups
+```
+
+Copy the backup directory or encrypted archive to `backups/`, then restore the
+same files:
+
+```bash
+export BACKUP_TS=YYYYMMDDTHHMMSSZ
+export BACKUP_DIR="backups/$BACKUP_TS"
+
+cp "$BACKUP_DIR/ratatoskr.db" data/ratatoskr.db
+[ -f "$BACKUP_DIR/config.tar.gz" ] && tar -C . -xzf "$BACKUP_DIR/config.tar.gz"
+[ -f "$BACKUP_DIR/chroma_data.tar.gz" ] && tar -C . -xzf "$BACKUP_DIR/chroma_data.tar.gz"
+
+for archive in "$BACKUP_DIR"/data_*.tar.gz; do
+  [ -e "$archive" ] || continue
+  tar -C . -xzf "$archive"
+done
+```
+
+Validate and start:
+
+```bash
+sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
+docker compose -f ops/docker/docker-compose.yml config
+docker compose -f ops/docker/docker-compose.yml up -d
+python -m app.cli.migrate_db --status
+```
+
+If the new host uses different paths, update `.env` or `ratatoskr.yaml` for
+`DB_PATH`, `YOUTUBE_STORAGE_PATH`, `ATTACHMENT_STORAGE_PATH`,
+`ATTACHMENT_VIDEO_STORAGE_PATH`, and `ELEVENLABS_AUDIO_PATH` before starting.
 
 ---
 
-## Export Summaries (Alternative Backup)
+## Restore Test Checklist
 
-### Export to JSON
+Run this on a staging host or disposable VM before a release:
 
-```bash
-# Export all summaries
-python -m app.cli.export_summaries --format json --output summaries.json
+1. Create a full backup with SQLite, Chroma, media, and config.
+2. Restore it into an empty checkout.
+3. Run `sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"`.
+4. Run `docker compose -f ops/docker/docker-compose.yml config`.
+5. Start the stack with `docker compose -f ops/docker/docker-compose.yml up -d`.
+6. Confirm `ratatoskr`, `mobile-api`, `redis`, and `chroma` are healthy or
+   intentionally disabled by profile/config.
+7. Open the web/API and verify existing summaries are visible.
+8. Run a semantic search. If Chroma was rebuilt instead of restored, run
+   `python -m app.cli.backfill_chroma_store --rebuild` first.
+9. Open a restored YouTube summary with a `video_file_path` and confirm the
+   file path exists under `data/videos/`, or accept that the media cache was not
+   restored.
+10. Send one known-good URL through the bot or CLI to confirm new writes work.
 
-# Export specific date range
-python -m app.cli.export_summaries \
-  --format json \
-  --start-date 2026-01-01 \
-  --end-date 2026-02-09 \
-  --output summaries_jan.json
-```
+---
 
-### Export to CSV
+## Maintenance Commands
 
-```bash
-# Export summaries as CSV
-sqlite3 data/ratatoskr.db -header -csv \
-  "SELECT id, url, title, created_at FROM summaries;" \
-  > summaries.csv
-```
-
-### Export to Markdown
+Vacuum SQLite during a maintenance window:
 
 ```bash
-# Export summaries as Markdown files
-python -m app.cli.export_summaries --format markdown --output-dir summaries_md/
-
-# One .md file per summary
+docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write
+sqlite3 data/ratatoskr.db "VACUUM;"
+sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
+docker compose -f ops/docker/docker-compose.yml up -d
 ```
+
+Recover a damaged SQLite database into a new file:
+
+```bash
+docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write
+sqlite3 data/ratatoskr.db ".recover" | sqlite3 data/ratatoskr.recovered.db
+sqlite3 data/ratatoskr.recovered.db "PRAGMA integrity_check;"
+mv data/ratatoskr.db data/ratatoskr.corrupted.db
+mv data/ratatoskr.recovered.db data/ratatoskr.db
+docker compose -f ops/docker/docker-compose.yml up -d
+```
+
+If recovery fails, restore the newest backup that passes `PRAGMA integrity_check`.
 
 ---
 
 ## See Also
 
-- [DEPLOYMENT.md](../DEPLOYMENT.md) - Production deployment
-- [How to Migrate Versions](migrate-versions.md) - Upgrade procedures
-- [TROUBLESHOOTING § Database Issues](../TROUBLESHOOTING.md#database-issues)
-
----
-
-**Last Updated:** 2026-02-09
+- [Deployment](../DEPLOYMENT.md)
+- [How to Migrate Versions](migrate-versions.md)
+- [ChromaDB Vector Search](setup-chroma-vector-search.md)
+- [YouTube Downloads](configure-youtube-download.md)
+- [Config File Reference](../reference/config-file.md)

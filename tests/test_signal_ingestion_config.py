@@ -20,9 +20,9 @@ def test_signal_ingestion_parses_yaml_style_lists() -> None:
     cfg = SignalIngestionConfig(
         enabled=True,
         hn_enabled=True,
-        hn_feeds=["top", "new"],
+        hn_feeds=["top", "new"],  # type: ignore[arg-type]
         reddit_enabled=True,
-        reddit_subreddits=["r/selfhosted", "python"],
+        reddit_subreddits=["r/selfhosted", "python"],  # type: ignore[arg-type]
     )
 
     assert cfg.any_enabled is True

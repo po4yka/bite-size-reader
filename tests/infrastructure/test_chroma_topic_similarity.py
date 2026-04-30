@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import pytest
 
 from app.application.services.signal_scoring import SignalCandidate
 from app.infrastructure.search.chroma_topic_similarity import ChromaTopicSimilarityAdapter
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 class _FakeVectorStore:
@@ -20,7 +24,12 @@ class _FakeVectorStore:
     def health_check(self) -> bool:
         return self.available
 
-    def query(self, query_vector, filters, top_k):
+    def query(
+        self,
+        query_vector: Sequence[float],
+        filters: dict[str, Any] | None,
+        top_k: int,
+    ) -> dict[str, Any]:
         self.queries.append((list(query_vector), dict(filters or {}), top_k))
         return self.raw
 
@@ -55,7 +64,12 @@ async def test_chroma_topic_similarity_queries_candidate_text() -> None:
 @pytest.mark.asyncio
 async def test_chroma_topic_similarity_returns_zero_when_query_fails() -> None:
     class BrokenStore(_FakeVectorStore):
-        def query(self, query_vector, filters, top_k):
+        def query(
+            self,
+            query_vector: Sequence[float],
+            filters: dict[str, Any] | None,
+            top_k: int,
+        ) -> dict[str, Any]:
             raise RuntimeError("chroma down")
 
     embedding = SimpleNamespace(generate_embedding=AsyncMock(return_value=[0.1]))

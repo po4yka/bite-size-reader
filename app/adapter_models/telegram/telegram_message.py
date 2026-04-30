@@ -252,7 +252,9 @@ def _build_parsed_message_kwargs(message: Any) -> dict[str, Any]:
         "via_bot_user_id": getattr(message, "via_bot_user_id", None),
         "effect_id": getattr(message, "effect_id", None),
         "link_preview_options": (
-            _telegram_obj_to_dict(link_preview_options) if link_preview_options is not None else None
+            _telegram_obj_to_dict(link_preview_options)
+            if link_preview_options is not None
+            else None
         ),
         "show_caption_above_media": getattr(message, "show_caption_above_media", None),
         "media_type": media_type,

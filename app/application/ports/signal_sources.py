@@ -80,11 +80,46 @@ class SignalSourceRepositoryPort(Protocol):
     async def async_list_source_health(self, *, user_id: int) -> list[dict[str, Any]]:
         """List source health rows visible to a user."""
 
-    async def async_list_user_signals(self, user_id: int) -> list[dict[str, Any]]:
+    async def async_list_user_signals(
+        self,
+        user_id: int,
+        *,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
         """List scored signal candidates visible to a user."""
+
+    async def async_upsert_topic(
+        self,
+        *,
+        user_id: int,
+        name: str,
+        description: str | None = None,
+        weight: float = 1.0,
+        embedding_ref: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create or update a user's topic preference."""
 
     async def async_get_user_signal(self, *, user_id: int, signal_id: int) -> dict[str, Any] | None:
         """Return one scored signal candidate visible to a user."""
+
+    async def async_record_user_signal(
+        self,
+        *,
+        user_id: int,
+        feed_item_id: int,
+        topic_id: int | None = None,
+        status: str = "candidate",
+        heuristic_score: float | None = None,
+        llm_score: float | None = None,
+        final_score: float | None = None,
+        evidence: dict[str, Any] | None = None,
+        filter_stage: str = "heuristic",
+        llm_judge: dict[str, Any] | None = None,
+        llm_cost_usd: float | None = None,
+    ) -> dict[str, Any]:
+        """Persist one scored signal candidate."""
 
     async def async_update_user_signal_status(
         self,

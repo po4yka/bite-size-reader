@@ -205,7 +205,7 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 | `SCRAPER_DEFUDDLE_TIMEOUT_SEC` | `20` | Defuddle request timeout (seconds) |
 | `SCRAPER_DEFUDDLE_API_BASE_URL` | `https://defuddle.md` | Defuddle API base URL |
 | `FIRECRAWL_SELF_HOSTED_ENABLED` | `false` | Enable self-hosted Firecrawl provider |
-| `FIRECRAWL_SELF_HOSTED_URL` | `http://firecrawl:3002` | Self-hosted Firecrawl base URL |
+| `FIRECRAWL_SELF_HOSTED_URL` | `http://firecrawl-api:3002` | Self-hosted Firecrawl base URL |
 | `FIRECRAWL_SELF_HOSTED_API_KEY` | `fc-ratatoskr-local` | Self-hosted Firecrawl API key |
 | `SCRAPER_FIRECRAWL_TIMEOUT_SEC` | `90` | Self-hosted Firecrawl timeout for article chain |
 | `SCRAPER_FIRECRAWL_WAIT_FOR_MS` | `3000` | Self-hosted Firecrawl wait-for milliseconds for article chain |

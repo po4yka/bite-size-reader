@@ -172,6 +172,10 @@ def test_create_mcp_server_registers_expected_tools_and_resources(
         "chroma_health",
         "chroma_index_stats",
         "chroma_sync_gap",
+        "list_signal_sources",
+        "list_user_signals",
+        "set_signal_source_active",
+        "update_signal_feedback",
     }
     assert set(mcp.registered_resources) == {
         "ratatoskr://aggregations/recent",
@@ -189,6 +193,8 @@ def test_create_mcp_server_registers_expected_tools_and_resources(
         "ratatoskr://chroma/health",
         "ratatoskr://chroma/index-stats",
         "ratatoskr://chroma/sync-gap",
+        "ratatoskr://signals/recent",
+        "ratatoskr://sources",
     }
 
 

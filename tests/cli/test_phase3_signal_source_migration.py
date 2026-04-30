@@ -81,8 +81,7 @@ def test_signal_source_migration_backfills_legacy_rss_and_channel_rows(tmp_path)
 
         assert Subscription.get(Subscription.legacy_rss_subscription == 1).source == rss_source
         assert (
-            Subscription.get(Subscription.legacy_channel_subscription == 1).source
-            == channel_source
+            Subscription.get(Subscription.legacy_channel_subscription == 1).source == channel_source
         )
 
         assert FeedItem.get(FeedItem.legacy_rss_item == rss_item.id).canonical_url == rss_item.url

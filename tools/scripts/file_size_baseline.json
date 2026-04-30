@@ -1,10 +1,9 @@
 {
-  ".desloppify_t2.json": 2468,
   "app/mcp/server.py": 2247,
-  "docs/openapi/mobile_api.json": 13974,
-  "docs/openapi/mobile_api.yaml": 8916,
+  "docs/openapi/mobile_api.json": 14578,
+  "docs/openapi/mobile_api.yaml": 9293,
   "ops/monitoring/grafana/provisioning/dashboards/ratatoskr-overview.json": 1666,
   "uv.lock": 4792,
   "clients/web/package-lock.json": 7326,
-  "clients/web/src/api/generated.ts": 8819
+  "clients/web/src/api/generated.ts": 9183
 }

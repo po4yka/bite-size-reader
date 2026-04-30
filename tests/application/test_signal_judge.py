@@ -29,6 +29,9 @@ class _FakeLLM:
             model="test-model",
         )
 
+    async def aclose(self) -> None:
+        return None
+
 
 @pytest.mark.asyncio
 async def test_signal_judge_calls_llm_only_for_capped_candidates() -> None:
@@ -80,7 +83,11 @@ async def test_signal_judge_retries_invalid_json_once() -> None:
     class RetryLLM(_FakeLLM):
         async def chat(self, messages, **kwargs):
             self.calls.append({"messages": messages, **kwargs})
-            text = "not json" if len(self.calls) == 1 else '{"relevance_score": 0.4, "decision": "skip", "reason": "weak"}'
+            text = (
+                "not json"
+                if len(self.calls) == 1
+                else '{"relevance_score": 0.4, "decision": "skip", "reason": "weak"}'
+            )
             return LLMCallResult(status=CallStatus.OK, response_text=text, cost_usd=0.0)
 
     llm = RetryLLM("")

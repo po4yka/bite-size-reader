@@ -52,9 +52,7 @@ async def test_init_session_promotes_pending_session_after_success(
     await handler._promote_pending_session(state)
 
     assert final.read_text(encoding="utf-8") == "new"
-    assert (session_dir / "digest_userbot.legacy.bak.session").read_text(
-        encoding="utf-8"
-    ) == "old"
+    assert (session_dir / "digest_userbot.legacy.bak.session").read_text(encoding="utf-8") == "old"
 
 
 def test_active_app_code_has_no_pyrogram_imports() -> None:

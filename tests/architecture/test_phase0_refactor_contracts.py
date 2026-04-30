@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -44,9 +43,7 @@ def test_active_web_contracts_do_not_use_carbon_client_id() -> None:
     ]
 
     offenders = [
-        relative_path
-        for relative_path in checked_paths
-        if "web-carbon-v1" in _read(relative_path)
+        relative_path for relative_path in checked_paths if "web-carbon-v1" in _read(relative_path)
     ]
 
     assert offenders == []
@@ -74,11 +71,7 @@ def test_deployment_docs_match_current_firecrawl_compose_shape() -> None:
         "Self-hosted Firecrawl services in `ops/docker/docker-compose.yml`",
     ]
 
-    offenders = [
-        claim
-        for claim in forbidden_claims
-        if claim in deployment or claim in scraper_adr
-    ]
+    offenders = [claim for claim in forbidden_claims if claim in deployment or claim in scraper_adr]
 
     assert offenders == []
 

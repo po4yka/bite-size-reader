@@ -397,7 +397,9 @@ class SqliteSignalSourceRepositoryAdapter(SqliteBaseRepository):
                 )
             return result
 
-        return await self._execute(_query, operation_name="list_signal_source_health", read_only=True)
+        return await self._execute(
+            _query, operation_name="list_signal_source_health", read_only=True
+        )
 
     async def async_list_user_signals(
         self,

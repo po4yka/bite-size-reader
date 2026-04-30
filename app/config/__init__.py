@@ -15,10 +15,10 @@ from .media import AttachmentConfig, YouTubeConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
 from .rss import RSSConfig
-from .signal_ingestion import SignalIngestionConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
 from .settings import AppConfig, Config, ConfigHelper, Settings, clear_config_cache, load_config
+from .signal_ingestion import SignalIngestionConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig
 from .tts import ElevenLabsConfig
 from .twitter import TwitterConfig

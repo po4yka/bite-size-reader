@@ -191,7 +191,9 @@ async def test_run_rss_poll_invokes_signal_worker(monkeypatch) -> None:
     monkeypatch.setitem(
         sys.modules,
         "app.adapters.rss.feed_poller",
-        SimpleNamespace(poll_all_feeds=AsyncMock(return_value={"new_item_ids": [], "new_items": 0})),
+        SimpleNamespace(
+            poll_all_feeds=AsyncMock(return_value={"new_item_ids": [], "new_items": 0})
+        ),
     )
     signal_worker = SimpleNamespace(run_once=AsyncMock(return_value={"persisted": 2}))
     service = scheduler_module.SchedulerService(
@@ -211,7 +213,9 @@ async def test_run_rss_poll_invokes_optional_source_ingestion_runner(monkeypatch
     monkeypatch.setitem(
         sys.modules,
         "app.adapters.rss.feed_poller",
-        SimpleNamespace(poll_all_feeds=AsyncMock(return_value={"new_item_ids": [], "new_items": 0})),
+        SimpleNamespace(
+            poll_all_feeds=AsyncMock(return_value={"new_item_ids": [], "new_items": 0})
+        ),
     )
     runner = SimpleNamespace(run_once=AsyncMock(return_value={"items": 3}))
     service = scheduler_module.SchedulerService(

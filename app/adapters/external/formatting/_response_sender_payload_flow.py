@@ -6,8 +6,8 @@ import io
 import json
 from typing import Any
 
-from app.api.models.responses import success_response
 from app.adapters.telegram.telethon_compat import InlineKeyboardButton, InlineKeyboardMarkup
+from app.api.models.responses import success_response
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
 

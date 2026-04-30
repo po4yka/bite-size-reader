@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 TELETHON_AVAILABLE = True
 try:  # pragma: no cover - exercised when dependency is installed
     from telethon import Button, TelegramClient, events, functions, types
-    from telethon.errors import SessionPasswordNeededError
+    from telethon.errors import SessionPasswordNeededError as _SessionPasswordNeededError
 except Exception:  # pragma: no cover - allow import in minimal test envs
     Button = None
     TelegramClient = None
@@ -22,10 +22,12 @@ except Exception:  # pragma: no cover - allow import in minimal test envs
     functions = None
     types = None
 
-    class SessionPasswordNeededError(Exception):
+    class _SessionPasswordNeededError(Exception):  # type: ignore[no-redef]
         """Fallback exception used when Telethon is unavailable."""
 
     TELETHON_AVAILABLE = False
+
+SessionPasswordNeededError = _SessionPasswordNeededError
 
 
 class ParseMode(StrEnum):
@@ -112,8 +114,7 @@ def to_telethon_buttons(reply_markup: Any) -> Any:
         return rows
     if isinstance(reply_markup, ReplyKeyboardMarkup):
         return [
-            [_reply_button_to_telethon(button) for button in row]
-            for row in reply_markup.keyboard
+            [_reply_button_to_telethon(button) for button in row] for row in reply_markup.keyboard
         ]
     if isinstance(reply_markup, ReplyKeyboardRemove):
         return Button.clear()
@@ -398,7 +399,9 @@ class TelethonMessageAdapter:
             **_filter_send_kwargs(kwargs),
         )
 
-    async def reply_document(self, document: Any, *, caption: str | None = None, **kwargs: Any) -> Any:
+    async def reply_document(
+        self, document: Any, *, caption: str | None = None, **kwargs: Any
+    ) -> Any:
         return await self._client.raw.send_file(
             self.chat.id,
             document,
@@ -415,7 +418,9 @@ class TelethonCallbackQueryAdapter:
         self._bot = bot
         data = getattr(event, "data", b"")
         self.data = data.decode("utf-8") if isinstance(data, bytes) else str(data)
-        self.message = TelethonMessageAdapter(event, bot) if getattr(event, "message", None) else None
+        self.message = (
+            TelethonMessageAdapter(event, bot) if getattr(event, "message", None) else None
+        )
         self.from_user = _Object(id=getattr(event, "sender_id", None))
 
     async def answer(self, text: str | None = None, show_alert: bool = False) -> None:

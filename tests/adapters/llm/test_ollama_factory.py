@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any, cast
 
 from app.adapters.llm.factory import LLMClientFactory
 
@@ -21,7 +22,7 @@ def test_factory_creates_openai_compatible_cloud_ollama_client() -> None:
         ),
     )
 
-    client = LLMClientFactory.create("ollama", config)  # type: ignore[arg-type]
+    client = cast("Any", LLMClientFactory.create("ollama", config))  # type: ignore[arg-type]
 
     assert client.provider_name == "ollama"
     assert client._base_url == "https://ollama.example.com/v1"

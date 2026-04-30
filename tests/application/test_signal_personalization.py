@@ -18,7 +18,7 @@ class _FakeVectorStore:
     user_scope = "local"
 
     def __init__(self) -> None:
-        self.upserts = []
+        self.upserts: list[dict] = []
 
     def health_check(self) -> bool:
         return True

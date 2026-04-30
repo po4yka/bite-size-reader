@@ -133,7 +133,10 @@ class URLSummaryDeliveryService:
         if not correlation_id:
             return None
         try:
-            from app.adapters.telegram.telethon_compat import InlineKeyboardButton, InlineKeyboardMarkup
+            from app.adapters.telegram.telethon_compat import (
+                InlineKeyboardButton,
+                InlineKeyboardMarkup,
+            )
 
             return InlineKeyboardMarkup(
                 [

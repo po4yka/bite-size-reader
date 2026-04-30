@@ -14,7 +14,7 @@ class TestLLMClientFactory:
 
     def test_valid_providers_constant(self) -> None:
         """VALID_PROVIDERS should contain expected values."""
-        assert frozenset({"openrouter", "openai", "anthropic"}) == VALID_PROVIDERS
+        assert frozenset({"openrouter", "openai", "anthropic", "ollama"}) == VALID_PROVIDERS
 
     def test_invalid_provider_raises_value_error(self) -> None:
         """Invalid provider should raise ValueError."""

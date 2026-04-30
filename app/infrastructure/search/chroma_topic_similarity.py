@@ -3,16 +3,29 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from app.application.services.signal_scoring import SignalCandidate
     from app.infrastructure.embedding.embedding_protocol import EmbeddingServiceProtocol
-    from app.infrastructure.vector.chroma_store import ChromaVectorStore
 
 logger = get_logger(__name__)
+
+
+class ChromaQueryStore(Protocol):
+    """Subset of the Chroma store used by signal topic similarity."""
+
+    def query(
+        self,
+        query_vector: Sequence[float],
+        filters: dict[str, Any] | None,
+        top_k: int,
+    ) -> dict[str, Any]:
+        """Query similar vectors."""
 
 
 class ChromaTopicSimilarityAdapter:
@@ -21,7 +34,7 @@ class ChromaTopicSimilarityAdapter:
     def __init__(
         self,
         *,
-        vector_store: ChromaVectorStore,
+        vector_store: ChromaQueryStore,
         embedding_service: EmbeddingServiceProtocol,
         user_id: int | None = None,
         top_k: int = 8,

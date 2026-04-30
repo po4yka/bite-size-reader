@@ -125,8 +125,8 @@ class DigestTriggerService:
         from app.adapters.digest.digest_service import DigestService
         from app.adapters.digest.formatter import DigestFormatter
         from app.adapters.digest.userbot_client import UserbotClient
-        from app.adapters.telegram.telethon_compat import TelethonBotClient
         from app.adapters.openrouter.openrouter_client import OpenRouterClient
+        from app.adapters.telegram.telethon_compat import TelethonBotClient
         from app.config import load_config
 
         session_dir = Path("/data")

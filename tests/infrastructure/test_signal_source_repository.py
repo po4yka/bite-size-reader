@@ -189,16 +189,22 @@ async def test_signal_repository_sets_user_source_active_with_ownership(repo):
     source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
     await repo.async_subscribe(user_id=1001, source_id=source["id"])
 
-    assert await repo.async_set_user_source_active(
-        user_id=2002,
-        source_id=source["id"],
-        is_active=False,
-    ) is False
-    assert await repo.async_set_user_source_active(
-        user_id=1001,
-        source_id=source["id"],
-        is_active=False,
-    ) is True
+    assert (
+        await repo.async_set_user_source_active(
+            user_id=2002,
+            source_id=source["id"],
+            is_active=False,
+        )
+        is False
+    )
+    assert (
+        await repo.async_set_user_source_active(
+            user_id=1001,
+            source_id=source["id"],
+            is_active=False,
+        )
+        is True
+    )
 
     reloaded = await repo.async_get_source(source["id"])
     assert reloaded["is_active"] is False

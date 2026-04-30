@@ -28,8 +28,8 @@ def register_resources(
     semantic_service: SemanticSearchService,
     signal_service: SignalMcpService | None = None,
 ) -> None:
-    if signal_service is None:
-        signal_service = _NullSignalService()
+    signal_runtime: Any = signal_service if signal_service is not None else _NullSignalService()
+
     @mcp.resource("ratatoskr://aggregations/recent")
     async def recent_aggregations_resource() -> str:
         """Recent aggregation bundles for the scoped MCP user."""
@@ -112,12 +112,12 @@ def register_resources(
     @mcp.resource("ratatoskr://signals/recent")
     def recent_signals_resource() -> str:
         """Recent signal candidates for the scoped MCP user."""
-        return to_json(signal_service.list_signals(limit=20))
+        return to_json(signal_runtime.list_signals(limit=20))
 
     @mcp.resource("ratatoskr://sources")
     def signal_sources_resource() -> str:
         """Signal source catalog."""
-        return to_json(signal_service.list_sources(limit=100))
+        return to_json(signal_runtime.list_sources(limit=100))
 
 
 class _NullSignalService:

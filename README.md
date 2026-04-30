@@ -55,8 +55,8 @@ Optional scraper, YouTube, Twitter/X, MCP, and provider tuning now live in
 
 Compose profiles:
 
-- `with-firecrawl` starts self-hosted Firecrawl and its dependencies.
-- `with-cloud-ollama` configures a remote OpenAI-compatible Ollama endpoint; it does not start a local model server.
+- `with-firecrawl` starts self-hosted Firecrawl and its dependencies; set `FIRECRAWL_SELF_HOSTED_ENABLED=true` to route Ratatoskr through it.
+- `with-cloud-ollama` adds a remote OpenAI-compatible Ollama reachability check; set `LLM_PROVIDER=ollama` and `OLLAMA_*` values to use it. It does not start a local model server.
 - `with-monitoring` starts Prometheus, Grafana, Loki, Promtail, and node-exporter.
 - `mcp`, `mcp-write`, and `mcp-public` start the optional MCP server variants.
 

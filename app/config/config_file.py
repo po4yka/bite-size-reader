@@ -90,7 +90,9 @@ def load_ratatoskr_yaml(
     Unknown sections and keys are ignored deliberately. The resulting dict is
     fed into the existing Settings validator below ``.env`` and process env.
     """
-    config_path = next((candidate for candidate in _candidate_paths(path) if candidate.is_file()), None)
+    config_path = next(
+        (candidate for candidate in _candidate_paths(path) if candidate.is_file()), None
+    )
     if config_path is None:
         return {}
 

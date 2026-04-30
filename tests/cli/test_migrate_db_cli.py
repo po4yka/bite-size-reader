@@ -31,9 +31,7 @@ def test_main_runs_shared_migration_flow_once(monkeypatch) -> None:
     assert captured["db"].migrate_calls == 1
 
 
-def test_migrate_db_status_reports_migration_state(
-    monkeypatch, tmp_path: Path, capsys
-) -> None:
+def test_migrate_db_status_reports_migration_state(monkeypatch, tmp_path: Path, capsys) -> None:
     db_path = tmp_path / "status.sqlite"
     monkeypatch.setattr(sys, "argv", ["migrate_db", "--status", str(db_path)])
 

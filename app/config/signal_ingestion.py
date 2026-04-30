@@ -45,7 +45,11 @@ class SignalIngestionConfig(BaseModel):
         return tuple(part.strip() for part in self.hn_feeds.split(",") if part.strip())
 
     def reddit_names(self) -> tuple[str, ...]:
-        return tuple(part.strip().removeprefix("r/") for part in self.reddit_subreddits.split(",") if part.strip())
+        return tuple(
+            part.strip().removeprefix("r/")
+            for part in self.reddit_subreddits.split(",")
+            if part.strip()
+        )
 
     @property
     def any_enabled(self) -> bool:

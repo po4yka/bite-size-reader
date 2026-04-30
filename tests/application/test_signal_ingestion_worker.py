@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from app.application.services.signal_ingestion_worker import SignalIngestionWorker
 from app.application.services.signal_scoring import SignalCandidate, SignalScoringService
 from app.core.time_utils import UTC
+
+if TYPE_CHECKING:
+    from app.application.ports.signal_sources import SignalSourceRepositoryPort
 
 
 class _FakeTopicSimilarity:
@@ -62,7 +66,7 @@ class _FakeSignalRepository:
 async def test_signal_ingestion_worker_scores_and_persists_candidates() -> None:
     repo = _FakeSignalRepository()
     worker = SignalIngestionWorker(
-        repository=repo,
+        repository=cast("SignalSourceRepositoryPort", repo),
         scorer=SignalScoringService(topic_similarity=_FakeTopicSimilarity()),
     )
 
@@ -86,7 +90,7 @@ async def test_signal_ingestion_worker_disables_when_scoring_is_not_ready() -> N
 
     repo = _FakeSignalRepository()
     worker = SignalIngestionWorker(
-        repository=repo,
+        repository=cast("SignalSourceRepositoryPort", repo),
         scorer=SignalScoringService(topic_similarity=NotReadySimilarity()),
     )
 
@@ -120,7 +124,7 @@ async def test_signal_ingestion_worker_applies_llm_judge_decisions() -> None:
 
     repo = _FakeSignalRepository()
     worker = SignalIngestionWorker(
-        repository=repo,
+        repository=cast("SignalSourceRepositoryPort", repo),
         scorer=SignalScoringService(topic_similarity=_FakeTopicSimilarity()),
         judge=Judge(),
     )

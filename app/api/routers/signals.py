@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.api.dependencies.database import get_session_manager
+from app.api.dependencies.signals import get_signal_source_repository
 from app.api.models.responses import success_response
 from app.api.models.signals import (  # noqa: TC001
     SignalFeedbackRequest,
@@ -16,9 +16,9 @@ from app.api.models.signals import (  # noqa: TC001
 from app.api.routers.auth import get_current_user
 from app.application.services.signal_personalization import SignalPersonalizationService
 from app.di.api import resolve_api_runtime
-from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
-    SqliteSignalSourceRepositoryAdapter,
-)
+
+if TYPE_CHECKING:
+    from app.application.ports.signal_sources import SignalSourceRepositoryPort
 
 router = APIRouter()
 
@@ -27,20 +27,11 @@ def _user_id(user: dict[str, Any]) -> int:
     return int(user["user_id"])
 
 
-def _repo(request: Request) -> SqliteSignalSourceRepositoryAdapter:
-    try:
-        db = resolve_api_runtime(request).db
-    except RuntimeError:
-        db = get_session_manager(request)
-    return SqliteSignalSourceRepositoryAdapter(db)
-
-
 @router.get("")
 async def list_signals(
-    request: Request,
+    repo: SignalSourceRepositoryPort = Depends(get_signal_source_repository),
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    repo = _repo(request)
     signals = await repo.async_list_user_signals(_user_id(user), limit=50)
     return success_response({"signals": signals})
 
@@ -48,9 +39,9 @@ async def list_signals(
 @router.get("/health")
 async def signal_health(
     request: Request,
+    repo: SignalSourceRepositoryPort = Depends(get_signal_source_repository),
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    repo = _repo(request)
     sources = await repo.async_list_source_health(user_id=_user_id(user))
     chroma = {"ready": False, "required": True, "collection": None}
     try:
@@ -59,8 +50,10 @@ async def signal_health(
         ready = False
         if vector_store is not None:
             health_check = getattr(vector_store, "health_check", None)
-            ready = bool(health_check()) if callable(health_check) else bool(
-                getattr(vector_store, "available", False)
+            ready = (
+                bool(health_check())
+                if callable(health_check)
+                else bool(getattr(vector_store, "available", False))
             )
         chroma = {
             "ready": ready,
@@ -83,10 +76,9 @@ async def signal_health(
 
 @router.get("/sources/health")
 async def source_health(
-    request: Request,
+    repo: SignalSourceRepositoryPort = Depends(get_signal_source_repository),
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    repo = _repo(request)
     rows = await repo.async_list_source_health(user_id=_user_id(user))
     return success_response({"sources": rows})
 
@@ -95,10 +87,9 @@ async def source_health(
 async def set_source_active(
     source_id: int,
     body: SourceActiveRequest,
-    request: Request,
+    repo: SignalSourceRepositoryPort = Depends(get_signal_source_repository),
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    repo = _repo(request)
     updated = await repo.async_set_user_source_active(
         user_id=_user_id(user),
         source_id=source_id,
@@ -114,9 +105,9 @@ async def update_signal_feedback(
     signal_id: int,
     body: SignalFeedbackRequest,
     request: Request,
+    repo: SignalSourceRepositoryPort = Depends(get_signal_source_repository),
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    repo = _repo(request)
     if body.action == "hide_source":
         updated = await repo.async_hide_signal_source(user_id=_user_id(user), signal_id=signal_id)
     elif body.action == "boost_topic":
@@ -134,7 +125,9 @@ async def update_signal_feedback(
             status=status,
         )
         if updated and body.action == "like":
-            await _embed_liked_signal(request=request, repo=repo, user_id=_user_id(user), signal_id=signal_id)
+            await _embed_liked_signal(
+                request=request, repo=repo, user_id=_user_id(user), signal_id=signal_id
+            )
     if not updated:
         raise HTTPException(status_code=404, detail="Signal not found")
     return success_response({"updated": True})
@@ -144,9 +137,9 @@ async def update_signal_feedback(
 async def upsert_topic(
     body: TopicPreferenceRequest,
     request: Request,
+    repo: SignalSourceRepositoryPort = Depends(get_signal_source_repository),
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    repo = _repo(request)
     user_id = _user_id(user)
     topic = await repo.async_upsert_topic(
         user_id=user_id,
@@ -186,7 +179,7 @@ async def upsert_topic(
 async def _embed_liked_signal(
     *,
     request: Request,
-    repo: SqliteSignalSourceRepositoryAdapter,
+    repo: SignalSourceRepositoryPort,
     user_id: int,
     signal_id: int,
 ) -> None:

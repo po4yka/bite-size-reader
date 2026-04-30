@@ -1,7 +1,7 @@
 # Mobile API Specification (Ratatoskr)
 
-- Version: 1.2
-- Last Updated: 2026-04-12
+- Version: 1.3
+- Last Updated: 2026-04-30
 - Canonical machine-readable contract: `docs/openapi/mobile_api.yaml` and `docs/openapi/mobile_api.json`
 
 ## Overview
@@ -12,6 +12,7 @@ This document is a developer-facing summary of the mobile API implemented by the
 - Primary clients: mobile apps (Android/iOS/KMP), Telegram Mini App, web interface (`clients/web/`)
 - Envelope contract: all JSON business responses use `success`, `data`, `meta`, and standardized `error`
 - Mixed-source aggregation surface: `/v1/aggregations`
+- Phase 3 signal/source triage surface: `/v1/signals`
 - OpenAPI source of truth: `docs/openapi/mobile_api.yaml`
 
 The same FastAPI host also serves the web SPA:
@@ -431,6 +432,46 @@ Execution failures:
 
 - `500 PROCESSING_ERROR` with `details.reason_code=AGGREGATION_TIMEOUT` when server-side aggregation exceeds the processing window
 - `500 PROCESSING_ERROR` with `details.reason_code=AGGREGATION_UPSTREAM_FAILURE` when no source extraction or synthesis output could be completed successfully
+
+### Signal Scoring and Sources
+
+- `GET /v1/signals`
+- `GET /v1/signals/health`
+- `GET /v1/signals/sources/health`
+- `POST /v1/signals/sources/{source_id}/active`
+- `POST /v1/signals/{signal_id}/feedback`
+- `POST /v1/signals/topics`
+
+`GET /v1/signals` returns the authenticated user's ranked signal queue. Signal rows include scoring/status fields plus source and topic context such as `final_score`, `filter_stage`, `feed_item_title`, `feed_item_url`, `source_kind`, `source_title`, and `topic_name`.
+
+`GET /v1/signals/health` returns Phase 3 readiness for signal scoring:
+
+- `chroma.ready`: whether the vector store health check currently passes
+- `chroma.required`: whether vector search is required by runtime config
+- `chroma.collection`: active vector collection name when available
+- `sources.total`, `sources.active`, and `sources.errored`: source health counts visible to the user
+
+`GET /v1/signals/sources/health` returns per-source rows for the authenticated user's subscriptions. Rows include source identity, active state, fetch error counts, last fetch/success timestamps, subscription active state, cadence, and next fetch time.
+
+`POST /v1/signals/sources/{source_id}/active` enables or pauses an existing subscribed source:
+
+```json
+{
+  "is_active": false
+}
+```
+
+`POST /v1/signals/{signal_id}/feedback` records one user action. Allowed `action` values are `like`, `dislike`, `skip`, `hide_source`, `queue`, and `boost_topic`.
+
+`POST /v1/signals/topics` creates or updates a single-user topic preference:
+
+```json
+{
+  "name": "local-first AI",
+  "description": "Self-hosted agents, retrieval, and private inference",
+  "weight": 1.5
+}
+```
 
 ### Search and Topics
 

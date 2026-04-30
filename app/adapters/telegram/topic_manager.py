@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     class Client(Protocol):
         pass
 
+
 logger = get_logger(__name__)
 
 # Default forum topic categories with associated keyword patterns.

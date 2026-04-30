@@ -118,8 +118,9 @@ mcp:
   weak/invalid JSON. Prefer models that advertise OpenAI-compatible chat
   completions and test summaries before using them unattended.
 - Firecrawl Cloud is optional. The scraper chain can run with Scrapling,
-  Defuddle, Playwright, Crawlee, and direct HTML providers; Phase 2 adds an
-  in-compose self-hosted Firecrawl profile.
+  Defuddle, Playwright, Crawlee, and direct HTML providers; the
+  `with-firecrawl` Docker Compose profile starts an in-compose self-hosted
+  Firecrawl stack at `http://firecrawl-api:3002`.
 - Signal ingestion optional sources are disabled unless `signal_ingestion.enabled`
   and the per-source flag are both true. Hacker News uses the official Firebase
   API and has no credentials. Reddit uses public subreddit JSON with a default

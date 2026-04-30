@@ -88,7 +88,9 @@ class RedditIngester:
             raise TransientSourceError(f"Reddit API error: {response.status_code}") from exc
 
         payload = response.json()
-        children = ((payload.get("data") or {}).get("children") or []) if isinstance(payload, dict) else []
+        children = (
+            ((payload.get("data") or {}).get("children") or []) if isinstance(payload, dict) else []
+        )
         items = [
             self._normalize_child(child.get("data") or {})
             for child in children
@@ -111,7 +113,9 @@ class RedditIngester:
             msg = "Reddit post missing id"
             raise TransientSourceError(msg)
         permalink = str(raw.get("permalink") or "")
-        comments_url = f"https://www.reddit.com{permalink}" if permalink.startswith("/") else permalink
+        comments_url = (
+            f"https://www.reddit.com{permalink}" if permalink.startswith("/") else permalink
+        )
         outbound_url = raw.get("url_overridden_by_dest") or raw.get("url") or comments_url
         try:
             canonical_url = normalize_url(str(outbound_url))

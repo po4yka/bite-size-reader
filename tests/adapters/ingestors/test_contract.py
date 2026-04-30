@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -12,6 +13,9 @@ from app.application.ports.source_ingestors import (
     SourceIngester,
 )
 from app.core.time_utils import UTC
+
+if TYPE_CHECKING:
+    from app.application.ports.signal_sources import SignalSourceRepositoryPort
 
 
 class _FakeRepository:
@@ -80,7 +84,7 @@ def test_source_ingester_protocol_is_runtime_checkable() -> None:
 async def test_runner_persists_normalized_items_and_subscriptions() -> None:
     repo = _FakeRepository()
     runner = SourceIngestionRunner(
-        repository=repo,
+        repository=cast("SignalSourceRepositoryPort", repo),
         ingesters=[_FakeIngester()],
         subscriber_user_ids=[1001],
     )

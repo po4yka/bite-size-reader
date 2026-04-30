@@ -48,8 +48,7 @@ async def export_eval_set(
     status: str | None,
 ) -> int:
     db = DatabaseSessionManager(str(db_path))
-    db.connect()
-    try:
+    with db.connect():
         repo = SqliteSignalSourceRepositoryAdapter(db)
         rows = await repo.async_list_user_signals(user_id, status=status, limit=limit)
         with output_path.open("w", encoding="utf-8") as handle:
@@ -67,8 +66,6 @@ async def export_eval_set(
                 }
                 handle.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
         return len(rows)
-    finally:
-        db.close()
 
 
 def _is_relevant(row: dict[str, Any]) -> bool:

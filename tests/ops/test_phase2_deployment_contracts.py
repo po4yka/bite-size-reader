@@ -3,8 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import yaml
-
+import yaml  # type: ignore[import-untyped]
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -39,7 +38,10 @@ def test_firecrawl_profile_uses_internal_services_not_host_gateway() -> None:
 
     assert "extra_hosts" not in services["ratatoskr"]
     ratatoskr_env = _env_map(services["ratatoskr"])
-    assert ratatoskr_env["FIRECRAWL_SELF_HOSTED_URL"] == "${FIRECRAWL_SELF_HOSTED_URL:-http://firecrawl-api:3002}"
+    assert (
+        ratatoskr_env["FIRECRAWL_SELF_HOSTED_URL"]
+        == "${FIRECRAWL_SELF_HOSTED_URL:-http://firecrawl-api:3002}"
+    )
 
     for name in (
         "firecrawl-api",
@@ -76,9 +78,7 @@ def test_monitoring_profile_is_in_primary_compose_file() -> None:
 
 
 def test_release_workflow_publishes_stable_but_not_latest() -> None:
-    workflow = yaml.safe_load(
-        (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-    )
+    workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8"))
     tags = workflow["jobs"]["push-docker-tag"]["steps"][4]["with"]["tags"]
 
     assert "type=raw,value=stable" in tags

@@ -158,16 +158,16 @@ Acceptance evidence:
 
 Acceptance evidence:
 
-- [x] `docker compose config` succeeds for default and each profile.
-- [x] Default stack starts bot/API/Redis/Chroma.
-- [x] Firecrawl profile starts an internal Firecrawl service without host-gateway.
+- [x] `docker compose config` succeeds for default and each profile. Locally revalidated on 2026-04-30 with Docker Compose v5.1.0 for default, `with-firecrawl`, `with-cloud-ollama`, `with-monitoring`, all MCP profiles, and all profiles combined.
+- [x] Default rendered services are bot/API/Redis/Chroma (`ratatoskr`, `mobile-api`, `redis`, `chroma`) per `docker compose -f ops/docker/docker-compose.yml config --services`.
+- [x] Firecrawl profile renders an internal Firecrawl service stack without host-gateway (`firecrawl-api`, `firecrawl-playwright`, `firecrawl-redis`, `firecrawl-rabbitmq`, `firecrawl-postgres`).
 
 ### 2.2 Firecrawl service integration
 
 - [x] Choose supported Firecrawl image and dependent services.
 - [x] Add Firecrawl API, Redis/Postgres/Playwright/RabbitMQ dependencies only as required by the chosen Firecrawl image.
 - [x] Pin image tags or document update policy.
-- [x] Set `FIRECRAWL_SELF_HOSTED_ENABLED=true` in compose profile.
+- [x] Document `FIRECRAWL_SELF_HOSTED_ENABLED=true` for the self-hosted Firecrawl compose path.
 - [x] Set `FIRECRAWL_SELF_HOSTED_URL` to the internal service name.
 - [x] Align `app/config/scraper.py` defaults with compose behavior.
 - [x] Update scraper diagnostics to clearly show self-hosted Firecrawl availability.
@@ -177,6 +177,7 @@ Acceptance evidence:
 
 - [ ] `python -m app.cli.summary --url <test-url>` succeeds through self-hosted Firecrawl in profile. `[needs verification: requires pulling/running Firecrawl stack]`
 - [x] Diagnostics identify provider order and enabled Firecrawl tier.
+- [x] Locally proven on 2026-04-30: the documented command prefix renders `FIRECRAWL_SELF_HOSTED_ENABLED: "true"` and `FIRECRAWL_SELF_HOSTED_URL: http://firecrawl-api:3002` into the bot service. A bare `--profile with-firecrawl` render starts Firecrawl services but leaves Ratatoskr at `FIRECRAWL_SELF_HOSTED_ENABLED: "0"` by design.
 
 ### 2.3 Cloud Ollama deployment docs
 
@@ -191,6 +192,7 @@ Acceptance evidence:
 
 - [ ] First-summary smoke test passes with a configured cloud Ollama endpoint. `[needs external endpoint]`
 - [x] OpenRouter docs remain the primary path.
+- [x] Locally proven on 2026-04-30: the documented cloud Ollama command renders `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL`, `OLLAMA_API_KEY`, and `OLLAMA_MODEL` into bot/API services, and the profile adds only `cloud-ollama-check` using `curl "$OLLAMA_BASE_URL/models"`; no local Ollama server is started.
 
 ### 2.4 GHCR release tagging
 
@@ -216,6 +218,12 @@ Acceptance evidence:
 Acceptance evidence:
 
 - [x] README links the repeatable "clone to first summary" script.
+- [ ] External clean-host validation steps remaining:
+  1. On a fresh Docker host or VM with Docker daemon running, clone the repo, copy `.env.example` to `.env`, fill Telegram/OpenRouter secrets, and run `docker compose -f ops/docker/docker-compose.yml up -d --build`.
+  2. Record `docker compose -f ops/docker/docker-compose.yml ps`, `docker compose -f ops/docker/docker-compose.yml logs --tail=80 ratatoskr`, and the first successful Telegram summary from an allowed user.
+  3. Repeat with `FIRECRAWL_SELF_HOSTED_ENABLED=true docker compose -f ops/docker/docker-compose.yml --profile with-firecrawl up -d --build`, then run `docker compose -f ops/docker/docker-compose.yml exec ratatoskr python -m app.cli.summary --url https://example.com`.
+  4. If validating cloud Ollama, use a real remote OpenAI-compatible `/v1` endpoint and record `/models` check success plus one first-summary smoke result.
+  5. Capture `docs/assets/clone-to-first-summary.cast` or equivalent, noting host type, network speed, image cache state, elapsed time, and enabled profiles.
 - [ ] At least one external person successfully follows the flow. `[needs verification]`
 
 ## Phase 3 — Signal scoring v0
@@ -568,52 +576,53 @@ Acceptance evidence:
 
 - [ ] Publish GHCR semver and `stable` tags.
 - [ ] Test README quickstart with an external person.
-- [ ] Keep `.env.example` at seven or fewer required assignments.
-- [ ] Document `ratatoskr.yaml` schema and precedence.
+- [x] Keep `.env.example` at seven or fewer required assignments.
+- [x] Document `ratatoskr.yaml` schema and precedence.
 - [ ] Verify default compose reaches first summary in under 10 minutes.
-- [ ] Verify self-hosted Firecrawl docs match compose behavior.
-- [ ] Document OpenRouter primary and cloud Ollama optional provider paths.
+- [x] Verify self-hosted Firecrawl docs match compose behavior.
+- [x] Document OpenRouter primary and cloud Ollama optional provider paths.
 - [ ] Document migration from each prior public version in `CHANGELOG.md`.
-- [ ] Test backup and restore for SQLite, Chroma, Redis expectations, downloaded videos, and config.
+- [ ] Test backup and restore for SQLite, Chroma, Redis expectations, downloaded videos, and config. `[procedure documented in docs/how-to/backup-and-restore.md; still needs an operator-run restore drill before v1 tag]`
 - [x] Complete all-Telethon migration.
 - [ ] Document MCP read/write/search contract for Hermes.
 - [ ] Complete multi-agent adaptation plan.
 - [ ] Remove unintentional Carbon names from active web code.
 - [ ] Align browser extension and CLI docs with auth/client ID contracts.
-- [ ] Regenerate OpenAPI YAML/JSON and mobile API docs for Phase 3 API changes.
-- [ ] Run full CI-equivalent checks before v1 tag.
+- [x] Synchronize OpenAPI YAML/JSON and mobile API docs for Phase 3 API changes.
+- [ ] Run full CI-equivalent checks before v1 tag. `[partial local pass: Python format/lint/type/tests, OpenAPI sync/validation, compose config, and web static/tests pass; live compose up, first summary, and restore drill still need external/runtime validation]`
 
 ## Cross-phase tracking
 
 ### Documentation updates
 
-- [ ] `README.md`
+- [x] `README.md`
 - [ ] `CHANGELOG.md`
 - [ ] `docs/DEPLOYMENT.md`
-- [ ] `docs/environment_variables.md`
-- [ ] `docs/reference/config-file.md`
+- [x] `docs/environment_variables.md`
+- [x] `docs/reference/config-file.md`
 - [ ] `docs/reference/data-model.md`
 - [ ] `docs/reference/frontend-web.md`
 - [ ] `docs/mcp_server.md`
-- [ ] `docs/MOBILE_API_SPEC.md`
-- [ ] `docs/openapi/mobile_api.yaml`
-- [ ] `docs/openapi/mobile_api.json`
+- [x] `docs/MOBILE_API_SPEC.md`
+- [x] `docs/openapi/mobile_api.yaml`
+- [x] `docs/openapi/mobile_api.json`
 - [ ] `docs/how-to/migrate-versions.md`
-- [ ] `docs/how-to/backup-and-restore.md`
+- [x] `docs/how-to/backup-and-restore.md`
 - [ ] `docs/how-to/migrate-from-bite-size-reader.md`
 
 ### Validation commands
 
-- [ ] `make format`
-- [ ] `make lint`
-- [ ] `make type`
-- [ ] `pytest tests/ -m "not slow and not integration"`
-- [ ] `python -m app.cli.migrate_db --status`
+- [x] `make format`
+- [x] `make lint`
+- [x] `make type`
+- [x] `pytest tests/ -m "not slow and not integration"`
+- [x] `python -m app.cli.migrate_db --status data/ratatoskr.db`
 - [ ] `python -m app.cli.summary --url <known-good-url>`
-- [ ] `docker compose -f ops/docker/docker-compose.yml config`
+- [x] `docker compose -f ops/docker/docker-compose.yml config`
 - [ ] `docker compose -f ops/docker/docker-compose.yml up`
-- [ ] `cd clients/web && npm run check:static && npm run test`
-- [ ] OpenAPI sync/regeneration command used by the project
+- [x] `cd clients/web && npm run check:static && npm run test`
+- [x] OpenAPI sync command used by the project: `make check-openapi`
+- [ ] OpenAPI YAML/JSON regeneration command is not defined in the project. Current contract is hand-maintained `docs/openapi/mobile_api.yaml` mirrored to JSON and guarded by `make check-openapi`. Next step: add a documented exporter command or script that writes both `docs/openapi/mobile_api.yaml` and `docs/openapi/mobile_api.json`, then wire it into `Makefile`.
 
 ### Open decisions still requiring maintainer input
 
