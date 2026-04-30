@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "generate:api": "openapi-typescript ../../docs/openapi/mobile_api.yaml -o src/api/generated.ts",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "chromatic": "chromatic --exit-zero-on-changes --build-script-name=build-storybook"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.95.2",
@@ -45,6 +46,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "@vitest/browser-playwright": "^4.1.1",
     "@vitest/coverage-v8": "^4.1.1",
+    "chromatic": "^16.6.3",
     "eslint": "^10.1.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",

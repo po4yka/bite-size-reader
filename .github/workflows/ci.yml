@@ -168,6 +168,85 @@ jobs:
           path: clients/web/storybook-static
           retention-days: 7
 
+  web-chromatic:
+    name: Web Chromatic (Storybook Visual Regression)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+    defaults:
+      run:
+        working-directory: clients/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: clients/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Publish to Chromatic
+        uses: chromaui/action@v11
+        with:
+          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          workingDir: clients/web
+          buildScriptName: build-storybook
+          exitZeroOnChanges: true
+        continue-on-error: true
+
+  web-playwright-visual:
+    name: Web Playwright Visual Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: clients/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: clients/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Build web frontend
+        run: npm run build
+
+      - name: Run Playwright visual tests
+        run: npm run test:e2e -- mobile-routes
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: clients/web/playwright-report/
+          retention-days: 14
+
+      - name: Upload screenshot diffs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-screenshot-diffs-${{ github.run_id }}
+          path: clients/web/test-results/
+          retention-days: 14
+
   web-build:
     name: Web Build
     runs-on: ubuntu-latest

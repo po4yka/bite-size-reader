@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Web frontend — visual regression CI (Phase 9)
+
+Adds Chromatic (component-level, Storybook-based) and Playwright (route-level,
+screenshot diff) visual-regression CI jobs to the Frost web frontend pipeline;
+see `docs/reference/visual-regression.md` for setup and baseline workflow.
+
 ### Web frontend — mobile-responsive layouts
 
 Adds Frost mobile-artboard fidelity to the React web frontend across
