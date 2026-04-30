@@ -1,8 +1,10 @@
 # ADR-0001: Use Firecrawl for Content Extraction
 
+> **Status update (2026-04-30):** This ADR is superseded by [ADR-0006](0006-multi-provider-scraper-chain.md) and the 2026-04-30 self-hosted-only scraper refactor (commit `af150730`). Cloud Firecrawl has been removed entirely. `FIRECRAWL_API_KEY` is no longer used anywhere in the codebase. The active provider chain is described in ADR-0006. Historical content below is preserved for reference.
+
 **Date:** 2024-12-15
 
-**Status:** Accepted
+**Status:** Accepted — Superseded by ADR-0006 (2026-04-30)
 
 **Deciders:** po4yka
 
@@ -186,6 +188,8 @@ Firecrawl scored highest across all high-priority criteria.
 
 **2026-03-06**: Extended by [ADR-0006](0006-multi-provider-scraper-chain.md) -- content extraction now uses a multi-provider fallback chain (Scrapling -> Firecrawl -> Playwright -> Crawlee -> direct HTML by default), with Firecrawl resolving to self-hosted when enabled or cloud when `FIRECRAWL_API_KEY` is configured.
 
+**2026-04-30**: Cloud Firecrawl removed entirely (commit `af150730`). `FIRECRAWL_API_KEY` is no longer used. The provider chain now includes Crawl4AI and ScrapeGraphAI; Defuddle is now a self-hosted Node sidecar. See ADR-0006 Update (2026-04-30) for the full end state.
+
 ---
 
 ### Update Log
@@ -196,3 +200,4 @@ Firecrawl scored highest across all high-priority criteria.
 | 2025-01-15 | po4yka | Added fallback note |
 | 2025-02-05 | po4yka | Added success rate observation |
 | 2026-03-06 | po4yka | Extended by ADR-0006 (multi-provider scraper chain) |
+| 2026-04-30 | po4yka | Superseded: cloud Firecrawl removed; see ADR-0006 update |

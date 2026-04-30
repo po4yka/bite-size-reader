@@ -4,7 +4,7 @@ Agents wrap extraction, summarization, and validation with structured results, r
 
 ## Roles
 
-- **ContentExtractionAgent** — Firecrawl/YouTube fetch; persists crawl artifacts.
+- **ContentExtractionAgent** — scraper chain / YouTube fetch; persists crawl artifacts. The scraper chain tries up to 8 providers (Scrapling → Crawl4AI → Firecrawl self-hosted → Defuddle → Playwright → Crawlee → direct HTML → ScrapeGraphAI) before failing.
 - **SummarizationAgent** — OpenRouter call with self-correction loop; tracks tokens/cost/latency.
 - **ValidationAgent** — Enforces `summary_contract` (length caps, deduped tags/entities).
 - **WebSearchAgent** — Analyzes content for knowledge gaps; executes targeted web searches to enrich context.
@@ -14,7 +14,7 @@ Agents wrap extraction, summarization, and validation with structured results, r
 
 ```mermaid
 flowchart LR
-  In[Input (url|forward)] --> Extract["ContentExtractionAgent\n(Firecrawl/YouTube)"]
+  In[Input (url|forward)] --> Extract["ContentExtractionAgent\n(ScraperChain/YouTube)"]
   Extract --> WebSearch["WebSearchAgent\n(optional enrichment)"]
   WebSearch --> Summ["SummarizationAgent\n(OpenRouter + feedback)"]
   Summ --> Valid["ValidationAgent\n(summary_contract)"]
@@ -68,7 +68,7 @@ result = await orchestrator.execute(OrchestratorInput(url="https://example.com",
 
 ## Testing
 
-- Unit: mock Firecrawl/LLM; assert retries and validation errors are surfaced.
+- Unit: mock scraper chain providers / LLM; assert retries and validation errors are surfaced.
 - Integration: orchestrator with fixtures; expect `validation_attempts > 1` when schema errors injected.
 - Signal tests: `tests/application/test_signal_scoring.py`, `tests/application/test_signal_ingestion_worker.py`, and `tests/application/test_signal_judge.py` cover deterministic filtering, worker persistence, and bounded judge behavior separately from the agent orchestration tests.
 

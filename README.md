@@ -55,7 +55,8 @@ Optional scraper, YouTube, Twitter/X, MCP, and provider tuning now live in
 
 Compose profiles:
 
-- `with-firecrawl` starts self-hosted Firecrawl and its dependencies; set `FIRECRAWL_SELF_HOSTED_ENABLED=true` to route Ratatoskr through it. Without self-hosting, the article scraper uses cloud Firecrawl as a fallback when `FIRECRAWL_API_KEY` is configured.
+- `with-scrapers` (recommended) starts the full self-hosted scraper sidecar stack: `firecrawl-api` (port 3002), `crawl4ai` (port 11235), and `defuddle-api` (port 3003) plus their dependencies. Set `FIRECRAWL_SELF_HOSTED_ENABLED=true` to activate the Firecrawl rung. Cloud Firecrawl is not used for article extraction; there is no `FIRECRAWL_API_KEY` requirement.
+- `with-firecrawl` starts the same sidecar set and is kept for backward compatibility; `with-scrapers` is the preferred name going forward.
 - `with-cloud-ollama` adds a remote OpenAI-compatible Ollama reachability check; set `LLM_PROVIDER=ollama` and `OLLAMA_*` values to use it. It does not start a local model server.
 - `with-monitoring` starts Prometheus, Grafana, Loki, Promtail, and node-exporter.
 - `mcp`, `mcp-write`, and `mcp-public` start the optional MCP server variants.
@@ -71,11 +72,13 @@ The Phase 2 onboarding script is tracked in
 ## What it does
 
 **Web articles.** A multi-provider scraper chain — Scrapling →
-Firecrawl (self-hosted when enabled, cloud when configured) → Playwright →
-Crawlee → direct HTML — extracts clean content, then OpenRouter generates a
-summary against the strict JSON contract. Defuddle is available as an explicit
-opt-in provider, and JS-heavy hosts can be configured to skip straight to a
-browser-based provider.
+Crawl4AI → Firecrawl (self-hosted only) → Defuddle → Playwright →
+Crawlee → direct HTML → ScrapeGraphAI — extracts clean content, then
+OpenRouter generates a summary against the strict JSON contract. The default
+order is overridable via `SCRAPER_PROVIDER_ORDER`. Cloud Firecrawl is not
+used; all sidecars (Firecrawl, Crawl4AI, Defuddle) run via the
+`with-scrapers` Docker Compose profile. JS-heavy hosts can be configured to
+skip straight to a browser-based provider.
 
 **YouTube videos.** Detects every common URL form (watch, shorts,
 live, embed, music, mobile). Pulls transcripts via
@@ -130,8 +133,9 @@ requests, and pull requests are welcome at
 
 Built on the shoulders of [Telethon](https://github.com/LonamiWebs/Telethon),
 [Scrapling](https://github.com/D4Vinci/Scrapling),
-[Firecrawl](https://www.firecrawl.dev/),
-[Defuddle](https://defuddle.md/) when explicitly enabled,
+[Firecrawl](https://github.com/mendableai/firecrawl) (self-hosted),
+[Crawl4AI](https://github.com/unclecode/crawl4ai),
+[Defuddle](https://github.com/kepano/defuddle) (self-hosted Node sidecar),
 [OpenRouter](https://openrouter.ai/),
 [FastAPI](https://fastapi.tiangolo.com/),
 a project-owned design system shim,

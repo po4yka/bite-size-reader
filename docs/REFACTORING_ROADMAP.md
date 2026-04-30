@@ -25,7 +25,7 @@ User-visible end state: a new self-hoster can clone, set only a small set of sec
 | Carbon-specific surface | No Carbon package dependency, but 50 textual remnants in `clients/web` and `docs/reference/frontend-web.md` | `clients/web/src/design/` documents Carbon-compatible props; `clients/web/src/api/auth.ts` still uses `web-carbon-v1`; `clients/web/src/styles.css` still has `.cds--skeleton` compatibility |
 | Client surfaces | Web SPA, CLI, browser extension | `clients/web`, `clients/cli`, `clients/browser-extension` |
 | MCP surface | 22 tools, 16 resources | `app/mcp/tool_registrations.py` has 22 `@mcp.tool()` decorators; `app/mcp/resource_registrations.py` has 16 `@mcp.resource(...)` decorators |
-| Scraper providers | Default order: `scrapling`, `firecrawl`, `playwright`, `crawlee`, `direct_html`; opt-in: `defuddle` | `app/config/scraper.py` provider tokens; implementations under `app/adapters/content/scraper/` |
+| Scraper providers | Default order: `scrapling`, `crawl4ai`, `firecrawl_self_hosted`, `defuddle`, `playwright`, `crawlee`, `direct_html`, `scrapegraph_ai` (commit `af150730`, 2026-04-30). Cloud Firecrawl removed; `FIRECRAWL_API_KEY` no longer used. | `app/config/scraper.py` provider tokens; implementations under `app/adapters/content/scraper/` |
 | Existing ingestion | RSS models and polling/delivery, Telegram channel digest, Substack feed URL resolver | `app/db/_models_rss.py`, `app/adapters/rss/feed_poller.py`, `app/adapters/rss/rss_delivery_service.py`, `app/db/_models_digest.py`, `app/adapters/rss/substack.py` |
 | Multi-agent system | 11 Python files, 3,995 LOC | `app/agents/`; active references from `app/application/services/multi_source_aggregation_service.py` |
 | DB migrations | Versioned migration runners already exist, not Alembic; `app/cli/migrations/` is the active canonical path | `app/db/runtime/bootstrap.py` imports `app.cli.migrations.migration_runner`; `app/cli/migrate_db.py` is used by the running API startup command; `app/db/migrations/` appears to be duplicate drift |
@@ -138,7 +138,7 @@ Dependencies: Phase 0. Out of scope: changing scraper provider behavior, adding 
 Goals:
 
 - One compose command starts the default self-host stack with working internal dependencies.
-- Self-hosted Firecrawl is the default scraper path; cloud Firecrawl is a fallback.
+- Self-hosted Firecrawl is one rung in the scraper chain; cloud Firecrawl was removed in commit `af150730` (2026-04-30). The chain now also includes Crawl4AI (sidecar) and ScrapeGraphAI (in-process LLM last resort).
 - Profiles separate core, Firecrawl, cloud Ollama/Ollama-compatible provider configuration, monitoring, and MCP costs.
 - GHCR publishes semver and `stable` tags.
 
@@ -147,7 +147,7 @@ Concrete work breakdown:
 | Unit | Files/modules | Change | Acceptance criterion |
 | --- | --- | --- | --- |
 | Compose profiles | `ops/docker/docker-compose.yml`, `ops/docker/docker-compose.monitoring.yml`, `README.md`, `docs/DEPLOYMENT.md` | Reshape services into `core`, `with-firecrawl`, `with-cloud-ollama`, `with-monitoring`, optional `mcp`. | `docker compose --profile with-firecrawl up` starts app/API/Redis/Chroma/Firecrawl without host-gateway assumptions; `with-cloud-ollama` documents env/YAML provider selection rather than starting a local model server. |
-| Firecrawl service | `ops/docker/docker-compose.yml`, `app/config/scraper.py`, `docs/adr/0006-multi-provider-scraper-chain.md` | Add supported Firecrawl container/service and make self-hosted provider default in compose. | `SCRAPER_PROVIDER_ORDER` includes self-hosted Firecrawl and diagnostics show it enabled. |
+| Scraper sidecar stack — **DONE `af150730` 2026-04-30** | `ops/docker/docker-compose.yml`, `app/config/scraper.py`, `docs/adr/0006-multi-provider-scraper-chain.md` | Added `crawl4ai` and `defuddle-api` sidecars alongside self-hosted Firecrawl; new `with-scrapers` profile. Cloud Firecrawl removed entirely. | `SCRAPER_PROVIDER_ORDER` default is `scrapling->crawl4ai->firecrawl_self_hosted->defuddle->playwright->crawlee->direct_html->scrapegraph_ai`; `with-scrapers` profile starts all three sidecars. |
 | Cloud Ollama provider | `pyproject.toml`, `app/config/llm.py`, LLM adapter factory, compose docs | Add optional cloud Ollama/Ollama-compatible provider path with explicit quality and structured-output caveats. | First-summary smoke test passes with cloud Ollama provider config, while OpenRouter remains the documented primary path. |
 | Release tags | `.github/workflows/release.yml`, docs | Add `:stable` tag promotion and rollback notes. | Tagging a release pushes `ghcr.io/po4yka/ratatoskr:<version>` and `:stable`. |
 | Onboarding recording | `README.md`, `docs/assets/` | Add GIF/asciicast from clone to first summary. | README shows the exact happy path and measured elapsed time. |
@@ -163,7 +163,7 @@ Acceptance criteria:
 
 Risks and mitigations:
 
-- Firecrawl service increases RAM beyond small VPS/Raspberry Pi limits. Mitigation: provide `core-lite` path that uses Scrapling/Defuddle/direct HTML and labels Firecrawl as higher-quality profile.
+- Scraper sidecars (Firecrawl, Crawl4AI, Defuddle) increase RAM beyond small VPS/Raspberry Pi limits. Mitigation: the default core stack runs without sidecars (Scrapling + direct HTML covers most sites); `with-scrapers` profile is opt-in.
 - Cloud Ollama path disappoints users with weak structured JSON. Mitigation: document tested models/endpoints and keep OpenRouter as the primary quality path.
 
 Estimated effort: low 4, expected 6, high 9 person-days.

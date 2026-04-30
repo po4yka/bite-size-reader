@@ -34,7 +34,12 @@ Web search enrichment uses an LLM to:
 ## Prerequisites
 
 - Ratatoskr installed and running
-- Firecrawl API key (free tier supports search)
+- Firecrawl cloud API key (`FIRECRAWL_API_KEY`) for the Search API path,
+  or DuckDuckGo (no key required). Note: `FIRECRAWL_API_KEY` is used
+  exclusively by this web-search enrichment path; it is not part of the
+  article-extraction scraper chain. See
+  [`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md)
+  for how article extraction works.
 
 ---
 

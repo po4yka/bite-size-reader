@@ -116,18 +116,27 @@ CHUNKING_ENABLED=true
 CHUNK_MAX_CHARS=150000  # Default: 200000
 ```
 
-### Optimize Firecrawl
+### Tune the scraper chain
+
+The chain tries providers in order (Scrapling → Crawl4AI → Firecrawl →
+Defuddle → Playwright → Crawlee → direct HTML → Scrapegraph-AI). To
+reduce latency, prefer in-process providers and shorten timeouts. See
+[`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md)
+for the full chain reference and configuration recipes.
 
 ```bash
-# Reduce JavaScript wait time
+# Shorten Firecrawl sidecar JavaScript wait time (when sidecar is enabled)
 FIRECRAWL_WAIT_FOR_MS=1000  # Default: 3000
 
-# Reduce timeout
-FIRECRAWL_TIMEOUT_SEC=60  # Default: 90
+# Reduce Firecrawl sidecar timeout
+SCRAPER_FIRECRAWL_TIMEOUT_SEC=60  # Default: 90
 
-# Skip unnecessary content
+# Skip unnecessary content formats
 FIRECRAWL_INCLUDE_IMAGES=false
 FIRECRAWL_INCLUDE_LINKS=false
+
+# Pin to a single fast provider for testing
+SCRAPER_FORCE_PROVIDER=scrapling
 ```
 
 ---
@@ -170,14 +179,14 @@ ENABLE_LLM_CACHE=true
 REDIS_LLM_TTL_SECONDS=604800
 ```
 
-### Firecrawl Free Tier Strategy
+### Prefer lightweight providers for simple sites
 
 ```bash
-# Use trafilatura fallback for simple sites
-CONTENT_EXTRACTION_FALLBACK=true
+# Limit the chain to in-process providers (no sidecars needed)
+SCRAPER_PROVIDER_ORDER=scrapling,direct_html
 
-# Firecrawl only for complex sites
-# (Auto-detects JavaScript-heavy pages)
+# Promote browser providers for known JS-heavy hosts
+SCRAPER_JS_HEAVY_HOSTS=example.com,spa-site.io
 ```
 
 ---

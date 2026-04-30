@@ -231,19 +231,21 @@ docker restart ratatoskr
 
 **Solution**: Follow "Bot doesn't respond" above
 
-### Summaries fail with "Firecrawl error"
+### Summaries fail with extraction errors
 
-**Cause**: Invalid Firecrawl API key or quota exceeded
+**Cause**: All scraper providers failed for the given URL. Ratatoskr uses
+a multi-provider fallback chain (Scrapling → Crawl4AI → Firecrawl →
+Defuddle → Playwright → Crawlee → direct HTML → Scrapegraph-AI); see
+[`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md).
 
 **Solution**:
 
 ```bash
-# Test Firecrawl key
-curl -H "Authorization: Bearer YOUR_FIRECRAWL_KEY" \
-     https://api.firecrawl.dev/v1/account
+# Check logs for which providers were tried
+docker logs ratatoskr | grep "scraper_chain"
 
-# Check quota (free tier: 500 credits/month)
-# If exceeded, upgrade at https://firecrawl.dev/pricing
+# Enable debug logging for detailed provider output
+LOG_LEVEL=DEBUG docker restart ratatoskr
 ```
 
 ### Summaries fail with "OpenRouter error"

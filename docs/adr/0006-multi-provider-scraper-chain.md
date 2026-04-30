@@ -130,6 +130,41 @@ Maintain the existing architecture but add Scrapling as a fallback for Firecrawl
 **2026-03-06**: Playwright browser fallback was added between Firecrawl and direct HTML for JS-heavy pages.
 **2026-03-06**: Crawlee hybrid fallback was added before direct HTML as an advanced single-page extractor.
 
+## Update (2026-04-30) — Self-hosted-only refactor (commit `af150730`)
+
+The following changes were shipped on 2026-04-30 and supersede parts of the original decision text above. The original text is preserved unchanged for historical reference.
+
+### Cloud Firecrawl removed
+
+Cloud Firecrawl is no longer used for article extraction. `FIRECRAWL_API_KEY` is no longer read anywhere in the scraper chain or `TopicSearchService`. Web search enrichment now requires `FIRECRAWL_SELF_HOSTED_ENABLED=true` (pointing at the internal Docker sidecar). The `with-scrapers` compose profile (alias: `with-firecrawl`) brings up the full sidecar set.
+
+### New default provider order
+
+```
+scrapling -> crawl4ai -> firecrawl_self_hosted -> defuddle -> playwright -> crawlee -> direct_html -> scrapegraph_ai
+```
+
+Overridable via `SCRAPER_PROVIDER_ORDER`.
+
+### New providers
+
+- **Crawl4AI** (`crawl4ai_provider.py`) — HTTP call to a `crawl4ai` Docker sidecar at port 11235. New env vars: `SCRAPER_CRAWL4AI_ENABLED`, `SCRAPER_CRAWL4AI_URL`, `SCRAPER_CRAWL4AI_TOKEN`, `SCRAPER_CRAWL4AI_TIMEOUT_SEC`.
+- **ScrapeGraphAI** (`scrapegraph_ai_provider.py`) — in-process last-resort provider; drives an OpenRouter LLM call to extract structured JSON and converts it to markdown. New env vars: `SCRAPER_SCRAPEGRAPH_ENABLED`, `SCRAPER_SCRAPEGRAPH_TIMEOUT_SEC`.
+
+### Defuddle self-hosted
+
+Defuddle is now a self-hosted Node sidecar defined in `ops/docker/defuddle/`. The public `defuddle.md` API URL is deprecated. Default env vars flipped: `SCRAPER_DEFUDDLE_ENABLED=true`, `SCRAPER_DEFUDDLE_API_BASE_URL=http://defuddle-api:3003`.
+
+### Browserforge fingerprint randomization
+
+`DynamicFetcher`-based fingerprint randomization is now applied to `scrapling_provider`, `playwright_provider`, and `crawlee_provider`.
+
+### New compose profiles
+
+- `with-scrapers` (new, preferred name) — starts `firecrawl-api` (3002), `crawl4ai` (11235), and `defuddle-api` (3003) plus Firecrawl dependencies.
+- `with-firecrawl` (existing) — kept as a backward-compatible alias; starts the same sidecar set.
+
+
 ---
 
 ### Update Log
@@ -139,3 +174,4 @@ Maintain the existing architecture but add Scrapling as a fallback for Firecrawl
 | 2026-03-06 | po4yka | Initial decision (Accepted) |
 | 2026-03-06 | po4yka | Added Playwright fallback tier before direct HTML |
 | 2026-03-06 | po4yka | Added Crawlee hybrid fallback before direct HTML |
+| 2026-04-30 | po4yka | Cloud Firecrawl removed; Crawl4AI + ScrapeGraphAI added; Defuddle self-hosted; browserforge fingerprinting; `with-scrapers` profile |

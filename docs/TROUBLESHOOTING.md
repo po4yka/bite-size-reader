@@ -7,7 +7,7 @@ This guide helps you diagnose and resolve common issues with Ratatoskr.
 - [Debugging with Correlation IDs](#debugging-with-correlation-ids)
 - [Installation Issues](#installation-issues)
 - [Configuration Issues](#configuration-issues)
-- [Firecrawl Issues](#firecrawl-issues)
+- [Content Extraction / Scraper Chain Issues](#content-extraction--scraper-chain-issues)
 - [OpenRouter Issues](#openrouter-issues)
 - [YouTube Issues](#youtube-issues)
 - [Database Issues](#database-issues)
@@ -27,7 +27,7 @@ This guide helps you diagnose and resolve common issues with Ratatoskr.
 
 - Telegram messages
 - Database requests
-- Firecrawl API calls
+- Scraper chain provider calls
 - OpenRouter LLM calls
 - Log entries
 
@@ -80,8 +80,11 @@ WHERE id = '<correlation_id>';
 
 Common `error_context_json.reason_code` values:
 
-- `FIRECRAWL_ERROR`
+- `SCRAPER_CHAIN_EXHAUSTED` -- all providers failed
+- `FIRECRAWL_ERROR` (self-hosted)
 - `FIRECRAWL_LOW_VALUE`
+- `CRAWL4AI_ERROR`
+- `DEFUDDLE_ERROR`
 - `PLAYWRIGHT_EMPTY_CONTENT`
 - `PLAYWRIGHT_UI_OR_LOGIN`
 - `RESOLVE_FAILED`
@@ -192,7 +195,7 @@ API_HASH=your_api_hash
 BOT_TOKEN=your_bot_token
 ALLOWED_USER_IDS=123456789
 OPENROUTER_API_KEY=your_key
-# FIRECRAWL_API_KEY is optional (Scrapling is the free default scraper)
+# No FIRECRAWL_API_KEY needed -- self-hosted sidecars replace cloud Firecrawl
 EOF
 ```
 
@@ -209,17 +212,16 @@ See [environment_variables.md](environment_variables.md) for full reference.
 **Solution**:
 
 ```bash
-# Test Firecrawl key
-curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" \
-     https://api.firecrawl.dev/v1/scrape \
+# Test self-hosted Firecrawl sidecar (no API key needed)
+curl -X POST http://localhost:3002/v1/scrape \
+     -H "Content-Type: application/json" \
      -d '{"url":"https://example.com"}'
 
 # Test OpenRouter key
 curl -H "Authorization: Bearer $OPENROUTER_API_KEY" \
      https://openrouter.ai/api/v1/models
 
-# If invalid, regenerate keys:
-# - Firecrawl: https://firecrawl.dev/account
+# If OpenRouter key is invalid, regenerate at:
 # - OpenRouter: https://openrouter.ai/keys
 ```
 
@@ -248,25 +250,26 @@ docker restart ratatoskr
 
 ---
 
-## Firecrawl Issues
+## Content Extraction / Scraper Chain Issues
 
-> **Multi-provider fallback**: Content extraction uses an ordered chain of providers (default: Scrapling -> Firecrawl -> Playwright -> Crawlee -> direct HTML). If one provider fails, the next is tried automatically. Most Firecrawl issues below only apply when cloud Firecrawl is in your `SCRAPER_PROVIDER_ORDER`. Scrapling (free, in-process) handles the majority of sites without needing an API key. You can also enable self-hosted Firecrawl (`FIRECRAWL_SELF_HOSTED_ENABLED=true`) as a middle ground. See `docs/environment_variables.md` for scraper chain configuration.
+> **Multi-provider fallback**: Content extraction uses an ordered chain of providers (default: Scrapling → Crawl4AI → Firecrawl self-hosted → Defuddle → Playwright → Crawlee → direct HTML → ScrapeGraphAI). If one provider fails, the next is tried automatically. Cloud Firecrawl is not used; `FIRECRAWL_API_KEY` is not required. The self-hosted sidecar stack (Firecrawl, Crawl4AI, Defuddle) is started with `--profile with-scrapers`. See `docs/environment_variables.md` for scraper chain configuration.
 
-### API Rate Limits
+### Self-Hosted Sidecar Rate / Capacity Issues
 
-**Symptom**: "429 Too Many Requests" errors.
+**Symptom**: "429 Too Many Requests" or slow responses from a scraper sidecar.
 
-**Cause**: Exceeded Firecrawl rate limits (free tier: 500 credits/month, paid: varies).
+**Cause**: Self-hosted sidecar container is overloaded or under-resourced.
 
 **Solution**:
 
 ```bash
-# Check Firecrawl usage
-curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" \
-     https://api.firecrawl.dev/v1/account
+# Check sidecar health
+curl http://localhost:3002/health   # Firecrawl
+curl http://localhost:11235/health  # Crawl4AI
+curl http://localhost:3003/health   # Defuddle
 
-# Upgrade plan or wait for monthly reset
-# https://firecrawl.dev/pricing
+# Restart the affected sidecar
+docker compose -f ops/docker/docker-compose.yml --profile with-scrapers restart firecrawl-api
 ```
 
 ### Firecrawl Timeouts
@@ -317,6 +320,37 @@ echo "CONTENT_EXTRACTION_FALLBACK=true" >> .env
 ```
 
 ---
+
+### All Providers Failed (Scraper Chain Exhausted)
+
+**Symptom**: Summary fails; logs contain `scraper_chain_exhausted` or reason code `SCRAPER_CHAIN_EXHAUSTED`.
+
+**Cause**: All enabled scraper chain providers returned empty content or an error for this URL.
+
+**Solution**:
+
+```bash
+# 1. Check which providers are enabled
+grep SCRAPER_ .env
+
+# 2. Verify sidecar health
+curl http://localhost:3002/health      # self-hosted Firecrawl
+curl http://localhost:11235/health     # Crawl4AI
+curl http://localhost:3003/health      # Defuddle
+
+# 3. Force a single provider for testing
+echo "SCRAPER_FORCE_PROVIDER=scrapling" >> .env
+# Valid values: scrapling | crawl4ai | firecrawl_self_hosted | defuddle | playwright | crawlee | direct_html | scrapegraph_ai
+
+# 4. Check per-provider failure reasons in logs
+docker logs ratatoskr 2>&1 | grep '"context":"scraper"'
+
+# 5. Restart sidecars if unresponsive
+docker compose -f ops/docker/docker-compose.yml --profile with-scrapers restart
+```
+
+**Last resort**: enable ScrapeGraphAI (`SCRAPER_SCRAPEGRAPH_ENABLED=true`) — uses an LLM call and adds latency/cost but handles sites that defeat all browser-based approaches.
+
 
 ## OpenRouter Issues
 
@@ -1189,11 +1223,16 @@ SELECT request_id, validation_errors FROM summaries WHERE validation_errors IS N
 Isolate whether issue is with bot or external service:
 
 ```bash
-# Test Firecrawl
-curl -X POST https://api.firecrawl.dev/v1/scrape \
-  -H "Authorization: Bearer $FIRECRAWL_API_KEY" \
+# Test self-hosted Firecrawl sidecar
+curl -X POST http://localhost:3002/v1/scrape \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com"}' | jq .
+
+# Test Crawl4AI sidecar
+curl http://localhost:11235/health | jq .
+
+# Test Defuddle sidecar
+curl http://localhost:3003/health | jq .
 
 # Test OpenRouter
 curl -X POST https://openrouter.ai/api/v1/chat/completions \
@@ -1247,7 +1286,7 @@ free -h
 top -bn1 | grep "Cpu(s)"
 
 # Network
-ping -c 3 api.firecrawl.dev
+curl -s http://localhost:3002/health   # self-hosted Firecrawl sidecar
 ping -c 3 openrouter.ai
 ```
 
@@ -1286,4 +1325,4 @@ If you're still stuck after trying these steps:
 
 ---
 
-**Last Updated**: 2026-03-28
+**Last Updated**: 2026-04-30

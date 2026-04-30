@@ -547,7 +547,7 @@ except TranscriptsDisabled:
 
 | Service | Purpose | Free Tier | Rate Limits | Fallback |
 | --------- | --------- | ----------- | ------------- | ---------- |
-| Firecrawl | Content extraction | 500 req/month | 10 req/min | Trafilatura |
+| Firecrawl (self-hosted) | Content extraction | Unlimited (self-hosted) | Local quota | Scrapling, Crawl4AI, Defuddle, Playwright, Crawlee, direct HTML, ScrapeGraphAI |
 | OpenRouter | LLM completions | Yes (free models) | Varies by model | Model fallback chain |
 | Telethon | Telegram client | Unlimited | 30 msg/sec | FloodWait handling via MTProto errors |
 | yt-dlp | YouTube download | Unlimited | YouTube rate limits | youtube-transcript-api |
@@ -559,9 +559,15 @@ except TranscriptsDisabled:
 **Required Variables:**
 
 ```bash
-# Firecrawl
-FIRECRAWL_API_KEY=fc-xxx...
-FIRECRAWL_TIMEOUT_SEC=90
+# Firecrawl (self-hosted; cloud is no longer used by the article scraper chain)
+FIRECRAWL_SELF_HOSTED_ENABLED=true
+FIRECRAWL_SELF_HOSTED_URL=http://firecrawl-api:3002
+FIRECRAWL_SELF_HOSTED_API_KEY=fc-ratatoskr-local
+SCRAPER_FIRECRAWL_TIMEOUT_SEC=90
+
+# Other scraper sidecars
+SCRAPER_CRAWL4AI_URL=http://crawl4ai:11235
+SCRAPER_DEFUDDLE_API_BASE_URL=http://defuddle-api:3003
 
 # OpenRouter
 OPENROUTER_API_KEY=sk-or-xxx...

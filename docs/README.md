@@ -88,6 +88,7 @@ You want to submit pull requests or improve the project.
 - [SPEC.md](SPEC.md) - Technical specification
 - [ADRs](adr/README.md) - Understand past decisions
 - [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Code organization
+- [Scraper chain explainer](explanation/scraper-chain.md) - Provider taxonomy, fallback logic, and deployment topology
 - [Frontend Web Guide](reference/frontend-web.md) - web app architecture and design shim notes
 
 ### 🔌 I'm an Integrator

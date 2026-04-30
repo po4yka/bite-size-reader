@@ -42,11 +42,14 @@ flowchart LR
     URLHandler --> URLProcessor
     URLProcessor --> ContentExtractor
     ContentExtractor --> ScraperChain[ScraperChain]
-    ScraperChain -->|primary| Scrapling[Scrapling]
-    ScraperChain -->|secondary| Firecrawl[(Firecrawl /scrape)]
-    ScraperChain -->|tertiary| Playwright[Playwright]
-    ScraperChain -->|quaternary| Crawlee[Crawlee]
-    ScraperChain -->|last_resort| DirectHTML[Direct HTML]
+    ScraperChain -->|1| Scrapling[Scrapling]
+    ScraperChain -->|2| Crawl4AI[Crawl4AI sidecar]
+    ScraperChain -->|3| Firecrawl[(Firecrawl sidecar)]
+    ScraperChain -->|4| Defuddle[Defuddle sidecar]
+    ScraperChain -->|5| Playwright[Playwright]
+    ScraperChain -->|6| Crawlee[Crawlee]
+    ScraperChain -->|7| DirectHTML[Direct HTML]
+    ScraperChain -->|8| ScrapegraphAI[Scrapegraph-AI]
     URLProcessor --> ContentChunker
     URLProcessor --> LLMSummarizer
     LLMSummarizer --> OpenRouter[(OpenRouter Chat Completions)]
@@ -76,7 +79,7 @@ flowchart LR
 
   ForwardProcessor --> LLMSummarizer
   LLMSummarizer -.->|optional| WebSearch[WebSearchAgent]
-  WebSearch -.-> Firecrawl
+  WebSearch -.-> Firecrawl[(Firecrawl sidecar)]
   ContentExtractor --> SQLite[(SQLite)]
   MessagePersistence --> SQLite
   LLMSummarizer --> SQLite
@@ -150,7 +153,8 @@ Telegram update
            └─ MessageRouter
               └─ URLHandler ── URLBatchPolicyService / URLAwaitingStateStore
                  └─ URLProcessor (correlation_id assigned)
-                    ├─ ContentExtractor → ScraperChain (Scrapling → Firecrawl → Playwright → Crawlee → direct HTML)
+                    ├─ ContentExtractor → ScraperChain (Scrapling → Crawl4AI → Firecrawl self-hosted → Defuddle → Playwright → Crawlee → direct HTML → ScrapeGraphAI)
+                    │   (see docs/explanation/scraper-chain.md for the detailed provider diagram)
                     ├─ ContentChunker (large bodies)
                     └─ LLMSummarizer
                        └─ OpenRouter (with retries; web-search enrichment optional)
@@ -172,11 +176,11 @@ Each subsystem has a canonical doc; this page is the entry point.
 
 | Subsystem | Purpose | Canonical doc |
 | --- | --- | --- |
-| URL pipeline (Scrapling, Firecrawl, Playwright, Crawlee, direct HTML) | Extract clean article content from arbitrary URLs with a fallback chain. | [`docs/SPEC.md`](../SPEC.md) (`Content extraction` section) |
+| URL pipeline (Scrapling, Crawl4AI, Firecrawl self-hosted, Defuddle, Playwright, Crawlee, direct HTML, ScrapeGraphAI) | Extract clean article content from arbitrary URLs with an 8-provider fallback chain. Order overridable via `SCRAPER_PROVIDER_ORDER`. Cloud Firecrawl not used. | [`docs/explanation/scraper-chain.md`](scraper-chain.md) · [`docs/SPEC.md`](../SPEC.md) |
 | YouTube extractor | Download video (1080p), pull transcripts, store metadata. | [`docs/how-to/configure-youtube-download.md`](../how-to/configure-youtube-download.md) |
-| Twitter / X extractor | Public Firecrawl scrape with optional Playwright fallback for tweets, threads, and X Articles. | [`docs/how-to/configure-twitter-extraction.md`](../how-to/configure-twitter-extraction.md) |
+| Twitter / X extractor | Two-tier extraction: self-hosted Firecrawl scrape by default; opt-in authenticated Playwright for protected accounts, threads, and X Articles. | [`docs/how-to/configure-twitter-extraction.md`](../how-to/configure-twitter-extraction.md) |
 | LLM summarization (multi-agent) | Extraction → summarization → validation → optional web search, with self-correction. | [`docs/multi_agent_architecture.md`](../multi_agent_architecture.md) |
-| Web search enrichment | Inject up-to-date context via Firecrawl Search before final summary. | [`docs/how-to/enable-web-search.md`](../how-to/enable-web-search.md) |
+| Web search enrichment | Inject up-to-date context via self-hosted Firecrawl search (`FIRECRAWL_SELF_HOSTED_ENABLED=true`) before final summary. | [`docs/how-to/enable-web-search.md`](../how-to/enable-web-search.md) |
 | Channel digest | Userbot reads subscribed channels; scheduled digests via `/digest`. | [`docs/SPEC.md`](../SPEC.md) (`Channel digest` section) |
 | Mixed-source aggregation | Bundle one or more links + forwards / attachments into a single synthesised result. | [`docs/SPEC.md`](../SPEC.md) (`Mixed-source aggregation` section) |
 | Search (FTS5 + vector) | Local full-text plus optional ChromaDB semantic / hybrid search. | [`docs/how-to/setup-chroma-vector-search.md`](../how-to/setup-chroma-vector-search.md) |

@@ -39,6 +39,7 @@ Acceptance evidence:
 - [x] Update docs to say current compose uses `firecrawl-api:host-gateway` until Phase 2 adds an in-compose Firecrawl service.
 - [x] Add an explicit warning that self-hosted Firecrawl is not currently started by the default compose file.
 - [x] Add a TODO note in deployment docs pointing to Phase 2 if the docs mention `ratatoskr-firecrawl` or port `3002` as already present.
+- [x] **2026-04-30 (`af150730`)**: Phase 2 scraper sidecar work shipped. Cloud Firecrawl removed. `with-scrapers` profile adds Crawl4AI (11235) and Defuddle (3003) alongside Firecrawl (3002). `FIRECRAWL_API_KEY` no longer used. Docs updated.
 
 Acceptance evidence:
 
@@ -149,6 +150,7 @@ Acceptance evidence:
 ### 2.1 Compose profile design
 
 - [x] Decide final profile names: `core`, `with-firecrawl`, `with-cloud-ollama`, `with-monitoring`, `mcp`.
+- [x] **2026-04-30 (`af150730`)**: `with-scrapers` profile added as the canonical name for the full sidecar stack; `with-firecrawl` kept as alias.
 - [x] Make default compose include bot, API/web, Redis, and Chroma.
 - [x] Keep web served by FastAPI; avoid a separate frontend runtime container unless justified.
 - [x] Ensure API/web auth secrets are required only when browser/API/extension auth is enabled.
@@ -178,6 +180,7 @@ Acceptance evidence:
 - [ ] `python -m app.cli.summary --url <test-url>` succeeds through self-hosted Firecrawl in profile. `[needs verification: requires pulling/running Firecrawl stack]`
 - [x] Diagnostics identify provider order and enabled Firecrawl tier.
 - [x] Locally proven on 2026-04-30: the documented command prefix renders `FIRECRAWL_SELF_HOSTED_ENABLED: "true"` and `FIRECRAWL_SELF_HOSTED_URL: http://firecrawl-api:3002` into the bot service. A bare `--profile with-firecrawl` render starts Firecrawl services but leaves Ratatoskr at `FIRECRAWL_SELF_HOSTED_ENABLED: "0"` by design.
+- [x] **2026-04-30 (`af150730`)**: Crawl4AI and Defuddle sidecars added to `with-scrapers` / `with-firecrawl` profiles. Cloud Firecrawl removed. `FIRECRAWL_API_KEY` no longer referenced.
 
 ### 2.3 Cloud Ollama deployment docs
 

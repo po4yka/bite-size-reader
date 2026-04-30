@@ -61,11 +61,14 @@ scraper:
   profile: balanced
   provider_order:
     - scrapling
+    - crawl4ai
     - firecrawl
+    - defuddle
     - playwright
     - crawlee
     - direct_html
-  defuddle_enabled: false
+    - scrapegraph_ai
+  defuddle_enabled: true
   firecrawl_self_hosted_enabled: false
 
 firecrawl:
@@ -117,13 +120,20 @@ mcp:
   remote provider, the provider times out on long articles, or the model returns
   weak/invalid JSON. Prefer models that advertise OpenAI-compatible chat
   completions and test summaries before using them unattended.
-- Firecrawl Cloud is optional. The default scraper order is Scrapling,
-  Firecrawl, Playwright, Crawlee, then direct HTML. The `firecrawl` provider uses
-  cloud Firecrawl when `firecrawl.api_key` is configured and self-hosted
-  Firecrawl is disabled.
-- Defuddle is opt-in because the default service sends URLs to
-  `https://defuddle.md`. To use it, set `scraper.defuddle_enabled: true` and add
-  `defuddle` to `scraper.provider_order`.
+- The default scraper chain order is Scrapling → Crawl4AI → Firecrawl →
+  Defuddle → Playwright → Crawlee → direct HTML → Scrapegraph-AI. Each
+  provider is skipped when its sidecar is unavailable or its enabled flag is
+  false. See [`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md)
+  for the full chain reference.
+- The `firecrawl` provider slot activates only when
+  `scraper.firecrawl_self_hosted_enabled: true`; cloud Firecrawl is not
+  used for article scraping. `FIRECRAWL_API_KEY` is only consumed by the
+  web-search enrichment path (`TopicSearchService`), not by the scraper chain.
+- Defuddle defaults to enabled (`scraper.defuddle_enabled: true`) but
+  requires a reachable `defuddle-api` sidecar (default:
+  `http://defuddle-api:3003`). The sidecar can be replaced by the public
+  `https://defuddle.md` API for development by setting
+  `SCRAPER_DEFUDDLE_API_BASE_URL=https://defuddle.md`.
 - The `with-firecrawl` Docker Compose profile starts an in-compose self-hosted
   Firecrawl stack at `http://firecrawl-api:3002`. Set
   `scraper.firecrawl_self_hosted_enabled: true` to use it; self-hosted

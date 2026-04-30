@@ -907,7 +907,12 @@ CHROMA_REQUIRED=true
 # LLM (for summary CLI)
 OPENROUTER_API_KEY=...
 OPENROUTER_MODEL=deepseek/deepseek-v3.2
-FIRECRAWL_API_KEY=...
+
+# Scraper sidecars (optional; in-process Scrapling works without them)
+FIRECRAWL_SELF_HOSTED_ENABLED=true
+FIRECRAWL_SELF_HOSTED_URL=http://firecrawl-api:3002
+SCRAPER_CRAWL4AI_URL=http://crawl4ai:11235
+SCRAPER_DEFUDDLE_API_BASE_URL=http://defuddle-api:3003
 ```
 
 ---

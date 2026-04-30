@@ -7,7 +7,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 - Python 3.13+
 - Telegram account and bot token
 - OpenRouter API key
-- Firecrawl API key (optional -- Scrapling and self-hosted Firecrawl are free alternatives)
+- Self-hosted scraper sidecars are optional but recommended (Firecrawl, Crawl4AI, Defuddle); started via `with-scrapers` compose profile — no cloud API keys required
 - Docker (for containerized deployment)
 - Node.js 20+ (optional; needed for local `clients/web/` frontend development)
 - (Optional) Redis for API rate limits/sync locks
@@ -29,13 +29,17 @@ This guide explains how to prepare environments, configure secrets, and run the 
 - Choose a model (e.g., `deepseek/deepseek-v3.2`) and set `OPENROUTER_MODEL`.
 - Optional attribution: `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`.
 
-## Firecrawl Setup (Optional)
+## Scraper Sidecar Setup (Optional)
 
-`FIRECRAWL_API_KEY` is **optional**. The default scraper chain (`SCRAPER_PROVIDER_ORDER`) tries Scrapling (free, in-process) first, then falls back to Firecrawl, Playwright, Crawlee, and direct HTML extraction. You only need a cloud Firecrawl API key if you want to use cloud Firecrawl or web search enrichment.
+Cloud Firecrawl is not used for article extraction. `FIRECRAWL_API_KEY` is no longer required.
 
-- Cloud Firecrawl: Sign up at https://www.firecrawl.dev/ and set `FIRECRAWL_API_KEY`.
-- Self-hosted Firecrawl: run the `with-firecrawl` compose profile. It starts an internal Firecrawl API, Playwright service, Redis, RabbitMQ, and Postgres stack, then points Ratatoskr at `http://firecrawl-api:3002`.
-- Scrapling: Enabled by default (`SCRAPER_SCRAPLING_ENABLED=true`), no API key required.
+The default scraper chain order is: `scrapling -> crawl4ai -> firecrawl_self_hosted -> defuddle -> playwright -> crawlee -> direct_html -> scrapegraph_ai`. Order is overridable via `SCRAPER_PROVIDER_ORDER`.
+
+- **Scrapling**: enabled by default, no external dependency.
+- **Crawl4AI**: HTTP sidecar at port 11235. Enable with `SCRAPER_CRAWL4AI_ENABLED=true` and start via the `with-scrapers` profile.
+- **Self-hosted Firecrawl**: set `FIRECRAWL_SELF_HOSTED_ENABLED=true` and start via `with-scrapers`. Internal endpoint: `http://firecrawl-api:3002`.
+- **Defuddle**: self-hosted Node sidecar at `defuddle-api:3003`. Started automatically by `with-scrapers`. Default is now enabled (`SCRAPER_DEFUDDLE_ENABLED=true`, `SCRAPER_DEFUDDLE_API_BASE_URL=http://defuddle-api:3003`).
+- **ScrapeGraphAI**: in-process last-resort LLM provider, no sidecar required. Enable with `SCRAPER_SCRAPEGRAPH_ENABLED=true`.
 - Breaking rename note: legacy vars (`SCRAPLING_*`, `SCRAPER_DIRECT_HTTP_ENABLED`) now fail fast at startup.
 
 See `docs/environment_variables.md` for the full multi-provider scraper chain configuration.
@@ -150,12 +154,14 @@ services:
 
 Run the core stack: `docker compose -f ops/docker/docker-compose.yml up -d --build`
 
-Run core plus self-hosted Firecrawl:
+Run core plus self-hosted scraper sidecars (Firecrawl, Crawl4AI, Defuddle):
 
 ```bash
 FIRECRAWL_SELF_HOSTED_ENABLED=true \
-docker compose -f ops/docker/docker-compose.yml --profile with-firecrawl up -d --build
+docker compose -f ops/docker/docker-compose.yml --profile with-scrapers up -d --build
 ```
+
+The `with-firecrawl` profile is an alias for `with-scrapers` and is kept for backward compatibility.
 
 Run with a remote Ollama-compatible provider:
 
@@ -177,7 +183,7 @@ docker compose -f ops/docker/docker-compose.yml --profile with-monitoring up -d 
 
 These profile services are not required but enhance functionality when available:
 
-- **Self-hosted Firecrawl** (`with-firecrawl`) -- internal Firecrawl API plus its Playwright, Redis, RabbitMQ, and Postgres dependencies. Image defaults follow Firecrawl upstream `latest`; pin `FIRECRAWL_IMAGE`, `FIRECRAWL_PLAYWRIGHT_IMAGE`, and `FIRECRAWL_POSTGRES_IMAGE` in production when you need repeatable rebuilds.
+- **Self-hosted scraper sidecars** (`with-scrapers` / `with-firecrawl`) -- starts `firecrawl-api` (port 3002) plus its Playwright, Redis, RabbitMQ, and Postgres dependencies, `crawl4ai` (port 11235), and `defuddle-api` (port 3003). Cloud Firecrawl is not a deployment option for the article extraction path. Image defaults follow upstream `latest`; pin `FIRECRAWL_IMAGE`, `FIRECRAWL_PLAYWRIGHT_IMAGE`, and `FIRECRAWL_POSTGRES_IMAGE` in production when you need repeatable rebuilds.
 - **Cloud Ollama** (`with-cloud-ollama`) -- does not start a local model server. It configures Ratatoskr for a remote OpenAI-compatible `/v1` endpoint and runs a lightweight `/models` reachability check. Structured JSON quality depends on the remote model; OpenRouter remains the primary quality path.
 - **Monitoring** (`with-monitoring`) -- Prometheus, Grafana, Loki, Promtail, and node-exporter from the primary compose file.
 - **MCP Server** (`mcp`, `mcp-write`, `mcp-public`) -- Exposes article, search, ChromaDB, and aggregation tools/resources to external AI agents (OpenClaw, Claude Desktop, hosted SSE clients). Runs as a dedicated Docker container with SSE transport (`ratatoskr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
@@ -351,7 +357,7 @@ docker compose -f ops/docker/docker-compose.yml up -d --build
 ## Troubleshooting
 
 - "Access denied": verify `ALLOWED_USER_IDS` contains your Telegram numeric ID.
-- "Failed to fetch content": Firecrawl error; try again or check the target page access.
+- "Failed to fetch content": scraper chain exhausted all providers; check sidecar health (`curl localhost:3002/health`, `curl localhost:11235/health`, `curl localhost:3003/health`) and review logs for `scraper_chain_exhausted`. See `docs/TROUBLESHOOTING.md` for diagnosis steps.
 - "LLM error": OpenRouter API issue or model outage; rely on built-in retries/fallbacks; check logs.
 - Missing deps after update: rebuild the Docker image.
 - Secrets/env issues: recheck `.env` (quote special chars).

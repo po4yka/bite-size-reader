@@ -67,6 +67,7 @@ ADRs should generally remain unchanged once accepted, as they represent decision
 - [SPEC.md](../SPEC.md) - Technical specification (what the system does)
 - [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Architecture overview
 - [multi_agent_architecture.md](../multi_agent_architecture.md) - Multi-agent system design
+- [explanation/scraper-chain.md](../explanation/scraper-chain.md) - Scraper chain provider taxonomy, fallback logic, and deployment topology (see ADR-0006)
 - [CLAUDE.md](../../CLAUDE.md) - AI assistant guide
 
 ---

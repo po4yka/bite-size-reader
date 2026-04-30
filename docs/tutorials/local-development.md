@@ -135,9 +135,6 @@ API_HASH=your_api_hash
 BOT_TOKEN=your_bot_token
 ALLOWED_USER_IDS=your_user_id
 
-# Content extraction (required)
-FIRECRAWL_API_KEY=your_firecrawl_key
-
 # LLM (required)
 OPENROUTER_API_KEY=your_openrouter_key
 OPENROUTER_MODEL=deepseek/deepseek-v3.2
@@ -148,6 +145,12 @@ DB_PATH=./data/ratatoskr.db
 # Logging
 LOG_LEVEL=DEBUG
 ```
+
+Content extraction uses the built-in multi-provider chain (Scrapling →
+Crawl4AI → Firecrawl → Defuddle → Playwright → Crawlee → direct HTML →
+Scrapegraph-AI) with no API key required for the default in-process
+providers. See [`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md)
+for the full chain reference.
 
 **Get API keys**: See [Quickstart Tutorial § Get API Keys](quickstart.md#step-1-get-api-keys-3-minutes)
 

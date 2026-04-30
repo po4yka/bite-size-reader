@@ -50,13 +50,13 @@ sequenceDiagram
   participant TG as Telegram/FastAPI
   participant Router as Message Router
   participant UC as Use Cases (URL/Forward)
-  participant Extract as Extractors (Firecrawl/YouTube)
+  participant Extract as Extractors (ScraperChain/YouTube)
   participant LLM as Summarizer+Validator
   participant DB as SQLite/Persistence
 
   TG->>Router: incoming message / API call
   Router->>UC: normalize + route
-  UC->>Extract: fetch content (Firecrawl/yt-dlp)
+  UC->>Extract: fetch content (ScraperChain/yt-dlp)
   Extract->>LLM: content chunks
   LLM-->>UC: JSON summary (contract-validated)
   UC->>DB: persist request/crawl/llm_call/summary

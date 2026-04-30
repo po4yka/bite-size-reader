@@ -65,7 +65,7 @@ This specification defines the canonical contracts for the project (API shape, T
 
 Telegram service that accepts either:
 
-1) a **web article URL** -> parses it with **Firecrawl** to get clean Markdown/HTML/metadata -> summarizes via **OpenRouter** Chat Completions -> replies with a **strict JSON summary** -> persists *all* artifacts in SQLite.
+1) a **web article URL** -> extracts clean content via the multi-provider **scraper chain** (Scrapling, Crawl4AI, Firecrawl self-hosted, Defuddle, Playwright, Crawlee, direct HTML, ScrapeGraphAI) -> summarizes via **OpenRouter** Chat Completions -> replies with a **strict JSON summary** -> persists *all* artifacts in SQLite.
 2) a **YouTube video URL** -> downloads video (1080p) with **yt-dlp**, extracts transcript with **youtube-transcript-api** -> summarizes via **OpenRouter** -> replies with JSON summary -> persists *video metadata, file paths, and transcript* in SQLite.
 3) a **forwarded channel message** -> summarizes via **OpenRouter** -> replies with JSON summary -> persists *full Telegram message snapshot* and raw LLM call.
 
@@ -76,7 +76,7 @@ Everything runs in one Docker container; code lives on GitHub. Access is restric
 ### Goals
 
 - Robust URL -> content -> LLM -> JSON summary pipeline.
-- End‑to‑end data capture: Telegram request, full Firecrawl output, raw LLM response, final JSON summary.
+- End‑to‑end data capture: Telegram request, full scraper-chain output, raw LLM response, final JSON summary.
 - Deterministic **Summary JSON contract** with validation (length caps, types, dedupe).
 - Idempotence for URLs (normalized URL hash).
 - Clear observability (structured logs, audit trail, latency & token metrics).
@@ -90,13 +90,15 @@ Everything runs in one Docker container; code lives on GitHub. Access is restric
 
 ## External systems & authoritative docs
 
-- **Content Extraction (multi-provider)** — ordered fallback chain: Scrapling (in-process) → Firecrawl (self-hosted when enabled, cloud when configured) → Playwright-rendered HTML → Crawlee hybrid fallback → direct HTML fetch. Defuddle is available as an explicit opt-in provider. All providers return `FirecrawlResult` as the universal output model. Cloud Firecrawl also powers web search (`TopicSearchService`) when configured.
-  - **Scrapling** — in-process Python library with TLS impersonation + trafilatura extraction. Zero external dependencies.
-  - **Firecrawl** — converts pages into LLM‑ready content; handles proxies, caching, JS, PDFs; outputs **markdown**, **structured**, **screenshots**, **html**. Can run self-hosted (Docker) or cloud API.
-    Docs: https://docs.firecrawl.dev/features/scrape | API: https://docs.firecrawl.dev/api-reference/endpoint/scrape
-  - **Playwright** — browser-rendered fallback for JS-heavy pages before direct HTTP salvage.
-  - **Crawlee** — advanced single-page fallback that runs BeautifulSoup crawler first, then Playwright crawler.
-  - **Direct HTML** — httpx streaming fetch + trafilatura/html_to_text extraction. Last-resort fallback.
+- **Content Extraction (multi-provider)** — ordered fallback chain (default): Scrapling → Crawl4AI → Firecrawl (self-hosted) → Defuddle → Playwright → Crawlee → direct HTML → ScrapeGraphAI. Order is overridable via `SCRAPER_PROVIDER_ORDER`. Cloud Firecrawl is not used; `FIRECRAWL_API_KEY` is no longer required. All providers normalize output into `FirecrawlResult` (universal output model). Web search (`TopicSearchService`) requires `FIRECRAWL_SELF_HOSTED_ENABLED=true`.
+  - **Scrapling** — in-process Python library with TLS impersonation + trafilatura extraction. Zero external dependencies. Browserforge fingerprint randomization via `DynamicFetcher`.
+  - **Crawl4AI** — HTTP provider calling a `crawl4ai` Docker sidecar at port 11235. Configured via `SCRAPER_CRAWL4AI_URL` / `SCRAPER_CRAWL4AI_TOKEN`.
+  - **Firecrawl** — self-hosted only; converts pages into LLM-ready content; handles proxies, caching, JS, PDFs; outputs **markdown**, **structured**, **screenshots**, **html**. Docker sidecar at `firecrawl-api:3002`. Docs: https://docs.firecrawl.dev/features/scrape
+  - **Defuddle** — self-hosted Node sidecar at `defuddle-api:3003` (`ops/docker/defuddle/`). The public `defuddle.md` URL is deprecated.
+  - **Playwright** — browser-rendered fallback for JS-heavy pages. Browserforge fingerprint randomization applied.
+  - **Crawlee** — advanced single-page fallback that runs BeautifulSoup crawler first, then PlaywrightCrawler. Browserforge fingerprint randomization applied.
+  - **Direct HTML** — httpx streaming fetch + trafilatura/html_to_text extraction.
+  - **ScrapeGraphAI** — in-process last-resort provider; uses OpenRouter LLM to extract structured JSON then bridges to markdown. Activated only when all preceding providers fail.
 
 - **OpenRouter** — unified **Chat Completions** endpoint compatible with OpenAI schema; requires `Authorization: Bearer`; supports optional attribution headers `HTTP-Referer`, `X-Title`.
   Overview — https://openrouter.ai/docs/api-reference/overview
@@ -486,13 +488,13 @@ sequenceDiagram
   telegram_raw_json
   ```
 
-- **crawl_results** *(Firecrawl /scrape)*:
+- **crawl_results** *(scraper chain output — one row per request)*:
 
   ```
   id (PK)
   request_id (FK, unique)
   source_url
-  endpoint                 -- '/v2/scrape'
+  endpoint                 -- provider token: 'scrapling' | 'crawl4ai' | 'firecrawl_self_hosted' | 'defuddle' | 'playwright' | 'crawlee' | 'direct_html' | 'scrapegraph_ai'
   http_status
   status                   -- 'ok'|'error'
   options_json             -- formats, mobile, pdf, actions, timeouts
@@ -730,12 +732,15 @@ classDiagram
 ### URL flow
 
 1) `MessageRouter` classifies the interaction, persists a `requests` row (`type='url'`), normalizes the URL, and records the `dedupe_hash` via `MessagePersistence`.
-2) `URLProcessor.content_extractor` invokes the **`ContentScraperChain`** (ordered fallback: Scrapling -> Firecrawl -> Playwright -> Crawlee -> direct HTML fetch; Defuddle is opt-in):
-   - **Scrapling** (primary): In-process TLS-impersonated fetch + trafilatura text extraction. Zero external dependencies.
-   - **Firecrawl** (secondary): Uses self-hosted Firecrawl when `FIRECRAWL_SELF_HOSTED_ENABLED=true`; otherwise uses cloud Firecrawl when `FIRECRAWL_API_KEY` is configured. Formats: markdown/html by default; optional links/summary/images.
-   - **Playwright** (tertiary): Browser-rendered HTML extraction for JS-heavy pages. Minimum 400-char threshold.
-   - **Crawlee** (quaternary): Hybrid single-page extraction (`BeautifulSoupCrawler` -> `PlaywrightCrawler`) with retry budget.
-   - **Direct HTML** (last resort): httpx streaming fetch + `html_to_text()` extraction. Minimum 400-char threshold.
+2) `URLProcessor.content_extractor` invokes the **`ContentScraperChain`** (default order: Scrapling → Crawl4AI → Firecrawl self-hosted → Defuddle → Playwright → Crawlee → direct HTML → ScrapeGraphAI; overridable via `SCRAPER_PROVIDER_ORDER`):
+   - **Scrapling** (1): In-process TLS-impersonated fetch + trafilatura text extraction. Zero external dependencies. Browserforge fingerprint randomization.
+   - **Crawl4AI** (2): HTTP call to `crawl4ai` Docker sidecar at port 11235. Requires `SCRAPER_CRAWL4AI_ENABLED=true`.
+   - **Firecrawl self-hosted** (3): Uses `FIRECRAWL_SELF_HOSTED_URL` (default `http://firecrawl-api:3002`) when `FIRECRAWL_SELF_HOSTED_ENABLED=true`. Cloud Firecrawl is not used; `FIRECRAWL_API_KEY` is not required. Formats: markdown/html by default; optional links/summary/images.
+   - **Defuddle** (4): Self-hosted Node sidecar at `defuddle-api:3003`. Default enabled.
+   - **Playwright** (5): Browser-rendered HTML extraction for JS-heavy pages. Browserforge fingerprint randomization.
+   - **Crawlee** (6): Hybrid single-page extraction (`BeautifulSoupCrawler` -> `PlaywrightCrawler`) with retry budget. Browserforge fingerprint randomization.
+   - **Direct HTML** (7): httpx streaming fetch + `html_to_text()` extraction. Minimum 400-char threshold.
+   - **ScrapeGraphAI** (8, last resort): In-process LLM-driven extraction via OpenRouter; only activates when all preceding providers fail.
    - All providers return `FirecrawlResult` as the universal output model.
    - Persist the full raw response, extracted content, metadata, and latency telemetry in SQLite.
 3) `URLProcessor` determines language, loads the matching system prompt, and reports detection back to the user through `ResponseFormatter`.
@@ -872,7 +877,7 @@ flowchart LR
 
 ## Error handling & retries
 
-- **ContentScraperChain**: ordered fallback (Scrapling -> Firecrawl -> Playwright -> Crawlee -> direct HTML by default; Defuddle only when explicitly enabled and ordered). Each provider is tried in sequence; low-value extracted content falls through to later providers. Individual providers may retry internally (e.g., Firecrawl retries 3× with exponential backoff on 5xx/timeouts).
+- **ContentScraperChain**: ordered fallback (default: Scrapling → Crawl4AI → Firecrawl self-hosted → Defuddle → Playwright → Crawlee → direct HTML → ScrapeGraphAI; overridable via `SCRAPER_PROVIDER_ORDER`). Each provider is tried in sequence; low-value extracted content falls through to later providers. Individual providers may retry internally (e.g., Firecrawl retries 3× with exponential backoff on 5xx/timeouts).
 - **OpenRouter**: retry on 429/5xx; allow model fallback; always persist failing payload.
 - Telegram send errors -> short user notice + audit log.
 
@@ -910,7 +915,8 @@ API_HASH=...
 BOT_TOKEN=...
 ALLOWED_USER_IDS=123456789
 
-FIRECRAWL_API_KEY=...
+# FIRECRAWL_API_KEY is no longer required (cloud Firecrawl removed in af150730)
+# Set FIRECRAWL_SELF_HOSTED_ENABLED=true to use the self-hosted sidecar
 
 OPENROUTER_API_KEY=...
 OPENROUTER_MODEL=qwen/qwen3-max
@@ -1118,13 +1124,18 @@ Web client implemented in `clients/web/` (React + TypeScript + Vite + a project-
 
 Content extraction uses an ordered fallback chain via `ContentScraperChain`:
 
-1. **Scrapling** (primary) -- in-process Python library with TLS impersonation. Uses `trafilatura.extract()` for text extraction. Zero external dependencies, fastest path.
-2. **Self-hosted Firecrawl** (secondary) -- same v2 API running in the `with-firecrawl` Docker Compose profile (`firecrawl-api` on port 3002). Handles JS rendering, proxies, PDFs.
-3. **Playwright** (tertiary) -- browser-rendered extraction for JS-heavy pages. Minimum 400-char content threshold.
-4. **Crawlee** (quaternary) -- hybrid single-page extraction (`BeautifulSoupCrawler` then `PlaywrightCrawler`) before final salvage.
-5. **Direct HTML** (last resort) -- httpx streaming fetch + `html_to_text()`. Minimum 400-char content threshold.
+1. **Scrapling** (primary) -- in-process Python library with TLS impersonation. Uses `trafilatura.extract()` for text extraction. Zero external dependencies, fastest path. Browserforge fingerprint randomization via `DynamicFetcher`.
+2. **Crawl4AI** -- HTTP call to a `crawl4ai` Docker sidecar at `SCRAPER_CRAWL4AI_URL` (default port 11235). Optional bearer token via `SCRAPER_CRAWL4AI_TOKEN`.
+3. **Self-hosted Firecrawl** -- same v2 API running in the `with-scrapers` / `with-firecrawl` Docker Compose profile (`firecrawl-api` on port 3002). Handles JS rendering, proxies, PDFs. Requires `FIRECRAWL_SELF_HOSTED_ENABLED=true`.
+4. **Defuddle** -- self-hosted Node sidecar at `defuddle-api:3003` (`ops/docker/defuddle/`). The public `defuddle.md` API is deprecated.
+5. **Playwright** -- browser-rendered extraction for JS-heavy pages. Browserforge fingerprint randomization applied.
+6. **Crawlee** -- hybrid single-page extraction (`BeautifulSoupCrawler` then `PlaywrightCrawler`). Browserforge fingerprint randomization applied.
+7. **Direct HTML** -- httpx streaming fetch + `html_to_text()`. Minimum 400-char content threshold.
+8. **ScrapeGraphAI** (last resort) -- in-process LLM-driven provider; calls OpenRouter to extract structured JSON and bridges to markdown. Only activates when all preceding providers fail.
 
-All providers return `FirecrawlResult` as the universal output model. Cloud Firecrawl remains available for `TopicSearchService` (web search) when `FIRECRAWL_API_KEY` is set.
+All providers return `FirecrawlResult` as the universal output model. Cloud Firecrawl is no longer used; `FIRECRAWL_API_KEY` is not required. Web search (`TopicSearchService`) uses the self-hosted Firecrawl endpoint when `FIRECRAWL_SELF_HOSTED_ENABLED=true`.
+Default provider order: `scrapling -> crawl4ai -> firecrawl_self_hosted -> defuddle -> playwright -> crawlee -> direct_html -> scrapegraph_ai`. Override with `SCRAPER_PROVIDER_ORDER`.
+New env vars: `SCRAPER_CRAWL4AI_ENABLED`, `SCRAPER_CRAWL4AI_URL`, `SCRAPER_CRAWL4AI_TOKEN`, `SCRAPER_CRAWL4AI_TIMEOUT_SEC`, `SCRAPER_SCRAPEGRAPH_ENABLED`, `SCRAPER_SCRAPEGRAPH_TIMEOUT_SEC`.
 Operational controls include `SCRAPER_ENABLED`, `SCRAPER_PROFILE`, `SCRAPER_BROWSER_ENABLED`, and `SCRAPER_FORCE_PROVIDER`; startup fails fast on deprecated scraper env names (`SCRAPLING_*`, `SCRAPER_DIRECT_HTTP_ENABLED`).
 
 - Config: `app/config/scraper.py` (`ScraperConfig`)
@@ -1133,10 +1144,11 @@ Operational controls include `SCRAPER_ENABLED`, `SCRAPER_PROFILE`, `SCRAPER_BROW
 - Factory: `app/adapters/content/scraper/factory.py` (`ContentScraperFactory`)
 - ADR: [ADR-0006](adr/0006-multi-provider-scraper-chain.md)
 
-### Firecrawl (/scrape) -- Cloud API
+### Firecrawl (/scrape) -- Self-Hosted
 
+- Self-hosted only via the `with-scrapers` / `with-firecrawl` Docker Compose profile. Cloud Firecrawl is not used for article extraction; `FIRECRAWL_API_KEY` is no longer required.
 - Converts URL to **markdown**; can also return **html**, **structured**, **screenshots**. Handles proxies, caching, dynamic content, PDFs.
-- `FIRECRAWL_API_KEY` is optional -- only needed for cloud Firecrawl or web search enrichment.
+- Internal service endpoint: `http://firecrawl-api:3002`. Activate via `FIRECRAWL_SELF_HOSTED_ENABLED=true` and `FIRECRAWL_SELF_HOSTED_URL=http://firecrawl-api:3002`.
 - Consider `mobile` emulation and `parsers: ["pdf"]`.
 - Docs:
   - Feature: https://docs.firecrawl.dev/features/scrape
