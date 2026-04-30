@@ -153,3 +153,6 @@ app/static/digest/
 .desloppify/*
 scorecard.png
 .worktrees/
+
+*storybook.log
+storybook-static

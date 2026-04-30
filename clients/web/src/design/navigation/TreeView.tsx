@@ -13,7 +13,10 @@ export interface TreeViewProps
   hideLabel?: boolean;
   selected?: Array<string | number>;
   active?: string | number;
-  onSelect?: (event: React.MouseEvent<HTMLLIElement>, node: { id: string | number }) => void;
+  onSelect?: (
+    event: React.MouseEvent<HTMLLIElement>,
+    node: { id: string | number },
+  ) => void;
   multiselect?: boolean;
   size?: "default" | "compact";
   children?: ReactNode;
@@ -28,6 +31,7 @@ export function TreeView({
   multiselect: _multiselect,
   size: _size,
   className,
+  style,
   children,
   ...rest
 }: TreeViewProps) {
@@ -37,11 +41,25 @@ export function TreeView({
   void _multiselect;
   void _size;
   return (
-    <div className={["rtk-tree-view", className].filter(Boolean).join(" ")}>
+    <div
+      className={className}
+      style={{ fontFamily: "var(--frost-font-mono)", ...style }}
+    >
       {label && !hideLabel ? (
-        <p className="rtk-tree-view__label">{label}</p>
+        <p
+          style={{
+            fontSize: "11px",
+            fontWeight: 500,
+            textTransform: "uppercase",
+            letterSpacing: "1px",
+            opacity: 0.55,
+            marginBottom: "8px",
+          }}
+        >
+          {label}
+        </p>
       ) : null}
-      <ul role="tree" {...rest}>
+      <ul role="tree" style={{ listStyle: "none", margin: 0, padding: 0 }} {...rest}>
         {children}
       </ul>
     </div>
@@ -76,56 +94,105 @@ export function TreeNode({
   active = false,
   selected = false,
   className,
-  renderIcon: RenderIcon,
+  renderIcon: _renderIcon,
   children,
   depth = 0,
 }: TreeNodeProps) {
   void _id;
+  void _renderIcon;
   const isControlled = isExpanded !== undefined;
   const [internalOpen, setInternalOpen] = useState(defaultIsExpanded);
   const open = isControlled ? !!isExpanded : internalOpen;
   const hasChildren = Children.count(children) > 0;
+
   const handleToggle = (event: React.MouseEvent) => {
     event.stopPropagation();
     if (!isControlled) setInternalOpen((v) => !v);
     onToggle?.(event, { isExpanded: !open });
   };
+
+  /* indent guide: 1px ink hairline at parent's glyph column position */
+  const indentPx = depth * 24;
+
   return (
     <li
       role="treeitem"
       aria-selected={selected || undefined}
       aria-expanded={hasChildren ? open : undefined}
       aria-disabled={disabled || undefined}
-      className={[
-        "rtk-tree-node",
-        active ? "rtk-tree-node--active" : null,
-        selected ? "rtk-tree-node--selected" : null,
-        disabled ? "rtk-tree-node--disabled" : null,
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      className={className}
       onClick={(event) => onSelect?.(event)}
-      style={{ paddingLeft: `${depth * 0.75}rem` }}
+      style={{
+        listStyle: "none",
+        position: "relative",
+        paddingLeft: indentPx,
+        fontFamily: "var(--frost-font-mono)",
+      }}
     >
-      <div className="rtk-tree-node__row">
+      {/* Vertical indent guide line */}
+      {depth > 0 ? (
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: indentPx - 12,
+            top: 0,
+            bottom: 0,
+            width: 1,
+            background:
+              "color-mix(in oklch, var(--frost-ink) 40%, transparent)",
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          padding: "4px 0",
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.4 : selected || active ? 1 : 0.85,
+        }}
+      >
         {hasChildren ? (
           <button
             type="button"
-            className="rtk-tree-node__toggle"
             aria-label={open ? "Collapse" : "Expand"}
             onClick={handleToggle}
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "11px",
+              color: "var(--frost-ink)",
+              opacity: 0.85,
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
           >
             {open ? "▾" : "▸"}
           </button>
         ) : (
-          <span className="rtk-tree-node__toggle-spacer" />
+          <span style={{ width: "11px", flexShrink: 0 }} />
         )}
-        {RenderIcon ? <RenderIcon size={16} aria-hidden /> : null}
-        <span className="rtk-tree-node__label">{label}</span>
+        <span
+          style={{
+            fontSize: "13px",
+            fontWeight: selected || active ? 800 : 500,
+            letterSpacing: "0.4px",
+            lineHeight: "130%",
+          }}
+        >
+          {label}
+        </span>
       </div>
+
       {hasChildren && open ? (
-        <ul role="group" className="rtk-tree-node__group">
+        <ul role="group" style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {Children.map(children, (child) =>
             isValidElement<TreeNodeProps>(child)
               ? cloneElement(child, { depth: depth + 1 })

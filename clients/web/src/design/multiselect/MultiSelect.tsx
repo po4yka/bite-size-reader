@@ -7,6 +7,59 @@ import {
   type ReactNode,
 } from "react";
 
+/* ─── shared inline styles ─────────────────────────────────────────── */
+
+const monoLabel: React.CSSProperties = {
+  fontFamily: "var(--frost-font-mono)",
+  fontSize: "11px",
+  fontWeight: 500,
+  textTransform: "uppercase",
+  letterSpacing: "1px",
+  lineHeight: "130%",
+};
+
+const triggerStyle = (open: boolean, invalid: boolean): React.CSSProperties => ({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "8px",
+  width: "100%",
+  background: "var(--frost-page)",
+  border: "none",
+  borderBottom: invalid
+    ? "2px solid var(--frost-spark)"
+    : open
+      ? "1px solid var(--frost-ink)"
+      : "1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent)",
+  borderRadius: 0,
+  padding: "8px 12px",
+  fontFamily: "var(--frost-font-mono)",
+  fontSize: "13px",
+  fontWeight: 500,
+  letterSpacing: "0.4px",
+  color: "var(--frost-ink)",
+  cursor: "pointer",
+  textAlign: "left",
+});
+
+const menuStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "100%",
+  left: 0,
+  right: 0,
+  zIndex: 200,
+  background: "var(--frost-page)",
+  border: "1px solid var(--frost-ink)",
+  borderRadius: 0,
+  maxHeight: "240px",
+  overflowY: "auto",
+  listStyle: "none",
+  margin: 0,
+  padding: 0,
+};
+
+/* ─── MultiSelect ───────────────────────────────────────────────────── */
+
 export interface MultiSelectProps<T> {
   id?: string;
   titleText?: ReactNode;
@@ -69,54 +122,48 @@ export function MultiSelect<T>({
   }, [open, onMenuChange]);
 
   const itemKey = (item: T): string | number => {
-    const id = (item as { id?: string | number | null } | null | undefined)?.id;
-    return id ?? itemToString(item);
+    const itemId = (item as { id?: string | number | null } | null | undefined)
+      ?.id;
+    return itemId ?? itemToString(item);
   };
 
-  const selectedSet = useMemo(() => {
-    return new Set(current.map(itemKey));
-  }, [current, itemToString]); // eslint-disable-line react-hooks/exhaustive-deps
+  const selectedSet = useMemo(
+    () => new Set(current.map(itemKey)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [current, itemToString],
+  );
 
   const toggle = (item: T) => {
     const key = itemKey(item);
-    let next: T[];
-    if (selectedSet.has(key)) {
-      next = current.filter((it) => itemKey(it) !== key);
-    } else {
-      next = [...current, item];
-    }
+    const next = selectedSet.has(key)
+      ? current.filter((it) => itemKey(it) !== key)
+      : [...current, item];
     if (!isControlled) setInternal(next);
     onChange?.({ selectedItems: next });
   };
 
-  const cls = [
-    "rtk-multiselect",
-    invalid ? "rtk-multiselect--invalid" : null,
-    disabled ? "rtk-multiselect--disabled" : null,
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
   return (
-    <div className="rtk-form-field" ref={containerRef}>
+    <div
+      className={className}
+      style={{ fontFamily: "var(--frost-font-mono)", display: "flex", flexDirection: "column", gap: "4px" }}
+      ref={containerRef}
+    >
       {titleText ? (
         <label
           htmlFor={elementId}
-          className={
-            hideLabel
-              ? "rtk-form-field__label rtk-visually-hidden"
-              : "rtk-form-field__label"
-          }
+          style={{
+            ...monoLabel,
+            visibility: hideLabel ? "hidden" : "visible",
+          }}
         >
           {titleText}
         </label>
       ) : null}
-      <div className={cls}>
+
+      <div style={{ position: "relative" }}>
         <button
           id={elementId}
           type="button"
-          className="rtk-multiselect__toggle"
           aria-haspopup="listbox"
           aria-expanded={open}
           disabled={disabled}
@@ -125,19 +172,49 @@ export function MultiSelect<T>({
             setOpen(next);
             onMenuChange?.(next);
           }}
+          style={{
+            ...triggerStyle(open, invalid),
+            opacity: disabled ? 0.4 : 1,
+            cursor: disabled ? "not-allowed" : "pointer",
+          }}
         >
-          {current.length > 0 ? (
-            <span className="rtk-multiselect__count">{current.length}</span>
-          ) : null}
-          <span className="rtk-multiselect__label">
-            {current.length > 0
-              ? current.map(itemToString).join(", ")
-              : (placeholder ?? label ?? "Choose options")}
+          <span style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
+            {current.length > 0 ? (
+              /* Chip-style bracketed labels inline */
+              current.map((item, i) => (
+                <span
+                  key={i}
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "11px",
+                    fontWeight: 800,
+                    textTransform: "uppercase",
+                    letterSpacing: "1px",
+                    border: "1px solid var(--frost-ink)",
+                    padding: "1px 6px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  [ {itemToString(item)} ]
+                </span>
+              ))
+            ) : (
+              <span style={{ opacity: 0.55 }}>
+                {typeof placeholder === "string"
+                  ? placeholder
+                  : typeof label === "string"
+                    ? label
+                    : "Choose options"}
+              </span>
+            )}
           </span>
-          <span aria-hidden>▾</span>
+          <span aria-hidden style={{ flexShrink: 0, opacity: 0.55 }}>
+            ▾
+          </span>
         </button>
+
         {open ? (
-          <ul role="listbox" aria-multiselectable className="rtk-multiselect__menu">
+          <ul role="listbox" aria-multiselectable style={menuStyle}>
             {items.map((item, idx) => {
               const key = itemKey(item);
               const checked = selectedSet.has(key);
@@ -146,21 +223,41 @@ export function MultiSelect<T>({
                   role="option"
                   aria-selected={checked}
                   key={String(key) + ":" + idx}
-                  className={[
-                    "rtk-multiselect__item",
-                    checked ? "rtk-multiselect__item--selected" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
                   onClick={() => toggle(item)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "13px",
+                    fontWeight: checked ? 800 : 500,
+                    letterSpacing: "0.4px",
+                    borderBottom:
+                      "1px solid color-mix(in oklch, var(--frost-ink) 20%, transparent)",
+                    background: checked
+                      ? "color-mix(in oklch, var(--frost-ink) 8%, var(--frost-page))"
+                      : "transparent",
+                  }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    readOnly
-                    tabIndex={-1}
-                    aria-hidden
-                  />
+                  {/* 12×12 checkbox indicator */}
+                  <span
+                    style={{
+                      width: 12,
+                      height: 12,
+                      border: "1px solid var(--frost-ink)",
+                      borderRadius: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      fontSize: "9px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    {checked ? "✕" : null}
+                  </span>
                   <span>{itemToString(item)}</span>
                 </li>
               );
@@ -168,8 +265,16 @@ export function MultiSelect<T>({
           </ul>
         ) : null}
       </div>
+
       {invalid && invalidText ? (
-        <div className="rtk-form-field__message rtk-form-field__message--error">
+        <div
+          style={{
+            fontSize: "11px",
+            opacity: 0.85,
+            borderLeft: "2px solid var(--frost-spark)",
+            paddingLeft: "6px",
+          }}
+        >
           {invalidText}
         </div>
       ) : null}
@@ -177,10 +282,8 @@ export function MultiSelect<T>({
   );
 }
 
-/**
- * `FilterableMultiSelect` adds a typeahead filter on top of `MultiSelect`.
- * The shim implementation reuses MultiSelect with a controlled filter input.
- */
+/* ─── FilterableMultiSelect ─────────────────────────────────────────── */
+
 export function FilterableMultiSelect<T>(
   props: MultiSelectProps<T> & {
     onInputValueChange?: (value: string) => void;
@@ -188,24 +291,48 @@ export function FilterableMultiSelect<T>(
   },
 ) {
   const [filter, setFilter] = useState("");
-  const { items, itemToString = (it) => (it ? String(it) : ""), ...rest } = props;
+  const {
+    items,
+    itemToString = (it) => (it ? String(it) : ""),
+    onInputValueChange,
+    ...rest
+  } = props;
+
   const filtered = useMemo(() => {
     if (!filter.trim()) return items;
     const needle = filter.toLowerCase();
-    return items.filter((it) => itemToString(it).toLowerCase().includes(needle));
+    return items.filter((it) =>
+      itemToString(it).toLowerCase().includes(needle),
+    );
   }, [items, filter, itemToString]);
+
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
       <input
         type="search"
-        className="rtk-multiselect__filter"
         placeholder={
           typeof rest.placeholder === "string" ? rest.placeholder : "Filter…"
         }
         value={filter}
         onChange={(event) => {
           setFilter(event.currentTarget.value);
-          props.onInputValueChange?.(event.currentTarget.value);
+          onInputValueChange?.(event.currentTarget.value);
+        }}
+        style={{
+          fontFamily: "var(--frost-font-mono)",
+          fontSize: "13px",
+          fontWeight: 500,
+          letterSpacing: "0.4px",
+          border: "none",
+          borderBottom:
+            "1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent)",
+          borderRadius: 0,
+          padding: "8px 12px",
+          background: "transparent",
+          color: "var(--frost-ink)",
+          outline: "none",
+          width: "100%",
+          boxSizing: "border-box",
         }}
       />
       <MultiSelect items={filtered} itemToString={itemToString} {...rest} />

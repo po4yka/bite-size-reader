@@ -22,7 +22,6 @@ export interface DropdownProps<T> {
   disabled?: boolean;
   invalid?: boolean;
   invalidText?: ReactNode;
-  /** Change callback with the selected item. */
   onChange?: (state: { selectedItem: T | null }) => void;
   className?: string;
 }
@@ -69,34 +68,38 @@ export function Dropdown<T>({
   };
 
   const itemKey = (item: T): string | number => {
-    const id = (item as { id?: string | number | null } | null | undefined)?.id;
-    return id ?? itemToString(item);
+    const itemId = (item as { id?: string | number | null } | null | undefined)
+      ?.id;
+    return itemId ?? itemToString(item);
   };
 
-  const cls = [
-    "rtk-dropdown",
-    invalid ? "rtk-dropdown--invalid" : null,
-    disabled ? "rtk-dropdown--disabled" : null,
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
   return (
-    <div className="rtk-form-field" ref={containerRef}>
+    <div
+      className={className}
+      style={{
+        fontFamily: "var(--frost-font-mono)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px",
+      }}
+      ref={containerRef}
+    >
       {titleText ? (
         <label
           htmlFor={elementId}
-          className={
-            hideLabel
-              ? "rtk-form-field__label rtk-visually-hidden"
-              : "rtk-form-field__label"
-          }
+          style={{
+            fontSize: "11px",
+            fontWeight: 500,
+            textTransform: "uppercase",
+            letterSpacing: "1px",
+            visibility: hideLabel ? "hidden" : "visible",
+          }}
         >
           {titleText}
         </label>
       ) : null}
-      <div className={cls}>
+
+      <div style={{ position: "relative" }}>
         <button
           id={elementId}
           type="button"
@@ -104,19 +107,62 @@ export function Dropdown<T>({
           aria-expanded={open}
           disabled={disabled}
           onClick={() => setOpen((v) => !v)}
-          className="rtk-dropdown__toggle"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "8px",
+            width: "100%",
+            background: "var(--frost-page)",
+            border: "none",
+            borderBottom: invalid
+              ? "2px solid var(--frost-spark)"
+              : "1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent)",
+            borderRadius: 0,
+            padding: "8px 12px",
+            fontFamily: "var(--frost-font-mono)",
+            fontSize: "13px",
+            fontWeight: 500,
+            letterSpacing: "0.4px",
+            color: "var(--frost-ink)",
+            cursor: disabled ? "not-allowed" : "pointer",
+            opacity: disabled ? 0.4 : 1,
+            textAlign: "left",
+          }}
         >
-          <span className="rtk-dropdown__label">
-            {current
-              ? ItemElement
-                ? <ItemElement item={current} />
-                : itemToString(current)
-              : (label ?? "Choose…")}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {current != null ? (
+              ItemElement ? <ItemElement item={current} /> : itemToString(current)
+            ) : (
+              <span style={{ opacity: 0.55 }}>
+                {typeof label === "string" ? label : "Choose…"}
+              </span>
+            )}
           </span>
-          <span aria-hidden>▾</span>
+          <span aria-hidden style={{ flexShrink: 0, opacity: 0.55 }}>
+            ▾
+          </span>
         </button>
+
         {open ? (
-          <ul role="listbox" className="rtk-dropdown__menu">
+          <ul
+            role="listbox"
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              right: 0,
+              zIndex: 200,
+              background: "var(--frost-page)",
+              border: "1px solid var(--frost-ink)",
+              borderRadius: 0,
+              maxHeight: "240px",
+              overflowY: "auto",
+              listStyle: "none",
+              margin: 0,
+              padding: 0,
+            }}
+          >
             {items.map((item, idx) => {
               const key = itemKey(item);
               const isCurrent = current != null && itemKey(current) === key;
@@ -125,13 +171,23 @@ export function Dropdown<T>({
                   role="option"
                   aria-selected={isCurrent || undefined}
                   key={String(key) + ":" + idx}
-                  className={[
-                    "rtk-dropdown__item",
-                    isCurrent ? "rtk-dropdown__item--selected" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
                   onClick={() => choose(item)}
+                  style={{
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "13px",
+                    fontWeight: isCurrent ? 800 : 500,
+                    letterSpacing: "0.4px",
+                    borderBottom:
+                      "1px solid color-mix(in oklch, var(--frost-ink) 20%, transparent)",
+                    background: isCurrent
+                      ? "color-mix(in oklch, var(--frost-ink) 8%, var(--frost-page))"
+                      : "transparent",
+                    borderLeft: isCurrent
+                      ? "2px solid var(--frost-spark)"
+                      : "2px solid transparent",
+                  }}
                 >
                   {ItemElement ? <ItemElement item={item} /> : itemToString(item)}
                 </li>
@@ -140,8 +196,16 @@ export function Dropdown<T>({
           </ul>
         ) : null}
       </div>
+
       {invalid && invalidText ? (
-        <div className="rtk-form-field__message rtk-form-field__message--error">
+        <div
+          style={{
+            fontSize: "11px",
+            opacity: 0.85,
+            borderLeft: "2px solid var(--frost-spark)",
+            paddingLeft: "6px",
+          }}
+        >
           {invalidText}
         </div>
       ) : null}

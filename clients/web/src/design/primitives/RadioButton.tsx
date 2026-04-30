@@ -31,8 +31,18 @@ export const RadioButton = forwardRef<HTMLInputElement, RadioButtonProps>(
   ) {
     const fallbackId = useId();
     const inputId = id ?? fallbackId;
+
     return (
-      <div className={["rtk-radio", className].filter(Boolean).join(" ")}>
+      <div
+        className={className}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "8px",
+          fontFamily: "var(--frost-font-mono)",
+        }}
+      >
+        {/* Visually hidden real input */}
         <input
           ref={ref}
           id={inputId}
@@ -42,11 +52,63 @@ export const RadioButton = forwardRef<HTMLInputElement, RadioButtonProps>(
           checked={checked}
           disabled={disabled}
           onChange={(event) => onChange?.(value, name, event)}
-          className="rtk-radio__input"
+          style={{
+            position: "absolute",
+            width: 1,
+            height: 1,
+            margin: -1,
+            overflow: "hidden",
+            clip: "rect(0,0,0,0)",
+            whiteSpace: "nowrap",
+            border: 0,
+          }}
           {...rest}
         />
+
+        {/* Custom 16×16 square frame */}
+        <label
+          htmlFor={inputId}
+          aria-hidden
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 16,
+            height: 16,
+            border: "1px solid var(--frost-ink)",
+            borderRadius: 0,
+            background: "var(--frost-page)",
+            cursor: disabled ? "not-allowed" : "pointer",
+            opacity: disabled ? 0.4 : 1,
+            boxSizing: "border-box",
+            flexShrink: 0,
+          }}
+        >
+          {/* 8×8 ink-filled inner square when selected */}
+          {checked ? (
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                background: "var(--frost-ink)",
+                borderRadius: 0,
+                display: "block",
+              }}
+            />
+          ) : null}
+        </label>
+
         {labelText ? (
-          <label htmlFor={inputId} className="rtk-radio__label">
+          <label
+            htmlFor={inputId}
+            style={{
+              fontSize: "13px",
+              fontWeight: 500,
+              letterSpacing: "0.4px",
+              cursor: disabled ? "not-allowed" : "pointer",
+              opacity: disabled ? 0.4 : 1,
+            }}
+          >
             {labelText}
           </label>
         ) : null}
@@ -88,19 +150,40 @@ export function RadioButtonGroup({
   className,
   children,
 }: RadioButtonGroupProps) {
-  const cls = [
-    "rtk-radio-group",
-    `rtk-radio-group--${orientation}`,
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
   return (
-    <fieldset className={cls} disabled={disabled} aria-invalid={invalid || undefined}>
+    <fieldset
+      className={className}
+      disabled={disabled}
+      aria-invalid={invalid || undefined}
+      style={{
+        border: "none",
+        padding: 0,
+        margin: 0,
+        fontFamily: "var(--frost-font-mono)",
+      }}
+    >
       {legendText ? (
-        <legend className="rtk-radio-group__legend">{legendText}</legend>
+        <legend
+          style={{
+            fontSize: "11px",
+            fontWeight: 500,
+            textTransform: "uppercase",
+            letterSpacing: "1px",
+            marginBottom: "8px",
+            opacity: 0.55,
+          }}
+        >
+          {legendText}
+        </legend>
       ) : null}
-      <div className="rtk-radio-group__items">
+      <div
+        style={{
+          display: "flex",
+          flexDirection: orientation === "vertical" ? "column" : "row",
+          gap: "var(--frost-gap-row, 8px)",
+          flexWrap: "wrap",
+        }}
+      >
         {Children.map(children, (child) => {
           if (!isValidElement<RadioButtonProps>(child)) return child;
           return cloneElement(child, {
@@ -116,11 +199,23 @@ export function RadioButtonGroup({
         })}
       </div>
       {invalid && invalidText ? (
-        <div className="rtk-form-field__message rtk-form-field__message--error">
+        <div
+          style={{
+            fontSize: "11px",
+            opacity: 0.85,
+            borderLeft: "2px solid var(--frost-spark)",
+            paddingLeft: "6px",
+            marginTop: "4px",
+          }}
+        >
           {invalidText}
         </div>
       ) : helperText ? (
-        <div className="rtk-form-field__helper">{helperText}</div>
+        <div
+          style={{ fontSize: "11px", opacity: 0.55, marginTop: "4px" }}
+        >
+          {helperText}
+        </div>
       ) : null}
     </fieldset>
   );

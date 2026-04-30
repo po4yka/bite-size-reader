@@ -38,7 +38,15 @@ export function ContentSwitcher({
   return (
     <div
       role="tablist"
-      className={["rtk-content-switcher", className].filter(Boolean).join(" ")}
+      className={className}
+      style={{
+        display: "inline-flex",
+        flexDirection: "row",
+        gap: "var(--frost-gap-row, 8px)",
+        borderBottom:
+          "1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent)",
+        fontFamily: "var(--frost-font-mono)",
+      }}
     >
       {items.map((child, idx) =>
         cloneElement(child, {
@@ -76,6 +84,7 @@ export function Switch({
   __selected,
   __onClick,
   children,
+  style,
   ...rest
 }: SwitchProps) {
   void _name;
@@ -87,16 +96,29 @@ export function Switch({
       tabIndex={__selected ? 0 : -1}
       disabled={disabled}
       onClick={__onClick}
-      className={[
-        "rtk-content-switcher__item",
-        __selected ? "rtk-content-switcher__item--selected" : null,
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      className={className}
+      style={{
+        fontFamily: "var(--frost-font-mono)",
+        fontSize: "11px",
+        fontWeight: 800,
+        textTransform: "uppercase",
+        letterSpacing: "1px",
+        lineHeight: "130%",
+        background: "transparent",
+        border: "none",
+        borderLeft: __selected
+          ? "2px solid var(--frost-spark)"
+          : "2px solid transparent",
+        padding: "8px 4px",
+        cursor: disabled ? "not-allowed" : "pointer",
+        color: "var(--frost-ink)",
+        opacity: __selected ? 1 : 0.55,
+        transition: "opacity 0.08s linear, border-left-color 0.08s linear",
+        ...style,
+      }}
       {...rest}
     >
-      {children ?? text}
+      [ {children ?? text} ]
     </button>
   );
 }

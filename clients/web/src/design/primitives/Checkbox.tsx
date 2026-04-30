@@ -11,7 +11,6 @@ export interface CheckboxProps
   id?: string;
   labelText?: ReactNode;
   hideLabel?: boolean;
-  /** Change callback with the checked state and resolved input id. */
   onChange?: (
     event: ChangeEvent<HTMLInputElement>,
     state: { checked: boolean; id: string },
@@ -34,6 +33,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       invalid = false,
       invalidText,
       className,
+      checked,
+      disabled,
       ...rest
     },
     ref,
@@ -41,39 +42,106 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     void _indeterminate;
     const fallbackId = useId();
     const inputId = id ?? fallbackId;
+
     return (
-      <div className={["rtk-checkbox", className].filter(Boolean).join(" ")}>
-        <input
-          ref={ref}
-          id={inputId}
-          type="checkbox"
-          className="rtk-checkbox__input"
-          onChange={(event) =>
-            onChange?.(event, {
-              checked: event.currentTarget.checked,
-              id: inputId,
-            })
-          }
-          aria-invalid={invalid || undefined}
-          {...rest}
-        />
-        {labelText ? (
+      <div
+        className={className}
+        style={{
+          display: "inline-flex",
+          flexDirection: "column",
+          gap: "4px",
+          fontFamily: "var(--frost-font-mono)",
+        }}
+      >
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+          {/* Visually hidden real input */}
+          <input
+            ref={ref}
+            id={inputId}
+            type="checkbox"
+            checked={checked}
+            disabled={disabled}
+            onChange={(event) =>
+              onChange?.(event, {
+                checked: event.currentTarget.checked,
+                id: inputId,
+              })
+            }
+            aria-invalid={invalid || undefined}
+            style={{
+              position: "absolute",
+              width: 1,
+              height: 1,
+              margin: -1,
+              overflow: "hidden",
+              clip: "rect(0,0,0,0)",
+              whiteSpace: "nowrap",
+              border: 0,
+            }}
+            {...rest}
+          />
+
+          {/* Custom 16×16 square frame */}
           <label
             htmlFor={inputId}
-            className={
-              hideLabel
-                ? "rtk-checkbox__label rtk-visually-hidden"
-                : "rtk-checkbox__label"
-            }
+            aria-hidden
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 16,
+              height: 16,
+              border: invalid
+                ? "2px solid var(--frost-spark)"
+                : "1px solid var(--frost-ink)",
+              borderRadius: 0,
+              background: "var(--frost-page)",
+              cursor: disabled ? "not-allowed" : "pointer",
+              opacity: disabled ? 0.4 : 1,
+              boxSizing: "border-box",
+              flexShrink: 0,
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "11px",
+              fontWeight: 800,
+              color: "var(--frost-ink)",
+              lineHeight: 1,
+              userSelect: "none",
+            }}
           >
-            {labelText}
+            {checked ? "✕" : null}
           </label>
-        ) : null}
+
+          {labelText ? (
+            <label
+              htmlFor={inputId}
+              style={{
+                fontSize: "13px",
+                fontWeight: 500,
+                letterSpacing: "0.4px",
+                cursor: disabled ? "not-allowed" : "pointer",
+                opacity: disabled ? 0.4 : 1,
+                visibility: hideLabel ? "hidden" : "visible",
+              }}
+            >
+              {labelText}
+            </label>
+          ) : null}
+        </div>
+
         {helperText ? (
-          <div className="rtk-form-field__helper">{helperText}</div>
+          <div style={{ fontSize: "11px", opacity: 0.55, letterSpacing: "0.4px" }}>
+            {helperText}
+          </div>
         ) : null}
         {invalid && invalidText ? (
-          <div className="rtk-form-field__message rtk-form-field__message--error">
+          <div
+            style={{
+              fontSize: "11px",
+              opacity: 0.85,
+              borderLeft: "2px solid var(--frost-spark)",
+              paddingLeft: "6px",
+            }}
+          >
             {invalidText}
           </div>
         ) : null}
