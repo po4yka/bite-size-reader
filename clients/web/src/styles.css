@@ -11,7 +11,7 @@
   --ratatoskr-space-subsection: 1.25rem;
   --ratatoskr-space-element: 0.75rem;
   --ratatoskr-surface-hover: var(--rtk-color-layer-hover, rgba(0, 0, 0, 0.04));
-  --ratatoskr-border-hover: var(--rtk-color-border-strong, #8d8d8d);
+  --ratatoskr-border-hover: var(--rtk-color-border-strong);
   --ratatoskr-radius-sm: 0.25rem;
   --ratatoskr-transition-fast: 110ms cubic-bezier(0.2, 0, 0.38, 0.9);
   --ratatoskr-transition-normal: 150ms cubic-bezier(0.2, 0, 0.38, 0.9);
@@ -53,10 +53,11 @@ body,
 
 body {
   margin: 0;
-  background: var(--rtk-color-bg);
-  color: var(--rtk-color-text);
+  background: var(--frost-page);
+  color: var(--frost-ink);
+  font-family: var(--frost-font-mono);
   overflow-x: hidden;
-  -webkit-tap-highlight-color: var(--rtk-color-focus, rgba(0, 0, 0, 0.12));
+  -webkit-tap-highlight-color: color-mix(in oklch, var(--frost-ink) 12%, transparent);
   touch-action: manipulation;
 }
 
@@ -680,10 +681,10 @@ body {
   align-items: center;
   gap: 0.25rem;
   padding: 0.125rem 0.5rem 0.125rem 0.25rem;
-  border: 1px solid var(--rtk-color-border-subtle, #e0e0e0);
+  border: 1px solid var(--rtk-color-border-subtle);
   border-radius: 1rem;
-  background: var(--rtk-color-layer, #f4f4f4);
-  color: var(--rtk-color-text, #161616);
+  background: var(--rtk-color-layer);
+  color: var(--frost-ink);
   font-size: 0.75rem;
   line-height: 1.125rem;
   cursor: pointer;
@@ -701,7 +702,7 @@ body {
   width: 0.75rem;
   height: 0.75rem;
   border-radius: 50%;
-  border: 1px solid var(--rtk-color-border-subtle, #e0e0e0);
+  border: 1px solid var(--rtk-color-border-subtle);
   flex-shrink: 0;
 }
 
@@ -728,30 +729,6 @@ body {
   .result-tile,
   .article-stat {
     transition: none;
-  }
-}
-
-/*
- * Skeleton shimmer keyframes live in `./design/base.css`
- * (`@keyframes ratatoskr-shimmer`).
- */
-.rtk-skeleton {
-  background-image: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.08) 40%,
-    rgba(255, 255, 255, 0.14) 50%,
-    rgba(255, 255, 255, 0.08) 60%,
-    transparent 100%
-  );
-  background-size: 200% 100%;
-  animation: ratatoskr-shimmer 1.5s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rtk-skeleton {
-    animation: none;
-    background-image: none;
   }
 }
 

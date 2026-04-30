@@ -1,0 +1,14 @@
+/*
+ * Frost font imports. Self-hosted via @fontsource (OFL-licensed, bundled by Vite).
+ * Must be imported before tokens.css so font stacks resolve correctly.
+ *
+ * JetBrains Mono — all UI surfaces (labels, body, meta, headings, code)
+ *   Weights: 400 (thin/low-signal), 500 (body/default), 800 (emph/uppercase)
+ *
+ * Source Serif 4 — reader body and pull-quotes only (italic 500)
+ */
+
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/800.css";
+@import "@fontsource/source-serif-4/500-italic.css";

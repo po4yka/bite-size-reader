@@ -1,67 +1,143 @@
 /*
- * Project-owned design tokens for the Ratatoskr web client.
+ * Frost design tokens for the Ratatoskr web client.
  *
- * Variables are namespaced `--rtk-*` and consumed via `var(--rtk-X, fallback)`.
- * The fallback should always be a literal value or another `--rtk-*` var; do
- * not chain to external design systems.
+ * Source of truth: frost-tokens.json (DTCG v2.13.0).
+ * Namespace: --frost-* for Frost primitives.
+ * Back-compat aliases: --rtk-* at the bottom, resolving to Frost tokens.
+ * Legacy --rtk-* names are pending removal in Phase 4.
  */
+
+/* ─── Frost primitives ─────────────────────────────────────────────────────── */
 
 :root,
 [data-theme="light"] {
-  /* Color */
-  --rtk-color-bg: oklch(98.6% 0.012 96);
-  --rtk-color-text: oklch(22% 0.025 72);
-  --rtk-color-text-muted: oklch(45% 0.03 72);
-  --rtk-color-text-error: oklch(51% 0.18 28);
-  --rtk-color-support-error: oklch(51% 0.18 28);
-  --rtk-color-layer: oklch(96.2% 0.015 95);
-  --rtk-color-layer-hover: oklch(92.5% 0.018 95);
-  --rtk-color-layer-accent: oklch(88.2% 0.025 88);
-  --rtk-color-border-subtle: oklch(86.5% 0.024 88);
-  --rtk-color-border-strong: oklch(52% 0.045 80);
-  --rtk-color-focus: oklch(49% 0.145 31);
-  --rtk-color-accent: oklch(49% 0.145 31);
-  --rtk-color-success: oklch(44% 0.105 150);
-  --rtk-color-warning: oklch(63% 0.13 74);
-  --rtk-color-shadow: rgba(0, 0, 0, 0.1);
+  /* Color — two-color rule: ink + page invert in dark mode; spark stays */
+  --frost-ink: #1C242C;
+  --frost-page: #F0F2F5;
+  --frost-spark: #DC3545;
+  --frost-ink-pure: #000000;   /* print/PDF only — not for UI */
+  --frost-page-pure: #FFFFFF;  /* print/PDF only — not for UI */
 
-  /* Spacing */
+  /* Alpha ladder — eight steps applied to ink */
+  --frost-alpha-quiet: 0.25;
+  --frost-alpha-dot: 0.40;
+  --frost-alpha-inactive: 0.50;
+  --frost-alpha-low-signal: 0.55;
+  --frost-alpha-meta: 0.60;
+  --frost-alpha-secondary: 0.70;
+  --frost-alpha-active-soft: 0.85;
+  --frost-alpha-active: 1.00;
+
+  /* Spacing — cell-grid rhythm (cell = 8px) */
+  --frost-cell: 8px;
+  --frost-half-line: 8px;
+  --frost-line: 16px;
+  --frost-gap-inline: 4px;
+  --frost-gap-row: 8px;
+  --frost-gap-section: 48px;
+  --frost-gap-page: 64px;
+  --frost-pad-page: 32px;
+
+  /* Strips — content column widths (22 × cell multiples) */
+  --frost-strip-1: 176px;
+  --frost-strip-2: 352px;
+  --frost-strip-3: 528px;
+  --frost-strip-4: 704px;
+  --frost-strip-5: 880px;
+  --frost-strip-6: 1056px;
+  --frost-strip-7: 1232px;
+  --frost-strip-8: 1408px;
+
+  /* Borders — hairline only; spark bar for critical signal */
+  --frost-hairline: 1px;
+  --frost-spark-web: 2px;
+  --frost-spark-mobile: 4px;
+
+  /* Typography — font families */
+  --frost-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --frost-font-serif: "Source Serif 4", "Source Serif Pro", Georgia, serif;
+
+  /* Typography — mono-xs: 11px / 500 / 1.3 / 1px tracking */
+  --frost-type-mono-xs-size: 11px;
+  --frost-type-mono-xs-tracking: 1px;
+  --frost-type-mono-xs-weight: 500;
+  --frost-type-mono-xs-line-height: 1.3;
+
+  /* Typography — mono-sm: 12px / 500 / 1.3 / 0.4px tracking */
+  --frost-type-mono-sm-size: 12px;
+  --frost-type-mono-sm-tracking: 0.4px;
+  --frost-type-mono-sm-weight: 500;
+  --frost-type-mono-sm-line-height: 1.3;
+
+  /* Typography — mono-body: 13px / 500 / 1.3 / 0.4px tracking */
+  --frost-type-mono-body-size: 13px;
+  --frost-type-mono-body-tracking: 0.4px;
+  --frost-type-mono-body-weight: 500;
+  --frost-type-mono-body-line-height: 1.3;
+
+  /* Typography — mono-emph: 13px / 800 / 1.3 / 1px tracking (UPPERCASE) */
+  --frost-type-mono-emph-size: 13px;
+  --frost-type-mono-emph-tracking: 1px;
+  --frost-type-mono-emph-weight: 800;
+  --frost-type-mono-emph-line-height: 1.3;
+
+  /* Typography — serif-reader: 16px / 500 italic / 1.55 / 0 tracking */
+  --frost-type-serif-reader-size: 16px;
+  --frost-type-serif-reader-tracking: 0;
+  --frost-type-serif-reader-weight: 500;
+  --frost-type-serif-reader-line-height: 1.55;
+
+  /* Typography — serif-reader-zoom: 22px / 500 italic / 1.55 / 0 tracking */
+  --frost-type-serif-reader-zoom-size: 22px;
+  --frost-type-serif-reader-zoom-tracking: 0;
+  --frost-type-serif-reader-zoom-weight: 500;
+  --frost-type-serif-reader-zoom-line-height: 1.55;
+
+  /* ─── Back-compat aliases — pending removal in Phase 4 ──────────────────── */
+
+  /* Color aliases */
+  --rtk-color-bg: var(--frost-page);
+  --rtk-color-text: var(--frost-ink);
+  --rtk-color-text-muted: color-mix(in oklch, var(--frost-ink) 55%, transparent);
+  --rtk-color-text-error: var(--frost-ink); /* error = ink + spark hairline, never red text */
+  --rtk-color-support-error: var(--frost-spark);
+  --rtk-color-layer: color-mix(in oklch, var(--frost-ink) 5%, var(--frost-page));
+  --rtk-color-layer-hover: color-mix(in oklch, var(--frost-ink) 8%, var(--frost-page));
+  --rtk-color-layer-accent: color-mix(in oklch, var(--frost-ink) 12%, var(--frost-page));
+  --rtk-color-border-subtle: color-mix(in oklch, var(--frost-ink) 25%, transparent);
+  --rtk-color-border-strong: color-mix(in oklch, var(--frost-ink) 50%, transparent);
+  --rtk-color-focus: var(--frost-ink);
+  --rtk-color-accent: var(--frost-ink);
+  --rtk-color-success: var(--frost-ink);
+  --rtk-color-warning: var(--frost-ink);
+  --rtk-color-shadow: transparent;
+
+  /* Spacing aliases — retune to Frost cell rhythm */
   --rtk-space-1: 0.125rem;
   --rtk-space-2: 0.25rem;
-  --rtk-space-3: 0.5rem;
-  --rtk-space-4: 0.75rem;
-  --rtk-space-5: 1rem;
+  --rtk-space-3: 0.5rem;   /* cell */
+  --rtk-space-4: 0.5rem;
+  --rtk-space-5: 1rem;     /* line */
   --rtk-space-6: 1.5rem;
-  --rtk-space-7: 2rem;
-  --rtk-space-8: 2.5rem;
+  --rtk-space-7: 2rem;     /* pad-page */
+  --rtk-space-8: 3rem;     /* gap-section */
 
-  /* Typography */
-  --rtk-font-body-01-size: 0.875rem;
+  /* Typography aliases — bridge to Frost */
+  --rtk-font-body-01-size: var(--frost-type-mono-body-size);
   --rtk-font-body-02-size: 1rem;
-  --rtk-font-label-size: 0.75rem;
-  --rtk-font-heading-04-size: 1.75rem;
-  --rtk-font-heading-04-tracking: 0;
-  --rtk-font-heading-04-leading: 1.29;
+  --rtk-font-label-size: var(--frost-type-mono-xs-size);
+  --rtk-font-heading-04-size: 1.25rem;
+  --rtk-font-heading-04-tracking: 1px;
+  --rtk-font-heading-04-leading: 1.3;
 
-  /* Radius */
-  --rtk-radius-sm: 0.25rem;
-  --rtk-radius-md: 0.5rem;
+  /* Radius aliases — Frost has none; alias to 0 */
+  --rtk-radius-sm: 0;
+  --rtk-radius-md: 0;
 }
 
 [data-theme="dark"] {
-  --rtk-color-bg: oklch(19% 0.018 78);
-  --rtk-color-text: oklch(93% 0.014 96);
-  --rtk-color-text-muted: oklch(74% 0.02 92);
-  --rtk-color-text-error: oklch(70% 0.16 26);
-  --rtk-color-support-error: oklch(70% 0.16 26);
-  --rtk-color-layer: oklch(25% 0.02 78);
-  --rtk-color-layer-hover: oklch(31% 0.022 78);
-  --rtk-color-layer-accent: oklch(35% 0.027 84);
-  --rtk-color-border-subtle: oklch(37% 0.026 84);
-  --rtk-color-border-strong: oklch(62% 0.035 88);
-  --rtk-color-focus: oklch(72% 0.15 48);
-  --rtk-color-accent: oklch(72% 0.15 48);
-  --rtk-color-success: oklch(71% 0.12 152);
-  --rtk-color-warning: oklch(76% 0.13 76);
-  --rtk-color-shadow: rgba(0, 0, 0, 0.4);
+  /* Color — ink and page flip; spark stays */
+  --frost-ink: #E8ECF0;
+  --frost-page: #12161C;
+  /* --frost-spark: #DC3545 — unchanged in dark mode */
 }

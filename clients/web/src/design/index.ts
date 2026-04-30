@@ -5,6 +5,7 @@
  * HTML+CSS+TSX and contain no third-party design system dependencies.
  */
 
+import "./fonts.css";
 import "./tokens.css";
 import "./base.css";
 

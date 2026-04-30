@@ -222,7 +222,7 @@ def terms_of_service() -> FileResponse:
 @app.get("/web")
 @app.get("/web/{path:path}")
 def web_interface(path: str = "") -> FileResponse:
-    """Serve Carbon web SPA entrypoint."""
+    """Serve web SPA entrypoint."""
     del path
     return _serve_web_index()
 

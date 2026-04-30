@@ -34,7 +34,7 @@ function syncTelegramWebAppVisuals(webApp: TelegramWebApp): void {
   setRootCssVar("--tg-theme-hint-color", theme.hint_color);
   setRootCssVar("--tg-theme-link-color", theme.link_color);
   setThemeColorMeta(
-    theme.bg_color ?? (colorScheme === "dark" ? "#161616" : "#ffffff"),
+    theme.bg_color ?? (colorScheme === "dark" ? "#12161C" : "#F0F2F5"),
   );
 }
 
