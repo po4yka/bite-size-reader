@@ -1024,7 +1024,7 @@ Web client implemented in `clients/web/` (React + TypeScript + Vite + a project-
 ### Authentication modes
 
 - `telegram-webapp` mode: when `window.Telegram.WebApp.initData` is present, client sends `X-Telegram-Init-Data`.
-- `jwt` mode: otherwise client uses Telegram Login Widget (`/v1/auth/telegram-login`, `client_id=web-carbon-v1`), stores JWT tokens, sends `Authorization: Bearer ...`, and refreshes via `/v1/auth/refresh`.
+- `jwt` mode: otherwise client uses Telegram Login Widget (`/v1/auth/telegram-login`, `client_id=web-v1`), stores JWT tokens, sends `Authorization: Bearer ...`, and refreshes via `/v1/auth/refresh`.
 
 ### Frontend tooling
 

@@ -34,7 +34,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 `FIRECRAWL_API_KEY` is **optional**. The default scraper chain (`SCRAPER_PROVIDER_ORDER`) tries Scrapling (free, in-process) first, then falls back to Firecrawl, Playwright, Crawlee, and direct HTML extraction. You only need a cloud Firecrawl API key if you want to use cloud Firecrawl or web search enrichment.
 
 - Cloud Firecrawl: Sign up at https://www.firecrawl.dev/ and set `FIRECRAWL_API_KEY`.
-- Self-hosted Firecrawl: Enable via `FIRECRAWL_SELF_HOSTED_ENABLED=true`. Docker Compose includes a `ratatoskr-firecrawl` service on port 3002.
+- Self-hosted Firecrawl: Enable via `FIRECRAWL_SELF_HOSTED_ENABLED=true` and point `FIRECRAWL_SELF_HOSTED_URL` at a running Firecrawl API. The current Compose file does not start Firecrawl; it uses the `firecrawl-api` host-gateway name for an externally managed Firecrawl service. Phase 2 of the refactoring roadmap will add an in-compose Firecrawl profile.
 - Scrapling: Enabled by default (`SCRAPER_SCRAPLING_ENABLED=true`), no API key required.
 - Breaking rename note: legacy vars (`SCRAPLING_*`, `SCRAPER_DIRECT_HTTP_ENABLED`) now fail fast at startup.
 

@@ -38,7 +38,7 @@ test("loads library after jwt bootstrap", async ({ page }) => {
         successEnvelope({
           userId: 123,
           username: "tester",
-          clientId: "web-carbon-v1",
+          clientId: "web-v1",
           isOwner: true,
           createdAt: "2026-03-07T00:00:00Z",
         }),

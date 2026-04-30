@@ -1,7 +1,7 @@
 import { apiRequest } from "./client";
 import type { AuthTokens, AuthUser, TelegramAuthPayload } from "../auth/types";
 
-const WEB_CLIENT_ID = "web-carbon-v1";
+const WEB_CLIENT_ID = "web-v1";
 
 interface TelegramLoginData {
   tokens: {

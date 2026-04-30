@@ -15,52 +15,52 @@ Conventions:
 
 ### 0.1 Rename residue audit
 
-- [ ] Run active-contract grep:
+- [x] Run active-contract grep:
   `rg -n "bite-size-reader|bite_size_reader|bsr|BSR|web-carbon-v1|Carbon|carbon|cds-" . --glob '!data/**' --glob '!chroma_data/**' --glob '!clients/web/node_modules/**' --glob '!.git/**'`.
-- [ ] Split findings into `runtime`, `docs-history`, `generated`, and `accepted-compatibility`.
-- [ ] Rename active web client ID from `web-carbon-v1` to `web-v1` in `clients/web/src/api/auth.ts`, `clients/web/src/features/auth/SecretLoginForm.tsx`, tests, `docs/reference/frontend-web.md`, `docs/SPEC.md`, and generated OpenAPI/mobile docs if they reference the ID.
-- [ ] Decide whether to keep a one-release alias for `web-carbon-v1`.
-- [ ] If keeping an alias, add explicit server-side/client-side compatibility tests and mark removal target in `CHANGELOG.md`.
-- [ ] If not keeping an alias, document session reset and token refresh impact in `CHANGELOG.md` and the web frontend guide.
-- [ ] Rename active `BSR*` alert names in `ops/monitoring/alerting_rules.yml` to `Ratatoskr*` or `RTK*`.
-- [ ] Preserve old `bsr` examples only in `docs/how-to/migrate-from-bite-size-reader.md` where they are genuinely migration history.
-- [ ] Regenerate lockfiles or dependency comments that still say `bite-size-reader`, or document them as generated historical leftovers.
-- [ ] Re-run grep and paste the remaining allowed findings into the Phase 0 completion note.
+- [x] Split findings into `runtime`, `docs-history`, `generated`, and `accepted-compatibility`.
+- [x] Rename active web client ID from `web-carbon-v1` to `web-v1` in `clients/web/src/api/auth.ts`, `clients/web/src/features/auth/SecretLoginForm.tsx`, tests, `docs/reference/frontend-web.md`, `docs/SPEC.md`, and generated OpenAPI/mobile docs if they reference the ID.
+- [x] Decide whether to keep a one-release alias for `web-carbon-v1`.
+- [x] N/A: no one-release alias is implemented for `web-carbon-v1`.
+- [x] If not keeping an alias, document session reset and token refresh impact in `CHANGELOG.md` and the web frontend guide.
+- [x] Rename active `BSR*` alert names in `ops/monitoring/alerting_rules.yml` to `Ratatoskr*` or `RTK*`.
+- [x] Preserve old `bsr` examples only in `docs/how-to/migrate-from-bite-size-reader.md` where they are genuinely migration history.
+- [x] Regenerate lockfiles or dependency comments that still say `bite-size-reader`, or document them as generated historical leftovers.
+- [x] Re-run grep and paste the remaining allowed findings into the Phase 0 completion note.
 
 Acceptance evidence:
 
-- [ ] `rg` output contains only migration-history or generated accepted leftovers.
-- [ ] Web auth tests pass after client ID rename.
-- [ ] `CHANGELOG.md` has an entry for any session/client ID break.
+- [x] `rg` output contains only migration-history or generated accepted leftovers.
+- [ ] Web auth tests pass after client ID rename. `[blocked: clients/web dependencies are not installed locally; npm reports vitest: command not found]`
+- [x] `CHANGELOG.md` has an entry for any session/client ID break.
 
 ### 0.2 Deployment docs truth reconciliation
 
-- [ ] Compare `README.md`, `docs/DEPLOYMENT.md`, `docs/adr/0006-multi-provider-scraper-chain.md`, and `ops/docker/docker-compose.yml` for Firecrawl claims.
-- [ ] Update docs to say current compose uses `firecrawl-api:host-gateway` until Phase 2 adds an in-compose Firecrawl service.
-- [ ] Add an explicit warning that self-hosted Firecrawl is not currently started by the default compose file.
-- [ ] Add a TODO note in deployment docs pointing to Phase 2 if the docs mention `ratatoskr-firecrawl` or port `3002` as already present.
+- [x] Compare `README.md`, `docs/DEPLOYMENT.md`, `docs/adr/0006-multi-provider-scraper-chain.md`, and `ops/docker/docker-compose.yml` for Firecrawl claims.
+- [x] Update docs to say current compose uses `firecrawl-api:host-gateway` until Phase 2 adds an in-compose Firecrawl service.
+- [x] Add an explicit warning that self-hosted Firecrawl is not currently started by the default compose file.
+- [x] Add a TODO note in deployment docs pointing to Phase 2 if the docs mention `ratatoskr-firecrawl` or port `3002` as already present.
 
 Acceptance evidence:
 
-- [ ] A reader can tell whether Firecrawl is external, host-gateway, or compose-managed.
-- [ ] `rg -n "ratatoskr-firecrawl|port 3002|firecrawl-api:host-gateway" docs ops/docker` shows no contradiction.
+- [x] A reader can tell whether Firecrawl is external, host-gateway, or compose-managed.
+- [x] `rg -n "ratatoskr-firecrawl|port 3002|firecrawl-api:host-gateway" docs ops/docker` shows no contradiction.
 
 ### 0.3 Canonical migration path
 
-- [ ] Confirm runtime import path stays `app.cli.migrations.migration_runner` in `app/db/runtime/bootstrap.py`.
-- [ ] Confirm `app/cli/migrate_db.py` delegates to `DatabaseSessionManager.migrate()`.
-- [ ] Mark `app/cli/migrations/` as canonical in migration docs.
-- [ ] Audit `app/db/migrations/` against `app/cli/migrations/` and list migrations that exist only in one side.
-- [ ] Decide whether to delete `app/db/migrations/` immediately or leave a deprecated compatibility package with an import-time warning.
-- [ ] Add tests that fail if a new migration is added under `app/db/migrations/`.
-- [ ] Add a migration status path to `python -m app.cli.migrate_db --status` if missing, delegating to `app/cli/migrations/migration_runner.py`.
-- [ ] Document `status`, `run --dry-run`, and rollback limitations in `docs/how-to/migrate-versions.md`.
+- [x] Confirm runtime import path stays `app.cli.migrations.migration_runner` in `app/db/runtime/bootstrap.py`.
+- [x] Confirm `app/cli/migrate_db.py` delegates to `DatabaseSessionManager.migrate()`.
+- [x] Mark `app/cli/migrations/` as canonical in migration docs.
+- [x] Audit `app/db/migrations/` against `app/cli/migrations/` and list migrations that exist only in one side.
+- [x] Decide whether to delete `app/db/migrations/` immediately or leave a deprecated compatibility package with an import-time warning.
+- [x] Add tests that fail if a new migration is added under `app/db/migrations/`.
+- [x] Add a migration status path to `python -m app.cli.migrate_db --status` if missing, delegating to `app/cli/migrations/migration_runner.py`.
+- [x] Document `status`, `run --dry-run`, and rollback limitations in `docs/how-to/migrate-versions.md`.
 
 Acceptance evidence:
 
-- [ ] `python -m app.cli.migrate_db --status` or equivalent prints applied/pending migrations.
-- [ ] CI/test guard prevents future migrations under the duplicate directory.
-- [ ] Phase 3 migration work has one target directory: `app/cli/migrations/`.
+- [x] `python -m app.cli.migrate_db --status` or equivalent prints applied/pending migrations.
+- [x] CI/test guard prevents future migrations under the duplicate directory.
+- [x] Phase 3 migration work has one target directory: `app/cli/migrations/`.
 
 ## Phase 1 — Config consolidation
 
@@ -617,7 +617,6 @@ Acceptance evidence:
 
 - [ ] Supported cloud Ollama endpoint(s) and model list.
 - [ ] First-run `JWT_SECRET_KEY` behavior for local-only web/API installs.
-- [ ] One-release alias versus immediate reset for `web-carbon-v1` to `web-v1`.
 - [ ] Compatibility view/table strategy while merging RSS/channel tables.
 - [ ] Exact Chroma-down behavior for signal scoring startup.
 - [ ] Agent ownership split for signal stages.

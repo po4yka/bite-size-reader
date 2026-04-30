@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-from app.db.migrations.migration_runner import MigrationRunner
+from app.cli.migrations.migration_runner import MigrationRunner
 from app.db.session import DatabaseSessionManager
 
 

@@ -82,6 +82,13 @@ nano .env
 #### 4. Run Database Migrations
 
 ```bash
+# Inspect pending/applied migrations first
+docker run --rm \
+  --env-file .env \
+  -v $(pwd)/data:/data \
+  ghcr.io/po4yka/ratatoskr:latest \
+  python -m app.cli.migrate_db --status
+
 # Run migrations before starting new version
 docker run --rm \
   --env-file .env \

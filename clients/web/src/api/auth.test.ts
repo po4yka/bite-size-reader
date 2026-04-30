@@ -20,7 +20,7 @@ describe("auth api", () => {
   });
 
   it("getWebClientId returns the web client identifier", () => {
-    expect(getWebClientId()).toBe("web-carbon-v1");
+    expect(getWebClientId()).toBe("web-v1");
   });
 
   it("loginWithTelegram maps tokens and always sets refreshToken to null", async () => {
@@ -60,7 +60,7 @@ describe("auth api", () => {
     apiRequestMock.mockResolvedValueOnce({
       userId: 10,
       username: "alice",
-      clientId: "web-carbon-v1",
+      clientId: "web-v1",
       isOwner: 1, // truthy but not boolean
       createdAt: "2026-01-01",
     });

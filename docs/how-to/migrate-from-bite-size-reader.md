@@ -190,10 +190,11 @@ redis-cli --scan --pattern 'bsr:*' | xargs -L 100 redis-cli del
 - **GHCR image redirect** from `po4yka/bite-size-reader` to
   `po4yka/ratatoskr` is best-effort GitHub behaviour — pin the new path
   in CI to avoid auth-flow breakage.
-- **Karakeep integration** is removed in the same release; the historical
-  migration `app/db/migrations/020_drop_karakeep_sync.py` is preserved
-  to drop the legacy `karakeep_sync` table on startup. Re-running the
-  rename does not re-create the table.
+- **Karakeep integration** is removed in the same release. The canonical
+  runtime migration path is now `app/cli/migrations/`; if an older local
+  database still contains a `karakeep_sync` table, drop it manually after
+  confirming you no longer need that data. Re-running the rename does not
+  re-create the table.
 - **The digest mini-app's built JS asset** in `app/static/digest/assets/`
   may still encode the old `bsr_library_filter` localStorage key in its
   bundled output until you rebuild the mini-app.

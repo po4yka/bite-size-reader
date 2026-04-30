@@ -44,11 +44,16 @@ not drift from the operational guide.
 - `lock-piptools` Makefile target -- `lock-uv` is the canonical dependency locking path
 - `PROMPT.md` -- referenced non-existent migration docs
 - `app/grpc/` module, `app/protos/`, and `grpc` optional extra -- aspirational gRPC layer never wired into production
+- Duplicate versioned migration modules under `app/db/migrations/`; `app/cli/migrations/` is now the sole canonical migration directory used by runtime startup.
 
 ### Security
 - Update pyjwt 2.11.0 to 2.12.1 (CVE-2026-32597)
 
 ### Changed
+- Rename the active web client ID from `web-carbon-v1` to `web-v1`; existing web/browser sessions may need to sign in again.
+- Rename Prometheus alert rule names from the historical `BSR*` prefix to `Ratatoskr*`.
+- Clarify that current Docker Compose points at an externally managed self-hosted Firecrawl API via `firecrawl-api:host-gateway`; the in-compose Firecrawl profile is planned separately.
+- Add `python -m app.cli.migrate_db --status [/path/to/db.sqlite]` for canonical migration status reporting.
 - Replace `uv pip compile --extra dev` with `uv export --only-group dev` across CI workflows, Makefile, and scripts (PEP 735 dependency groups)
 - Add retry wrapper around `uv lock --check` in CI to handle transient GitHub CDN failures
 - Prune stale paths from coverage_includes.txt and file_size_baseline.json

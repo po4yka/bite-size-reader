@@ -10,7 +10,7 @@ groups:
   - name: ratatoskr_availability
     rules:
       # High error rate alert
-      - alert: BSRHighErrorRate
+      - alert: RatatoskrHighErrorRate
         expr: |
           (
             sum(rate(ratatoskr_requests_total{status="error"}[5m]))
@@ -25,7 +25,7 @@ groups:
           description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
 
       # Critical error rate
-      - alert: BSRCriticalErrorRate
+      - alert: RatatoskrCriticalErrorRate
         expr: |
           (
             sum(rate(ratatoskr_requests_total{status="error"}[5m]))
@@ -42,7 +42,7 @@ groups:
   - name: ratatoskr_circuit_breakers
     rules:
       # Circuit breaker open
-      - alert: BSRCircuitBreakerOpen
+      - alert: RatatoskrCircuitBreakerOpen
         expr: ratatoskr_circuit_breaker_state > 1
         for: 1m
         labels:
@@ -52,7 +52,7 @@ groups:
           description: "Circuit breaker for {{ $labels.service }} has been open for more than 1 minute"
 
       # Circuit breaker stuck open
-      - alert: BSRCircuitBreakerStuckOpen
+      - alert: RatatoskrCircuitBreakerStuckOpen
         expr: ratatoskr_circuit_breaker_state > 1
         for: 5m
         labels:
@@ -64,7 +64,7 @@ groups:
   - name: ratatoskr_latency
     rules:
       # High request latency
-      - alert: BSRHighLatency
+      - alert: RatatoskrHighLatency
         expr: |
           histogram_quantile(0.99,
             sum(rate(ratatoskr_request_latency_seconds_bucket[5m])) by (le, type)
@@ -77,7 +77,7 @@ groups:
           description: "p99 latency is {{ $value | humanizeDuration }} for {{ $labels.type }} requests"
 
       # High Firecrawl latency
-      - alert: BSRFirecrawlHighLatency
+      - alert: RatatoskrFirecrawlHighLatency
         expr: |
           histogram_quantile(0.95,
             sum(rate(ratatoskr_firecrawl_latency_seconds_bucket[5m])) by (le, endpoint)
@@ -90,7 +90,7 @@ groups:
           description: "p95 Firecrawl latency is {{ $value | humanizeDuration }}"
 
       # High OpenRouter latency
-      - alert: BSROpenRouterHighLatency
+      - alert: RatatoskrOpenRouterHighLatency
         expr: |
           histogram_quantile(0.95,
             sum(rate(ratatoskr_openrouter_latency_seconds_bucket[5m])) by (le, model)
@@ -105,7 +105,7 @@ groups:
   - name: ratatoskr_database
     rules:
       # Slow database queries
-      - alert: BSRSlowDatabaseQueries
+      - alert: RatatoskrSlowDatabaseQueries
         expr: |
           histogram_quantile(0.95,
             sum(rate(ratatoskr_db_query_latency_seconds_bucket[5m])) by (le, operation)
@@ -120,7 +120,7 @@ groups:
   - name: ratatoskr_external_services
     rules:
       # Firecrawl high error rate
-      - alert: BSRFirecrawlHighErrors
+      - alert: RatatoskrFirecrawlHighErrors
         expr: |
           (
             sum(rate(ratatoskr_firecrawl_requests_total{status="error"}[5m]))
@@ -135,7 +135,7 @@ groups:
           description: "Firecrawl error rate is {{ $value | humanizePercentage }}"
 
       # No Firecrawl requests (service may be down)
-      - alert: BSRFirecrawlNoRequests
+      - alert: RatatoskrFirecrawlNoRequests
         expr: |
           sum(rate(ratatoskr_firecrawl_requests_total[10m])) == 0
           and
@@ -150,7 +150,7 @@ groups:
   - name: ratatoskr_costs
     rules:
       # High OpenRouter spending
-      - alert: BSRHighOpenRouterSpending
+      - alert: RatatoskrHighOpenRouterSpending
         expr: |
           increase(ratatoskr_openrouter_cost_usd_total[1h]) > 10
         for: 0m
@@ -161,7 +161,7 @@ groups:
           description: "OpenRouter costs in the last hour: ${{ $value | printf \"%.2f\" }}"
 
       # Very high daily spending
-      - alert: BSRVeryHighDailySpending
+      - alert: RatatoskrVeryHighDailySpending
         expr: |
           increase(ratatoskr_openrouter_cost_usd_total[24h]) > 100
         for: 0m

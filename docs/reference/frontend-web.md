@@ -93,8 +93,9 @@ Auth is hybrid and selected at runtime in `detectAuthMode`:
 2. `jwt` mode
    - Trigger: no WebApp initData
    - Login: Telegram Login Widget -> `POST /v1/auth/telegram-login`
-   - Client id: `web-carbon-v1`
+   - Client id: `web-v1`
    - Session: bearer token storage + auto refresh via `POST /v1/auth/refresh`
+   - Pre-v1 client id renames may require signing in again because sessions are scoped by client id.
 
 Auth provider implementation: `clients/web/src/auth/AuthProvider.tsx`.
 
