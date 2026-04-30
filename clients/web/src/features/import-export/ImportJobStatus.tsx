@@ -1,6 +1,6 @@
 import {
-  InlineLoading,
-  ProgressBar,
+  MonoProgressBar,
+  SparkLoading,
   Tag,
   UnorderedList,
   ListItem,
@@ -21,7 +21,7 @@ interface ImportJobStatusProps {
 export default function ImportJobStatus({ jobId }: ImportJobStatusProps) {
   const { data: job, isLoading, error } = useImportJob(jobId);
 
-  if (isLoading) return <InlineLoading description="Loading job status..." />;
+  if (isLoading) return <SparkLoading description="Loading job status..." />;
   if (error || !job) return null;
 
   const progressValue = job.totalItems > 0
@@ -29,34 +29,71 @@ export default function ImportJobStatus({ jobId }: ImportJobStatusProps) {
     : 0;
 
   return (
-    <div style={{ marginTop: "1rem" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-        <h4>Import Job #{job.id}</h4>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-row)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--frost-gap-row)" }}>
+        <h4
+          style={{
+            fontFamily: "var(--frost-font-mono)",
+            fontSize: "var(--frost-type-mono-body-size)",
+            fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+            color: "var(--frost-ink)",
+            margin: 0,
+          }}
+        >
+          Import Job #{job.id}
+        </h4>
         <Tag type={statusTagType(job.status)} size="sm">
           {job.status}
         </Tag>
       </div>
 
       {job.totalItems > 0 && (
-        <ProgressBar
+        <MonoProgressBar
           label={`${job.processedItems} / ${job.totalItems} items`}
           value={progressValue}
           max={100}
         />
       )}
 
-      <p style={{ margin: "0.5rem 0", fontSize: "0.875rem" }}>
+      <p
+        style={{
+          fontFamily: "var(--frost-font-mono)",
+          fontSize: "var(--frost-type-mono-xs-size)",
+          color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+          margin: 0,
+        }}
+      >
         Created: {job.createdItems} | Skipped: {job.skippedItems} | Failed: {job.failedItems}
       </p>
 
       {job.failedItems > 0 && job.errors.length > 0 && (
-        <details style={{ marginTop: "0.5rem" }}>
-          <summary style={{ cursor: "pointer", fontSize: "0.875rem", color: "var(--rtk-color-text-error)" }}>
+        <details>
+          <summary
+            style={{
+              cursor: "pointer",
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-xs-size)",
+              color: "var(--frost-spark)",
+            }}
+          >
             {job.errors.length} error(s)
           </summary>
-          <UnorderedList style={{ marginTop: "0.25rem", fontSize: "0.8125rem" }}>
+          <UnorderedList style={{ marginTop: "0.25rem" }}>
             {job.errors.map((err, i) => (
-              <ListItem key={i}>
+              <ListItem
+                key={i}
+                style={{
+                  fontFamily: "var(--frost-font-mono)",
+                  fontSize: "var(--frost-type-mono-xs-size)",
+                  color: "var(--frost-ink)",
+                }}
+              >
                 <strong>{err.url}</strong>: {err.error}
               </ListItem>
             ))}

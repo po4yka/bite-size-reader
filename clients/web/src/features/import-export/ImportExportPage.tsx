@@ -1,18 +1,18 @@
 import { useCallback, useState } from "react";
 import {
-  Button,
+  BracketButton,
+  BracketTab,
+  BracketTabList,
+  BracketTabPanel,
+  BracketTabPanels,
+  BracketTabs,
   Checkbox,
   FileUploader,
-  InlineNotification,
+  MonoInput,
   NumberInput,
   RadioButton,
   RadioButtonGroup,
-  Tab,
-  TabList,
-  TabPanel,
-  TabPanels,
-  Tabs,
-  TextInput,
+  StatusBadge,
 } from "../../design";
 import { useImportFile } from "../../hooks/useImportExport";
 import { getExportUrl } from "../../api/importExport";
@@ -26,6 +26,16 @@ function detectFormat(fileName: string): string {
   if (ext === "html" || ext === "htm") return "Netscape HTML";
   return "Unknown";
 }
+
+const sectionLabelStyle: React.CSSProperties = {
+  fontFamily: "var(--frost-font-mono)",
+  fontSize: "11px",
+  fontWeight: 800,
+  textTransform: "uppercase" as const,
+  letterSpacing: "1px",
+  color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+  margin: 0,
+};
 
 export default function ImportExportPage() {
   // --- Import state ---
@@ -91,98 +101,148 @@ export default function ImportExportPage() {
   const mutationError = importMutation.error;
 
   return (
-    <section className="page-section">
-      <h1 style={{ marginBottom: "1rem" }}>Import / Export</h1>
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-7)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section)",
+      }}
+    >
+      <h1
+        style={{
+          fontFamily: "var(--frost-font-mono)",
+          fontSize: "var(--frost-type-mono-emph-size)",
+          fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+          letterSpacing: "var(--frost-type-mono-emph-tracking)",
+          textTransform: "uppercase",
+          color: "var(--frost-ink)",
+          margin: 0,
+        }}
+      >
+        Import / Export
+      </h1>
 
       {mutationError && (
-        <InlineNotification
-          kind="error"
+        <StatusBadge
+          severity="alarm"
           title="Import failed"
           subtitle={(mutationError as Error).message}
-          hideCloseButton
-          style={{ marginBottom: "1rem" }}
         />
       )}
 
-      <Tabs>
-        <TabList aria-label="Import/Export tabs">
-          <Tab>Import</Tab>
-          <Tab>Export</Tab>
-        </TabList>
-        <TabPanels>
+      <BracketTabs>
+        <BracketTabList aria-label="Import/Export tabs">
+          <BracketTab>Import</BracketTab>
+          <BracketTab>Export</BracketTab>
+        </BracketTabList>
+        <BracketTabPanels>
           {/* --- Import Tab --- */}
-          <TabPanel>
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: "32rem" }}>
-              <FileUploader
-                accept={[".html", ".json", ".csv"]}
-                buttonLabel="Choose file"
-                filenameStatus="edit"
-                labelDescription="Supported formats: JSON, CSV, Netscape HTML"
-                labelTitle="Upload bookmarks file"
-                onChange={handleFileChange}
-                onDelete={() => {
-                  setSelectedFile(null);
-                  setDetectedFormat("");
+          <BracketTabPanel>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--frost-gap-section)",
+                paddingTop: "var(--frost-gap-row)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--frost-gap-row)",
+                  maxWidth: "var(--frost-strip-4)",
                 }}
-              />
+              >
+                <p style={sectionLabelStyle}>§ UPLOAD FILE</p>
+                <FileUploader
+                  accept={[".html", ".json", ".csv"]}
+                  buttonLabel="Choose file"
+                  filenameStatus="edit"
+                  labelDescription="Supported formats: JSON, CSV, Netscape HTML"
+                  labelTitle="Upload bookmarks file"
+                  onChange={handleFileChange}
+                  onDelete={() => {
+                    setSelectedFile(null);
+                    setDetectedFormat("");
+                  }}
+                />
 
-              {detectedFormat && (
-                <p className="rtk-label">
-                  Detected format: <strong>{detectedFormat}</strong>
-                </p>
+                {detectedFormat && (
+                  <p
+                    style={{
+                      fontFamily: "var(--frost-font-mono)",
+                      fontSize: "var(--frost-type-mono-xs-size)",
+                      color: "var(--frost-ink)",
+                      margin: 0,
+                    }}
+                  >
+                    Detected format: <strong>{detectedFormat}</strong>
+                  </p>
+                )}
+
+                <Checkbox
+                  id="import-summarize"
+                  labelText="Summarize content"
+                  checked={summarize}
+                  onChange={(_event: React.ChangeEvent<HTMLInputElement>, { checked }: { checked: boolean }) =>
+                    setSummarize(checked)
+                  }
+                />
+
+                <Checkbox
+                  id="import-create-tags"
+                  labelText="Create tags from imported tags"
+                  checked={createTags}
+                  onChange={(_event: React.ChangeEvent<HTMLInputElement>, { checked }: { checked: boolean }) =>
+                    setCreateTags(checked)
+                  }
+                />
+
+                <NumberInput
+                  id="import-collection-id"
+                  label="Target collection ID (optional)"
+                  min={1}
+                  value={collectionId ?? ""}
+                  onChange={(_event: unknown, { value }: { value: number | string }) => {
+                    const num = typeof value === "number" ? value : parseInt(String(value), 10);
+                    setCollectionId(Number.isNaN(num) ? undefined : num);
+                  }}
+                  allowEmpty
+                />
+
+                <BracketButton
+                  onClick={handleImport}
+                  disabled={!selectedFile || importMutation.isPending}
+                >
+                  {importMutation.isPending ? "Importing..." : "Import"}
+                </BracketButton>
+              </div>
+
+              {activeJobId != null && (
+                <ImportJobStatus jobId={activeJobId} />
               )}
 
-              <Checkbox
-                id="import-summarize"
-                labelText="Summarize content"
-                checked={summarize}
-                onChange={(_event: React.ChangeEvent<HTMLInputElement>, { checked }: { checked: boolean }) =>
-                  setSummarize(checked)
-                }
-              />
-
-              <Checkbox
-                id="import-create-tags"
-                labelText="Create tags from imported tags"
-                checked={createTags}
-                onChange={(_event: React.ChangeEvent<HTMLInputElement>, { checked }: { checked: boolean }) =>
-                  setCreateTags(checked)
-                }
-              />
-
-              <NumberInput
-                id="import-collection-id"
-                label="Target collection ID (optional)"
-                min={1}
-                value={collectionId ?? ""}
-                onChange={(_event: unknown, { value }: { value: number | string }) => {
-                  const num = typeof value === "number" ? value : parseInt(String(value), 10);
-                  setCollectionId(Number.isNaN(num) ? undefined : num);
-                }}
-                allowEmpty
-              />
-
-              <Button
-                kind="primary"
-                onClick={handleImport}
-                disabled={!selectedFile || importMutation.isPending}
-              >
-                {importMutation.isPending ? "Importing..." : "Import"}
-              </Button>
+              <div>
+                <ImportHistory />
+              </div>
             </div>
-
-            {activeJobId != null && (
-              <ImportJobStatus jobId={activeJobId} />
-            )}
-
-            <div style={{ marginTop: "2rem" }}>
-              <ImportHistory />
-            </div>
-          </TabPanel>
+          </BracketTabPanel>
 
           {/* --- Export Tab --- */}
-          <TabPanel>
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: "32rem" }}>
+          <BracketTabPanel>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--frost-gap-row)",
+                maxWidth: "var(--frost-strip-4)",
+                paddingTop: "var(--frost-gap-row)",
+              }}
+            >
+              <p style={sectionLabelStyle}>§ EXPORT OPTIONS</p>
               <RadioButtonGroup
                 legendText="Export format"
                 name="export-format"
@@ -194,7 +254,7 @@ export default function ImportExportPage() {
                 <RadioButton id="export-html" labelText="Netscape HTML" value="html" />
               </RadioButtonGroup>
 
-              <TextInput
+              <MonoInput
                 id="export-tag"
                 labelText="Filter by tag (optional)"
                 value={exportTag}
@@ -214,13 +274,13 @@ export default function ImportExportPage() {
                 allowEmpty
               />
 
-              <Button kind="primary" onClick={handleExport}>
+              <BracketButton onClick={handleExport}>
                 Download
-              </Button>
+              </BracketButton>
             </div>
-          </TabPanel>
-        </TabPanels>
-      </Tabs>
-    </section>
+          </BracketTabPanel>
+        </BracketTabPanels>
+      </BracketTabs>
+    </main>
   );
 }

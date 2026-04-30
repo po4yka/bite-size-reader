@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Button,
+  BracketButton,
   ContentSwitcher,
-  InlineLoading,
-  InlineNotification,
-  ProgressBar,
-  Select,
-  SelectItem,
+  MonoInput,
+  MonoSelect,
+  MonoSelectItem,
+  MonoProgressBar,
+  SparkLoading,
+  StatusBadge,
   Switch,
-  TextInput,
-  Tile,
 } from "../../design";
 import { useDuplicateCheck, useRequestStatus, useSubmitUrl, useRetryRequest } from "../../hooks/useRequests";
 import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
@@ -272,10 +271,30 @@ export default function SubmitPage() {
   }
 
   return (
-    <section className="page-section">
-      <h1>Submit</h1>
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-5)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section)",
+      }}
+    >
+      <h1
+        style={{
+          fontFamily: "var(--frost-font-mono)",
+          fontSize: "var(--frost-type-mono-emph-size)",
+          fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+          letterSpacing: "var(--frost-type-mono-emph-tracking)",
+          textTransform: "uppercase",
+          color: "var(--frost-ink)",
+          margin: 0,
+        }}
+      >
+        Submit
+      </h1>
 
-      <div style={{ marginBottom: "1rem" }}>
+      <div>
         <ContentSwitcher
           selectedIndex={submitMode === "url" ? 0 : 1}
           onChange={({ index }) => {
@@ -289,7 +308,13 @@ export default function SubmitPage() {
       </div>
 
       {submitMode === "forward" && (
-        <>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--frost-gap-section)",
+          }}
+        >
           <ForwardForm
             onRequestCreated={(id) => {
               dispatchSubmission({
@@ -300,207 +325,293 @@ export default function SubmitPage() {
             }}
           />
           {requestId && statusQuery.data && (
-            <Tile style={{ marginTop: "1rem" }}>
-              <ProgressBar label="Processing status" value={progress} helperText={statusHelperText || undefined} />
-              <div className="form-actions">
+            <div
+              style={{
+                border: "1px solid var(--frost-ink)",
+                padding: "var(--frost-pad-page)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--frost-gap-row)",
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: "var(--frost-font-mono)",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                  color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                  margin: 0,
+                }}
+              >
+                § STATUS
+              </p>
+              <MonoProgressBar label="Processing status" value={progress} helperText={statusHelperText || undefined} />
+              <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
                 {statusQuery.data.status === "completed" && statusQuery.data.summaryId && (
-                  <Button onClick={handleOpenCompletedSummary}>Open summary</Button>
+                  <BracketButton onClick={handleOpenCompletedSummary}>Open summary</BracketButton>
                 )}
                 {statusQuery.data.status === "failed" && (statusQuery.data.canRetry || statusQuery.data.retryable) && (
-                  <Button onClick={handleRetry} disabled={retryMutation.isPending}>
+                  <BracketButton onClick={handleRetry} disabled={retryMutation.isPending}>
                     {retryMutation.isPending ? "Retrying..." : "Retry processing"}
-                  </Button>
+                  </BracketButton>
                 )}
                 {pollingPaused && (
-                  <Button kind="tertiary" onClick={() => dispatchSubmission({ type: "POLL_RESUME" })}>
+                  <BracketButton kind="ghost" onClick={() => dispatchSubmission({ type: "POLL_RESUME" })}>
                     Resume polling
-                  </Button>
+                  </BracketButton>
                 )}
-                <Button kind="ghost" onClick={() => void statusQuery.refetch()} disabled={statusQuery.isFetching}>
+                <BracketButton kind="ghost" onClick={() => void statusQuery.refetch()} disabled={statusQuery.isFetching}>
                   Refresh now
-                </Button>
+                </BracketButton>
               </div>
               {statusQuery.data.correlationId && (
-                <p className="muted">Correlation ID: {statusQuery.data.correlationId}</p>
+                <p
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-xs-size)",
+                    color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                    margin: 0,
+                  }}
+                >
+                  Correlation ID: {statusQuery.data.correlationId}
+                </p>
               )}
               {statusQuery.data.status === "failed" && (
-                <InlineNotification
-                  kind="error"
-                  title="Processing failed"
-                  subtitle={statusQuery.data.errorMessage ?? "Unknown error"}
-                  hideCloseButton
-                />
+                <StatusBadge severity="alarm" title="Processing failed" subtitle={statusQuery.data.errorMessage ?? "Unknown error"} />
               )}
-            </Tile>
+            </div>
           )}
-          {requestId && statusQuery.isLoading && <InlineLoading description="Connecting to status stream..." />}
+          {requestId && statusQuery.isLoading && <SparkLoading description="Connecting to status stream..." />}
           {requestId && statusQuery.error && (
-            <InlineNotification
-              kind="warning"
+            <StatusBadge
+              severity="warn"
               title="Status polling interrupted"
               subtitle={statusQuery.error instanceof Error ? statusQuery.error.message : "Unknown error"}
-              hideCloseButton
             />
           )}
-        </>
+        </div>
       )}
 
       {submitMode === "url" && (
-      <Tile>
-        <div className="digest-form-grid">
-          <TextInput
-            id="submit-url"
-            labelText="Article or YouTube URL"
-            placeholder="https://example.com/article…"
-            value={url}
-            invalid={urlTouched && !urlValidation.isValid}
-            invalidText={urlValidation.error ?? ""}
-            onBlur={() => setUrlTouched(true)}
-            onChange={(event) => {
-              setUrl(event.currentTarget.value);
-              setUrlTouched(true);
-              if (!requestId) {
-                dispatchSubmission({ type: "RESET" });
-              }
+        <div
+          style={{
+            border: "1px solid var(--frost-ink)",
+            padding: "var(--frost-pad-page)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--frost-gap-section)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--frost-gap-row)",
             }}
-          />
-          <Select
-            id="submit-lang-preference"
-            labelText="Summary language"
-            value={langPreference}
-            onChange={(event) => setLangPreference(event.currentTarget.value as "auto" | "en" | "ru")}
           >
-            <SelectItem value="auto" text="Auto-detect" />
-            <SelectItem value="en" text="English" />
-            <SelectItem value="ru" text="Russian" />
-          </Select>
-        </div>
+            <p
+              style={{
+                fontFamily: "var(--frost-font-mono)",
+                fontSize: "11px",
+                fontWeight: 800,
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                margin: 0,
+              }}
+            >
+              § SUBMIT URL
+            </p>
+            <MonoInput
+              id="submit-url"
+              labelText="Article or YouTube URL"
+              placeholder="https://example.com/article…"
+              value={url}
+              invalid={urlTouched && !urlValidation.isValid}
+              invalidText={urlValidation.error ?? ""}
+              onBlur={() => setUrlTouched(true)}
+              onChange={(event) => {
+                setUrl(event.currentTarget.value);
+                setUrlTouched(true);
+                if (!requestId) {
+                  dispatchSubmission({ type: "RESET" });
+                }
+              }}
+            />
+            <MonoSelect
+              id="submit-lang-preference"
+              labelText="Summary language"
+              value={langPreference}
+              onChange={(event) => setLangPreference(event.currentTarget.value as "auto" | "en" | "ru")}
+            >
+              <MonoSelectItem value="auto" text="Auto-detect" />
+              <MonoSelectItem value="en" text="English" />
+              <MonoSelectItem value="ru" text="Russian" />
+            </MonoSelect>
+          </div>
 
-        <div className="form-actions">
-          <Button
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-          >
-            {submitMutation.isPending ? "Submitting…" : "Summarize"}
-          </Button>
+          <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
+            <BracketButton
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+            >
+              {submitMutation.isPending ? "Submitting…" : "Summarize"}
+            </BracketButton>
 
-          {duplicateSummaryId != null && (
-            <Button kind="ghost" onClick={() => navigate(`/library/${duplicateSummaryId}`)}>
-              View existing summary
-            </Button>
+            {duplicateSummaryId != null && (
+              <BracketButton kind="ghost" onClick={() => navigate(`/library/${duplicateSummaryId}`)}>
+                View existing summary
+              </BracketButton>
+            )}
+
+            {duplicateSummaryId == null && duplicateRequestId && (
+              <BracketButton kind="ghost" onClick={startTrackingExistingRequest}>
+                Track existing request
+              </BracketButton>
+            )}
+
+            {(requestId || submitDuplicate) && (
+              <BracketButton kind="ghost" onClick={resetSubmitFlow}>
+                Start new submission
+              </BracketButton>
+            )}
+          </div>
+
+          {duplicateQuery.isFetching && !submitMutation.isPending && (
+            <SparkLoading description="Checking duplicates…" />
           )}
 
-          {duplicateSummaryId == null && duplicateRequestId && (
-            <Button kind="tertiary" onClick={startTrackingExistingRequest}>
-              Track existing request
-            </Button>
+          {submitMutation.error && (
+            <StatusBadge
+              severity="alarm"
+              title="Submission failed"
+              subtitle={submitMutation.error instanceof Error ? submitMutation.error.message : "Unknown error"}
+            />
           )}
 
-          {(requestId || submitDuplicate) && (
-            <Button kind="ghost" onClick={resetSubmitFlow}>
-              Start new submission
-            </Button>
+          {duplicateQuery.error && !submitMutation.isPending && (
+            <StatusBadge
+              severity="warn"
+              title="Duplicate pre-check unavailable"
+              subtitle="You can still submit. We will validate on server side."
+            />
           )}
-        </div>
 
-        {duplicateQuery.isFetching && !submitMutation.isPending && <InlineLoading description="Checking duplicates…" />}
+          {(submitDuplicate || duplicateQuery.data?.isDuplicate) && (
+            <StatusBadge
+              severity="info"
+              title="✓ Duplicate detected"
+              subtitle={
+                submitDuplicate?.message ??
+                "This URL is already known. Open existing summary or track processing if still running."
+              }
+            />
+          )}
 
-        {submitMutation.error && (
-          <InlineNotification
-            kind="error"
-            title="Submission failed"
-            subtitle={submitMutation.error instanceof Error ? submitMutation.error.message : "Unknown error"}
-            hideCloseButton
-          />
-        )}
+          {submitDuplicate?.summarizedAt && (
+            <p
+              style={{
+                fontFamily: "var(--frost-font-mono)",
+                fontSize: "var(--frost-type-mono-xs-size)",
+                color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                margin: 0,
+              }}
+            >
+              Already summarized on {new Date(submitDuplicate.summarizedAt).toLocaleString()}.
+            </p>
+          )}
 
-        {duplicateQuery.error && !submitMutation.isPending && (
-          <InlineNotification
-            kind="warning"
-            title="Duplicate pre-check unavailable"
-            subtitle="You can still submit. We will validate on server side."
-            hideCloseButton
-          />
-        )}
+          {requestId && statusQuery.data && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--frost-gap-row)",
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: "var(--frost-font-mono)",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                  color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                  margin: 0,
+                }}
+              >
+                § STATUS
+              </p>
+              <MonoProgressBar label="Processing status" value={progress} helperText={statusHelperText || undefined} />
 
-        {(submitDuplicate || duplicateQuery.data?.isDuplicate) && (
-          <InlineNotification
-            kind="info"
-            title="Duplicate detected"
-            subtitle={
-              submitDuplicate?.message ??
-              "This URL is already known. Open existing summary or track processing if still running."
-            }
-            hideCloseButton
-          />
-        )}
+              <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
+                {statusQuery.data.status === "completed" && statusQuery.data.summaryId && (
+                  <BracketButton onClick={handleOpenCompletedSummary}>Open summary</BracketButton>
+                )}
 
-        {submitDuplicate?.summarizedAt && (
-          <p className="muted">Already summarized on {new Date(submitDuplicate.summarizedAt).toLocaleString()}.</p>
-        )}
+                {statusQuery.data.status === "failed" && (statusQuery.data.canRetry || statusQuery.data.retryable) && (
+                  <BracketButton onClick={handleRetry} disabled={retryMutation.isPending}>
+                    {retryMutation.isPending ? "Retrying…" : "Retry processing"}
+                  </BracketButton>
+                )}
 
-        {requestId && statusQuery.data && (
-          <>
-            <ProgressBar label="Processing status" value={progress} helperText={statusHelperText || undefined} />
+                {pollingPaused && (
+                  <BracketButton kind="ghost" onClick={() => dispatchSubmission({ type: "POLL_RESUME" })}>
+                    Resume polling
+                  </BracketButton>
+                )}
 
-            <div className="form-actions">
-              {statusQuery.data.status === "completed" && statusQuery.data.summaryId && (
-                <Button onClick={handleOpenCompletedSummary}>Open summary</Button>
+                <BracketButton kind="ghost" onClick={() => void statusQuery.refetch()} disabled={statusQuery.isFetching}>
+                  Refresh now
+                </BracketButton>
+              </div>
+
+              {statusQuery.data.correlationId && (
+                <p
+                  style={{
+                    fontFamily: "var(--frost-font-mono)",
+                    fontSize: "var(--frost-type-mono-xs-size)",
+                    color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                    margin: 0,
+                  }}
+                >
+                  Correlation ID: {statusQuery.data.correlationId}
+                </p>
               )}
 
-              {statusQuery.data.status === "failed" && (statusQuery.data.canRetry || statusQuery.data.retryable) && (
-                <Button onClick={handleRetry} disabled={retryMutation.isPending}>
-                  {retryMutation.isPending ? "Retrying…" : "Retry processing"}
-                </Button>
+              {statusQuery.data.status === "failed" && (
+                <StatusBadge
+                  severity="alarm"
+                  title="Processing failed"
+                  subtitle={statusQuery.data.errorMessage ?? "Unknown error"}
+                />
               )}
-
-              {pollingPaused && (
-                <Button kind="tertiary" onClick={() => dispatchSubmission({ type: "POLL_RESUME" })}>
-                  Resume polling
-                </Button>
-              )}
-
-              <Button kind="ghost" onClick={() => void statusQuery.refetch()} disabled={statusQuery.isFetching}>
-                Refresh now
-              </Button>
             </div>
+          )}
 
-            {statusQuery.data.correlationId && (
-              <p className="muted">Correlation ID: {statusQuery.data.correlationId}</p>
-            )}
+          {requestId && statusQuery.isLoading && (
+            <SparkLoading description="Connecting to status stream…" />
+          )}
 
-            {statusQuery.data.status === "failed" && (
-              <InlineNotification
-                kind="error"
-                title="Processing failed"
-                subtitle={statusQuery.data.errorMessage ?? "Unknown error"}
-                hideCloseButton
-              />
-            )}
-          </>
-        )}
+          {requestId && statusQuery.error && (
+            <StatusBadge
+              severity="warn"
+              title="Status polling interrupted"
+              subtitle={statusQuery.error instanceof Error ? statusQuery.error.message : "Unknown error"}
+            />
+          )}
 
-        {requestId && statusQuery.isLoading && <InlineLoading description="Connecting to status stream…" />}
-
-        {requestId && statusQuery.error && (
-          <InlineNotification
-            kind="warning"
-            title="Status polling interrupted"
-            subtitle={statusQuery.error instanceof Error ? statusQuery.error.message : "Unknown error"}
-            hideCloseButton
-          />
-        )}
-
-        {pollingPaused && requestId && !isTerminalStatus(statusQuery.data?.status ?? "pending") && (
-          <InlineNotification
-            kind="warning"
-            title="Polling paused"
-            subtitle="Auto-polling was paused to prevent endless retries. Resume polling or refresh manually."
-            hideCloseButton
-          />
-        )}
-      </Tile>
+          {pollingPaused && requestId && !isTerminalStatus(statusQuery.data?.status ?? "pending") && (
+            <StatusBadge
+              severity="warn"
+              title="Polling paused"
+              subtitle="Auto-polling was paused to prevent endless retries. Resume polling or refresh manually."
+            />
+          )}
+        </div>
       )}
-    </section>
+    </main>
   );
 }

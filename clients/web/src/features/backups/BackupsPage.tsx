@@ -1,17 +1,20 @@
 import { useMemo, useState } from "react";
 import {
-  Button,
-  DataTable,
-  DataTableSkeleton,
-  InlineNotification,
-  Modal,
+  BracketButton,
+  BrutalistDataTableSkeleton,
+  BrutalistModal,
+  BrutalistModalBody,
+  BrutalistModalFooter,
+  BrutalistModalHeader,
+  BrutalistTable,
+  BrutalistTableContainer,
   NumberInput,
-  Select,
-  SelectItem,
+  MonoSelect,
+  MonoSelectItem,
+  StatusBadge,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
@@ -52,6 +55,16 @@ function formatSize(bytes: number | null): string {
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString();
 }
+
+const sectionLabelStyle: React.CSSProperties = {
+  fontFamily: "var(--frost-font-mono)",
+  fontSize: "11px",
+  fontWeight: 800,
+  textTransform: "uppercase" as const,
+  letterSpacing: "1px",
+  color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+  margin: 0,
+};
 
 // ---------------------------------------------------------------------------
 // Main page
@@ -140,122 +153,165 @@ export default function BackupsPage() {
   ].find((e): e is Error => e instanceof Error);
 
   return (
-    <section className="page-section">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-        <h1>Backups</h1>
-        <Button
-          kind="primary"
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-7)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1
+          style={{
+            fontFamily: "var(--frost-font-mono)",
+            fontSize: "var(--frost-type-mono-emph-size)",
+            fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+            letterSpacing: "var(--frost-type-mono-emph-tracking)",
+            textTransform: "uppercase",
+            color: "var(--frost-ink)",
+            margin: 0,
+          }}
+        >
+          Backups
+        </h1>
+        <BracketButton
           onClick={handleCreate}
           disabled={createMutation.isPending}
         >
           {createMutation.isPending ? "Creating..." : "Create Backup"}
-        </Button>
+        </BracketButton>
       </div>
 
       {firstMutationError && (
-        <InlineNotification
-          kind="error"
-          title="Action failed"
-          subtitle={firstMutationError.message}
-          hideCloseButton
-        />
+        <StatusBadge severity="alarm" title="Action failed" subtitle={firstMutationError.message} />
       )}
 
       {processingBackupId != null && (
-        <div style={{ marginBottom: "1rem" }}>
-          <BackupProgress backupId={processingBackupId} onComplete={handleBackupComplete} />
-        </div>
+        <BackupProgress backupId={processingBackupId} onComplete={handleBackupComplete} />
       )}
 
-      {backupsQuery.isLoading && <DataTableSkeleton columnCount={headers.length} rowCount={4} showToolbar={false} />}
+      {backupsQuery.isLoading && (
+        <BrutalistDataTableSkeleton columnCount={headers.length} rowCount={4} showToolbar={false} />
+      )}
       <QueryErrorNotification error={backupsQuery.error} title="Failed to load backups" />
 
       {!backupsQuery.isLoading && backups.length === 0 && !backupsQuery.error && (
-        <p>No backups yet. Create one to get started.</p>
+        <p
+          style={{
+            fontFamily: "var(--frost-font-mono)",
+            fontSize: "var(--frost-type-mono-body-size)",
+            color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+            margin: 0,
+          }}
+        >
+          No backups yet. Create one to get started.
+        </p>
       )}
 
       {backups.length > 0 && (
-        <DataTable rows={rows} headers={headers}>
-          {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-            <TableContainer title="Backup history">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {rows.map((row) => {
-                    const backup = row.cells.find((c) => c.info.header === "Actions")?.value as Backup;
-                    return (
-                      <TableRow {...getRowProps({ row })}>
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === "Status") {
-                            const status = cell.value as BackupStatus;
-                            return (
-                              <TableCell key={cell.id}>
-                                <Tag type={statusTagType(status)} size="sm">
-                                  {status}
-                                </Tag>
-                              </TableCell>
-                            );
-                          }
-                          if (cell.info.header === "Actions") {
-                            return (
-                              <TableCell key={cell.id}>
-                                <div className="table-actions">
-                                  {backup.status === "completed" && (
-                                    <Button
-                                      kind="ghost"
+        <div>
+          <p style={{ ...sectionLabelStyle, marginBottom: "var(--frost-gap-row)" }}>§ BACKUP HISTORY</p>
+          <BrutalistTable rows={rows} headers={headers}>
+            {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
+              <BrutalistTableContainer title="Backup history">
+                <Table {...getTableProps()}>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((header) => (
+                        <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rows.map((row) => {
+                      const backup = row.cells.find((c) => c.info.header === "Actions")?.value as Backup;
+                      return (
+                        <TableRow {...getRowProps({ row })}>
+                          {row.cells.map((cell) => {
+                            if (cell.info.header === "Status") {
+                              const status = cell.value as BackupStatus;
+                              return (
+                                <TableCell key={cell.id}>
+                                  <Tag type={statusTagType(status)} size="sm">
+                                    {status}
+                                  </Tag>
+                                </TableCell>
+                              );
+                            }
+                            if (cell.info.header === "Actions") {
+                              return (
+                                <TableCell key={cell.id}>
+                                  <div style={{ display: "flex", gap: "var(--frost-gap-row)" }}>
+                                    {backup.status === "completed" && (
+                                      <BracketButton
+                                        kind="ghost"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          window.open(getBackupDownloadUrl(backup.id), "_blank");
+                                        }}
+                                      >
+                                        Download
+                                      </BracketButton>
+                                    )}
+                                    <BracketButton
+                                      kind="danger--ghost"
                                       size="sm"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        window.open(getBackupDownloadUrl(backup.id), "_blank");
+                                        setDeleteTarget(backup);
                                       }}
+                                      disabled={deleteMutation.isPending}
                                     >
-                                      Download
-                                    </Button>
-                                  )}
-                                  <Button
-                                    kind="danger--ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDeleteTarget(backup);
-                                    }}
-                                    disabled={deleteMutation.isPending}
-                                  >
-                                    Delete
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            );
-                          }
-                          return <TableCell key={cell.id}>{cell.value as string}</TableCell>;
-                        })}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
+                                      Delete
+                                    </BracketButton>
+                                  </div>
+                                </TableCell>
+                              );
+                            }
+                            return <TableCell key={cell.id}>{cell.value as string}</TableCell>;
+                          })}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </BrutalistTableContainer>
+            )}
+          </BrutalistTable>
+        </div>
       )}
 
       {/* Schedule configuration */}
-      <div style={{ marginTop: "2rem" }}>
-        <h2 style={{ marginBottom: "1rem" }}>Backup Schedule</h2>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--frost-gap-row)",
+        }}
+      >
+        <p style={sectionLabelStyle}>§ BACKUP SCHEDULE</p>
 
-        {scheduleQuery.isLoading && <p>Loading schedule...</p>}
+        {scheduleQuery.isLoading && (
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-body-size)",
+              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+              margin: 0,
+            }}
+          >
+            Loading schedule...
+          </p>
+        )}
         {scheduleQuery.error && (
           <QueryErrorNotification error={scheduleQuery.error} title="Failed to load schedule" />
         )}
 
         {schedule && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: "400px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-row)", maxWidth: "var(--frost-strip-3)" }}>
             <Toggle
               id="backup-schedule-enabled"
               labelText="Automatic backups"
@@ -268,16 +324,16 @@ export default function BackupsPage() {
               disabled={updateScheduleMutation.isPending}
             />
 
-            <Select
+            <MonoSelect
               id="backup-frequency"
               labelText="Frequency"
               value={schedule.backupFrequency ?? "weekly"}
               onChange={(e) => handleFrequencyChange(e.target.value)}
               disabled={updateScheduleMutation.isPending || !(schedule.backupEnabled ?? false)}
             >
-              <SelectItem value="daily" text="Daily" />
-              <SelectItem value="weekly" text="Weekly" />
-            </Select>
+              <MonoSelectItem value="daily" text="Daily" />
+              <MonoSelectItem value="weekly" text="Weekly" />
+            </MonoSelect>
 
             <NumberInput
               id="backup-retention"
@@ -296,29 +352,50 @@ export default function BackupsPage() {
       </div>
 
       {/* Restore section */}
-      <div style={{ marginTop: "2rem" }}>
-        <h2>Restore</h2>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--frost-gap-row)",
+        }}
+      >
+        <p style={sectionLabelStyle}>§ RESTORE</p>
         <RestoreUpload />
       </div>
 
       {/* Delete confirmation */}
-      <Modal
+      <BrutalistModal
         open={deleteTarget != null}
-        modalHeading="Delete backup"
-        primaryButtonText={deleteMutation.isPending ? "Deleting..." : "Delete"}
-        secondaryButtonText="Cancel"
         danger
         onRequestClose={() => {
           if (!deleteMutation.isPending) setDeleteTarget(null);
         }}
         onRequestSubmit={handleDelete}
       >
-        <p>
-          {deleteTarget
-            ? `Delete backup #${deleteTarget.id}? This action cannot be undone.`
-            : "Delete selected backup?"}
-        </p>
-      </Modal>
-    </section>
+        <BrutalistModalHeader title="Delete backup" />
+        <BrutalistModalBody>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-body-size)",
+              color: "var(--frost-ink)",
+              margin: 0,
+            }}
+          >
+            {deleteTarget
+              ? `Delete backup #${deleteTarget.id}? This action cannot be undone.`
+              : "Delete selected backup?"}
+          </p>
+        </BrutalistModalBody>
+        <BrutalistModalFooter
+          primaryButtonText={deleteMutation.isPending ? "Deleting..." : "Delete"}
+          secondaryButtonText="Cancel"
+          onRequestClose={() => {
+            if (!deleteMutation.isPending) setDeleteTarget(null);
+          }}
+          onRequestSubmit={handleDelete}
+        />
+      </BrutalistModal>
+    </main>
   );
 }
