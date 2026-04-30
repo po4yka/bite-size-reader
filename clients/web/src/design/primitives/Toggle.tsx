@@ -51,7 +51,7 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(function Toggle(
 
   return (
     <div
-      className={className}
+      className={["frost-toggle-wrap", className].filter(Boolean).join(" ")}
       style={{
         display: "inline-flex",
         alignItems: "center",

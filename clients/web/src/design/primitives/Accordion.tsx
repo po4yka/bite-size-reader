@@ -71,6 +71,7 @@ export function AccordionItem({
         type="button"
         disabled={disabled}
         aria-expanded={isOpen}
+        className="frost-accordion-header"
         onClick={() => {
           if (!isControlled) setInternalOpen((v) => !v);
           onHeadingClick?.({ isOpen: !isOpen });

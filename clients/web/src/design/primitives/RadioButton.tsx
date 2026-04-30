@@ -34,7 +34,7 @@ export const RadioButton = forwardRef<HTMLInputElement, RadioButtonProps>(
 
     return (
       <div
-        className={className}
+        className={["frost-radio-label-wrap", className].filter(Boolean).join(" ")}
         style={{
           display: "inline-flex",
           alignItems: "center",

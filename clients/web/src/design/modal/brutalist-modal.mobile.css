@@ -1,0 +1,19 @@
+/*
+ * BrutalistModal mobile overrides — full-screen takeover below 768px.
+ * Scoped to @container main (max-width: 768px).
+ */
+
+@container main (max-width: 768px) {
+  .brutalist-modal__frame {
+    max-width: none;
+    max-height: none;
+    width: 100vw;
+    height: 100vh;
+    border: none;
+    border-radius: 0;
+  }
+  .brutalist-modal__backdrop {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+}

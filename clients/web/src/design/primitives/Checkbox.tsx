@@ -53,7 +53,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           fontFamily: "var(--frost-font-mono)",
         }}
       >
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+        <div className="frost-checkbox-label-wrap" style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
           {/* Visually hidden real input */}
           <input
             ref={ref}

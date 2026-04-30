@@ -20,6 +20,23 @@ const backdropStyle: React.CSSProperties = {
   animation: "frost-modal-in 0.12s linear",
 };
 
+const mobileModalCSS = `
+@container main (max-width: 768px) {
+  .brutalist-modal__frame {
+    max-width: none;
+    max-height: none;
+    width: 100vw;
+    height: 100vh;
+    border: none;
+    border-radius: 0;
+  }
+  .brutalist-modal__backdrop {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+}
+`;
+
 const frameStyle = (size: "sm" | "md"): React.CSSProperties => ({
   position: "relative",
   background: "var(--frost-page)",
@@ -236,7 +253,9 @@ export function BrutalistModal({
   return (
     <>
       <style>{keyframes}</style>
+      <style>{mobileModalCSS}</style>
       <div
+        className="brutalist-modal__backdrop"
         style={backdropStyle}
         onClick={handleBackdropClick}
         onKeyDown={handleKeyDown}
@@ -247,7 +266,7 @@ export function BrutalistModal({
           role="dialog"
           aria-modal
           aria-label={typeof modalHeading === "string" ? modalHeading : undefined}
-          className={className}
+          className={["brutalist-modal__frame", className].filter(Boolean).join(" ")}
           style={{ ...frameStyle(size), ...dangerStyle }}
         >
           {/* Simple modal header */}

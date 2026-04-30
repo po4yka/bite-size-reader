@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ErrorBoundary from "./ErrorBoundary";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { MobileTabBar } from "../design/shell/MobileTabBar";
 import {
   BracketButton,
   Content,
@@ -118,7 +119,7 @@ export default function AppShell() {
     <Theme theme={theme}>
       <div className="app-shell">
         <SkipToContent />
-        <FrostHeader aria-label="Ratatoskr Web">
+        <FrostHeader aria-label="Ratatoskr Web" className="frost-header">
           <FrostHeaderMenuButton
             aria-label={expanded ? "Close navigation menu" : "Open navigation menu"}
             onClick={() => setExpanded((prev) => !prev)}
@@ -199,6 +200,7 @@ export default function AppShell() {
             <Outlet />
           </ErrorBoundary>
         </Content>
+        <MobileTabBar />
       </div>
     </Theme>
   );

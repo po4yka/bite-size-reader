@@ -42,23 +42,12 @@ export const FrostSideNav = forwardRef<HTMLElement, FrostSideNavProps>(
     void _isPersistent;
     return (
       <>
-        {expanded ? (
-          <div
-            onClick={onOverlayClick}
-            aria-hidden
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 99,
-              background: "color-mix(in oklch, var(--frost-page) 60%, transparent)",
-            }}
-          />
-        ) : null}
         <nav
           ref={ref}
           aria-label={(rest as { "aria-label"?: string })["aria-label"]}
           onBlur={onSideNavBlur}
-          className={className}
+          className={["frost-side-nav", className].filter(Boolean).join(" ")}
+          data-expanded={expanded ? "true" : "false"}
           style={{
             width: "var(--frost-strip-2, 352px)",
             background: "var(--frost-page)",
@@ -74,6 +63,11 @@ export const FrostSideNav = forwardRef<HTMLElement, FrostSideNavProps>(
         >
           {children}
         </nav>
+        <div
+          className="frost-side-nav__backdrop"
+          aria-hidden
+          onClick={onOverlayClick}
+        />
       </>
     );
   },

@@ -1,0 +1,122 @@
+/*
+ * Touch-target overrides — all interactive primitives get ≥44×44 hit areas
+ * on mobile. Visual size is preserved; padding / min-height bumps the tap area.
+ * All rules scoped to @container main (max-width: 768px).
+ */
+
+/* ─── BracketButton: sm padding 4×12 → 12×24 ─────────────────────── */
+
+@container main (max-width: 768px) {
+  .frost-bracket-btn {
+    min-height: 44px;
+    padding: 12px 24px;
+  }
+}
+
+/* ─── IconButton: 32×32 → 44×44 ──────────────────────────────────── */
+
+@container main (max-width: 768px) {
+  .frost-icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* ─── Checkbox: 16×16 visual, 44×44 label hit area ───────────────── */
+
+@container main (max-width: 768px) {
+  .frost-checkbox-label-wrap {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* ─── RadioButton: 16×16 visual, 44×44 label hit area ────────────── */
+
+@container main (max-width: 768px) {
+  .frost-radio-label-wrap {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* ─── Toggle: 32×16 visual, 44px min-height on wrapper ───────────── */
+
+@container main (max-width: 768px) {
+  .frost-toggle-wrap {
+    min-height: 44px;
+    align-items: center;
+  }
+}
+
+/* ─── Tag (Chip): min-height 44px, padding 8×12 ──────────────────── */
+
+@container main (max-width: 768px) {
+  .frost-chip {
+    min-height: 44px;
+    align-items: center;
+  }
+  .frost-chip > span {
+    padding: 8px 12px;
+  }
+}
+
+/* ─── Accordion header: min-height 44px ──────────────────────────── */
+
+@container main (max-width: 768px) {
+  .frost-accordion-header {
+    min-height: 44px;
+    padding: 0;
+    align-items: center;
+  }
+}
+
+/* ─── NumberInput steppers: 24×24 → 44×44 ────────────────────────── */
+
+@container main (max-width: 768px) {
+  .frost-number-input__stepper {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* ─── MonoSelect trigger: min-height 44px ────────────────────────── */
+
+@container main (max-width: 768px) {
+  .frost-mono-select {
+    min-height: 44px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}
+
+/* ─── MonoInput: min-height 44px ─────────────────────────────────── */
+
+@container main (max-width: 768px) {
+  .frost-mono-input {
+    min-height: 44px;
+    padding: 12px 0;
+  }
+}
+
+/* ─── MonoTextArea: min-height 44px ──────────────────────────────── */
+
+@container main (max-width: 768px) {
+  .frost-mono-textarea {
+    min-height: 44px;
+    padding: 12px 0;
+  }
+}
+
+/* ─── BracketSearch: min-height 44px ─────────────────────────────── */
+
+@container main (max-width: 768px) {
+  .frost-bracket-search {
+    min-height: 44px;
+    padding: 12px 0;
+  }
+}

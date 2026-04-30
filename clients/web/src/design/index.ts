@@ -8,6 +8,7 @@
 import "./fonts.css";
 import "./tokens.css";
 import "./base.css";
+import "./mobile.css";
 
 // ── In-place rewrites (Phase 2) — same filename, Frost shape ──────────────────
 

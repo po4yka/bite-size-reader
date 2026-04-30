@@ -1,0 +1,66 @@
+/*
+ * Mobile shell overrides — FrostHeader collapse, FrostSideNav drawer,
+ * AppShell bottom-padding reservation.
+ * All rules scoped to @container main (max-width: 768px).
+ */
+
+/* ─── FrostHeader mobile collapse ─────────────────────────────────── */
+
+@container main (max-width: 768px) {
+  .frost-header {
+    height: var(--frost-mobile-header, 54px);
+  }
+  .frost-header__tab-bar {
+    display: none;
+  }
+}
+
+/* ─── FrostSideNav drawer mode ────────────────────────────────────── */
+
+@container main (max-width: 768px) {
+  .frost-side-nav {
+    position: fixed;
+    top: var(--frost-mobile-header, 54px);
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: var(--frost-strip-5, 880px);
+    z-index: 100;
+    background: var(--page, var(--frost-page));
+    border-right: 1px solid var(--ink, var(--frost-ink));
+    transform: translateX(-100%);
+    transition: transform 0.2s ease-out;
+    overflow-y: auto;
+  }
+  .frost-side-nav[data-expanded="true"] {
+    transform: translateX(0);
+  }
+  .frost-side-nav__backdrop {
+    position: fixed;
+    top: var(--frost-mobile-header, 54px);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: color-mix(in oklch, var(--page, var(--frost-page)) 85%, transparent);
+    z-index: 99;
+    display: none;
+  }
+  .frost-side-nav[data-expanded="true"] ~ .frost-side-nav__backdrop {
+    display: block;
+  }
+}
+
+/* ─── AppContent bottom padding for tab bar ───────────────────────── */
+
+@container main (max-width: 768px) {
+  .app-content--mobile-padded,
+  .rtk-content {
+    padding-bottom: calc(var(--frost-tab-bar-height, 56px) + 16px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frost-side-nav {
+    transition-duration: 0.001s !important;
+  }
+}

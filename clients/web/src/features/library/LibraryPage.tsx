@@ -67,9 +67,10 @@ export default function LibraryPage() {
     }
   }, [visible.length]);
 
-  // Keyboard navigation
+  // Keyboard navigation (disabled on mobile — no physical keyboard)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      if (window.matchMedia("(max-width: 768px)").matches) return;
       if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
         setCursor((c) => Math.min(c + 1, visible.length - 1));
