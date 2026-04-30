@@ -94,3 +94,38 @@ async def test_signal_scoring_dedupes_exact_url_and_title_candidates():
 
     assert [item.feed_item_id for item in scored] == [1]
     assert scored[0].evidence["dedupe_key"] == "url:https://example.com/post"
+
+
+@pytest.mark.asyncio
+async def test_signal_scoring_dedupes_near_duplicate_text_with_minhash():
+    now = dt.datetime(2026, 4, 30, tzinfo=UTC)
+    candidates = [
+        SignalCandidate(
+            feed_item_id=1,
+            source_id=1,
+            source_kind="rss",
+            title="Python packaging migration guide",
+            canonical_url="https://example.com/a",
+            published_at=now,
+            metadata={
+                "content_text": "Python packaging migration guide for teams moving from setup.py"
+            },
+        ),
+        SignalCandidate(
+            feed_item_id=2,
+            source_id=2,
+            source_kind="rss",
+            title="Python packaging migration guide for teams",
+            canonical_url="https://example.net/b",
+            published_at=now,
+            metadata={
+                "content_text": "A Python packaging migration guide for teams moving from setup.py"
+            },
+        ),
+    ]
+    service = SignalScoringService(topic_similarity=_FakeTopicSimilarity({1: 1.0, 2: 1.0}))
+
+    scored = await service.score(candidates, now=now)
+
+    assert [item.feed_item_id for item in scored] == [1]
+    assert str(scored[0].evidence["minhash_key"]).startswith("minhash:")

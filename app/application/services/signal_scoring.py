@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -11,6 +13,9 @@ from typing import Protocol
 from app.core.time_utils import UTC
 
 LLM_JUDGE_CAP_FRACTION = 0.10
+MINHASH_SIGNATURE_SIZE = 64
+MINHASH_NEAR_DUPLICATE_THRESHOLD = 0.55
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
 class ChromaUnavailableError(RuntimeError):
@@ -95,6 +100,7 @@ class SignalScoringService:
                         "topic_similarity_score": topic_similarity,
                         "source_diversity_multiplier": diversity_penalty,
                         "dedupe_key": self._dedupe_key(candidate),
+                        "minhash_key": _minhash_dedupe_key(candidate),
                         "llm_cap_fraction": LLM_JUDGE_CAP_FRACTION,
                     },
                 )
@@ -117,12 +123,21 @@ class SignalScoringService:
 
     def _dedupe(self, candidates: list[SignalCandidate]) -> list[SignalCandidate]:
         seen: set[str] = set()
+        seen_signatures: list[tuple[int, ...]] = []
         result: list[SignalCandidate] = []
         for candidate in candidates:
             key = self._dedupe_key(candidate)
             if key in seen:
                 continue
+            signature = _candidate_minhash_signature(candidate)
+            if signature and any(
+                _signature_similarity(signature, existing) >= MINHASH_NEAR_DUPLICATE_THRESHOLD
+                for existing in seen_signatures
+            ):
+                continue
             seen.add(key)
+            if signature:
+                seen_signatures.append(signature)
             result.append(candidate)
         return result
 
@@ -130,6 +145,9 @@ class SignalScoringService:
     def _dedupe_key(candidate: SignalCandidate) -> str:
         if candidate.canonical_url:
             return f"url:{candidate.canonical_url.strip().lower()}"
+        minhash_key = _minhash_dedupe_key(candidate)
+        if minhash_key:
+            return minhash_key
         if candidate.title:
             return f"title:{candidate.title.strip().lower()}"
         return f"item:{candidate.feed_item_id}"
@@ -151,3 +169,70 @@ class SignalScoringService:
         if weighted <= 0:
             return 0.0
         return min(1.0, math.log10(weighted + 1) / 4.0)
+
+
+def _minhash_dedupe_key(candidate: SignalCandidate) -> str | None:
+    signature = _candidate_minhash_signature(candidate)
+    if not signature:
+        return None
+    band_width = 4
+    bands = [
+        signature[idx : idx + band_width]
+        for idx in range(0, len(signature), band_width)
+        if len(signature[idx : idx + band_width]) == band_width
+    ]
+    if not bands:
+        return None
+    # Use the lowest band hash as a stable near-duplicate bucket.
+    band_hashes = [hash(tuple(band)) & 0xFFFFFFFF for band in bands]
+    return f"minhash:{min(band_hashes):08x}"
+
+
+def _candidate_minhash_signature(candidate: SignalCandidate) -> tuple[int, ...] | None:
+    text = _candidate_text(candidate)
+    shingles = _word_shingles(text)
+    if len(shingles) < 3:
+        return None
+    return _minhash_signature(shingles)
+
+
+def _candidate_text(candidate: SignalCandidate) -> str:
+    metadata_text = candidate.metadata.get("content_text") or candidate.metadata.get("text") or ""
+    return " ".join(
+        part
+        for part in (
+            candidate.title or "",
+            str(metadata_text or ""),
+        )
+        if part
+    )
+
+
+def _word_shingles(text: str, *, width: int = 4) -> set[str]:
+    tokens = _TOKEN_RE.findall(text.lower())
+    if len(tokens) < width:
+        return set(tokens)
+    return {" ".join(tokens[idx : idx + width]) for idx in range(len(tokens) - width + 1)}
+
+
+def _minhash_signature(shingles: set[str]) -> tuple[int, ...]:
+    values: list[int] = []
+    for seed in range(MINHASH_SIGNATURE_SIZE):
+        minimum: int | None = None
+        for shingle in shingles:
+            digest = hashlib.blake2b(
+                f"{seed}:{shingle}".encode(),
+                digest_size=8,
+            ).digest()
+            value = int.from_bytes(digest, byteorder="big")
+            if minimum is None or value < minimum:
+                minimum = value
+        values.append(minimum or 0)
+    return tuple(values)
+
+
+def _signature_similarity(left: tuple[int, ...], right: tuple[int, ...]) -> float:
+    if not left or not right or len(left) != len(right):
+        return 0.0
+    matches = sum(1 for lvalue, rvalue in zip(left, right, strict=True) if lvalue == rvalue)
+    return matches / len(left)

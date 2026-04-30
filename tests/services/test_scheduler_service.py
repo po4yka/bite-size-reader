@@ -20,6 +20,8 @@ def _build_cfg(*, digest_enabled: bool = True, rss_enabled: bool = False, allowe
         rss=SimpleNamespace(
             enabled=rss_enabled,
             poll_interval_minutes=60,
+            auto_summarize=True,
+            max_items_per_poll=20,
         ),
         telegram=SimpleNamespace(
             allowed_user_ids=list(allowed_user_ids),
@@ -100,6 +102,7 @@ def _minimal_deps(**overrides):
         "digest_llm_factory": MagicMock(),
         "digest_bot_client_factory": MagicMock(),
         "digest_service_factory": MagicMock(),
+        "signal_worker_factory": None,
     }
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -178,3 +181,23 @@ async def test_run_channel_digest_starts_and_stops_dependencies(monkeypatch) -> 
     userbot.start.assert_awaited_once()
     userbot.stop.assert_awaited_once()
     llm_client.aclose.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_run_rss_poll_invokes_signal_worker(monkeypatch) -> None:
+    scheduler_module, _, _ = _load_scheduler_module(monkeypatch)
+    monkeypatch.setitem(
+        sys.modules,
+        "app.adapters.rss.feed_poller",
+        SimpleNamespace(poll_all_feeds=AsyncMock(return_value={"new_item_ids": [], "new_items": 0})),
+    )
+    signal_worker = SimpleNamespace(run_once=AsyncMock(return_value={"persisted": 2}))
+    service = scheduler_module.SchedulerService(
+        _build_cfg(digest_enabled=False, rss_enabled=True),
+        db=MagicMock(),
+        deps=_minimal_deps(signal_worker_factory=MagicMock(return_value=signal_worker)),
+    )
+
+    await service._run_rss_poll()
+
+    signal_worker.run_once.assert_awaited_once_with(limit=20)

@@ -314,3 +314,54 @@ class SqliteSignalSourceRepositoryAdapter(SqliteBaseRepository):
             return result
 
         return await self._execute(_query, operation_name="list_user_signals", read_only=True)
+
+    async def async_list_unscored_candidates(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        def _query() -> list[dict[str, Any]]:
+            signal_alias = UserSignal.alias()
+            rows = (
+                FeedItem.select(FeedItem, Source, Subscription, signal_alias)
+                .join(Source)
+                .switch(FeedItem)
+                .join(Subscription, on=(Subscription.source == FeedItem.source))
+                .switch(FeedItem)
+                .join(
+                    signal_alias,
+                    peewee.JOIN.LEFT_OUTER,
+                    on=(
+                        (signal_alias.feed_item == FeedItem.id)
+                        & (signal_alias.user == Subscription.user)
+                    ),
+                )
+                .where(
+                    (Source.is_active == True)  # noqa: E712
+                    & (Subscription.is_active == True)  # noqa: E712
+                    & (signal_alias.id.is_null(True))
+                )
+                .order_by(FeedItem.published_at.desc(nulls="LAST"), FeedItem.created_at.desc())
+                .limit(limit)
+            )
+            result: list[dict[str, Any]] = []
+            for row in rows:
+                subscription = row.subscription
+                result.append(
+                    {
+                        "user_id": subscription.user_id,
+                        "source_id": row.source_id,
+                        "source_kind": row.source.kind,
+                        "feed_item_id": row.id,
+                        "title": row.title,
+                        "canonical_url": row.canonical_url,
+                        "content_text": row.content_text,
+                        "published_at": row.published_at,
+                        "views": row.views,
+                        "forwards": row.forwards,
+                        "comments": row.comments,
+                    }
+                )
+            return result
+
+        return await self._execute(
+            _query,
+            operation_name="list_unscored_signal_candidates",
+            read_only=True,
+        )

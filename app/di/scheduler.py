@@ -29,9 +29,11 @@ def build_scheduler_dependencies(
     """Build scheduler job factories without constructing jobs inline in the service."""
     rss_bot_factory = None
     rss_delivery_factory = None
+    signal_worker_factory = None
     if cfg.rss.enabled:
         rss_bot_factory = lambda: _create_digest_bot_client(cfg)  # noqa: E731
         rss_delivery_factory = lambda: _create_rss_delivery_service(cfg, db)  # noqa: E731
+        signal_worker_factory = lambda: _create_signal_ingestion_worker(cfg, db)  # noqa: E731
 
     return SchedulerDependencies(
         digest_userbot_factory=lambda: _create_digest_userbot(cfg),
@@ -45,6 +47,7 @@ def build_scheduler_dependencies(
         ),
         rss_bot_client_factory=rss_bot_factory,
         rss_delivery_factory=rss_delivery_factory,
+        signal_worker_factory=signal_worker_factory,
     )
 
 
@@ -157,4 +160,37 @@ def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> 
         ),
         rss_repository=SqliteRSSFeedRepositoryAdapter(db),
         scraper_chain=scraper_chain,
+    )
+
+
+def _create_signal_ingestion_worker(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
+    from app.application.services.signal_ingestion_worker import SignalIngestionWorker
+    from app.application.services.signal_scoring import SignalScoringService
+    from app.core.embedding_space import resolve_embedding_space_identifier
+    from app.infrastructure.embedding.embedding_factory import create_embedding_service
+    from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
+        SqliteSignalSourceRepositoryAdapter,
+    )
+    from app.infrastructure.search.chroma_topic_similarity import ChromaTopicSimilarityAdapter
+    from app.infrastructure.vector.chroma_store import ChromaVectorStore
+
+    embedding_service = create_embedding_service(cfg.embedding)
+    vector_store = ChromaVectorStore(
+        host=cfg.vector_store.host,
+        auth_token=cfg.vector_store.auth_token,
+        environment=cfg.vector_store.environment,
+        user_scope=cfg.vector_store.user_scope,
+        collection_version=cfg.vector_store.collection_version,
+        embedding_space=resolve_embedding_space_identifier(cfg.embedding),
+        required=cfg.vector_store.required,
+        connection_timeout=cfg.vector_store.connection_timeout,
+    )
+    return SignalIngestionWorker(
+        repository=SqliteSignalSourceRepositoryAdapter(db),
+        scorer=SignalScoringService(
+            topic_similarity=ChromaTopicSimilarityAdapter(
+                vector_store=vector_store,
+                embedding_service=embedding_service,
+            )
+        ),
     )

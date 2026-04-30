@@ -57,3 +57,6 @@ class SignalSourceRepositoryPort(Protocol):
 
     async def async_list_user_signals(self, user_id: int) -> list[dict[str, Any]]:
         """List scored signal candidates visible to a user."""
+
+    async def async_list_unscored_candidates(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        """List active subscription/feed-item pairs that do not have a signal yet."""

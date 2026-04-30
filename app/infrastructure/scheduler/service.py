@@ -182,7 +182,10 @@ class SchedulerService:
             )
 
             if not new_item_ids or not self.cfg.rss.auto_summarize:
+                await self._run_signal_ingestion(correlation_id)
                 return
+
+            await self._run_signal_ingestion(correlation_id)
 
             if not self._deps.rss_delivery_factory or not self._deps.rss_bot_client_factory:
                 logger.warning("rss_delivery_not_configured", extra={"cid": correlation_id})
@@ -208,6 +211,22 @@ class SchedulerService:
         except Exception as exc:
             logger.exception(
                 "rss_poll_failed",
+                extra={"cid": correlation_id, "error": str(exc)},
+            )
+
+    async def _run_signal_ingestion(self, correlation_id: str) -> None:
+        signal_worker_factory = getattr(self._deps, "signal_worker_factory", None)
+        if not signal_worker_factory:
+            logger.info("signal_ingestion_skipped", extra={"cid": correlation_id})
+            return
+        try:
+            worker = signal_worker_factory()
+            limit = getattr(self.cfg.rss, "max_items_per_poll", 100)
+            stats = await worker.run_once(limit=limit)
+            logger.info("signal_ingestion_complete", extra={"cid": correlation_id, **stats})
+        except Exception as exc:
+            logger.exception(
+                "signal_ingestion_failed",
                 extra={"cid": correlation_id, "error": str(exc)},
             )
 

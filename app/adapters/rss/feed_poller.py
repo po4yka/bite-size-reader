@@ -9,6 +9,9 @@ from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
     SqliteRSSFeedRepositoryAdapter,
 )
+from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
+    SqliteSignalSourceRepositoryAdapter,
+)
 
 if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
@@ -21,6 +24,7 @@ MAX_FETCH_ERRORS = 10
 async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
     """Poll all active RSS feeds for new items."""
     repo = SqliteRSSFeedRepositoryAdapter(db)
+    signal_repo = SqliteSignalSourceRepositoryAdapter(db)
     feeds = await repo.async_list_active_feeds()
 
     new_item_ids: list[int] = []
@@ -40,6 +44,19 @@ async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
 
             # Store new items
             new_count = 0
+            signal_source = await signal_repo.async_upsert_source(
+                kind="rss",
+                external_id=str(feed.get("url") or ""),
+                url=feed.get("url"),
+                title=feed.get("title"),
+                description=feed.get("description"),
+                site_url=feed.get("site_url"),
+                metadata={
+                    "etag": feed.get("etag"),
+                    "last_modified": feed.get("last_modified"),
+                    "legacy_rss_feed_id": feed.get("id"),
+                },
+            )
             for entry in result.entries:
                 try:
                     item = await repo.async_create_feed_item(
@@ -54,6 +71,23 @@ async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
                     if item is not None:
                         new_count += 1
                         new_item_ids.append(int(item["id"]))
+                        await signal_repo.async_upsert_feed_item(
+                            source_id=int(signal_source["id"]),
+                            external_id=entry.guid,
+                            canonical_url=entry.url,
+                            title=entry.title,
+                            content_text=entry.content,
+                            author=entry.author,
+                            published_at=entry.published_at,
+                            metadata={"legacy_rss_item_id": item["id"]},
+                        )
+                        targets = await repo.async_list_delivery_targets([int(item["id"])])
+                        for target in targets:
+                            for subscriber_id in target.get("subscriber_ids", []):
+                                await signal_repo.async_subscribe(
+                                    user_id=int(subscriber_id),
+                                    source_id=int(signal_source["id"]),
+                                )
                 except Exception:
                     logger.warning(
                         "rss_item_create_failed",

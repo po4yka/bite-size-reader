@@ -180,3 +180,44 @@ async def test_signal_repository_can_disable_source(repo):
     reloaded = await repo.async_get_source(source["id"])
     assert reloaded is not None
     assert reloaded["is_active"] is False
+
+
+@pytest.mark.asyncio
+async def test_signal_repository_lists_unscored_candidates_once(repo):
+    _user(1001, "owner")
+    source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
+    await repo.async_subscribe(user_id=1001, source_id=source["id"])
+    item = await repo.async_upsert_feed_item(
+        source_id=source["id"],
+        external_id="guid-1",
+        title="Candidate",
+        canonical_url="https://example.com/post",
+        content_text="Candidate body",
+    )
+
+    candidates = await repo.async_list_unscored_candidates()
+
+    assert candidates == [
+        {
+            "user_id": 1001,
+            "source_id": source["id"],
+            "source_kind": "rss",
+            "feed_item_id": item["id"],
+            "title": "Candidate",
+            "canonical_url": "https://example.com/post",
+            "content_text": "Candidate body",
+            "published_at": None,
+            "views": None,
+            "forwards": None,
+            "comments": None,
+        }
+    ]
+
+    await repo.async_record_user_signal(
+        user_id=1001,
+        feed_item_id=item["id"],
+        status="candidate",
+        final_score=0.5,
+    )
+
+    assert await repo.async_list_unscored_candidates() == []

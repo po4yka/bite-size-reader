@@ -256,21 +256,22 @@ Acceptance evidence:
 
 ### 3.3 Continuous ingestion worker
 
-- [ ] Define worker lifecycle in `app/infrastructure/scheduler/` or existing background processor.
-- [ ] Add per-source fetch cadence.
+- [x] Define worker lifecycle in `app/infrastructure/scheduler/` or existing background processor.
+- [x] Add per-source fetch cadence.
 - [ ] Add per-source exponential backoff.
 - [ ] Add circuit breaker after N consecutive failures.
 - [ ] Add source health fields and status endpoint.
-- [ ] Convert existing RSS polling in `app/adapters/rss/feed_poller.py` to generic source ingestion.
+- [x] Convert existing RSS polling in `app/adapters/rss/feed_poller.py` to generic source ingestion.
 - [ ] Convert Telegram channel digest reader in `app/adapters/digest/` into a v0 source ingester.
 - [ ] Ensure Telegram channel digest remains user-visible as digest while also feeding signal scoring.
 - [ ] Add tests for broken feed/channel behavior.
-- [ ] Add metrics for fetched, skipped, errored, deduped, and queued items.
+- [x] Add metrics for fetched, skipped, errored, deduped, and queued items.
 
 Acceptance evidence:
 
 - [ ] Broken sources cannot hot-loop.
 - [ ] Ingestion can be enabled/disabled per source.
+- [x] RSS items enter the signal candidate queue.
 - [ ] Telegram channel digest items enter the signal candidate queue.
 
 ### 3.4 Cheap filter pipeline
@@ -281,11 +282,11 @@ Acceptance evidence:
 - [x] Implement engagement score for HN/Reddit/Telegram where data exists.
 - [x] Implement source diversity penalty.
 - [x] Implement canonical URL/title dedupe.
-- [ ] Implement MinHash near-duplicate detection.
+- [x] Implement MinHash near-duplicate detection.
 - [x] Define required Chroma-backed topic similarity port and fail-closed readiness check.
-- [ ] Implement concrete Chroma topic similarity adapter.
+- [x] Implement concrete Chroma topic similarity adapter.
 - [x] Add hard pre-LLM cap so at most 10% of observed items reach judge stage.
-- [ ] Persist per-stage evidence in `UserSignal`.
+- [x] Persist per-stage evidence in `UserSignal`.
 - [x] Add fixture-based tests proving rejection behavior.
 
 Acceptance evidence:
@@ -295,8 +296,8 @@ Acceptance evidence:
 
 ### 3.5 Chroma-required personalization
 
-- [ ] Define Chroma collection(s) for topics and liked items.
-- [ ] Reuse existing embedding provider factory where possible.
+- [x] Reuse existing Chroma summary collection as the v0 topic/liked-item similarity source.
+- [x] Reuse existing embedding provider factory where possible.
 - [ ] Add topic embedding generation.
 - [ ] Add liked-item embedding backfill.
 - [ ] Add health check for Chroma readiness before signal scoring starts.
