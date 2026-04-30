@@ -1,0 +1,103 @@
+/* Phase 7c Group E — automation + login mobile
+ * Webhooks / Rules / Signals / LoginPage
+ * All rules scoped to @container main (max-width: 768px). */
+
+/* ---------------------------------------------------------------------------
+ * WebhooksPage + RulesPage
+ * BrutalistTable → stacked cards: handled by generic .frost-table cascade
+ * from group-b.mobile.css. BrutalistModal → full-screen: handled by
+ * brutalist-modal.mobile.css (Phase 7b). Modal form bodies already use
+ * flexDirection:column inline, so no extra rule is needed.
+ * --------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+ * SignalsPage
+ * --------------------------------------------------------------------------- */
+
+/* Health strip: 3 flex cards → wrap to 2-up then 1-up */
+@container main (max-width: 768px) {
+  .signal-health-strip {
+    flex-wrap: wrap;
+  }
+
+  .signal-health-strip > * {
+    flex: 1 1 calc(50% - var(--frost-gap-row, 8px));
+    min-width: 0;
+  }
+}
+
+/* Main layout: queue + sidebar side-by-side → single column */
+@container main (max-width: 768px) {
+  .signal-layout {
+    flex-direction: column;
+    gap: var(--frost-gap-section, 32px);
+  }
+
+  .signal-queue {
+    flex: none;
+    width: 100%;
+  }
+
+  .signal-sidebar {
+    flex: none;
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid color-mix(in oklch, var(--frost-ink) 25%, transparent);
+    padding-top: var(--frost-gap-section, 32px);
+  }
+}
+
+/* Source health rows: actions wrap below label on narrow screens */
+@container main (max-width: 768px) {
+  .source-health-row {
+    flex-wrap: wrap;
+    gap: var(--frost-gap-row, 8px);
+  }
+
+  .source-health-row > :last-child {
+    flex-wrap: wrap;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * LoginPage
+ * --------------------------------------------------------------------------- */
+
+/* Outer container: stop centering, let content fill width */
+@container main (max-width: 768px) {
+  .login-page {
+    align-items: stretch;
+    padding: 32px var(--frost-pad-page-mobile, 16px);
+    min-height: auto;
+  }
+}
+
+/* Card: override the inline maxWidth: strip-3 */
+@container main (max-width: 768px) {
+  .login-card {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
+
+/* Telegram widget iframe: make it fill card width */
+@container main (max-width: 768px) {
+  .login-hero iframe {
+    width: 100% !important;
+    min-height: 56px;
+  }
+}
+
+/* Ghost action buttons at bottom: stack full-width */
+@container main (max-width: 768px) {
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions .frost-bracket-button,
+  .form-actions [class*="bracket-button"] {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+}
