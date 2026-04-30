@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Web frontend — Frost design system migration
+
+Full rewrite of the React web frontend (`clients/web/`) to the Frost
+design system: editorial monospace minimalism, two-color rule (ink +
+page) with a single critical accent (spark `#DC3545`), eight-step alpha
+ladder, brutalism (0 corner radius, 1px hairline borders, no shadows).
+See `DESIGN.md` at the repo root for the canonical spec.
+
+- **NEW** Frost component surface: `BracketButton`, `BrutalistCard`,
+  `BrutalistTable`, `BrutalistModal`, `BracketTabs`, `BracketPagination`,
+  `BracketSearch`, `MonoInput`, `MonoTextArea`, `MonoSelect`,
+  `MonoProgressBar`, `BrutalistSkeleton`, `SparkLoading`, `StatusBadge`,
+  `Toast`, `RowDigest`, `FrostHeader`, `FrostSideNav`. In-place rewrites
+  preserve legacy import names for `Tag`, `Link`, `IconButton`, `Toggle`,
+  `Checkbox`, `RadioButton`, `Accordion`, `NumberInput`, `UnorderedList`,
+  `CodeSnippet`, `FileUploader`, `Dropdown`, `MultiSelect`,
+  `FilterableMultiSelect`, `ContentSwitcher`, `TreeView`, `DatePicker`,
+  `TimePicker`.
+- **NEW** Self-hosted JetBrains Mono (regular/medium/extrabold) + Source
+  Serif 4 italic via `@fontsource` packages. Source Serif body shows up
+  in the article reader at 16px / 1.55 line-height.
+- **NEW** Storybook visual harness (`@storybook/react-vite`) covering
+  primitives in light + dark modes, plus a `web-storybook-build` CI job
+  that uploads the `storybook-static/` artifact.
+- **REWRITE** All 17 pages (Library, Articles, Article, Search,
+  TagManagement, Collections, Submit, ImportExport, Backups, Feeds,
+  Webhooks, Rules, Signals, Preferences, Digest, CustomDigestView,
+  Admin, Login) and the global AppShell migrated. Page widths snap to
+  `strip-N` tokens (176-1408px); horizontal page padding is 32px;
+  section gap is 48px; page gap is 64px.
+- **REMOVED** Legacy components: `Button`, `Tile`, `TextInput`,
+  `TextArea`, `Select`, `Search`, `InlineLoading`, `InlineNotification`,
+  `Skeleton`, `ProgressBar`, `ButtonSet`, `Tabs`, `Pagination`,
+  `DataTable`, `Modal`, `ComposedModal`, `AppHeader`, `AppSideNav`,
+  `StructuredList` (.tsx + .stories.tsx pairs, ~30 files total).
+- **REMOVED** Carbon-derived tokens (`--rtk-color-focus`,
+  `--rtk-color-success`, `--rtk-color-warning`, `--rtk-color-shadow`,
+  `--rtk-radius-sm`, `--rtk-radius-md`) and the back-compat `--rtk-*`
+  alias section in `tokens.css`. Frost is now the only token surface.
+- Bundle delta: index.js 152.61 kB → 189.74 kB across the migration
+  (+24% gross), with the legacy-removal phase recovering 12.99 kB once
+  legacy components were dead-code-eliminated.
+- All gates green throughout: typecheck, lint, 173 unit/render tests,
+  build, build-storybook.
+
 ### Breaking — Project renamed to Ratatoskr
 
 The project has been renamed from `bite-size-reader` to `ratatoskr`.

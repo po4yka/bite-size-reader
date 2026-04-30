@@ -6,7 +6,7 @@ This document provides project context for AI coding agents (Codex, Copilot, etc
 
 Async Telegram bot that summarizes web articles, YouTube videos, and forwarded channel posts. Returns structured JSON summaries with a strict contract. Single Docker container, owner-only access.
 
-**Stack:** Python 3.13+, Pyrogram, Scrapling/Firecrawl/Playwright (scraper chain), OpenRouter (LLM), SQLite (Peewee ORM), FastAPI, React 18 + TypeScript + Vite (Carbon web frontend).
+**Stack:** Python 3.13+, Pyrogram, Scrapling/Firecrawl/Playwright (scraper chain), OpenRouter (LLM), SQLite (Peewee ORM), FastAPI, React 18 + TypeScript + Vite (Frost web frontend).
 
 ## Architecture
 
@@ -30,7 +30,7 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 | Core | `app/core/` | URL normalization, JSON parsing, summary contract, logging |
 | Database | `app/db/` | Peewee ORM models (48 classes), `DatabaseSessionManager` (`session.py`) is sole DB entry point |
 | API | `app/api/` | FastAPI REST API with JWT auth |
-| Web | `clients/web/` | Carbon web interface (React + TypeScript + Vite) |
+| Web | `clients/web/` | Frost web interface (React + TypeScript + Vite) |
 | Search | `app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/` | Search workflows, vector search, and embedding services |
 | MCP | `app/mcp/` | Model Context Protocol server |
 
@@ -47,7 +47,7 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 - `bot.py` -- Entrypoint
 - `docs/SPEC.md` -- Full technical specification (canonical reference)
 - `docs/reference/frontend-web.md` -- Web frontend contracts
-- `DESIGN.md` -- Frost design system spec (DESIGN.md format). Canonical for web UI tokens, typography, components, and anti-patterns. The `--rtk-*` tokens in `clients/web/src/design/tokens.css` are legacy Carbon-derived seed values pending migration to Frost.
+- `DESIGN.md` -- Frost design system spec (DESIGN.md format). Canonical for web UI tokens, typography, components, and anti-patterns.
 
 ## Development Commands
 
@@ -84,7 +84,7 @@ python -m app.cli.summary --url <URL>           # CLI test runner
 11. Front-load the full task spec on the first turn; iterative refinement loses context against multi-step plans
 12. Make independent tool calls in parallel; sequence only when one result determines the next call's parameters
 13. Read code before asserting its behavior; cite `file:line` for non-obvious claims
-14. Web UI design: read `DESIGN.md` (Frost) before adding tokens, components, colors, or motion. Don't bind new code to legacy Carbon-derived `--rtk-*` colors (`#0F62FE`, `#24A148`, etc.) — they're migration debt
+14. Web UI design: read `DESIGN.md` (Frost) before adding tokens, components, colors, or motion. Use `--frost-*` tokens; do not introduce arbitrary hex values or new CSS custom properties outside the Frost token set.
 
 ## Database
 
@@ -226,7 +226,7 @@ When desloppify itself appears wrong or inconsistent:
 
 ## Impeccable Design Skills
 
-Curated UI/UX design skills from [impeccable](https://github.com/pbakaus/impeccable) for the Carbon web frontend. Codex skills in `.codex/skills/i-*/`.
+Curated UI/UX design skills from [impeccable](https://github.com/pbakaus/impeccable) for the Frost web frontend. Codex skills in `.codex/skills/i-*/`.
 
 | Command | Purpose |
 |---------|---------|
@@ -279,7 +279,7 @@ This is the canonical Codex overlay used by the README install command.
 9. Assessment scores are auto-applied from trusted internal run-batches imports, or via Claude cloud session imports (`desloppify review --external-start --external-runner claude` then printed `--external-submit`). Legacy attested external import via `--attested-external` remains supported.
 10. Manual override is safety-scoped: you cannot combine it with `--allow-partial`, and provisional manual scores expire on the next `scan` unless replaced by trusted internal or attested-external imports.
 11. If a batch fails, retry only that slice with `desloppify review --run-batches --packet <packet.json> --only-batches <idxs>`.
-12. For Carbon web frontend tasks, consult `docs/reference/frontend-web.md` and run `cd clients/web && npm run check:static` before completion.
+12. For Frost web frontend tasks, consult `docs/reference/frontend-web.md` and `DESIGN.md`, and run `cd clients/web && npm run check:static` before completion.
 
 <!-- desloppify-overlay: codex -->
 <!-- desloppify-end -->

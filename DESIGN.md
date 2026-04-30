@@ -115,12 +115,11 @@ components:
 
 ## Overview
 
-Frost is the project-owned design system for Ratatoskr — an editorial
-news-aggregation product. It is intentionally **post-Carbon**: the legacy
-`--rtk-*` token shim in `clients/web/src/design/tokens.css` carries
-seed values from the previous IBM Carbon theme so the codemod removing
-the old design system stayed mechanical. Migrating those tokens to
-Frost values is in-progress; this DESIGN.md is the migration target.
+Frost is the design system for Ratatoskr — an editorial news-aggregation
+product. Components ship at `clients/web/src/design/`. The Frost migration
+is complete: all 17 pages and AppShell run on Frost components; legacy Carbon
+tokens (`--rtk-color-focus`, `--rtk-color-success`, `--rtk-color-warning`,
+`--rtk-radius-*`) have been removed.
 
 Frost's three principles:
 
@@ -187,9 +186,11 @@ wordmark and section heads.
 Line-height is one of three percentages: `tight` 115% (ultra-dense
 rows), `body` 130% (default), `reader` 155% (Source Serif italic).
 
-The font shim in `clients/web/src/design/tokens.css` currently
-references generic `--rtk-font-body-01-size`. Migrate consumers to
-the JetBrains Mono / Source Serif tokens above.
+Font stacks are defined via `--frost-font-mono` and `--frost-font-serif`
+in `clients/web/src/design/tokens.css`. The `@font-face` declarations
+for JetBrains Mono and Source Serif 4 italic are in
+`clients/web/src/design/fonts.css`; fonts are self-hosted under
+`clients/web/public/fonts/`.
 
 ## Layout
 
@@ -236,28 +237,65 @@ There are no shadows. There are no gradients. There is no glassmorphism.
 ## Components
 
 Composition is **cards over canvas**: every cluster of related
-information is a Brutalist-Card, separated from siblings by a single
+information is a `BrutalistCard`, separated from siblings by a single
 hairline divider. Cards never overlap, never round, never shadow.
 
 The web canon set lives in Figma pages 08 (Atoms) and 09 (Molecules).
 Selected anchors:
 
-- **Brutalist-Card** — slab card. State enum: `default | critical`.
+- **`BrutalistCard`** — slab card. State enum: `default | critical`.
   Critical adds a 2px leading spark hairline.
 - **Pull-Quote** — Source Serif 4 medium italic body, mono uppercase
   attribution. Used for editorial highlights and quote-of-the-week.
-- **Bracket-Button** — `[ LABEL ]` literal brackets, mono ExtraBold
+  (Figma design token; no standalone React primitive yet.)
+- **`BracketButton`** — `[ LABEL ]` literal brackets, mono ExtraBold
   uppercase. The brackets are characters, not background fills.
-- **Status-Badge** — pill-shaped mono uppercase, severity enum
+- **`StatusBadge`** — pill-shaped mono uppercase, severity enum
   `info | warn | alarm`. Alarm adds the spark bar; alarm never paints
   text red.
 - **Atom / Mark** — inline text-highlight (added v2.13.0). Wraps a
   span of body text with `ink/0.08` alpha background + 1px ink/0.4
   underline. HUG-sized. Variants: `style=match | passage`.
-- **Chip** — bracket-bordered uppercase mono label, used for filters
-  and the version index.
-- **Row / Digest** — single-row card composed of mono cells, used in
+  (Styled via Frost tokens; no standalone React primitive.)
+- **`Tag`** (Chip) — bracket-bordered uppercase mono label, used for
+  filters and the version index.
+- **`RowDigest`** — single-row card composed of mono cells, used in
   list views.
+
+The full implemented component surface exported from
+`clients/web/src/design/index.ts` includes:
+
+**Frost primitives:** `BracketButton`, `BracketSearch`, `BrutalistCard`,
+`BrutalistSkeleton` / `BrutalistSkeletonText` / `BrutalistSkeletonPlaceholder` /
+`BrutalistDataTableSkeleton`, `MonoInput`, `MonoProgressBar`, `MonoSelect` /
+`MonoSelectItem`, `MonoTextArea`, `SparkLoading`, `StatusBadge`, `Toast`
+
+**In-place rewrites (Frost shape):** `IconButton`, `Tag`, `Link`,
+`NumberInput`, `Checkbox`, `RadioButton` / `RadioButtonGroup`, `Toggle`,
+`CodeSnippet`, `FileUploader`, `UnorderedList` / `ListItem`,
+`Accordion` / `AccordionItem`
+
+**Navigation:** `BracketTabs` / `BracketTabList` / `BracketTab` /
+`BracketTabPanels` / `BracketTabPanel`, `BracketPagination`,
+`ContentSwitcher` / `Switch`, `TreeView` / `TreeNode`
+
+**Table:** `BrutalistTable` / `BrutalistTableContainer` (and lower-level
+`Table*` sub-components for render-props composition)
+
+**Modal:** `BrutalistModal` / `BrutalistModalHeader` / `BrutalistModalBody` /
+`BrutalistModalFooter`
+
+**Structure:** `RowDigest` (via `RowDigestWrapper` / `RowDigestHead` /
+`RowDigestBody` / `RowDigestRow` / `RowDigestCell`)
+
+**Shell:** `FrostHeader` / `FrostHeaderName` / `FrostHeaderMenuButton` /
+`FrostHeaderGlobalBar` / `FrostHeaderGlobalAction` / `FrostSkipToContent`,
+`FrostSideNav` / `FrostSideNavItems` / `FrostSideNavLink` /
+`FrostSideNavDivider`, `Content`, `Theme`
+
+**Multiselect / Dropdown:** `MultiSelect`, `FilterableMultiSelect`, `Dropdown`
+
+**Pickers:** `DatePicker` / `DatePickerInput`, `TimePicker`
 
 Web views are assembled from these components in
 `clients/web/src/design/`. When a new view is needed, prefer
@@ -281,9 +319,9 @@ composing from existing primitives over inventing new ones.
 **Don't**
 
 - Don't use color for hierarchy. Blues, greens, ambers do not exist
-  in Frost. The legacy `#0F62FE` interactive blue and `#24A148`
-  success green still present in `tokens.css` and `AppColors.kt`
-  are migration debt; new code must not bind to them.
+  in Frost. The `--frost-ink`, `--frost-page`, and `--frost-spark`
+  tokens are the only color primitives; new code must not introduce
+  arbitrary hex values.
 - Don't add corner radius. `rounded-md`, `border-radius: 8px`,
   `RoundedCornerShape(...)` — all defects in this codebase.
 - Don't add shadows or gradients. Depth comes from typography
@@ -302,8 +340,8 @@ composing from existing primitives over inventing new ones.
 - Canonical tokens: `frost-tokens.json` (DTCG, repo root of the
   Frost project; tracked separately from this repo).
 - Figma source: file id `dvCkDlNR6CKgfekPgrWo87`.
-- Web tokens shim (legacy, pending migration):
-  `clients/web/src/design/tokens.css`.
-- Web design primitives: `clients/web/src/design/`.
-- This file documents Frost as it should land in this repo. Where
-  this file and the code disagree, this file is the target.
+- Web tokens: `clients/web/src/design/tokens.css` — Frost token
+  definitions (`--frost-ink`, `--frost-page`, `--frost-spark`,
+  `--frost-alpha-*`, `--frost-cell`, grid, typography slots).
+- Web design primitives (canonical implementation):
+  `clients/web/src/design/`.

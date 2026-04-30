@@ -34,7 +34,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - loguru, orjson (structured logging, fast JSON serialization)
 - FastAPI / uvicorn (Mobile REST API)
 - React 18 + TypeScript + Vite (web frontend)
-- Project-owned design shim under `clients/web/src/design/` (no third-party design system)
+- Frost design system (`clients/web/src/design/`) — editorial monospace minimalism with two-color rule + spark accent. See DESIGN.md.
 - @tanstack/react-query (web data fetching, caching, polling)
 - PyJWT (JWT authentication)
 - redis (optional caching and distributed locking)
@@ -367,7 +367,7 @@ When making changes, these are the most critical files to understand:
 - **`app/mcp/server.py`** -- MCP server for AI agents
 - **`bot.py`** -- Entrypoint (wires everything together)
 - **`docs/SPEC.md`** -- Full technical specification (canonical reference)
-- **`DESIGN.md`** -- Frost design system specification (DESIGN.md format, https://github.com/google-labs-code/design.md). Canonical reference for tokens, typography, layout, and component rules for the web client. The `--rtk-*` tokens in `clients/web/src/design/tokens.css` are legacy Carbon-derived seed values pending migration to Frost.
+- **`DESIGN.md`** -- Frost design system specification (DESIGN.md format, https://github.com/google-labs-code/design.md). Canonical reference for tokens, typography, components, and UI rules for the web client.
 
 ## Impeccable Design Skills
 

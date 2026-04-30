@@ -13,24 +13,62 @@ Reference for the web interface implemented in `clients/web/`.
 The web interface is the sole frontend surface — a standalone SPA built with:
 
 - React 19 + TypeScript + Vite
-- A project-owned design shim under `clients/web/src/design/` (no third-party design system)
+- The Frost design system under `clients/web/src/design/` (project-owned, brutalist; see `DESIGN.md`)
 - `@tanstack/react-query` for server state and polling
 
 It is built into `app/static/web` and served by FastAPI on `/web` and `/web/*`.
 
-### Design system
+### Design system — Frost
 
-`clients/web/src/design/` exports primitives (`Button`, `TextInput`, `Tile`, `Tag`, …),
-navigation (`Tabs`, `Pagination`, `TreeView`, `ContentSwitcher`), tables (`DataTable` and
-the `Table*` family), modals (`Modal`, `ComposedModal`), pickers, structure widgets, the
-shell (`Header`, `SideNav`, `Theme`), and SVG icons. Feature code imports exclusively from
-`../design`. Tokens (`tokens.css`) and reset/skeleton styles (`base.css`) are imported once
-through `clients/web/src/design/index.ts` and read via `var(--rtk-*, fallback)`.
-The mobile-consumable token source is `clients/web/tokens/tokens.json`; update
-that JSON first, then keep `clients/web/src/design/tokens.css` in sync. Theme
-selection writes `data-theme="light" | "dark"` on `<html>` so token CSS resolves
-on first paint without a flash. Add new components by extending the design
-directory; never reach for an external design system in feature code.
+`clients/web/src/design/` exports the Frost design system: editorial monospace
+minimalism with a two-color rule (ink + page) and a single critical accent
+(spark). See `DESIGN.md` at the repo root for the canonical spec.
+
+Frost-named primitives: `BracketButton`, `BracketSearch`, `BrutalistCard`,
+`BrutalistSkeleton` (+ Text/Placeholder/DataTable variants), `MonoInput`,
+`MonoTextArea`, `MonoSelect` (+ `MonoSelectItem`), `MonoProgressBar`,
+`SparkLoading`, `StatusBadge`, `Toast`. In-place rewrites keep their legacy
+names but ship Frost shape: `Tag`, `Link`, `IconButton`, `Toggle`, `Checkbox`,
+`RadioButton`, `Accordion`, `NumberInput`, `UnorderedList`, `CodeSnippet`,
+`FileUploader`.
+
+Frost navigation: `BracketTabs` (+ `BracketTabList`/`BracketTab`/
+`BracketTabPanels`/`BracketTabPanel`), `BracketPagination`. In-place
+rewrites: `TreeView`, `ContentSwitcher`.
+
+Frost table: `BrutalistTable` (+ `BrutalistTableContainer`) for the
+high-level render-props API. Lower-level `Table`/`TableHead`/`TableBody`/
+`TableRow`/`TableCell`/`TableHeader` primitives compose with it.
+`TableToolbar`/Expand/Select/Batch sub-components remain until the
+ChannelsTab and RSSFeedsTab digest views migrate to BrutalistTable.
+
+Frost modal: `BrutalistModal` (+ `BrutalistModalHeader`/
+`BrutalistModalBody`/`BrutalistModalFooter`).
+
+Frost shell: `FrostHeader` family + `FrostSideNav` family. In-place
+`Content` and `Theme` wrappers.
+
+Multiselect / pickers: in-place rewrites of `MultiSelect`,
+`FilterableMultiSelect`, `Dropdown`, `DatePicker`, `TimePicker`.
+
+Feature code imports exclusively from `../design`. Tokens (`tokens.css`),
+fonts (`fonts.css`, self-hosted JetBrains Mono + Source Serif 4 italic
+via `@fontsource`), and reset/skeleton styles (`base.css`) are imported
+once through `clients/web/src/design/index.ts` and read via `var(--frost-*)`
+custom properties. The Frost token surface includes `--frost-ink`,
+`--frost-page`, `--frost-spark`, the eight-step alpha ladder
+(`--frost-alpha-quiet` … `--frost-alpha-active`), cell-grid spacing
+(`--frost-cell` 8px, `--frost-line` 16px, `--frost-gap-section` 48px,
+`--frost-gap-page` 64px, `--frost-pad-page` 32px, `--frost-strip-1` …
+`--frost-strip-8` 176-1408px), mono/serif typography slots, and motion
+keyframes (`frost-blinker`, `frost-pulse`, `frost-toast`).
+
+The mobile-consumable token source is `clients/web/tokens/tokens.json`;
+update that JSON first, then keep `clients/web/src/design/tokens.css` in
+sync. Theme selection writes `data-theme="light" | "dark"` on `<html>`
+so token CSS resolves on first paint without a flash. Add new components
+by extending the design directory; never reach for an external design
+system in feature code.
 
 ---
 
