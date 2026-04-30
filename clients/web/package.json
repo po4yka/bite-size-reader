@@ -18,7 +18,8 @@
     "generate:api": "openapi-typescript ../../docs/openapi/mobile_api.yaml -o src/api/generated.ts",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "chromatic": "chromatic --exit-zero-on-changes --build-script-name=build-storybook"
+    "test:visual": "npm run build-storybook && npx playwright test",
+    "test:visual:update": "npm run build-storybook && npx playwright test --update-snapshots"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.95.2",
@@ -27,7 +28,6 @@
     "react-router-dom": "^7.13.2"
   },
   "devDependencies": {
-    "@chromatic-com/storybook": "^5.1.2",
     "@eslint/js": "^10.0.1",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/source-serif-4": "^5.2.9",
@@ -41,17 +41,18 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "@vitest/browser-playwright": "^4.1.1",
     "@vitest/coverage-v8": "^4.1.1",
-    "chromatic": "^16.6.3",
     "eslint": "^10.1.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "eslint-plugin-storybook": "^10.3.6",
     "globals": "^17.4.0",
+    "http-server": "^14.1.1",
     "jsdom": "^29.0.1",
     "openapi-typescript": "^7.13.0",
     "playwright": "^1.59.1",
