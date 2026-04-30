@@ -1,18 +1,18 @@
 import { useMemo, useState } from "react";
 import {
-  Button,
-  DataTable,
-  DataTableSkeleton,
-  InlineNotification,
-  Modal,
+  BracketButton,
+  BrutalistCard,
+  BrutalistDataTableSkeleton,
+  BrutalistModal,
+  BrutalistTable,
+  BrutalistTableContainer,
+  StatusBadge,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
-  Tile,
   Toggle,
 } from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
@@ -26,6 +26,24 @@ import {
 import type { Rule, CreateRulePayload, UpdateRulePayload } from "../../api/rules";
 import RuleEditor from "./RuleEditor";
 import RuleLogViewer from "./RuleLogViewer";
+
+const sectionLabelStyle: React.CSSProperties = {
+  fontFamily: "var(--frost-font-mono)",
+  fontSize: "11px",
+  fontWeight: 800,
+  textTransform: "uppercase" as const,
+  letterSpacing: "1px",
+  color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+  margin: 0,
+};
+
+const monoBodyStyle: React.CSSProperties = {
+  fontFamily: "var(--frost-font-mono)",
+  fontSize: "var(--frost-type-mono-body-size)",
+  fontWeight: "var(--frost-type-mono-body-weight)" as React.CSSProperties["fontWeight"],
+  color: "var(--frost-ink)",
+  margin: 0,
+};
 
 export default function RulesPage() {
   // --- list query ---
@@ -151,158 +169,187 @@ export default function RulesPage() {
   ].find((e): e is Error => e instanceof Error);
 
   return (
-    <section className="page-section">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "1rem",
-        }}
-      >
-        <h1>Rules</h1>
-        <Button kind="primary" onClick={openCreate}>
-          Create rule
-        </Button>
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-7)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1
+          style={{
+            fontFamily: "var(--frost-font-mono)",
+            fontSize: "var(--frost-type-mono-emph-size)",
+            fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+            letterSpacing: "var(--frost-type-mono-emph-tracking)",
+            textTransform: "uppercase",
+            color: "var(--frost-ink)",
+            margin: 0,
+          }}
+        >
+          Rules
+        </h1>
+        <BracketButton kind="primary" onClick={openCreate}>
+          Create Rule
+        </BracketButton>
       </div>
 
       {firstMutationError && (
-        <InlineNotification
-          kind="error"
-          title="Action failed"
-          subtitle={firstMutationError.message}
-          hideCloseButton
-        />
+        <StatusBadge severity="alarm" title="Action failed" subtitle={firstMutationError.message} />
       )}
 
       {testResult && (
-        <InlineNotification
-          kind={testResult.matched ? "success" : "warning"}
-          title={`Test rule #${testResult.ruleId}`}
+        <StatusBadge
+          severity={testResult.matched ? "info" : "warn"}
+          title={`${testResult.matched ? "✓ " : ""}Test rule #${testResult.ruleId}`}
           subtitle={testResult.detail}
-          onCloseButtonClick={() => setTestResult(null)}
-          style={{ marginBottom: "1rem" }}
+          dismissible
+          onDismiss={() => setTestResult(null)}
         />
       )}
 
       {rulesQuery.isLoading && (
-        <DataTableSkeleton columnCount={headers.length} rowCount={4} showToolbar={false} />
+        <BrutalistDataTableSkeleton columnCount={headers.length} rowCount={4} showToolbar={false} />
       )}
       <QueryErrorNotification error={rulesQuery.error} title="Failed to load rules" />
 
       {!rulesQuery.isLoading && rules.length === 0 && !rulesQuery.error && (
-        <Tile>
-          <div className="page-heading-group">
-            <h3>No automation rules</h3>
-            <p className="page-subtitle">
-              Rules run automatically when events occur and can trigger actions such as tagging or forwarding summaries.
-            </p>
-          </div>
-          <div className="form-actions">
-            <Button kind="primary" size="sm" onClick={openCreate}>
+        <BrutalistCard>
+          <h3
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-emph-size)",
+              fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+              textTransform: "uppercase",
+              letterSpacing: "var(--frost-type-mono-emph-tracking)",
+              color: "var(--frost-ink)",
+              margin: 0,
+            }}
+          >
+            No automation rules
+          </h3>
+          <p
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-body-size)",
+              color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+              margin: "var(--frost-gap-row) 0 0",
+            }}
+          >
+            Rules run automatically when events occur and can trigger actions such as tagging or forwarding summaries.
+          </p>
+          <div style={{ marginTop: "var(--frost-gap-section)" }}>
+            <BracketButton kind="primary" size="sm" onClick={openCreate}>
               Create your first rule
-            </Button>
+            </BracketButton>
           </div>
-        </Tile>
+        </BrutalistCard>
       )}
 
       {rules.length > 0 && (
-        <DataTable rows={rows} headers={headers}>
-          {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-            <TableContainer title="Automation rules">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>
-                        {header.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {rows.map((row) => {
-                    const ruleObj = row.cells.find(
-                      (c) => c.info.header === "actions",
-                    )?.value as Rule;
-                    return (
-                      <TableRow {...getRowProps({ row })}>
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === "enabled") {
-                            const r = cell.value as Rule;
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-row)" }}>
+          <p style={sectionLabelStyle}>§ ACTIVE RULES</p>
+          <BrutalistTable rows={rows} headers={headers}>
+            {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
+              <BrutalistTableContainer title="Automation rules">
+                <Table {...getTableProps()}>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((header) => (
+                        <TableHeader {...getHeaderProps({ header })}>
+                          {header.header}
+                        </TableHeader>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rows.map((row) => {
+                      const ruleObj = row.cells.find(
+                        (c) => c.info.header === "actions",
+                      )?.value as Rule;
+                      return (
+                        <TableRow {...getRowProps({ row })}>
+                          {row.cells.map((cell) => {
+                            if (cell.info.header === "enabled") {
+                              const r = cell.value as Rule;
+                              return (
+                                <TableCell key={cell.id}>
+                                  <Toggle
+                                    id={`toggle-${r.id}`}
+                                    size="sm"
+                                    labelA=""
+                                    labelB=""
+                                    toggled={r.enabled}
+                                    onToggle={() => handleToggleEnabled(r)}
+                                    disabled={updateMutation.isPending}
+                                  />
+                                </TableCell>
+                              );
+                            }
+                            if (cell.info.header === "actions") {
+                              return (
+                                <TableCell key={cell.id}>
+                                  <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
+                                    <BracketButton
+                                      kind="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openEdit(ruleObj);
+                                      }}
+                                    >
+                                      Edit
+                                    </BracketButton>
+                                    <BracketButton
+                                      kind="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLogRuleId(
+                                          logRuleId === ruleObj.id ? null : ruleObj.id,
+                                        );
+                                      }}
+                                    >
+                                      {logRuleId === ruleObj.id ? "Hide logs" : "Logs"}
+                                    </BracketButton>
+                                    <BracketButton
+                                      kind="danger--ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteTarget(ruleObj);
+                                      }}
+                                      disabled={deleteMutation.isPending}
+                                    >
+                                      Delete
+                                    </BracketButton>
+                                  </div>
+                                </TableCell>
+                              );
+                            }
                             return (
                               <TableCell key={cell.id}>
-                                <Toggle
-                                  id={`toggle-${r.id}`}
-                                  size="sm"
-                                  labelA=""
-                                  labelB=""
-                                  toggled={r.enabled}
-                                  onToggle={() => handleToggleEnabled(r)}
-                                  disabled={updateMutation.isPending}
-                                />
+                                {cell.value as string}
                               </TableCell>
                             );
-                          }
-                          if (cell.info.header === "actions") {
-                            return (
-                              <TableCell key={cell.id}>
-                                <div className="table-actions">
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openEdit(ruleObj);
-                                    }}
-                                  >
-                                    Edit
-                                  </Button>
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setLogRuleId(
-                                        logRuleId === ruleObj.id ? null : ruleObj.id,
-                                      );
-                                    }}
-                                  >
-                                    {logRuleId === ruleObj.id ? "Hide logs" : "Logs"}
-                                  </Button>
-                                  <Button
-                                    kind="danger--ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDeleteTarget(ruleObj);
-                                    }}
-                                    disabled={deleteMutation.isPending}
-                                  >
-                                    Delete
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            );
-                          }
-                          return (
-                            <TableCell key={cell.id}>
-                              {cell.value as string}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
+                          })}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </BrutalistTableContainer>
+            )}
+          </BrutalistTable>
+        </div>
       )}
 
       {logRuleId != null && (
-        <div style={{ marginTop: "1rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-row)" }}>
+          <p style={sectionLabelStyle}>§ RULE LOG</p>
           <RuleLogViewer ruleId={logRuleId} />
         </div>
       )}
@@ -321,23 +368,24 @@ export default function RulesPage() {
       )}
 
       {/* Delete confirmation */}
-      <Modal
+      <BrutalistModal
         open={deleteTarget != null}
-        modalHeading="Delete rule"
+        danger
+        modalHeading="Delete Rule"
         primaryButtonText={deleteMutation.isPending ? "Deleting..." : "Delete"}
         secondaryButtonText="Cancel"
-        danger
+        primaryButtonDisabled={deleteMutation.isPending}
         onRequestClose={() => {
           if (!deleteMutation.isPending) setDeleteTarget(null);
         }}
         onRequestSubmit={handleDelete}
       >
-        <p>
+        <p style={monoBodyStyle}>
           {deleteTarget
             ? `Delete "${deleteTarget.name}"? This action cannot be undone.`
             : "Delete selected rule?"}
         </p>
-      </Modal>
-    </section>
+      </BrutalistModal>
+    </main>
   );
 }

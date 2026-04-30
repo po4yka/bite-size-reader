@@ -1,5 +1,13 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Button, InlineLoading, InlineNotification, Tag, TextArea, TextInput, Tile } from "../../design";
+import {
+  BracketButton,
+  BrutalistCard,
+  MonoInput,
+  MonoTextArea,
+  SparkLoading,
+  StatusBadge,
+  Tag,
+} from "../../design";
 import type { SignalFeedbackAction, SignalSourceHealth, UserSignal } from "../../api/signals";
 import {
   useSetSignalSourceActive,
@@ -37,6 +45,31 @@ function statusTone(status: string): "green" | "blue" | "warm-gray" | "gray" {
   return "gray";
 }
 
+const sectionLabelStyle: React.CSSProperties = {
+  fontFamily: "var(--frost-font-mono)",
+  fontSize: "11px",
+  fontWeight: 800,
+  textTransform: "uppercase" as const,
+  letterSpacing: "1px",
+  color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+  margin: 0,
+};
+
+const monoBodyStyle: React.CSSProperties = {
+  fontFamily: "var(--frost-font-mono)",
+  fontSize: "var(--frost-type-mono-body-size)",
+  fontWeight: "var(--frost-type-mono-body-weight)" as React.CSSProperties["fontWeight"],
+  color: "var(--frost-ink)",
+  margin: 0,
+};
+
+const monoMetaStyle: React.CSSProperties = {
+  fontFamily: "var(--frost-font-mono)",
+  fontSize: "var(--frost-type-mono-body-size)",
+  color: "color-mix(in oklch, var(--frost-ink) 60%, transparent)",
+  margin: 0,
+};
+
 function SignalCard({
   signal,
   onFeedback,
@@ -47,42 +80,71 @@ function SignalCard({
   disabled: boolean;
 }) {
   return (
-    <Tile className="signal-card">
+    <BrutalistCard className="signal-card">
       <div className="signal-card__main">
-        <div className="signal-card__meta">
+        <div className="signal-card__meta" style={{ display: "flex", alignItems: "center", gap: "var(--frost-gap-row)", marginBottom: "var(--frost-gap-row)" }}>
           <Tag type={statusTone(signal.status)} size="sm">
             {signal.status}
           </Tag>
-          <span>{signal.sourceTitle || signal.sourceKind || "Unknown source"}</span>
-          {signal.topicName ? <span>{signal.topicName}</span> : null}
+          <span style={monoMetaStyle}>{signal.sourceTitle || signal.sourceKind || "Unknown source"}</span>
+          {signal.topicName ? <span style={monoMetaStyle}>{signal.topicName}</span> : null}
         </div>
-        <h2>{signal.feedItemTitle || "Untitled signal"}</h2>
+        <h2
+          style={{
+            fontFamily: "var(--frost-font-mono)",
+            fontSize: "var(--frost-type-mono-body-size)",
+            fontWeight: 800,
+            color: "var(--frost-ink)",
+            margin: "0 0 var(--frost-gap-row)",
+          }}
+        >
+          {signal.feedItemTitle || "Untitled signal"}
+        </h2>
         {signal.feedItemUrl ? (
-          <a className="signal-card__url" href={signal.feedItemUrl} target="_blank" rel="noreferrer">
+          <a
+            className="signal-card__url"
+            href={signal.feedItemUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              fontFamily: "var(--frost-font-mono)",
+              fontSize: "var(--frost-type-mono-body-size)",
+              color: "var(--frost-ink)",
+              textDecoration: "underline",
+              textDecorationColor: "color-mix(in oklch, var(--frost-ink) 40%, transparent)",
+              wordBreak: "break-all",
+            }}
+          >
             {signal.feedItemUrl}
           </a>
         ) : null}
       </div>
-      <div className="signal-score">
-        <span className="rtk-label">Score</span>
-        <strong>{formatScore(signal.finalScore)}</strong>
-        <span>{signal.filterStage || "heuristic"}</span>
+      <div className="signal-score" style={{ display: "flex", alignItems: "center", gap: "var(--frost-gap-row)", margin: "var(--frost-gap-row) 0" }}>
+        <span style={sectionLabelStyle}>Score</span>
+        <strong style={{ fontFamily: "var(--frost-font-mono)", fontWeight: 800, color: "var(--frost-ink)" }}>
+          {formatScore(signal.finalScore)}
+        </strong>
+        <span style={monoMetaStyle}>{signal.filterStage || "heuristic"}</span>
       </div>
-      <div className="signal-actions" aria-label={`Actions for ${signal.feedItemTitle || "signal"}`}>
-        <Button size="sm" kind="primary" disabled={disabled} onClick={() => onFeedback(signal.id, "like")}>
+      <div
+        className="signal-actions"
+        aria-label={`Actions for ${signal.feedItemTitle || "signal"}`}
+        style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}
+      >
+        <BracketButton size="sm" kind="primary" disabled={disabled} onClick={() => onFeedback(signal.id, "like")}>
           Like
-        </Button>
-        <Button size="sm" kind="secondary" disabled={disabled} onClick={() => onFeedback(signal.id, "queue")}>
+        </BracketButton>
+        <BracketButton size="sm" kind="secondary" disabled={disabled} onClick={() => onFeedback(signal.id, "queue")}>
           Queue
-        </Button>
-        <Button size="sm" kind="ghost" disabled={disabled} onClick={() => onFeedback(signal.id, "skip")}>
+        </BracketButton>
+        <BracketButton size="sm" kind="ghost" disabled={disabled} onClick={() => onFeedback(signal.id, "skip")}>
           Skip
-        </Button>
-        <Button size="sm" kind="danger--ghost" disabled={disabled} onClick={() => onFeedback(signal.id, "hide_source")}>
+        </BracketButton>
+        <BracketButton size="sm" kind="danger--ghost" disabled={disabled} onClick={() => onFeedback(signal.id, "hide_source")}>
           Hide source
-        </Button>
+        </BracketButton>
       </div>
-    </Tile>
+    </BrutalistCard>
   );
 }
 
@@ -97,28 +159,45 @@ function SourceHealthRow({
 }) {
   const hasErrors = source.fetchErrorCount > 0;
   return (
-    <div className="source-health-row">
+    <div
+      className="source-health-row"
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        padding: "var(--frost-gap-row) 0",
+        borderBottom: "1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent)",
+      }}
+    >
       <div>
-        <div className="source-health-row__title">{sourceLabel(source)}</div>
-        <div className="source-health-row__meta">
-          <span>{source.kind}</span>
-          <span>next: {formatDate(source.nextFetchAt)}</span>
+        <div style={{ fontFamily: "var(--frost-font-mono)", fontWeight: 800, color: "var(--frost-ink)", marginBottom: "4px" }}>
+          {sourceLabel(source)}
         </div>
-        {hasErrors ? <p className="source-health-row__error">{source.lastError}</p> : null}
+        <div style={{ display: "flex", gap: "var(--frost-gap-row)" }}>
+          <span style={monoMetaStyle}>{source.kind}</span>
+          <span style={monoMetaStyle}>next: {formatDate(source.nextFetchAt)}</span>
+        </div>
+        {hasErrors ? (
+          <p style={{ ...monoBodyStyle, color: "var(--frost-spark)", marginTop: "4px" }}>
+            {source.lastError}
+          </p>
+        ) : null}
       </div>
-      <div className="source-health-row__status">
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--frost-gap-row)" }}>
         <Tag type={source.isActive ? "green" : "warm-gray"} size="sm">
           {source.isActive ? "active" : "paused"}
         </Tag>
-        {hasErrors ? <Tag type="red" size="sm">{source.fetchErrorCount} errors</Tag> : null}
-        <Button
+        {hasErrors ? (
+          <Tag type="red" size="sm">{source.fetchErrorCount} errors</Tag>
+        ) : null}
+        <BracketButton
           kind="ghost"
           size="sm"
           disabled={disabled}
           onClick={() => onToggle(source.id, !source.isActive)}
         >
           {source.isActive ? "Pause" : "Resume"}
-        </Button>
+        </BracketButton>
       </div>
     </div>
   );
@@ -145,24 +224,28 @@ function TopicForm() {
   }
 
   return (
-    <form className="topic-form" onSubmit={handleSubmit}>
-      <TextInput
+    <form
+      className="topic-form"
+      onSubmit={handleSubmit}
+      style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-section)" }}
+    >
+      <MonoInput
         id="signal-topic-name"
         labelText="Topic"
         value={name}
         onChange={(event) => setName(event.currentTarget.value)}
         placeholder="Local-first AI tooling"
       />
-      <TextArea
+      <MonoTextArea
         id="signal-topic-description"
         labelText="Preference"
         value={description}
         onChange={(event) => setDescription(event.currentTarget.value)}
         placeholder="Prefer practical implementation notes over launch commentary."
       />
-      <Button type="submit" disabled={mutation.isPending || !name.trim()}>
+      <BracketButton type="submit" disabled={mutation.isPending || !name.trim()}>
         {mutation.isPending ? "Saving..." : "Save topic"}
-      </Button>
+      </BracketButton>
     </form>
   );
 }
@@ -187,59 +270,106 @@ export default function SignalsPage() {
   const sourceRows = sourcesQuery.data?.sources ?? [];
 
   return (
-    <section className="page-section signal-page">
-      <div className="page-heading-group">
-        <h1>Signals</h1>
-        <p className="page-subtitle">Ranked source items for the weekly triage loop.</p>
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-7)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section)",
+      }}
+    >
+      <div>
+        <h1
+          style={{
+            fontFamily: "var(--frost-font-mono)",
+            fontSize: "var(--frost-type-mono-emph-size)",
+            fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+            letterSpacing: "var(--frost-type-mono-emph-tracking)",
+            textTransform: "uppercase",
+            color: "var(--frost-ink)",
+            margin: "0 0 var(--frost-gap-row)",
+          }}
+        >
+          Signals
+        </h1>
+        <p style={monoMetaStyle}>Ranked source items for the weekly triage loop.</p>
       </div>
 
-      {healthQuery.isLoading ? <InlineLoading description="Checking signal health..." /> : null}
+      {healthQuery.isLoading ? <SparkLoading description="Checking signal health..." /> : null}
+
       {!chromaReady ? (
-        <InlineNotification
-          kind="warning"
+        <StatusBadge
+          severity="info"
           title="Signal scoring is paused"
           subtitle="Chroma is required for personalization and similarity scoring."
-          hideCloseButton
         />
       ) : null}
+
       {signalsQuery.error ? (
-        <InlineNotification
-          kind="error"
+        <StatusBadge
+          severity="alarm"
           title="Signals could not load"
           subtitle={(signalsQuery.error as Error).message}
-          hideCloseButton
         />
       ) : null}
 
-      <div className="signal-health-strip">
-        <Tile>
-          <span className="rtk-label">Chroma</span>
-          <strong>{healthQuery.data?.chroma.ready ? "Ready" : "Unavailable"}</strong>
-        </Tile>
-        <Tile>
-          <span className="rtk-label">Sources</span>
-          <strong>{healthQuery.data?.sources.total ?? sourceRows.length}</strong>
-        </Tile>
-        <Tile>
-          <span className="rtk-label">Errored</span>
-          <strong>{healthQuery.data?.sources.errored ?? sourceRows.filter((row) => row.fetchErrorCount > 0).length}</strong>
-        </Tile>
+      {/* Health strip */}
+      <div
+        className="signal-health-strip"
+        style={{ display: "flex", gap: "var(--frost-gap-row)" }}
+      >
+        <BrutalistCard style={{ flex: 1 }}>
+          <span style={sectionLabelStyle}>Chroma</span>
+          <strong style={{ display: "block", fontFamily: "var(--frost-font-mono)", fontWeight: 800, color: "var(--frost-ink)", marginTop: "4px" }}>
+            {healthQuery.data?.chroma.ready ? "Ready" : "Unavailable"}
+          </strong>
+        </BrutalistCard>
+        <BrutalistCard style={{ flex: 1 }}>
+          <span style={sectionLabelStyle}>Sources</span>
+          <strong style={{ display: "block", fontFamily: "var(--frost-font-mono)", fontWeight: 800, color: "var(--frost-ink)", marginTop: "4px" }}>
+            {healthQuery.data?.sources.total ?? sourceRows.length}
+          </strong>
+        </BrutalistCard>
+        <BrutalistCard style={{ flex: 1 }}>
+          <span style={sectionLabelStyle}>Errored</span>
+          <strong style={{ display: "block", fontFamily: "var(--frost-font-mono)", fontWeight: 800, color: "var(--frost-ink)", marginTop: "4px" }}>
+            {healthQuery.data?.sources.errored ?? sourceRows.filter((row) => row.fetchErrorCount > 0).length}
+          </strong>
+        </BrutalistCard>
       </div>
 
-      <div className="signal-layout">
-        <div className="signal-queue">
-          <div className="section-heading-row">
-            <h2>Queue</h2>
+      <div
+        className="signal-layout"
+        style={{ display: "flex", gap: "var(--frost-gap-page)", alignItems: "flex-start" }}
+      >
+        {/* Queue */}
+        <div className="signal-queue" style={{ flex: 2, display: "flex", flexDirection: "column", gap: "var(--frost-gap-section)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--frost-gap-row)" }}>
+            <p style={sectionLabelStyle}>§ QUEUE</p>
             <Tag type="blue" size="sm">{queuedSignals.length}</Tag>
           </div>
-          {signalsQuery.isLoading ? <InlineLoading description="Loading signals..." /> : null}
+          {signalsQuery.isLoading ? <SparkLoading description="Loading signals..." /> : null}
           {!signalsQuery.isLoading && queuedSignals.length === 0 ? (
-            <Tile className="empty-panel">
-              <h3>No queued signals</h3>
-              <p className="page-subtitle">New items appear here after RSS or Telegram channel ingestion runs.</p>
-            </Tile>
+            <BrutalistCard className="empty-panel">
+              <h3
+                style={{
+                  fontFamily: "var(--frost-font-mono)",
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                  color: "var(--frost-ink)",
+                  margin: "0 0 var(--frost-gap-row)",
+                }}
+              >
+                No queued signals
+              </h3>
+              <p style={monoMetaStyle}>
+                New items appear here after RSS or Telegram channel ingestion runs.
+              </p>
+            </BrutalistCard>
           ) : null}
-          <div className="signal-card-list">
+          <div className="signal-card-list" style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-section)" }}>
             {queuedSignals.map((signal) => (
               <SignalCard
                 key={signal.id}
@@ -251,20 +381,21 @@ export default function SignalsPage() {
           </div>
         </div>
 
-        <aside className="signal-sidebar">
-          <Tile className="signal-panel">
-            <h2>Topics</h2>
+        {/* Sidebar */}
+        <aside className="signal-sidebar" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--frost-gap-section)" }}>
+          <BrutalistCard className="signal-panel">
+            <p style={{ ...sectionLabelStyle, marginBottom: "var(--frost-gap-section)" }}>§ TOPICS</p>
             <TopicForm />
-          </Tile>
+          </BrutalistCard>
 
-          <Tile className="signal-panel">
-            <div className="section-heading-row">
-              <h2>Sources</h2>
+          <BrutalistCard className="signal-panel">
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--frost-gap-row)", marginBottom: "var(--frost-gap-section)" }}>
+              <p style={sectionLabelStyle}>§ SOURCES</p>
               <Tag type="gray" size="sm">{sourceRows.length}</Tag>
             </div>
-            {sourcesQuery.isLoading ? <InlineLoading description="Loading sources..." /> : null}
+            {sourcesQuery.isLoading ? <SparkLoading description="Loading sources..." /> : null}
             {sourceRows.length === 0 && !sourcesQuery.isLoading ? (
-              <p className="page-subtitle">No signal sources are subscribed yet.</p>
+              <p style={monoMetaStyle}>No signal sources are subscribed yet.</p>
             ) : null}
             <div className="source-health-list">
               {sourceRows.map((source) => (
@@ -278,26 +409,43 @@ export default function SignalsPage() {
                 />
               ))}
             </div>
-          </Tile>
+          </BrutalistCard>
         </aside>
       </div>
 
       {actedSignals.length > 0 ? (
-        <section className="signal-history">
-          <div className="section-heading-row">
-            <h2>Recent decisions</h2>
+        <section className="signal-history" style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-section)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--frost-gap-row)" }}>
+            <p style={sectionLabelStyle}>§ RECENT DECISIONS</p>
             <Tag type="gray" size="sm">{actedSignals.length}</Tag>
           </div>
-          <div className="signal-history-list">
+          <div
+            className="signal-history-list"
+            style={{
+              border: "1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent)",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             {actedSignals.slice(0, 8).map((signal) => (
-              <div key={signal.id} className="signal-history-row">
-                <span>{signal.feedItemTitle || "Untitled signal"}</span>
+              <div
+                key={signal.id}
+                className="signal-history-row"
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "12px 16px",
+                  borderBottom: "1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent)",
+                }}
+              >
+                <span style={monoBodyStyle}>{signal.feedItemTitle || "Untitled signal"}</span>
                 <Tag type={statusTone(signal.status)} size="sm">{signal.status}</Tag>
               </div>
             ))}
           </div>
         </section>
       ) : null}
-    </section>
+    </main>
   );
 }

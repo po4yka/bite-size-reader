@@ -1,22 +1,25 @@
 import { useMemo, useState } from "react";
 import {
-  Button,
+  BracketButton,
+  BrutalistCard,
+  BrutalistDataTableSkeleton,
+  BrutalistModal,
+  BrutalistModalBody,
+  BrutalistModalFooter,
+  BrutalistModalHeader,
+  BrutalistTable,
+  BrutalistTableContainer,
   Checkbox,
-  DataTable,
-  DataTableSkeleton,
-  InlineLoading,
-  InlineNotification,
-  Modal,
+  MonoInput,
+  SparkLoading,
+  StatusBadge,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
-  TextInput,
   Tag,
-  Tile,
 } from "../../design";
 import { QueryErrorNotification } from "../../components/QueryErrorNotification";
 import {
@@ -40,15 +43,27 @@ import { WEBHOOK_EVENT_TYPES } from "../../api/webhooks";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function statusTagType(status: string): "green" | "warm-gray" | "red" {
-  if (status === "active") return "green";
-  if (status === "paused") return "warm-gray";
-  return "red";
-}
-
 function maskSecret(last8: string): string {
   return `${"*".repeat(24)}${last8}`;
 }
+
+const sectionLabelStyle: React.CSSProperties = {
+  fontFamily: "var(--frost-font-mono)",
+  fontSize: "11px",
+  fontWeight: 800,
+  textTransform: "uppercase" as const,
+  letterSpacing: "1px",
+  color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+  margin: 0,
+};
+
+const monoBodyStyle: React.CSSProperties = {
+  fontFamily: "var(--frost-font-mono)",
+  fontSize: "var(--frost-type-mono-body-size)",
+  fontWeight: "var(--frost-type-mono-body-weight)" as React.CSSProperties["fontWeight"],
+  color: "var(--frost-ink)",
+  margin: 0,
+};
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -87,10 +102,10 @@ function DeliveryLog({ webhookId }: { webhookId: number }) {
   const { data, isLoading, error } = useDeliveries(webhookId);
   const deliveries: WebhookDelivery[] = data?.deliveries ?? [];
 
-  if (isLoading) return <InlineLoading description="Loading deliveries..." />;
+  if (isLoading) return <SparkLoading description="Loading deliveries..." />;
   if (error) return <QueryErrorNotification error={error} title="Failed to load deliveries" />;
   if (deliveries.length === 0) {
-    return <p className="rtk-label">No deliveries yet.</p>;
+    return <p style={monoBodyStyle}>No deliveries yet.</p>;
   }
 
   const headers = [
@@ -113,30 +128,33 @@ function DeliveryLog({ webhookId }: { webhookId: number }) {
   }));
 
   return (
-    <DataTable rows={rows} headers={headers}>
-      {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-        <TableContainer title="Delivery history">
-          <Table {...getTableProps()} size="sm">
-            <TableHead>
-              <TableRow>
-                {headers.map((header) => (
-                  <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow {...getRowProps({ row })}>
-                  {row.cells.map((cell) => (
-                    <TableCell key={cell.id}>{cell.value as string}</TableCell>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-row)" }}>
+      <p style={sectionLabelStyle}>§ DELIVERY HISTORY</p>
+      <BrutalistTable rows={rows} headers={headers}>
+        {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
+          <BrutalistTableContainer title="Delivery history">
+            <Table {...getTableProps()} size="sm">
+              <TableHead>
+                <TableRow>
+                  {headers.map((header) => (
+                    <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
                   ))}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </DataTable>
+              </TableHead>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow {...getRowProps({ row })}>
+                    {row.cells.map((cell) => (
+                      <TableCell key={cell.id}>{cell.value as string}</TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </BrutalistTableContainer>
+        )}
+      </BrutalistTable>
+    </div>
   );
 }
 
@@ -306,278 +324,359 @@ export default function WebhooksPage() {
   ].find((e): e is Error => e instanceof Error);
 
   return (
-    <section className="page-section">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-        <h1>Webhooks</h1>
-        <Button kind="primary" onClick={openCreate}>
-          Create webhook
-        </Button>
+    <main
+      style={{
+        maxWidth: "var(--frost-strip-7)",
+        padding: "0 var(--frost-pad-page)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--frost-gap-section)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1
+          style={{
+            fontFamily: "var(--frost-font-mono)",
+            fontSize: "var(--frost-type-mono-emph-size)",
+            fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+            letterSpacing: "var(--frost-type-mono-emph-tracking)",
+            textTransform: "uppercase",
+            color: "var(--frost-ink)",
+            margin: 0,
+          }}
+        >
+          Webhooks
+        </h1>
+        <BracketButton kind="primary" onClick={openCreate}>
+          Create Webhook
+        </BracketButton>
       </div>
 
       {firstMutationError && (
-        <InlineNotification
-          kind="error"
-          title="Action failed"
-          subtitle={firstMutationError.message}
-          hideCloseButton
-        />
+        <StatusBadge severity="alarm" title="Action failed" subtitle={firstMutationError.message} />
       )}
 
       {testResult && (
-        <InlineNotification
-          kind={testResult.success ? "success" : "error"}
-          title={`Test webhook #${testResult.id}`}
+        <StatusBadge
+          severity={testResult.success ? "info" : "alarm"}
+          title={`${testResult.success ? "✓ " : ""}Test webhook #${testResult.id}`}
           subtitle={testResult.detail}
-          onCloseButtonClick={() => setTestResult(null)}
-          style={{ marginBottom: "1rem" }}
+          dismissible
+          onDismiss={() => setTestResult(null)}
         />
       )}
 
       {revealedSecret && (
-        <InlineNotification
-          kind="info"
-          title={`Secret for webhook #${revealedSecret.id}`}
+        <StatusBadge
+          severity="info"
+          title={`✓ Secret for webhook #${revealedSecret.id}`}
           subtitle="This secret is shown only once. Copy it now."
-          onCloseButtonClick={() => setRevealedSecret(null)}
-          style={{ marginBottom: "1rem" }}
+          dismissible
+          onDismiss={() => setRevealedSecret(null)}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
-            <code style={{ fontSize: "0.875rem", wordBreak: "break-all" }}>{revealedSecret.secret}</code>
-            <Button kind="ghost" size="sm" onClick={() => void handleCopySecret(revealedSecret.secret)}>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--frost-gap-row)", marginTop: "var(--frost-gap-row)" }}>
+            <code style={{ fontFamily: "var(--frost-font-mono)", fontSize: "var(--frost-type-mono-body-size)", wordBreak: "break-all" }}>
+              {revealedSecret.secret}
+            </code>
+            <BracketButton kind="ghost" size="sm" onClick={() => void handleCopySecret(revealedSecret.secret)}>
               Copy
-            </Button>
+            </BracketButton>
           </div>
-        </InlineNotification>
+        </StatusBadge>
       )}
 
-      {webhooksQuery.isLoading && <DataTableSkeleton columnCount={headers.length} rowCount={4} showToolbar={false} />}
+      {webhooksQuery.isLoading && (
+        <BrutalistDataTableSkeleton columnCount={headers.length} rowCount={4} showToolbar={false} />
+      )}
       <QueryErrorNotification error={webhooksQuery.error} title="Failed to load webhooks" />
 
       {!webhooksQuery.isLoading && webhooks.length === 0 && !webhooksQuery.error && (
-        <Tile>
+        <BrutalistCard>
           <div className="page-heading-group">
-            <h3>No webhooks configured</h3>
-            <p className="page-subtitle">
+            <h3
+              style={{
+                fontFamily: "var(--frost-font-mono)",
+                fontSize: "var(--frost-type-mono-emph-size)",
+                fontWeight: "var(--frost-type-mono-emph-weight)" as React.CSSProperties["fontWeight"],
+                textTransform: "uppercase",
+                letterSpacing: "var(--frost-type-mono-emph-tracking)",
+                color: "var(--frost-ink)",
+                margin: 0,
+              }}
+            >
+              No webhooks configured
+            </h3>
+            <p
+              style={{
+                fontFamily: "var(--frost-font-mono)",
+                fontSize: "var(--frost-type-mono-body-size)",
+                color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                margin: "var(--frost-gap-row) 0 0",
+              }}
+            >
               Webhooks let external services receive notifications when events occur, such as a new summary being created.
             </p>
           </div>
-          <div className="form-actions">
-            <Button kind="primary" size="sm" onClick={openCreate}>
+          <div style={{ marginTop: "var(--frost-gap-section)" }}>
+            <BracketButton kind="primary" size="sm" onClick={openCreate}>
               Create your first webhook
-            </Button>
+            </BracketButton>
           </div>
-        </Tile>
+        </BrutalistCard>
       )}
 
       {webhooks.length > 0 && (
-        <DataTable rows={rows} headers={headers}>
-          {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
-            <TableContainer title="Webhook subscriptions">
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header) => (
-                      <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {rows.map((row) => {
-                    const wh = row.cells.find((c) => c.info.header === "Actions")?.value as Webhook;
-                    return (
-                      <TableRow {...getRowProps({ row })}>
-                        {row.cells.map((cell) => {
-                          if (cell.info.header === "Status") {
-                            const status = cell.value as string;
-                            return (
-                              <TableCell key={cell.id}>
-                                <Tag type={statusTagType(status)} size="sm">
-                                  {status}
-                                </Tag>
-                              </TableCell>
-                            );
-                          }
-                          if (cell.info.header === "Secret") {
-                            const last8 = cell.value as string;
-                            return (
-                              <TableCell key={cell.id}>
-                                <code style={{ fontSize: "0.8125rem" }}>{maskSecret(last8)}</code>
-                                <div style={{ display: "flex", gap: "0.25rem", marginTop: "0.25rem" }}>
-                                  <Button
-                                    kind="ghost"
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-row)" }}>
+          <p style={sectionLabelStyle}>§ WEBHOOK SUBSCRIPTIONS</p>
+          <BrutalistTable rows={rows} headers={headers}>
+            {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
+              <BrutalistTableContainer title="Webhook subscriptions">
+                <Table {...getTableProps()}>
+                  <TableHead>
+                    <TableRow>
+                      {headers.map((header) => (
+                        <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rows.map((row) => {
+                      const wh = row.cells.find((c) => c.info.header === "actions")?.value as Webhook;
+                      return (
+                        <TableRow {...getRowProps({ row })}>
+                          {row.cells.map((cell) => {
+                            if (cell.info.header === "status") {
+                              const status = cell.value as string;
+                              return (
+                                <TableCell key={cell.id}>
+                                  <Tag
+                                    type={status === "active" ? "green" : status === "paused" ? "warm-gray" : "red"}
                                     size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      void handleCopySecret(maskSecret(last8));
-                                    }}
                                   >
-                                    Copy
-                                  </Button>
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleRotate(wh.id);
-                                    }}
-                                    disabled={rotateMutation.isPending}
-                                  >
-                                    Rotate
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            );
-                          }
-                          if (cell.info.header === "Actions") {
-                            return (
-                              <TableCell key={cell.id}>
-                                <div className="table-actions">
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openEdit(wh);
-                                    }}
-                                  >
-                                    Edit
-                                  </Button>
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleTest(wh.id);
-                                    }}
-                                    disabled={testMutation.isPending}
-                                  >
-                                    Test
-                                  </Button>
-                                  <Button
-                                    kind="ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDeliveryWebhookId(deliveryWebhookId === wh.id ? null : wh.id);
-                                    }}
-                                  >
-                                    {deliveryWebhookId === wh.id ? "Hide log" : "Deliveries"}
-                                  </Button>
-                                  <Button
-                                    kind="danger--ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDeleteTarget(wh);
-                                    }}
-                                    disabled={deleteMutation.isPending}
-                                  >
-                                    Delete
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            );
-                          }
-                          return <TableCell key={cell.id}>{cell.value as string}</TableCell>;
-                        })}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
+                                    {status}
+                                  </Tag>
+                                </TableCell>
+                              );
+                            }
+                            if (cell.info.header === "secret") {
+                              const last8 = cell.value as string;
+                              return (
+                                <TableCell key={cell.id}>
+                                  <code style={{ fontFamily: "var(--frost-font-mono)", fontSize: "var(--frost-type-mono-body-size)" }}>
+                                    {maskSecret(last8)}
+                                  </code>
+                                  <div style={{ display: "flex", gap: "var(--frost-gap-row)", marginTop: "4px" }}>
+                                    <BracketButton
+                                      kind="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        void handleCopySecret(maskSecret(last8));
+                                      }}
+                                    >
+                                      Copy
+                                    </BracketButton>
+                                    <BracketButton
+                                      kind="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRotate(wh.id);
+                                      }}
+                                      disabled={rotateMutation.isPending}
+                                    >
+                                      Rotate
+                                    </BracketButton>
+                                  </div>
+                                </TableCell>
+                              );
+                            }
+                            if (cell.info.header === "actions") {
+                              return (
+                                <TableCell key={cell.id}>
+                                  <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
+                                    <BracketButton
+                                      kind="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openEdit(wh);
+                                      }}
+                                    >
+                                      Edit
+                                    </BracketButton>
+                                    <BracketButton
+                                      kind="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleTest(wh.id);
+                                      }}
+                                      disabled={testMutation.isPending}
+                                    >
+                                      {testMutation.isPending ? "Testing..." : "Test"}
+                                    </BracketButton>
+                                    <BracketButton
+                                      kind="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeliveryWebhookId(deliveryWebhookId === wh.id ? null : wh.id);
+                                      }}
+                                    >
+                                      {deliveryWebhookId === wh.id ? "Hide log" : "Deliveries"}
+                                    </BracketButton>
+                                    <BracketButton
+                                      kind="danger--ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteTarget(wh);
+                                      }}
+                                      disabled={deleteMutation.isPending}
+                                    >
+                                      Delete
+                                    </BracketButton>
+                                  </div>
+                                </TableCell>
+                              );
+                            }
+                            return <TableCell key={cell.id}>{cell.value as string}</TableCell>;
+                          })}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </BrutalistTableContainer>
+            )}
+          </BrutalistTable>
+        </div>
+      )}
+
+      {testMutation.isPending && (
+        <SparkLoading description="Sending test webhook..." />
       )}
 
       {deliveryWebhookId != null && (
-        <div style={{ marginTop: "1rem" }}>
-          <DeliveryLog webhookId={deliveryWebhookId} />
-        </div>
+        <DeliveryLog webhookId={deliveryWebhookId} />
       )}
 
       {/* Create modal */}
-      <Modal
+      <BrutalistModal
         open={createOpen}
-        modalHeading="Create webhook"
-        primaryButtonText={createMutation.isPending ? "Creating..." : "Create"}
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={!canCreate || createMutation.isPending}
+        size="md"
         onRequestClose={() => {
           if (!createMutation.isPending) setCreateOpen(false);
         }}
-        onRequestSubmit={handleCreate}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <TextInput
-            id="webhook-create-name"
-            labelText="Name (optional)"
-            value={createName}
-            onChange={(e) => setCreateName(e.currentTarget.value)}
-            placeholder="My webhook"
-          />
-          <TextInput
-            id="webhook-create-url"
-            labelText="URL"
-            value={createUrl}
-            onChange={(e) => setCreateUrl(e.currentTarget.value)}
-            placeholder="https://example.com/webhook"
-            invalid={createUrl.length > 0 && !createUrl.startsWith("http")}
-            invalidText="URL must start with http:// or https://"
-          />
-          <EventCheckboxGroup selected={createEvents} onChange={setCreateEvents} />
-        </div>
-      </Modal>
+        <BrutalistModalHeader title="Create Webhook" />
+        <BrutalistModalBody>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-section)" }}>
+            <MonoInput
+              id="webhook-create-name"
+              labelText="Name (optional)"
+              value={createName}
+              onChange={(e) => setCreateName(e.currentTarget.value)}
+              placeholder="My webhook"
+            />
+            <MonoInput
+              id="webhook-create-url"
+              labelText="URL"
+              value={createUrl}
+              onChange={(e) => setCreateUrl(e.currentTarget.value)}
+              placeholder="https://example.com/webhook"
+              invalid={createUrl.length > 0 && !createUrl.startsWith("http")}
+              invalidText="URL must start with http:// or https://"
+            />
+            <EventCheckboxGroup selected={createEvents} onChange={setCreateEvents} />
+          </div>
+        </BrutalistModalBody>
+        <BrutalistModalFooter>
+          <BracketButton
+            kind="ghost"
+            onClick={() => {
+              if (!createMutation.isPending) setCreateOpen(false);
+            }}
+          >
+            Cancel
+          </BracketButton>
+          <BracketButton
+            kind="primary"
+            disabled={!canCreate || createMutation.isPending}
+            onClick={handleCreate}
+          >
+            {createMutation.isPending ? "Creating..." : "Create"}
+          </BracketButton>
+        </BrutalistModalFooter>
+      </BrutalistModal>
 
       {/* Edit modal */}
-      <Modal
+      <BrutalistModal
         open={editWebhook != null}
-        modalHeading="Edit webhook"
-        primaryButtonText={updateMutation.isPending ? "Saving..." : "Save"}
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={!canUpdate || updateMutation.isPending}
+        size="md"
         onRequestClose={() => {
           if (!updateMutation.isPending) setEditWebhook(null);
         }}
-        onRequestSubmit={handleUpdate}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <TextInput
-            id="webhook-edit-name"
-            labelText="Name (optional)"
-            value={editName}
-            onChange={(e) => setEditName(e.currentTarget.value)}
-          />
-          <TextInput
-            id="webhook-edit-url"
-            labelText="URL"
-            value={editUrl}
-            onChange={(e) => setEditUrl(e.currentTarget.value)}
-            invalid={editUrl.length > 0 && !editUrl.startsWith("http")}
-            invalidText="URL must start with http:// or https://"
-          />
-          <EventCheckboxGroup selected={editEvents} onChange={setEditEvents} />
-        </div>
-      </Modal>
+        <BrutalistModalHeader title="Edit Webhook" />
+        <BrutalistModalBody>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--frost-gap-section)" }}>
+            <MonoInput
+              id="webhook-edit-name"
+              labelText="Name (optional)"
+              value={editName}
+              onChange={(e) => setEditName(e.currentTarget.value)}
+            />
+            <MonoInput
+              id="webhook-edit-url"
+              labelText="URL"
+              value={editUrl}
+              onChange={(e) => setEditUrl(e.currentTarget.value)}
+              invalid={editUrl.length > 0 && !editUrl.startsWith("http")}
+              invalidText="URL must start with http:// or https://"
+            />
+            <EventCheckboxGroup selected={editEvents} onChange={setEditEvents} />
+          </div>
+        </BrutalistModalBody>
+        <BrutalistModalFooter>
+          <BracketButton
+            kind="ghost"
+            onClick={() => {
+              if (!updateMutation.isPending) setEditWebhook(null);
+            }}
+          >
+            Cancel
+          </BracketButton>
+          <BracketButton
+            kind="primary"
+            disabled={!canUpdate || updateMutation.isPending}
+            onClick={handleUpdate}
+          >
+            {updateMutation.isPending ? "Saving..." : "Save"}
+          </BracketButton>
+        </BrutalistModalFooter>
+      </BrutalistModal>
 
       {/* Delete confirmation */}
-      <Modal
+      <BrutalistModal
         open={deleteTarget != null}
-        modalHeading="Delete webhook"
+        danger
+        modalHeading="Delete Webhook"
         primaryButtonText={deleteMutation.isPending ? "Deleting..." : "Delete"}
         secondaryButtonText="Cancel"
-        danger
+        primaryButtonDisabled={deleteMutation.isPending}
         onRequestClose={() => {
           if (!deleteMutation.isPending) setDeleteTarget(null);
         }}
         onRequestSubmit={handleDelete}
       >
-        <p>
+        <p style={monoBodyStyle}>
           {deleteTarget
             ? `Delete "${deleteTarget.name ?? `Webhook #${deleteTarget.id}`}"? This action cannot be undone.`
             : "Delete selected webhook?"}
         </p>
-      </Modal>
-    </section>
+      </BrutalistModal>
+    </main>
   );
 }
