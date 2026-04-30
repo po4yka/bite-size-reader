@@ -1,0 +1,193 @@
+/*
+ * Group B mobile overrides — Phase 7c Group B.
+ * Covers: SearchPage, TagManagementPage, CollectionsPage.
+ * All rules scoped via @container main (max-width: 768px).
+ * No desktop rules here.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SearchPage
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── BracketSearch — full-width sticky-top below the 54px FrostHeader ───────── */
+
+@container main (max-width: 768px) {
+  .search-sticky-bar {
+    position: sticky;
+    top: var(--frost-mobile-header, 54px);
+    background: var(--page, var(--frost-page));
+    z-index: 5;
+    padding: 16px var(--frost-pad-page-mobile, 16px);
+    /* Negative margin cancels the parent's horizontal padding so the bar
+       bleeds full-width edge-to-edge */
+    margin-left: calc(-1 * var(--frost-pad-page, 16px));
+    margin-right: calc(-1 * var(--frost-pad-page, 16px));
+  }
+}
+
+/* ─── Filter chip strip — ensure horizontal-scroll on SearchPage too ─────────── */
+/* Group A's .queue-toolbar .filters rule only covers LibraryPage.
+   SearchPage uses .tag-row inside a card; ensure those chip rows scroll. */
+
+@container main (max-width: 768px) {
+  .search-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .search-facet-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Chip/tag rows inside search — horizontal scroll, no wrap */
+  .search-facet-grid .tag-row {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .search-facet-grid .tag-row::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ─── BracketTabs / segmented tab lists — horizontal-scroll on mobile ─────────── */
+
+@container main (max-width: 768px) {
+  .search-tabs,
+  .bracket-tab-list {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .search-tabs::-webkit-scrollbar,
+  .bracket-tab-list::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ─── Power-filter panel (BrutalistCard) — stack full-width ─────────────────── */
+
+@container main (max-width: 768px) {
+  /* The result-grid on SearchPage uses repeat(auto-fill, minmax(320px, 1fr)).
+     Force single-column on narrow viewports. */
+  .result-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   TagManagementPage — BrutalistTable → stacked cards
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* BrutalistTable uses BrutalistTableContainer (.frost-table-container) wrapping
+   a .frost-table with .frost-table__head / .frost-table__body / .frost-table__row
+   / .frost-table__header / .frost-table__cell. */
+
+@container main (max-width: 768px) {
+  /* Make the container lose its border (cards will have their own dividers) */
+  .frost-table-container {
+    overflow-x: visible;
+    border: none;
+  }
+
+  /* Turn the table into a block so flex children stack */
+  .frost-table {
+    display: block;
+    width: 100%;
+  }
+
+  /* Hide column headers — labels inferred from context on mobile */
+  .frost-table__head {
+    display: none;
+  }
+
+  /* tbody becomes a flex column */
+  .frost-table__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* Each row becomes a flex-column card */
+  .frost-table__row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 16px;
+    border-bottom: 1px solid color-mix(in oklch, var(--frost-ink) 25%, transparent);
+    min-height: 88px;
+    /* Reset table-row display */
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Cells become full-width block elements */
+  .frost-table__cell {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+    background: transparent;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Action cell: lay buttons out in a row */
+  .frost-table__cell .table-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  /* Clickable rows — keep pointer but disable the desktop hover bg */
+  .frost-table__row.clickable-row {
+    cursor: pointer;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CollectionsPage — 2-col layout → single column
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@container main (max-width: 768px) {
+  /* Outer 2-col grid → single column */
+  .collections-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  /* Sidebar (tree panel + create form) → horizontal-scroll segmented strip */
+  .collections-tree {
+    /* Convert column panel to a horizontal strip above content */
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding: 8px var(--frost-pad-page-mobile, 16px);
+    border-bottom: 1px solid color-mix(in oklch, var(--frost-ink) 25%, transparent);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* Constrain height so it doesn't take over the viewport */
+    max-height: 160px;
+    align-items: flex-start;
+  }
+  .collections-tree::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Each direct child of the tree panel shrinks no further than its content */
+  .collections-tree > * {
+    flex-shrink: 0;
+  }
+
+  /* Items panel (content area) — full width, normal column flow */
+  .collections-items {
+    width: 100%;
+    padding: 16px var(--frost-pad-page-mobile, 16px) 0;
+    box-sizing: border-box;
+  }
+}

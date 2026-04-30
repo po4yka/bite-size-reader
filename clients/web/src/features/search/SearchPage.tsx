@@ -155,17 +155,19 @@ export default function SearchPage() {
         Search
       </h1>
 
-      <BracketSearch
-        id="search-input"
-        labelText="Search summaries"
-        placeholder="Search by keyword, topic, domain…"
-        value={query}
-        size="lg"
-        onChange={(event) => {
-          setQuery(event.currentTarget.value);
-          setPage(1);
-        }}
-      />
+      <div className="search-sticky-bar">
+        <BracketSearch
+          id="search-input"
+          labelText="Search summaries"
+          placeholder="Search by keyword, topic, domain…"
+          value={query}
+          size="lg"
+          onChange={(event) => {
+            setQuery(event.currentTarget.value);
+            setPage(1);
+          }}
+        />
+      </div>
 
       <BrutalistCard>
         <div
