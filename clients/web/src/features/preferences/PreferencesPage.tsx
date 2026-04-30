@@ -92,7 +92,7 @@ export default function PreferencesPage() {
 
   return (
     <section
-      className="page-section"
+      className="page-section preferences-page"
       style={{
         maxWidth: "var(--frost-strip-5, 880px)",
         padding: "var(--frost-pad-page, 32px)",

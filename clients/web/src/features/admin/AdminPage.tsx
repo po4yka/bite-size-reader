@@ -8,7 +8,7 @@ import AdminAuditLog from "./AdminAuditLog";
 export default function AdminPage() {
   return (
     <section
-      className="page-section"
+      className="page-section admin-page"
       style={{
         maxWidth: "var(--frost-strip-7, 1232px)",
         padding: "var(--frost-pad-page, 32px)",

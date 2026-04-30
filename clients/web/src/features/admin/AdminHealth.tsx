@@ -55,7 +55,7 @@ export default function AdminHealth() {
 
       {data && (
         <>
-          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
+          <div className="admin-health-stat-row" style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
             <BrutalistCard style={{ textAlign: "center", minWidth: 140 }}>
               <p className="rtk-label">Total Requests</p>
               <p style={{ fontSize: "1.75rem", fontWeight: 600 }}>{data.totalRequests.toLocaleString()}</p>

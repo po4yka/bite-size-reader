@@ -41,7 +41,7 @@ export default function AdminJobs() {
       {data && (
         <>
           <h4 style={{ marginBottom: "0.75rem" }}>Pipeline</h4>
-          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
+          <div className="admin-jobs-stat-row" style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
             <StatCard label="Pending" value={data.pipeline.pending} />
             <StatCard label="Processing" value={data.pipeline.processing} />
             <StatCard label="Completed today" value={data.pipeline.completedToday} />
@@ -49,7 +49,7 @@ export default function AdminJobs() {
           </div>
 
           <h4 style={{ marginBottom: "0.75rem" }}>Import Jobs</h4>
-          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+          <div className="admin-jobs-stat-row" style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
             <StatCard label="Active" value={data.imports.active} />
             <StatCard label="Completed today" value={data.imports.completedToday} />
           </div>

@@ -93,7 +93,7 @@ export default function AdminMetrics() {
           >
             § LLM (last 7 days)
           </p>
-          <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+          <div className="admin-metrics-stat-row" style={{ display: "flex", gap: "2rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
             <div>
               <p className="rtk-label">Total Calls</p>
               <p style={{ fontSize: "1.25rem", fontWeight: 600 }}>{llm.totalCalls.toLocaleString()}</p>

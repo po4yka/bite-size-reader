@@ -1,0 +1,202 @@
+/*
+ * Group D mobile overrides — Phase 7c Group D.
+ * Covers: PreferencesPage, DigestPage, CustomDigestViewPage, AdminPage.
+ * All rules scoped via @container main (max-width: 768px).
+ * No desktop rules here.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Generic: stat-card flex rows (AdminJobs, AdminHealth, AdminMetrics)
+   Re-usable for any .stat-card-row flex container inside .frost-card.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@container main (max-width: 768px) {
+  .stat-card-row {
+    flex-direction: column;
+  }
+
+  /* Stat cards that use inline minWidth: 140 — let them stretch full-width */
+  .stat-card-row > .frost-card {
+    min-width: 0 !important;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PreferencesPage — reduce outer padding/gap on mobile
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@container main (max-width: 768px) {
+  /* The outer <section class="page-section"> uses inline padding/gap.
+     Override to mobile values. !important needed to beat inline styles. */
+  .preferences-page {
+    padding: var(--frost-pad-page-mobile, 16px) !important;
+    gap: 24px !important;
+    max-width: 100% !important;
+  }
+
+  /* Each frost-card inside preferences fills full width */
+  .preferences-page > .frost-card {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+/* ─── ReadingStreakSection — 4-col stat grid → 2-col on mobile ──────────────── */
+
+@container main (max-width: 768px) {
+  /* The grid div uses inline grid-template-columns: repeat(4, 1fr).
+     Target it as the first grid child of the streak card.
+     !important needed to override inline style. */
+  .preferences-page .frost-card .reading-streak-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+}
+
+/* ─── ReadingGoalsSection — goal rows wrap; Add Goal form stacks ─────────────── */
+
+@container main (max-width: 768px) {
+  /* Goal rows (inline flex, alignItems:center) — allow wrap on narrow screens */
+  .preferences-page .frost-card .reading-goal-row {
+    flex-wrap: wrap !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  /* Add Goal form (inline flex, flexWrap:wrap) — stack each input full-width */
+  .preferences-page .frost-card .reading-goals-form {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  /* Selects/inputs inside the form go full-width */
+  .preferences-page .frost-card .reading-goals-form > * {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+}
+
+/* ─── SessionsSection — Carbon DataTable → overflow-x scroll ────────────────── */
+
+@container main (max-width: 768px) {
+  /* SessionsSection uses Carbon DataTable (not frost-table).
+     Wrap in a scrollable container so wide session tables don't overflow. */
+  .preferences-page .cds--data-table-container,
+  .preferences-page [class*="data-table-container"],
+  .preferences-page .cds--table-container {
+    overflow-x: auto;
+    display: block;
+    max-width: 100%;
+  }
+
+  .preferences-page table {
+    min-width: 480px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   DigestPage — reduce outer padding/gap on mobile
+   BracketTabList → generic .bracket-tab-list rule from group-b already applies.
+   Tab panel content (ChannelsTab, RSSFeedsTab, etc.) stacks naturally.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@container main (max-width: 768px) {
+  .digest-page {
+    padding: var(--frost-pad-page-mobile, 16px) !important;
+    gap: 24px !important;
+    max-width: 100% !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CustomDigestViewPage — reduce outer padding/gap on mobile
+   BrutalistCard + flex-wrap tag rows already reflow.
+   Post list is a column with dividers — no additional layout rules needed.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@container main (max-width: 768px) {
+  .custom-digest-view-page {
+    padding: var(--frost-pad-page-mobile, 16px) !important;
+    gap: 24px !important;
+    max-width: 100% !important;
+  }
+
+  /* Channel tag strip — allow wrap (already flex-wrap:wrap inline; this
+     ensures no overflow if a tag is very long). */
+  .custom-digest-view-page .frost-card .channel-tags {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   AdminPage — reduce outer padding/gap on mobile
+   BracketTabList → generic .bracket-tab-list rule from group-b already applies.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@container main (max-width: 768px) {
+  .admin-page {
+    padding: var(--frost-pad-page-mobile, 16px) !important;
+    gap: 24px !important;
+    max-width: 100% !important;
+  }
+}
+
+/* ─── AdminMetrics — LLM / Scraper metric flex rows → wrap to single column ─── */
+
+@container main (max-width: 768px) {
+  /* The LLM section uses inline display:flex; gap:2rem; flexWrap:wrap.
+     On very narrow phones the 2rem gap wastes space; tighten it and let
+     each metric block grow to a reasonable fraction. */
+  .admin-metrics-stat-row {
+    gap: 12px !important;
+  }
+
+  /* Each metric block inside the LLM row should be at least ~45% wide
+     so we get 2-per-row on 375px phones before wrapping to 1. */
+  .admin-metrics-stat-row > div {
+    flex: 1 1 calc(50% - 12px);
+    min-width: 120px;
+  }
+}
+
+/* ─── AdminJobs — StatCard flex rows → wrap to single column ─────────────────── */
+
+@container main (max-width: 768px) {
+  /* AdminJobs wraps two flex rows of StatCards (Pipeline + Import Jobs).
+     StatCards have inline minWidth:140. On mobile collapse to 2-per-row
+     by letting them grow/shrink. */
+  .admin-jobs-stat-row {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .admin-jobs-stat-row > .frost-card {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+}
+
+/* ─── AdminHealth — stat card row + BrutalistTable failures → handled ────────── */
+
+@container main (max-width: 768px) {
+  /* AdminHealth top 3 stat cards (Total Requests / Summaries / Failed)
+     use the same inline flex + minWidth:140 pattern. Collapse to 2-per-row. */
+  .admin-health-stat-row {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .admin-health-stat-row > .frost-card {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+
+  /* BrutalistTable (Recent Failures) → generic frost-table rules from
+     group-b.mobile.css already collapse it to stacked cards. */
+}

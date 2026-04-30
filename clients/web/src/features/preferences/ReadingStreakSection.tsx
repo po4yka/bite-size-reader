@@ -45,6 +45,7 @@ export default function ReadingStreakSection() {
       {streakQuery.data && (
         <>
           <div
+            className="reading-streak-grid"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(4, 1fr)",

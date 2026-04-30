@@ -45,7 +45,7 @@ export default function CustomDigestViewPage() {
 
   return (
     <section
-      className="page-section"
+      className="page-section custom-digest-view-page"
       style={{
         maxWidth: "var(--frost-strip-7, 1232px)",
         padding: "var(--frost-pad-page, 32px)",
@@ -59,7 +59,7 @@ export default function CustomDigestViewPage() {
 
       <BrutalistCard>
         <h3>Channels</h3>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
+        <div className="channel-tags" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
           {digest.channels.map((channel) => (
             <Tag key={channel.id}>
               {channel.title || `@${channel.username}`}

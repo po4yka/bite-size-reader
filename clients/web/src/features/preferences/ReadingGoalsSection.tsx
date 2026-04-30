@@ -103,6 +103,7 @@ export default function ReadingGoalsSection() {
             return (
               <div
                 key={goal.id}
+                className="reading-goal-row"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -148,7 +149,7 @@ export default function ReadingGoalsSection() {
 
           <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Add Goal</p>
 
-          <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div className="reading-goals-form" style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap" }}>
             <MonoSelect
               id="new-goal-type"
               labelText="Goal type"

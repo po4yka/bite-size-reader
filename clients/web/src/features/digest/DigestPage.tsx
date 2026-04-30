@@ -16,7 +16,7 @@ export default function DigestPage() {
 
   return (
     <section
-      className="page-section"
+      className="page-section digest-page"
       style={{
         maxWidth: "var(--frost-strip-7, 1232px)",
         padding: "var(--frost-pad-page, 32px)",
