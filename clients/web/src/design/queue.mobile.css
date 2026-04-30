@@ -1,0 +1,225 @@
+/*
+ * Queue + detail mobile overrides — Phase 7c Group A.
+ * All rules scoped via @container main (max-width: 768px).
+ * No desktop rules here; desktop layout lives in queue.css.
+ */
+
+/* ─── Queue toolbar ─────────────────────────────────────────────────────────── */
+
+@container main (max-width: 768px) {
+  .queue-toolbar {
+    flex-wrap: wrap;
+    gap: var(--frost-gap-row, 8px);
+    /* Override desktop grid with a flex layout */
+    display: flex;
+    align-items: flex-start;
+  }
+  .queue-toolbar .filters {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+  }
+}
+
+/* ─── Queue column header ───────────────────────────────────────────────────── */
+
+@container main (max-width: 768px) {
+  .queue-cols {
+    /* Hide the desktop column header on mobile */
+    display: none;
+  }
+}
+
+/* ─── Queue rows — stacked card layout ─────────────────────────────────────── */
+
+@container main (max-width: 768px) {
+  .queue li.row {
+    /* Drop the 7-col grid; stack as a card */
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 16px;
+    border-bottom: 1px solid color-mix(in oklch, var(--ink, var(--frost-ink)) 25%, transparent);
+    height: auto;
+    min-height: 88px; /* touch-friendly */
+    text-align: left;
+  }
+
+  .queue li.row .timestamp,
+  .queue li.row .source {
+    /* Top meta line: mono 11px uppercase alpha 0.55 */
+    flex: 0 0 auto;
+    color: color-mix(in oklch, var(--ink, var(--frost-ink)) 55%, transparent);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    /* Reset desktop overrides */
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    opacity: 1;
+  }
+
+  .queue li.row .timestamp::after {
+    content: " · ";
+    opacity: 0.4;
+  }
+
+  .queue li.row .title {
+    /* Body line — full-width, mono 13px */
+    flex: 1 1 auto;
+    width: 100%;
+    font-size: 13px;
+    letter-spacing: 0.4px;
+    text-transform: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    padding-right: 0;
+  }
+
+  .queue li.row .topics,
+  .queue li.row .signal {
+    /* Footer row */
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: color-mix(in oklch, var(--ink, var(--frost-ink)) 55%, transparent);
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    opacity: 1;
+  }
+
+  .queue li.row .dot {
+    /* Drop decorative dots between columns */
+    display: none;
+  }
+
+  /* Keep the 4px spark hairline for critical rows (mobile canon = 4px vs web 2px) */
+  .queue li.row.sig-critical::before {
+    border-left-width: var(--frost-spark-mobile, 4px);
+    width: var(--frost-spark-mobile, 4px);
+  }
+
+  /* Disable cursor + hover styling on mobile (touch-only) */
+  .queue li.row.cursor::after {
+    background: transparent !important;
+    animation: none;
+  }
+  .queue li.row.cursor {
+    background: transparent !important;
+    color: var(--ink, var(--frost-ink)) !important;
+  }
+  .queue li.row.cursor .dot,
+  .queue li.row.cursor .timestamp,
+  .queue li.row.cursor .topics {
+    opacity: 1;
+  }
+  .queue li.row:hover {
+    background: transparent !important;
+    color: var(--ink, var(--frost-ink)) !important;
+  }
+  .queue li.row:hover .dot,
+  .queue li.row:hover .timestamp,
+  .queue li.row:hover .topics {
+    opacity: 1;
+  }
+}
+
+/* ─── ArticlesPage pagination — sticky bottom above MobileTabBar ────────────── */
+
+@container main (max-width: 768px) {
+  .articles-pagination {
+    position: sticky;
+    bottom: var(--frost-tab-bar-height, 56px);
+    background: var(--page, var(--frost-page));
+    border-top: 1px solid color-mix(in oklch, var(--ink, var(--frost-ink)) 50%, transparent);
+    padding: 8px var(--frost-pad-page-mobile, 16px);
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+  }
+}
+
+/* ─── Detail grid — single column on mobile ─────────────────────────────────── */
+
+@container main (max-width: 768px) {
+  .detail {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    /* Extra bottom space for fixed action bar + tab bar */
+    padding-bottom: calc(var(--frost-tab-bar-height, 56px) + 56px + 16px);
+  }
+
+  .detail .meta,
+  .detail .anchors {
+    /* Sidebars stack inline above body */
+    display: block;
+    border: none;
+    padding: 0;
+  }
+
+  /* Hide the anchor sidebar on mobile — too crowded in single-column layout */
+  .detail .anchors {
+    display: none;
+  }
+
+  .detail .gutter {
+    display: none;
+  }
+
+  .detail .body {
+    /* Body full-width, Source Serif italic stays */
+    width: 100%;
+  }
+
+  .detail .body h1 {
+    /* Mono ExtraBold uppercase title at slightly smaller size */
+    font-size: clamp(20px, 6vw, 28px);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-variation-settings: "wght" 720;
+  }
+
+  .detail .body p {
+    /* Source Serif italic body */
+    font-family: var(--frost-font-serif, "Source Serif 4", Georgia, serif);
+    font-size: 16px;
+    line-height: 1.55;
+    font-style: italic;
+  }
+}
+
+/* ─── Detail action toolbar — fixed bottom above MobileTabBar ───────────────── */
+
+@container main (max-width: 768px) {
+  .detail-actions {
+    position: fixed;
+    bottom: var(--frost-tab-bar-height, 56px);
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--page, var(--frost-page));
+    border-top: 1px solid var(--ink, var(--frost-ink));
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 var(--frost-pad-page-mobile, 16px);
+    z-index: 50;
+    overflow-x: auto;
+  }
+
+  .detail-actions .dot {
+    display: none;
+  }
+
+  .detail-actions a,
+  .detail-actions button {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 12px 8px;
+    min-height: 44px;
+  }
+}

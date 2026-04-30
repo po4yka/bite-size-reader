@@ -97,6 +97,7 @@ export default function ArticlesPage() {
             setPage(event.page);
             setPageSize(event.pageSize);
           },
+          paginationClassName: "articles-pagination",
         }}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}

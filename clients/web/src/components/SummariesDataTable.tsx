@@ -28,6 +28,7 @@ interface SummariesDataTableProps {
     pageSize: number;
     pageSizes?: number[];
     onChange: (event: { page: number; pageSize: number }) => void;
+    paginationClassName?: string;
   };
   searchTerm: string;
   onSearchChange: (value: string) => void;
@@ -50,6 +51,7 @@ export function SummariesDataTable({
   renderActions,
   renderStatusColumn,
 }: SummariesDataTableProps) {
+  const { paginationClassName } = pagination;
   const navigate = useNavigate();
 
   const filteredSummaries = useMemo(() => {
@@ -165,13 +167,15 @@ export function SummariesDataTable({
             )}
           </DataTable>
 
-          <Pagination
-            page={pagination.page}
-            pageSize={pagination.pageSize}
-            pageSizes={pagination.pageSizes ?? [10, 20, 50]}
-            totalItems={pagination.total}
-            onChange={pagination.onChange}
-          />
+          <div className={paginationClassName}>
+            <Pagination
+              page={pagination.page}
+              pageSize={pagination.pageSize}
+              pageSizes={pagination.pageSizes ?? [10, 20, 50]}
+              totalItems={pagination.total}
+              onChange={pagination.onChange}
+            />
+          </div>
         </>
       )}
     </>
