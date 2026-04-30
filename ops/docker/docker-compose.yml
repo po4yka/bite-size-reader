@@ -8,7 +8,8 @@ services:
     container_name: ratatoskr-bot
     init: true
     env_file:
-      - ../../.env
+      - path: ../../.env
+        required: false
     volumes:
       - ../../data:/data
       - ../../config:/app/config:ro
@@ -27,12 +28,14 @@ services:
       - MAX_CONCURRENT_CALLS=${MAX_CONCURRENT_CALLS:-4}
       - REQUEST_TIMEOUT_SEC=${REQUEST_TIMEOUT_SEC:-60}
       - FIRECRAWL_SELF_HOSTED_ENABLED=${FIRECRAWL_SELF_HOSTED_ENABLED:-0}
-      - FIRECRAWL_SELF_HOSTED_URL=http://firecrawl-api:3003
+      - FIRECRAWL_SELF_HOSTED_URL=${FIRECRAWL_SELF_HOSTED_URL:-http://firecrawl-api:3002}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434/v1}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-ollama}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.3}
     dns:
       - 1.1.1.1
       - 8.8.8.8
-    extra_hosts:
-      - "firecrawl-api:host-gateway"
     restart: unless-stopped
     deploy:
       resources:
@@ -73,7 +76,8 @@ services:
     tmpfs:
       - /tmp
     env_file:
-      - ../../.env
+      - path: ../../.env
+        required: false
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -81,6 +85,10 @@ services:
       - DB_PATH=/data/ratatoskr.db
       - CHROMA_HOST=http://chroma:8000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434/v1}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-ollama}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.3}
       - REDIS_ENABLED=1
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -127,13 +135,14 @@ services:
     container_name: ratatoskr-mcp
     init: true
     env_file:
-      - ../../.env
+      - path: ../../.env
+        required: false
     environment:
       - MCP_ENABLED=true
       - MCP_TRANSPORT=sse
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8200
-      - MCP_USER_ID=${MCP_USER_ID:?MCP_USER_ID must be set in .env to scope MCP server access to a specific user}
+      - MCP_USER_ID=${MCP_USER_ID:-}
       - MCP_ALLOW_REMOTE_SSE=true
       - DB_PATH=/data/ratatoskr.db
       - CHROMA_HOST=http://chroma:8000
@@ -185,13 +194,14 @@ services:
     container_name: ratatoskr-mcp-write
     init: true
     env_file:
-      - ../../.env
+      - path: ../../.env
+        required: false
     environment:
       - MCP_ENABLED=true
       - MCP_TRANSPORT=sse
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8200
-      - MCP_USER_ID=${MCP_USER_ID:?MCP_USER_ID must be set in .env to scope writable MCP access to a specific user}
+      - MCP_USER_ID=${MCP_USER_ID:-}
       - MCP_ALLOW_REMOTE_SSE=true
       - DB_PATH=/data/ratatoskr.db
       - CHROMA_HOST=http://chroma:8000
@@ -243,7 +253,8 @@ services:
     container_name: ratatoskr-mcp-public
     init: true
     env_file:
-      - ../../.env
+      - path: ../../.env
+        required: false
     environment:
       - MCP_ENABLED=true
       - MCP_TRANSPORT=sse
@@ -295,6 +306,283 @@ services:
         reservations:
           memory: 128M
           cpus: "0.10"
+
+  cloud-ollama-check:
+    profiles:
+      - with-cloud-ollama
+    image: curlimages/curl:8.16.0
+    container_name: ratatoskr-cloud-ollama-check
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434/v1}
+    command:
+      - sh
+      - -c
+      - |
+        if [ "$${LLM_PROVIDER}" != "ollama" ]; then
+          echo "LLM_PROVIDER is not ollama; remote cloud Ollama check skipped."
+          exit 0
+        fi
+        curl -fsS "$${OLLAMA_BASE_URL%/}/models" >/dev/null
+    restart: "no"
+
+  firecrawl-api:
+    profiles:
+      - with-firecrawl
+    image: ${FIRECRAWL_IMAGE:-ghcr.io/firecrawl/firecrawl:latest}
+    container_name: ratatoskr-firecrawl-api
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3002
+      - INTERNAL_PORT=3002
+      - USE_DB_AUTHENTICATION=false
+      - REDIS_URL=redis://firecrawl-redis:6379
+      - REDIS_RATE_LIMIT_URL=redis://firecrawl-redis:6379
+      - PLAYWRIGHT_MICROSERVICE_URL=http://firecrawl-playwright:3000/scrape
+      - NUQ_RABBITMQ_URL=amqp://firecrawl-rabbitmq:5672
+      - POSTGRES_HOST=firecrawl-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${FIRECRAWL_POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${FIRECRAWL_POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${FIRECRAWL_POSTGRES_DB:-postgres}
+      - BULL_AUTH_KEY=${FIRECRAWL_BULL_AUTH_KEY:-ratatoskr-local}
+      - ENV=local
+    command: ["node", "dist/src/harness.js", "--start-docker"]
+    ports:
+      - "127.0.0.1:3002:3002"
+    depends_on:
+      firecrawl-playwright:
+        condition: service_started
+      firecrawl-redis:
+        condition: service_healthy
+      firecrawl-rabbitmq:
+        condition: service_healthy
+      firecrawl-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3002/serverHealthCheck').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+
+  firecrawl-playwright:
+    profiles:
+      - with-firecrawl
+    image: ${FIRECRAWL_PLAYWRIGHT_IMAGE:-ghcr.io/firecrawl/playwright-service:latest}
+    container_name: ratatoskr-firecrawl-playwright
+    environment:
+      - PORT=3000
+      - MAX_CONCURRENT_PAGES=${FIRECRAWL_MAX_CONCURRENT_PAGES:-2}
+      - BLOCK_MEDIA=${FIRECRAWL_BLOCK_MEDIA:-true}
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const net=require('net');const s=net.createConnection(3000,'127.0.0.1');s.on('connect',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),5000)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    tmpfs:
+      - /tmp/.cache:noexec,nosuid,size=1g
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+
+  firecrawl-redis:
+    profiles:
+      - with-firecrawl
+    image: redis:7-alpine
+    container_name: ratatoskr-firecrawl-redis
+    command: ["redis-server", "--bind", "0.0.0.0", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    volumes:
+      - firecrawl_redis_data:/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    security_opt:
+      - no-new-privileges:true
+
+  firecrawl-rabbitmq:
+    profiles:
+      - with-firecrawl
+    image: rabbitmq:3-management
+    container_name: ratatoskr-firecrawl-rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    volumes:
+      - firecrawl_rabbitmq_data:/var/lib/rabbitmq
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    security_opt:
+      - no-new-privileges:true
+
+  firecrawl-postgres:
+    profiles:
+      - with-firecrawl
+    image: ${FIRECRAWL_POSTGRES_IMAGE:-ghcr.io/firecrawl/nuq-postgres:latest}
+    container_name: ratatoskr-firecrawl-postgres
+    environment:
+      - POSTGRES_USER=${FIRECRAWL_POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${FIRECRAWL_POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${FIRECRAWL_POSTGRES_DB:-postgres}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    volumes:
+      - firecrawl_postgres_data:/var/lib/postgresql/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+
+  prometheus:
+    profiles:
+      - with-monitoring
+    image: prom/prometheus:v2.48.0
+    container_name: ratatoskr-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--storage.tsdb.retention.size=2GB"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/alerting_rules.yml:/etc/prometheus/alerting_rules.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      mobile-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  grafana:
+    profiles:
+      - with-monitoring
+    image: grafana/grafana:10.2.2
+    container_name: ratatoskr-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-change-this-grafana-password}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_HTTP_PORT=3001
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3001/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  loki:
+    profiles:
+      - with-monitoring
+    image: grafana/loki:2.9.2
+    container_name: ratatoskr-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ../monitoring/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  promtail:
+    profiles:
+      - with-monitoring
+    image: grafana/promtail:2.9.2
+    container_name: ratatoskr-promtail
+    restart: unless-stopped
+    volumes:
+      - ../monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_healthy
+
+  node-exporter:
+    profiles:
+      - with-monitoring
+    image: prom/node-exporter:v1.8.2
+    container_name: ratatoskr-node-exporter
+    restart: unless-stopped
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/host/root"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|run/credentials)($|/)"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+
   redis:
     image: redis:7-alpine
     container_name: ratatoskr-redis
@@ -376,3 +664,9 @@ services:
     stop_grace_period: 30s
 volumes:
   redis_data:
+  firecrawl_redis_data:
+  firecrawl_rabbitmq_data:
+  firecrawl_postgres_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:

@@ -1046,7 +1046,7 @@ Web client implemented in `clients/web/` (React + TypeScript + Vite + a project-
 Content extraction uses an ordered fallback chain via `ContentScraperChain`:
 
 1. **Scrapling** (primary) -- in-process Python library with TLS impersonation. Uses `trafilatura.extract()` for text extraction. Zero external dependencies, fastest path.
-2. **Self-hosted Firecrawl** (secondary) -- same v2 API running in Docker Compose (`ratatoskr-firecrawl` on port 3002). Handles JS rendering, proxies, PDFs.
+2. **Self-hosted Firecrawl** (secondary) -- same v2 API running in the `with-firecrawl` Docker Compose profile (`firecrawl-api` on port 3002). Handles JS rendering, proxies, PDFs.
 3. **Playwright** (tertiary) -- browser-rendered extraction for JS-heavy pages. Minimum 400-char content threshold.
 4. **Crawlee** (quaternary) -- hybrid single-page extraction (`BeautifulSoupCrawler` then `PlaywrightCrawler`) before final salvage.
 5. **Direct HTML** (last resort) -- httpx streaming fetch + `html_to_text()`. Minimum 400-char content threshold.

@@ -120,7 +120,7 @@ Maintain the existing architecture but add Scrapling as a fallback for Firecrawl
 - **Providers**: `scrapling_provider.py`, `firecrawl_provider.py`, `playwright_provider.py`, `crawlee_provider.py`, `direct_html_provider.py`
 - **Config**: `app/config/scraper.py` (`ScraperConfig`)
 - **Config v2**: `SCRAPER_*` controls now include profile tuning (`SCRAPER_PROFILE`), global/brower switches, force-provider override, and explicit direct-html/firecrawl-self-hosted tuning knobs. Legacy `SCRAPLING_*` and `SCRAPER_DIRECT_HTTP_ENABLED` names are fail-fast deprecated.
-- **Docker**: The current `ops/docker/docker-compose.yml` can point at an externally managed self-hosted Firecrawl API via `firecrawl-api:host-gateway`; it does not yet define a Firecrawl service. A dedicated Compose profile is planned in the refactoring roadmap.
+- **Docker**: `ops/docker/docker-compose.yml` includes a `with-firecrawl` profile that starts an internal Firecrawl API on `http://firecrawl-api:3002` with its Playwright, Redis, RabbitMQ, and Postgres dependencies. Externally managed Firecrawl remains possible by setting `FIRECRAWL_SELF_HOSTED_URL`.
 - **Tests**: `tests/test_scraper_chain.py` (45 tests)
 
 ## Notes

@@ -34,7 +34,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 `FIRECRAWL_API_KEY` is **optional**. The default scraper chain (`SCRAPER_PROVIDER_ORDER`) tries Scrapling (free, in-process) first, then falls back to Firecrawl, Playwright, Crawlee, and direct HTML extraction. You only need a cloud Firecrawl API key if you want to use cloud Firecrawl or web search enrichment.
 
 - Cloud Firecrawl: Sign up at https://www.firecrawl.dev/ and set `FIRECRAWL_API_KEY`.
-- Self-hosted Firecrawl: Enable via `FIRECRAWL_SELF_HOSTED_ENABLED=true` and point `FIRECRAWL_SELF_HOSTED_URL` at a running Firecrawl API. The current Compose file does not start Firecrawl; it uses the `firecrawl-api` host-gateway name for an externally managed Firecrawl service. Phase 2 of the refactoring roadmap will add an in-compose Firecrawl profile.
+- Self-hosted Firecrawl: run the `with-firecrawl` compose profile. It starts an internal Firecrawl API, Playwright service, Redis, RabbitMQ, and Postgres stack, then points Ratatoskr at `http://firecrawl-api:3002`.
 - Scrapling: Enabled by default (`SCRAPER_SCRAPLING_ENABLED=true`), no API key required.
 - Breaking rename note: legacy vars (`SCRAPLING_*`, `SCRAPER_DIRECT_HTTP_ENABLED`) now fail fast at startup.
 
@@ -148,15 +148,39 @@ services:
     healthcheck: HTTP /api/v2/heartbeat every 30s
 ```
 
-Run: `docker compose -f ops/docker/docker-compose.yml up -d --build`
+Run the core stack: `docker compose -f ops/docker/docker-compose.yml up -d --build`
+
+Run core plus self-hosted Firecrawl:
+
+```bash
+FIRECRAWL_SELF_HOSTED_ENABLED=true \
+docker compose -f ops/docker/docker-compose.yml --profile with-firecrawl up -d --build
+```
+
+Run with a remote Ollama-compatible provider:
+
+```bash
+LLM_PROVIDER=ollama \
+OLLAMA_BASE_URL=https://ollama.example.com/v1 \
+OLLAMA_API_KEY=replace_with_provider_token \
+OLLAMA_MODEL=llama3.3 \
+docker compose -f ops/docker/docker-compose.yml --profile with-cloud-ollama up -d --build
+```
+
+Run with monitoring:
+
+```bash
+docker compose -f ops/docker/docker-compose.yml --profile with-monitoring up -d --build
+```
 
 ## Optional Subsystems
 
-These services are not required but enhance functionality when available:
+These profile services are not required but enhance functionality when available:
 
-- **Redis** -- Caching layer for Firecrawl/LLM responses, API rate limiting, sync locks, and background task distributed locking. Set `REDIS_ENABLED=true` and configure `REDIS_URL` or host/port.
-- **ChromaDB** -- Vector search for semantic article queries. Set `CHROMA_HOST` to a running Chroma instance. Degrades gracefully when unavailable.
-- **MCP Server** -- Exposes article, search, ChromaDB, and aggregation tools/resources to external AI agents (OpenClaw, Claude Desktop, hosted SSE clients). Runs as a dedicated Docker container with SSE transport (`ratatoskr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
+- **Self-hosted Firecrawl** (`with-firecrawl`) -- internal Firecrawl API plus its Playwright, Redis, RabbitMQ, and Postgres dependencies. Image defaults follow Firecrawl upstream `latest`; pin `FIRECRAWL_IMAGE`, `FIRECRAWL_PLAYWRIGHT_IMAGE`, and `FIRECRAWL_POSTGRES_IMAGE` in production when you need repeatable rebuilds.
+- **Cloud Ollama** (`with-cloud-ollama`) -- does not start a local model server. It configures Ratatoskr for a remote OpenAI-compatible `/v1` endpoint and runs a lightweight `/models` reachability check. Structured JSON quality depends on the remote model; OpenRouter remains the primary quality path.
+- **Monitoring** (`with-monitoring`) -- Prometheus, Grafana, Loki, Promtail, and node-exporter from the primary compose file.
+- **MCP Server** (`mcp`, `mcp-write`, `mcp-public`) -- Exposes article, search, ChromaDB, and aggregation tools/resources to external AI agents (OpenClaw, Claude Desktop, hosted SSE clients). Runs as a dedicated Docker container with SSE transport (`ratatoskr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels. Set `DIGEST_ENABLED=true` and `API_BASE_URL` to the Mobile API endpoint. Run `/init_session` in the bot to authenticate the userbot via Mini App OTP/2FA flow, then use `/subscribe @channel` to add channels.
 
 Full variable reference: `docs/environment_variables.md`

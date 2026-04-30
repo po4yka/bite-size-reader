@@ -229,7 +229,7 @@ Content extraction uses an ordered chain of providers. Each provider is tried in
 
 - Scrapling is a free, in-process scraper that requires no API key. It is tried first by default.
 - Defuddle is a free HTTP API for content extraction. It is tried second in the default chain, after Scrapling.
-- Self-hosted Firecrawl runs as a Docker Compose service (`ratatoskr-firecrawl` on port 3002) and also requires no cloud API key.
+- Self-hosted Firecrawl runs as the `with-firecrawl` Docker Compose profile (`firecrawl-api` on port 3002) and also requires no cloud API key.
 - Playwright fallback is useful for JS-heavy pages that fail in HTTP-only extractors.
 - Crawlee fallback is a single-page advanced fallback (BeautifulSoup stage, then Playwright stage); it is not broad multi-page site crawling in this pipeline.
 - Cloud Firecrawl (`FIRECRAWL_API_KEY`) is only needed when it appears in `SCRAPER_PROVIDER_ORDER` as `"firecrawl"` or when web search enrichment is enabled.

@@ -53,10 +53,20 @@ Optional scraper, YouTube, Twitter/X, MCP, and provider tuning now live in
 `ratatoskr.yaml`; see [Optional YAML Configuration](docs/reference/config-file.md).
 `JWT_SECRET_KEY` is required only when enabling web/API/browser-extension JWT auth.
 
+Compose profiles:
+
+- `with-firecrawl` starts self-hosted Firecrawl and its dependencies.
+- `with-cloud-ollama` configures a remote OpenAI-compatible Ollama endpoint; it does not start a local model server.
+- `with-monitoring` starts Prometheus, Grafana, Loki, Promtail, and node-exporter.
+- `mcp`, `mcp-write`, and `mcp-public` start the optional MCP server variants.
+
 For the guided walkthrough, see the
 [5-minute Quickstart Tutorial](docs/tutorials/quickstart.md). For the
 full setup including TLS, monitoring, and backups, see
 [DEPLOYMENT.md](docs/DEPLOYMENT.md).
+The Phase 2 onboarding script is tracked in
+[Clone to First Summary](docs/how-to/clone-to-first-summary.md) for repeatable
+10-minute validation runs.
 
 ## What it does
 

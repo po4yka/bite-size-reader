@@ -50,6 +50,8 @@ not drift from the operational guide.
 - Update pyjwt 2.11.0 to 2.12.1 (CVE-2026-32597)
 
 ### Changed
+- Add Phase 2 compose profiles for self-hosted Firecrawl, remote cloud Ollama, monitoring, and MCP; default compose config now works without a local `.env` file.
+- Publish GHCR `:stable` on non-prerelease semver tags and keep `:latest` disabled.
 - Reduce `.env.example` to the five first-run Telegram/OpenRouter values and move optional power-user settings to `ratatoskr.yaml`.
 - Add optional `RATATOSKR_CONFIG` / `ratatoskr.yaml` loading with precedence below `.env` and process environment.
 - Add OpenAI-compatible cloud Ollama configuration (`LLM_PROVIDER=ollama`) while keeping OpenRouter as the default provider.

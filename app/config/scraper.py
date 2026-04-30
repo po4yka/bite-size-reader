@@ -113,7 +113,7 @@ class ScraperConfig(BaseModel):
         validation_alias="FIRECRAWL_SELF_HOSTED_ENABLED",
     )
     firecrawl_self_hosted_url: str = Field(
-        default="http://firecrawl-api:3003",
+        default="http://firecrawl-api:3002",
         validation_alias="FIRECRAWL_SELF_HOSTED_URL",
     )
     firecrawl_self_hosted_api_key: str = Field(

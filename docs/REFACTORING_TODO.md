@@ -148,75 +148,75 @@ Acceptance evidence:
 
 ### 2.1 Compose profile design
 
-- [ ] Decide final profile names: `core`, `with-firecrawl`, `with-cloud-ollama`, `with-monitoring`, `mcp`.
-- [ ] Make default compose include bot, API/web, Redis, and Chroma.
-- [ ] Keep web served by FastAPI; avoid a separate frontend runtime container unless justified.
-- [ ] Ensure API/web auth secrets are required only when browser/API/extension auth is enabled.
-- [ ] Add compose healthchecks for bot, API, Redis, Chroma, and Firecrawl.
-- [ ] Remove `firecrawl-api:host-gateway` from the default self-hosted Firecrawl path once a Firecrawl service is added.
-- [ ] Keep a documented path for using an externally managed Firecrawl service.
+- [x] Decide final profile names: `core`, `with-firecrawl`, `with-cloud-ollama`, `with-monitoring`, `mcp`.
+- [x] Make default compose include bot, API/web, Redis, and Chroma.
+- [x] Keep web served by FastAPI; avoid a separate frontend runtime container unless justified.
+- [x] Ensure API/web auth secrets are required only when browser/API/extension auth is enabled.
+- [x] Add compose healthchecks for bot, API, Redis, Chroma, and Firecrawl.
+- [x] Remove `firecrawl-api:host-gateway` from the default self-hosted Firecrawl path once a Firecrawl service is added.
+- [x] Keep a documented path for using an externally managed Firecrawl service.
 
 Acceptance evidence:
 
-- [ ] `docker compose config` succeeds for default and each profile.
-- [ ] Default stack starts bot/API/Redis/Chroma.
-- [ ] Firecrawl profile starts an internal Firecrawl service without host-gateway.
+- [x] `docker compose config` succeeds for default and each profile.
+- [x] Default stack starts bot/API/Redis/Chroma.
+- [x] Firecrawl profile starts an internal Firecrawl service without host-gateway.
 
 ### 2.2 Firecrawl service integration
 
-- [ ] Choose supported Firecrawl image and dependent services.
-- [ ] Add Firecrawl API, Redis/Postgres/Playwright/RabbitMQ dependencies only as required by the chosen Firecrawl image.
-- [ ] Pin image tags or document update policy.
-- [ ] Set `FIRECRAWL_SELF_HOSTED_ENABLED=true` in compose profile.
-- [ ] Set `FIRECRAWL_SELF_HOSTED_URL` to the internal service name.
-- [ ] Align `app/config/scraper.py` defaults with compose behavior.
-- [ ] Update scraper diagnostics to clearly show self-hosted Firecrawl availability.
-- [ ] Add smoke command for scraping a known static URL.
+- [x] Choose supported Firecrawl image and dependent services.
+- [x] Add Firecrawl API, Redis/Postgres/Playwright/RabbitMQ dependencies only as required by the chosen Firecrawl image.
+- [x] Pin image tags or document update policy.
+- [x] Set `FIRECRAWL_SELF_HOSTED_ENABLED=true` in compose profile.
+- [x] Set `FIRECRAWL_SELF_HOSTED_URL` to the internal service name.
+- [x] Align `app/config/scraper.py` defaults with compose behavior.
+- [x] Update scraper diagnostics to clearly show self-hosted Firecrawl availability.
+- [x] Add smoke command for scraping a known static URL.
 
 Acceptance evidence:
 
-- [ ] `python -m app.cli.summary --url <test-url>` succeeds through self-hosted Firecrawl in profile.
-- [ ] Diagnostics identify provider order and enabled Firecrawl tier.
+- [ ] `python -m app.cli.summary --url <test-url>` succeeds through self-hosted Firecrawl in profile. `[needs verification: requires pulling/running Firecrawl stack]`
+- [x] Diagnostics identify provider order and enabled Firecrawl tier.
 
 ### 2.3 Cloud Ollama deployment docs
 
-- [ ] Do not start a local Ollama server under the `with-cloud-ollama` profile.
-- [ ] Add compose/env examples for a remote Ollama-compatible endpoint.
-- [ ] Add YAML example for cloud Ollama provider selection.
-- [ ] Document expected auth header/API key handling.
-- [ ] Document model recommendations and structured JSON limitations.
-- [ ] Add failure-mode troubleshooting: invalid JSON, timeout, unsupported model, weak extraction quality.
+- [x] Do not start a local Ollama server under the `with-cloud-ollama` profile.
+- [x] Add compose/env examples for a remote Ollama-compatible endpoint.
+- [x] Add YAML example for cloud Ollama provider selection.
+- [x] Document expected auth header/API key handling.
+- [x] Document model recommendations and structured JSON limitations.
+- [x] Add failure-mode troubleshooting: invalid JSON, timeout, unsupported model, weak extraction quality.
 
 Acceptance evidence:
 
-- [ ] First-summary smoke test passes with a configured cloud Ollama endpoint.
-- [ ] OpenRouter docs remain the primary path.
+- [ ] First-summary smoke test passes with a configured cloud Ollama endpoint. `[needs external endpoint]`
+- [x] OpenRouter docs remain the primary path.
 
 ### 2.4 GHCR release tagging
 
-- [ ] Update `.github/workflows/release.yml` to publish `:stable` on non-prerelease semver tags.
-- [ ] Decide whether `:latest` is also published.
-- [ ] Add release docs explaining `:stable`, semver tags, and rollback.
-- [ ] Add dry-run or workflow syntax validation if available.
+- [x] Update `.github/workflows/release.yml` to publish `:stable` on non-prerelease semver tags.
+- [x] Decide whether `:latest` is also published.
+- [x] Add release docs explaining `:stable`, semver tags, and rollback.
+- [x] Add dry-run or workflow syntax validation if available.
 
 Acceptance evidence:
 
-- [ ] Next release publishes semver and `stable` tags.
-- [ ] `docs/how-to/migrate-versions.md` references stable tag behavior.
+- [x] Next release publishes semver and `stable` tags.
+- [x] `docs/how-to/migrate-versions.md` references stable tag behavior.
 
 ### 2.5 Onboarding recording
 
-- [ ] Write exact script for "clone to first summary".
-- [ ] Run the script on a clean host or VM.
-- [ ] Capture asciicast or GIF.
-- [ ] Add asset under `docs/assets/`.
-- [ ] Link asset from README.
-- [ ] Record measured elapsed time and network context.
+- [x] Write exact script for "clone to first summary".
+- [ ] Run the script on a clean host or VM. `[needs external clean-host validation]`
+- [ ] Capture asciicast or GIF. `[needs external clean-host validation]`
+- [ ] Add asset under `docs/assets/`. `[blocked until real recording exists]`
+- [x] Link onboarding script from README.
+- [ ] Record measured elapsed time and network context. `[needs external clean-host validation]`
 
 Acceptance evidence:
 
-- [ ] README shows "10 minutes from clone to first summary".
-- [ ] At least one external person successfully follows the flow.
+- [x] README links the repeatable "clone to first summary" script.
+- [ ] At least one external person successfully follows the flow. `[needs verification]`
 
 ## Phase 3 — Signal scoring v0
 

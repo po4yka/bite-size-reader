@@ -49,12 +49,16 @@ ls -lh data/*.backup* youtube_backup*
 #### 1. Pull Latest Image
 
 ```bash
-# Pull new version
-docker pull ghcr.io/po4yka/ratatoskr:latest
+# Pull the latest non-prerelease stable image
+docker pull ghcr.io/po4yka/ratatoskr:stable
 
 # Or specific version
 docker pull ghcr.io/po4yka/ratatoskr:v1.2.0
 ```
+
+Release tags publish semver images plus `stable` for non-prerelease tags.
+`:latest` is not published by the release workflow; use `:stable` for routine
+upgrades and semver tags for pinned rollbacks.
 
 #### 2. Stop Current Container
 
@@ -70,7 +74,7 @@ docker commit ratatoskr ratatoskr-backup
 
 ```bash
 # Compare .env.example from new version
-docker run --rm ghcr.io/po4yka/ratatoskr:latest cat .env.example > .env.example.new
+docker run --rm ghcr.io/po4yka/ratatoskr:stable cat .env.example > .env.example.new
 
 # Review differences
 diff .env .env.example.new
@@ -86,14 +90,14 @@ nano .env
 docker run --rm \
   --env-file .env \
   -v $(pwd)/data:/data \
-  ghcr.io/po4yka/ratatoskr:latest \
+  ghcr.io/po4yka/ratatoskr:stable \
   python -m app.cli.migrate_db --status
 
 # Run migrations before starting new version
 docker run --rm \
   --env-file .env \
   -v $(pwd)/data:/data \
-  ghcr.io/po4yka/ratatoskr:latest \
+  ghcr.io/po4yka/ratatoskr:stable \
   python -m app.cli.migrate_db
 
 # Check output for any errors
@@ -111,7 +115,7 @@ docker run -d \
   --env-file .env \
   -v $(pwd)/data:/data \
   --restart unless-stopped \
-  ghcr.io/po4yka/ratatoskr:latest
+  ghcr.io/po4yka/ratatoskr:stable
 
 # Verify startup
 docker logs ratatoskr | head -20

@@ -96,7 +96,11 @@ mcp:
 - OpenRouter is the primary supported provider path for first-run setup.
 - Cloud Ollama uses an OpenAI-compatible `/v1` endpoint. Structured output
   quality varies by hosted model, so `ollama.enable_structured_outputs` defaults
-  to `false`.
+  to `false`. When using `LLM_PROVIDER=ollama`, failures usually fall into four
+  buckets: `/models` is unreachable, the model name is not installed by the
+  remote provider, the provider times out on long articles, or the model returns
+  weak/invalid JSON. Prefer models that advertise OpenAI-compatible chat
+  completions and test summaries before using them unattended.
 - Firecrawl Cloud is optional. The scraper chain can run with Scrapling,
   Defuddle, Playwright, Crawlee, and direct HTML providers; Phase 2 adds an
   in-compose self-hosted Firecrawl profile.
