@@ -1,0 +1,139 @@
+/*
+ * Group C mobile overrides — Phase 7c Group C.
+ * Covers: SubmitPage, ImportExportPage, BackupsPage, FeedsPage.
+ * All rules scoped via @container main (max-width: 768px).
+ * No desktop rules here.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SubmitPage — stacked form, primary CTA pinned at bottom
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Pin the [ SUBMIT ] CTA above the MobileTabBar */
+
+@container main (max-width: 768px) {
+  .submit-cta {
+    position: fixed;
+    bottom: var(--frost-tab-bar-height, 56px);
+    left: 0;
+    right: 0;
+    padding: 8px var(--frost-pad-page-mobile, 16px);
+    background: var(--frost-page, var(--page));
+    border-top: 1px solid color-mix(in oklch, var(--frost-ink) 50%, transparent);
+    z-index: 10;
+    /* Lay buttons out as a column so each is full-width */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Every BracketButton inside the pinned CTA bar goes full-width */
+  .submit-cta .frost-bracket-button,
+  .submit-cta button[class*="bracket"],
+  .submit-cta > button {
+    width: 100%;
+    min-height: 56px;
+    font-size: 13px;
+    box-sizing: border-box;
+  }
+
+  /* Reserve space at the bottom of the URL form so the fixed bar doesn't
+     overlap the last pieces of content */
+  .submit-page-form {
+    padding-bottom: calc(56px + 8px + 16px);
+  }
+
+  /* ContentSwitcher mode toggle — horizontal-scroll on narrow viewports */
+  .submit-page .cds--content-switcher,
+  .submit-page [class*="content-switcher"] {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .submit-page .cds--content-switcher::-webkit-scrollbar,
+  .submit-page [class*="content-switcher"]::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ImportExportPage — tabs horizontal-scroll; job-history table → stacked cards
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* BracketTabList on ImportExportPage becomes a horizontal-scroll segmented
+   control. The .bracket-tab-list generic rule in group-b.mobile.css already
+   covers any element with that class; this rule targets the explicit className
+   added to ImportExportPage's BracketTabList to be unambiguous. */
+
+@container main (max-width: 768px) {
+  .import-export-tab-list {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .import-export-tab-list::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BackupsPage — BrutalistTable → stacked cards
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* BackupsPage uses the same frost-table-container / frost-table /
+   frost-table__* classes as TagManagementPage. The generic rules in
+   group-b.mobile.css already collapse those tables into stacked cards.
+   No additional rules are needed for BackupsPage — the existing Group B
+   generics apply.
+
+   The header row (h1 + Create Backup button) should wrap gracefully on
+   narrow viewports so the button doesn't overflow. */
+
+@container main (max-width: 768px) {
+  /* Backups page header: h1 + create-backup button side-by-side.
+     Allow wrap so the button drops below on very narrow screens. */
+  .backups-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Schedule + Restore sections are already single-column flex containers;
+     clamp their max-width to viewport on mobile. */
+  .backups-schedule,
+  .backups-restore {
+    max-width: 100%;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   FeedsPage — minimal vertical stack, no horizontal scroll
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* FeedsPage wraps RSSFeedsTab which uses the Carbon DataTable (not frost-table).
+   The page itself is already a flex column. Ensure no overflow. */
+
+@container main (max-width: 768px) {
+  /* The page outer wrapper — ensure no horizontal overflow */
+  .feeds-page {
+    overflow-x: hidden;
+  }
+
+  /* Carbon DataTable / table inside RSSFeedsTab — overflow-x scroll so the
+     wide table doesn't blow out the layout */
+  .feeds-page table,
+  .feeds-page .cds--data-table-container,
+  .feeds-page [class*="data-table"] {
+    overflow-x: auto;
+    display: block;
+    max-width: 100%;
+  }
+
+  /* Toolbar content in RSSFeedsTab — stack vertically */
+  .feeds-page .cds--toolbar-content,
+  .feeds-page [class*="toolbar-content"] {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}

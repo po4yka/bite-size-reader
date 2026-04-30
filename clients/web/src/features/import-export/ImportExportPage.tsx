@@ -133,7 +133,7 @@ export default function ImportExportPage() {
       )}
 
       <BracketTabs>
-        <BracketTabList aria-label="Import/Export tabs">
+        <BracketTabList aria-label="Import/Export tabs" className="import-export-tab-list">
           <BracketTab>Import</BracketTab>
           <BracketTab>Export</BracketTab>
         </BracketTabList>

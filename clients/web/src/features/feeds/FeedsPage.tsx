@@ -3,6 +3,7 @@ import { RSSFeedsTab } from "../digest/RSSFeedsTab";
 export default function FeedsPage() {
   return (
     <main
+      className="feeds-page"
       style={{
         maxWidth: "var(--frost-strip-7)",
         padding: "0 var(--frost-pad-page)",

@@ -272,6 +272,7 @@ export default function SubmitPage() {
 
   return (
     <main
+      className="submit-page"
       style={{
         maxWidth: "var(--frost-strip-5)",
         padding: "0 var(--frost-pad-page)",
@@ -396,6 +397,7 @@ export default function SubmitPage() {
 
       {submitMode === "url" && (
         <div
+          className="submit-page-form"
           style={{
             border: "1px solid var(--frost-ink)",
             padding: "var(--frost-pad-page)",
@@ -452,7 +454,7 @@ export default function SubmitPage() {
             </MonoSelect>
           </div>
 
-          <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
+          <div className="submit-cta" style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
             <BracketButton
               onClick={handleSubmit}
               disabled={!canSubmit}
