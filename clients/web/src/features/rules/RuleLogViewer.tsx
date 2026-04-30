@@ -1,6 +1,7 @@
 import {
-  DataTable,
-  InlineLoading,
+  BrutalistTable,
+  type BrutalistTableRenderProps,
+  SparkLoading,
   Table,
   TableBody,
   TableCell,
@@ -13,11 +14,21 @@ import { QueryErrorNotification } from "../../components/QueryErrorNotification"
 import { useRuleLogs } from "../../hooks/useRules";
 import type { RuleLog } from "../../api/rules";
 
+interface LogRow {
+  id: string;
+  createdAt: string;
+  matched: string;
+  durationMs: string;
+  actionsTaken: string;
+  error: string;
+  [key: string]: unknown;
+}
+
 export default function RuleLogViewer({ ruleId }: { ruleId: number }) {
   const { data, isLoading, error } = useRuleLogs(ruleId);
   const logs: RuleLog[] = data?.logs ?? [];
 
-  if (isLoading) return <InlineLoading description="Loading logs..." />;
+  if (isLoading) return <SparkLoading description="Loading logs..." />;
   if (error) return <QueryErrorNotification error={error} title="Failed to load rule logs" />;
   if (logs.length === 0) {
     return <p className="rtk-label">No execution logs yet.</p>;
@@ -31,7 +42,7 @@ export default function RuleLogViewer({ ruleId }: { ruleId: number }) {
     { key: "error", header: "Error" },
   ];
 
-  const rows = logs.map((log) => ({
+  const rows: LogRow[] = logs.map((log) => ({
     id: String(log.id),
     createdAt: new Date(log.createdAt).toLocaleString(),
     matched: log.matched ? "Yes" : "No",
@@ -41,19 +52,25 @@ export default function RuleLogViewer({ ruleId }: { ruleId: number }) {
   }));
 
   return (
-    <DataTable rows={rows} headers={headers}>
-      {({ rows, headers, getHeaderProps, getRowProps, getTableProps }) => (
+    <BrutalistTable<LogRow> rows={rows} headers={headers}>
+      {({
+        rows: rRows,
+        headers: rHeaders,
+        getHeaderProps,
+        getRowProps,
+        getTableProps,
+      }: BrutalistTableRenderProps<LogRow>) => (
         <TableContainer title="Execution logs">
           <Table {...getTableProps()} size="sm">
             <TableHead>
               <TableRow>
-                {headers.map((header) => (
+                {rHeaders.map((header) => (
                   <TableHeader {...getHeaderProps({ header })}>{header.header}</TableHeader>
                 ))}
               </TableRow>
             </TableHead>
             <TableBody>
-              {rows.map((row) => (
+              {rRows.map((row) => (
                 <TableRow {...getRowProps({ row })}>
                   {row.cells.map((cell) => (
                     <TableCell key={cell.id}>{cell.value as string}</TableCell>
@@ -64,6 +81,6 @@ export default function RuleLogViewer({ ruleId }: { ruleId: number }) {
           </Table>
         </TableContainer>
       )}
-    </DataTable>
+    </BrutalistTable>
   );
 }

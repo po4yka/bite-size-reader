@@ -276,7 +276,7 @@ export default function RuleEditor({ open, rule, onClose, onSave, onTest, isSavi
           if (!isSaving) onClose();
         }}
         onRequestSubmit={handleSubmit}
-        size="lg"
+        size="md"
       >
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           <TextInput

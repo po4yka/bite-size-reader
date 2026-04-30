@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { InlineLoading } from "../design";
+import { SparkLoading } from "../design";
 import { canAccessProtectedRoute } from "./guard";
 import { useAuth } from "./AuthProvider";
 
@@ -12,7 +12,7 @@ export default function RouteGuard({ children }: RouteGuardProps) {
   const { mode, status } = useAuth();
 
   if (status === "loading") {
-    return <InlineLoading description="Checking session…" />;
+    return <SparkLoading description="Checking session…" />;
   }
 
   if (!canAccessProtectedRoute(mode, status)) {

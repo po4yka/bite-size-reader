@@ -1,13 +1,13 @@
 import { useState } from "react";
 import {
-  Button,
-  InlineNotification,
+  BracketButton,
+  BrutalistCard,
+  MonoInput,
+  MonoSelect,
+  MonoSelectItem,
+  MonoTextArea,
   NumberInput,
-  Select,
-  SelectItem,
-  TextArea,
-  TextInput,
-  Tile,
+  StatusBadge,
 } from "../../design";
 import { useSubmitForward } from "../../hooks/useRequests";
 import type { ForwardMetadata } from "../../api/requests";
@@ -53,11 +53,11 @@ export function ForwardForm({ onRequestCreated }: Props) {
     mutation.error instanceof Error ? mutation.error.message : "Unknown error occurred.";
 
   return (
-    <Tile>
+    <BrutalistCard>
       <h3>Submit Telegram Forward</h3>
 
       <div style={{ marginTop: "1rem" }}>
-        <TextArea
+        <MonoTextArea
           id="forward-content"
           labelText="Forwarded content"
           placeholder="Paste the forwarded message text..."
@@ -100,7 +100,7 @@ export function ForwardForm({ onRequestCreated }: Props) {
       </div>
 
       <div style={{ marginTop: "1rem" }}>
-        <TextInput
+        <MonoInput
           id="forward-chat-title"
           labelText="Chat title (optional)"
           value={chatTitle}
@@ -110,35 +110,30 @@ export function ForwardForm({ onRequestCreated }: Props) {
       </div>
 
       <div style={{ marginTop: "1rem" }}>
-        <Select
+        <MonoSelect
           id="forward-lang-preference"
           labelText="Language"
           value={langPreference}
           onChange={(e) => setLangPreference(e.currentTarget.value as "auto" | "en" | "ru")}
           disabled={mutation.isPending}
         >
-          <SelectItem value="auto" text="Auto-detect" />
-          <SelectItem value="en" text="English" />
-          <SelectItem value="ru" text="Russian" />
-        </Select>
+          <MonoSelectItem value="auto" text="Auto-detect" />
+          <MonoSelectItem value="en" text="English" />
+          <MonoSelectItem value="ru" text="Russian" />
+        </MonoSelect>
       </div>
 
       <div style={{ marginTop: "1rem" }}>
-        <Button onClick={handleSubmit} disabled={!text.trim() || mutation.isPending}>
+        <BracketButton onClick={handleSubmit} disabled={!text.trim() || mutation.isPending}>
           {mutation.isPending ? "Submitting..." : "Submit Forward"}
-        </Button>
+        </BracketButton>
       </div>
 
       {mutation.isError && (
         <div style={{ marginTop: "1rem" }}>
-          <InlineNotification
-            kind="error"
-            title="Error"
-            subtitle={errorMessage}
-            hideCloseButton
-          />
+          <StatusBadge severity="alarm" title="Error" subtitle={errorMessage} />
         </div>
       )}
-    </Tile>
+    </BrutalistCard>
   );
 }

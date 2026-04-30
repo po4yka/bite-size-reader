@@ -177,7 +177,7 @@ export default function SmartCollectionEditor({
         if (!isSaving) onClose();
       }}
       onRequestSubmit={handleSubmit}
-      size="lg"
+      size="md"
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         <TextInput

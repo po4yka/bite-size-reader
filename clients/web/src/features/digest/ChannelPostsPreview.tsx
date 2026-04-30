@@ -30,7 +30,7 @@ export function ChannelPostsPreview({ username }: { username: string }) {
           key={post.id}
           style={{
             padding: "0.5rem 0",
-            borderBottom: "1px solid var(--rtk-color-border-subtle)",
+            borderBottom: "1px solid color-mix(in oklch, var(--frost-ink) 25%, transparent)",
           }}
         >
           <div className="digest-list-item-row">

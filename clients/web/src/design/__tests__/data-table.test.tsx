@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
-import { DataTable } from "../table/DataTable";
+// Phase 4 of the Frost migration deleted ./table/DataTable.tsx; the API now
+// lives in BrutalistTable.tsx, where the implementation function is still
+// exported under the legacy name `DataTable` (re-exported as `BrutalistTable`
+// via the design index). Importing direct from BrutalistTable preserves this
+// cell-id-format test.
+import { DataTable } from "../table/BrutalistTable";
 
 interface Row {
   id: string;

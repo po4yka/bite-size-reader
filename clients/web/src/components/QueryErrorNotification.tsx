@@ -1,4 +1,4 @@
-import { InlineNotification } from "../design";
+import { StatusBadge } from "../design";
 import { getErrorMessage } from "../lib/error";
 
 interface QueryErrorNotificationProps {
@@ -7,14 +7,18 @@ interface QueryErrorNotificationProps {
   hideCloseButton?: boolean;
 }
 
-export function QueryErrorNotification({ error, title, hideCloseButton = true }: QueryErrorNotificationProps) {
+export function QueryErrorNotification({
+  error,
+  title,
+  hideCloseButton = true,
+}: QueryErrorNotificationProps) {
   if (!error) return null;
   return (
-    <InlineNotification
-      kind="error"
+    <StatusBadge
+      severity="alarm"
       title={title}
       subtitle={getErrorMessage(error)}
-      hideCloseButton={hideCloseButton}
+      dismissible={!hideCloseButton}
     />
   );
 }

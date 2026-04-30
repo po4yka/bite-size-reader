@@ -144,7 +144,7 @@ export default function ReadingGoalsSection() {
             );
           })}
 
-          <hr style={{ margin: "1rem 0", border: "none", borderTop: "1px solid var(--rtk-color-border-subtle)" }} />
+          <hr style={{ margin: "1rem 0", border: "none", borderTop: "1px solid color-mix(in oklch, var(--frost-ink) 25%, transparent)" }} />
 
           <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Add Goal</p>
 

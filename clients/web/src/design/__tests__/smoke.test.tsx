@@ -3,88 +3,82 @@ import { render } from "@testing-library/react";
 import {
   Accordion,
   AccordionItem,
-  Button,
-  ButtonSet,
   Checkbox,
   CodeSnippet,
-  ComposedModal,
   Content,
   ContentSwitcher,
-  DataTable,
-  DataTableSkeleton,
   DatePicker,
   DatePickerInput,
   Dropdown,
   FileUploader,
   FilterableMultiSelect,
-  Header,
-  HeaderGlobalAction,
-  HeaderGlobalBar,
-  HeaderMenuButton,
-  HeaderName,
   IconButton,
-  InlineLoading,
-  InlineNotification,
   Link,
   ListItem,
-  Modal,
-  ModalBody,
-  ModalFooter,
-  ModalHeader,
   MultiSelect,
   NumberInput,
-  Pagination,
-  ProgressBar,
   RadioButton,
   RadioButtonGroup,
-  Search,
-  Select,
-  SelectItem,
-  SideNav,
-  SideNavDivider,
-  SideNavItems,
-  SideNavLink,
-  SkeletonPlaceholder,
-  SkeletonText,
-  SkipToContent,
-  StructuredListBody,
-  StructuredListCell,
-  StructuredListHead,
-  StructuredListRow,
-  StructuredListWrapper,
   Switch,
-  Tab,
-  Table,
   TableBatchAction,
   TableBatchActions,
-  TableBody,
-  TableCell,
-  TableContainer,
   TableExpandHeader,
   TableExpandRow,
   TableExpandedRow,
-  TableHead,
-  TableHeader,
-  TableRow,
   TableSelectAll,
   TableSelectRow,
   TableToolbar,
   TableToolbarContent,
   TableToolbarSearch,
-  TabList,
-  TabPanel,
-  TabPanels,
-  Tabs,
   Tag,
-  TextArea,
-  TextInput,
   Theme,
-  Tile,
   TimePicker,
   Toggle,
   TreeNode,
   TreeView,
   UnorderedList,
+  // Frost components
+  BracketButton,
+  BracketPagination,
+  BracketSearch,
+  BracketTab,
+  BracketTabList,
+  BracketTabPanel,
+  BracketTabPanels,
+  BracketTabs,
+  BrutalistCard,
+  BrutalistDataTableSkeleton,
+  BrutalistModal,
+  BrutalistModalBody,
+  BrutalistModalFooter,
+  BrutalistModalHeader,
+  BrutalistSkeleton,
+  BrutalistSkeletonPlaceholder,
+  BrutalistSkeletonText,
+  BrutalistTable,
+  BrutalistTableContainer,
+  FrostHeader,
+  FrostHeaderGlobalAction,
+  FrostHeaderGlobalBar,
+  FrostHeaderMenuButton,
+  FrostHeaderName,
+  FrostSideNav,
+  FrostSideNavDivider,
+  FrostSideNavItems,
+  FrostSideNavLink,
+  MonoInput,
+  MonoProgressBar,
+  MonoSelect,
+  MonoSelectItem,
+  MonoTextArea,
+  RowDigestBody,
+  RowDigestCell,
+  RowDigestHead,
+  RowDigestRow,
+  RowDigestWrapper,
+  SparkLoading,
+  StatusBadge,
+  Toast,
   // icons
   Add,
   Book,
@@ -111,22 +105,12 @@ import {
 } from "../index";
 
 describe("design layer smoke renders", () => {
-  it("primitives mount without throwing", () => {
+  it("in-place rewrite primitives mount without throwing", () => {
     const { unmount } = render(
       <>
-        <Button>btn</Button>
-        <ButtonSet>
-          <Button>a</Button>
-        </ButtonSet>
         <IconButton label="x">i</IconButton>
-        <Tile>tile</Tile>
         <Tag type="teal">tag</Tag>
         <Link href="#">link</Link>
-        <TextInput id="ti" labelText="L" />
-        <TextArea id="ta" labelText="L" />
-        <Select id="sel" labelText="L">
-          <SelectItem value="a" text="A" />
-        </Select>
         <NumberInput id="ni" label="L" />
         <Checkbox id="cb" labelText="L" />
         <RadioButtonGroup name="g" legendText="L">
@@ -134,13 +118,6 @@ describe("design layer smoke renders", () => {
           <RadioButton id="r2" labelText="B" value="b" />
         </RadioButtonGroup>
         <Toggle id="tg" labelText="L" />
-        <Search id="search" />
-        <InlineLoading status="active" description="loading" />
-        <InlineNotification kind="info" title="hi" />
-        <SkeletonText paragraph lineCount={2} />
-        <SkeletonPlaceholder />
-        <DataTableSkeleton columnCount={2} rowCount={2} />
-        <ProgressBar label="p" value={50} />
         <CodeSnippet>code</CodeSnippet>
         <FileUploader buttonLabel="Pick" />
         <UnorderedList>
@@ -155,18 +132,9 @@ describe("design layer smoke renders", () => {
     unmount();
   });
 
-  it("navigation primitives mount", () => {
+  it("navigation in-place rewrites mount", () => {
     const { unmount } = render(
       <>
-        <Tabs>
-          <TabList>
-            <Tab>One</Tab>
-          </TabList>
-          <TabPanels>
-            <TabPanel>p1</TabPanel>
-          </TabPanels>
-        </Tabs>
-        <Pagination page={1} pageSize={10} totalItems={10} />
         <TreeView label="tree" hideLabel>
           <TreeNode id="1" label="root">
             <TreeNode id="1.1" label="child" />
@@ -182,7 +150,7 @@ describe("design layer smoke renders", () => {
     unmount();
   });
 
-  it("table primitives mount", () => {
+  it("legacy table sub-components mount (pending migration of digest pages)", () => {
     const headers = [
       { key: "name", header: "Name" },
       { key: "domain", header: "Domain" },
@@ -190,59 +158,44 @@ describe("design layer smoke renders", () => {
     const rows = [{ id: "r1", name: "n", domain: "d" }];
     const { unmount } = render(
       <>
-        <DataTable rows={rows} headers={headers}>
+        <BrutalistTable rows={rows} headers={headers}>
           {({ rows: r, headers: h, getHeaderProps, getRowProps, getTableProps }) => (
-            <TableContainer title="t">
+            <BrutalistTableContainer title="t">
               <TableToolbar>
                 <TableToolbarContent>
                   <TableToolbarSearch />
                 </TableToolbarContent>
               </TableToolbar>
-              <Table {...getTableProps()}>
-                <TableHead>
-                  <TableRow>
+              <table {...getTableProps()}>
+                <thead>
+                  <tr>
                     <TableSelectAll />
                     <TableExpandHeader />
                     {h.map((header) => (
-                      <TableHeader key={header.key} {...getHeaderProps({ header })}>
+                      <th key={header.key} {...getHeaderProps({ header })}>
                         {header.header}
-                      </TableHeader>
+                      </th>
                     ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
+                  </tr>
+                </thead>
+                <tbody>
                   {r.map((row) => (
                     <TableExpandRow key={row.id} {...getRowProps({ row })}>
                       <TableSelectRow id={`s-${row.id}`} />
                       {row.cells.map((cell) => (
-                        <TableCell key={cell.id}>{String(cell.value)}</TableCell>
+                        <td key={cell.id}>{String(cell.value)}</td>
                       ))}
                     </TableExpandRow>
                   ))}
                   <TableExpandedRow colSpan={3}>x</TableExpandedRow>
-                </TableBody>
-              </Table>
+                </tbody>
+              </table>
               <TableBatchActions shouldShowBatchActions totalSelected={1} onCancel={() => {}}>
                 <TableBatchAction>Do</TableBatchAction>
               </TableBatchActions>
-            </TableContainer>
+            </BrutalistTableContainer>
           )}
-        </DataTable>
-      </>,
-    );
-    expect(true).toBe(true);
-    unmount();
-  });
-
-  it("modal primitives mount (closed)", () => {
-    const { unmount } = render(
-      <>
-        <Modal open={false}>m</Modal>
-        <ComposedModal open={false}>
-          <ModalHeader title="t" />
-          <ModalBody>b</ModalBody>
-          <ModalFooter>f</ModalFooter>
-        </ComposedModal>
+        </BrutalistTable>
       </>,
     );
     expect(true).toBe(true);
@@ -284,43 +237,107 @@ describe("design layer smoke renders", () => {
     unmount();
   });
 
-  it("structure / shell / theme primitives mount", () => {
+  it("Frost primitives mount", () => {
+    const { unmount } = render(
+      <>
+        <BracketButton>[ ACTION ]</BracketButton>
+        <BracketSearch id="bs" />
+        <BrutalistCard>card</BrutalistCard>
+        <BrutalistSkeleton />
+        <BrutalistSkeletonText />
+        <BrutalistSkeletonPlaceholder />
+        <BrutalistDataTableSkeleton columnCount={2} rowCount={2} />
+        <MonoInput id="mi" labelText="L" />
+        <MonoProgressBar label="p" value={50} />
+        <MonoSelect id="msel" labelText="L">
+          <MonoSelectItem value="a" text="A" />
+        </MonoSelect>
+        <MonoTextArea id="mta" labelText="L" />
+        <SparkLoading status="active" description="loading" />
+        <StatusBadge severity="info">INFO</StatusBadge>
+        <Toast severity="info" title="t" />
+        <BracketPagination page={1} pageSize={10} totalItems={10} />
+      </>,
+    );
+    expect(true).toBe(true);
+    unmount();
+  });
+
+  it("Frost navigation mounts", () => {
+    const { unmount } = render(
+      <>
+        <BracketTabs>
+          <BracketTabList>
+            <BracketTab>One</BracketTab>
+          </BracketTabList>
+          <BracketTabPanels>
+            <BracketTabPanel>p1</BracketTabPanel>
+          </BracketTabPanels>
+        </BracketTabs>
+      </>,
+    );
+    expect(true).toBe(true);
+    unmount();
+  });
+
+  it("Frost modal mounts (closed)", () => {
+    const { unmount } = render(
+      <>
+        <BrutalistModal open={false}>
+          <BrutalistModalHeader title="t" />
+          <BrutalistModalBody>b</BrutalistModalBody>
+          <BrutalistModalFooter>f</BrutalistModalFooter>
+        </BrutalistModal>
+      </>,
+    );
+    expect(true).toBe(true);
+    unmount();
+  });
+
+  it("Frost structure mounts", () => {
+    const { unmount } = render(
+      <>
+        <RowDigestWrapper>
+          <RowDigestHead>
+            <RowDigestRow head>
+              <RowDigestCell head>H</RowDigestCell>
+            </RowDigestRow>
+          </RowDigestHead>
+          <RowDigestBody>
+            <RowDigestRow>
+              <RowDigestCell>Body</RowDigestCell>
+            </RowDigestRow>
+          </RowDigestBody>
+        </RowDigestWrapper>
+      </>,
+    );
+    expect(true).toBe(true);
+    unmount();
+  });
+
+  it("Frost shell mounts", () => {
     const { unmount } = render(
       <Theme theme="white">
-        <Header aria-label="h">
-          <SkipToContent />
-          <HeaderMenuButton aria-label="menu" />
-          <HeaderName href="#" prefix="R">
+        <FrostHeader aria-label="h">
+          <FrostHeaderMenuButton aria-label="menu" />
+          <FrostHeaderName href="#" prefix="R">
             App
-          </HeaderName>
-          <HeaderGlobalBar>
-            <HeaderGlobalAction aria-label="x">
+          </FrostHeaderName>
+          <FrostHeaderGlobalBar>
+            <FrostHeaderGlobalAction aria-label="x">
               <Add />
-            </HeaderGlobalAction>
-          </HeaderGlobalBar>
-        </Header>
-        <SideNav aria-label="s" expanded={false}>
-          <SideNavItems>
-            <SideNavLink href="#" renderIcon={Book}>
+            </FrostHeaderGlobalAction>
+          </FrostHeaderGlobalBar>
+        </FrostHeader>
+        <FrostSideNav aria-label="s" expanded={false}>
+          <FrostSideNavItems>
+            <FrostSideNavLink href="#" renderIcon={Book}>
               Lib
-            </SideNavLink>
-            <SideNavDivider />
-          </SideNavItems>
-        </SideNav>
-        <Content>
-          <StructuredListWrapper>
-            <StructuredListHead>
-              <StructuredListRow head>
-                <StructuredListCell head>H</StructuredListCell>
-              </StructuredListRow>
-            </StructuredListHead>
-            <StructuredListBody>
-              <StructuredListRow>
-                <StructuredListCell>Body</StructuredListCell>
-              </StructuredListRow>
-            </StructuredListBody>
-          </StructuredListWrapper>
-        </Content>
+            </FrostSideNavLink>
+            <FrostSideNavDivider />
+          </FrostSideNavItems>
+        </FrostSideNav>
+        <Content>content</Content>
       </Theme>,
     );
     expect(true).toBe(true);
