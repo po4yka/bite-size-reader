@@ -15,6 +15,7 @@ from app.mcp.context import McpServerContext
 from app.mcp.http_auth import McpHttpAuthMiddleware
 from app.mcp.resource_registrations import register_resources
 from app.mcp.semantic_service import SemanticSearchService
+from app.mcp.signal_service import SignalMcpService
 from app.mcp.tool_registrations import register_tools
 
 logging.basicConfig(
@@ -67,6 +68,7 @@ def create_mcp_server(context: McpServerContext | None = None) -> FastMCP:
     article_service = ArticleReadService(server_context)
     catalog_service = CatalogReadService(server_context)
     semantic_service = SemanticSearchService(server_context, article_service)
+    signal_service = SignalMcpService(server_context)
 
     register_tools(
         mcp,
@@ -74,6 +76,7 @@ def create_mcp_server(context: McpServerContext | None = None) -> FastMCP:
         article_service=article_service,
         catalog_service=catalog_service,
         semantic_service=semantic_service,
+        signal_service=signal_service,
     )
     register_resources(
         mcp,
@@ -81,6 +84,7 @@ def create_mcp_server(context: McpServerContext | None = None) -> FastMCP:
         article_service=article_service,
         catalog_service=catalog_service,
         semantic_service=semantic_service,
+        signal_service=signal_service,
     )
     return mcp
 

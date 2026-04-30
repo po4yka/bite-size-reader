@@ -13,6 +13,9 @@ from app.db.models import (
     ChannelPostAnalysis,
     ChannelSubscription,
     DigestDelivery,
+    FeedItem,
+    Source,
+    Subscription,
     UserDigestPreference,
     _utcnow,
 )
@@ -209,6 +212,77 @@ class SqliteDigestStore:
                     "url": post.get("url"),
                 },
             )
+
+    def mirror_posts_to_signal_sources(
+        self,
+        *,
+        user_id: int,
+        channel: Any,
+        posts: list[dict[str, Any]],
+    ) -> None:
+        source, _created = Source.get_or_create(
+            kind="telegram_channel",
+            external_id=channel.username,
+            defaults={
+                "url": f"https://t.me/{channel.username}",
+                "title": channel.title,
+                "description": channel.description,
+                "is_active": channel.is_active,
+                "fetch_error_count": channel.fetch_error_count,
+                "last_error": channel.last_error,
+                "last_fetched_at": channel.last_fetched_at,
+                "metadata_json": {
+                    "channel_id": channel.channel_id,
+                    "member_count": channel.member_count,
+                },
+                "legacy_channel": channel.id,
+            },
+        )
+        source.url = f"https://t.me/{channel.username}"
+        source.title = channel.title
+        source.description = channel.description
+        source.is_active = channel.is_active
+        source.fetch_error_count = channel.fetch_error_count
+        source.last_error = channel.last_error
+        source.last_fetched_at = channel.last_fetched_at
+        source.metadata_json = {
+            "channel_id": channel.channel_id,
+            "member_count": channel.member_count,
+        }
+        source.legacy_channel = channel.id
+        source.save()
+        Subscription.get_or_create(
+            user=user_id,
+            source=source.id,
+            defaults={"is_active": True},
+        )
+        for post in posts:
+            channel_post = ChannelPost.get_or_none(
+                ChannelPost.channel == channel,
+                ChannelPost.message_id == post["message_id"],
+            )
+            item, _item_created = FeedItem.get_or_create(
+                source=source.id,
+                external_id=str(post["message_id"]),
+                defaults={
+                    "canonical_url": post.get("url"),
+                    "content_text": post.get("text"),
+                    "published_at": post.get("date"),
+                    "views": post.get("views"),
+                    "forwards": post.get("forwards"),
+                    "metadata_json": {"media_type": post.get("media_type")},
+                    "legacy_channel_post": channel_post.id if channel_post else None,
+                },
+            )
+            item.canonical_url = post.get("url")
+            item.content_text = post.get("text")
+            item.published_at = post.get("date")
+            item.views = post.get("views")
+            item.forwards = post.get("forwards")
+            item.metadata_json = {"media_type": post.get("media_type")}
+            if channel_post:
+                item.legacy_channel_post = channel_post.id
+            item.save()
 
     def update_channel_fetch_success(self, channel: Any) -> None:
         Channel.update(

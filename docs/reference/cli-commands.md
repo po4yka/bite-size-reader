@@ -17,6 +17,7 @@ Ratatoskr provides CLI tools for:
 - Database migrations (`migrate_db.py`)
 - Search functionality testing (`search.py`, `search_compare.py`)
 - Embedding and vector store management (`backfill_embeddings.py`, `backfill_chroma_store.py`)
+- Signal-scoring eval export and precision checks (`signal_eval.py`)
 - Performance optimization (`add_performance_indexes.py`)
 - MCP server (`mcp_server.py`)
 
@@ -56,6 +57,44 @@ See:
 - [CLI README](../../clients/cli/README.md)
 - [External Access Quickstart](../tutorials/external-access-quickstart.md)
 - [Mobile API Spec](../MOBILE_API_SPEC.md)
+
+---
+
+## Signal Eval
+
+**Command:** `python -m app.cli.signal_eval`
+
+**Purpose:** Export ranked signal candidates for manual labeling and compute precision@5.
+
+### Export Eval Set
+
+```bash
+python -m app.cli.signal_eval export \
+  --db-path data/ratatoskr.sqlite \
+  --user-id 123456 \
+  --limit 100 \
+  --output data/signal_eval.jsonl
+```
+
+The export is JSONL. Each row includes `rank`, `signal_id`, `status`, `final_score`, title, URL, source, topic, and a default `relevant` value derived from feedback status. Edit `relevant` manually when building a self-curated eval set.
+
+### Precision@5
+
+```bash
+python -m app.cli.signal_eval precision --input data/signal_eval.jsonl --k 5
+```
+
+Output:
+
+```json
+{"k": 5, "evaluated": 5, "relevant": 3, "precision": 0.6}
+```
+
+For Phase 3, treat `liked` and `queued` as relevant by default. Manual `relevant` labels in the JSONL file override status-derived relevance.
+
+### Real-Use Eval Workflow
+
+Run a weekly export during 2-3 weeks of normal source use, label the top candidates, and keep each JSONL file with the date in the filename. Compute `precision --k 5` per file and compare the trend before changing weights, prompts, or source mix. Do not mix unlabeled rows into the precision calculation; either remove them from JSONL or set `relevant` explicitly.
 
 ---
 

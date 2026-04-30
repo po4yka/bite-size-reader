@@ -44,9 +44,11 @@ class SignalIngestionWorker:
         *,
         repository: SignalSourceRepositoryPort,
         scorer: SignalScoringService,
+        judge: Any | None = None,
     ) -> None:
         self._repository = repository
         self._scorer = scorer
+        self._judge = judge
 
     async def run_once(
         self,
@@ -67,6 +69,11 @@ class SignalIngestionWorker:
                 disabled=True,
             ).to_dict()
 
+        rows_by_item_id = {int(row["feed_item_id"]): row for row in rows}
+        judge_decisions = {}
+        if self._judge is not None:
+            judge_decisions = await self._judge.judge(scored, rows_by_item_id=rows_by_item_id)
+
         scored_by_item = {item.feed_item_id: item for item in scored}
         persisted = 0
         errors = 0
@@ -75,14 +82,33 @@ class SignalIngestionWorker:
             if score is None:
                 continue
             try:
+                decision = judge_decisions.get(int(row["feed_item_id"]))
+                status = "candidate"
+                llm_score = None
+                llm_judge = None
+                llm_cost_usd = None
+                filter_stage = "heuristic"
+                final_score = score.score
+                evidence = dict(score.evidence)
+                if decision is not None:
+                    status = "queued" if decision.decision == "queue" else "dismissed"
+                    llm_score = decision.llm_score
+                    llm_judge = decision.evidence()
+                    llm_cost_usd = decision.cost_usd
+                    filter_stage = "llm_judge"
+                    final_score = decision.llm_score
+                    evidence["llm_judge"] = llm_judge
                 await self._repository.async_record_user_signal(
                     user_id=int(row["user_id"]),
                     feed_item_id=int(row["feed_item_id"]),
-                    status="candidate",
+                    status=status,
                     heuristic_score=score.score,
-                    final_score=score.score,
-                    evidence=score.evidence,
-                    filter_stage="heuristic",
+                    llm_score=llm_score,
+                    final_score=final_score,
+                    evidence=evidence,
+                    filter_stage=filter_stage,
+                    llm_judge=llm_judge,
+                    llm_cost_usd=llm_cost_usd,
                 )
                 persisted += 1
             except Exception:

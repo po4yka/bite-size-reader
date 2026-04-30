@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 MAX_FETCH_ERRORS = 10
+SIGNAL_SOURCE_BASE_BACKOFF_SECONDS = 300
 
 
 async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
@@ -31,7 +32,21 @@ async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
     stats: dict = {"polled": 0, "new_items": 0, "errors": 0, "skipped": 0}
 
     for feed in feeds:
+        signal_source: dict | None = None
         try:
+            signal_source = await signal_repo.async_upsert_source(
+                kind="rss",
+                external_id=str(feed.get("url") or ""),
+                url=feed.get("url"),
+                title=feed.get("title"),
+                description=feed.get("description"),
+                site_url=feed.get("site_url"),
+                metadata={
+                    "etag": feed.get("etag"),
+                    "last_modified": feed.get("last_modified"),
+                    "legacy_rss_feed_id": feed.get("id"),
+                },
+            )
             result = fetch_feed(
                 str(feed.get("url") or ""),
                 etag=feed.get("etag"),
@@ -40,6 +55,7 @@ async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
 
             if result.not_modified:
                 stats["skipped"] += 1
+                await signal_repo.async_record_source_fetch_success(int(signal_source["id"]))
                 continue
 
             # Store new items
@@ -104,6 +120,7 @@ async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
                 etag=result.etag,
                 last_modified=result.last_modified,
             )
+            await signal_repo.async_record_source_fetch_success(int(signal_source["id"]))
 
             stats["polled"] += 1
             stats["new_items"] += new_count
@@ -115,6 +132,13 @@ async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
                 error=str(exc),
                 max_fetch_errors=MAX_FETCH_ERRORS,
             )
+            if signal_source is not None:
+                await signal_repo.async_record_source_fetch_error(
+                    source_id=int(signal_source["id"]),
+                    error=str(exc),
+                    max_errors=MAX_FETCH_ERRORS,
+                    base_backoff_seconds=SIGNAL_SOURCE_BASE_BACKOFF_SECONDS,
+                )
             logger.warning(
                 "rss_feed_poll_error",
                 extra={

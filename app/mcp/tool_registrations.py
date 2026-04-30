@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from app.mcp.article_service import ArticleReadService
     from app.mcp.catalog_service import CatalogReadService
     from app.mcp.semantic_service import SemanticSearchService
+    from app.mcp.signal_service import SignalMcpService
 
 
 def register_tools(
@@ -27,7 +28,10 @@ def register_tools(
     article_service: ArticleReadService,
     catalog_service: CatalogReadService,
     semantic_service: SemanticSearchService,
+    signal_service: SignalMcpService | None = None,
 ) -> None:
+    if signal_service is None:
+        signal_service = _NullSignalService()
     def _status_from_result(result: Any) -> str:
         return "error" if isinstance(result, dict) and "error" in result else "success"
 
@@ -273,6 +277,42 @@ def register_tools(
         )
 
     @mcp.tool()
+    def list_signal_sources(limit: int = 50) -> str:
+        """List signal sources for the scoped MCP user."""
+        return to_json(_call_sync("list_signal_sources", signal_service.list_sources, limit))
+
+    @mcp.tool()
+    def list_user_signals(limit: int = 20, status: str | None = None) -> str:
+        """List scored signal candidates for the scoped MCP user."""
+        return to_json(
+            _call_sync("list_user_signals", signal_service.list_signals, limit, status)
+        )
+
+    @mcp.tool()
+    async def update_signal_feedback(signal_id: int, action: str) -> str:
+        """Write signal feedback: like, dislike, skip, queue, or hide_source."""
+        return to_json(
+            await _call_async(
+                "update_signal_feedback",
+                signal_service.update_signal_feedback,
+                signal_id,
+                action,
+            )
+        )
+
+    @mcp.tool()
+    async def set_signal_source_active(source_id: int, is_active: bool) -> str:
+        """Enable or disable one subscribed signal source for the scoped MCP user."""
+        return to_json(
+            await _call_async(
+                "set_signal_source_active",
+                signal_service.set_source_active,
+                source_id,
+                is_active,
+            )
+        )
+
+    @mcp.tool()
     async def chroma_health() -> str:
         """Check Chroma availability and fallback readiness."""
         return to_json(await _call_async("chroma_health", semantic_service.chroma_health))
@@ -295,3 +335,17 @@ def register_tools(
                 sample_size,
             )
         )
+
+
+class _NullSignalService:
+    def list_sources(self, limit: int = 50) -> dict[str, Any]:
+        return {"sources": []}
+
+    def list_signals(self, limit: int = 20, status: str | None = None) -> dict[str, Any]:
+        return {"signals": []}
+
+    async def update_signal_feedback(self, signal_id: int, action: str) -> dict[str, Any]:
+        return {"error": "Signal service is not configured"}
+
+    async def set_source_active(self, source_id: int, is_active: bool) -> dict[str, Any]:
+        return {"error": "Signal service is not configured"}

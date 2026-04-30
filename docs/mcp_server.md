@@ -244,7 +244,7 @@ Example mcporter config:
 }
 ```
 
-## Tools (21)
+## Tools (25)
 
 | Tool | Description |
 | ------ | ------------- |
@@ -266,11 +266,15 @@ Example mcporter config:
 | `semantic_search(description, limit, language)` | Vector similarity search via ChromaDB (falls back to keyword) |
 | `hybrid_search(query, limit, language, min_similarity, rerank)` | Combined keyword + semantic retrieval into a single ranked list |
 | `find_similar_articles(summary_id, limit, min_similarity, rerank)` | Find articles semantically similar to an existing summary |
+| `list_signal_sources(limit)` | List signal sources visible to the scoped MCP user |
+| `list_user_signals(limit, status)` | List scored signal candidates visible to the scoped MCP user |
+| `update_signal_feedback(signal_id, action)` | Write feedback for a signal candidate (`like`, `dislike`, `skip`, `queue`, `hide_source`, `boost_topic`) |
+| `set_signal_source_active(source_id, is_active)` | Enable or disable a subscribed signal source for the scoped MCP user |
 | `chroma_health()` | Check ChromaDB availability and fallback readiness |
 | `chroma_index_stats(scan_limit)` | Index coverage stats between SQLite summaries and ChromaDB |
 | `chroma_sync_gap(max_scan, sample_size)` | Report sync gaps between SQLite summaries and ChromaDB index |
 
-## Resources (15)
+## Resources (17)
 
 | URI | Description |
 | ----- | ------------- |
@@ -289,10 +293,13 @@ Example mcporter config:
 | `ratatoskr://chroma/health` | ChromaDB health and fallback status |
 | `ratatoskr://chroma/index-stats` | ChromaDB index coverage statistics |
 | `ratatoskr://chroma/sync-gap` | Sync gap report between SQLite and ChromaDB |
+| `ratatoskr://signals/recent` | Recent scored signal candidates for the scoped MCP user |
+| `ratatoskr://sources` | Signal source catalog |
 
 ## Graceful Degradation
 
 - ChromaDB is optional. When unavailable, `semantic_search` and `hybrid_search` fall back to keyword-based `search_articles`. The `chroma_*` tools report availability status rather than failing.
+- Signal scoring requires Chroma. The REST signal health endpoint reports readiness before the worker runs, and MCP exposes signal reads/writes without silently changing the scoring pipeline.
 - The MCP server logs to stderr (required by stdio transport) and never writes to stdout outside of MCP protocol messages.
 
 ## Implementation

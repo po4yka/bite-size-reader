@@ -60,6 +60,11 @@ class ChannelReader:
                     p["_channel_id"] = channel.channel_id or channel.id
                     p["_channel_username"] = channel.username
                 self._store.persist_posts(channel, posts)
+                self._store.mirror_posts_to_signal_sources(
+                    user_id=user_id,
+                    channel=channel,
+                    posts=posts,
+                )
                 self._store.update_channel_fetch_success(channel)
                 channel_posts[channel.id] = posts
             except Exception:
@@ -141,6 +146,11 @@ class ChannelReader:
             p["_channel_id"] = channel.channel_id or channel.id
             p["_channel_username"] = channel.username
         self._store.persist_posts(channel, posts)
+        self._store.mirror_posts_to_signal_sources(
+            user_id=user_id,
+            channel=channel,
+            posts=posts,
+        )
         self._store.update_channel_fetch_success(channel)
 
         # Filter out already-delivered posts

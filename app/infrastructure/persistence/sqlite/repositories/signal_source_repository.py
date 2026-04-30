@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import peewee
@@ -99,6 +99,90 @@ class SqliteSignalSourceRepositoryAdapter(SqliteBaseRepository):
             )
 
         return await self._execute(_update, operation_name="set_signal_source_active")
+
+    async def async_set_user_source_active(
+        self,
+        *,
+        user_id: int,
+        source_id: int,
+        is_active: bool,
+    ) -> bool:
+        def _update() -> bool:
+            subscription_exists = (
+                Subscription.select(Subscription.id)
+                .where((Subscription.user == user_id) & (Subscription.source == source_id))
+                .exists()
+            )
+            if not subscription_exists:
+                return False
+            return (
+                Source.update(
+                    {
+                        Source.is_active: is_active,
+                        Source.updated_at: datetime.now(UTC),
+                    }
+                )
+                .where(Source.id == source_id)
+                .execute()
+                > 0
+            )
+
+        return await self._execute(_update, operation_name="set_user_signal_source_active")
+
+    async def async_record_source_fetch_success(self, source_id: int) -> None:
+        def _update() -> None:
+            now = datetime.now(UTC)
+            Source.update(
+                {
+                    Source.fetch_error_count: 0,
+                    Source.last_error: None,
+                    Source.last_fetched_at: now,
+                    Source.last_successful_at: now,
+                    Source.updated_at: now,
+                }
+            ).where(Source.id == source_id).execute()
+            Subscription.update(
+                {
+                    Subscription.next_fetch_at: None,
+                    Subscription.updated_at: now,
+                }
+            ).where(Subscription.source == source_id).execute()
+
+        await self._execute(_update, operation_name="record_signal_source_fetch_success")
+
+    async def async_record_source_fetch_error(
+        self,
+        *,
+        source_id: int,
+        error: str,
+        max_errors: int,
+        base_backoff_seconds: int,
+    ) -> bool:
+        def _update() -> bool:
+            now = datetime.now(UTC)
+            source = Source.get_by_id(source_id)
+            error_count = source.fetch_error_count + 1
+            disabled = error_count >= max_errors
+            backoff_seconds = min(base_backoff_seconds * (2 ** max(0, error_count - 1)), 86400)
+            next_fetch_at = now + timedelta(seconds=backoff_seconds)
+            Source.update(
+                {
+                    Source.fetch_error_count: error_count,
+                    Source.last_error: error[:500],
+                    Source.last_fetched_at: now,
+                    Source.is_active: not disabled,
+                    Source.updated_at: now,
+                }
+            ).where(Source.id == source_id).execute()
+            Subscription.update(
+                {
+                    Subscription.next_fetch_at: next_fetch_at,
+                    Subscription.updated_at: now,
+                }
+            ).where(Subscription.source == source_id).execute()
+            return disabled
+
+        return await self._execute(_update, operation_name="record_signal_source_fetch_error")
 
     async def async_set_subscription_active(
         self,
@@ -282,6 +366,39 @@ class SqliteSignalSourceRepositoryAdapter(SqliteBaseRepository):
             read_only=True,
         )
 
+    async def async_list_source_health(self, *, user_id: int) -> list[dict[str, Any]]:
+        def _query() -> list[dict[str, Any]]:
+            rows = (
+                Subscription.select(Subscription, Source)
+                .join(Source)
+                .where(Subscription.user == user_id)
+                .order_by(Source.is_active.asc(), Source.fetch_error_count.desc(), Source.title)
+            )
+            result: list[dict[str, Any]] = []
+            for row in rows:
+                source = row.source
+                result.append(
+                    {
+                        "id": source.id,
+                        "kind": source.kind,
+                        "external_id": source.external_id,
+                        "url": source.url,
+                        "title": source.title,
+                        "is_active": source.is_active,
+                        "fetch_error_count": source.fetch_error_count,
+                        "last_error": source.last_error,
+                        "last_fetched_at": source.last_fetched_at,
+                        "last_successful_at": source.last_successful_at,
+                        "subscription_id": row.id,
+                        "subscription_active": row.is_active,
+                        "cadence_seconds": row.cadence_seconds,
+                        "next_fetch_at": row.next_fetch_at,
+                    }
+                )
+            return result
+
+        return await self._execute(_query, operation_name="list_signal_source_health", read_only=True)
+
     async def async_list_user_signals(
         self,
         user_id: int,
@@ -314,6 +431,108 @@ class SqliteSignalSourceRepositoryAdapter(SqliteBaseRepository):
             return result
 
         return await self._execute(_query, operation_name="list_user_signals", read_only=True)
+
+    async def async_get_user_signal(self, *, user_id: int, signal_id: int) -> dict[str, Any] | None:
+        def _query() -> dict[str, Any] | None:
+            row = (
+                UserSignal.select(UserSignal, FeedItem, Topic, Source)
+                .join(FeedItem)
+                .join(Source)
+                .switch(UserSignal)
+                .join(Topic, peewee.JOIN.LEFT_OUTER)
+                .where((UserSignal.id == signal_id) & (UserSignal.user == user_id))
+                .first()
+            )
+            if row is None:
+                return None
+            data = model_to_dict(row) or {}
+            data["feed_item_id"] = row.feed_item.id
+            data["feed_item_title"] = row.feed_item.title
+            data["feed_item_url"] = row.feed_item.canonical_url
+            data["feed_item_content_text"] = row.feed_item.content_text
+            data["source_kind"] = row.feed_item.source.kind
+            data["source_title"] = row.feed_item.source.title
+            data["topic_name"] = row.topic.name if row.topic_id else None
+            return data
+
+        return await self._execute(_query, operation_name="get_user_signal", read_only=True)
+
+    async def async_update_user_signal_status(
+        self,
+        *,
+        user_id: int,
+        signal_id: int,
+        status: str,
+    ) -> bool:
+        def _update() -> bool:
+            return (
+                UserSignal.update(
+                    {
+                        UserSignal.status: status,
+                        UserSignal.decided_at: datetime.now(UTC),
+                        UserSignal.updated_at: datetime.now(UTC),
+                    }
+                )
+                .where((UserSignal.id == signal_id) & (UserSignal.user == user_id))
+                .execute()
+                > 0
+            )
+
+        return await self._execute(_update, operation_name="update_user_signal_status")
+
+    async def async_hide_signal_source(self, *, user_id: int, signal_id: int) -> bool:
+        def _update() -> bool:
+            signal = (
+                UserSignal.select(UserSignal, FeedItem, Source)
+                .join(FeedItem)
+                .join(Source)
+                .where((UserSignal.id == signal_id) & (UserSignal.user == user_id))
+                .first()
+            )
+            if signal is None:
+                return False
+            Source.update(
+                {
+                    Source.is_active: False,
+                    Source.updated_at: datetime.now(UTC),
+                }
+            ).where(Source.id == signal.feed_item.source_id).execute()
+            signal.status = "hidden_source"
+            signal.decided_at = datetime.now(UTC)
+            signal.save()
+            return True
+
+        return await self._execute_transaction(_update, operation_name="hide_signal_source")
+
+    async def async_boost_signal_topic(
+        self,
+        *,
+        user_id: int,
+        signal_id: int,
+        increment: float = 0.25,
+    ) -> bool:
+        def _update() -> bool:
+            signal = UserSignal.get_or_none(
+                (UserSignal.id == signal_id)
+                & (UserSignal.user == user_id)
+                & (UserSignal.topic.is_null(False))
+            )
+            if signal is None:
+                return False
+            topic = Topic.get_or_none((Topic.id == signal.topic_id) & (Topic.user == user_id))
+            if topic is None:
+                return False
+            now = datetime.now(UTC)
+            topic.weight = min(5.0, float(topic.weight or 0.0) + max(0.0, float(increment)))
+            topic.updated_at = now
+            topic.save()
+            signal.status = "boosted_topic"
+            signal.decided_at = now
+            signal.updated_at = now
+            signal.save()
+            return True
+
+        return await self._execute_transaction(_update, operation_name="boost_signal_topic")
 
     async def async_list_unscored_candidates(self, *, limit: int = 100) -> list[dict[str, Any]]:
         def _query() -> list[dict[str, Any]]:

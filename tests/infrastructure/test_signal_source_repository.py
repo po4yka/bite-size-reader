@@ -183,6 +183,28 @@ async def test_signal_repository_can_disable_source(repo):
 
 
 @pytest.mark.asyncio
+async def test_signal_repository_sets_user_source_active_with_ownership(repo):
+    _user(1001, "owner")
+    _user(2002, "other")
+    source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
+    await repo.async_subscribe(user_id=1001, source_id=source["id"])
+
+    assert await repo.async_set_user_source_active(
+        user_id=2002,
+        source_id=source["id"],
+        is_active=False,
+    ) is False
+    assert await repo.async_set_user_source_active(
+        user_id=1001,
+        source_id=source["id"],
+        is_active=False,
+    ) is True
+
+    reloaded = await repo.async_get_source(source["id"])
+    assert reloaded["is_active"] is False
+
+
+@pytest.mark.asyncio
 async def test_signal_repository_lists_unscored_candidates_once(repo):
     _user(1001, "owner")
     source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
@@ -221,3 +243,140 @@ async def test_signal_repository_lists_unscored_candidates_once(repo):
     )
 
     assert await repo.async_list_unscored_candidates() == []
+
+
+@pytest.mark.asyncio
+async def test_signal_repository_records_source_backoff_and_circuit_breaker(repo):
+    source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
+
+    disabled = await repo.async_record_source_fetch_error(
+        source_id=source["id"],
+        error="timeout",
+        max_errors=2,
+        base_backoff_seconds=60,
+    )
+    after_first = await repo.async_get_source(source["id"])
+    disabled_again = await repo.async_record_source_fetch_error(
+        source_id=source["id"],
+        error="still timeout",
+        max_errors=2,
+        base_backoff_seconds=60,
+    )
+    after_second = await repo.async_get_source(source["id"])
+
+    assert disabled is False
+    assert after_first["fetch_error_count"] == 1
+    assert after_first["last_error"] == "timeout"
+    assert disabled_again is True
+    assert after_second["fetch_error_count"] == 2
+    assert after_second["is_active"] is False
+
+    await repo.async_record_source_fetch_success(source["id"])
+    recovered = await repo.async_get_source(source["id"])
+    assert recovered["fetch_error_count"] == 0
+    assert recovered["last_error"] is None
+    assert recovered["is_active"] is False
+
+
+@pytest.mark.asyncio
+async def test_signal_repository_updates_feedback_and_hides_source(repo):
+    _user(1001, "owner")
+    source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
+    item = await repo.async_upsert_feed_item(source_id=source["id"], external_id="guid-1")
+    signal = await repo.async_record_user_signal(
+        user_id=1001,
+        feed_item_id=item["id"],
+        status="candidate",
+        final_score=0.7,
+    )
+
+    assert await repo.async_update_user_signal_status(
+        user_id=1001,
+        signal_id=signal["id"],
+        status="liked",
+    )
+    signals = await repo.async_list_user_signals(1001)
+    assert signals[0]["status"] == "liked"
+
+    assert await repo.async_hide_signal_source(user_id=1001, signal_id=signal["id"])
+    reloaded = await repo.async_get_source(source["id"])
+    assert reloaded["is_active"] is False
+
+
+@pytest.mark.asyncio
+async def test_signal_repository_gets_one_user_signal_detail(repo):
+    _user(1001, "owner")
+    source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
+    item = await repo.async_upsert_feed_item(
+        source_id=source["id"],
+        external_id="guid-1",
+        title="Signal item",
+        canonical_url="https://example.com/item",
+        content_text="Useful content",
+    )
+    signal = await repo.async_record_user_signal(
+        user_id=1001,
+        feed_item_id=item["id"],
+        status="liked",
+        final_score=0.8,
+    )
+
+    detail = await repo.async_get_user_signal(user_id=1001, signal_id=signal["id"])
+
+    assert detail is not None
+    assert detail["id"] == signal["id"]
+    assert detail["feed_item_id"] == item["id"]
+    assert detail["feed_item_title"] == "Signal item"
+    assert detail["feed_item_content_text"] == "Useful content"
+    assert detail["feed_item_url"] == "https://example.com/item"
+
+
+@pytest.mark.asyncio
+async def test_signal_repository_boosts_signal_topic(repo):
+    _user(1001, "owner")
+    source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
+    item = await repo.async_upsert_feed_item(source_id=source["id"], external_id="guid-1")
+    topic = await repo.async_upsert_topic(user_id=1001, name="Infra", weight=1.0)
+    signal = await repo.async_record_user_signal(
+        user_id=1001,
+        feed_item_id=item["id"],
+        topic_id=topic["id"],
+        status="candidate",
+        final_score=0.8,
+    )
+
+    assert await repo.async_boost_signal_topic(user_id=1001, signal_id=signal["id"], increment=0.5)
+    detail = await repo.async_get_user_signal(user_id=1001, signal_id=signal["id"])
+
+    assert detail["status"] == "boosted_topic"
+    assert detail["topic_name"] == "Infra"
+    assert Topic.get_by_id(topic["id"]).weight == 1.5
+
+
+@pytest.mark.asyncio
+async def test_signal_repository_lists_source_health(repo):
+    _user(1001, "owner")
+    source = await repo.async_upsert_source(
+        kind="rss",
+        external_id="https://example.com/feed.xml",
+        url="https://example.com/feed.xml",
+        title="Example Feed",
+    )
+    await repo.async_subscribe(user_id=1001, source_id=int(source["id"]))
+    await repo.async_record_source_fetch_error(
+        source_id=int(source["id"]),
+        error="timeout while fetching feed",
+        max_errors=10,
+        base_backoff_seconds=60,
+    )
+
+    rows = await repo.async_list_source_health(user_id=1001)
+
+    assert len(rows) == 1
+    assert rows[0]["id"] == source["id"]
+    assert rows[0]["kind"] == "rss"
+    assert rows[0]["title"] == "Example Feed"
+    assert rows[0]["fetch_error_count"] == 1
+    assert rows[0]["last_error"] == "timeout while fetching feed"
+    assert rows[0]["subscription_active"] is True
+    assert rows[0]["next_fetch_at"] is not None

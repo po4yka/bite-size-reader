@@ -28,6 +28,8 @@ from app.mcp.context import McpServerContext
 from app.mcp.http_auth import McpHttpAuthMiddleware
 from app.mcp.tool_registrations import register_tools
 
+pytest_plugins = ("tests.mcp_test_support",)
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -87,6 +89,12 @@ async def test_mcp_tool_registration_records_success_metrics() -> None:
         chroma_index_stats=AsyncMock(return_value={"coverage": 1.0}),
         chroma_sync_gap=AsyncMock(return_value={"gap": 0}),
     )
+    signal_service = SimpleNamespace(
+        list_sources=MagicMock(return_value={"sources": []}),
+        list_signals=MagicMock(return_value={"signals": []}),
+        update_signal_feedback=AsyncMock(return_value={"updated": True}),
+        set_source_active=AsyncMock(return_value={"updated": True}),
+    )
 
     register_tools(
         mcp,
@@ -94,7 +102,16 @@ async def test_mcp_tool_registration_records_success_metrics() -> None:
         article_service=cast("Any", article_service),
         catalog_service=cast("Any", catalog_service),
         semantic_service=cast("Any", semantic_service),
+        signal_service=cast("Any", signal_service),
     )
+
+    assert len(mcp.tools) == 25
+    assert {
+        "list_signal_sources",
+        "list_user_signals",
+        "update_signal_feedback",
+        "set_signal_source_active",
+    } <= set(mcp.tools)
 
     with patch("app.mcp.tool_registrations.record_request") as metrics_mock:
         payload = await mcp.tools["create_aggregation_bundle"](

@@ -37,6 +37,28 @@ class SignalSourceRepositoryPort(Protocol):
     async def async_set_source_active(self, source_id: int, *, is_active: bool) -> bool:
         """Enable or disable a source."""
 
+    async def async_set_user_source_active(
+        self,
+        *,
+        user_id: int,
+        source_id: int,
+        is_active: bool,
+    ) -> bool:
+        """Enable or disable a source if the user is subscribed to it."""
+
+    async def async_record_source_fetch_success(self, source_id: int) -> None:
+        """Reset source health after a successful fetch."""
+
+    async def async_record_source_fetch_error(
+        self,
+        *,
+        source_id: int,
+        error: str,
+        max_errors: int,
+        base_backoff_seconds: int,
+    ) -> bool:
+        """Record a source fetch failure and return whether the source was disabled."""
+
     async def async_upsert_feed_item(
         self,
         *,
@@ -55,8 +77,35 @@ class SignalSourceRepositoryPort(Protocol):
     async def async_list_user_subscriptions(self, user_id: int) -> list[dict[str, Any]]:
         """List subscriptions visible to a user."""
 
+    async def async_list_source_health(self, *, user_id: int) -> list[dict[str, Any]]:
+        """List source health rows visible to a user."""
+
     async def async_list_user_signals(self, user_id: int) -> list[dict[str, Any]]:
         """List scored signal candidates visible to a user."""
+
+    async def async_get_user_signal(self, *, user_id: int, signal_id: int) -> dict[str, Any] | None:
+        """Return one scored signal candidate visible to a user."""
+
+    async def async_update_user_signal_status(
+        self,
+        *,
+        user_id: int,
+        signal_id: int,
+        status: str,
+    ) -> bool:
+        """Update one signal status if it belongs to the user."""
+
+    async def async_hide_signal_source(self, *, user_id: int, signal_id: int) -> bool:
+        """Disable the source behind one of the user's signals."""
+
+    async def async_boost_signal_topic(
+        self,
+        *,
+        user_id: int,
+        signal_id: int,
+        increment: float = 0.25,
+    ) -> bool:
+        """Boost the topic attached to one of the user's signals."""
 
     async def async_list_unscored_candidates(self, *, limit: int = 100) -> list[dict[str, Any]]:
         """List active subscription/feed-item pairs that do not have a signal yet."""

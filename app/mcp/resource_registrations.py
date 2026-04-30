@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from app.mcp.article_service import ArticleReadService
     from app.mcp.catalog_service import CatalogReadService
     from app.mcp.semantic_service import SemanticSearchService
+    from app.mcp.signal_service import SignalMcpService
 
 
 def register_resources(
@@ -25,7 +26,10 @@ def register_resources(
     article_service: ArticleReadService,
     catalog_service: CatalogReadService,
     semantic_service: SemanticSearchService,
+    signal_service: SignalMcpService | None = None,
 ) -> None:
+    if signal_service is None:
+        signal_service = _NullSignalService()
     @mcp.resource("ratatoskr://aggregations/recent")
     async def recent_aggregations_resource() -> str:
         """Recent aggregation bundles for the scoped MCP user."""
@@ -104,3 +108,21 @@ def register_resources(
     async def chroma_sync_gap_resource() -> str:
         """Chroma/SQLite sync gap sample using default scan limits."""
         return to_json(await semantic_service.chroma_sync_gap())
+
+    @mcp.resource("ratatoskr://signals/recent")
+    def recent_signals_resource() -> str:
+        """Recent signal candidates for the scoped MCP user."""
+        return to_json(signal_service.list_signals(limit=20))
+
+    @mcp.resource("ratatoskr://sources")
+    def signal_sources_resource() -> str:
+        """Signal source catalog."""
+        return to_json(signal_service.list_sources(limit=100))
+
+
+class _NullSignalService:
+    def list_sources(self, limit: int = 50) -> dict[str, Any]:
+        return {"sources": []}
+
+    def list_signals(self, limit: int = 20, status: str | None = None) -> dict[str, Any]:
+        return {"signals": []}

@@ -12,8 +12,12 @@ from app.core.time_utils import UTC
 
 
 class _FakeRSSRepo:
+    instance = None
+
     def __init__(self, _db) -> None:
         self.items: list[dict] = []
+        self.feed_errors: list[dict] = []
+        _FakeRSSRepo.instance = self
 
     async def async_list_active_feeds(self):
         return [
@@ -38,6 +42,9 @@ class _FakeRSSRepo:
     async def async_update_feed_fetch_success(self, **kwargs):
         return None
 
+    async def async_record_feed_fetch_error(self, **kwargs):
+        self.feed_errors.append(kwargs)
+
 
 class _FakeSignalRepo:
     instance = None
@@ -46,6 +53,8 @@ class _FakeSignalRepo:
         self.sources: list[dict] = []
         self.items: list[dict] = []
         self.subscriptions: list[dict] = []
+        self.successes: list[int] = []
+        self.errors: list[dict] = []
         _FakeSignalRepo.instance = self
 
     async def async_upsert_source(self, **kwargs):
@@ -59,6 +68,13 @@ class _FakeSignalRepo:
     async def async_subscribe(self, **kwargs):
         self.subscriptions.append(kwargs)
         return {"id": 400, **kwargs}
+
+    async def async_record_source_fetch_success(self, source_id: int):
+        self.successes.append(source_id)
+
+    async def async_record_source_fetch_error(self, **kwargs):
+        self.errors.append(kwargs)
+        return False
 
 
 @pytest.mark.asyncio
@@ -94,3 +110,27 @@ async def test_rss_poll_mirrors_new_items_into_signal_sources(monkeypatch):
     assert signal_repo.sources[0]["kind"] == "rss"
     assert signal_repo.items[0]["external_id"] == "guid-1"
     assert signal_repo.subscriptions == [{"user_id": 1001, "source_id": 200}]
+    assert signal_repo.successes == [200]
+
+
+@pytest.mark.asyncio
+async def test_rss_poll_records_signal_source_error_for_broken_feed(monkeypatch):
+    from app.adapters.rss import feed_poller
+
+    monkeypatch.setattr(feed_poller, "SqliteRSSFeedRepositoryAdapter", _FakeRSSRepo)
+    monkeypatch.setattr(feed_poller, "SqliteSignalSourceRepositoryAdapter", _FakeSignalRepo)
+
+    def _broken_fetch(*_args, **_kwargs):
+        raise RuntimeError("feed is broken")
+
+    monkeypatch.setattr(feed_poller, "fetch_feed", _broken_fetch)
+
+    stats = await feed_poller.poll_all_feeds(SimpleNamespace())
+
+    rss_repo = _FakeRSSRepo.instance
+    signal_repo = _FakeSignalRepo.instance
+    assert stats["errors"] == 1
+    assert rss_repo.feed_errors[0]["error"] == "feed is broken"
+    assert signal_repo.sources[0]["kind"] == "rss"
+    assert signal_repo.errors[0]["source_id"] == 200
+    assert signal_repo.errors[0]["max_errors"] == feed_poller.MAX_FETCH_ERRORS

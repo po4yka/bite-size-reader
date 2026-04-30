@@ -94,3 +94,41 @@ async def test_signal_ingestion_worker_disables_when_scoring_is_not_ready() -> N
 
     assert stats == {"candidates": 2, "persisted": 0, "errors": 0, "disabled": True}
     assert repo.recorded == []
+
+
+@pytest.mark.asyncio
+async def test_signal_ingestion_worker_applies_llm_judge_decisions() -> None:
+    class Judge:
+        async def judge(self, scored_candidates, *, rows_by_item_id):
+            return {
+                1: SimpleDecision(
+                    llm_score=0.95,
+                    decision="queue",
+                    reason="important",
+                    cost_usd=0.02,
+                    latency_ms=50,
+                    model="judge",
+                )
+            }
+
+    class SimpleDecision:
+        def __init__(self, **kwargs) -> None:
+            self.__dict__.update(kwargs)
+
+        def evidence(self):
+            return {"reason": self.reason, "model": self.model}
+
+    repo = _FakeSignalRepository()
+    worker = SignalIngestionWorker(
+        repository=repo,
+        scorer=SignalScoringService(topic_similarity=_FakeTopicSimilarity()),
+        judge=Judge(),
+    )
+
+    stats = await worker.run_once(limit=10, now=dt.datetime(2026, 4, 30, tzinfo=UTC))
+
+    assert stats["persisted"] == 2
+    assert repo.recorded[0]["status"] == "queued"
+    assert repo.recorded[0]["llm_score"] == 0.95
+    assert repo.recorded[0]["llm_cost_usd"] == 0.02
+    assert repo.recorded[0]["filter_stage"] == "llm_judge"

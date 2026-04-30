@@ -62,11 +62,15 @@ result = await orchestrator.execute(OrchestratorInput(url="https://example.com",
 
 - Used in `app/application/use_cases/summarize_url.py` and by the API background processor.
 - Wraps `ContentExtractor`/`LLMSummarizer`, adds retries, validation, and correlation-aware logging.
+- Signal scoring v0 keeps deterministic source ingestion, MinHash dedupe, Chroma similarity, source diversity, and the 10% LLM cap outside the agent layer in `app/application/services/signal_scoring.py` and `app/application/services/signal_ingestion_worker.py`.
+- The LLM-as-judge step is intentionally a bounded service (`app/application/services/signal_judge.py`), not a replacement orchestration agent. It reuses the project LLM client contract, validates structured output, records cost/evidence, and only runs for candidates admitted by the cheap filter cap.
+- Existing extraction/summarization/validation agents remain available for one-off URL and aggregation flows. They are not deleted or put in front of every feed item, which keeps Phase 3 ingestion from becoming an all-agent/all-LLM pipeline.
 
 ## Testing
 
 - Unit: mock Firecrawl/LLM; assert retries and validation errors are surfaced.
 - Integration: orchestrator with fixtures; expect `validation_attempts > 1` when schema errors injected.
+- Signal tests: `tests/application/test_signal_scoring.py`, `tests/application/test_signal_ingestion_worker.py`, and `tests/application/test_signal_judge.py` cover deterministic filtering, worker persistence, and bounded judge behavior separately from the agent orchestration tests.
 
 ## WebSearchAgent (optional enrichment)
 

@@ -79,6 +79,10 @@ async def test_aggregation_detail_resource_returns_session_payload() -> None:
         chroma_index_stats=AsyncMock(return_value={"coverage": 1.0}),
         chroma_sync_gap=AsyncMock(return_value={"gap": 0}),
     )
+    signal_service = SimpleNamespace(
+        list_sources=MagicMock(return_value={"sources": []}),
+        list_signals=MagicMock(return_value={"signals": []}),
+    )
 
     register_resources(
         mcp,
@@ -86,12 +90,16 @@ async def test_aggregation_detail_resource_returns_session_payload() -> None:
         article_service=cast("Any", article_service),
         catalog_service=cast("Any", catalog_service),
         semantic_service=cast("Any", semantic_service),
+        signal_service=cast("Any", signal_service),
     )
 
     payload = await mcp.resources["aggregation_bundle_resource"]("42")
 
     assert json.loads(payload)["session"]["id"] == 42
+    assert len(mcp.resource_uris) == 17
     assert "ratatoskr://aggregations/{session_id}" in mcp.resource_uris
+    assert "ratatoskr://signals/recent" in mcp.resource_uris
+    assert "ratatoskr://sources" in mcp.resource_uris
 
 
 def test_hosted_mcp_resource_uses_request_scoped_identity(mcp_test_db, monkeypatch) -> None:

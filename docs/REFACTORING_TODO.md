@@ -258,21 +258,21 @@ Acceptance evidence:
 
 - [x] Define worker lifecycle in `app/infrastructure/scheduler/` or existing background processor.
 - [x] Add per-source fetch cadence.
-- [ ] Add per-source exponential backoff.
-- [ ] Add circuit breaker after N consecutive failures.
-- [ ] Add source health fields and status endpoint.
+- [x] Add per-source exponential backoff.
+- [x] Add circuit breaker after N consecutive failures.
+- [x] Add source health fields and status endpoint.
 - [x] Convert existing RSS polling in `app/adapters/rss/feed_poller.py` to generic source ingestion.
-- [ ] Convert Telegram channel digest reader in `app/adapters/digest/` into a v0 source ingester.
-- [ ] Ensure Telegram channel digest remains user-visible as digest while also feeding signal scoring.
-- [ ] Add tests for broken feed/channel behavior.
+- [x] Convert Telegram channel digest reader in `app/adapters/digest/` into a v0 source ingester.
+- [x] Ensure Telegram channel digest remains user-visible as digest while also feeding signal scoring.
+- [x] Add tests for broken feed/channel behavior.
 - [x] Add metrics for fetched, skipped, errored, deduped, and queued items.
 
 Acceptance evidence:
 
-- [ ] Broken sources cannot hot-loop.
-- [ ] Ingestion can be enabled/disabled per source.
+- [x] Broken sources cannot hot-loop.
+- [x] Ingestion can be enabled/disabled per source.
 - [x] RSS items enter the signal candidate queue.
-- [ ] Telegram channel digest items enter the signal candidate queue.
+- [x] Telegram channel digest items enter the signal candidate queue.
 
 ### 3.4 Cheap filter pipeline
 
@@ -298,76 +298,76 @@ Acceptance evidence:
 
 - [x] Reuse existing Chroma summary collection as the v0 topic/liked-item similarity source.
 - [x] Reuse existing embedding provider factory where possible.
-- [ ] Add topic embedding generation.
-- [ ] Add liked-item embedding backfill.
-- [ ] Add health check for Chroma readiness before signal scoring starts.
-- [ ] Add admin/status API fields for Chroma signal-scoring health.
+- [x] Add topic embedding generation.
+- [x] Add liked-item embedding backfill.
+- [x] Add health check for Chroma readiness before signal scoring starts.
+- [x] Add admin/status API fields for Chroma signal-scoring health.
 - [x] Document behavior when Chroma is down.
 
 Acceptance evidence:
 
 - [x] Signal scoring does not silently degrade to SQLite-only similarity.
-- [ ] Admin/status surface shows Chroma readiness.
+- [x] Admin/status surface shows Chroma readiness.
 
 ### 3.6 LLM-as-judge
 
-- [ ] Add bounded judge prompt for top candidate slice.
-- [ ] Add or update both `en/` and `ru/` prompt files if current prompt structure requires language parity.
-- [ ] Add judge output schema and validator.
-- [ ] Add cost and latency logging for judge calls.
-- [ ] Add daily/user budget guard.
-- [ ] Add retry handling for invalid structured output.
-- [ ] Add tests for judge call suppression below threshold.
+- [x] Add bounded judge prompt for top candidate slice.
+- [x] Add or update both `en/` and `ru/` prompt files if current prompt structure requires language parity.
+- [x] Add judge output schema and validator.
+- [x] Add cost and latency logging for judge calls.
+- [x] Add daily/user budget guard.
+- [x] Add retry handling for invalid structured output.
+- [x] Add tests for judge call suppression below threshold.
 
 Acceptance evidence:
 
-- [ ] Less than 10% of observed candidates reach LLM in test fixtures.
-- [ ] Judge decisions are persisted with evidence and cost metadata.
+- [x] Less than 10% of observed candidates reach LLM in test fixtures.
+- [x] Judge decisions are persisted with evidence and cost metadata.
 
 ### 3.7 Feedback and eval
 
-- [ ] Wire feedback actions: like, dislike, skip, hide source, boost topic.
-- [ ] Store feedback in `SummaryFeedback`, `UserSignal`, or a new normalized feedback table.
-- [ ] Add CLI command to export eval set.
-- [ ] Add CLI command to compute precision@5.
-- [ ] Add fixtures under `tests/fixtures/`.
-- [ ] Add 2-3 week real-use eval workflow docs.
-- [ ] Add web/API endpoints needed by Phase 4 feed UI.
+- [x] Wire feedback actions: like, dislike, skip, hide source, boost topic.
+- [x] Store feedback in `SummaryFeedback`, `UserSignal`, or a new normalized feedback table.
+- [x] Add CLI command to export eval set.
+- [x] Add CLI command to compute precision@5.
+- [x] Add fixtures under `tests/fixtures/`.
+- [x] Add 2-3 week real-use eval workflow docs.
+- [x] Add web/API endpoints needed by Phase 4 feed UI.
 
 Acceptance evidence:
 
-- [ ] Maintainer can run one command that reports precision@5.
-- [ ] Feedback affects later ranking through Chroma/topic preferences.
+- [x] Maintainer can run one command that reports precision@5.
+- [x] Feedback affects later ranking through Chroma/topic preferences.
 
 ### 3.8 Agent adaptation
 
-- [ ] Audit `app/agents/base_agent.py`, `multi_source_extraction_agent.py`, `multi_source_aggregation_agent.py`, `relationship_analysis_agent.py`, `summarization_agent.py`, and `validation_agent.py`.
-- [ ] Decide which signal stages are agent-owned versus deterministic services.
-- [ ] Keep cheap filters outside LLM-style agent abstractions.
-- [ ] Add signal-specific agent or adapter only where orchestration/validation benefits.
-- [ ] Refactor agent result metadata to carry scoring evidence where useful.
-- [ ] Update `docs/multi_agent_architecture.md`.
-- [ ] Add tests for adapted agents.
+- [x] Audit `app/agents/base_agent.py`, `multi_source_extraction_agent.py`, `multi_source_aggregation_agent.py`, `relationship_analysis_agent.py`, `summarization_agent.py`, and `validation_agent.py`.
+- [x] Decide which signal stages are agent-owned versus deterministic services.
+- [x] Keep cheap filters outside LLM-style agent abstractions.
+- [x] Add signal-specific agent or adapter only where orchestration/validation benefits.
+- [x] Refactor agent result metadata to carry scoring evidence where useful.
+- [x] Update `docs/multi_agent_architecture.md`.
+- [x] Add tests for adapted agents.
 
 Acceptance evidence:
 
-- [ ] No existing agent layer is deleted wholesale.
-- [ ] Signal scoring does not become an all-agent/all-LLM pipeline.
+- [x] No existing agent layer is deleted wholesale.
+- [x] Signal scoring does not become an all-agent/all-LLM pipeline.
 
 ### 3.9 MCP/Hermes contract
 
-- [ ] Define stable MCP read operations for sources, signals, summaries, and stats.
-- [ ] Define stable MCP search operations for keyword, semantic, and hybrid retrieval.
-- [ ] Define stable MCP write operations for aggregation creation, source/subscription management, and feedback actions as needed.
-- [ ] Version tool/resource names or document compatibility guarantees.
-- [ ] Add auth/security notes for read/write separation.
-- [ ] Update `docs/mcp_server.md`.
-- [ ] Add tests for tool/resource registration counts and contracts.
+- [x] Define stable MCP read operations for sources, signals, summaries, and stats.
+- [x] Define stable MCP search operations for keyword, semantic, and hybrid retrieval.
+- [x] Define stable MCP write operations for aggregation creation, source/subscription management, and feedback actions as needed.
+- [x] Version tool/resource names or document compatibility guarantees.
+- [x] Add auth/security notes for read/write separation.
+- [x] Update `docs/mcp_server.md`.
+- [x] Add tests for tool/resource registration counts and contracts.
 
 Acceptance evidence:
 
-- [ ] MCP remains read/write/search capable for Hermes.
-- [ ] Tool/resource set is intentionally documented, not accidental growth.
+- [x] MCP remains read/write/search capable for Hermes.
+- [x] Tool/resource set is intentionally documented, not accidental growth.
 
 ## Phase 4 — Finish Carbon rename and lighten design shim
 
