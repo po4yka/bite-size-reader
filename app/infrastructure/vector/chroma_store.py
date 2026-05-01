@@ -321,13 +321,15 @@ class ChromaVectorStore:
             safe_metadata = {
                 k: v for k, v in dict(metadata).items() if k not in {"environment", "user_scope"}
             }
-            validated_metadata.append(
-                ChromaMetadata(
-                    **safe_metadata,
-                    environment=self._environment,
-                    user_scope=self._user_scope,
-                ).model_dump()
-            )
+            dumped = ChromaMetadata(
+                **safe_metadata,
+                environment=self._environment,
+                user_scope=self._user_scope,
+            ).model_dump()
+            # Chroma rejects empty list metadata values; drop those keys so the
+            # upsert validates. Missing keys are fine; presence with [] is not.
+            cleaned = {k: v for k, v in dumped.items() if not (isinstance(v, list) and not v)}
+            validated_metadata.append(cleaned)
 
         return final_ids, validated_metadata
 
