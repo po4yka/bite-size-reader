@@ -218,6 +218,29 @@ class TelethonBotClient:
     async def delete_messages(self, chat_id: int, message_ids: list[int]) -> None:
         await self._client.delete_messages(chat_id, message_ids)
 
+    async def edit_message_text(
+        self,
+        *,
+        chat_id: int,
+        message_id: int,
+        text: str,
+        parse_mode: str | None = None,
+        reply_markup: Any | None = None,
+        disable_web_page_preview: bool | None = None,
+        **_kwargs: Any,
+    ) -> Any:
+        edit_kwargs: dict[str, Any] = {}
+        if disable_web_page_preview is not None:
+            edit_kwargs["link_preview"] = not bool(disable_web_page_preview)
+        return await self._client.edit_message(
+            chat_id,
+            message_id,
+            text,
+            parse_mode=normalize_parse_mode(parse_mode),
+            buttons=to_telethon_buttons(reply_markup),
+            **edit_kwargs,
+        )
+
     async def set_bot_commands(
         self,
         commands: list[BotCommand],

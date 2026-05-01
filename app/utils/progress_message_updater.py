@@ -32,6 +32,7 @@ class ProgressMessageUpdater:
         progress_tracker: TelegramProgressMessage,
         message: Any,
         update_interval: float = 4.0,
+        parse_mode: str | None = "HTML",
     ):
         """Initialize progress message updater.
 
@@ -39,10 +40,13 @@ class ProgressMessageUpdater:
             progress_tracker: TelegramProgressMessage instance for message updates
             message: Telegram message object
             update_interval: Seconds between progress updates (default: 4.0)
+            parse_mode: Parse mode applied to every progress edit (default: HTML, since
+                all current formatters emit HTML markup)
         """
         self._tracker = progress_tracker
         self._message = message
         self._interval = update_interval
+        self._parse_mode = parse_mode
         self._start_time = time.time()
         self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
@@ -69,7 +73,7 @@ class ProgressMessageUpdater:
         if self._current_formatter:
             elapsed = time.time() - self._start_time
             text = self._current_formatter(elapsed)
-            await self._tracker.update(self._message, text)
+            await self._tracker.update(self._message, text, parse_mode=self._parse_mode)
 
     async def finalize(self, final_text: str) -> None:
         """Stop updates and set final message.
@@ -98,7 +102,7 @@ class ProgressMessageUpdater:
                 self._task = None
 
         # Send final message
-        await self._tracker.finalize(self._message, final_text)
+        await self._tracker.finalize(self._message, final_text, parse_mode=self._parse_mode)
 
     async def _update_loop(self) -> None:
         """Internal loop for periodic progress updates."""
@@ -106,7 +110,7 @@ class ProgressMessageUpdater:
             if self._current_formatter:
                 elapsed = time.time() - self._start_time
                 text = self._current_formatter(elapsed)
-                await self._tracker.update(self._message, text)
+                await self._tracker.update(self._message, text, parse_mode=self._parse_mode)
             await asyncio.sleep(self._interval)
 
     async def __aenter__(self) -> "ProgressMessageUpdater":

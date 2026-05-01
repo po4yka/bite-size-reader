@@ -43,5 +43,29 @@ async def test_progress_message_editing():
     )
 
 
+@pytest.mark.asyncio
+async def test_progress_message_updater_passes_html_parse_mode() -> None:
+    """Regression: every periodic update must reach the tracker with parse_mode set.
+
+    The progress formatters emit HTML; without parse_mode, Telegram renders the
+    raw tags (``<b>Content Extraction</b>``) as literal text instead of bold.
+    """
+    from app.utils.progress_message_updater import ProgressMessageUpdater
+
+    tracker = AsyncMock()
+    message = Mock()
+    updater = ProgressMessageUpdater(tracker, message, update_interval=0.05)
+
+    await updater.start(lambda elapsed: f"<b>Working</b> ({elapsed:.0f}s)")
+    await asyncio.sleep(0.12)
+    await updater.finalize("<b>Done</b>")
+
+    assert tracker.update.await_count >= 1
+    for call in tracker.update.await_args_list:
+        assert call.kwargs.get("parse_mode") == "HTML"
+    assert tracker.finalize.await_count == 1
+    assert tracker.finalize.await_args.kwargs.get("parse_mode") == "HTML"
+
+
 if __name__ == "__main__":
     asyncio.run(test_progress_message_editing())

@@ -63,3 +63,55 @@ def test_active_app_code_has_no_pyrogram_imports() -> None:
         if "from pyrogram" in text or "import pyrogram" in text:
             offenders.append(str(path))
     assert offenders == []
+
+
+@pytest.mark.asyncio
+async def test_telethon_bot_client_edit_message_text_invokes_telethon_edit_message() -> None:
+    """Regression: progress-message edits must reach Telethon's edit_message API.
+
+    The response sender's edit flow checks ``hasattr(client, "edit_message_text")``;
+    when that attribute was missing the edit silently failed and every progress
+    tick posted a fresh message instead of editing in place.
+    """
+    from app.adapters.telegram.telethon_compat import TelethonBotClient
+
+    captured: dict[str, Any] = {}
+
+    class _FakeTelethon:
+        async def edit_message(
+            self,
+            entity: int,
+            message_id: int,
+            text: str,
+            *,
+            parse_mode: Any | None = None,
+            buttons: Any | None = None,
+            link_preview: bool | None = None,
+        ) -> str:
+            captured.update(
+                entity=entity,
+                message_id=message_id,
+                text=text,
+                parse_mode=parse_mode,
+                buttons=buttons,
+                link_preview=link_preview,
+            )
+            return "edited"
+
+    client = TelethonBotClient.__new__(TelethonBotClient)
+    client._client = _FakeTelethon()  # type: ignore[attr-defined]
+
+    assert hasattr(client, "edit_message_text")
+    result = await client.edit_message_text(
+        chat_id=42,
+        message_id=7,
+        text="<b>hello</b>",
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+    assert result == "edited"
+    assert captured["entity"] == 42
+    assert captured["message_id"] == 7
+    assert captured["text"] == "<b>hello</b>"
+    assert captured["parse_mode"] == "html"
+    assert captured["link_preview"] is False
