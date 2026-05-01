@@ -7,96 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Web frontend — local-only Playwright visual regression (Phase 10)
-
-Replaces Chromatic with a fully local Playwright visual-regression solution.
-Route-level coverage (`mobile-routes.spec.ts`, 16 routes × 4 device profiles)
-is joined by component-level coverage (`storybook-visual.spec.ts`, one
-screenshot per Storybook story). All baselines are committed to the repo — no
-third-party service or account required. See
-`docs/reference/visual-regression.md` for baseline workflow and CI behavior.
-
-### Web frontend — mobile-responsive layouts
-
-Adds Frost mobile-artboard fidelity to the React web frontend across
-all 17 routes + AppShell. Container queries on the main content area
-(`@container main (max-width: 768px)`) drive the breakpoint, isolated
-from viewport — so embedded views (drawer, modal, side panel) reflow
-off available width.
-
-- **NEW** Mobile cell grid: 48-col below 768px (vs web's 178-col),
-  computed live by the boot script in index.html.
-- **NEW** Mobile chrome: 54px FrostHeader collapses to wordmark +
-  hamburger; FrostSideNav becomes a slide-in drawer; new
-  MobileTabBar (56px bottom strip with QUEUE · DIGESTS · TOPICS ·
-  SETTINGS, active tab has 4px leading spark).
-- **NEW** Mobile-specific tokens: `--frost-spark-mobile` 4px,
-  `--frost-tab-bar-height` 56px, `--frost-mobile-header` 54px,
-  `--frost-pad-page-mobile` 16px, `--frost-gap-ext` 10px.
-- **REWRITE** All 17 routes have designed mobile layouts: tables →
-  stacked cards, multi-column grids → single column, BracketTabs →
-  horizontal-scroll segmented controls. LibraryPage queue is a
-  stacked card list with tap-to-open. ArticlePage reader has a
-  fixed-bottom action bar above the tab bar.
-- **NEW** Touch targets ≥44×44 across all interactive primitives
-  (BracketButton, IconButton, Checkbox, RadioButton, Toggle, Tag,
-  Accordion, NumberInput, MonoInput/TextArea/Select, BracketSearch).
-- **NEW** Playwright mobile device projects (iPhone 12, Pixel 5,
-  iPad Mini) plus a desktop project; existing tests run on all
-  projects.
-- **NEW** Storybook Frost Mobile (393×690) viewport with a
-  responsive default; primitive stories render in mobile by default.
-- **FIX** `@storybook/addon-viewport` `INITIAL_VIEWPORTS` import
-  (broken since Storybook 8+ API change).
-- Bundle delta: index.js 186.09 kB → 188.78 kB (+1.4%) across the
-  whole mobile migration; CSS payload absorbs the new mobile.css
-  aggregator + 5 group-*.mobile.css per-route files.
-
-### Web frontend — Frost design system migration
-
-Full rewrite of the React web frontend (`clients/web/`) to the Frost
-design system: editorial monospace minimalism, two-color rule (ink +
-page) with a single critical accent (spark `#DC3545`), eight-step alpha
-ladder, brutalism (0 corner radius, 1px hairline borders, no shadows).
-See `DESIGN.md` at the repo root for the canonical spec.
-
-- **NEW** Frost component surface: `BracketButton`, `BrutalistCard`,
-  `BrutalistTable`, `BrutalistModal`, `BracketTabs`, `BracketPagination`,
-  `BracketSearch`, `MonoInput`, `MonoTextArea`, `MonoSelect`,
-  `MonoProgressBar`, `BrutalistSkeleton`, `SparkLoading`, `StatusBadge`,
-  `Toast`, `RowDigest`, `FrostHeader`, `FrostSideNav`. In-place rewrites
-  preserve legacy import names for `Tag`, `Link`, `IconButton`, `Toggle`,
-  `Checkbox`, `RadioButton`, `Accordion`, `NumberInput`, `UnorderedList`,
-  `CodeSnippet`, `FileUploader`, `Dropdown`, `MultiSelect`,
-  `FilterableMultiSelect`, `ContentSwitcher`, `TreeView`, `DatePicker`,
-  `TimePicker`.
-- **NEW** Self-hosted JetBrains Mono (regular/medium/extrabold) + Source
-  Serif 4 italic via `@fontsource` packages. Source Serif body shows up
-  in the article reader at 16px / 1.55 line-height.
-- **NEW** Storybook visual harness (`@storybook/react-vite`) covering
-  primitives in light + dark modes, plus a `web-storybook-build` CI job
-  that uploads the `storybook-static/` artifact.
-- **REWRITE** All 17 pages (Library, Articles, Article, Search,
-  TagManagement, Collections, Submit, ImportExport, Backups, Feeds,
-  Webhooks, Rules, Signals, Preferences, Digest, CustomDigestView,
-  Admin, Login) and the global AppShell migrated. Page widths snap to
-  `strip-N` tokens (176-1408px); horizontal page padding is 32px;
-  section gap is 48px; page gap is 64px.
-- **REMOVED** Legacy components: `Button`, `Tile`, `TextInput`,
-  `TextArea`, `Select`, `Search`, `InlineLoading`, `InlineNotification`,
-  `Skeleton`, `ProgressBar`, `ButtonSet`, `Tabs`, `Pagination`,
-  `DataTable`, `Modal`, `ComposedModal`, `AppHeader`, `AppSideNav`,
-  `StructuredList` (.tsx + .stories.tsx pairs, ~30 files total).
-- **REMOVED** Carbon-derived tokens (`--rtk-color-focus`,
-  `--rtk-color-success`, `--rtk-color-warning`, `--rtk-color-shadow`,
-  `--rtk-radius-sm`, `--rtk-radius-md`) and the back-compat `--rtk-*`
-  alias section in `tokens.css`. Frost is now the only token surface.
-- Bundle delta: index.js 152.61 kB → 189.74 kB across the migration
-  (+24% gross), with the legacy-removal phase recovering 12.99 kB once
-  legacy components were dead-code-eliminated.
-- All gates green throughout: typecheck, lint, 173 unit/render tests,
-  build, build-storybook.
-
 ### Breaking — Project renamed to Ratatoskr
 
 The project has been renamed from `bite-size-reader` to `ratatoskr`.
@@ -151,7 +61,7 @@ authenticates successfully, then stores the old file as
 - Update pyjwt 2.11.0 to 2.12.1 (CVE-2026-32597)
 
 ### Changed
-- Add Phase 2 compose profiles for self-hosted Firecrawl, remote cloud Ollama, monitoring, and MCP; default compose config now works without a local `.env` file.
+- Add Docker Compose profiles for self-hosted scrapers, remote cloud Ollama, monitoring, and MCP; default compose config now works without a local `.env` file.
 - Publish GHCR `:stable` on non-prerelease semver tags and keep `:latest` disabled.
 - Reduce `.env.example` to the five first-run Telegram/OpenRouter values and move optional power-user settings to `ratatoskr.yaml`.
 - Add optional `RATATOSKR_CONFIG` / `ratatoskr.yaml` loading with precedence below `.env` and process environment.

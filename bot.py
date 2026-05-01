@@ -51,8 +51,6 @@ async def main() -> None:
     db_write_queue = DbWriteQueue(maxsize=256)
     db_write_queue.start()
 
-    # Create bot using factory pattern (while maintaining backward compatibility)
-    # The factory is used internally by TelegramBot.__post_init__
     bot = TelegramBot(
         cfg=cfg_holder,  # type: ignore[arg-type]
         db=db,

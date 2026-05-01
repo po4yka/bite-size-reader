@@ -45,7 +45,7 @@ class SubmitRequestData(BaseModel):
 
 
 class RequestStatusData(RequestStatus):
-    """Backward-compatible alias for request status payload."""
+    """Status-payload schema referenced separately in the OpenAPI spec."""
 
 
 class DuplicateCheckData(BaseModel):

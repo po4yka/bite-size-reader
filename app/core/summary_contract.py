@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
-
+from app.core.summary_contract_impl.common import SummaryJSON
 from app.core.summary_contract_impl.contract import (
     cap_text,
     extract_keywords_tfidf,
@@ -17,9 +16,6 @@ from app.types.summary_types import (
     SemanticChunk,
     SummaryDict,
 )
-
-# Legacy alias for backward compatibility
-SummaryJSON = dict[str, Any]
 
 
 def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:

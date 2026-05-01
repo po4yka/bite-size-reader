@@ -121,7 +121,7 @@ Maintain the existing architecture but add Scrapling as a fallback for Firecrawl
 - **Providers**: `scrapling_provider.py`, `firecrawl_provider.py`, `playwright_provider.py`, `crawlee_provider.py`, `direct_html_provider.py`
 - **Config**: `app/config/scraper.py` (`ScraperConfig`)
 - **Config v2**: `SCRAPER_*` controls now include profile tuning (`SCRAPER_PROFILE`), global/brower switches, force-provider override, and explicit direct-html/firecrawl-self-hosted tuning knobs. Legacy `SCRAPLING_*` and `SCRAPER_DIRECT_HTTP_ENABLED` names are fail-fast deprecated.
-- **Docker**: `ops/docker/docker-compose.yml` includes a `with-firecrawl` profile that starts an internal Firecrawl API on `http://firecrawl-api:3002` with its Playwright, Redis, RabbitMQ, and Postgres dependencies. Externally managed Firecrawl remains possible by setting `FIRECRAWL_SELF_HOSTED_URL`.
+- **Docker**: `ops/docker/docker-compose.yml` includes a `with-scrapers` profile that starts an internal Firecrawl API on `http://firecrawl-api:3002` with its Playwright, Redis, RabbitMQ, and Postgres dependencies. Externally managed Firecrawl remains possible by setting `FIRECRAWL_SELF_HOSTED_URL`.
 - **Tests**: `tests/test_scraper_chain.py` (45 tests)
 
 ## Notes
@@ -136,7 +136,7 @@ The following changes were shipped on 2026-04-30 and supersede parts of the orig
 
 ### Cloud Firecrawl removed
 
-Cloud Firecrawl is no longer used for article extraction. `FIRECRAWL_API_KEY` is no longer read anywhere in the scraper chain or `TopicSearchService`. Web search enrichment now requires `FIRECRAWL_SELF_HOSTED_ENABLED=true` (pointing at the internal Docker sidecar). The `with-scrapers` compose profile (alias: `with-firecrawl`) brings up the full sidecar set.
+Cloud Firecrawl is no longer used for article extraction. `FIRECRAWL_API_KEY` is no longer read anywhere in the scraper chain or `TopicSearchService`. Web search enrichment now requires `FIRECRAWL_SELF_HOSTED_ENABLED=true` (pointing at the internal Docker sidecar). The `with-scrapers` compose profile brings up the full sidecar set.
 
 ### New default provider order
 
@@ -159,10 +159,9 @@ Defuddle is now a self-hosted Node sidecar defined in `ops/docker/defuddle/`. Th
 
 `DynamicFetcher`-based fingerprint randomization is now applied to `scrapling_provider`, `playwright_provider`, and `crawlee_provider`.
 
-### New compose profiles
+### Compose profile
 
-- `with-scrapers` (new, preferred name) — starts `firecrawl-api` (3002), `crawl4ai` (11235), and `defuddle-api` (3003) plus Firecrawl dependencies.
-- `with-firecrawl` (existing) — kept as a backward-compatible alias; starts the same sidecar set.
+- `with-scrapers` — starts `firecrawl-api` (3002), `crawl4ai` (11235), and `defuddle-api` (3003) plus Firecrawl dependencies.
 
 
 ---

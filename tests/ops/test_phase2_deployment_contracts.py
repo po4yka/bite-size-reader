@@ -33,7 +33,7 @@ def test_default_compose_stack_contains_core_services_without_profiles() -> None
     assert services["mobile-api"]["ports"] == ["127.0.0.1:18000:8000"]
 
 
-def test_firecrawl_profile_uses_internal_services_not_host_gateway() -> None:
+def test_scrapers_profile_uses_internal_services_not_host_gateway() -> None:
     services = _compose()["services"]
 
     assert "extra_hosts" not in services["ratatoskr"]
@@ -51,7 +51,7 @@ def test_firecrawl_profile_uses_internal_services_not_host_gateway() -> None:
         "firecrawl-postgres",
     ):
         assert name in services
-        assert services[name]["profiles"] == ["with-firecrawl"]
+        assert services[name]["profiles"] == ["with-scrapers"]
 
     assert services["firecrawl-api"]["depends_on"]["firecrawl-playwright"]["condition"]
     assert "3002" in services["firecrawl-api"]["ports"][0]

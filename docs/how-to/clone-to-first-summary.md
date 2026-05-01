@@ -34,9 +34,9 @@ structured summary.
 
 ```bash
 FIRECRAWL_SELF_HOSTED_ENABLED=true \
-docker compose -f ops/docker/docker-compose.yml --profile with-firecrawl up -d --build
+docker compose -f ops/docker/docker-compose.yml --profile with-scrapers up -d --build
 
-docker compose -f ops/docker/docker-compose.yml --profile with-firecrawl ps
+docker compose -f ops/docker/docker-compose.yml --profile with-scrapers ps
 ```
 
 Smoke a known static page through the CLI once the stack is healthy:

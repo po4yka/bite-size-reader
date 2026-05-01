@@ -24,32 +24,29 @@ It is built into `app/static/web` and served by FastAPI on `/web` and `/web/*`.
 minimalism with a two-color rule (ink + page) and a single critical accent
 (spark). See `DESIGN.md` at the repo root for the canonical spec.
 
-Frost-named primitives: `BracketButton`, `BracketSearch`, `BrutalistCard`,
+Frost primitives: `BracketButton`, `BracketSearch`, `BrutalistCard`,
 `BrutalistSkeleton` (+ Text/Placeholder/DataTable variants), `MonoInput`,
 `MonoTextArea`, `MonoSelect` (+ `MonoSelectItem`), `MonoProgressBar`,
-`SparkLoading`, `StatusBadge`, `Toast`. In-place rewrites keep their legacy
-names but ship Frost shape: `Tag`, `Link`, `IconButton`, `Toggle`, `Checkbox`,
-`RadioButton`, `Accordion`, `NumberInput`, `UnorderedList`, `CodeSnippet`,
-`FileUploader`.
+`SparkLoading`, `StatusBadge`, `Toast`, `Tag`, `Link`, `IconButton`,
+`Toggle`, `Checkbox`, `RadioButton`, `Accordion`, `NumberInput`,
+`UnorderedList`, `CodeSnippet`, `FileUploader`.
 
-Frost navigation: `BracketTabs` (+ `BracketTabList`/`BracketTab`/
-`BracketTabPanels`/`BracketTabPanel`), `BracketPagination`. In-place
-rewrites: `TreeView`, `ContentSwitcher`.
+Navigation: `BracketTabs` (+ `BracketTabList`/`BracketTab`/
+`BracketTabPanels`/`BracketTabPanel`), `BracketPagination`,
+`TreeView`, `ContentSwitcher`.
 
-Frost table: `BrutalistTable` (+ `BrutalistTableContainer`) for the
+Table: `BrutalistTable` (+ `BrutalistTableContainer`) for the
 high-level render-props API. Lower-level `Table`/`TableHead`/`TableBody`/
 `TableRow`/`TableCell`/`TableHeader` primitives compose with it.
-`TableToolbar`/Expand/Select/Batch sub-components remain until the
-ChannelsTab and RSSFeedsTab digest views migrate to BrutalistTable.
 
-Frost modal: `BrutalistModal` (+ `BrutalistModalHeader`/
+Modal: `BrutalistModal` (+ `BrutalistModalHeader`/
 `BrutalistModalBody`/`BrutalistModalFooter`).
 
-Frost shell: `FrostHeader` family + `FrostSideNav` family. In-place
-`Content` and `Theme` wrappers.
+Shell: `FrostHeader` family + `FrostSideNav` family, `Content` and
+`Theme` wrappers.
 
-Multiselect / pickers: in-place rewrites of `MultiSelect`,
-`FilterableMultiSelect`, `Dropdown`, `DatePicker`, `TimePicker`.
+Multiselect / pickers: `MultiSelect`, `FilterableMultiSelect`,
+`Dropdown`, `DatePicker`, `TimePicker`.
 
 Feature code imports exclusively from `../design`. Tokens (`tokens.css`),
 fonts (`fonts.css`, self-hosted JetBrains Mono + Source Serif 4 italic

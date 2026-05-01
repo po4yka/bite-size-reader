@@ -33,7 +33,8 @@ from app.adapters.external.firecrawl.constants import (
     FIRECRAWL_SEARCH_URL,
     build_urls,
 )
-from app.adapters.external.firecrawl.error_handler import ErrorHandler, asyncio_sleep_backoff
+from app.adapters.external.firecrawl.error_handler import ErrorHandler
+from app.core.backoff import sleep_backoff
 from app.adapters.external.firecrawl.models import (
     FirecrawlResult,
     FirecrawlSearchItem,
@@ -531,7 +532,7 @@ class FirecrawlClient:
                     cur_mobile = not cur_mobile
                     if pdf_hint:
                         cur_pdf = not cur_pdf
-                    await asyncio_sleep_backoff(self._backoff_base, attempt)
+                    await sleep_backoff(attempt, self._backoff_base)
                     continue
                 break
 
@@ -597,7 +598,7 @@ class FirecrawlClient:
                 max_size_mb=self._max_response_size_bytes / (1024 * 1024),
             )
             if attempt < self._max_retries:
-                await asyncio_sleep_backoff(self._backoff_base, attempt)
+                await sleep_backoff(attempt, self._backoff_base)
                 return (False, 0, None, latency, error)  # Retry without toggle
             return self._result_builder.build_error_result(
                 resp.status_code, latency, error, url, options_snapshot
@@ -610,7 +611,7 @@ class FirecrawlClient:
             error = f"invalid_json: {exc}"
             self._payload_logger.log_invalid_json(str(exc), resp.status_code)
             if attempt < self._max_retries:
-                await asyncio_sleep_backoff(self._backoff_base, attempt)
+                await sleep_backoff(attempt, self._backoff_base)
                 return (False, 0, None, latency, error)
             return self._result_builder.build_error_result(
                 resp.status_code, latency, error, url, options_snapshot

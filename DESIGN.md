@@ -116,10 +116,7 @@ components:
 ## Overview
 
 Frost is the design system for Ratatoskr — an editorial news-aggregation
-product. Components ship at `clients/web/src/design/`. The Frost migration
-is complete: all 17 pages and AppShell run on Frost components; legacy Carbon
-tokens (`--rtk-color-focus`, `--rtk-color-success`, `--rtk-color-warning`,
-`--rtk-radius-*`) have been removed.
+product. Components ship at `clients/web/src/design/`.
 
 Frost's three principles:
 
@@ -303,15 +300,13 @@ Selected anchors:
 The full implemented component surface exported from
 `clients/web/src/design/index.ts` includes:
 
-**Frost primitives:** `BracketButton`, `BracketSearch`, `BrutalistCard`,
+**Primitives:** `BracketButton`, `BracketSearch`, `BrutalistCard`,
 `BrutalistSkeleton` / `BrutalistSkeletonText` / `BrutalistSkeletonPlaceholder` /
 `BrutalistDataTableSkeleton`, `MonoInput`, `MonoProgressBar`, `MonoSelect` /
-`MonoSelectItem`, `MonoTextArea`, `SparkLoading`, `StatusBadge`, `Toast`
-
-**In-place rewrites (Frost shape):** `IconButton`, `Tag`, `Link`,
-`NumberInput`, `Checkbox`, `RadioButton` / `RadioButtonGroup`, `Toggle`,
-`CodeSnippet`, `FileUploader`, `UnorderedList` / `ListItem`,
-`Accordion` / `AccordionItem`
+`MonoSelectItem`, `MonoTextArea`, `SparkLoading`, `StatusBadge`, `Toast`,
+`IconButton`, `Tag`, `Link`, `NumberInput`, `Checkbox`,
+`RadioButton` / `RadioButtonGroup`, `Toggle`, `CodeSnippet`, `FileUploader`,
+`UnorderedList` / `ListItem`, `Accordion` / `AccordionItem`
 
 **Navigation:** `BracketTabs` / `BracketTabList` / `BracketTab` /
 `BracketTabPanels` / `BracketTabPanel`, `BracketPagination`,

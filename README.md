@@ -55,8 +55,7 @@ Optional scraper, YouTube, Twitter/X, MCP, and provider tuning now live in
 
 Compose profiles:
 
-- `with-scrapers` (recommended) starts the full self-hosted scraper sidecar stack: `firecrawl-api` (port 3002), `crawl4ai` (port 11235), and `defuddle-api` (port 3003) plus their dependencies. Set `FIRECRAWL_SELF_HOSTED_ENABLED=true` to activate the Firecrawl rung. Cloud Firecrawl is not used for article extraction; there is no `FIRECRAWL_API_KEY` requirement.
-- `with-firecrawl` starts the same sidecar set and is kept for backward compatibility; `with-scrapers` is the preferred name going forward.
+- `with-scrapers` starts the full self-hosted scraper sidecar stack: `firecrawl-api` (port 3002), `crawl4ai` (port 11235), and `defuddle-api` (port 3003) plus their dependencies. Set `FIRECRAWL_SELF_HOSTED_ENABLED=true` to activate the Firecrawl rung. Cloud Firecrawl is not used for article extraction; there is no `FIRECRAWL_API_KEY` requirement.
 - `with-cloud-ollama` adds a remote OpenAI-compatible Ollama reachability check; set `LLM_PROVIDER=ollama` and `OLLAMA_*` values to use it. It does not start a local model server.
 - `with-monitoring` starts Prometheus, Grafana, Loki, Promtail, and node-exporter.
 - `mcp`, `mcp-write`, and `mcp-public` start the optional MCP server variants.
@@ -65,7 +64,7 @@ For the guided walkthrough, see the
 [5-minute Quickstart Tutorial](docs/tutorials/quickstart.md). For the
 full setup including TLS, monitoring, and backups, see
 [DEPLOYMENT.md](docs/DEPLOYMENT.md).
-The Phase 2 onboarding script is tracked in
+The onboarding script is tracked in
 [Clone to First Summary](docs/how-to/clone-to-first-summary.md) for repeatable
 10-minute validation runs.
 

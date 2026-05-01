@@ -108,7 +108,7 @@ class URLHandler:
             relationship_analysis_service=self._relationship_analysis_service,
         )
 
-        # Backward-compatible attribute for tests/introspection.
+        # Test/introspection seam: exposes the awaiting-state mapping directly.
         self._awaiting_url_users = self._awaiting_state.raw_state
 
     async def _compute_url_timeout(self, url: str, attempt: int = 0) -> float:
@@ -168,13 +168,9 @@ class URLHandler:
         """Add user to awaiting URL list."""
         await self._awaiting_state.add(uid)
 
-    async def cancel_pending_requests(self, uid: int) -> tuple[bool, bool]:
-        """Cancel any pending URL requests for a user.
-
-        Returns (awaiting_cancelled, False) for backward compatibility.
-        """
-        awaiting_cancelled = await self._awaiting_state.remove(uid)
-        return awaiting_cancelled, False
+    async def cancel_pending_requests(self, uid: int) -> bool:
+        """Cancel any pending URL requests for a user. Returns whether the user was awaiting."""
+        return await self._awaiting_state.remove(uid)
 
     async def handle_awaited_url(
         self,

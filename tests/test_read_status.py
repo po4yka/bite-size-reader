@@ -4,7 +4,7 @@ import unittest
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-from app.adapters.telegram.command_processor import CommandProcessor
+from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.db.models import database_proxy
 from app.db.session import DatabaseSessionManager
@@ -108,47 +108,47 @@ def make_bot(tmp_path: str) -> ReadStatusBot:
 
 class TestParseUnreadArguments(unittest.TestCase):
     def test_parse_unread_with_mention_only(self) -> None:
-        limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot")
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread@bot")
         assert limit == 5
         assert topic is None
 
     def test_parse_unread_with_mention_and_limit(self) -> None:
-        limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot 3")
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread@bot 3")
         assert limit == 3
         assert topic is None
 
     def test_parse_unread_with_mention_and_topic(self) -> None:
-        limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot gardening")
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread@bot gardening")
         assert limit == 5
         assert topic == "gardening"
 
     def test_parse_unread_with_numeric_topic_only(self) -> None:
-        limit, topic = CommandProcessor._parse_unread_arguments("/unread 2024")
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread 2024")
         assert limit == 5
         assert topic == "2024"
 
     def test_parse_unread_with_numeric_topic_and_limit(self) -> None:
-        limit, topic = CommandProcessor._parse_unread_arguments("/unread 2024 limit=3")
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread 2024 limit=3")
         assert limit == 3
         assert topic == "2024"
 
     def test_parse_unread_with_topic_and_trailing_limit(self) -> None:
-        limit, topic = CommandProcessor._parse_unread_arguments("/unread ai 2")
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread ai 2")
         assert limit == 2
         assert topic == "ai"
 
     def test_parse_unread_trailing_limit_above_max_is_topic(self) -> None:
-        limit, topic = CommandProcessor._parse_unread_arguments("/unread ai 99")
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread ai 99")
         assert limit == 5
         assert topic == "ai 99"
 
     def test_parse_unread_numeric_only_without_mention_is_topic(self) -> None:
-        limit, topic = CommandProcessor._parse_unread_arguments("/unread 3")
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread 3")
         assert limit == 5
         assert topic == "3"
 
     def test_parse_unread_numeric_only_with_mention_is_limit(self) -> None:
-        limit, topic = CommandProcessor._parse_unread_arguments("/unread@bot 4")
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread@bot 4")
         assert limit == 4
         assert topic is None
 

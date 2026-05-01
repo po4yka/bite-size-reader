@@ -117,13 +117,3 @@ class EmbeddingService(EmbeddingSerializationMixin):
     async def aclose(self) -> None:
         """Async wrapper for close()."""
         await asyncio.to_thread(self.close)
-
-    @property
-    def model_name(self) -> str:
-        """Get default model name (for backward compatibility)."""
-        return self._default_model
-
-    @property
-    def dimensions(self) -> int:
-        """Get default model dimensions (for backward compatibility)."""
-        return self.get_dimensions(None)

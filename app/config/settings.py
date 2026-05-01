@@ -519,5 +519,5 @@ class ConfigHelper:
         return tuple(client_ids)
 
 
-# Singleton instance for backward compatibility
+# Public alias used across the codebase.
 Config = ConfigHelper

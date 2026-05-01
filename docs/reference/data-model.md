@@ -319,7 +319,7 @@ CREATE TABLE sources (
 
 - Unique `(kind, external_id)` for natural source identity.
 - Non-unique `(kind, is_active)` for ingestion scans.
-- `legacy_rss_feed_id` and `legacy_channel_id` preserve backward compatibility and allow rollback to the old RSS/channel surfaces.
+- `legacy_rss_feed_id` and `legacy_channel_id` cross-reference the source row to the original `rss_feeds` / `channels` table entry, populated by `feed_poller` and `signal_ingester` and propagated as ingestion metadata.
 
 ---
 
@@ -542,7 +542,7 @@ CREATE TABLE crawl_results (
     firecrawl_error_code     TEXT,
     firecrawl_error_message  TEXT,
     firecrawl_details_json   TEXT,  -- Error details
-    raw_response_json        TEXT,  -- Full Firecrawl response (legacy)
+    raw_response_json        TEXT,  -- Full Firecrawl response; nulled by migration 006 once structured fields are decomposed
     tokens_used              INTEGER,
     latency_ms               INTEGER,
     error_text               TEXT,  -- Internal error message
@@ -569,7 +569,7 @@ CREATE TABLE crawl_results (
 - `firecrawl_error_code` (str, nullable) - Firecrawl error code
 - `firecrawl_error_message` (str, nullable) - Firecrawl error message
 - `firecrawl_details_json` (str, nullable) - Firecrawl error details
-- `raw_response_json` (str, nullable) - Full Firecrawl response (legacy)
+- `raw_response_json` (str, nullable) - Full Firecrawl response; nulled by migration 006 after structured fields are decomposed; readers fall back to it for rows pre-decomposition
 - `tokens_used` (int, nullable) - Tokens consumed
 - `latency_ms` (int, nullable) - API call latency
 - `error_text` (str, nullable) - Internal error message

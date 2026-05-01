@@ -216,14 +216,11 @@ class URLCommandsHandler:
             ctx: The command execution context.
         """
         awaiting_cancelled = False
-        multi_cancelled = False
         active_cancelled = 0
 
         # Cancel pending requests via URL handler
         if self._url_handler is not None:
-            awaiting_cancelled, multi_cancelled = await self._url_handler.cancel_pending_requests(
-                ctx.uid
-            )
+            awaiting_cancelled = await self._url_handler.cancel_pending_requests(ctx.uid)
 
         # Cancel active tasks via task manager
         if self._task_manager is not None:
@@ -233,8 +230,6 @@ class URLCommandsHandler:
         cancelled_parts: list[str] = []
         if awaiting_cancelled:
             cancelled_parts.append("pending URL request")
-        if multi_cancelled:
-            cancelled_parts.append("pending multi-link confirmation")
         if active_cancelled:
             if active_cancelled == 1:
                 cancelled_parts.append("ongoing request")

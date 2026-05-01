@@ -61,7 +61,7 @@ services:
       chroma:
         condition: service_healthy
         required: false # Allow bot to start without ChromaDB (graceful degradation)
-      # only enforced when --profile with-scrapers or with-firecrawl is active
+      # only enforced when --profile with-scrapers is active
       crawl4ai:
         condition: service_healthy
         required: false
@@ -121,7 +121,7 @@ services:
       chroma:
         condition: service_healthy
         required: false # Allow API to start without ChromaDB (graceful degradation)
-      # only enforced when --profile with-scrapers or with-firecrawl is active
+      # only enforced when --profile with-scrapers is active
       crawl4ai:
         condition: service_healthy
         required: false
@@ -350,7 +350,7 @@ services:
 
   firecrawl-api:
     profiles:
-      - with-firecrawl
+      - with-scrapers
     image: ${FIRECRAWL_IMAGE:-ghcr.io/firecrawl/firecrawl:latest}
     container_name: ratatoskr-firecrawl-api
     environment:
@@ -404,7 +404,7 @@ services:
 
   firecrawl-playwright:
     profiles:
-      - with-firecrawl
+      - with-scrapers
     image: ${FIRECRAWL_PLAYWRIGHT_IMAGE:-ghcr.io/firecrawl/playwright-service:latest}
     container_name: ratatoskr-firecrawl-playwright
     environment:
@@ -436,7 +436,7 @@ services:
 
   firecrawl-redis:
     profiles:
-      - with-firecrawl
+      - with-scrapers
     image: redis:7-alpine
     container_name: ratatoskr-firecrawl-redis
     command: ["redis-server", "--bind", "0.0.0.0", "--save", "", "--appendonly", "no"]
@@ -458,7 +458,7 @@ services:
 
   firecrawl-rabbitmq:
     profiles:
-      - with-firecrawl
+      - with-scrapers
     image: rabbitmq:3-management
     container_name: ratatoskr-firecrawl-rabbitmq
     healthcheck:
@@ -480,7 +480,7 @@ services:
 
   firecrawl-postgres:
     profiles:
-      - with-firecrawl
+      - with-scrapers
     image: ${FIRECRAWL_POSTGRES_IMAGE:-ghcr.io/firecrawl/nuq-postgres:latest}
     container_name: ratatoskr-firecrawl-postgres
     environment:
@@ -506,7 +506,6 @@ services:
 
   crawl4ai:
     profiles:
-      - with-firecrawl
       - with-scrapers
     # Pinned to 0.8.0 (stable; "latest" tag tracks this version per upstream).
     # To upgrade: check https://hub.docker.com/r/unclecode/crawl4ai/tags
@@ -537,7 +536,6 @@ services:
 
   defuddle-api:
     profiles:
-      - with-firecrawl
       - with-scrapers
     build:
       context: ./defuddle

@@ -508,7 +508,7 @@ sequenceDiagram
   firecrawl_error_code     -- Firecrawl error code when present
   firecrawl_error_message  -- Firecrawl-provided error message
   firecrawl_details_json   -- Firecrawl error details array/object
-  raw_response_json        -- legacy payload (kept for backward compatibility)
+  raw_response_json        -- full Firecrawl payload; nulled by migration 006 after decomposition
   latency_ms
   error_text
   ```
@@ -1126,7 +1126,7 @@ Content extraction uses an ordered fallback chain via `ContentScraperChain`:
 
 1. **Scrapling** (primary) -- in-process Python library with TLS impersonation. Uses `trafilatura.extract()` for text extraction. Zero external dependencies, fastest path. Browserforge fingerprint randomization via `DynamicFetcher`.
 2. **Crawl4AI** -- HTTP call to a `crawl4ai` Docker sidecar at `SCRAPER_CRAWL4AI_URL` (default port 11235). Optional bearer token via `SCRAPER_CRAWL4AI_TOKEN`.
-3. **Self-hosted Firecrawl** -- same v2 API running in the `with-scrapers` / `with-firecrawl` Docker Compose profile (`firecrawl-api` on port 3002). Handles JS rendering, proxies, PDFs. Requires `FIRECRAWL_SELF_HOSTED_ENABLED=true`.
+3. **Self-hosted Firecrawl** -- same v2 API running in the `with-scrapers` Docker Compose profile (`firecrawl-api` on port 3002). Handles JS rendering, proxies, PDFs. Requires `FIRECRAWL_SELF_HOSTED_ENABLED=true`.
 4. **Defuddle** -- self-hosted Node sidecar at `defuddle-api:3003` (`ops/docker/defuddle/`). The public `defuddle.md` API is deprecated.
 5. **Playwright** -- browser-rendered extraction for JS-heavy pages. Browserforge fingerprint randomization applied.
 6. **Crawlee** -- hybrid single-page extraction (`BeautifulSoupCrawler` then `PlaywrightCrawler`). Browserforge fingerprint randomization applied.
@@ -1146,7 +1146,7 @@ Operational controls include `SCRAPER_ENABLED`, `SCRAPER_PROFILE`, `SCRAPER_BROW
 
 ### Firecrawl (/scrape) -- Self-Hosted
 
-- Self-hosted only via the `with-scrapers` / `with-firecrawl` Docker Compose profile. Cloud Firecrawl is not used for article extraction; `FIRECRAWL_API_KEY` is no longer required.
+- Self-hosted only via the `with-scrapers` Docker Compose profile. Cloud Firecrawl is not used for article extraction; `FIRECRAWL_API_KEY` is no longer required.
 - Converts URL to **markdown**; can also return **html**, **structured**, **screenshots**. Handles proxies, caching, dynamic content, PDFs.
 - Internal service endpoint: `http://firecrawl-api:3002`. Activate via `FIRECRAWL_SELF_HOSTED_ENABLED=true` and `FIRECRAWL_SELF_HOSTED_URL=http://firecrawl-api:3002`.
 - Consider `mobile` emulation and `parsers: ["pdf"]`.

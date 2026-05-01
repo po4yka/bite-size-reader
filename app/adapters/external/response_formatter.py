@@ -1,8 +1,8 @@
 """Response formatting facade.
 
-This module provides the ResponseFormatter class, which serves as a facade for
-the decomposed formatting components. It maintains backward compatibility with
-existing code while delegating to specialized components:
+ResponseFormatter is the public Telegram-output API for Ratatoskr. It composes
+specialized components and exposes a single stable surface used across
+Telegram adapters, API handlers, and the DI container:
 
 - DataFormatterImpl: Stateless data formatting (bytes, metrics, stats)
 - MessageValidatorImpl: Security validation (content safety, URL validation, rate limiting)
@@ -12,28 +12,13 @@ existing code while delegating to specialized components:
 - SummaryPresenterImpl: Summary presentation (structured summaries, translations)
 - DatabasePresenterImpl: Database UI (overview, verification, search results)
 
-All public methods are delegated to the appropriate component while maintaining
-the original API signatures for backward compatibility.
-
-Migration plan (track in parallel with app/services/ cleanup):
-  Phase 1 — notification handlers (app/adapters/telegram/notification_handlers/):
-    Replace ResponseFormatter with NotificationFormatterImpl directly.
-  Phase 2 — Telegram command handlers (app/adapters/telegram/command_handlers/):
-    Replace with ResponseSenderImpl for reply methods.
-  Phase 3 — remaining callers (app/api/, app/di/):
-    Replace with appropriate specialized formatter per caller domain.
-  Milestone: facade removal when importer count reaches 0.
-  Protocols (ResponseSender, NotificationFormatter, etc.) are in
-  app/adapters/external/formatting/protocols.py for use in type hints.
-
-Progress gate: importer count must not grow beyond 46 (baseline 2026-03-18).
-  Verify with: grep -r "from app.adapters.external.response_formatter import" app/ | wc -l
-  Each new direct import is a regression against the migration.
+Component protocols (ResponseSender, NotificationFormatter, etc.) live in
+`app/adapters/external/formatting/protocols.py` for use in type hints when a
+caller needs only one capability rather than the full facade.
 """
 
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING, Any, cast
 
 from app.adapters.external.formatting.data_formatter import DataFormatterImpl
@@ -68,8 +53,8 @@ logger = get_logger(__name__)
 class ResponseFormatter:
     """Handles message formatting and replies to Telegram users.
 
-    This class is a facade that delegates to specialized components for different
-    concerns while maintaining backward compatibility with existing code.
+    Facade that composes specialized formatting/sending components behind a
+    single stable interface.
     """
 
     def __init__(
@@ -84,41 +69,15 @@ class ResponseFormatter:
         topic_manager: TopicManager | None = None,
         lang: str = "en",
     ) -> None:
-        """Initialize the ResponseFormatter facade.
-
-        .. deprecated::
-            ResponseFormatter is a 55+-method delegation facade. Migrate callers
-            to concrete components directly: NotificationFormatterImpl for
-            status notifications, ResponseSenderImpl for core Telegram sending,
-            SummaryPresenterImpl for summary presentation. Track new callers
-            in GitHub and prefer the concrete component in new code.
-
-        Args:
-            safe_reply_func: Optional callback for test compatibility.
-            reply_json_func: Optional callback for test compatibility.
-            telegram_client: Optional Telegram client for message operations.
-            telegram_limits: Optional limits configuration object.
-            verbosity_resolver: Optional resolver for per-user verbosity.
-                When *None*, all notification methods behave as DEBUG (legacy).
-            admin_log_chat_id: Optional chat ID for admin-level debug logging.
-        """
-        warnings.warn(
-            "ResponseFormatter is deprecated; import from concrete components "
-            "(NotificationFormatterImpl, ResponseSenderImpl, SummaryPresenterImpl) directly.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         self._verbosity_resolver = verbosity_resolver
         self._lang = lang
 
-        # Load limits from config (with backward-compatible defaults)
         if telegram_limits is not None:
             self.MAX_MESSAGE_CHARS = telegram_limits.max_message_chars
             self.MAX_URL_LENGTH = telegram_limits.max_url_length
             self.MAX_BATCH_URLS = telegram_limits.max_batch_urls
             self.MIN_MESSAGE_INTERVAL_MS = telegram_limits.min_message_interval_ms
         else:
-            # Fallback defaults for backward compatibility
             self.MAX_MESSAGE_CHARS = 3500
             self.MAX_URL_LENGTH = 2048
             self.MAX_BATCH_URLS = 200
@@ -190,7 +149,6 @@ class ResponseFormatter:
             progress_tracker=progress_tracker,
         )
 
-        # Expose internal state for backward compatibility with existing code
         self._last_message_time: float = 0.0
         self._notified_error_ids: set[str] = set()
 
@@ -649,7 +607,7 @@ class ResponseFormatter:
         )
 
     # =========================================================================
-    # Private methods exposed for backward compatibility with tests
+    # Private methods exposed for tests
     # =========================================================================
 
     def _validate_content(self, text: str) -> tuple[bool, str]:

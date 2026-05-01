@@ -1,8 +1,8 @@
 """
 Authentication API endpoints.
 
-This module aggregates focused auth sub-routers into a single router exported
-by `app.api.routers.auth` for backward compatibility.
+Aggregates focused auth sub-routers (telegram, secret keys, me, sessions) into
+the single router re-exported by `app.api.routers.auth`.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ router.include_router(endpoints_secret_keys.router)
 router.include_router(endpoints_me.router)
 router.include_router(endpoints_sessions.router)
 
-# Re-export handlers for tests/backward-compat (tests call these functions directly)
+# Re-export handlers so tests can call them directly without going through HTTP.
 telegram_login = endpoints_telegram.telegram_login
 get_telegram_link_status = endpoints_telegram.get_telegram_link_status
 begin_telegram_link = endpoints_telegram.begin_telegram_link

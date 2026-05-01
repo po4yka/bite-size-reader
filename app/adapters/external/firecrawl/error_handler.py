@@ -13,7 +13,6 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.external.firecrawl.models import FirecrawlSearchResult
-from app.core.backoff import sleep_backoff as _sleep_backoff
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
 from app.utils.retry_utils import is_retryable_status_code
@@ -273,14 +272,3 @@ class ErrorHandler:
         )
 
 
-async def asyncio_sleep_backoff(base: float, attempt: int) -> None:
-    """Sleep with exponential backoff and jitter.
-
-    Thin wrapper around :func:`app.core.backoff.sleep_backoff` kept for
-    backward compatibility with existing callers.
-
-    Args:
-        base: Base delay in seconds
-        attempt: Current attempt number (0-indexed)
-    """
-    await _sleep_backoff(attempt, base)

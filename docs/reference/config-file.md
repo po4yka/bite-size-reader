@@ -134,7 +134,7 @@ mcp:
   `http://defuddle-api:3003`). The sidecar can be replaced by the public
   `https://defuddle.md` API for development by setting
   `SCRAPER_DEFUDDLE_API_BASE_URL=https://defuddle.md`.
-- The `with-firecrawl` Docker Compose profile starts an in-compose self-hosted
+- The `with-scrapers` Docker Compose profile starts an in-compose self-hosted
   Firecrawl stack at `http://firecrawl-api:3002`. Set
   `scraper.firecrawl_self_hosted_enabled: true` to use it; self-hosted
   Firecrawl takes precedence when both self-hosted and cloud Firecrawl are
