@@ -49,6 +49,7 @@ clients/web/coverage/
 # CRITICAL: Never commit this file. Create a `.env.example` instead.
 .env
 *.env
+.env.bak*
 
 # Model configuration (deployment-specific; track ops/config/models.yaml.example instead)
 config/models.yaml
@@ -75,6 +76,9 @@ logs/
 # --- Runtime Data ---
 # Application data directory (SQLite DB, session files, backups)
 data/
+
+# Local ChromaDB vector store data
+chroma_data/
 
 # --- Temporary/Data Files ---
 # Export files, data dumps, and temporary text files
