@@ -395,7 +395,7 @@ docker run -d \
 
 ## See Also
 
-- [CHANGELOG.md](../../CHANGELOG.md) - Version history
+- [CHANGELOG.md](../CHANGELOG.md) - Version history
 - [DEPLOYMENT.md](../DEPLOYMENT.md) - Deployment guide
 - [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) - Fix issues
 - [Backup and Restore Guide](backup-and-restore.md) - Data protection
