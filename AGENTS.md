@@ -47,7 +47,7 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 - `bot.py` -- Entrypoint
 - `docs/SPEC.md` -- Full technical specification (canonical reference)
 - `docs/reference/frontend-web.md` -- Web frontend contracts
-- `docs/DESIGN.md` -- Frost design system spec (DESIGN.md format). Canonical for web UI tokens, typography, components, and anti-patterns.
+- `DESIGN.md` -- Frost design system spec (DESIGN.md format). Canonical for web UI tokens, typography, components, and anti-patterns.
 
 ## Development Commands
 
@@ -78,13 +78,13 @@ python -m app.cli.summary --url <URL>           # CLI test runner
 5. Update both `en/` and `ru/` prompts when changing LLM behavior
 6. Validate summary JSON with `app/core/summary_contract.py`
 7. Database changes require migration via `app/cli/migrate_db.py` + docs/SPEC.md update
-8. Web frontend changes: read `docs/reference/frontend-web.md` first, run `npm run check:static` before finalizing. Web UI must adapt to ≤768px via container queries on AppShell main; see `docs/DESIGN.md` Mobile section.
+8. Web frontend changes: read `docs/reference/frontend-web.md` first, run `npm run check:static` before finalizing. Web UI must adapt to ≤768px via container queries on AppShell main; see DESIGN.md Mobile section.
 9. State scope explicitly when giving an instruction; don't expect silent generalization across items
 10. Tell the agent what to do, not what to avoid (e.g., "use `tests/db_helpers.py`" vs. "don't write new fixtures")
 11. Front-load the full task spec on the first turn; iterative refinement loses context against multi-step plans
 12. Make independent tool calls in parallel; sequence only when one result determines the next call's parameters
 13. Read code before asserting its behavior; cite `file:line` for non-obvious claims
-14. Web UI design: read `docs/DESIGN.md` (Frost) before adding tokens, components, colors, or motion. Use `--frost-*` tokens; do not introduce arbitrary hex values or new CSS custom properties outside the Frost token set.
+14. Web UI design: read `DESIGN.md` (Frost) before adding tokens, components, colors, or motion. Use `--frost-*` tokens; do not introduce arbitrary hex values or new CSS custom properties outside the Frost token set.
 
 ## Database
 
@@ -279,7 +279,7 @@ This is the canonical Codex overlay used by the README install command.
 9. Assessment scores are auto-applied from trusted internal run-batches imports, or via Claude cloud session imports (`desloppify review --external-start --external-runner claude` then printed `--external-submit`). Legacy attested external import via `--attested-external` remains supported.
 10. Manual override is safety-scoped: you cannot combine it with `--allow-partial`, and provisional manual scores expire on the next `scan` unless replaced by trusted internal or attested-external imports.
 11. If a batch fails, retry only that slice with `desloppify review --run-batches --packet <packet.json> --only-batches <idxs>`.
-12. For Frost web frontend tasks, consult `docs/reference/frontend-web.md` and `docs/DESIGN.md`, and run `cd clients/web && npm run check:static` before completion.
+12. For Frost web frontend tasks, consult `docs/reference/frontend-web.md` and `DESIGN.md`, and run `cd clients/web && npm run check:static` before completion.
 
 <!-- desloppify-overlay: codex -->
 <!-- desloppify-end -->

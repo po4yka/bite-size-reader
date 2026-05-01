@@ -34,7 +34,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - loguru, orjson (structured logging, fast JSON serialization)
 - FastAPI / uvicorn (Mobile REST API)
 - React 18 + TypeScript + Vite (web frontend)
-- Frost design system (`clients/web/src/design/`) — editorial monospace minimalism with two-color rule + spark accent. See `docs/DESIGN.md`.
+- Frost design system (`clients/web/src/design/`) — editorial monospace minimalism with two-color rule + spark accent. See DESIGN.md.
 - @tanstack/react-query (web data fetching, caching, polling)
 - PyJWT (JWT authentication)
 - redis (optional caching and distributed locking)
@@ -245,7 +245,7 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
    - Read `docs/reference/frontend-web.md` before changing web architecture, routing, auth, or data layer behavior
    - Keep same-host serving contract intact (`/web`, `/web/*`, `/static/web/*`)
    - Preserve hybrid auth behavior (Telegram WebApp header mode and JWT mode with refresh)
-   - Web UI must adapt to ≤768px via container queries on AppShell main; see `docs/DESIGN.md` Mobile section.
+   - Web UI must adapt to ≤768px via container queries on AppShell main; see DESIGN.md Mobile section.
    - Run `cd clients/web && npm run check:static && npm run test` before finalizing
 
 ### Security Considerations
@@ -368,7 +368,7 @@ When making changes, these are the most critical files to understand:
 - **`app/mcp/server.py`** -- MCP server for AI agents
 - **`bot.py`** -- Entrypoint (wires everything together)
 - **`docs/SPEC.md`** -- Full technical specification (canonical reference)
-- **`docs/DESIGN.md`** -- Frost design system specification (DESIGN.md format, https://github.com/google-labs-code/design.md). Canonical reference for tokens, typography, components, and UI rules for the web client.
+- **`DESIGN.md`** -- Frost design system specification (DESIGN.md format, https://github.com/google-labs-code/design.md). Canonical reference for tokens, typography, components, and UI rules for the web client.
 
 ## Impeccable Design Skills
 
@@ -468,6 +468,6 @@ For questions about the codebase, always refer to:
 1. This file (CLAUDE.md) for AI assistant guidance
 2. docs/SPEC.md for technical specification
 3. docs/reference/frontend-web.md for web frontend contracts and workflows
-4. docs/DESIGN.md for the Frost design system (tokens, typography, components, anti-patterns). Read before any web UI change.
+4. DESIGN.md for the Frost design system (tokens, typography, components, anti-patterns). Read before any web UI change.
 5. README.md for user-facing documentation
 6. Code comments and docstrings for implementation details

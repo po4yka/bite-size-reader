@@ -255,7 +255,7 @@ Background, context, and "why" discussions.
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Debugging guide | When something goes wrong |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Setup and deployment | Initial setup, production deploy |
 | [environment_variables.md](environment_variables.md) | Config reference | Configuring the system |
-| [CHANGELOG.md](CHANGELOG.md) | Version history | Tracking changes over time |
+| [CHANGELOG.md](../CHANGELOG.md) | Version history | Tracking changes over time |
 
 ### Specialized Documentation
 

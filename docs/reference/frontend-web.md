@@ -13,7 +13,7 @@ Reference for the web interface implemented in `clients/web/`.
 The web interface is the sole frontend surface — a standalone SPA built with:
 
 - React 19 + TypeScript + Vite
-- The Frost design system under `clients/web/src/design/` (project-owned, brutalist; see `../DESIGN.md`)
+- The Frost design system under `clients/web/src/design/` (project-owned, brutalist; see `DESIGN.md`)
 - `@tanstack/react-query` for server state and polling
 
 It is built into `app/static/web` and served by FastAPI on `/web` and `/web/*`.
@@ -22,7 +22,7 @@ It is built into `app/static/web` and served by FastAPI on `/web` and `/web/*`.
 
 `clients/web/src/design/` exports the Frost design system: editorial monospace
 minimalism with a two-color rule (ink + page) and a single critical accent
-(spark). See `../DESIGN.md` for the canonical spec.
+(spark). See `DESIGN.md` at the repo root for the canonical spec.
 
 Frost primitives: `BracketButton`, `BracketSearch`, `BrutalistCard`,
 `BrutalistSkeleton` (+ Text/Placeholder/DataTable variants), `MonoInput`,

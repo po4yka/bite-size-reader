@@ -89,7 +89,7 @@ authenticates successfully, then stores the old file as
 - Mobile API digest/system routers now delegate orchestration to dedicated services (`DigestFacade`, `SystemMaintenanceService`) instead of in-router DB/Redis/file workflows.
 - Formatter component boundaries now enforce protocol interfaces at constructor/public seams rather than concrete `*Impl` coupling.
 - Project docs refreshed to reflect current architecture boundaries and service decomposition across Telegram/API/formatting flows.
-- Project documentation refreshed for dual frontend setup, including a new Carbon web frontend guide and updated deployment/local-dev/quickstart/spec/API docs.
+- Project documentation refreshed for dual frontend setup, including a new Carbon web frontend guide (`FRONTEND.md`) and updated deployment/local-dev/quickstart/spec/API docs.
 - Project documentation refreshed for mixed-source aggregation coverage, rollout flags, bundle observability, and FastAPI aggregation endpoints.
 
 ### Fixed

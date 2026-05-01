@@ -13,7 +13,7 @@ external MCP / webhook integrations.
 **Estimated Time:** 5–15 minutes depending on integrations.
 **Related:** [DEPLOYMENT.md](../DEPLOYMENT.md),
 [Migrate Versions (general)](migrate-versions.md),
-[`CHANGELOG.md`](../CHANGELOG.md) for the canonical breaking-change list.
+[`CHANGELOG.md`](../../CHANGELOG.md) for the canonical breaking-change list.
 
 ---
 
