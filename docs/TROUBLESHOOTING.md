@@ -1321,7 +1321,6 @@ If you're still stuck after trying these steps:
 - [DEPLOYMENT.md](DEPLOYMENT.md) - Setup and deployment guides
 - [FAQ.md](FAQ.md) - Frequently asked questions
 - [SPEC.md](SPEC.md) - Technical specification
-- [ADRs](adr/README.md) - Architecture decision records
 
 ---
 

@@ -636,7 +636,6 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 - Read [CLAUDE.md](../../CLAUDE.md) - Comprehensive codebase guide
 - Read [SPEC.md](../SPEC.md) - Technical specification
-- Read [ADRs](../adr/README.md) - Architectural decisions
 
 **Make contributions**:
 

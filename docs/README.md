@@ -52,7 +52,6 @@ You want to contribute code, customize the bot, or understand the architecture.
 
 **Next steps**:
 
-- [ADRs](adr/README.md) - Architecture decision records (why things are this way)
 - [Multi-Agent Architecture](multi_agent_architecture.md) - LLM pipeline design
 - [Explanation docs](README.md#explanation-understanding-oriented) - Design rationale
 
@@ -81,12 +80,10 @@ You want to submit pull requests or improve the project.
 
 1. [Local Development Tutorial](tutorials/local-development.md)
 2. Code standards: See [CLAUDE.md § Code Standards](../CLAUDE.md#code-standards)
-3. [ADR Template](adr/template.md) - For documenting architectural decisions
 
 **Next steps**:
 
 - [SPEC.md](SPEC.md) - Technical specification
-- [ADRs](adr/README.md) - Understand past decisions
 - [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Code organization
 - [Scraper chain explainer](explanation/scraper-chain.md) - Provider taxonomy, fallback logic, and deployment topology
 - [Frontend Web Guide](reference/frontend-web.md) - web app architecture and design shim notes
@@ -155,7 +152,7 @@ You want to integrate Ratatoskr with other tools or build a client.
 - **Get the high-level picture** → [Architecture Overview](explanation/architecture-overview.md)
 - **Understand the layer rationale** → [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
 - **Understand the multi-agent pipeline** → [Multi-Agent Architecture](multi_agent_architecture.md)
-- **Understand design decisions** → [ADRs](adr/README.md)
+- **Understand design decisions** → [Design Philosophy](explanation/design-philosophy.md)
 - **See the full technical spec** → [SPEC.md](SPEC.md)
 
 ### 🧑‍💻 Developing
@@ -230,7 +227,6 @@ Technical facts, API specs, and complete references.
 | [OpenAPI Schema](openapi/) | Machine-readable API spec | Integrators |
 | [Summary Contract](SPEC.md#summary-json-contract) | JSON output format (35+ fields) | Developers, Integrators |
 | [Database Schema](SPEC.md#database-schema) | Database tables and relationships | Developers, Integrators |
-| [ADR Template](adr/template.md) | Architecture decision template | Contributors |
 
 ### Explanation (Understanding-Oriented)
 
@@ -239,7 +235,6 @@ Background, context, and "why" discussions.
 | Explanation | Description | Audience |
 | ------------- | ------------- | ---------- |
 | [Architecture Overview](explanation/architecture-overview.md) | Component diagram, request lifecycle, subsystem index | Operators, Developers, Integrators |
-| [ADRs](adr/README.md) | Architecture decision records | Developers, Contributors |
 | [Hexagonal Architecture](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) | Why ports and adapters | Developers |
 | [Multi-Agent Architecture](multi_agent_architecture.md) | Why specialized agents | Developers |
 | [MCP Server](mcp_server.md) | AI agent integration explained | Integrators |
@@ -273,16 +268,6 @@ Background, context, and "why" discussions.
 | [mcp_server.md](mcp_server.md) | MCP integration | Integrating with AI agents |
 | [claude_code_hooks.md](claude_code_hooks.md) | Safety hooks | Understanding dev workflow |
 
-### Architecture Decision Records
-
-| ADR | Title | When to Read |
-| ----- | ------- | -------------- |
-| [ADR-0001](adr/0001-use-firecrawl-for-content-extraction.md) | Use Firecrawl | Why Firecrawl vs alternatives |
-| [ADR-0002](adr/0002-strict-json-summary-contract.md) | Strict JSON contract | Why structured output |
-| [ADR-0003](adr/0003-single-user-access-control.md) | Single-user access | Why not multi-tenant |
-| [ADR-0004](adr/0004-hexagonal-architecture.md) | Hexagonal architecture | Why ports and adapters |
-| [ADR-0005](adr/0005-multi-agent-llm-pipeline.md) | Multi-agent pipeline | Why specialized agents |
-
 ---
 
 ## Glossary
@@ -310,7 +295,7 @@ See the [Architecture Overview](explanation/architecture-overview.md) for an ann
 | Keyword | See Documentation |
 | --------- | ------------------- |
 | **API integration** | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md), [First Mobile API Client Tutorial](tutorials/first-mobile-api-client.md) |
-| **Architecture** | [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md), [ADRs](adr/README.md) |
+| **Architecture** | [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md), [Architecture Overview](explanation/architecture-overview.md) |
 | **Backup** | [How to backup and restore](how-to/backup-and-restore.md), [TROUBLESHOOTING.md § Database](TROUBLESHOOTING.md#database-issues) |
 | **ChromaDB** | [How to setup ChromaDB](how-to/setup-chroma-vector-search.md), [TROUBLESHOOTING.md § ChromaDB](TROUBLESHOOTING.md#chromadb-issues) |
 | **Configuration** | [environment_variables.md](environment_variables.md), [FAQ § Configuration](FAQ.md#configuration) |
@@ -319,19 +304,19 @@ See the [Architecture Overview](explanation/architecture-overview.md) for an ann
 | **Debugging** | [TROUBLESHOOTING.md](TROUBLESHOOTING.md), [SPEC.md § Correlation IDs](SPEC.md#correlation-ids) |
 | **Deployment** | [DEPLOYMENT.md](DEPLOYMENT.md), [Quickstart Tutorial](tutorials/quickstart.md) |
 | **Docker** | [DEPLOYMENT.md § Docker](DEPLOYMENT.md), [FAQ § Installation](FAQ.md#installation) |
-| **Firecrawl** | [ADR-0001](adr/0001-use-firecrawl-for-content-extraction.md), [TROUBLESHOOTING.md § Firecrawl](TROUBLESHOOTING.md#firecrawl-issues) |
+| **Firecrawl** | [Scraper chain explainer](explanation/scraper-chain.md), [TROUBLESHOOTING.md § Firecrawl](TROUBLESHOOTING.md#firecrawl-issues) |
 | **Installation** | [DEPLOYMENT.md](DEPLOYMENT.md), [FAQ § Installation](FAQ.md#installation) |
 | **LLM models** | [environment_variables.md § LLM](environment_variables.md), [FAQ § Cost](FAQ.md#what-are-the-cheapest-models-that-work-well) |
 | **MCP Server** | [mcp_server.md](mcp_server.md), [TROUBLESHOOTING.md § MCP](TROUBLESHOOTING.md#mcp-server-issues) |
 | **Mobile API** | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md), [First Mobile API Client Tutorial](tutorials/first-mobile-api-client.md) |
 | **Mixed-source aggregation** | [SPEC.md](SPEC.md), [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md), [environment_variables.md](environment_variables.md) |
-| **Multi-agent** | [multi_agent_architecture.md](multi_agent_architecture.md), [ADR-0005](adr/0005-multi-agent-llm-pipeline.md) |
+| **Multi-agent** | [multi_agent_architecture.md](multi_agent_architecture.md) |
 | **OpenRouter** | [environment_variables.md § OpenRouter](environment_variables.md), [TROUBLESHOOTING.md § OpenRouter](TROUBLESHOOTING.md#openrouter-issues) |
 | **Performance** | [How to optimize performance](how-to/optimize-performance.md), [TROUBLESHOOTING.md § Performance](TROUBLESHOOTING.md#performance-issues) |
 | **Redis** | [How to setup Redis](how-to/setup-redis-caching.md), [TROUBLESHOOTING.md § Redis](TROUBLESHOOTING.md#redis-issues) |
 | **Search** | [SPEC.md § Search](SPEC.md#search), [How to setup ChromaDB](how-to/setup-chroma-vector-search.md) |
-| **Security** | [ADR-0003](adr/0003-single-user-access-control.md), [FAQ § Security](FAQ.md#security) |
-| **Summary contract** | [SPEC.md § Summary JSON Contract](SPEC.md#summary-json-contract), [ADR-0002](adr/0002-strict-json-summary-contract.md) |
+| **Security** | [FAQ § Security](FAQ.md#security) |
+| **Summary contract** | [SPEC.md § Summary JSON Contract](SPEC.md#summary-json-contract), [Summary Contract Design](explanation/summary-contract-design.md) |
 | **Testing** | [Local Development Tutorial § Testing](tutorials/local-development.md), [CLAUDE.md § Testing](../CLAUDE.md#testing) |
 | **Troubleshooting** | [TROUBLESHOOTING.md](TROUBLESHOOTING.md), [FAQ](FAQ.md) |
 | **Web interface** | [Frontend Web Guide](reference/frontend-web.md), [README.md § Web Interface](../README.md#web-interface-v1) |

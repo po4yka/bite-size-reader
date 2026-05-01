@@ -4,7 +4,7 @@ Why Ratatoskr enforces a strict 35+ field JSON schema for all summaries.
 
 **Audience:** Developers, Architects
 **Type:** Explanation
-**Related:** [ADR-0002](../adr/0002-strict-json-summary-contract.md), [Design Philosophy](design-philosophy.md)
+**Related:** [Design Philosophy](design-philosophy.md)
 
 ---
 
@@ -284,8 +284,6 @@ class SummaryOutput(BaseModel):
 
 **Success Rate:** 94%+ (vs 85% without self-correction).
 
-See: [ADR-0005 Multi-Agent Pipeline](../adr/0005-multi-agent-llm-pipeline.md)
-
 ---
 
 ## Trade-offs
@@ -520,7 +518,6 @@ class SourceType(str, Enum):
 
 ## See Also
 
-- [ADR-0002: Strict JSON Summary Contract](../adr/0002-strict-json-summary-contract.md) - Decision record
 - [Design Philosophy](design-philosophy.md) - Overall architectural principles
 - [SPEC.md § Summary JSON Contract](../SPEC.md#summary-json-contract) - Full field reference
 - [Multi-Agent Architecture](../multi_agent_architecture.md) - Self-correction implementation

@@ -8,8 +8,7 @@ and configuration recipes.
 or extend the content-extraction pipeline.
 **Type:** Explanation.
 **Related:** [`docs/explanation/architecture-overview.md`](architecture-overview.md)
-(parent), [`docs/adr/0006-multi-provider-scraper-chain.md`](../adr/0006-multi-provider-scraper-chain.md)
-(decision history), [`docs/environment_variables.md`](../environment_variables.md)
+(parent), [`docs/environment_variables.md`](../environment_variables.md)
 (full env-var reference), [`docs/FAQ.md`](../FAQ.md) (operational tips).
 **Source:**
 [`app/adapters/content/scraper/chain.py`](../../app/adapters/content/scraper/chain.py),
@@ -269,7 +268,6 @@ SCRAPER_SCRAPEGRAPH_ENABLED=false
 ## Cross-references
 
 - Parent architecture: [`docs/explanation/architecture-overview.md`](architecture-overview.md)
-- Decision record: [`docs/adr/0006-multi-provider-scraper-chain.md`](../adr/0006-multi-provider-scraper-chain.md)
 - All scraper env vars: [`docs/environment_variables.md`](../environment_variables.md)
 - Operational tips: [`docs/FAQ.md`](../FAQ.md)
 - Source — chain: [`app/adapters/content/scraper/chain.py`](../../app/adapters/content/scraper/chain.py)

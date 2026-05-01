@@ -58,7 +58,6 @@ def test_monitoring_alert_names_use_ratatoskr_prefix() -> None:
 def test_deployment_docs_match_current_firecrawl_compose_shape() -> None:
     compose = _read("ops/docker/docker-compose.yml")
     deployment = _read("docs/DEPLOYMENT.md")
-    scraper_adr = _read("docs/adr/0006-multi-provider-scraper-chain.md")
 
     compose_has_firecrawl_service = "\n  firecrawl" in compose
     if compose_has_firecrawl_service:
@@ -71,7 +70,7 @@ def test_deployment_docs_match_current_firecrawl_compose_shape() -> None:
         "Self-hosted Firecrawl services in `ops/docker/docker-compose.yml`",
     ]
 
-    offenders = [claim for claim in forbidden_claims if claim in deployment or claim in scraper_adr]
+    offenders = [claim for claim in forbidden_claims if claim in deployment]
 
     assert offenders == []
 

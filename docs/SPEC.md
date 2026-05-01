@@ -1142,7 +1142,6 @@ Operational controls include `SCRAPER_ENABLED`, `SCRAPER_PROFILE`, `SCRAPER_BROW
 - Protocol: `app/adapters/content/scraper/protocol.py` (`ContentScraperProtocol`)
 - Chain: `app/adapters/content/scraper/chain.py` (`ContentScraperChain`)
 - Factory: `app/adapters/content/scraper/factory.py` (`ContentScraperFactory`)
-- ADR: [ADR-0006](adr/0006-multi-provider-scraper-chain.md)
 
 ### Firecrawl (/scrape) -- Self-Hosted
 

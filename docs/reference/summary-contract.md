@@ -520,7 +520,6 @@ summary_v2 = {
 
 - [Summary Contract Design](../explanation/summary-contract-design.md) - Design rationale
 - [SPEC.md § Summary JSON Contract](../SPEC.md#summary-json-contract-canonical) - Canonical specification
-- [ADR-0002: Strict JSON Summary Contract](../adr/0002-strict-json-summary-contract.md) - Decision record
 
 ---
 

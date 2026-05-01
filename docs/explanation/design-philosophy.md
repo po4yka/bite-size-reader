@@ -4,7 +4,7 @@ Understanding the principles and trade-offs behind Ratatoskr's architecture.
 
 **Audience:** Developers, Architects
 **Type:** Explanation
-**Related:** [ADR Index](../adr/README.md), [Hexagonal Architecture](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
+**Related:** [Hexagonal Architecture](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md), [Architecture Overview](architecture-overview.md)
 
 ---
 
@@ -61,7 +61,7 @@ See: [Observability Strategy](observability-strategy.md)
 
 **Rationale:** When LLMs hallucinate or external APIs change format, strict contracts catch errors immediately rather than silently corrupting data.
 
-See: [Summary Contract Design](summary-contract-design.md), [ADR-0002](../adr/0002-strict-json-summary-contract.md)
+See: [Summary Contract Design](summary-contract-design.md)
 
 ---
 
@@ -173,7 +173,7 @@ See: [Summary Contract Design](summary-contract-design.md), [ADR-0002](../adr/00
 - Add new interfaces (CLI runner, Mobile API, gRPC) without touching core
 - Framework independence (Telegram adapter can change without domain changes)
 
-See: [ADR-0004 Hexagonal Architecture](../adr/0004-hexagonal-architecture.md)
+See: [Hexagonal Architecture Quickstart](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
 
 ---
 
@@ -190,7 +190,7 @@ See: [ADR-0004 Hexagonal Architecture](../adr/0004-hexagonal-architecture.md)
 - Parallel execution of independent agents (web search + content extraction)
 - Agent-specific prompt engineering (extraction optimized for markdown cleaning, summarization for JSON schema adherence)
 
-See: [ADR-0005 Multi-Agent Pipeline](../adr/0005-multi-agent-llm-pipeline.md), [Multi-Agent Architecture](../multi_agent_architecture.md)
+See: [Multi-Agent Architecture](../multi_agent_architecture.md)
 
 ---
 
@@ -208,7 +208,7 @@ See: [ADR-0005 Multi-Agent Pipeline](../adr/0005-multi-agent-llm-pipeline.md), [
 - Multi-language support (same schema in English and Russian)
 - API client reliability (no "maybe this field exists" logic)
 
-See: [Summary Contract Design](summary-contract-design.md), [ADR-0002](../adr/0002-strict-json-summary-contract.md)
+See: [Summary Contract Design](summary-contract-design.md)
 
 ---
 
@@ -229,7 +229,7 @@ See: [Summary Contract Design](summary-contract-design.md), [ADR-0002](../adr/00
 
 **Rationale:** For 99% of users, sharing means "deploy a second bot for your friend" (trivial with Docker). The 1% who need multi-user can fork and add proper auth.
 
-See: [ADR-0003 Single-User Access Control](../adr/0003-single-user-access-control.md)
+See: [FAQ § Security](../FAQ.md#security)
 
 ---
 
@@ -269,7 +269,7 @@ See: [ADR-0003 Single-User Access Control](../adr/0003-single-user-access-contro
 
 **Fallback:** Trafilatura used when Firecrawl fails or is disabled.
 
-See: [ADR-0001 Firecrawl](../adr/0001-use-firecrawl-for-content-extraction.md)
+See: [Scraper chain explainer](scraper-chain.md)
 
 ---
 
@@ -562,7 +562,6 @@ content = content.strip("```")
 
 ## See Also
 
-- [ADR Index](../adr/README.md) - Architectural decision records
 - [Summary Contract Design](summary-contract-design.md) - Why strict JSON schema
 - [Observability Strategy](observability-strategy.md) - Logging and debugging approach
 - [Hexagonal Architecture Quickstart](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Ports and Adapters pattern
