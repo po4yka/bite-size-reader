@@ -139,7 +139,7 @@ flowchart TD
   CallbackHandler --> CallbackRegistry[CallbackActionRegistry]
   CallbackRegistry --> CallbackActions[CallbackActionService]
   AccessController --> MessageRouter
-  MessageRouter --> CommandProcessor
+  MessageRouter --> TelegramCommandDispatcher
   MessageRouter --> URLHandler
   URLHandler --> URLBatchPolicy[URLBatchPolicyService]
   URLHandler --> URLAwaitingState[URLAwaitingStateStore]

@@ -50,6 +50,7 @@ authenticates successfully, then stores the old file as
 - Optional manual live smoke script for X article links (`scripts/twitter_article_live_smoke.py`) with per-link JSON diagnostics
 
 ### Removed
+- `with-firecrawl` Docker Compose profile alias; use `with-scrapers` instead. Operators with `--profile with-firecrawl` in scripts must update to `--profile with-scrapers`.
 - `pyrotgfork`/Pyrogram and `pytgcrypto` runtime dependencies; Telethon is now the only Telegram client stack.
 - `nlp` optional extra group and spaCy trained model dependencies (en_core_web_sm, ru_core_news_sm) -- codebase only uses `spacy.blank()` + sentencizer
 - `lock-piptools` Makefile target -- `lock-uv` is the canonical dependency locking path

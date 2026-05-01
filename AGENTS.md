@@ -6,7 +6,7 @@ This document provides project context for AI coding agents (Codex, Copilot, etc
 
 Async Telegram bot that summarizes web articles, YouTube videos, and forwarded channel posts. Returns structured JSON summaries with a strict contract. Single Docker container, owner-only access.
 
-**Stack:** Python 3.13+, Pyrogram, Scrapling/Firecrawl/Playwright (scraper chain), OpenRouter (LLM), SQLite (Peewee ORM), FastAPI, React 18 + TypeScript + Vite (Frost web frontend).
+**Stack:** Python 3.13+, Telethon, Scrapling/Firecrawl/Playwright (scraper chain), OpenRouter (LLM), SQLite (Peewee ORM), FastAPI, React 18 + TypeScript + Vite (Frost web frontend).
 
 ## Architecture
 

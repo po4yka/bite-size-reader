@@ -17,7 +17,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 **Tech Stack:**
 
 - Python 3.13+
-- Pyrogram (async Telegram MTProto)
+- Telethon (async Telegram MTProto)
 - Scrapling (primary in-process content scraper)
 - Firecrawl API (self-hosted secondary scraper; cloud API optional for web search)
 - yt-dlp (YouTube video downloading)
@@ -238,7 +238,7 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 
 7. **Concurrency:**
    - Semaphore-based rate limiting for Firecrawl/OpenRouter (`MAX_CONCURRENT_CALLS`)
-   - Async/await throughout (Pyrogram, httpx, SQLite via peewee-async patterns)
+   - Async/await throughout (Telethon, httpx, SQLite via peewee-async patterns)
    - Optional `uvloop` for async performance
 
 8. **Web Frontend Changes (`clients/web/`):**
@@ -301,7 +301,7 @@ Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch
 - **Chroma Vector Store** -- Semantic search via ChromaDB embeddings (`app/infrastructure/`, `app/cli/backfill_chroma_store.py`). Embedding provider switchable via `EmbeddingConfig` (local sentence-transformers or Gemini API); see `app/infrastructure/embedding/embedding_factory.py`
 - **PDF Export** -- Summary export to PDF via weasyprint
 - **Background Scheduling** -- APScheduler-based background task processing with Redis distributed locks
-- **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Pyrogram userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow.
+- **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Telethon userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow.
 
 ### Safety Hooks
 
@@ -345,7 +345,7 @@ Claude Code hooks provide automatic safety checks. See `docs/claude_code_hooks.m
 
 - **Firecrawl:** https://docs.firecrawl.dev/api-reference/endpoint/scrape | Integration: `app/adapters/content/content_extractor.py`
 - **OpenRouter:** https://openrouter.ai/docs/api-reference/chat-completion | Integration: `app/adapters/openrouter/openrouter_client.py`
-- **Pyrogram:** https://telegramplayground.github.io/pyrogram/ | Integration: `app/adapters/telegram/telegram_bot.py`
+- **Telethon:** https://docs.telethon.dev/ | Integration: `app/adapters/telegram/telegram_bot.py`
 
 ## File References
 

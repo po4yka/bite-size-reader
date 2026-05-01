@@ -28,7 +28,7 @@ flowchart LR
     CallbackHandler --> CallbackRegistry[CallbackActionRegistry]
     CallbackRegistry --> CallbackActions[CallbackActionService]
     AccessController --> MessageRouter
-    MessageRouter --> CommandProcessor
+    MessageRouter --> TelegramCommandDispatcher
     MessageRouter --> URLHandler
     URLHandler --> URLBatchPolicy[URLBatchPolicyService]
     URLHandler --> URLAwaitingState[URLAwaitingStateStore]
@@ -57,14 +57,14 @@ flowchart LR
 
   subgraph DigestPipeline[Channel digest]
     Scheduler[APScheduler] --> DigestService
-    CommandProcessor -.->|/digest| DigestService
+    TelegramCommandDispatcher -.->|/digest| DigestService
     DigestService --> ChannelReader
     ChannelReader --> UserbotClient[Userbot client]
     DigestService --> DigestAnalyzer
     DigestAnalyzer --> OpenRouter
     DigestService --> DigestFormatter
     DigestFormatter --> TGClient
-    CommandProcessor -.->|/init_session| SessionInit[Session init + Mini App]
+    TelegramCommandDispatcher -.->|/init_session| SessionInit[Session init + Mini App]
     SessionInit --> UserbotClient
   end
 
