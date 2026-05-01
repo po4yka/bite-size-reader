@@ -178,20 +178,6 @@ class SearchHandler:
             raise_if_cancelled(exc)
             logger.warning("audit_log_failed", extra={"error": str(exc)})
 
-        # Check if searcher is available
-        if not searcher:
-            await self._formatter.safe_reply(ctx.message, unavailable_message)
-            if ctx.interaction_id:
-                await async_safe_update_user_interaction(
-                    ctx.user_repo,
-                    interaction_id=ctx.interaction_id,
-                    response_sent=True,
-                    response_type=f"{response_prefix}_disabled",
-                    start_time=ctx.start_time,
-                    logger_=logger,
-                )
-            return
-
         # Extract topic from command text
         parts = ctx.text.split(maxsplit=1)
         topic = parts[1].strip() if len(parts) > 1 else ""
@@ -205,6 +191,20 @@ class SearchHandler:
                     interaction_id=ctx.interaction_id,
                     response_sent=True,
                     response_type=f"{response_prefix}_usage",
+                    start_time=ctx.start_time,
+                    logger_=logger,
+                )
+            return
+
+        # Check if searcher is available after validating command usage.
+        if not searcher:
+            await self._formatter.safe_reply(ctx.message, unavailable_message)
+            if ctx.interaction_id:
+                await async_safe_update_user_interaction(
+                    ctx.user_repo,
+                    interaction_id=ctx.interaction_id,
+                    response_sent=True,
+                    response_type=f"{response_prefix}_disabled",
                     start_time=ctx.start_time,
                     logger_=logger,
                 )

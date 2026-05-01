@@ -34,7 +34,6 @@ from app.adapters.external.firecrawl.constants import (
     build_urls,
 )
 from app.adapters.external.firecrawl.error_handler import ErrorHandler
-from app.core.backoff import sleep_backoff
 from app.adapters.external.firecrawl.models import (
     FirecrawlResult,
     FirecrawlSearchItem,
@@ -55,6 +54,7 @@ from app.adapters.external.firecrawl.validators import (
     validate_search_inputs,
 )
 from app.core.async_utils import raise_if_cancelled
+from app.core.backoff import sleep_backoff
 from app.core.call_status import CallStatus
 from app.core.http_utils import ResponseSizeError, validate_response_size
 from app.core.logging_utils import get_logger

@@ -260,9 +260,7 @@ def _lazy_import_stealthy_fetcher() -> Any:
     return mod.StealthyFetcher
 
 
-async def _async_fetch_basic(
-    url: str, session_or_cls: Any
-) -> tuple[str | None, str | None]:
+async def _async_fetch_basic(url: str, session_or_cls: Any) -> tuple[str | None, str | None]:
     """Async basic fetch.
 
     ``session_or_cls`` is either:
@@ -286,9 +284,7 @@ def _sync_fetch_basic(url: str) -> tuple[str | None, str | None]:
     return html, text
 
 
-def _sync_fetch_stealth(
-    url: str, stealth_cls: Any | None = None
-) -> tuple[str | None, str | None]:
+def _sync_fetch_stealth(url: str, stealth_cls: Any | None = None) -> tuple[str | None, str | None]:
     """Stealth fetch for JS-heavy sites via DynamicFetcher (Playwright-based).
 
     ``stealth_cls`` is the cached fetcher class (resolved once by the provider).

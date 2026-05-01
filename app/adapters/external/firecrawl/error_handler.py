@@ -13,6 +13,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.external.firecrawl.models import FirecrawlSearchResult
+from app.core.backoff import sleep_backoff as _sleep_backoff
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
 from app.utils.retry_utils import is_retryable_status_code
@@ -270,5 +271,3 @@ class ErrorHandler:
             error_text=error_text,
             http_status=resp.status_code,
         )
-
-

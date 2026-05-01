@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import gettempdir
 from typing import TYPE_CHECKING, Any, cast
 
 from app.di.repositories import (
@@ -80,7 +81,7 @@ def _create_digest_bot_client(cfg: AppConfig) -> Any:
         api_id=cfg.telegram.api_id,
         api_hash=cfg.telegram.api_hash,
         bot_token=cfg.telegram.bot_token,
-        session_dir="/tmp",
+        session_dir=gettempdir(),
     )
 
 

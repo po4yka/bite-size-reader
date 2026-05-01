@@ -99,7 +99,7 @@ async def test_telethon_bot_client_edit_message_text_invokes_telethon_edit_messa
             return "edited"
 
     client = TelethonBotClient.__new__(TelethonBotClient)
-    client._client = _FakeTelethon()  # type: ignore[attr-defined]
+    client._client = _FakeTelethon()
 
     assert hasattr(client, "edit_message_text")
     result = await client.edit_message_text(

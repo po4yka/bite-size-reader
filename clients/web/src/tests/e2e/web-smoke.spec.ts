@@ -13,7 +13,8 @@ function successEnvelope(data: unknown) {
 
 test("renders login route", async ({ page }) => {
   await page.goto("login");
-  await expect(page.getByText("Sign in to Ratatoskr")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ratatoskr" })).toBeVisible();
+  await expect(page.getByText("Sign in to access your summaries.")).toBeVisible();
 });
 
 test("loads library after jwt bootstrap", async ({ page }) => {
@@ -82,5 +83,6 @@ test("loads library after jwt bootstrap", async ({ page }) => {
 
   await page.goto("library");
 
-  await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
+  await expect(page.getByText("INBOX")).toBeVisible();
+  await expect(page.getByText("Example Summary")).toBeVisible();
 });

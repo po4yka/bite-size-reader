@@ -44,7 +44,10 @@ class TestScrapeGraphAIProvider:
         module_stub = _make_graph_stub(graph_result)
         provider = _make_provider(timeout_sec=30)
 
-        with patch("app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",return_value=module_stub):
+        with patch(
+            "app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",
+            return_value=module_stub,
+        ):
             result = await provider.scrape_markdown("https://example.com")
 
         assert result.status == "ok"
@@ -60,7 +63,10 @@ class TestScrapeGraphAIProvider:
         module_stub = _make_graph_stub(graph_result)
         provider = _make_provider(timeout_sec=30)
 
-        with patch("app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",return_value=module_stub):
+        with patch(
+            "app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",
+            return_value=module_stub,
+        ):
             result = await provider.scrape_markdown("https://example.com")
 
         assert result.status == "error"
@@ -73,14 +79,18 @@ class TestScrapeGraphAIProvider:
         module_stub = _make_graph_stub(graph_result)
         provider = _make_provider(timeout_sec=30, min_content_length=400)
 
-        with patch("app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",return_value=module_stub):
+        with patch(
+            "app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",
+            return_value=module_stub,
+        ):
             result = await provider.scrape_markdown("https://example.com")
 
         assert result.status == "error"
         assert result.endpoint == "scrapegraph_ai"
-        assert "too short" in (result.error_text or "").lower() or "content" in (
-            result.error_text or ""
-        ).lower()
+        assert (
+            "too short" in (result.error_text or "").lower()
+            or "content" in (result.error_text or "").lower()
+        )
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_import_error_returns_error_with_hint(self):
@@ -107,13 +117,14 @@ class TestScrapeGraphAIProvider:
 
         module_stub = MagicMock()
         graph_instance = MagicMock()
-        graph_instance.run.side_effect = lambda: (_ for _ in ()).throw(
-            TimeoutError("timeout")
-        )
+        graph_instance.run.side_effect = lambda: (_ for _ in ()).throw(TimeoutError("timeout"))
         module_stub.SmartScraperGraph = MagicMock(return_value=graph_instance)
 
         with (
-            patch("app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",return_value=module_stub),
+            patch(
+                "app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",
+                return_value=module_stub,
+            ),
             patch(
                 "asyncio.wait_for",
                 side_effect=TimeoutError("scrapegraph timed out"),
@@ -135,7 +146,10 @@ class TestScrapeGraphAIProvider:
         module_stub = MagicMock()
         module_stub.SmartScraperGraph = MagicMock(return_value=graph_instance)
 
-        with patch("app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",return_value=module_stub):
+        with patch(
+            "app.adapters.content.scraper.scrapegraph_provider.importlib.import_module",
+            return_value=module_stub,
+        ):
             result = await provider.scrape_markdown("https://example.com")
 
         assert result.status == "error"

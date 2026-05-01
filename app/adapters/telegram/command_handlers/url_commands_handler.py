@@ -249,9 +249,7 @@ class URLCommandsHandler:
 
         if ctx.interaction_id:
             response_type = (
-                "cancelled"
-                if (awaiting_cancelled or multi_cancelled or active_cancelled)
-                else "cancel_none"
+                "cancelled" if (awaiting_cancelled or active_cancelled) else "cancel_none"
             )
             await async_safe_update_user_interaction(
                 ctx.user_repo,

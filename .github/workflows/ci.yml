@@ -170,7 +170,7 @@ jobs:
 
   web-playwright-visual:
     name: Web Playwright Visual Regression
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 30
     defaults:
       run:
@@ -190,7 +190,7 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium webkit
+        run: npx playwright install chromium webkit
 
       - name: Build web frontend
         run: npm run build
@@ -261,6 +261,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium
 
       - name: Run web unit tests with coverage
         run: npm run test:coverage

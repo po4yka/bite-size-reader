@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from tempfile import gettempdir
 from typing import TYPE_CHECKING, Any
 
 from app.api.exceptions import ValidationError
@@ -150,7 +151,7 @@ class DigestTriggerService:
                 api_id=app_cfg.telegram.api_id,
                 api_hash=app_cfg.telegram.api_hash,
                 bot_token=app_cfg.telegram.bot_token,
-                session_dir="/tmp",
+                session_dir=gettempdir(),
             )
 
             async with bot:

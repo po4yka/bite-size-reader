@@ -105,9 +105,10 @@ class TestCrawl4AIProvider:
 
         assert result.status == "error"
         assert result.endpoint == "crawl4ai"
-        assert "too short" in (result.error_text or "").lower() or "content" in (
-            result.error_text or ""
-        ).lower()
+        assert (
+            "too short" in (result.error_text or "").lower()
+            or "content" in (result.error_text or "").lower()
+        )
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_http_500_returns_error(self):

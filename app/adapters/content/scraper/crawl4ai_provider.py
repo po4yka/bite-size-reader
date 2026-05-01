@@ -19,10 +19,10 @@ import httpx
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
-from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
 
 logger = get_logger(__name__)
 
@@ -133,7 +133,12 @@ class Crawl4AIProvider:
                 self._audit(
                     "ERROR",
                     "crawl4ai_failure",
-                    {"url": url, "error": "timeout", "timeout_sec": effective_timeout, "request_id": request_id},
+                    {
+                        "url": url,
+                        "error": "timeout",
+                        "timeout_sec": effective_timeout,
+                        "request_id": request_id,
+                    },
                 )
             return FirecrawlResult(
                 status=CallStatus.ERROR,
@@ -156,7 +161,11 @@ class Crawl4AIProvider:
                 self._audit(
                     "ERROR",
                     "crawl4ai_failure",
-                    {"url": url, "error": f"HTTP {exc.response.status_code}", "request_id": request_id},
+                    {
+                        "url": url,
+                        "error": f"HTTP {exc.response.status_code}",
+                        "request_id": request_id,
+                    },
                 )
             return FirecrawlResult(
                 status=CallStatus.ERROR,
@@ -181,7 +190,12 @@ class Crawl4AIProvider:
                 self._audit(
                     "ERROR",
                     "crawl4ai_failure",
-                    {"url": url, "error": str(exc), "error_type": type(exc).__name__, "request_id": request_id},
+                    {
+                        "url": url,
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                        "request_id": request_id,
+                    },
                 )
             return FirecrawlResult(
                 status=CallStatus.ERROR,
@@ -221,7 +235,9 @@ class Crawl4AIProvider:
         raw_markdown = first.get("markdown")
         if isinstance(raw_markdown, dict):
             # Some Crawl4AI versions return {"fit_markdown": "...", "raw_markdown": "..."}
-            content_markdown = raw_markdown.get("fit_markdown") or raw_markdown.get("raw_markdown") or ""
+            content_markdown = (
+                raw_markdown.get("fit_markdown") or raw_markdown.get("raw_markdown") or ""
+            )
         elif isinstance(raw_markdown, str):
             content_markdown = raw_markdown
         else:

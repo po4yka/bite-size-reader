@@ -231,7 +231,7 @@ Below 768px:
   (vs `/178` on desktop). Strip widths recompute live; font-size
   derives from cell. `Math.max(ch, 6)` floors smartwatch viewports.
 - **Header collapses** to 54px (`--frost-mobile-header`); wordmark
-  + hamburger only.
+  and hamburger only.
 - **SideNav becomes a drawer** that slides in from the left over
   the content with a `page@0.85` backdrop. Tap-outside or the
   hamburger toggle closes it.

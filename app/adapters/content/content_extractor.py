@@ -69,6 +69,15 @@ class ContentExtractor(
 ):
     """Handles Firecrawl operations and content extraction/processing."""
 
+    @property
+    def firecrawl(self) -> Any:
+        """Backward-compatible alias for the configured scraper chain."""
+        return self.scraper
+
+    @firecrawl.setter
+    def firecrawl(self, scraper: Any) -> None:
+        self.scraper = scraper
+
     def __init__(
         self,
         cfg: AppConfig,
@@ -81,7 +90,6 @@ class ContentExtractor(
     ) -> None:
         self.cfg = cfg
         self.db = db
-        self.scraper = firecrawl
         # Backwards-compatible alias for existing platform extractors/tests. The
         # object is normally the generic multi-provider scraper chain, not only
         # the Firecrawl client.

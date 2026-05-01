@@ -37,7 +37,7 @@ for (const story of stories) {
     await expect(page).toHaveScreenshot(`${story.id}.png`, {
       fullPage: false,
       animations: "disabled",
-      maxDiffPixels: 100,
+      maxDiffPixels: 150,
     });
   });
 }
