@@ -44,9 +44,10 @@ Don't lose sleep over these — the code or the build handles them:
   the file on first start. The default config triggers this; custom
   paths that don't end in `ratatoskr.db` are left alone (rename manually
   if you want consistency).
-- **Pyrogram session file.** Sessions run with `in_memory=True`, so the
-  bot session name change (`bite_size_reader_bot` → `ratatoskr_bot`)
-  doesn't touch disk. No action needed.
+- **Telethon bot session.** Bot sessions are keyed by `BOT_TOKEN`, not
+  username, so a bot-handle change (`bite_size_reader_bot` →
+  `ratatoskr_tldr_bot`) only requires updating `BOT_TOKEN` and
+  `VITE_TELEGRAM_BOT_USERNAME` in `.env` and rebuilding the web bundle.
 - **Lock files.** `uv.lock`, `requirements.txt`, `requirements-dev.txt`,
   and `clients/web/package-lock.json` are regenerated as part of the
   rename PR — your build will pull the right artifact.
