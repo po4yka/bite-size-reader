@@ -95,11 +95,12 @@ non-rooted Android devices.
 ## CEO-Facing Decision Points
 
 - Confirm Ratatoskr mobile contract readiness remains the top company priority
-  until POY-258, POY-259, POY-260, and POY-262 resolve.
+  until all auth, sync, summary, collections, search, digest, and signal
+  contract tasks in the [task board](tasks/dashboard.md) are resolved.
 - Confirm RIPDPI stays isolated from Ratatoskr implementation capacity until
-  POY-271 gives CTO sequencing for ownerless critical epics.
-- Confirm no additional roadmap expansion starts until POY-255 and POY-257
-  report their QA/security gates.
+  CTO provides sequencing for ownerless critical epics.
+- Confirm no additional roadmap expansion starts until active QA/security gate
+  tasks in the [task board](tasks/dashboard.md) report completion.
 
 ### P2 Backlog
 
