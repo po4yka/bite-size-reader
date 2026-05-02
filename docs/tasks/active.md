@@ -12,10 +12,10 @@
   Produce a cross-repo contract map between the Ratatoskr FastAPI mobile API and the ratatoskr-client KMP app, then identify the smallest set of implementation, QA, or documentation follow-ups needed for a mobile release-readiness baseline.
 
   Context
-  CEO heartbeat read ratatoskr CLAUDE.md, docs/SPEC.md, docs/MOBILE_API_SPEC.md, DESIGN.md, ratatoskr-client AGENTS.md, composeApp/AGENTS.md, DESIGN.md, and docs/ARCHITECTURE.md. The backend mobile API source of truth is docs/openapi/mobile_api.yaml/json and uses /v1 envelope responses, bearer auth, Telegram initData, secret-login, session sync, summaries/articles aliases, collections, search, digest, signals, and mixed-source aggregation surfaces. The KMP client uses Kotlin Multiplatform, Decompose navigation, SQLDelight/offline-first data, Ktor auth refresh, secure storage, and Frost design rules. CEO must not edit docs/openapi/mobile_api.yaml directly.
+  Ratatoskr CLAUDE.md, docs/SPEC.md, docs/MOBILE_API_SPEC.md, DESIGN.md, ratatoskr-client AGENTS.md, composeApp/AGENTS.md, DESIGN.md, and docs/ARCHITECTURE.md were read for context. The backend mobile API source of truth is docs/openapi/mobile_api.yaml/json and uses /v1 envelope responses, bearer auth, Telegram initData, secret-login, session sync, summaries/articles aliases, collections, search, digest, signals, and mixed-source aggregation surfaces. The KMP client uses Kotlin Multiplatform, Decompose navigation, SQLDelight/offline-first data, Ktor auth refresh, secure storage, and Frost design rules. Do not edit docs/openapi/mobile_api.yaml directly.
 
   Owner
-  CTO. Coordinate with Senior Python Backend Engineer, Senior KMP/Compose Engineer, Product Manager, QA Lead, and Security Engineer as needed.
+  CTO. Coordinate with Senior Python Backend Engineer, Senior KMP/Compose Engineer, and Security Engineer as needed.
 
   Priority
   High.
@@ -52,10 +52,10 @@
   Add or refresh a backend contract fixture/test for `/v1/sync/apply` showing the exact JSON response shape consumed by ratatoskr-client.
 
   Context
-  CTO contract map POY-253 found backend sync-apply response is coherent and should stand: `sessionId`, `results[]`, `conflicts[]`, `hasMore`. KMP will adapt in POY-258. Backend should preserve this contract with focused test evidence so future changes do not reintroduce drift.
+  POY-253 contract map found backend sync-apply response is coherent and should stand: `sessionId`, `results[]`, `conflicts[]`, `hasMore`. KMP will adapt in POY-258. Backend should preserve this contract with focused test evidence so future changes do not reintroduce drift.
 
   Owner
-  Senior Python Backend Engineer. Coordinate with CTO and QA Lead.
+  Senior Python Backend Engineer.
 
   Priority
   High.
@@ -66,7 +66,7 @@
   Acceptance criteria
   - Add or update a focused test/fixture for `/v1/sync/apply` response JSON, including at least success result, conflict result, and `hasMore` behavior where supported.
   - Verify response envelope and camelCase aliases match the mobile API contract.
-  - Do not change `docs/openapi/mobile_api.yaml` unless CTO explicitly requests a contract update in a separate issue.
+  - Do not change `docs/openapi/mobile_api.yaml` unless a contract update is explicitly requested in a separate issue.
   - Report the exact pytest command used.
 
   Expected artifact
@@ -164,7 +164,7 @@
   - No regression in existing WebApp / secret-login tests.
 
   ## Owner
-  Senior Python Backend Engineer (with Security Engineer + CTO sign-off on the policy decision).
+  Senior Python Backend Engineer (with Security Engineer sign-off on the policy decision).
 
 - [ ] #task Decouple SECRET_LOGIN_PEPPER from JWT signing key #repo/ratatoskr #area/auth #status/doing ⏫ [paperclip:POY-282]
   - Paperclip: POY-282 · assigned to: Senior Python Backend Engineer (Ratatoskr)
@@ -187,9 +187,9 @@
   - Bandit / pip-audit / unit tests still green.
 
   ## Owner
-  Security Engineer + Senior Python Backend Engineer + CTO sign-off on rotation plan.
+  Security Engineer + Senior Python Backend Engineer (sign-off required on rotation plan).
 
-- [ ] #task Use constant-time compare for Telegram link nonce #repo/ratatoskr #area/general #status/doing ⏫ [paperclip:POY-283]
+- [ ] #task Use constant-time compare for Telegram link nonce #repo/ratatoskr #area/auth #status/doing ⏫ [paperclip:POY-283]
   - Paperclip: POY-283 · assigned to: Senior Python Backend Engineer (Ratatoskr)
   - Blocks: POY-257
   
@@ -217,10 +217,10 @@
   Decide the second-wave Ratatoskr auth/security policy scope from the Security/AppSec review in POY-257, then create the follow-up implementation/review issues that are warranted.
 
   Context
-  Security marked Ratatoskr mobile auth, secret-login, and client storage not release-ready. The three high implementation blockers were already filed as POY-280, POY-282, and POY-283 and assigned to Backend. Security deferred 11 additional follow-ups pending CTO/board direction.
+  Security marked Ratatoskr mobile auth, secret-login, and client storage not release-ready. The three high implementation blockers were already filed as POY-280, POY-282, and POY-283 and assigned to Backend. Security deferred 11 additional follow-ups pending direction on scope.
 
   Owner
-  CTO.
+  See assigned to field above.
 
   Priority
   High.
@@ -230,12 +230,12 @@
 
   Acceptance criteria
   - Decision memo posted on this issue covering TLS pinning policy, secret show-once strategy, AuditLog retention, hosted MCP/CLI exposure scope, and default clearSavedCredentials UX.
-  - Each decision is classified as implementation follow-up, security review follow-up, product/UX follow-up, board approval needed, or no-action-with-rationale.
+  - Each decision is classified as implementation follow-up, security review follow-up, product/UX follow-up, approval needed, or no-action-with-rationale.
   - Follow-up issues are created with explicit owners, acceptance criteria, expected artifact, constraints, risks, verification plan, and definition of done.
-  - Board approval is requested before any external exposure expansion, credential policy change, telemetry/privacy scope change, or release-readiness claim.
+  - Explicit approval is requested before any external exposure expansion, credential policy change, telemetry/privacy scope change, or release-readiness claim.
 
   Expected artifact
-  A concise CTO decision memo plus the resulting child issues/interactions.
+  A concise decision memo plus the resulting child issues/interactions.
 
   Constraints
   - Do not edit product code in this task.
@@ -251,7 +251,7 @@
   Verification plan
   - Cross-check the decision memo against POY-257 findings and the existing Ratatoskr docs/specs.
   - Confirm every selected follow-up has an owner and is linked to this issue or POY-257.
-  - Confirm any board-gated decision has an approval request instead of an implementation task.
+  - Confirm any approval-gated decision has an approval request instead of an implementation task.
 
   Definition of done
-  CTO has posted the decision memo, created or explicitly rejected the deferred follow-ups, and left POY-257 with a clear Security/AppSec re-review path.
+  The decision memo has been posted, deferred follow-ups created or explicitly rejected, and POY-257 left with a clear Security/AppSec re-review path.

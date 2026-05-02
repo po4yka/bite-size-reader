@@ -13,7 +13,7 @@
   Ratatoskr mobile API uses bearer auth, refresh tokens, Telegram initData, secret-login, secret-key creation/rotation/revocation, account deletion, session listing, and allowlist-aware behavior. ratatoskr-client stores tokens in platform secure storage (Tink AEAD/DataStore on Android, KeychainSettings on iOS) and uses Ktor bearer refresh. The project must not expose secrets, store plaintext secrets, or broaden external access without explicit approval.
 
   Owner
-  Security Engineer. Coordinate with CTO, Senior Python Backend Engineer, Senior KMP/Compose Engineer, and QA Lead.
+  Security Engineer. Coordinate with Senior Python Backend Engineer and Senior KMP/Compose Engineer as needed.
 
   Priority
   High.
@@ -25,7 +25,7 @@
   - Identify security-sensitive auth/session/client-storage flows and source files/docs to review.
   - Define must-have tests or inspection evidence for refresh-token rotation, logout/revocation, secret-login one-time plaintext behavior, Telegram linking, account deletion, and secure storage.
   - Flag any release-blocking ambiguity in fail-open allowlist behavior, external client IDs, or hosted MCP/CLI access.
-  - State what requires board approval: external access expansion, credentials, telemetry, or production release signoff.
+  - State what requires explicit approval: external access expansion, credentials, telemetry, or production release signoff.
 
   Expected artifact
   Paperclip security review note with flow inventory, risk classification, required evidence, and follow-up issues if needed.

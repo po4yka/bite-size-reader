@@ -30,9 +30,9 @@
   - `.cursor/rules/mobile_api.mdc`
 
 
-## general
+## auth
 
-- [ ] #task Add nickname + password login with Remember Me option #repo/ratatoskr #area/general #status/backlog 🔼 [paperclip:POY-256]
+- [ ] #task Add nickname + password login with Remember Me option #repo/ratatoskr #area/auth #status/backlog 🔼 [paperclip:POY-256]
   - Paperclip: POY-256 · assigned to: unassigned
   
   ## Goal
@@ -58,7 +58,9 @@
   - `app/api/services/` (token issuance)
   - `docs/reference/frontend-web.md` (hybrid auth contract)
 
-- [ ] #task Freeze and version the Mobile API surface #repo/ratatoskr #area/general #status/backlog ⏫ [paperclip:POY-263]
+## api
+
+- [ ] #task Freeze and version the Mobile API surface #repo/ratatoskr #area/api #status/backlog ⏫ [paperclip:POY-263]
   - Paperclip: POY-263 · assigned to: unassigned
   
   ## Goal
@@ -80,7 +82,9 @@
   - `app/api/main.py`, `app/api/routers/`
   - POY-253 (KMP client readiness)
 
-- [ ] #task Scraper chain failure correlation and metrics #repo/ratatoskr #area/general #status/backlog 🔼 [paperclip:POY-266]
+## observability
+
+- [ ] #task Scraper chain failure correlation and metrics #repo/ratatoskr #area/observability #status/backlog 🔼 [paperclip:POY-266]
   - Paperclip: POY-266 · assigned to: unassigned
   
   ## Goal
@@ -103,7 +107,7 @@
   - `app/observability/`
   - Roadmap P2 #1
 
-- [ ] #task LLM call retry-budget telemetry #repo/ratatoskr #area/general #status/backlog 🔼 [paperclip:POY-267]
+- [ ] #task LLM call retry-budget telemetry #repo/ratatoskr #area/observability #status/backlog 🔼 [paperclip:POY-267]
   - Paperclip: POY-267 · assigned to: unassigned
   
   ## Goal
@@ -125,7 +129,9 @@
   - `app/db/models.py` (`LLMCall`)
   - Roadmap P2 #1
 
-- [ ] #task Articles management overhaul (filters, bulk actions, real signal) #repo/ratatoskr #area/general #status/backlog 🔼 [paperclip:POY-281]
+## frontend
+
+- [ ] #task Articles management overhaul (filters, bulk actions, real signal) #repo/ratatoskr #area/frontend #status/backlog 🔼 [paperclip:POY-281]
   - Paperclip: POY-281 · assigned to: unassigned
   
   ## Goal
