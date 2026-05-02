@@ -29,8 +29,7 @@ Scope:
    transitions. Trade-off: this defers broader polish and secondary iOS widgets
    until the core client proves it can safely consume real data.
 3. RIPDPI critical-epic sequencing, not parallel execution.
-   RIPDPI remains a separate governance lane. Product should ask CTO to sequence
-   ownerless critical epics and keep QA/security gates visible, but Ratatoskr
+   RIPDPI remains a separate governance lane. Leadership should sequence ownerless critical epics and keep quality gates visible, but Ratatoskr
    implementation capacity should not be borrowed for broad RIPDPI execution.
    Trade-off: this protects existing RIPDPI reliability work while keeping the
    Ratatoskr mobile release path from fragmenting.
@@ -63,12 +62,12 @@ non-rooted Android devices.
 
 ## Explicit Stop List
 
-- Do not start Mobile API shape changes without CTO approval. Contract drift is
+- Do not start Mobile API shape changes without leadership approval. Contract drift is
   more damaging than missing a secondary endpoint in the first release slice.
 - Do not start Frost token or visual-system redesign work. Web and mobile should
   use existing Frost primitives and tokens.
 - Do not start broad RIPDPI implementation from Ratatoskr capacity. RIPDPI
-  critical epics need CTO sequencing and their own QA/security gates first.
+  critical epics need leadership sequencing and their own quality gates first.
 - Do not start secondary mobile surfaces such as iOS widgets/share polish,
   advanced digest tuning, or recommendation experiments until auth + sync +
   summary browsing are proven end to end.
@@ -85,20 +84,18 @@ non-rooted Android devices.
    Users can sign in, sync, browse summaries, open detail, use collections, and
    recover from token refresh/offline transitions on the KMP client.
 3. Mobile Beta: Frost parity and QA regression pass.
-   Users get a coherent Frost interface across web/mobile, with QA Lead signoff
-   on Android/iOS smoke coverage before release expansion.
+   Users get a coherent Frost interface across web/mobile, with QA signoff on Android/iOS smoke coverage before release expansion.
 4. RIPDPI Maintenance Gate: critical epics sequenced.
    Users should not see a Ratatoskr-driven RIPDPI feature push yet; they should
-   see continued non-root reliability and diagnostics quality once CTO/QA gates
-   are clear.
+   see continued non-root reliability and diagnostics quality once quality gates are clear.
 
-## CEO-Facing Decision Points
+## Decision Points
 
 - Confirm Ratatoskr mobile contract readiness remains the top company priority
   until all auth, sync, summary, collections, search, digest, and signal
   contract tasks in the [task board](tasks/dashboard.md) are resolved.
 - Confirm RIPDPI stays isolated from Ratatoskr implementation capacity until
-  CTO provides sequencing for ownerless critical epics.
+  leadership provides sequencing for ownerless critical epics.
 - Confirm no additional roadmap expansion starts until active QA/security gate
   tasks in the [task board](tasks/dashboard.md) report completion.
 
@@ -116,14 +113,12 @@ non-rooted Android devices.
 
 Archive or defer work that only changes visual preference, duplicates existing
 docs, adds remote-service dependence to RIPDPI, or requires Frost token/Mobile
-API contract changes without CTO approval.
+API contract changes without leadership approval.
 
 ## Coordination Rules
 
-- Mobile API contract changes and Frost token changes require CTO involvement
-  before implementation tasks are created.
-- Release readiness requires QA Lead signoff on the relevant regression gate:
+- Mobile API contract changes and Frost token changes require leadership involvement before implementation tasks are created.
+- Release readiness requires QA signoff on the relevant regression gate:
   Ratatoskr backend/API checks, ratatoskr-client KMP checks, or RIPDPI Android
   build/static/unit/diagnostic smoke checks.
-- Product should create child issues only after confirming the concrete
-  implementation slice, success criteria, owner specialty, and blocker graph.
+- Child issues should be created only after confirming the concrete implementation slice, success criteria, and blocker graph.

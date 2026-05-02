@@ -1,9 +1,7 @@
 # Second-Wave Auth/Security Policy Scope
 
 Status: decided
-Issue: POY-284
 Date: 2026-05-02
-Owner: CTO
 
 ## Context
 
