@@ -471,3 +471,25 @@ For questions about the codebase, always refer to:
 4. DESIGN.md for the Frost design system (tokens, typography, components, anti-patterns). Read before any web UI change.
 5. README.md for user-facing documentation
 6. Code comments and docstrings for implementation details
+
+---
+
+## Task Board
+
+This repository uses Obsidian Tasks-compatible Markdown task lines as the canonical task system.
+Use the `repo-task-board` skill for all task-related operations.
+
+Canonical files:
+
+- `docs/tasks/backlog.md` — backlog items by area
+- `docs/tasks/active.md` — in-progress and review tasks
+- `docs/tasks/blocked.md` — blocked tasks with reasons
+- `docs/tasks/dashboard.md` — Obsidian Tasks query hub
+
+Canonical task syntax:
+
+```md
+- [ ] #task <imperative title> #repo/ratatoskr #area/<area> #status/<status> <priority>
+```
+
+Invoke the `repo-task-board` skill when the user mentions: roadmap, TODO, backlog, Kanban, task board, sprint, blocked work, or agent-ready work.

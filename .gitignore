@@ -160,3 +160,7 @@ scorecard.png
 
 *storybook.log
 storybook-static
+
+# Obsidian volatile state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json

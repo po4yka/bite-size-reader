@@ -1,5 +1,7 @@
 # Cross-Project Roadmap Priorities
 
+> Active task board: [docs/tasks/dashboard.md](tasks/dashboard.md) · Per-issue backlog: [docs/tasks/backlog.md](tasks/backlog.md)
+
 Last updated: 2026-05-02
 
 Scope:
