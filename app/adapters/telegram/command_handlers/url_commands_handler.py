@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     )
     from app.adapters.telegram.task_manager import UserTaskManager
     from app.adapters.telegram.url_handler import URLHandler
+    from app.application.ports.requests import RequestRepositoryPort
 
 logger = get_logger(__name__)
 
@@ -46,6 +47,8 @@ class URLCommandsHandler:
         self,
         response_formatter: ResponseFormatter,
         processor_provider: URLProcessorProvider,
+        *,
+        request_repo: RequestRepositoryPort | None = None,
     ) -> None:
         """Initialize the URL commands handler.
 
@@ -54,9 +57,12 @@ class URLCommandsHandler:
             processor_provider: Object with url_processor, url_handler, and
                 _task_manager attributes that can be dynamically accessed.
                 This allows tests to modify these after initialization.
+            request_repo: Optional repository for looking up requests by
+                correlation_id (required for /retry command).
         """
         self._formatter = response_formatter
         self._processor_provider = processor_provider
+        self._request_repo = request_repo
 
     @property
     def _url_processor(self) -> URLProcessor:
@@ -259,3 +265,58 @@ class URLCommandsHandler:
                 start_time=ctx.start_time,
                 logger_=logger,
             )
+
+    @audit_command("command_retry", include_text=True)
+    async def handle_retry(self, ctx: CommandExecutionContext) -> tuple[str | None, bool]:
+        """Handle /retry <error_id> — re-drive a previously failed URL request."""
+        if self._request_repo is None:
+            await self._formatter.safe_reply(ctx.message, "Retry is not available in this context.")
+            return None, False
+
+        parts = ctx.text.strip().split(maxsplit=1)
+        if len(parts) < 2 or not parts[1].strip():
+            await self._formatter.safe_reply(
+                ctx.message,
+                "Usage: /retry <error_id> — copy the Error ID shown in the failure message.",
+            )
+            return None, False
+
+        correlation_id = parts[1].strip()
+        request = await self._request_repo.async_get_latest_request_by_correlation_id(
+            correlation_id
+        )
+        if request is None or request.get("user_id") != ctx.uid:
+            await self._formatter.safe_reply(
+                ctx.message, f"No failed request found for Error ID: {correlation_id}"
+            )
+            return None, False
+
+        status = request.get("status", "")
+        if status != "error":
+            await self._formatter.safe_reply(
+                ctx.message,
+                f"Request {correlation_id} has status '{status}', not 'error'. Nothing to retry.",
+            )
+            return None, False
+
+        input_url = request.get("input_url") or ""
+        if not input_url:
+            await self._formatter.safe_reply(
+                ctx.message, f"No URL found for request {correlation_id}."
+            )
+            return None, False
+
+        url_handler = self._require_url_handler()
+        retry_cid = f"{correlation_id}-retry-1"
+        logger.info(
+            "command_retry_started",
+            extra={"cid": retry_cid, "original_cid": correlation_id, "uid": ctx.uid},
+        )
+        await url_handler.handle_single_url(
+            message=ctx.message,
+            url=input_url,
+            correlation_id=retry_cid,
+            interaction_id=ctx.interaction_id,
+            batch_mode=False,
+        )
+        return None, False

@@ -6,14 +6,13 @@ import argparse
 import asyncio
 import contextlib
 import json
-import os
 import sys
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.config import AppConfig, load_config
+from app.cli._runtime import prepare_config as _prepare_config
 from app.core.logging_utils import generate_correlation_id, get_logger, setup_json_logging
 from app.di.database import build_runtime_database
 from app.di.shared import close_runtime_resources
@@ -156,70 +155,6 @@ def _resolve_text(args: argparse.Namespace) -> str:
 
     msg = "Provide a message text or use --url to supply a link to summarize."
     raise SystemExit(msg)
-
-
-def _load_env_file(path: Path) -> None:
-    """Load environment variables from a .env-style file if present."""
-    if not path.exists() or not path.is_file():
-        return
-
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip()
-        if not key:
-            continue
-        if value and value[0] == value[-1] and value[0] in {'"', "'"}:
-            value = value[1:-1]
-        os.environ.setdefault(key, value)
-
-
-def _prepare_config(args: argparse.Namespace) -> AppConfig:
-    """Load configuration, optionally applying CLI overrides."""
-    base_dir = Path(__file__).resolve().parents[2]
-    candidates: list[Path] = []
-    if args.env_file:
-        candidates.append(args.env_file)
-    else:
-        candidates.extend([Path.cwd() / ".env", base_dir / ".env"])
-
-    for candidate in candidates:
-        try:
-            _load_env_file(candidate)
-            if candidate.exists():
-                logger.debug("loaded_env_file", extra={"path": str(candidate)})
-        except Exception as exc:
-            logger.warning("env_file_error", extra={"path": str(candidate), "error": str(exc)})
-            continue
-
-    try:
-        cfg = load_config(allow_stub_telegram=True)
-    except RuntimeError as exc:
-        msg = (
-            "Configuration error: "
-            f"{exc}. Set FIRECRAWL_SELF_HOSTED_ENABLED=true (and OPENROUTER_API_KEY) before running the CLI."
-        )
-        raise SystemExit(msg) from exc
-    runtime = cfg.runtime
-    updated = False
-
-    if args.db_path:
-        runtime = replace(runtime, db_path=str(args.db_path))
-        updated = True
-
-    if args.log_level:
-        runtime = replace(runtime, log_level=args.log_level)
-        updated = True
-
-    if updated:
-        cfg = replace(cfg, runtime=runtime)
-
-    return cfg
 
 
 async def run_summary_cli(args: argparse.Namespace) -> None:

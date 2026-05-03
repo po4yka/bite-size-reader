@@ -302,3 +302,52 @@ async def test_get_request_by_id_prefers_joined_repository_path() -> None:
     request_repo.get_request_context_mock.assert_awaited_once_with(99)
     request_repo.async_get_request_by_id.assert_not_called()
     llm_repo.async_get_llm_calls_by_request.assert_awaited_once_with(99)
+
+
+@pytest.mark.asyncio
+async def test_retry_creates_new_row_not_mutates_original(db, user_factory) -> None:
+    """retry_failed_request must insert a fresh row, not overwrite the failed one."""
+    user = user_factory(username="retry-new-row", telegram_user_id=7001)
+    service = build_request_service(db)
+    failed = Request.create(
+        user_id=user.telegram_user_id,
+        input_url="https://new-row.example.com",
+        normalized_url="https://new-row.example.com",
+        dedupe_hash="hash-new-row",
+        status="error",
+        correlation_id="cid-new-row",
+        type="url",
+    )
+    count_before = Request.select().count()
+
+    await service.retry_failed_request(user.telegram_user_id, failed.id)
+
+    assert Request.select().count() == count_before + 1
+    original = Request.get_by_id(failed.id)
+    assert original.status == "error", "original row must stay in error state"
+    retry_row = Request.select().where(Request.correlation_id == "cid-new-row-retry-1").first()
+    assert retry_row is not None
+    assert retry_row.id != failed.id
+    assert retry_row.status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_retry_does_not_carry_dedupe_hash(db, user_factory) -> None:
+    """Cloned retry row must have dedupe_hash=None so it never collides with the original."""
+    user = user_factory(username="retry-no-hash", telegram_user_id=7002)
+    service = build_request_service(db)
+    failed = Request.create(
+        user_id=user.telegram_user_id,
+        input_url="https://no-hash.example.com",
+        normalized_url="https://no-hash.example.com",
+        dedupe_hash="hash-no-hash",
+        status="error",
+        correlation_id="cid-no-hash",
+        type="url",
+    )
+
+    await service.retry_failed_request(user.telegram_user_id, failed.id)
+
+    retry_row = Request.select().where(Request.correlation_id == "cid-no-hash-retry-1").first()
+    assert retry_row is not None
+    assert retry_row.dedupe_hash is None

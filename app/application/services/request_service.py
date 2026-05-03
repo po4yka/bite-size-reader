@@ -295,7 +295,6 @@ class RequestService:
             user_id=user_id,
             input_url=original.get("input_url"),
             normalized_url=original.get("normalized_url"),
-            dedupe_hash=original.get("dedupe_hash"),
             content_text=original.get("content_text"),
             fwd_from_chat_id=original.get("fwd_from_chat_id"),
             fwd_from_msg_id=original.get("fwd_from_msg_id"),

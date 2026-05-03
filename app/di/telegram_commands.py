@@ -82,6 +82,7 @@ def build_command_dispatcher_deps(
     url_commands_handler = URLCommandsHandler(
         response_formatter=response_formatter,
         processor_provider=runtime_state,
+        request_repo=repositories.request_repository,
     )
     content_handler = ContentHandler(
         response_formatter=response_formatter,
@@ -196,6 +197,10 @@ def build_command_dispatcher_deps(
             TextCommandRoute(
                 "/summarize_all",
                 _build_text_handler(context_factory, url_commands_handler.handle_summarize_all),
+            ),
+            TextCommandRoute(
+                "/retry",
+                _build_text_handler(context_factory, url_commands_handler.handle_retry),
             ),
         ),
         summarize_prefix="/summarize",

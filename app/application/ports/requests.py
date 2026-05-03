@@ -56,6 +56,11 @@ class RequestRepositoryPort(Protocol):
     async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
         """Return request by dedupe hash."""
 
+    async def async_get_latest_request_by_correlation_id(
+        self, correlation_id: str
+    ) -> dict[str, Any] | None:
+        """Return the most recent request matching correlation_id."""
+
     async def async_get_requests_by_ids(
         self, request_ids: list[int], user_id: int | None = None
     ) -> dict[int, dict[str, Any]]:
