@@ -54,6 +54,7 @@ class ContentScraperFactory:
             "playwright": lambda: _build_playwright(scraper_cfg),
             "crawlee": lambda: _build_crawlee(scraper_cfg),
             "direct_html": lambda: _build_direct_html(scraper_cfg),
+            "direct_pdf": lambda: _build_direct_pdf(scraper_cfg),
             "crawl4ai": lambda: _build_crawl4ai(scraper_cfg, audit),
             "scrapegraph_ai": lambda: _build_scrapegraph(cfg),
         }
@@ -243,6 +244,30 @@ def _build_direct_html(scraper_cfg: object) -> ContentScraperProtocol | None:
         timeout_sec=timeout_sec,
         min_text_length=getattr(scraper_cfg, "min_content_length", 400),
         max_response_mb=getattr(scraper_cfg, "direct_html_max_response_mb", 10),
+    )
+
+
+def _build_direct_pdf(scraper_cfg: object) -> ContentScraperProtocol | None:
+    if not getattr(scraper_cfg, "direct_pdf_enabled", True):
+        return None
+
+    try:
+        import fitz  # noqa: F401  type: ignore[import-untyped]
+    except ImportError:
+        return None
+
+    from app.adapters.content.scraper.direct_pdf_provider import DirectPDFProvider
+
+    timeout_multiplier = profile_timeout_multiplier(getattr(scraper_cfg, "profile", "balanced"))
+    timeout_sec = max(
+        1,
+        round(getattr(scraper_cfg, "direct_pdf_timeout_sec", 60) * timeout_multiplier),
+    )
+
+    return DirectPDFProvider(
+        timeout_sec=timeout_sec,
+        max_pdf_mb=getattr(scraper_cfg, "direct_pdf_max_size_mb", 20),
+        min_text_length=getattr(scraper_cfg, "min_content_length", 400),
     )
 
 

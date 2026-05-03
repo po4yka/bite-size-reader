@@ -14,6 +14,7 @@ SCRAPER_PROVIDER_TOKENS = {
     "playwright",
     "crawlee",
     "direct_html",
+    "direct_pdf",
     "crawl4ai",
     "scrapegraph_ai",
 }
@@ -21,6 +22,7 @@ SCRAPER_PROVIDER_TOKENS = {
 SCRAPER_PROFILES = {"fast", "balanced", "robust"}
 DEFAULT_SCRAPER_PROVIDER_ORDER = [
     "scrapling",
+    "direct_pdf",
     "crawl4ai",
     "firecrawl",
     "defuddle",
@@ -210,6 +212,20 @@ class ScraperConfig(BaseModel):
         validation_alias="SCRAPER_DIRECT_HTML_MAX_RESPONSE_MB",
     )
 
+    direct_pdf_enabled: bool = Field(
+        default=True,
+        validation_alias="SCRAPER_DIRECT_PDF_ENABLED",
+        description="Enable direct PDF download+extraction via PyMuPDF",
+    )
+    direct_pdf_timeout_sec: int = Field(
+        default=60,
+        validation_alias="SCRAPER_DIRECT_PDF_TIMEOUT_SEC",
+    )
+    direct_pdf_max_size_mb: int = Field(
+        default=20,
+        validation_alias="SCRAPER_DIRECT_PDF_MAX_SIZE_MB",
+    )
+
     crawl4ai_enabled: bool = Field(
         default=True,
         validation_alias="SCRAPER_CRAWL4AI_ENABLED",
@@ -355,6 +371,8 @@ class ScraperConfig(BaseModel):
         "crawlee_max_retries",
         "direct_html_timeout_sec",
         "direct_html_max_response_mb",
+        "direct_pdf_timeout_sec",
+        "direct_pdf_max_size_mb",
         "crawl4ai_timeout_sec",
         "scrapegraph_timeout_sec",
         mode="before",
@@ -384,6 +402,8 @@ class ScraperConfig(BaseModel):
             "crawlee_max_retries": (0, 10),
             "direct_html_timeout_sec": (1, 300),
             "direct_html_max_response_mb": (1, 200),
+            "direct_pdf_timeout_sec": (1, 300),
+            "direct_pdf_max_size_mb": (1, 200),
             "crawl4ai_timeout_sec": (1, 300),
             "scrapegraph_timeout_sec": (1, 600),
         }
