@@ -5,10 +5,11 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from app.adapters.attachment._attachment_shared import _MAX_PDF_TEXT_CHARS, load_prompt
 from app.adapters.attachment.image_extractor import ImageExtractor
+from app.adapters.attachment.markitdown_extractor import MarkitdownExtractor
 from app.adapters.attachment.pdf_extractor import PDFExtractor
 from app.adapters.attachment.vision_messages import (
     build_multi_image_vision_messages,
@@ -23,6 +24,22 @@ if TYPE_CHECKING:
     from app.adapters.attachment._attachment_llm import AttachmentLLMWorkflowService
     from app.adapters.attachment._attachment_persistence import AttachmentPersistenceService
     from app.adapters.attachment._attachment_shared import AttachmentProcessorContext
+
+_MIME_TO_FORMAT: Final[dict[str, str]] = {
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.ms-excel": "xls",
+    "application/epub+zip": "epub",
+    "application/rtf": "rtf",
+    "text/rtf": "rtf",
+    "text/csv": "csv",
+    "text/html": "html",
+    "application/json": "json",
+    "application/xml": "xml",
+    "text/xml": "xml",
+}
+_DOCUMENT_MIME_TYPES: Final[frozenset[str]] = frozenset(_MIME_TO_FORMAT)
 
 
 class AttachmentContentService:
@@ -54,6 +71,10 @@ class AttachmentContentService:
             return "image", mime, fname
         if mime == "application/pdf":
             return "pdf", mime, fname
+        if mime in _DOCUMENT_MIME_TYPES:
+            if not self._context.cfg.attachment.document_processing_enabled:
+                return None, None, None
+            return "document", mime, fname
         return None, None, None
 
     def check_size_limits(self, message: Any, file_type: str) -> str | None:
@@ -68,20 +89,21 @@ class AttachmentContentService:
         if file_size is None:
             return None
 
-        max_bytes = (
-            attachment_cfg.max_image_size_mb * 1024 * 1024
-            if file_type == "image"
-            else attachment_cfg.max_pdf_size_mb * 1024 * 1024
-        )
+        if file_type == "image":
+            max_bytes = attachment_cfg.max_image_size_mb * 1024 * 1024
+            max_mb = attachment_cfg.max_image_size_mb
+            label = "Image"
+        elif file_type == "document":
+            max_bytes = attachment_cfg.max_document_size_mb * 1024 * 1024
+            max_mb = attachment_cfg.max_document_size_mb
+            label = "Document"
+        else:
+            max_bytes = attachment_cfg.max_pdf_size_mb * 1024 * 1024
+            max_mb = attachment_cfg.max_pdf_size_mb
+            label = "PDF"
+
         if file_size <= max_bytes:
             return None
-
-        max_mb = (
-            attachment_cfg.max_image_size_mb
-            if file_type == "image"
-            else attachment_cfg.max_pdf_size_mb
-        )
-        label = "Image" if file_type == "image" else "PDF"
         return f"{label} too large (max {max_mb}MB)."
 
     async def download_attachment(self, message: Any) -> str | None:
@@ -136,6 +158,19 @@ class AttachmentContentService:
         if file_type == "image":
             result = await self.process_image(
                 file_path=file_path,
+                caption=caption,
+                chosen_lang=chosen_lang,
+                req_id=req_id,
+                correlation_id=correlation_id,
+                interaction_id=interaction_id,
+                message=message,
+                status_updater=status_updater,
+            )
+        elif file_type == "document":
+            file_format = _MIME_TO_FORMAT.get(mime_type or "", "document")
+            result = await self.process_document(
+                file_path=file_path,
+                file_format=file_format,
                 caption=caption,
                 chosen_lang=chosen_lang,
                 req_id=req_id,
@@ -343,6 +378,9 @@ class AttachmentContentService:
                 max_pages=attachment_cfg.max_pdf_pages,
                 max_vision_pages=attachment_cfg.max_vision_pages_per_pdf,
                 image_max_dimension=attachment_cfg.image_max_dimension,
+                min_image_dimension=attachment_cfg.pdf_min_image_dimension,
+                max_embedded_images=attachment_cfg.pdf_max_embedded_images,
+                vector_draw_threshold=attachment_cfg.pdf_vector_draw_threshold,
                 on_progress=lambda text: asyncio.run_coroutine_threadsafe(
                     on_pdf_progress(text),
                     loop,
@@ -361,6 +399,18 @@ class AttachmentContentService:
 
         await self._persistence.update_pdf_metadata(req_id, pdf_content)
 
+        self._context.logger.debug(
+            "pdf_extracted",
+            extra={
+                "pages": pdf_content.page_count,
+                "is_scanned": pdf_content.is_scanned,
+                "image_pages": len(pdf_content.image_pages),
+                "embedded_images": len(pdf_content.embedded_images),
+                "figure_page_count": pdf_content.figure_page_count,
+                "cid": correlation_id,
+            },
+        )
+
         if not caption and self._context.cfg.runtime.preferred_lang == LANG_AUTO:
             content_text = pdf_content.text[:2000]
             if content_text.strip():
@@ -374,7 +424,7 @@ class AttachmentContentService:
 
         all_image_uris = [img.data_uri for img in pdf_content.image_pages]
         for image in pdf_content.embedded_images:
-            if len(all_image_uris) >= 10:
+            if len(all_image_uris) >= attachment_cfg.pdf_max_image_uris_total:
                 break
             all_image_uris.append(image.data_uri)
 
@@ -410,6 +460,105 @@ class AttachmentContentService:
             model_override=model_override,
             status_updater=status_updater,
         )
+
+    async def process_document(
+        self,
+        *,
+        file_path: str,
+        file_format: str,
+        caption: str | None,
+        chosen_lang: str,
+        req_id: int,
+        correlation_id: str | None,
+        interaction_id: int | None,
+        message: Any,
+        status_updater: Callable[[str], Awaitable[None]] | None = None,
+    ) -> dict[str, Any] | None:
+        """Process an office/EPUB/HTML document attachment via markitdown."""
+        attachment_cfg = self._context.cfg.attachment
+
+        try:
+            if status_updater:
+                await status_updater(f"📄 <b>Converting {file_format.upper()} document...</b>")
+
+            doc_content = await asyncio.to_thread(
+                MarkitdownExtractor.extract,
+                file_path,
+                file_format=file_format,
+                max_chars=attachment_cfg.max_document_chars,
+            )
+        except ValueError as exc:
+            self._context.logger.warning(
+                "document_extraction_failed",
+                extra={"error": str(exc), "cid": correlation_id, "format": file_format},
+            )
+            await self._context.response_formatter.safe_reply(
+                message,
+                f"Could not process {file_format.upper()} document: {exc}",
+            )
+            return None
+
+        self._context.logger.debug(
+            "document_extracted",
+            extra={
+                "file_format": file_format,
+                "chars": len(doc_content.text),
+                "truncated": doc_content.truncated,
+                "cid": correlation_id,
+            },
+        )
+
+        if not caption and self._context.cfg.runtime.preferred_lang == LANG_AUTO:
+            content_text = doc_content.text[:2000]
+            if content_text.strip():
+                detected = detect_language(content_text)
+                chosen_lang = choose_language(self._context.cfg.runtime.preferred_lang, detected)
+
+        system_prompt = load_prompt("document_analysis", chosen_lang)
+        lang_label = "Russian" if chosen_lang == LANG_RU else "English"
+        messages = self._build_document_messages(
+            doc_content=doc_content,
+            system_prompt=system_prompt,
+            caption=caption,
+            lang_label=lang_label,
+        )
+
+        return await self._workflow.run_summary_workflow(
+            messages=messages,
+            req_id=req_id,
+            correlation_id=correlation_id,
+            interaction_id=interaction_id,
+            chosen_lang=chosen_lang,
+            message=message,
+            model_override=None,
+            status_updater=status_updater,
+        )
+
+    def _build_document_messages(
+        self,
+        *,
+        doc_content: Any,
+        system_prompt: str,
+        caption: str | None,
+        lang_label: str,
+    ) -> list[dict[str, Any]]:
+        truncation_note = ""
+        if doc_content.truncated:
+            truncation_note = (
+                f"\n\n[Document truncated to {_MAX_PDF_TEXT_CHARS} characters]"
+            )
+
+        user_content = (
+            f"Summarize the following {doc_content.file_format.upper()} document to the specified "
+            f"JSON schema. Respond in {lang_label}.\n\n{doc_content.text}{truncation_note}"
+        )
+        if caption:
+            user_content = f"User context: {caption}\n\n{user_content}"
+
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ]
 
     def build_pdf_metadata_header(self, pdf_content: Any) -> str:
         """Build a compact metadata header for PDF prompts."""

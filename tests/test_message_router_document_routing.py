@@ -11,6 +11,22 @@ from app.adapters.telegram.routing.content_router import MessageContentRouter
 from app.adapters.telegram.routing.interactions import MessageInteractionRecorder
 from app.adapters.telegram.routing.models import PreparedRouteContext
 
+# All MIME types that should now route to attachment_processor
+_DOCUMENT_MIMES = [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "application/epub+zip",
+    "application/rtf",
+    "text/rtf",
+    "text/csv",
+    "text/html",
+    "application/json",
+    "application/xml",
+    "text/xml",
+]
+
 
 def _make_context(message: SimpleNamespace) -> PreparedRouteContext:
     return PreparedRouteContext(
@@ -192,3 +208,76 @@ async def test_attachment_plus_url_routes_via_aggregation_handler() -> None:
         interaction_id=11,
     )
     attachment_processor.handle_attachment_flow.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Document MIME type routing tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("mime", _DOCUMENT_MIMES)
+def test_should_handle_attachment_true_for_document_mimes(mime: str) -> None:
+    """_should_handle_attachment must return True for all supported document MIME types."""
+    message = SimpleNamespace(
+        photo=None,
+        document=SimpleNamespace(mime_type=mime),
+    )
+    assert MessageContentRouter._should_handle_attachment(message) is True
+
+
+def test_should_handle_attachment_false_for_unknown_mime() -> None:
+    """_should_handle_attachment must return False for unrecognised MIME types."""
+    message = SimpleNamespace(
+        photo=None,
+        document=SimpleNamespace(mime_type="application/octet-stream"),
+    )
+    assert MessageContentRouter._should_handle_attachment(message) is False
+
+
+@pytest.mark.asyncio
+async def test_docx_document_routes_to_attachment_processor() -> None:
+    """A .docx document message must be dispatched to attachment_processor, not url_handler."""
+    command_processor = MagicMock()
+    command_processor.has_active_init_session.return_value = False
+    url_handler = SimpleNamespace(
+        can_handle_document=MagicMock(return_value=False),
+        handle_document_file=AsyncMock(),
+        is_awaiting_url=AsyncMock(return_value=False),
+        handle_awaited_url=AsyncMock(),
+        handle_direct_url=AsyncMock(),
+        add_awaiting_user=AsyncMock(),
+    )
+    attachment_processor = SimpleNamespace(handle_attachment_flow=AsyncMock())
+    router = MessageContentRouter(
+        command_dispatcher=cast("Any", command_processor),
+        url_handler=cast("Any", url_handler),
+        forward_processor=cast(
+            "Any",
+            SimpleNamespace(handle_forward_flow=AsyncMock()),
+        ),
+        response_formatter=cast(
+            "Any",
+            SimpleNamespace(safe_reply=AsyncMock()),
+        ),
+        interaction_recorder=MessageInteractionRecorder(
+            user_repo=SimpleNamespace(async_insert_user_interaction=AsyncMock()),
+            structured_output_enabled=True,
+        ),
+        callback_handler=None,
+        attachment_processor=cast("Any", attachment_processor),
+        lang="en",
+    )
+    docx_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    message = SimpleNamespace(
+        document=SimpleNamespace(mime_type=docx_mime, file_name="report.docx"),
+        contact=None,
+        web_app_data=None,
+        photo=None,
+        text=None,
+        caption=None,
+    )
+
+    await router.route(_make_context(message), interaction_id=20, start_time=0.0)
+
+    attachment_processor.handle_attachment_flow.assert_awaited_once()
+    url_handler.handle_document_file.assert_not_awaited()

@@ -200,9 +200,51 @@ class AttachmentConfig(BaseModel):
     )
 
     max_vision_pages_per_pdf: int = Field(
-        default=5,
+        default=8,
         validation_alias="ATTACHMENT_MAX_VISION_PAGES",
-        description="Maximum number of sparse/scanned PDF pages to render for vision LLM",
+        description="Maximum number of sparse/scanned/figure PDF pages to render for vision LLM",
+    )
+
+    pdf_min_image_dimension: int = Field(
+        default=100,
+        validation_alias="ATTACHMENT_PDF_MIN_IMAGE_DIMENSION",
+        description="Minimum image dimension (px) for embedded PDF images to be extracted",
+    )
+
+    pdf_max_embedded_images: int = Field(
+        default=8,
+        validation_alias="ATTACHMENT_PDF_MAX_EMBEDDED_IMAGES",
+        description="Maximum number of embedded raster images to extract per PDF",
+    )
+
+    pdf_max_image_uris_total: int = Field(
+        default=12,
+        validation_alias="ATTACHMENT_PDF_MAX_IMAGE_URIS",
+        description="Maximum total image URIs (rendered pages + embedded) sent to vision model",
+    )
+
+    pdf_vector_draw_threshold: int = Field(
+        default=30,
+        validation_alias="ATTACHMENT_PDF_VECTOR_DRAW_THRESHOLD",
+        description="Minimum vector path count on a page to treat it as a figure page for vision rendering",
+    )
+
+    document_processing_enabled: bool = Field(
+        default=True,
+        validation_alias="ATTACHMENT_DOCUMENT_PROCESSING_ENABLED",
+        description="Enable Office / EPUB / HTML / structured-text document processing via markitdown",
+    )
+
+    max_document_size_mb: int = Field(
+        default=20,
+        validation_alias="ATTACHMENT_MAX_DOCUMENT_SIZE_MB",
+        description="Maximum size for non-PDF documents (docx/pptx/xlsx/epub/...) in MB",
+    )
+
+    max_document_chars: int = Field(
+        default=45_000,
+        validation_alias="ATTACHMENT_MAX_DOCUMENT_CHARS",
+        description="Truncate extracted Markdown to this many characters before LLM summarization",
     )
 
     @field_validator(
@@ -212,10 +254,16 @@ class AttachmentConfig(BaseModel):
         "image_max_dimension",
         "cleanup_after_hours",
         "max_vision_pages_per_pdf",
+        "pdf_min_image_dimension",
+        "pdf_max_embedded_images",
+        "pdf_max_image_uris_total",
+        "pdf_vector_draw_threshold",
         "video_max_download_size_mb",
         "video_timeout_sec",
         "video_cleanup_after_hours",
         "video_frame_sample_count",
+        "max_document_size_mb",
+        "max_document_chars",
         mode="before",
     )
     @classmethod

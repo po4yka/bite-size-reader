@@ -28,6 +28,7 @@ class PDFContent:
     truncated: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
     toc: list[list[Any]] = field(default_factory=list)
+    figure_page_count: int = 0
 
 
 class PDFExtractor:
@@ -41,12 +42,14 @@ class PDFExtractor:
         sparse_threshold: int,
         min_image_dimension: int,
         image_max_dimension: int,
+        vector_draw_threshold: int,
         on_progress: Callable[[str], Any] | None,
         fitz_module: Any,
-    ) -> tuple[list[str], list[int], list[str], list[ImageContent]]:
-        """Extract per-page text, sparse-page indices, links, and embedded images."""
+    ) -> tuple[list[str], list[int], list[int], list[str], list[ImageContent]]:
+        """Extract per-page text, sparse/figure-page indices, links, and embedded images."""
         text_parts: list[str] = []
         sparse_page_indices: list[int] = []
+        figure_page_indices: list[int] = []
         links: list[str] = []
         embedded_images: list[ImageContent] = []
         seen_image_xrefs: set[int] = set()
@@ -59,12 +62,31 @@ class PDFExtractor:
             blocks = page.get_text("blocks")
             blocks.sort(key=lambda b: (b[1], b[0]))
             page_text = "\n".join(b[4].strip() for b in blocks if b[4].strip())
+
+            # Inline detected tables as Markdown so the LLM gets structured data
+            try:
+                finder = page.find_tables()
+                for t_idx, table in enumerate(finder.tables, 1):
+                    try:
+                        md = table.to_markdown()
+                        if md.strip():
+                            sep = "\n\n" if page_text else ""
+                            page_text = f"{page_text}{sep}[Table {t_idx}]\n{md}"
+                    except AttributeError:
+                        pass  # to_markdown() absent in this PyMuPDF build
+            except Exception as exc:
+                logger.warning(
+                    "pdf_table_detection_failed",
+                    extra={"page": page_idx, "error": str(exc)},
+                )
+
             text_parts.append(page_text)
 
             for link in page.get_links():
                 if "uri" in link:
                     links.append(link["uri"])
 
+            page_has_raster = False
             for img in page.get_images():
                 xref = img[0]
                 width, height = img[2], img[3]
@@ -73,6 +95,7 @@ class PDFExtractor:
                 if width < min_image_dimension or height < min_image_dimension:
                     continue
                 seen_image_xrefs.add(xref)
+                page_has_raster = True
 
                 try:
                     pix = fitz_module.Pixmap(doc, xref)
@@ -89,10 +112,23 @@ class PDFExtractor:
                         extra={"xref": xref, "error": str(exc)},
                     )
 
+            # Detect vector-drawn figures (charts, diagrams) on text-rich pages.
+            # page.get_drawings() returns path/fill operations; a high count indicates
+            # a chart drawn from PDF primitives rather than an embedded raster.
+            page_has_vector_figure = False
+            if not page_has_raster:
+                try:
+                    page_has_vector_figure = len(page.get_drawings()) >= vector_draw_threshold
+                except Exception:
+                    pass
+
             if len(page_text) < sparse_threshold:
                 sparse_page_indices.append(page_idx)
+            elif page_has_raster or page_has_vector_figure:
+                # Text-rich page with a figure: needs vision rendering
+                figure_page_indices.append(page_idx)
 
-        return text_parts, sparse_page_indices, links, embedded_images
+        return text_parts, sparse_page_indices, figure_page_indices, links, embedded_images
 
     @staticmethod
     def _render_sparse_pages(
@@ -129,9 +165,11 @@ class PDFExtractor:
         *,
         max_pages: int = 50,
         sparse_threshold: int = 100,
-        max_vision_pages: int = 5,
+        max_vision_pages: int = 8,
         image_max_dimension: int = 2048,
-        min_image_dimension: int = 200,
+        min_image_dimension: int = 100,
+        max_embedded_images: int = 8,
+        vector_draw_threshold: int = 30,
         on_progress: Callable[[str], Any] | None = None,
     ) -> PDFContent:
         """Extract text and optionally render sparse/scanned pages from a PDF.
@@ -184,21 +222,22 @@ class PDFExtractor:
             if on_progress:
                 on_progress(f"Reading {pages_to_process} pages...")
 
-            text_parts, sparse_page_indices, links, embedded_images = (
+            text_parts, sparse_page_indices, figure_page_indices, links, embedded_images = (
                 PDFExtractor._extract_page_content(
                     doc=doc,
                     pages_to_process=pages_to_process,
                     sparse_threshold=sparse_threshold,
                     min_image_dimension=min_image_dimension,
                     image_max_dimension=image_max_dimension,
+                    vector_draw_threshold=vector_draw_threshold,
                     on_progress=on_progress,
                     fitz_module=fitz,
                 )
             )
 
-            # Limit embedded images to top 5 largest by file size to avoid overloading context
+            # Limit embedded images to top N largest by file size to avoid overloading context
             embedded_images.sort(key=lambda img: img.file_size_bytes, reverse=True)
-            embedded_images = embedded_images[:5]
+            embedded_images = embedded_images[:max_embedded_images]
 
             # De-duplicate links while preserving order
             unique_links: list[str] = []
@@ -218,7 +257,13 @@ class PDFExtractor:
             # Determine if the PDF is predominantly scanned/image-based
             is_scanned = len(sparse_page_indices) > pages_to_process * 0.5
 
-            vision_pages = sparse_page_indices[:max_vision_pages]
+            # Sparse pages take priority; figure pages (vector charts, embedded rasters on
+            # text-rich pages) fill remaining slots up to max_vision_pages.
+            vision_pages = list(
+                dict.fromkeys(sparse_page_indices + figure_page_indices)
+            )[:max_vision_pages]
+            figure_page_count = sum(1 for p in vision_pages if p in figure_page_indices)
+
             image_pages = PDFExtractor._render_sparse_pages(
                 doc=doc,
                 vision_pages=vision_pages,
@@ -246,6 +291,7 @@ class PDFExtractor:
                 truncated=truncated,
                 metadata=metadata,
                 toc=toc,
+                figure_page_count=figure_page_count,
             )
         finally:
             doc.close()

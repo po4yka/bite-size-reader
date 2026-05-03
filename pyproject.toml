@@ -143,10 +143,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Attachment processing: image handling + PDF extraction
+# Attachment processing: image handling + PDF extraction + office documents
 attachment = [
   "Pillow>=11.0.0",
   "pymupdf>=1.25.0",
+  "markitdown[docx,pptx,xlsx,outlook]>=0.0.2",
 ]
 
 # Browser-based scraper fallback providers (Playwright + Crawlee)
