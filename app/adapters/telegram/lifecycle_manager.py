@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from pathlib import Path
 from typing import Any
 
+from app.adapters.digest.session_validator import validate_and_repair_session
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
 
@@ -46,12 +48,21 @@ class TelegramLifecycleManager:
             name="rate_limiter_cleanup_loop",
         )
 
+        await self._validate_digest_session()
         await self._warm_adaptive_timeout_cache()
         await self._clear_startup_cache()
 
     async def on_shutdown(self) -> None:
         await self._cancel_task(self._backup_task)
         await self._cancel_task(self._rate_limiter_cleanup_task)
+
+    async def _validate_digest_session(self) -> None:
+        cfg = getattr(self._bot, "cfg", None)
+        if cfg is None or not getattr(getattr(cfg, "digest", None), "enabled", False):
+            return
+        session_name: str = cfg.digest.session_name
+        session_file = Path("/data") / f"{session_name}.session"
+        validate_and_repair_session(session_file)
 
     async def _warm_adaptive_timeout_cache(self) -> None:
         adaptive_timeout = getattr(self._bot, "_adaptive_timeout_service", None)

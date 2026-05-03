@@ -5,12 +5,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
+from app.observability.metrics import record_scheduler_chronic_failure
 
 if TYPE_CHECKING:
     from app.config import AppConfig
@@ -34,6 +36,7 @@ class SchedulerService:
         self._deps = deps
         self._scheduler: AsyncIOScheduler | None = None
         self._started = False
+        self._job_consecutive_failures: dict[str, int] = {}
 
     def start(self) -> None:
         """Start the scheduler with configured jobs."""
@@ -42,6 +45,8 @@ class SchedulerService:
             return
 
         self._scheduler = AsyncIOScheduler()
+        self._scheduler.add_listener(self._on_job_error, EVENT_JOB_ERROR)
+        self._scheduler.add_listener(self._on_job_executed, EVENT_JOB_EXECUTED)
 
         if self.cfg.digest.enabled:
             for idx, time_str in enumerate(self.cfg.digest.digest_times):
@@ -250,6 +255,23 @@ class SchedulerService:
                 "source_ingestion_failed",
                 extra={"cid": correlation_id, "error": str(exc)},
             )
+
+    def _on_job_error(self, event: Any) -> None:
+        job_id: str = event.job_id
+        count = self._job_consecutive_failures.get(job_id, 0) + 1
+        self._job_consecutive_failures[job_id] = count
+        if count >= 3:
+            logger.error(
+                "scheduler_job_chronic_failure",
+                extra={"job_id": job_id, "consecutive": count, "error": repr(event.exception)},
+            )
+            record_scheduler_chronic_failure(job_id)
+
+    def _on_job_executed(self, event: Any) -> None:
+        job_id: str = event.job_id
+        if self._job_consecutive_failures.get(job_id, 0) > 0:
+            logger.info("scheduler_job_recovered", extra={"job_id": job_id})
+            self._job_consecutive_failures[job_id] = 0
 
     def get_next_run_time(self, job_id: str) -> datetime | None:
         """Get next scheduled run time for a job."""

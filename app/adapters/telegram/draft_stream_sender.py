@@ -8,7 +8,7 @@ from typing import Any
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
-from app.observability.metrics import record_draft_stream_event
+from app.observability.metrics import record_circuit_breaker_state, record_draft_stream_event
 
 logger = get_logger(__name__)
 
@@ -72,6 +72,7 @@ class DraftStreamSender:
         self._transport_disabled: bool = False
         self._transport_disabled_since: float = 0.0
         self._transport_consecutive_failures: int = 0
+        self._transport_half_open: bool = False
 
     def set_telegram_client(self, telegram_client: Any) -> None:
         """Update Telegram client reference (used by ResponseFormatter rewiring)."""
@@ -131,10 +132,12 @@ class DraftStreamSender:
                 )
             self._transport_disabled = False
             self._transport_consecutive_failures = 0
+            self._transport_half_open = True
             logger.info(
                 "draft_transport_circuit_half_open",
                 extra={"disabled_for_sec": round(elapsed)},
             )
+            record_circuit_breaker_state("draft_stream", "half_open")
 
         key = self.request_key(message)
         if key is None:
@@ -181,6 +184,8 @@ class DraftStreamSender:
             state.fallback_until = 0.0
             self._transport_consecutive_failures = 0
             self._transport_disabled_since = 0.0
+            self._transport_half_open = False
+            record_circuit_breaker_state("draft_stream", "closed")
             record_draft_stream_event("draft_send_success")
             logger.debug(
                 "draft_send_success",
@@ -198,12 +203,13 @@ class DraftStreamSender:
                 state.fallback_until = time.time() + 10
 
             self._transport_consecutive_failures += 1
-            if (
-                not self._transport_disabled
-                and self._transport_consecutive_failures >= _TRANSPORT_CIRCUIT_BREAKER_THRESHOLD
-            ):
+            reopen = self._transport_half_open or (
+                self._transport_consecutive_failures >= _TRANSPORT_CIRCUIT_BREAKER_THRESHOLD
+            )
+            if not self._transport_disabled and reopen:
                 self._transport_disabled = True
                 self._transport_disabled_since = time.time()
+                self._transport_half_open = False
                 logger.warning(
                     "draft_transport_circuit_open",
                     extra={
@@ -211,6 +217,7 @@ class DraftStreamSender:
                         "last_error": str(exc),
                     },
                 )
+                record_circuit_breaker_state("draft_stream", "open")
 
             record_draft_stream_event("draft_send_fallback")
             if reason == "policy_reject":

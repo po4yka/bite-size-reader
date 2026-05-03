@@ -124,3 +124,57 @@ async def test_draft_sender_permanent_fallback_after_three_consecutive_failures(
         state = sender._states[key]
         assert state.fallback is True
         assert state.consecutive_failures == 3
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_half_open_after_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Circuit half-opens after reset timeout and closes on a successful probe."""
+    import app.adapters.telegram.draft_stream_sender as module
+
+    monkeypatch.setattr(module.time, "time", lambda: 400.0)
+
+    telegram_client = SimpleNamespace(client=SimpleNamespace(invoke=AsyncMock()))
+    sender = DraftStreamSender(
+        telegram_client=telegram_client,
+        settings=DraftStreamSettings(enabled=True, min_interval_ms=0, min_delta_chars=1, max_chars=256),
+    )
+    # Pre-set open circuit as if it tripped at t=0 (400s ago)
+    sender._transport_disabled = True
+    sender._transport_disabled_since = 0.0
+
+    with patch.object(sender, "_send_custom_request", AsyncMock(return_value=None)):
+        message = _MessageStub()
+        result = await sender.send_update(message, "probe", force=True)
+
+    assert result.ok is True
+    assert result.sent is True
+    assert sender._transport_disabled is False
+    assert sender._transport_consecutive_failures == 0
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_reopens_on_half_open_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Circuit re-opens with a fresh timestamp when the half-open probe also fails."""
+    import app.adapters.telegram.draft_stream_sender as module
+
+    monkeypatch.setattr(module.time, "time", lambda: 400.0)
+
+    telegram_client = SimpleNamespace(client=SimpleNamespace(invoke=AsyncMock()))
+    sender = DraftStreamSender(
+        telegram_client=telegram_client,
+        settings=DraftStreamSettings(enabled=True, min_interval_ms=0, min_delta_chars=1, max_chars=256),
+    )
+    sender._transport_disabled = True
+    sender._transport_disabled_since = 0.0
+
+    with patch.object(
+        sender,
+        "_send_custom_request",
+        AsyncMock(side_effect=RuntimeError("telegram_client_invoke_unavailable")),
+    ):
+        message = _MessageStub()
+        result = await sender.send_update(message, "probe", force=True)
+
+    assert result.fallback is True
+    assert sender._transport_disabled is True
+    assert sender._transport_disabled_since == 400.0

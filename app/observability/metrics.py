@@ -224,6 +224,13 @@ if PROMETHEUS_AVAILABLE:
         registry=REGISTRY,
     )
 
+    SCHEDULER_JOB_CHRONIC_FAILURES = Counter(
+        "ratatoskr_scheduler_job_chronic_failures_total",
+        "Scheduler jobs that have failed 3+ consecutive ticks",
+        ["job_id"],
+        registry=REGISTRY,
+    )
+
 else:
     # Create dummy metrics when prometheus_client is not available
     REGISTRY = None
@@ -251,6 +258,7 @@ else:
     AGGREGATION_SYNTHESIS_COVERAGE = None
     AGGREGATION_USED_SOURCES = None
     AGGREGATION_COST_USD = None
+    SCHEDULER_JOB_CHRONIC_FAILURES = None
 
 
 def get_metrics() -> bytes:
@@ -483,6 +491,13 @@ def record_draft_stream_event(event: str, *, amount: int = 1) -> None:
     if amount <= 0:
         return
     DRAFT_STREAM_EVENTS.labels(event=event).inc(amount)
+
+
+def record_scheduler_chronic_failure(job_id: str) -> None:
+    """Increment the chronic-failure counter for a scheduler job."""
+    if not PROMETHEUS_AVAILABLE:
+        return
+    SCHEDULER_JOB_CHRONIC_FAILURES.labels(job_id=job_id).inc()
 
 
 def record_stream_latency_ms(metric: str, value_ms: float) -> None:

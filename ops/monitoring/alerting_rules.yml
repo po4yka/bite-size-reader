@@ -61,6 +61,16 @@ groups:
           summary: "Circuit breaker stuck open for {{ $labels.service }}"
           description: "Circuit breaker for {{ $labels.service }} has been open for more than 5 minutes - manual intervention may be required"
 
+      # Scheduler job chronically failing
+      - alert: RatatoskrSchedulerJobChronicallyFailing
+        expr: increase(ratatoskr_scheduler_job_chronic_failures_total[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scheduler job {{ $labels.job_id }} failing 3+ consecutive ticks"
+          description: "Job {{ $labels.job_id }} has failed at least 3 ticks in a row - check journalctl for scheduler_job_chronic_failure events"
+
   - name: ratatoskr_latency
     rules:
       # High request latency
