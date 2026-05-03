@@ -432,6 +432,9 @@ class TelethonMessageAdapter:
             buttons=to_telethon_buttons(kwargs.pop("reply_markup", None)),
         )
 
+    async def download(self, *, file_name: str | None = None) -> str | None:
+        return await self._bot.raw.download_media(self._message, file=file_name)
+
 
 class TelethonCallbackQueryAdapter:
     """Expose callback query fields used by the callback handler."""
