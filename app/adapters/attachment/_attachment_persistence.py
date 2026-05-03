@@ -114,6 +114,27 @@ class AttachmentPersistenceService:
                 processing_method=_determine_processing_method(pdf_content),
             )
 
+    async def update_document_metadata(self, req_id: int, doc_content: Any) -> None:
+        """Update attachment metadata after markitdown extraction."""
+        updated = await self._attachment_repo.async_update_processing(
+            req_id,
+            extracted_text_length=len(doc_content.text),
+            vision_used=False,
+            processing_method="text_extraction",
+        )
+        if not updated:
+            self._context.logger.debug(
+                "attachment_record_not_found_document",
+                extra={"request_id": req_id},
+            )
+            await self._attachment_repo.async_create_processing(
+                request_id=req_id,
+                status="processing",
+                extracted_text_length=len(doc_content.text),
+                vision_used=False,
+                processing_method="text_extraction",
+            )
+
     async def send_attachment_result(
         self,
         message: Any,

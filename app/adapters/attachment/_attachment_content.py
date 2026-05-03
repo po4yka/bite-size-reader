@@ -498,6 +498,8 @@ class AttachmentContentService:
             )
             return None
 
+        await self._persistence.update_document_metadata(req_id, doc_content)
+
         self._context.logger.debug(
             "document_extracted",
             extra={

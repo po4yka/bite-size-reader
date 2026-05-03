@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 from unittest import mock
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -42,7 +42,9 @@ def _make_context() -> MagicMock:
 async def test_document_uses_default_model_and_json_schema() -> None:
     """process_document must use no model_override and not trigger the vision model path."""
     ctx = _make_context()
-    svc = AttachmentContentService(ctx, persistence=MagicMock(), workflow=MagicMock())
+    persistence = MagicMock()
+    persistence.update_document_metadata = AsyncMock()
+    svc = AttachmentContentService(ctx, persistence=persistence, workflow=MagicMock())
 
     captured_run: dict[str, Any] = {}
 
