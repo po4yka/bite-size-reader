@@ -12,6 +12,8 @@ services:
         required: false
     volumes:
       - ../../data:/data
+      - ../../app:/app/app:ro
+      - ../../bot.py:/app/bot.py:ro
       - ../../config:/app/config:ro
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
@@ -111,6 +113,8 @@ services:
       - SCRAPER_DEFUDDLE_TOKEN=${DEFUDDLE_AUTH_TOKEN:-}
     volumes:
       - ../../data:/data
+      - ../../app:/app/app:ro
+      - ../../bot.py:/app/bot.py:ro
       - ../../config:/app/config:ro
       - /etc/localtime:/etc/localtime:ro
     ports:
