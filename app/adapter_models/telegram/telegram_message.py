@@ -50,6 +50,15 @@ def _telegram_obj_to_dict(obj: Any) -> dict[str, Any]:
             return [_convert(item, _seen=_seen, _depth=_depth + 1) for item in value]
 
         if not hasattr(value, "__dict__"):
+            # slots-based dataclasses (e.g. _Object) have __slots__ but no __dict__
+            if hasattr(value, "__slots__"):
+                slots_dict: dict[str, Any] = {}
+                for key in value.__slots__:
+                    if not str(key).startswith("_"):
+                        slots_dict[str(key)] = _convert(
+                            getattr(value, key, None), _seen=_seen, _depth=_depth + 1
+                        )
+                return slots_dict
             return value
 
         if _depth >= 8:
@@ -313,6 +322,7 @@ def _extract_fallback_user(from_user_data: Any) -> TelegramUser | None:
 
 def _build_fallback_message_kwargs(message: Any) -> dict[str, Any]:
     media_objects = _extract_media_objects(message)
+    media_payload = _serialize_media_objects(media_objects)
     photo_raw = media_objects.get("photo")
     return {
         "message_id": getattr(message, "id", 0),
@@ -323,22 +333,22 @@ def _build_fallback_message_kwargs(message: Any) -> dict[str, Any]:
         "caption": getattr(message, "caption", None),
         "photo": _serialize_photo(photo_raw),
         "photo_list": _serialize_photo(photo_raw),
-        "video": media_objects.get("video"),
-        "audio": media_objects.get("audio"),
-        "document": media_objects.get("document"),
-        "sticker": media_objects.get("sticker"),
-        "voice": media_objects.get("voice"),
-        "video_note": media_objects.get("video_note"),
-        "animation": media_objects.get("animation"),
-        "contact": media_objects.get("contact"),
-        "location": media_objects.get("location"),
-        "venue": media_objects.get("venue"),
-        "poll": media_objects.get("poll"),
-        "dice": media_objects.get("dice"),
-        "game": media_objects.get("game"),
-        "invoice": media_objects.get("invoice"),
-        "successful_payment": media_objects.get("successful_payment"),
-        "story": media_objects.get("story"),
+        "video": media_payload["video"],
+        "audio": media_payload["audio"],
+        "document": media_payload["document"],
+        "sticker": media_payload["sticker"],
+        "voice": media_payload["voice"],
+        "video_note": media_payload["video_note"],
+        "animation": media_payload["animation"],
+        "contact": media_payload["contact"],
+        "location": media_payload["location"],
+        "venue": media_payload["venue"],
+        "poll": media_payload["poll"],
+        "dice": media_payload["dice"],
+        "game": media_payload["game"],
+        "invoice": media_payload["invoice"],
+        "successful_payment": media_payload["successful_payment"],
+        "story": media_payload["story"],
     }
 
 
