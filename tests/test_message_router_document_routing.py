@@ -131,6 +131,7 @@ async def test_multi_link_messages_route_via_aggregation_handler() -> None:
         attachment_processor=None,
         aggregation_handler=cast("Any", aggregation_handler),
         lang="en",
+        aggregation_default_mode="bundle",
     )
     message = SimpleNamespace(
         document=None,
@@ -152,6 +153,58 @@ async def test_multi_link_messages_route_via_aggregation_handler() -> None:
         interaction_id=10,
     )
     url_handler.handle_direct_url.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_multi_link_messages_default_per_url_routes_via_url_handler() -> None:
+    """With the default per_url mode, plain-text multi-URL messages bypass the bundle
+    handler and fall through to handle_direct_url for full per-article summaries."""
+    command_processor = MagicMock()
+    command_processor.has_active_init_session.return_value = False
+    url_handler = SimpleNamespace(
+        can_handle_document=MagicMock(return_value=False),
+        handle_document_file=AsyncMock(),
+        is_awaiting_url=AsyncMock(return_value=False),
+        handle_awaited_url=AsyncMock(),
+        handle_direct_url=AsyncMock(),
+        add_awaiting_user=AsyncMock(),
+    )
+    aggregation_handler = SimpleNamespace(handle_message_bundle=AsyncMock())
+    router = MessageContentRouter(
+        command_dispatcher=cast("Any", command_processor),
+        url_handler=cast("Any", url_handler),
+        forward_processor=cast(
+            "Any",
+            SimpleNamespace(handle_forward_flow=AsyncMock()),
+        ),
+        response_formatter=cast(
+            "Any",
+            SimpleNamespace(safe_reply=AsyncMock()),
+        ),
+        interaction_recorder=MessageInteractionRecorder(
+            user_repo=SimpleNamespace(async_insert_user_interaction=AsyncMock()),
+            structured_output_enabled=True,
+        ),
+        callback_handler=None,
+        attachment_processor=None,
+        aggregation_handler=cast("Any", aggregation_handler),
+        lang="en",
+        # default: aggregation_default_mode="per_url"
+    )
+    message = SimpleNamespace(
+        document=None,
+        contact=None,
+        web_app_data=None,
+        photo=None,
+        text="https://example.com/a https://example.com/b",
+        caption=None,
+    )
+    context = replace(_make_context(message), text=message.text)
+
+    await router.route(context, interaction_id=10, start_time=0.0)
+
+    aggregation_handler.handle_message_bundle.assert_not_awaited()
+    url_handler.handle_direct_url.assert_awaited_once()
 
 
 @pytest.mark.asyncio

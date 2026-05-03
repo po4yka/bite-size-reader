@@ -42,6 +42,7 @@ class MessageContentRouter:
         attachment_processor: AttachmentProcessor | None = None,
         aggregation_handler: MultiSourceAggregationHandler | None = None,
         lang: str = "en",
+        aggregation_default_mode: str = "per_url",
     ) -> None:
         self.command_dispatcher = command_dispatcher
         self.url_handler = url_handler
@@ -52,6 +53,7 @@ class MessageContentRouter:
         self.attachment_processor = attachment_processor
         self.aggregation_handler = aggregation_handler
         self._lang = lang
+        self._aggregation_default_mode = aggregation_default_mode
 
     async def route(
         self,
@@ -114,7 +116,11 @@ class MessageContentRouter:
             )
             return
 
-        if context.text and self.aggregation_handler is not None:
+        if (
+            context.text
+            and self.aggregation_handler is not None
+            and self._aggregation_default_mode == "bundle"
+        ):
             url_count = len(extract_all_urls(context.text))
             if url_count >= 2:
                 handled = await self.aggregation_handler.handle_message_bundle(

@@ -71,6 +71,9 @@ class RuntimeConfig(BaseModel):
     aggregation_non_youtube_video_enabled: bool = Field(
         default=True, validation_alias="AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED"
     )
+    aggregation_default_mode: str = Field(
+        default="per_url", validation_alias="AGGREGATION_DEFAULT_MODE"
+    )
     rate_limit_max_requests: int = Field(default=10, validation_alias="RATE_LIMIT_MAX_REQUESTS")
     rate_limit_window_seconds: int = Field(default=60, validation_alias="RATE_LIMIT_WINDOW_SECONDS")
     rate_limit_max_concurrent: int = Field(default=3, validation_alias="RATE_LIMIT_MAX_CONCURRENT")
@@ -211,6 +214,16 @@ class RuntimeConfig(BaseModel):
             msg = f"Aggregation rollout stage must be one of {sorted(allowed)}"
             raise ValueError(msg)
         return stage
+
+    @field_validator("aggregation_default_mode", mode="before")
+    @classmethod
+    def _validate_aggregation_default_mode(cls, value: Any) -> str:
+        mode = str(value or "per_url").strip().lower()
+        allowed = {"per_url", "bundle"}
+        if mode not in allowed:
+            msg = f"Aggregation default mode must be one of {sorted(allowed)}"
+            raise ValueError(msg)
+        return mode
 
     @field_validator("db_backup_interval_minutes", mode="before")
     @classmethod

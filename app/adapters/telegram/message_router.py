@@ -101,6 +101,7 @@ class MessageRouter:
             attachment_processor=attachment_processor,
             aggregation_handler=aggregation_handler,
             lang=lang,
+            aggregation_default_mode=cfg.runtime.aggregation_default_mode,
         )
         self._failure_handler = MessageRouteFailureHandler(
             response_formatter=response_formatter,
