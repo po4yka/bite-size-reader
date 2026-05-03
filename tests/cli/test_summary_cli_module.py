@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from app.cli import _runtime as cli_runtime
 from app.cli import summary as summary_cli
 
 
@@ -33,12 +34,12 @@ def test_load_env_file_sets_missing_values_only(
     monkeypatch.setenv("QUOTED_SINGLE", "already-set")
     monkeypatch.delenv("QUOTED_DOUBLE", raising=False)
 
-    summary_cli._load_env_file(env_path)
+    cli_runtime.load_env_file(env_path)
 
     assert Path(env_path).exists()
-    assert summary_cli.os.environ["PLAIN"] == "value"
-    assert summary_cli.os.environ["QUOTED_SINGLE"] == "already-set"
-    assert summary_cli.os.environ["QUOTED_DOUBLE"] == "double"
+    assert cli_runtime.os.environ["PLAIN"] == "value"
+    assert cli_runtime.os.environ["QUOTED_SINGLE"] == "already-set"
+    assert cli_runtime.os.environ["QUOTED_DOUBLE"] == "double"
 
 
 def test_main_returns_zero_when_run_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:

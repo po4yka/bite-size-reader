@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.adapters.attachment._attachment_llm import AttachmentLLMWorkflowService
-from app.adapters.attachment.pdf_extractor import PDFContent
 from app.adapters.attachment.image_extractor import ImageContent
 
 
@@ -63,7 +61,6 @@ async def test_pdf_with_images_uses_vision_model_and_json_object() -> None:
 
     async def fake_execute(**kwargs: Any) -> None:
         captured.update(kwargs)
-        return None
 
     ctx.workflow.execute_summary_workflow = fake_execute
 
@@ -96,7 +93,6 @@ async def test_pdf_without_images_uses_default_model_and_json_schema() -> None:
 
     async def fake_execute(**kwargs: Any) -> None:
         captured.update(kwargs)
-        return None
 
     ctx.workflow.execute_summary_workflow = fake_execute
 

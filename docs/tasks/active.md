@@ -87,7 +87,7 @@
 - [ ] #task Backend: add refresh-token rotation test for /v1/auth/refresh #repo/ratatoskr #area/auth #status/doing ⏫ [paperclip:POY-277]
   - Paperclip: POY-277 · assigned to: Senior Python Backend Engineer (Ratatoskr)
   
-  Filed from [POY-255](/POY/issues/POY-255) QA gate (row B9). Coordinate with Security Engineer ([POY-257](/POY/issues/POY-257)).
+  Filed from POY-255 QA gate (row B9). Coordinate with Security Engineer (POY-257).
 
   Objective
   Existing tests in tests/api/test_auth_sessions.py cover token persistence and logout revocation but do NOT prove that calling POST /v1/auth/refresh issues a new refresh token AND revokes the previous one. Without this, an attacker who steals one refresh token can keep refreshing indefinitely.
@@ -107,7 +107,7 @@
 - [ ] #task Backend: add sync handler integration tests covering full/delta/apply + idempotency #repo/ratatoskr #area/sync #status/doing ⏫ [paperclip:POY-278]
   - Paperclip: POY-278 · assigned to: Senior Python Backend Engineer (Ratatoskr)
   
-  Filed from [POY-255](/POY/issues/POY-255) QA gate (row B10).
+  Filed from POY-255 QA gate (row B10).
 
   Objective
   Today tests/api/test_sync_service.py only covers SyncService._coerce_iso datetime serialization. The actual handlers (POST /sessions, GET /full, GET /delta, POST /apply in app/api/routers/sync.py) have no integration coverage. tests/test_api_rate_limit_and_sync.py exists but is excluded from CI.
@@ -131,7 +131,7 @@
 - [ ] #task Backend CI: promote web-playwright-visual to required status-check job #repo/ratatoskr #area/ci #status/doing ⏫ [paperclip:POY-279]
   - Paperclip: POY-279 · assigned to: Senior Build Gradle CI Engineer
   
-  Filed from [POY-255](/POY/issues/POY-255) QA gate (row B14).
+  Filed from POY-255 QA gate (row B14).
 
   Objective
   .github/workflows/ci.yml job web-playwright-visual runs the Playwright route + Storybook visual snapshot suite (Frost components, mobile route snapshots across desktop/iPhone 12/Pixel 5/iPad Mini). It is the canonical Frost parity reference for the v1 mobile release. Today it can fail without blocking status-check, which means a Frost regression can ship.
@@ -150,7 +150,7 @@
   - Blocks: POY-257
   
   ## Background
-  From the security review on [POY-257](/POY/issues/POY-257) (finding B1):
+  From the security review on POY-257 (finding B1):
 
   `app/api/routers/auth/dependencies.py:117-120` calls `Config.is_user_allowed(user_id, fail_open_when_empty=True)`, while `webapp_auth.py:103`, `telegram.py:117`, and `secret_auth.py:76` all pass `fail_open_when_empty=False`. The startup validator at `app/config/settings.py:315-323` prevents an empty list under production config, but is bypassed by `allow_stub_telegram=True` (the lazy-load default in `secret_auth._get_cfg`).
 
@@ -171,7 +171,7 @@
   - Blocks: POY-257
   
   ## Background
-  From the security review on [POY-257](/POY/issues/POY-257) (finding B2):
+  From the security review on POY-257 (finding B2):
 
   `app/api/routers/auth/secret_auth.py:42-52` (`_get_secret_pepper`) returns `cfg.runtime.jwt_secret_key` when `SECRET_LOGIN_PEPPER` is unset.
 
@@ -194,7 +194,7 @@
   - Blocks: POY-257
   
   ## Background
-  From the security review on [POY-257](/POY/issues/POY-257) (finding B3):
+  From the security review on POY-257 (finding B3):
 
   `app/api/routers/auth/endpoints_telegram.py:146` validates the link-confirmation nonce with a plain `payload.nonce != link_nonce` comparison, while every other security-sensitive comparison in this module already uses `hmac.compare_digest` (e.g. `webapp_auth.py:68`, `telegram.py:110`, `endpoints_secret_keys.py:142`).
 

@@ -54,6 +54,9 @@ def _load_scheduler_module(monkeypatch):
                 "job": FakeJob(),
             }
 
+        def add_listener(self, callback, mask) -> None:
+            pass
+
         def start(self) -> None:
             self.started = True
 
@@ -75,7 +78,13 @@ def _load_scheduler_module(monkeypatch):
             self.minute = minute
             self.timezone = timezone
 
-    monkeypatch.setitem(sys.modules, "apscheduler", types.ModuleType("apscheduler"))
+    apscheduler_mod = types.ModuleType("apscheduler")
+    monkeypatch.setitem(sys.modules, "apscheduler", apscheduler_mod)
+    apscheduler_events = types.ModuleType("apscheduler.events")
+    apscheduler_events.EVENT_JOB_ERROR = 1
+    apscheduler_events.EVENT_JOB_EXECUTED = 2
+    monkeypatch.setitem(sys.modules, "apscheduler.events", apscheduler_events)
+    apscheduler_mod.events = apscheduler_events
     monkeypatch.setitem(
         sys.modules, "apscheduler.schedulers", types.ModuleType("apscheduler.schedulers")
     )

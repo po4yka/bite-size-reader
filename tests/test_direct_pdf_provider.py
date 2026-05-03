@@ -16,7 +16,7 @@ from app.core.call_status import CallStatus
 
 
 @pytest.mark.parametrize(
-    "url,expected",
+    ("url", "expected"),
     [
         ("https://example.com/report.pdf", True),
         ("https://example.com/report.PDF", True),
@@ -105,6 +105,7 @@ async def test_fetch_exception_gives_error() -> None:
 
 
 def test_factory_registers_direct_pdf_when_fitz_available() -> None:
+    pytest.importorskip("fitz", reason="PyMuPDF (fitz) required for direct_pdf provider")
     from app.adapters.content.scraper.factory import _build_direct_pdf
 
     cfg = MagicMock()

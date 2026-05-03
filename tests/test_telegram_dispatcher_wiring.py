@@ -64,6 +64,7 @@ def test_command_dispatcher_routes_preserve_expected_precedence_order() -> None:
     assert [route.prefix for route in deps.routes.pre_summarize_text] == [
         "/aggregate",
         "/summarize_all",
+        "/retry",
     ]
     assert deps.routes.summarize_prefix == "/summarize"
     assert [route.prefix for route in deps.routes.post_summarize_uid] == ["/cancel"]

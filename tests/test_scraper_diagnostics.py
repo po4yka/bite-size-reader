@@ -28,6 +28,7 @@ def test_build_scraper_diagnostics_includes_expected_keys() -> None:
     assert "scrapegraph_ai" in diagnostics["providers"]
     assert diagnostics["provider_order_effective"] == [
         "scrapling",
+        "direct_pdf",
         "crawl4ai",
         "firecrawl",
         "defuddle",

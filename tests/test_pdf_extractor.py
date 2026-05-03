@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import io
-from pathlib import Path
+from pathlib import Path  # noqa: TC003
 from typing import Any
 
 import pytest
 
 pytest.importorskip("fitz", reason="PyMuPDF (fitz) required for PDF extractor tests")
 
-import fitz  # noqa: E402  (after import guard)
+import fitz
 
 from app.adapters.attachment.pdf_extractor import PDFContent, PDFExtractor
 
@@ -80,7 +79,7 @@ def test_text_rich_page_with_embedded_image_renders_for_vision(tmp_path: Path) -
     page = doc.new_page()
     # Add enough text to exceed the sparse threshold
     page.insert_text((50, 50), "Detailed analysis text. " * 20)
-    # Embed a 300×300 raster (well above the 100-px dimension floor)
+    # Embed a 300x300 raster (well above the 100-px dimension floor)
     img_bytes = _make_png_bytes(300, 300)
     page.insert_image(fitz.Rect(200, 200, 500, 500), stream=img_bytes)
     _save(doc, path)
@@ -119,7 +118,7 @@ def test_text_rich_page_with_vector_chart_renders_for_vision(tmp_path: Path) -> 
 
 
 def test_min_image_dimension_filter_respects_config(tmp_path: Path) -> None:
-    """A 150×150 image should be dropped at the default 200-px floor but kept at 100 px."""
+    """A 150x150 image should be dropped at the default 200-px floor but kept at 100 px."""
     path, doc = _make_pdf(tmp_path)
     page = doc.new_page()
     page.insert_text((50, 50), "Some text. " * 10)
@@ -138,7 +137,7 @@ def test_top_n_embedded_images_respects_config(tmp_path: Path) -> None:
     """Only the top max_embedded_images images should be retained, sorted by file size."""
     path, doc = _make_pdf(tmp_path)
     page = doc.new_page(width=2000, height=2000)
-    # Insert 10 distinct 200×200 images at non-overlapping positions
+    # Insert 10 distinct 200x200 images at non-overlapping positions
     for i in range(10):
         col, row = i % 5, i // 5
         x0, y0 = 50 + col * 350, 50 + row * 350
@@ -161,7 +160,7 @@ def test_table_detected_and_inlined_as_markdown(tmp_path: Path) -> None:
     path, doc = _make_pdf(tmp_path)
     page = doc.new_page()
 
-    # Draw a simple 3-column × 3-row table with visible borders
+    # Draw a simple 3-column x 3-row table with visible borders
     col_xs = [50, 150, 250, 350]
     row_ys = [100, 140, 180, 220]
 
