@@ -83,7 +83,7 @@ def test_extract_raises_when_markitdown_missing(tmp_path: Path) -> None:
     p = _write(tmp_path, "page.html", "<p>hello</p>")
     original = sys.modules.get("markitdown")
     try:
-        sys.modules["markitdown"] = None  # type: ignore[assignment]
+        sys.modules["markitdown"] = None
         with pytest.raises(ValueError, match="markitdown"):
             MarkitdownExtractor.extract(p, file_format="html")
     finally:

@@ -51,7 +51,7 @@ async def test_document_uses_default_model_and_json_schema() -> None:
     async def fake_run(**kwargs: Any) -> None:
         captured_run.update(kwargs)
 
-    svc._workflow.run_summary_workflow = fake_run  # type: ignore[assignment]
+    svc._workflow.run_summary_workflow = fake_run  # type: ignore[method-assign]
 
     doc_content = DocumentContent(text="Hello document", file_format="docx", truncated=False)
 

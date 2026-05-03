@@ -117,6 +117,10 @@ exclude = ["data", "build", "dist", "venv", "ratatoskr", "\\.claude"]
 plugins = []
 strict_optional = false
 
+[[tool.mypy.overrides]]
+module = ["tests.test_telegram_retry_command"]
+ignore_errors = true
+
 [project]
 name = "ratatoskr"
 version = "0.1.0"
