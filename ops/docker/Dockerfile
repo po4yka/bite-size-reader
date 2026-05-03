@@ -35,8 +35,8 @@ COPY pyproject.toml uv.lock ./
 # Bot/MCP need: ml, youtube, export, scheduler, mcp, api (mcp http_auth imports app.api.routers.auth.tokens)
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cache/pip \
-    echo "Starting uv sync with extras: ml youtube export scheduler mcp api" && \
-    uv sync --frozen --no-dev --extra ml --extra youtube --extra export --extra scheduler --extra mcp --extra api --extra browser_scraper --verbose && \
+    echo "Starting uv sync with extras: ml youtube export scheduler mcp api attachment" && \
+    uv sync --frozen --no-dev --extra ml --extra youtube --extra export --extra scheduler --extra mcp --extra api --extra browser_scraper --extra attachment --verbose && \
     echo "uv sync completed successfully"
 
 # =============================================================================
