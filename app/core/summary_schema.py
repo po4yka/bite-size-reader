@@ -115,6 +115,7 @@ class SourceType(StrEnum):
     OPINION = "opinion"
     TUTORIAL = "tutorial"
     REFERENCE = "reference"
+    PDF = "pdf"
 
 
 class TemporalFreshness(StrEnum):

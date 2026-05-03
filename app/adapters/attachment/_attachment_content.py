@@ -498,9 +498,13 @@ class AttachmentContentService:
                 {"role": "user", "content": user_content},
             ]
 
-        return build_text_with_images_messages(
-            system_prompt,
-            text,
-            image_uris,
-            caption=caption,
-        )
+        # Vision path: keep the JSON schema instruction in the user message.
+        # build_text_with_images_messages loses user_content when caption is None,
+        # so build the multipart message manually.
+        content_parts: list[dict[str, Any]] = [{"type": "text", "text": user_content}]
+        for uri in image_uris:
+            content_parts.append({"type": "image_url", "image_url": {"url": uri}})
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": content_parts},
+        ]
