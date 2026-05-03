@@ -62,6 +62,7 @@ class AttachmentPersistenceService:
             file_name=file_name,
             file_size_bytes=file_size,
             status="processing",
+            vision_used=False,
         )
 
     async def update_attachment_status(
