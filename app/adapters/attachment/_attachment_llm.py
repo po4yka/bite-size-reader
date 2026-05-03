@@ -38,7 +38,11 @@ class AttachmentLLMWorkflowService:
     ) -> dict[str, Any] | None:
         """Execute the standard LLM summary flow for an attachment."""
         max_tokens = 6144
-        response_format = self._context.workflow.build_structured_response_format()
+        # Vision models don't reliably support json_schema strict mode; they return
+        # 200 OK with non-parseable content instead of rejecting with a 400, so the
+        # auto_fallback_structured mechanism never fires. Use json_object for them.
+        rf_mode = "json_object" if model_override else None
+        response_format = self._context.workflow.build_structured_response_format(mode=rf_mode)
 
         request_kwargs: dict[str, Any] = {
             "messages": messages,
@@ -56,7 +60,9 @@ class AttachmentLLMWorkflowService:
         requests = [LLMRequestConfig(**request_kwargs)]
         repair_context = LLMRepairContext(
             base_messages=messages,
-            repair_response_format=self._context.workflow.build_structured_response_format(),
+            repair_response_format=self._context.workflow.build_structured_response_format(
+                mode=rf_mode
+            ),
             repair_max_tokens=max_tokens,
             default_prompt=(
                 "Your previous message was not a valid JSON object. Respond with ONLY a corrected "

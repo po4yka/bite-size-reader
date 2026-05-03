@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-import pytest
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from app.adapters.digest.session_validator import validate_and_repair_session
 
@@ -30,7 +31,8 @@ def test_repairs_legacy_number_column(tmp_path: Path) -> None:
     assert result == {"status": "repaired", "from": "number"}
     with sqlite3.connect(db) as conn:
         row = conn.execute("SELECT version FROM version").fetchone()
-    assert row is not None and row[0] == 6
+    assert row is not None
+    assert row[0] == 6
 
 
 def test_returns_ok_when_already_correct(tmp_path: Path) -> None:
@@ -45,7 +47,8 @@ def test_returns_ok_when_already_correct(tmp_path: Path) -> None:
     assert result == {"status": "ok"}
     with sqlite3.connect(db) as conn:
         row = conn.execute("SELECT version FROM version").fetchone()
-    assert row is not None and row[0] == 6
+    assert row is not None
+    assert row[0] == 6
 
 
 def test_returns_absent_when_file_missing(tmp_path: Path) -> None:
