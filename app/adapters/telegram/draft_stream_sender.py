@@ -54,6 +54,7 @@ class DraftSendResult:
 
 
 _TRANSPORT_CIRCUIT_BREAKER_THRESHOLD: int = 3
+_CIRCUIT_RESET_TIMEOUT_SEC: float = 300.0
 
 
 class DraftStreamSender:
@@ -69,6 +70,7 @@ class DraftStreamSender:
         self._settings = settings
         self._states: dict[tuple[int, int], DraftStreamState] = {}
         self._transport_disabled: bool = False
+        self._transport_disabled_since: float = 0.0
         self._transport_consecutive_failures: int = 0
 
     def set_telegram_client(self, telegram_client: Any) -> None:
@@ -122,8 +124,16 @@ class DraftStreamSender:
             return DraftSendResult(ok=False, sent=False, fallback=True, reason="disabled")
 
         if self._transport_disabled:
-            return DraftSendResult(
-                ok=False, sent=False, fallback=True, reason="transport_circuit_open"
+            elapsed = time.time() - self._transport_disabled_since
+            if elapsed < _CIRCUIT_RESET_TIMEOUT_SEC:
+                return DraftSendResult(
+                    ok=False, sent=False, fallback=True, reason="transport_circuit_open"
+                )
+            self._transport_disabled = False
+            self._transport_consecutive_failures = 0
+            logger.info(
+                "draft_transport_circuit_half_open",
+                extra={"disabled_for_sec": round(elapsed)},
             )
 
         key = self.request_key(message)
@@ -170,6 +180,7 @@ class DraftStreamSender:
             state.consecutive_failures = 0
             state.fallback_until = 0.0
             self._transport_consecutive_failures = 0
+            self._transport_disabled_since = 0.0
             record_draft_stream_event("draft_send_success")
             logger.debug(
                 "draft_send_success",
@@ -192,6 +203,7 @@ class DraftStreamSender:
                 and self._transport_consecutive_failures >= _TRANSPORT_CIRCUIT_BREAKER_THRESHOLD
             ):
                 self._transport_disabled = True
+                self._transport_disabled_since = time.time()
                 logger.warning(
                     "draft_transport_circuit_open",
                     extra={
