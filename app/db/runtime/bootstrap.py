@@ -37,10 +37,9 @@ class DatabaseBootstrapService:
         with self._database.connection_context(), self._database.bind_ctx(ALL_MODELS):
             self._database.create_tables(ALL_MODELS, safe=True)
 
-            from app.cli.migrations.migration_runner import MigrationRunner
+            from app.db.alembic_runner import upgrade_to_head
 
-            runner = MigrationRunner(self)
-            runner.run_pending()
+            upgrade_to_head(self._path)
             SchemaMigrator(self._database, self._logger).ensure_schema_compatibility()
             self._topic_search.ensure_index()
 

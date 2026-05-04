@@ -1,52 +1,41 @@
 """Database migration CLI tool.
 
-Ensures all tables are created and schema is up to date using the shared
-application migration flow.
+Runs Alembic migrations to bring the schema up to date.  Existing databases
+that still have the legacy migration_history table are automatically stamped
+to the Alembic head revision so historical migrations are not re-applied.
 
 Usage:
-    # Run all migrations (base + versioned)
+    # Run all pending migrations
     python -m app.cli.migrate_db
 
     # Specify database path
     python -m app.cli.migrate_db /path/to/db.sqlite
 
-    # Show migration status
+    # Show current revision and pending migrations
     python -m app.cli.migrate_db --status [/path/to/db.sqlite]
 
-    # For more migration commands, use the migration runner directly:
-    python -m app.cli.migrations.migration_runner status
-    python -m app.cli.migrations.migration_runner run --dry-run
+    # Use the Alembic CLI directly for full control:
+    alembic upgrade head
+    alembic downgrade -1
+    alembic history
+    alembic current
+    alembic stamp <revision>
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import sys
 
-from app.cli.migrations.migration_runner import MigrationRunner
-from app.core.logging_utils import get_logger
-from app.db.session import DatabaseSessionManager
+from app.db.alembic_runner import print_status, upgrade_to_head
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _resolve_db_path(args: list[str]) -> str:
     positional = [arg for arg in args if not arg.startswith("-")]
-    return positional[0] if positional else "/data/ratatoskr.db"
-
-
-def _print_status(db: DatabaseSessionManager) -> None:
-    runner = MigrationRunner(db)
-    status = runner.get_migration_status()
-    print("\nMigration Status:")
-    print(f"  Total: {status['total']}")
-    print(f"  Applied: {status['applied']}")
-    print(f"  Pending: {status['pending']}")
-    print("\nMigrations:")
-    for migration in status["migrations"]:
-        status_icon = "✓" if migration["applied"] else "○"
-        applied_at = f" (applied {migration['applied_at']})" if migration["applied"] else ""
-        print(f"  {status_icon} {migration['name']}{applied_at}")
+    return positional[0] if positional else os.getenv("DB_PATH", "/data/ratatoskr.db")
 
 
 def main() -> int:
@@ -60,16 +49,13 @@ def main() -> int:
         level=logging.INFO,
     )
 
-    # Initialize database and run migrations
     try:
-        db = DatabaseSessionManager(path=db_path)
-
         if show_status:
-            _print_status(db)
+            print_status(db_path)
             return 0
 
-        logger.info("Running database migrations...")
-        db.migrate()
+        logger.info("Running database migrations via Alembic...")
+        upgrade_to_head(db_path)
         logger.info("Database migration completed successfully")
         return 0
 
