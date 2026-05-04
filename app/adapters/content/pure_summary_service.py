@@ -93,11 +93,7 @@ class PureSummaryService:
             correlation_id=request.correlation_id,
         )
 
-        use_instructor = self._runtime.cfg.openrouter.use_instructor_summary
-        system_prompt = request.system_prompt
-        if use_instructor:
-            system_prompt = self._load_instructor_prompt(request.chosen_lang)
-
+        system_prompt = self._load_instructor_prompt(request.chosen_lang)
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
@@ -112,63 +108,15 @@ class PureSummaryService:
                 "lang": request.chosen_lang,
                 "has_feedback": bool(request.feedback_instructions),
                 "model": model_override or self._runtime.cfg.openrouter.model,
-                "instructor": use_instructor,
             },
         )
 
-        if use_instructor:
-            return await self._summarize_with_instructor(
-                messages=messages,
-                max_tokens=max_tokens,
-                model_override=model_override,
-                correlation_id=request.correlation_id,
-            )
-
-        response_format = self._runtime.workflow.build_structured_response_format()
-
-        try:
-            async with self._runtime.sem():
-                llm_result = await self._runtime.openrouter.chat(
-                    messages,
-                    response_format=response_format,
-                    max_tokens=max_tokens,
-                    temperature=self._runtime.cfg.openrouter.temperature,
-                    top_p=self._runtime.cfg.openrouter.top_p,
-                    request_id=None,
-                    model_override=model_override,
-                )
-        except Exception as exc:
-            logger.error(
-                "summarize_pure_llm_call_failed",
-                extra={"cid": request.correlation_id, "error": str(exc)},
-            )
-            raise ValueError(f"LLM call failed: {exc}") from exc
-
-        if llm_result.status != CallStatus.OK:
-            error_msg = llm_result.error_text or "Unknown LLM error"
-            logger.error(
-                "summarize_pure_llm_error",
-                extra={
-                    "cid": request.correlation_id,
-                    "status": llm_result.status,
-                    "error": error_msg,
-                },
-            )
-            raise ValueError(f"LLM returned error status: {error_msg}") from None
-
-        summary = self.parse_summary_from_llm_result(llm_result)
-        if not summary:
-            logger.error(
-                "summarize_pure_parse_failed",
-                extra={"cid": request.correlation_id},
-            )
-            raise ValueError("Failed to parse valid summary from LLM response") from None
-
-        logger.info(
-            "summarize_pure_success",
-            extra={"cid": request.correlation_id, "summary_keys": list(summary.keys())},
+        return await self._summarize_with_instructor(
+            messages=messages,
+            max_tokens=max_tokens,
+            model_override=model_override,
+            correlation_id=request.correlation_id,
         )
-        return summary
 
     async def _summarize_with_instructor(
         self,

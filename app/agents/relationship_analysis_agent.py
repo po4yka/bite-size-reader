@@ -18,8 +18,6 @@ from app.adapter_models.batch_analysis import (
     SeriesInfo,
 )
 from app.agents.base_agent import AgentResult, BaseAgent
-from app.core.call_status import CallStatus
-from app.core.json_utils import extract_json
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
@@ -29,6 +27,15 @@ logger = get_logger(__name__)
 
 # Prompt directory
 _PROMPT_DIR = Path(__file__).parent.parent / "prompts"
+
+
+class _RelationshipLLMResponse(BaseModel):
+    relationship_type: str = "unrelated"
+    confidence: float = 0.5
+    reasoning: str = ""
+    series_info: dict[str, Any] | None = None
+    cluster_info: dict[str, Any] | None = None
+
 
 # Patterns for series detection
 SERIES_PATTERNS = [
@@ -474,26 +481,16 @@ class RelationshipAnalysisAgent(BaseAgent[RelationshipAnalysisInput, Relationshi
             {"role": "user", "content": user_content},
         ]
 
-        result = await self._llm.chat(
+        result = await self._llm.chat_structured(
             messages,
-            response_format={"type": "json_object"},
+            response_model=_RelationshipLLMResponse,
+            max_retries=3,
             max_tokens=1000,
             temperature=0.1,
             request_id=None,
         )
 
-        if result.status != CallStatus.OK:
-            self.log_warning(f"LLM relationship analysis failed: {result.error_text}")
-            return None
-
-        response_text = result.response_text or ""
-        parsed = extract_json(response_text)
-
-        if not isinstance(parsed, dict):
-            self.log_warning("Failed to parse LLM relationship response")
-            return None
-
-        return self._parse_llm_response(parsed, articles)
+        return self._parse_llm_response(result.parsed.model_dump(), articles)
 
     def _parse_llm_response(
         self, parsed: dict[str, Any], articles: list[ArticleMetadata]

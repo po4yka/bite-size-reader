@@ -5,14 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from pydantic import BaseModel
+
 from app.adapter_models.batch_analysis import (
     CombinedSummaryInput,
     CombinedSummaryOutput,
     RelationshipType,
 )
 from app.agents.base_agent import AgentResult, BaseAgent
-from app.core.call_status import CallStatus
-from app.core.json_utils import extract_json
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
@@ -24,6 +24,19 @@ logger = get_logger(__name__)
 
 # Prompt directory
 _PROMPT_DIR = Path(__file__).parent.parent / "prompts"
+
+
+class _CombinedSummaryLLMResponse(BaseModel):
+    thematic_arc: str = ""
+    synthesized_insights: list[Any] = []
+    contradictions: list[Any] = []
+    complementary_points: list[Any] = []
+    recommended_reading_order: list[Any] = []
+    reading_order_rationale: str | None = None
+    combined_key_ideas: list[Any] = []
+    combined_entities: list[Any] = []
+    combined_topic_tags: list[Any] = []
+    total_reading_time_min: int | None = None
 
 
 class CombinedSummaryAgent(BaseAgent[CombinedSummaryInput, CombinedSummaryOutput]):
@@ -100,27 +113,20 @@ class CombinedSummaryAgent(BaseAgent[CombinedSummaryInput, CombinedSummaryOutput
             {"role": "user", "content": context},
         ]
 
-        result = await self._llm.chat(
-            messages,
-            response_format={"type": "json_object"},
-            max_tokens=2000,
-            temperature=0.3,  # Slightly higher for creative synthesis
-            request_id=None,
-            on_stream_delta=self._on_stream_delta,
-        )
-
-        if result.status != CallStatus.OK:
-            self.log_warning(f"LLM combined summary failed: {result.error_text}")
+        try:
+            result = await self._llm.chat_structured(
+                messages,
+                response_model=_CombinedSummaryLLMResponse,
+                max_retries=3,
+                max_tokens=2000,
+                temperature=0.3,  # Slightly higher for creative synthesis
+                request_id=None,
+            )
+        except Exception as exc:
+            self.log_warning(f"LLM combined summary failed: {exc}")
             return None
 
-        response_text = result.response_text or ""
-        parsed = extract_json(response_text)
-
-        if not isinstance(parsed, dict):
-            self.log_warning("Failed to parse LLM combined summary response")
-            return None
-
-        return self._parse_llm_response(parsed, input_data)
+        return self._parse_llm_response(result.parsed.model_dump(), input_data)
 
     def _build_llm_context(self, input_data: CombinedSummaryInput) -> str:
         """Build the context string for the LLM."""

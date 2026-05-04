@@ -6,10 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
-from app.core.call_status import CallStatus
-from app.core.json_utils import extract_json
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
@@ -82,31 +80,26 @@ class SignalJudgeService:
 
     async def _judge_one(self, row: dict[str, Any]) -> SignalJudgeDecision | None:
         prompt = self._build_prompt(row)
-        for attempt in range(2):
-            result = await self._llm.chat(
+        try:
+            result = await self._llm.chat_structured(
                 [{"role": "user", "content": prompt}],
+                response_model=SignalJudgeOutput,
+                max_retries=3,
                 temperature=0.0,
                 max_tokens=350,
-                response_format=_response_format(),
             )
-            if result.status != CallStatus.OK or result.error_text:
-                logger.warning("signal_judge_llm_error", extra={"error": result.error_text})
-                return None
-            parsed = self._parse_output(result.response_text or "")
-            if parsed is None:
-                if attempt == 0:
-                    prompt += "\n\nReturn only valid JSON matching the requested schema."
-                    continue
-                return None
-            return SignalJudgeDecision(
-                llm_score=parsed.relevance_score,
-                decision=parsed.decision,
-                reason=parsed.reason,
-                cost_usd=result.cost_usd,
-                latency_ms=result.latency_ms,
-                model=result.model,
-            )
-        return None
+        except Exception as exc:
+            logger.warning("signal_judge_llm_error", extra={"error": str(exc)})
+            return None
+        parsed = result.parsed
+        return SignalJudgeDecision(
+            llm_score=parsed.relevance_score,
+            decision=parsed.decision,
+            reason=parsed.reason,
+            cost_usd=result.cost_usd,
+            latency_ms=result.latency_ms,
+            model=result.model_used,
+        )
 
     def _build_prompt(self, row: dict[str, Any]) -> str:
         template = _load_prompt(self._lang)
@@ -116,39 +109,8 @@ class SignalJudgeService:
             content=str(row.get("content_text") or "")[:4000],
         )
 
-    @staticmethod
-    def _parse_output(raw_text: str) -> SignalJudgeOutput | None:
-        parsed = extract_json(raw_text)
-        if not isinstance(parsed, dict):
-            return None
-        try:
-            return SignalJudgeOutput.model_validate(parsed)
-        except ValidationError:
-            logger.warning("signal_judge_schema_invalid", extra={"raw": raw_text[:200]})
-            return None
-
 
 def _load_prompt(lang: str) -> str:
     safe_lang = "ru" if lang.startswith("ru") else "en"
     path = PROMPT_DIR / f"signal_judge_{safe_lang}.txt"
     return path.read_text(encoding="utf-8").strip()
-
-
-def _response_format() -> dict[str, Any]:
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "signal_judge_output",
-            "strict": True,
-            "schema": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["relevance_score", "decision", "reason"],
-                "properties": {
-                    "relevance_score": {"type": "number", "minimum": 0, "maximum": 1},
-                    "decision": {"type": "string", "enum": ["queue", "skip", "hide_source"]},
-                    "reason": {"type": "string"},
-                },
-            },
-        },
-    }

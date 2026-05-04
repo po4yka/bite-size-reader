@@ -6,8 +6,8 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from app.core.call_status import CallStatus
-from app.core.json_utils import extract_json
+from pydantic import BaseModel, Field
+
 from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
 
@@ -20,6 +20,15 @@ logger = get_logger(__name__)
 PROMPT_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
 
 VALID_CONTENT_TYPES = {"news", "tutorial", "opinion", "announcement", "other"}
+
+
+class _DigestPostAnalysis(BaseModel):
+    real_topic: str = ""
+    tldr: str = ""
+    key_insights: list[str] = Field(default_factory=list)
+    relevance_score: float = 0.5
+    content_type: str = "other"
+    is_ad: bool = False
 
 
 class DigestAnalyzer:
@@ -81,20 +90,13 @@ class DigestAnalyzer:
 
     @staticmethod
     def _parse_and_validate_llm_response(
-        raw_text: str, correlation_id: str
+        raw: dict[str, Any], correlation_id: str
     ) -> dict[str, Any] | None:
-        """Parse and validate an LLM JSON response for post analysis.
+        """Validate normalized fields from a parsed LLM response dict.
 
-        Returns a dict with normalized fields, or None if parsing/validation fails.
+        Returns a dict with normalized fields, or None if validation fails.
         """
-        parsed = extract_json(raw_text)
-
-        if parsed is None or not isinstance(parsed, dict):
-            logger.warning(
-                "digest_analysis_parse_failed",
-                extra={"cid": correlation_id, "raw": raw_text[:200]},
-            )
-            return None
+        parsed = raw
 
         real_topic = str(parsed.get("real_topic", "")).strip()
         tldr = str(parsed.get("tldr", "")).strip()
@@ -158,21 +160,24 @@ class DigestAnalyzer:
                 {"role": "user", "content": user_prompt},
             ]
 
-            result = await self._llm.chat(
-                messages,
-                temperature=0.1,
-                max_tokens=500,
-            )
-
-            if result.status != CallStatus.OK or result.error_text:
+            try:
+                result = await self._llm.chat_structured(
+                    messages,
+                    response_model=_DigestPostAnalysis,
+                    max_retries=3,
+                    temperature=0.1,
+                    max_tokens=500,
+                )
+            except Exception as exc:
                 logger.warning(
                     "digest_llm_error",
-                    extra={"cid": correlation_id, "error": result.error_text},
+                    extra={"cid": correlation_id, "error": str(exc)},
                 )
                 return None
 
-            raw_text = result.response_text or ""
-            fields = self._parse_and_validate_llm_response(raw_text, correlation_id)
+            fields = self._parse_and_validate_llm_response(
+                result.parsed.model_dump(), correlation_id
+            )
             if fields is None:
                 return None
 

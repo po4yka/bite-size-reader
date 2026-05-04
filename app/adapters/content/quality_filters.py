@@ -8,10 +8,11 @@ from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from pydantic import BaseModel
+
 if TYPE_CHECKING:
     from app.adapters.external.firecrawl.models import FirecrawlResult
     from app.adapters.llm.protocol import LLMClientProtocol
-    from app.adapter_models.llm.llm_models import LLMCallResult
 
 from app.core.html_utils import clean_markdown_article_text, html_to_text
 from app.core.logging_utils import get_logger
@@ -146,6 +147,11 @@ _QUALITY_PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "qualit
 _quality_system_prompt: str | None = None
 
 
+class _QualityVerdict(BaseModel):
+    classification: str  # "real_content" | "stub" | ...
+    confidence: float = 0.0
+
+
 def _load_quality_system_prompt() -> str:
     global _quality_system_prompt
     if _quality_system_prompt is None:
@@ -163,11 +169,11 @@ async def classify_content_quality_llm(
     timeout_sec: float = 3.0,
     confidence_threshold: float = 0.7,
     request_id: int | None = None,
-) -> tuple[bool, LLMCallResult | None]:
+) -> tuple[bool, None]:
     """Ask LLM whether extracted text is real content or a stub.
 
-    Returns (is_stub, llm_result). On any failure, defers to the heuristic
-    verdict by returning (True, llm_result_or_None).
+    Returns (is_stub, None). On any failure, defers to the heuristic
+    verdict by returning (True, None).
     """
     system_prompt = _load_quality_system_prompt()
     user_message = (
@@ -180,17 +186,17 @@ async def classify_content_quality_llm(
         {"role": "user", "content": user_message},
     ]
 
-    llm_result: LLMCallResult | None = None
     try:
-        llm_result = await asyncio.wait_for(
-            llm_client.chat(
+        structured = await asyncio.wait_for(
+            llm_client.chat_structured(
                 messages,
+                response_model=_QualityVerdict,
+                max_retries=3,
                 temperature=0.0,
                 max_tokens=50,
                 model_override=flash_model,
                 fallback_models_override=flash_fallback_models,
                 request_id=request_id,
-                response_format={"type": "json_object"},
             ),
             timeout=timeout_sec,
         )
@@ -199,22 +205,11 @@ async def classify_content_quality_llm(
         return True, None
     except Exception:
         logger.warning("quality_llm_error", extra={"request_id": request_id}, exc_info=True)
-        return True, llm_result
+        return True, None
 
-    try:
-        import json_repair
-
-        raw = json_repair.loads(llm_result.response_text or "{}")
-        parsed: dict[str, Any] = raw if isinstance(raw, dict) else {}
-        classification = parsed.get("classification", "stub")
-        confidence = float(parsed.get("confidence", 0.0))
-    except Exception:
-        logger.warning(
-            "quality_llm_parse_error",
-            extra={"request_id": request_id, "response": llm_result.response_text},
-        )
-        return True, llm_result
+    classification = structured.parsed.classification
+    confidence = structured.parsed.confidence
 
     if classification == "real_content" and confidence >= confidence_threshold:
-        return False, llm_result
-    return True, llm_result
+        return False, None
+    return True, None

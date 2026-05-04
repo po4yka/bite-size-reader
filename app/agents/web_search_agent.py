@@ -10,8 +10,6 @@ from pydantic import BaseModel, ConfigDict
 
 from app.adapters.content.search_context_builder import SearchContextBuilder
 from app.agents.base_agent import AgentResult, BaseAgent
-from app.core.call_status import CallStatus
-from app.core.json_utils import extract_json
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
@@ -203,46 +201,16 @@ class WebSearchAgent(BaseAgent[WebSearchAgentInput, WebSearchAgentOutput]):
         ]
 
         # Make LLM call
-        result = await self._llm.chat(
+        result = await self._llm.chat_structured(
             messages,
-            response_format={"type": "json_object"},
+            response_model=SearchAnalysisResult,
+            max_retries=3,
             max_tokens=500,
             temperature=0.1,  # Low temperature for deterministic analysis
             request_id=None,  # No DB persistence for analysis
         )
 
-        if result.status != CallStatus.OK:
-            raise ValueError(f"LLM analysis failed: {result.error_text}")
-
-        # Parse response
-        response_text = result.response_text or ""
-        parsed = extract_json(response_text)
-
-        if not isinstance(parsed, dict):
-            self.log_warning(
-                "invalid_analysis_response",
-                response_preview=response_text[:200],
-            )
-            return SearchAnalysisResult(
-                needs_search=False,
-                queries=[],
-                reason="Could not parse analysis response",
-            )
-
-        needs_search = bool(parsed.get("needs_search", False))
-        queries = parsed.get("queries", [])
-        reason = parsed.get("reason", "")
-
-        # Validate queries
-        if not isinstance(queries, list):
-            queries = []
-        queries = [str(q).strip() for q in queries if q and isinstance(q, str)]
-
-        return SearchAnalysisResult(
-            needs_search=needs_search,
-            queries=queries,
-            reason=reason,
-        )
+        return result.parsed
 
     def _load_analysis_prompt(self, language: str) -> str:
         """Load the search analysis prompt for the given language.

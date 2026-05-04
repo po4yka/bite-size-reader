@@ -25,8 +25,6 @@ from app.application.dto.aggregation import (
     SourceCoverageEntry,
     SourceExtractionItemResult,
 )
-from app.core.call_status import CallStatus
-from app.core.json_utils import extract_json
 from app.domain.models.source import AggregationItemStatus, AggregationSessionStatus
 
 if TYPE_CHECKING:
@@ -71,6 +69,16 @@ _EVIDENCE_BASE_WEIGHTS: dict[AggregationEvidenceKind, float] = {
     AggregationEvidenceKind.OCR: 0.45,
     AggregationEvidenceKind.METADATA: 0.35,
 }
+
+
+class _AggregationLLMResponse(BaseModel):
+    key_claims: list[Any] = []
+    contradictions: list[Any] = []
+    duplicate_signals: list[Any] = []
+    overview: str = ""
+    complementary_points: list[Any] = []
+    entities: list[Any] = []
+    topic_tags: list[Any] = []
 
 
 class MultiSourceAggregationInput(BaseModel):
@@ -204,29 +212,26 @@ class MultiSourceAggregationAgent(
             duplicate_signals=duplicate_signals,
             contradiction_hints=contradiction_hints,
         )
-        result = await self._llm.chat(
-            [
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": context},
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=2400,
-            temperature=0.2,
-            request_id=None,
-        )
-        if result.status != CallStatus.OK:
-            self.log_warning("multi_source_aggregation_llm_failed", error=result.error_text)
-            return None, float(result.cost_usd or 0.0)
-
-        parsed = extract_json(result.response_text or "")
-        if not isinstance(parsed, dict):
-            self.log_warning("multi_source_aggregation_llm_invalid_json")
-            return None, float(result.cost_usd or 0.0)
+        try:
+            result = await self._llm.chat_structured(
+                [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": context},
+                ],
+                response_model=_AggregationLLMResponse,
+                max_retries=3,
+                max_tokens=2400,
+                temperature=0.2,
+                request_id=None,
+            )
+        except Exception as exc:
+            self.log_warning("multi_source_aggregation_llm_failed", error=str(exc))
+            return None, 0.0
 
         try:
             return (
                 self._parse_llm_output(
-                    parsed=parsed,
+                    parsed=result.parsed.model_dump(),
                     input_data=input_data,
                     extracted_items=extracted_items,
                     source_weights=source_weights,
