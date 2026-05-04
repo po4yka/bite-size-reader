@@ -45,16 +45,23 @@ class _AppConfigScheduleSource(ScheduleSource):
 
     Reads DIGEST_TIMES (cron per delivery time) and RSS_POLL_INTERVAL_MINUTES
     (interval converted to cron).  No runtime mutation — redeploy to change.
+
+    load_config() is deferred to the first get_schedules() call so that
+    importing this module (e.g. during test collection) doesn't require env
+    vars to be set.
     """
 
     def __init__(self) -> None:
+        self._tasks: list[ScheduledTask] | None = None
+
+    def _build_tasks(self) -> list[ScheduledTask]:
         cfg = load_config()
-        self._tasks: list[ScheduledTask] = []
+        tasks: list[ScheduledTask] = []
 
         if cfg.digest.enabled:
             for time_str in cfg.digest.digest_times:
                 h, m = map(int, time_str.split(":"))
-                self._tasks.append(
+                tasks.append(
                     ScheduledTask(
                         task_name="ratatoskr.digest.run",
                         cron=f"{m} {h} * * *",
@@ -67,7 +74,7 @@ class _AppConfigScheduleSource(ScheduleSource):
 
         signal_sources_enabled = bool(getattr(cfg.signal_ingestion, "any_enabled", False))
         if cfg.rss.enabled or signal_sources_enabled:
-            self._tasks.append(
+            tasks.append(
                 ScheduledTask(
                     task_name="ratatoskr.rss.poll",
                     cron=_minutes_to_cron(cfg.rss.poll_interval_minutes),
@@ -77,7 +84,11 @@ class _AppConfigScheduleSource(ScheduleSource):
                 )
             )
 
+        return tasks
+
     async def get_schedules(self) -> list[ScheduledTask]:
+        if self._tasks is None:
+            self._tasks = self._build_tasks()
         return self._tasks
 
 
