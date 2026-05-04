@@ -125,12 +125,20 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
             "total_reading_time_min": 12
         }"""
 
+    def _make_structured_result(self, parsed_dict: dict) -> MagicMock:
+        """Build a StructuredLLMResult-compatible mock for chat_structured."""
+        structured = MagicMock()
+        structured.parsed.model_dump.return_value = parsed_dict
+        structured.cost_usd = 0.0
+        return structured
+
     async def test_successful_combined_summary_for_series(self):
         """Test successful combined summary generation for series."""
-        llm_response = MagicMock()
-        llm_response.status = "ok"
-        llm_response.response_text = self.valid_llm_response
-        self.mock_llm.chat = AsyncMock(return_value=llm_response)
+        import json
+
+        self.mock_llm.chat_structured = AsyncMock(
+            return_value=self._make_structured_result(json.loads(self.valid_llm_response))
+        )
 
         input_data = CombinedSummaryInput(
             articles=self.articles,
@@ -151,10 +159,11 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_successful_combined_summary_for_cluster(self):
         """Test successful combined summary generation for topic cluster."""
-        llm_response = MagicMock()
-        llm_response.status = "ok"
-        llm_response.response_text = self.valid_llm_response
-        self.mock_llm.chat = AsyncMock(return_value=llm_response)
+        import json
+
+        self.mock_llm.chat_structured = AsyncMock(
+            return_value=self._make_structured_result(json.loads(self.valid_llm_response))
+        )
 
         input_data = CombinedSummaryInput(
             articles=self.articles,
@@ -208,10 +217,9 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_llm_failure_handled(self):
         """Test graceful handling of LLM failure."""
-        llm_response = MagicMock()
-        llm_response.status = "error"
-        llm_response.error_text = "LLM service unavailable"
-        self.mock_llm.chat = AsyncMock(return_value=llm_response)
+        self.mock_llm.chat_structured = AsyncMock(
+            side_effect=RuntimeError("LLM service unavailable")
+        )
 
         input_data = CombinedSummaryInput(
             articles=self.articles,
@@ -226,11 +234,10 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.success)
 
     async def test_invalid_json_response_handled(self):
-        """Test handling of invalid JSON from LLM."""
-        llm_response = MagicMock()
-        llm_response.status = "ok"
-        llm_response.response_text = "This is not valid JSON"
-        self.mock_llm.chat = AsyncMock(return_value=llm_response)
+        """Test handling of invalid JSON from LLM (Instructor raises on parse failure)."""
+        self.mock_llm.chat_structured = AsyncMock(
+            side_effect=ValueError("Failed to parse LLM response as valid JSON")
+        )
 
         input_data = CombinedSummaryInput(
             articles=self.articles,
@@ -258,10 +265,11 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
             "total_reading_time_min": 10
         }"""
 
-        llm_response = MagicMock()
-        llm_response.status = "ok"
-        llm_response.response_text = response_no_order
-        self.mock_llm.chat = AsyncMock(return_value=llm_response)
+        import json
+
+        self.mock_llm.chat_structured = AsyncMock(
+            return_value=self._make_structured_result(json.loads(response_no_order))
+        )
 
         input_data = CombinedSummaryInput(
             articles=self.articles,
@@ -279,10 +287,11 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_llm_context_includes_relationship_info(self):
         """Test that LLM context includes relationship information."""
-        llm_response = MagicMock()
-        llm_response.status = "ok"
-        llm_response.response_text = self.valid_llm_response
-        self.mock_llm.chat = AsyncMock(return_value=llm_response)
+        import json
+
+        self.mock_llm.chat_structured = AsyncMock(
+            return_value=self._make_structured_result(json.loads(self.valid_llm_response))
+        )
 
         input_data = CombinedSummaryInput(
             articles=self.articles,
@@ -295,8 +304,8 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
         await self.agent.execute(input_data)
 
         # Verify LLM was called with context including relationship info
-        self.mock_llm.chat.assert_called_once()
-        call_args = self.mock_llm.chat.call_args
+        self.mock_llm.chat_structured.assert_called_once()
+        call_args = self.mock_llm.chat_structured.call_args
         messages = call_args[0][0]
 
         # User message should contain relationship type
@@ -318,10 +327,11 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
             "combined_topic_tags": ["#python"]
         }"""
 
-        llm_response = MagicMock()
-        llm_response.status = "ok"
-        llm_response.response_text = response_no_time
-        self.mock_llm.chat = AsyncMock(return_value=llm_response)
+        import json
+
+        self.mock_llm.chat_structured = AsyncMock(
+            return_value=self._make_structured_result(json.loads(response_no_time))
+        )
 
         input_data = CombinedSummaryInput(
             articles=self.articles,
@@ -339,10 +349,11 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
 
     async def test_russian_language_prompt(self):
         """Test that Russian language uses correct prompt."""
-        llm_response = MagicMock()
-        llm_response.status = "ok"
-        llm_response.response_text = self.valid_llm_response
-        self.mock_llm.chat = AsyncMock(return_value=llm_response)
+        import json
+
+        self.mock_llm.chat_structured = AsyncMock(
+            return_value=self._make_structured_result(json.loads(self.valid_llm_response))
+        )
 
         input_data = CombinedSummaryInput(
             articles=self.articles,
@@ -355,11 +366,11 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
         await self.agent.execute(input_data)
 
         # Verify LLM was called (prompt loading is internal)
-        self.mock_llm.chat.assert_called_once()
+        self.mock_llm.chat_structured.assert_called_once()
 
     async def test_llm_exception_handled(self):
         """Test handling of LLM exception."""
-        self.mock_llm.chat = AsyncMock(side_effect=RuntimeError("Connection error"))
+        self.mock_llm.chat_structured = AsyncMock(side_effect=RuntimeError("Connection error"))
 
         input_data = CombinedSummaryInput(
             articles=self.articles,
@@ -372,7 +383,7 @@ class TestCombinedSummaryAgent(unittest.IsolatedAsyncioTestCase):
         result = await self.agent.execute(input_data)
 
         self.assertFalse(result.success)
-        self.assertIn("Connection error", result.error)
+        self.assertIn("generate combined summary", result.error)
 
     async def test_ensure_list_helper(self):
         """Test the _ensure_list helper method."""

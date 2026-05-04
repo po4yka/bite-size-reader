@@ -5,7 +5,7 @@ This folder is the Obsidian vault for ratatoskr task management.
 ## Structure
 
 | File / Folder | Purpose |
-|---|---|
+| --- | --- |
 | `active.md` | Live Obsidian Tasks query — doing + review |
 | `backlog.md` | Live Obsidian Tasks query — backlog |
 | `blocked.md` | Live Obsidian Tasks query — blocked |

@@ -131,8 +131,10 @@ class RerankingService:
         """
         model = self._ensure_model()
 
-        # Run in thread pool to avoid blocking
-        return await asyncio.to_thread(model.predict, pairs, show_progress_bar=False)
+        # Run in thread pool to avoid blocking; wrap in lambda to resolve overload ambiguity
+        return await asyncio.to_thread(
+            lambda: model.predict(pairs, show_progress_bar=False)
+        )
 
     @property
     def model_name(self) -> str:

@@ -111,6 +111,7 @@ async def correlation_id_middleware(request: Request, call_next: Callable):
     token = correlation_id_ctx.set(correlation_id)
     try:
         from app.observability.otel import set_correlation_id_attr
+
         set_correlation_id_attr(correlation_id)
     except ImportError:
         pass

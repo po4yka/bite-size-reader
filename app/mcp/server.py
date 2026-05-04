@@ -18,6 +18,7 @@ from app.mcp.signal_service import SignalMcpService
 from app.mcp.tool_registrations import register_tools
 
 from app.core.logging_utils import setup_json_logging
+
 setup_json_logging()
 logger = logging.getLogger("ratatoskr.mcp")
 
@@ -104,6 +105,7 @@ def run_server(
     """Start the MCP server."""
     try:
         from app.observability.otel import init_tracing
+
         init_tracing()
     except Exception:
         pass

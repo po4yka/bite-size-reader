@@ -11,6 +11,7 @@ from __future__ import annotations
 
 try:
     from app.observability.otel import init_tracing as _init_tracing
+
     _init_tracing()
 except Exception:  # pragma: no cover
     pass

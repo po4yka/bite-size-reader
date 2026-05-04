@@ -17,6 +17,7 @@ from app.tasks.middleware import ChronicFailureMiddleware, OTelPropagationMiddle
 # Initialise OTel tracing before broker/redis clients are constructed.
 try:
     from app.observability.otel import init_tracing as _init_tracing
+
     _init_tracing()  # reads OTEL_ENABLED / OTEL_EXPORTER_OTLP_ENDPOINT from env
 except Exception:  # pragma: no cover
     pass
@@ -24,9 +25,9 @@ except Exception:  # pragma: no cover
 _broker_type = os.getenv("TASKIQ_BROKER", "redis").lower()
 
 if _broker_type == "memory":
-    from taskiq import InMemoryBroker
+    from taskiq import AsyncBroker, InMemoryBroker
 
-    broker = InMemoryBroker()
+    broker: AsyncBroker = InMemoryBroker()
 else:
     from taskiq_redis import RedisAsyncResultBackend, RedisStreamBroker
 

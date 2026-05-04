@@ -86,12 +86,19 @@ async def test_optional_parameters(respx_mock, or_client):
         b"data: [DONE]\n"
         b"\n"
     )
-    route = respx_mock.post(OR_CHAT_URL).mock(return_value=httpx.Response(
-        200, headers={"content-type": "text/event-stream"}, content=sse_body,
-    ))
+    route = respx_mock.post(OR_CHAT_URL).mock(
+        return_value=httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=sse_body,
+        )
+    )
     await or_client.chat(
         [{"role": "user", "content": "Hello"}],
-        temperature=0.5, max_tokens=50, top_p=0.9, stream=True,
+        temperature=0.5,
+        max_tokens=50,
+        top_p=0.9,
+        stream=True,
     )
     assert route.called
     body = json.loads(route.calls[0].request.content)
@@ -114,9 +121,12 @@ async def test_http_headers(respx_mock, or_client):
 
 @pytest.mark.asyncio
 async def test_error_handling_400(respx_mock, or_client):
-    respx_mock.post(OR_CHAT_URL).mock(return_value=httpx.Response(
-        400, json={"error": {"message": "Invalid request parameters"}},
-    ))
+    respx_mock.post(OR_CHAT_URL).mock(
+        return_value=httpx.Response(
+            400,
+            json={"error": {"message": "Invalid request parameters"}},
+        )
+    )
     result = await or_client.chat([{"role": "user", "content": "Hello"}])
     assert result.status == "error"
     assert "Invalid or missing request parameters" in result.error_text
@@ -124,9 +134,12 @@ async def test_error_handling_400(respx_mock, or_client):
 
 @pytest.mark.asyncio
 async def test_error_handling_401(respx_mock, or_client):
-    respx_mock.post(OR_CHAT_URL).mock(return_value=httpx.Response(
-        401, json={"error": {"message": "Invalid API key"}},
-    ))
+    respx_mock.post(OR_CHAT_URL).mock(
+        return_value=httpx.Response(
+            401,
+            json={"error": {"message": "Invalid API key"}},
+        )
+    )
     result = await or_client.chat([{"role": "user", "content": "Hello"}])
     assert result.status == "error"
     assert "Authentication failed" in result.error_text
@@ -134,9 +147,12 @@ async def test_error_handling_401(respx_mock, or_client):
 
 @pytest.mark.asyncio
 async def test_error_handling_402(respx_mock, or_client):
-    respx_mock.post(OR_CHAT_URL).mock(return_value=httpx.Response(
-        402, json={"error": {"message": "Insufficient credits"}},
-    ))
+    respx_mock.post(OR_CHAT_URL).mock(
+        return_value=httpx.Response(
+            402,
+            json={"error": {"message": "Insufficient credits"}},
+        )
+    )
     result = await or_client.chat([{"role": "user", "content": "Hello"}])
     assert result.status == "error"
     assert "Insufficient account balance" in result.error_text
@@ -144,9 +160,12 @@ async def test_error_handling_402(respx_mock, or_client):
 
 @pytest.mark.asyncio
 async def test_error_handling_404(respx_mock, or_client):
-    respx_mock.post(OR_CHAT_URL).mock(return_value=httpx.Response(
-        404, json={"error": {"message": "Model not found"}},
-    ))
+    respx_mock.post(OR_CHAT_URL).mock(
+        return_value=httpx.Response(
+            404,
+            json={"error": {"message": "Model not found"}},
+        )
+    )
     result = await or_client.chat([{"role": "user", "content": "Hello"}])
     assert result.status == "error"
     assert "Requested resource not found" in result.error_text
@@ -154,10 +173,13 @@ async def test_error_handling_404(respx_mock, or_client):
 
 @pytest.mark.asyncio
 async def test_error_handling_429_with_retry_after(respx_mock, or_client):
-    respx_mock.post(OR_CHAT_URL).mock(return_value=httpx.Response(
-        429, json={"error": {"message": "Rate limit exceeded"}},
-        headers={"retry-after": "5"},
-    ))
+    respx_mock.post(OR_CHAT_URL).mock(
+        return_value=httpx.Response(
+            429,
+            json={"error": {"message": "Rate limit exceeded"}},
+            headers={"retry-after": "5"},
+        )
+    )
     with patch("asyncio.sleep") as mock_sleep:
         await or_client.chat([{"role": "user", "content": "Hello"}])
         mock_sleep.assert_called_with(5)
@@ -165,9 +187,12 @@ async def test_error_handling_429_with_retry_after(respx_mock, or_client):
 
 @pytest.mark.asyncio
 async def test_error_handling_500(respx_mock, or_client):
-    respx_mock.post(OR_CHAT_URL).mock(return_value=httpx.Response(
-        500, json={"error": {"message": "Internal server error"}},
-    ))
+    respx_mock.post(OR_CHAT_URL).mock(
+        return_value=httpx.Response(
+            500,
+            json={"error": {"message": "Internal server error"}},
+        )
+    )
     with patch("asyncio.sleep") as mock_sleep:
         await or_client.chat([{"role": "user", "content": "Hello"}])
         assert mock_sleep.call_count > 0
@@ -175,12 +200,16 @@ async def test_error_handling_500(respx_mock, or_client):
 
 @pytest.mark.asyncio
 async def test_success_response_parsing(respx_mock, or_client):
-    respx_mock.post(OR_CHAT_URL).mock(return_value=httpx.Response(
-        200,
-        json={"choices": [{"message": {"content": "Test response"}}],
-              "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-              "model": "deepseek/deepseek-v3.2"},
-    ))
+    respx_mock.post(OR_CHAT_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "Test response"}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+                "model": "deepseek/deepseek-v3.2",
+            },
+        )
+    )
     result = await or_client.chat([{"role": "user", "content": "Hello"}])
     assert result.status == "ok"
     assert result.response_text == "Test response"
@@ -192,29 +221,36 @@ async def test_success_response_parsing(respx_mock, or_client):
 
 @pytest.mark.asyncio
 async def test_structured_output_content_with_json_part(respx_mock, or_client):
-    respx_mock.post(OR_CHAT_URL).mock(return_value=httpx.Response(
-        200,
-        json={
-            "id": "test-response",
-            "model": "qwen/qwen3-max",
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-            "choices": [{
-                "message": {
-                    "role": "assistant",
-                    "content": [
-                        {"type": "reasoning", "text": "Planning structured output"},
-                        {"type": "output_json", "json": {
-                            "summary_250": "Short summary",
-                            "summary_1000": "Medium summary",
-                            "tldr": "Longer summary",
-                        }},
-                    ],
-                },
-                "finish_reason": "stop",
-                "native_finish_reason": "completed",
-            }],
-        },
-    ))
+    respx_mock.post(OR_CHAT_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "test-response",
+                "model": "qwen/qwen3-max",
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": [
+                                {"type": "reasoning", "text": "Planning structured output"},
+                                {
+                                    "type": "output_json",
+                                    "json": {
+                                        "summary_250": "Short summary",
+                                        "summary_1000": "Medium summary",
+                                        "tldr": "Longer summary",
+                                    },
+                                },
+                            ],
+                        },
+                        "finish_reason": "stop",
+                        "native_finish_reason": "completed",
+                    }
+                ],
+            },
+        )
+    )
     response_format = {
         "type": "json_schema",
         "json_schema": {
@@ -231,7 +267,8 @@ async def test_structured_output_content_with_json_part(respx_mock, or_client):
         },
     }
     result = await or_client.chat(
-        [{"role": "user", "content": "Hello"}], response_format=response_format,
+        [{"role": "user", "content": "Hello"}],
+        response_format=response_format,
     )
     assert result.status == "ok"
     assert result.response_text is not None
@@ -243,13 +280,17 @@ async def test_structured_output_content_with_json_part(respx_mock, or_client):
 
 @pytest.mark.asyncio
 async def test_models_endpoint(respx_mock, or_client):
-    respx_mock.get(OR_MODELS_URL).mock(return_value=httpx.Response(
-        200,
-        json={"data": [
-            {"id": "deepseek/deepseek-v3.2", "name": "DeepSeek V3"},
-            {"id": "google/gemini-3.1-pro-preview", "name": "Gemini 3.1 Pro Preview"},
-        ]},
-    ))
+    respx_mock.get(OR_MODELS_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"id": "deepseek/deepseek-v3.2", "name": "DeepSeek V3"},
+                    {"id": "google/gemini-3.1-pro-preview", "name": "Gemini 3.1 Pro Preview"},
+                ]
+            },
+        )
+    )
     models = await or_client.get_models()
     assert respx_mock.calls[-1].request.url == OR_MODELS_URL
     assert "data" in models
@@ -258,14 +299,19 @@ async def test_models_endpoint(respx_mock, or_client):
 
 @pytest.mark.asyncio
 async def test_fallback_models(respx_mock, or_client):
-    respx_mock.post(OR_CHAT_URL).mock(side_effect=[
-        httpx.Response(500, json={"error": "Server error"}),
-        httpx.Response(200, json={
-            "choices": [{"message": {"content": "Fallback response"}}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-            "model": "google/gemini-3.1-pro-preview",
-        }),
-    ])
+    respx_mock.post(OR_CHAT_URL).mock(
+        side_effect=[
+            httpx.Response(500, json={"error": "Server error"}),
+            httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "Fallback response"}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+                    "model": "google/gemini-3.1-pro-preview",
+                },
+            ),
+        ]
+    )
     with patch("asyncio.sleep"):
         result = await or_client.chat([{"role": "user", "content": "Hello"}])
     assert result.status == "ok"
@@ -348,4 +394,5 @@ def test_error_message_generation():
         assert "HTTP 999 error" in error_msg
     finally:
         import asyncio
+
         asyncio.run(client.aclose())

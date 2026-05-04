@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
+
+if TYPE_CHECKING:
+    from taskiq.message import TaskiqMessage
 
 pytest.importorskip("opentelemetry", reason="opentelemetry SDK not installed")
 pytest.importorskip("taskiq", reason="taskiq not installed")
@@ -20,7 +23,9 @@ from app.tasks.middleware import OTelPropagationMiddleware
 class _FakeMessage:
     """Minimal stand-in for taskiq.message.TaskiqMessage."""
 
-    def __init__(self, *, task_name: str = "my_task", task_id: str = "tid-123", kwargs: dict | None = None) -> None:
+    def __init__(
+        self, *, task_name: str = "my_task", task_id: str = "tid-123", kwargs: dict | None = None
+    ) -> None:
         self.labels: dict[str, Any] = {}
         self.task_name = task_name
         self.task_id = task_id

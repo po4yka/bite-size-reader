@@ -29,9 +29,13 @@ async def test_openrouter_stream_success_invokes_delta_callback(respx_mock) -> N
         b"data: [DONE]\n"
         b"\n"
     )
-    respx_mock.post(OR_CHAT_URL).mock(return_value=httpx.Response(
-        200, headers={"content-type": "text/event-stream"}, content=sse_body,
-    ))
+    respx_mock.post(OR_CHAT_URL).mock(
+        return_value=httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=sse_body,
+        )
+    )
 
     result = await client.chat(
         [{"role": "user", "content": "hello"}],
@@ -60,9 +64,13 @@ async def test_openrouter_stream_tolerates_malformed_frames(respx_mock) -> None:
         b"data: [DONE]\n"
         b"\n"
     )
-    respx_mock.post(OR_CHAT_URL).mock(return_value=httpx.Response(
-        200, headers={"content-type": "text/event-stream"}, content=sse_body,
-    ))
+    respx_mock.post(OR_CHAT_URL).mock(
+        return_value=httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=sse_body,
+        )
+    )
 
     result = await client.chat(
         [{"role": "user", "content": "hello"}],
@@ -89,10 +97,12 @@ async def test_openrouter_stream_failure_falls_back_to_non_stream(respx_mock) ->
     }
     # First call: raise a transport-level error so streaming fails
     # Second call: non-stream fallback succeeds
-    respx_mock.post(OR_CHAT_URL).mock(side_effect=[
-        httpx.ConnectError("stream transport failed"),
-        httpx.Response(200, json=fallback_json),
-    ])
+    respx_mock.post(OR_CHAT_URL).mock(
+        side_effect=[
+            httpx.ConnectError("stream transport failed"),
+            httpx.Response(200, json=fallback_json),
+        ]
+    )
 
     result = await client.chat(
         [{"role": "user", "content": "hello"}],

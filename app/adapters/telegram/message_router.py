@@ -123,6 +123,7 @@ class MessageRouter:
         concurrent_acquired = False
         correlation_id = generate_correlation_id()
         from app.observability.otel import get_tracer, set_correlation_id_attr
+
         _tracer = get_tracer(__name__)
 
         try:
@@ -141,7 +142,11 @@ class MessageRouter:
 
                 logger.info(
                     "checking_access_for_user",
-                    extra={"cid": correlation_id, "user_id": uid, "user_id_type": type(uid).__name__},
+                    extra={
+                        "cid": correlation_id,
+                        "user_id": uid,
+                        "user_id_type": type(uid).__name__,
+                    },
                 )
                 if not await self.access_controller.check_access(
                     uid,

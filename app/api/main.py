@@ -80,11 +80,13 @@ async def lifespan(app: FastAPI):
     try:
         from app.config import load_config as _load_config
         from app.observability.otel import init_tracing
+
         init_tracing(_load_config(allow_stub_telegram=True))
         runtime = await build_api_runtime()
         setup_json_logging(runtime.cfg.runtime.log_level)
         try:
             from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
             FastAPIInstrumentor.instrument_app(app)
         except ImportError:
             pass

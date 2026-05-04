@@ -474,6 +474,7 @@ class OpenRouterClient:
         per_model_timeout_sec: float | None = None,
     ) -> LLMCallResult:
         from app.observability.otel import get_tracer
+
         tracer = get_tracer(__name__)
         with tracer.start_as_current_span(
             "llm.chat",
@@ -515,6 +516,7 @@ class OpenRouterClient:
     ) -> Any:
         """Structured chat completion via Instructor (Pydantic-validated, auto-reask)."""
         from app.observability.otel import get_tracer as _get_tracer
+
         _tracer = _get_tracer(__name__)
         with _tracer.start_as_current_span(
             "llm.chat_structured",

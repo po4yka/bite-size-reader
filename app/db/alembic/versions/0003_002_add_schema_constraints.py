@@ -86,29 +86,39 @@ _LLM_INDEXES = [
 
 def upgrade() -> None:
     conn = op.get_bind()
+    tables = {
+        row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
+    }
 
-    # Remove orphaned llm_calls (no valid request)
-    conn.execute(
-        text("""
-        DELETE FROM llm_calls
-        WHERE request_id IS NULL
-           OR request_id NOT IN (SELECT id FROM requests)
-    """)
-    )
+    # llm_calls reconstruction
+    if "llm_calls" in tables:
+        # Remove orphaned rows before adding NOT NULL constraint
+        conn.execute(
+            text("""
+            DELETE FROM llm_calls
+            WHERE request_id IS NULL
+               OR request_id NOT IN (SELECT id FROM requests)
+        """)
+        )
 
-    # Recreate llm_calls with NOT NULL on request_id
-    op.execute(text(_LLM_CALLS_DDL))
-    conn.execute(text("INSERT INTO llm_calls_new SELECT * FROM llm_calls"))
-    conn.execute(text("DROP TABLE llm_calls"))
-    conn.execute(text("ALTER TABLE llm_calls_new RENAME TO llm_calls"))
+        # Recreate with NOT NULL on request_id
+        op.execute(text(_LLM_CALLS_DDL))
+        conn.execute(text("INSERT INTO llm_calls_new SELECT * FROM llm_calls"))
+        conn.execute(text("DROP TABLE llm_calls"))
+        conn.execute(text("ALTER TABLE llm_calls_new RENAME TO llm_calls"))
+    # If llm_calls is absent (fresh Alembic-only DB), Peewee's create_tables
+    # will create it after migrations complete; skip reconstruction.
+
     for idx_name, cols in _LLM_INDEXES:
-        op.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON llm_calls({cols})"))
+        if "llm_calls" in tables:
+            op.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON llm_calls({cols})"))
 
-    # Add validation triggers
-    conn.execute(text("DROP TRIGGER IF EXISTS validate_request_insert"))
-    conn.execute(text("DROP TRIGGER IF EXISTS validate_request_update"))
-    op.execute(text(_VALIDATE_INSERT_TRIGGER))
-    op.execute(text(_VALIDATE_UPDATE_TRIGGER))
+    # Add validation triggers only when the referenced table exists
+    if "requests" in tables:
+        conn.execute(text("DROP TRIGGER IF EXISTS validate_request_insert"))
+        conn.execute(text("DROP TRIGGER IF EXISTS validate_request_update"))
+        op.execute(text(_VALIDATE_INSERT_TRIGGER))
+        op.execute(text(_VALIDATE_UPDATE_TRIGGER))
 
 
 def downgrade() -> None:

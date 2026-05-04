@@ -97,6 +97,7 @@ class ContentScraperChain:
         request_id: int | None = None,
     ) -> FirecrawlResult:
         from app.observability.otel import get_tracer
+
         _tracer = get_tracer(__name__)
         errors: list[str] = []
 

@@ -18,6 +18,6 @@ updated: <% tp.date.now("YYYY-MM-DD") %>
 
 ## Acceptance criteria
 
-- [ ] 
+- [ ]
 
 ## Definition of done

@@ -3,6 +3,7 @@
 Guards all OTel imports so the module is importable even when the
 [otel] extra is not installed — every public function degrades to a no-op.
 """
+
 from __future__ import annotations
 
 import os
@@ -49,11 +50,15 @@ def init_tracing(cfg: AppConfig | None = None) -> None:
     from opentelemetry.instrumentation.logging import LoggingInstrumentor
     from opentelemetry.instrumentation.redis import RedisInstrumentor
 
-    endpoint = cfg.otel.endpoint if cfg is not None else os.getenv(
-        "OTEL_EXPORTER_OTLP_ENDPOINT", "http://tempo:4317"
+    endpoint = (
+        cfg.otel.endpoint
+        if cfg is not None
+        else os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://tempo:4317")
     )
-    sqlite3_on = cfg.otel.sqlite3_enabled if cfg is not None else (
-        os.getenv("OTEL_SQLITE3_ENABLED", "").lower() in ("1", "true")
+    sqlite3_on = (
+        cfg.otel.sqlite3_enabled
+        if cfg is not None
+        else (os.getenv("OTEL_SQLITE3_ENABLED", "").lower() in ("1", "true"))
     )
 
     process_role = os.getenv("RATATOSKR_PROCESS_ROLE", "unknown")

@@ -223,18 +223,20 @@ async def test_multi_source_aggregation_agent_uses_llm_output_when_available() -
         ]
 
         llm_client = MagicMock()
-        llm_response = MagicMock()
-        llm_response.status = "ok"
-        llm_response.response_text = f"""{{
+        # Build a parsed response object that mirrors _AggregationLLMResponse.model_dump()
+        parsed_data = {
             "overview": "The bundle combines reporting and first-person commentary about stabilizing demand.",
             "key_claims": [
-                {{
+                {
                     "claim_id": "claim_1",
                     "claim": "Both sources point to demand stabilizing later in the year.",
-                    "source_item_ids": ["{article_document.source_item_id}", "{video_document.source_item_id}"],
+                    "source_item_ids": [
+                        article_document.source_item_id,
+                        video_document.source_item_id,
+                    ],
                     "evidence_kinds": ["text", "transcript"],
-                    "confidence": 0.84
-                }}
+                    "confidence": 0.84,
+                }
             ],
             "contradictions": [],
             "complementary_points": [
@@ -242,9 +244,12 @@ async def test_multi_source_aggregation_agent_uses_llm_output_when_available() -
             ],
             "duplicate_signals": [],
             "entities": ["CEO"],
-            "topic_tags": ["markets", "#demand"]
-        }}"""
-        llm_client.chat = AsyncMock(return_value=llm_response)
+            "topic_tags": ["markets", "#demand"],
+        }
+        structured_result = MagicMock()
+        structured_result.parsed.model_dump.return_value = parsed_data
+        structured_result.cost_usd = 0.0
+        llm_client.chat_structured = AsyncMock(return_value=structured_result)
 
         agent = MultiSourceAggregationAgent(
             aggregation_session_repo=repo,
@@ -272,4 +277,4 @@ async def test_multi_source_aggregation_agent_uses_llm_output_when_available() -
         ]
         assert result.output.topic_tags == ["#markets", "#demand"]
         assert result.output.used_source_count == 2
-        llm_client.chat.assert_awaited_once()
+        llm_client.chat_structured.assert_awaited_once()

@@ -24,12 +24,23 @@ target_metadata = None
 
 
 def _get_db_url() -> str:
-    """Resolve the SQLite URL, preferring DB_PATH env var over alembic.ini."""
+    """Resolve the SQLite URL.
+
+    Priority order:
+    1. sqlalchemy.url set programmatically via cfg.set_main_option() (used by
+       upgrade_to_head() — this is the authoritative source when Alembic is
+       invoked from Python code).
+    2. DB_PATH env var (used when running the Alembic CLI directly so operators
+       don't need to edit alembic.ini).
+    3. Hard-coded production default from alembic.ini.
+    """
+    url = config.get_main_option("sqlalchemy.url", "").strip()
+    if url and url != "sqlite:///":
+        return url
     path = os.getenv("DB_PATH", "").strip()
     if path:
         return f"sqlite:///{path}"
-    url = config.get_main_option("sqlalchemy.url")
-    return url or "sqlite:////data/ratatoskr.db"
+    return "sqlite:////data/ratatoskr.db"
 
 
 def _apply_pragmas(dbapi_conn, _connection_record) -> None:

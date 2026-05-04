@@ -19,8 +19,6 @@ kanban-plugin: basic
 
 ## Todo
 
-
-
 ## Doing
 
 - [ ] [[map-ratatoskr-mobile-api-contract-to-kmp-readiness]]
@@ -34,8 +32,6 @@ kanban-plugin: basic
 - [ ] [[decide-auth-security-second-wave-scope]]
 
 ## Review
-
-
 
 ## Blocked
 

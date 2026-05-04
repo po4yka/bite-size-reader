@@ -19,11 +19,18 @@ async def fc_client():
 
 @pytest.mark.asyncio
 async def test_firecrawl_200_with_error_in_response_body(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        200,
-        json={"error": "SCRAPE_ALL_ENGINES_FAILED", "markdown": None, "html": None,
-              "metadata": None, "status_code": 200},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "error": "SCRAPE_ALL_ENGINES_FAILED",
+                "markdown": None,
+                "html": None,
+                "metadata": None,
+                "status_code": 200,
+            },
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "error"
     assert result.http_status == 200
@@ -34,12 +41,18 @@ async def test_firecrawl_200_with_error_in_response_body(respx_mock, fc_client):
 
 @pytest.mark.asyncio
 async def test_firecrawl_200_without_error_in_response_body(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        200,
-        json={"markdown": "# Test Content\n\nThis is a test.",
-              "html": "<h1>Test Content</h1><p>This is a test.</p>",
-              "metadata": {"title": "Test Page"}, "links": [], "status_code": 200},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "markdown": "# Test Content\n\nThis is a test.",
+                "html": "<h1>Test Content</h1><p>This is a test.</p>",
+                "metadata": {"title": "Test Page"},
+                "links": [],
+                "status_code": 200,
+            },
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "ok"
     assert result.http_status == 200
@@ -50,12 +63,18 @@ async def test_firecrawl_200_without_error_in_response_body(respx_mock, fc_clien
 
 @pytest.mark.asyncio
 async def test_firecrawl_200_with_empty_error_field(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        200,
-        json={"error": None, "markdown": "# Test Content\n\nThis is a test.",
-              "html": "<h1>Test Content</h1><p>This is a test.</p>",
-              "metadata": {"title": "Test Page"}, "status_code": 200},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "error": None,
+                "markdown": "# Test Content\n\nThis is a test.",
+                "html": "<h1>Test Content</h1><p>This is a test.</p>",
+                "metadata": {"title": "Test Page"},
+                "status_code": 200,
+            },
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "ok"
     assert result.http_status == 200
@@ -65,12 +84,18 @@ async def test_firecrawl_200_with_empty_error_field(respx_mock, fc_client):
 
 @pytest.mark.asyncio
 async def test_firecrawl_200_with_empty_string_error(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        200,
-        json={"error": "", "markdown": "# Test Content\n\nThis is a test.",
-              "html": "<h1>Test Content</h1><p>This is a test.</p>",
-              "metadata": {"title": "Test Page"}, "status_code": 200},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "error": "",
+                "markdown": "# Test Content\n\nThis is a test.",
+                "html": "<h1>Test Content</h1><p>This is a test.</p>",
+                "metadata": {"title": "Test Page"},
+                "status_code": 200,
+            },
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "ok"
     assert result.http_status == 200
@@ -80,12 +105,18 @@ async def test_firecrawl_200_with_empty_string_error(respx_mock, fc_client):
 
 @pytest.mark.asyncio
 async def test_firecrawl_200_with_whitespace_error(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        200,
-        json={"error": "   \n\t  ", "markdown": "# Test Content\n\nThis is a test.",
-              "html": "<h1>Test Content</h1><p>This is a test.</p>",
-              "metadata": {"title": "Test Page"}, "status_code": 200},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "error": "   \n\t  ",
+                "markdown": "# Test Content\n\nThis is a test.",
+                "html": "<h1>Test Content</h1><p>This is a test.</p>",
+                "metadata": {"title": "Test Page"},
+                "status_code": 200,
+            },
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "ok"
     assert result.http_status == 200
@@ -95,11 +126,23 @@ async def test_firecrawl_200_with_whitespace_error(respx_mock, fc_client):
 
 @pytest.mark.asyncio
 async def test_firecrawl_200_with_data_array_error(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        200,
-        json={"success": True, "data": [{"error": "SCRAPE_ALL_ENGINES_FAILED",
-              "markdown": None, "html": None, "metadata": None}], "status_code": 200},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": [
+                    {
+                        "error": "SCRAPE_ALL_ENGINES_FAILED",
+                        "markdown": None,
+                        "html": None,
+                        "metadata": None,
+                    }
+                ],
+                "status_code": 200,
+            },
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "error"
     assert result.http_status == 200
@@ -109,12 +152,23 @@ async def test_firecrawl_200_with_data_array_error(respx_mock, fc_client):
 
 @pytest.mark.asyncio
 async def test_firecrawl_200_with_data_array_success(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        200,
-        json={"success": True, "data": [{"markdown": "# Test Content\n\nThis is a test.",
-              "html": "<h1>Test Content</h1><p>This is a test.</p>",
-              "metadata": {"title": "Test Page"}, "links": []}], "status_code": 200},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": [
+                    {
+                        "markdown": "# Test Content\n\nThis is a test.",
+                        "html": "<h1>Test Content</h1><p>This is a test.</p>",
+                        "metadata": {"title": "Test Page"},
+                        "links": [],
+                    }
+                ],
+                "status_code": 200,
+            },
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "ok"
     assert result.http_status == 200
@@ -125,12 +179,21 @@ async def test_firecrawl_200_with_data_array_success(respx_mock, fc_client):
 
 @pytest.mark.asyncio
 async def test_firecrawl_200_with_data_object_success(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        200,
-        json={"success": True, "data": {"markdown": "# Test Content\n\nThis is a test.",
-              "html": "<h1>Test Content</h1><p>This is a test.</p>",
-              "metadata": {"title": "Test Page"}, "links": []}, "status_code": 200},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": {
+                    "markdown": "# Test Content\n\nThis is a test.",
+                    "html": "<h1>Test Content</h1><p>This is a test.</p>",
+                    "metadata": {"title": "Test Page"},
+                    "links": [],
+                },
+                "status_code": 200,
+            },
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "ok"
     assert result.http_status == 200
@@ -141,11 +204,21 @@ async def test_firecrawl_200_with_data_object_success(respx_mock, fc_client):
 
 @pytest.mark.asyncio
 async def test_firecrawl_200_with_data_object_error(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        200,
-        json={"success": True, "data": {"error": "SCRAPE_ALL_ENGINES_FAILED",
-              "markdown": None, "html": None, "metadata": None}, "status_code": 200},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": {
+                    "error": "SCRAPE_ALL_ENGINES_FAILED",
+                    "markdown": None,
+                    "html": None,
+                    "metadata": None,
+                },
+                "status_code": 200,
+            },
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "error"
     assert result.http_status == 200
@@ -155,9 +228,12 @@ async def test_firecrawl_200_with_data_object_error(respx_mock, fc_client):
 
 @pytest.mark.asyncio
 async def test_firecrawl_401_unauthorized(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        401, json={"error": "Unauthorized", "message": "Invalid API key"},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            401,
+            json={"error": "Unauthorized", "message": "Invalid API key"},
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "error"
     assert result.http_status == 401
@@ -166,9 +242,12 @@ async def test_firecrawl_401_unauthorized(respx_mock, fc_client):
 
 @pytest.mark.asyncio
 async def test_firecrawl_402_payment_required(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        402, json={"error": "Payment Required", "message": "Insufficient credits"},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            402,
+            json={"error": "Payment Required", "message": "Insufficient credits"},
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "error"
     assert result.http_status == 402
@@ -177,9 +256,12 @@ async def test_firecrawl_402_payment_required(respx_mock, fc_client):
 
 @pytest.mark.asyncio
 async def test_firecrawl_404_not_found(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        404, json={"error": "Not Found", "message": "Resource not found"},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            404,
+            json={"error": "Not Found", "message": "Resource not found"},
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "error"
     assert result.http_status == 404
@@ -188,10 +270,16 @@ async def test_firecrawl_404_not_found(respx_mock, fc_client):
 
 @pytest.mark.asyncio
 async def test_firecrawl_429_rate_limit(respx_mock, fc_client):
-    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
-        429,
-        json={"error": "Rate Limit Exceeded", "message": "Too many requests", "retry_after": 60},
-    ))
+    respx_mock.post(FC_SCRAPE_URL).mock(
+        return_value=httpx.Response(
+            429,
+            json={
+                "error": "Rate Limit Exceeded",
+                "message": "Too many requests",
+                "retry_after": 60,
+            },
+        )
+    )
     result = await fc_client.scrape_markdown("https://example.com")
     assert result.status == "error"
     assert result.http_status == 429

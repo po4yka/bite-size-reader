@@ -65,6 +65,7 @@ class OTelPropagationMiddleware(TaskiqMiddleware):
     async def pre_send(self, message: TaskiqMessage) -> TaskiqMessage:
         try:
             from opentelemetry.propagate import inject
+
             inject(message.labels)
         except Exception:
             pass
@@ -95,9 +96,7 @@ class OTelPropagationMiddleware(TaskiqMiddleware):
             pass
         return message
 
-    async def post_execute(
-        self, message: TaskiqMessage, result: Any
-    ) -> Any:
+    async def post_execute(self, message: TaskiqMessage, result: Any) -> Any:
         try:
             span = getattr(message, "_otel_span", None)
             if span is not None:

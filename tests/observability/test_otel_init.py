@@ -2,27 +2,34 @@
 
 from __future__ import annotations
 
+import pytest
+
 import app.observability.otel as otel_module
 
 
-def test_init_noop_when_disabled(monkeypatch: object) -> None:
+def test_init_noop_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(otel_module, "_initialized", False)
     monkeypatch.setenv("OTEL_ENABLED", "false")
     otel_module.init_tracing()
     assert not otel_module._initialized
 
 
-def test_init_idempotent(monkeypatch: object) -> None:
+def test_init_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     """Second call short-circuits before _is_enabled is ever checked."""
     monkeypatch.setattr(otel_module, "_initialized", True)
     reached: list[bool] = []
     original = otel_module._is_enabled
-    monkeypatch.setattr(otel_module, "_is_enabled", lambda cfg: reached.append(True) or original(cfg))
+
+    def _spy(cfg: object) -> bool:
+        reached.append(True)
+        return original(cfg)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(otel_module, "_is_enabled", _spy)
     otel_module.init_tracing()
     assert reached == []
 
 
-def test_get_tracer_returns_noop_when_sdk_absent(monkeypatch: object) -> None:
+def test_get_tracer_returns_noop_when_sdk_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(otel_module, "_otel_available", False)
     tracer = otel_module.get_tracer("test.module")
     assert isinstance(tracer, otel_module._NoOpTracer)

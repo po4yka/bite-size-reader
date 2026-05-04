@@ -213,6 +213,7 @@ class URLProcessor:
     ) -> URLProcessingFlowResult:
         """Execute the URL processing pipeline (extraction -> summarization -> delivery)."""
         from app.observability.otel import get_tracer
+
         _tracer = get_tracer(__name__)
         with _tracer.start_as_current_span(
             "url_flow.process",
