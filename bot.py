@@ -7,7 +7,6 @@ from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import ConfigHolder, ConfigReloader, load_config
 from app.db.write_queue import DbWriteQueue
 from app.di.database import build_runtime_database
-from app.di.scheduler import build_scheduler_dependencies
 
 # Use uvloop for better async performance if available
 try:
@@ -55,14 +54,26 @@ async def main() -> None:
         cfg=cfg_holder,  # type: ignore[arg-type]
         db=db,
         db_write_queue=db_write_queue,
-        scheduler_dependencies=build_scheduler_dependencies(cfg, db),
     )
+
+    # Start the taskiq broker in producer mode (not worker mode — the worker
+    # process runs separately via `taskiq worker app.tasks.broker:broker`).
+    try:
+        from app.tasks.broker import broker
+
+        if not broker.is_worker_process:
+            await broker.startup()
+    except ImportError:
+        broker = None  # type: ignore[assignment]
+
     config_reloader.start()
     try:
         await bot.start()
     finally:
         await config_reloader.stop()
         await db_write_queue.stop()
+        if broker is not None and not broker.is_worker_process:
+            await broker.shutdown()
 
 
 if __name__ == "__main__":

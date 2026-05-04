@@ -3,7 +3,9 @@
 aiohappyeyeballs==2.6.1
     # via aiohttp
 aiohttp==3.13.5
-    # via instructor
+    # via
+    #   instructor
+    #   taskiq
 aiosignal==1.4.0
     # via aiohttp
 alembic==1.18.4
@@ -21,13 +23,12 @@ anyio==4.13.0
     #   openai
     #   sse-starlette
     #   starlette
+    #   taskiq
     #   watchfiles
 apify-fingerprint-datapoints==0.12.0
     # via
     #   browserforge
     #   crawlee
-apscheduler==3.11.2
-    # via ratatoskr
 async-timeout==5.0.1
     # via crawlee
 attrs==26.1.0
@@ -373,6 +374,7 @@ packaging==26.0
     #   huggingface-hub
     #   onnxruntime
     #   spacy
+    #   taskiq
     #   thinc
     #   transformers
     #   weasel
@@ -409,6 +411,8 @@ pybase64==1.4.3
     # via chromadb
 pycparser==3.0 ; implementation_name != 'PyPy'
     # via cffi
+pycron==3.2.0
+    # via taskiq
 pydantic==2.12.5
     # via
     #   chromadb
@@ -420,6 +424,7 @@ pydantic==2.12.5
     #   pydantic-settings
     #   ratatoskr
     #   spacy
+    #   taskiq
     #   thinc
     #   weasel
 pydantic-core==2.41.5
@@ -476,7 +481,9 @@ pyyaml==6.0.3
     #   transformers
     #   uvicorn
 redis==7.4.0
-    # via ratatoskr
+    # via
+    #   ratatoskr
+    #   taskiq-redis
 referencing==0.37.0
     # via
     #   jsonschema
@@ -569,6 +576,14 @@ sympy==1.14.0
     # via
     #   onnxruntime
     #   torch
+taskiq==0.12.2
+    # via
+    #   ratatoskr
+    #   taskiq-redis
+taskiq-dependencies==1.5.7
+    # via taskiq
+taskiq-redis==1.2.2
+    # via ratatoskr
 telethon==1.43.2
     # via ratatoskr
 tenacity==9.1.4
@@ -655,9 +670,7 @@ typing-inspection==0.4.2
 tzdata==2026.1 ; sys_platform == 'win32'
     # via tzlocal
 tzlocal==5.3.1
-    # via
-    #   apscheduler
-    #   dateparser
+    # via dateparser
 urllib3==2.6.3
     # via
     #   courlan

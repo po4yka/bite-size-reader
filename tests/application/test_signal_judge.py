@@ -29,6 +29,9 @@ class _FakeLLM:
             model="test-model",
         )
 
+    async def chat_structured(self, messages, *, response_model, **kwargs):
+        raise NotImplementedError
+
     async def aclose(self) -> None:
         return None
 

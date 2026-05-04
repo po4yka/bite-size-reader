@@ -76,6 +76,7 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     runtime = None
+    broker = None
     try:
         runtime = await build_api_runtime()
         setup_json_logging(runtime.cfg.runtime.log_level)
@@ -90,8 +91,21 @@ async def lifespan(app: FastAPI):
 
         logger.info("database_initialized", extra={"db_path": runtime.db.path})
 
+        # Connect the taskiq broker in producer mode so API endpoints can
+        # enqueue tasks via .kiq() in future features.
+        try:
+            from app.tasks.broker import broker as _broker
+
+            if not _broker.is_worker_process:
+                await _broker.startup()
+                broker = _broker
+        except ImportError:
+            pass
+
         yield
     finally:
+        if broker is not None and not broker.is_worker_process:
+            await broker.shutdown()
         await close_redis()
         if runtime is not None:
             await close_api_runtime(runtime)

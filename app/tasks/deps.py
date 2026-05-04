@@ -1,69 +1,63 @@
+"""Worker-process dependency providers for TaskiqDepends.
+
+Factories are module-level singletons (lru_cache) so each worker process
+opens the DB and loads config once.  Factory helper functions that produce
+fresh service objects on every task run are plain callables — not cached —
+because each run needs a fresh Telethon/OpenRouter client lifecycle.
+"""
+
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 from tempfile import gettempdir
 from typing import TYPE_CHECKING, Any, cast
 
-from app.di.repositories import (
-    build_crawl_result_repository,
-    build_llm_repository,
-    build_request_repository,
-    build_summary_repository,
-    build_user_repository,
-)
-from app.di.types import SchedulerDependencies
+from taskiq import TaskiqDepends
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
-    from app.adapters.external.formatting.protocols import (
-        ResponseFormatterFacade as ResponseFormatter,
-    )
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
 
 
-def build_scheduler_dependencies(
-    cfg: AppConfig,
-    db: DatabaseSessionManager,
-) -> SchedulerDependencies:
-    """Build scheduler job factories without constructing jobs inline in the service."""
-    rss_bot_factory = None
-    rss_delivery_factory = None
-    signal_worker_factory = None
-    source_ingestion_runner_factory = None
-    if cfg.rss.enabled:
-        rss_bot_factory = lambda: _create_digest_bot_client(cfg)  # noqa: E731
-        rss_delivery_factory = lambda: _create_rss_delivery_service(cfg, db)  # noqa: E731
-    if cfg.rss.enabled or cfg.signal_ingestion.any_enabled:
-        signal_worker_factory = lambda: _create_signal_ingestion_worker(cfg, db)  # noqa: E731
-    if cfg.signal_ingestion.any_enabled:
-        source_ingestion_runner_factory = lambda: _create_source_ingestion_runner(cfg, db)  # noqa: E731
-
-    return SchedulerDependencies(
-        digest_userbot_factory=lambda: _create_digest_userbot(cfg),
-        digest_llm_factory=lambda: _create_digest_llm_client(cfg),
-        digest_bot_client_factory=lambda: _create_digest_bot_client(cfg),
-        digest_service_factory=lambda userbot, llm_client, send_message: _create_digest_service(
-            cfg,
-            userbot=userbot,
-            llm_client=llm_client,
-            send_message=send_message,
-        ),
-        rss_bot_client_factory=rss_bot_factory,
-        rss_delivery_factory=rss_delivery_factory,
-        signal_worker_factory=signal_worker_factory,
-        source_ingestion_runner_factory=source_ingestion_runner_factory,
-    )
+# ── singleton providers ───────────────────────────────────────────────────────
 
 
-def _create_digest_userbot(cfg: AppConfig) -> Any:
+@lru_cache(maxsize=1)
+def _cached_config() -> AppConfig:
+    from app.config import load_config
+
+    return load_config()
+
+
+async def get_app_config() -> AppConfig:
+    """Return the cached AppConfig singleton for this worker process."""
+    return _cached_config()
+
+
+_db_instance: DatabaseSessionManager | None = None
+
+
+async def get_db(cfg: AppConfig = TaskiqDepends(get_app_config)) -> DatabaseSessionManager:
+    """Return a cached DatabaseSessionManager for this worker process."""
+    global _db_instance
+    if _db_instance is None:
+        from app.db.session import DatabaseSessionManager
+
+        _db_instance = DatabaseSessionManager(path=cfg.runtime.db_path)
+    return _db_instance
+
+
+# ── digest factory helpers ────────────────────────────────────────────────────
+
+
+def create_digest_userbot(cfg: AppConfig) -> Any:
     from app.adapters.digest.userbot_client import UserbotClient
 
     return UserbotClient(cfg, Path("/data"))
 
 
-def _create_digest_llm_client(cfg: AppConfig) -> Any:
+def create_digest_llm_client(cfg: AppConfig) -> Any:
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
 
     return OpenRouterClient(
@@ -73,7 +67,7 @@ def _create_digest_llm_client(cfg: AppConfig) -> Any:
     )
 
 
-def _create_digest_bot_client(cfg: AppConfig) -> Any:
+def create_digest_bot_client(cfg: AppConfig) -> Any:
     from app.adapters.telegram.telethon_compat import TelethonBotClient
 
     return TelethonBotClient(
@@ -85,12 +79,12 @@ def _create_digest_bot_client(cfg: AppConfig) -> Any:
     )
 
 
-def _create_digest_service(
+def create_digest_service(
     cfg: AppConfig,
     *,
     userbot: Any,
     llm_client: Any,
-    send_message: Callable[[int, str, Any | None], Awaitable[None]],
+    send_message: Any,
 ) -> Any:
     from app.adapters.digest.analyzer import DigestAnalyzer
     from app.adapters.digest.channel_reader import ChannelReader
@@ -109,7 +103,22 @@ def _create_digest_service(
     )
 
 
-def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
+# ── RSS / signal factory helpers ──────────────────────────────────────────────
+
+
+def create_rss_bot_client(cfg: AppConfig) -> Any:
+    from app.adapters.telegram.telethon_compat import TelethonBotClient
+
+    return TelethonBotClient(
+        name="rss_bot_sender",
+        api_id=cfg.telegram.api_id,
+        api_hash=cfg.telegram.api_hash,
+        bot_token=cfg.telegram.bot_token,
+        session_dir=gettempdir(),
+    )
+
+
+def create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
     from app.adapters.content.pure_summary_service import PureSummaryService
     from app.adapters.content.scraper.factory import ContentScraperFactory
     from app.adapters.content.summarization_runtime import SummarizationRuntime
@@ -118,6 +127,13 @@ def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> 
     )
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
     from app.adapters.rss.rss_delivery_service import RSSDeliveryService
+    from app.di.repositories import (
+        build_crawl_result_repository,
+        build_llm_repository,
+        build_request_repository,
+        build_summary_repository,
+        build_user_repository,
+    )
     from app.di.shared import LazySemaphoreFactory
     from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
         SqliteRSSFeedRepositoryAdapter,
@@ -130,7 +146,7 @@ def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> 
         fallback_models=cfg.openrouter.fallback_models,
     )
     response_formatter = cast(
-        "ResponseFormatter",
+        "Any",
         TelegramResponseFormatter(
             telegram_limits=cfg.telegram_limits,
             telegram_config=cfg.telegram,
@@ -152,12 +168,9 @@ def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> 
     )
     pure_service = PureSummaryService(runtime=runtime)
     prompt_mgr = get_prompt_manager()
-
     scraper_chain = None
     if cfg.rss.scrape_short_content:
-        audit = lambda *_a, **_kw: None  # noqa: E731
-        scraper_chain = ContentScraperFactory.create_from_config(cfg, audit=audit)
-
+        scraper_chain = ContentScraperFactory.create_from_config(cfg, audit=lambda *_a, **_kw: None)
     return RSSDeliveryService(
         cfg=cfg.rss,
         pure_summary_service=pure_service,
@@ -169,7 +182,7 @@ def _create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> 
     )
 
 
-def _create_signal_ingestion_worker(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
+def create_signal_ingestion_worker(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
     from app.application.services.signal_ingestion_worker import SignalIngestionWorker
     from app.application.services.signal_scoring import SignalScoringService
     from app.core.embedding_space import resolve_embedding_space_identifier
@@ -202,7 +215,7 @@ def _create_signal_ingestion_worker(cfg: AppConfig, db: DatabaseSessionManager) 
     )
 
 
-def _create_source_ingestion_runner(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
+def create_source_ingestion_runner(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
     from app.adapters.ingestors.hn import HackerNewsIngester
     from app.adapters.ingestors.reddit import RedditIngester, RequestRateBudget
     from app.adapters.ingestors.runner import SourceIngestionRunner

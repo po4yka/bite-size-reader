@@ -13,7 +13,6 @@ from app.adapters.llm.openai.client import OpenAIClient
 from app.adapters.llm.protocol import LLMClientProtocol
 from app.adapters.openrouter.openrouter_client import OpenRouterClient, OpenRouterClientConfig
 
-
 # ---------------------------------------------------------------------------
 # Minimal test schema
 # ---------------------------------------------------------------------------
@@ -98,9 +97,7 @@ async def test_openrouter_chat_structured_success() -> None:
     )
     client._instructor_async_client = mock_instructor
 
-    result = await client.chat_structured(
-        _MESSAGES, response_model=_Fact, request_id=42
-    )
+    result = await client.chat_structured(_MESSAGES, response_model=_Fact, request_id=42)
 
     assert isinstance(result, StructuredLLMResult)
     assert result.parsed is expected
@@ -136,9 +133,7 @@ async def test_openrouter_chat_structured_falls_back_to_second_model() -> None:
         return (expected, comp)
 
     mock_instructor = MagicMock()
-    mock_instructor.chat.completions.create_with_completion = AsyncMock(
-        side_effect=side_effect
-    )
+    mock_instructor.chat.completions.create_with_completion = AsyncMock(side_effect=side_effect)
     client._instructor_async_client = mock_instructor
 
     result = await client.chat_structured(_MESSAGES, response_model=_Fact)
@@ -213,9 +208,7 @@ async def test_openrouter_chat_structured_respects_fallback_override() -> None:
         return (expected, comp)
 
     mock_instructor = MagicMock()
-    mock_instructor.chat.completions.create_with_completion = AsyncMock(
-        side_effect=side_effect
-    )
+    mock_instructor.chat.completions.create_with_completion = AsyncMock(side_effect=side_effect)
     client._instructor_async_client = mock_instructor
 
     result = await client.chat_structured(

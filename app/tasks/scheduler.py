@@ -1,0 +1,77 @@
+"""Taskiq scheduler: emits channel_digest and rss_poll tasks at configured times.
+
+Run as a separate process:
+    taskiq scheduler app.tasks.scheduler:scheduler [--skip-first-run]
+
+The scheduler does NOT execute tasks; it only enqueues them onto the broker.
+Tasks are consumed and executed by the worker process.
+"""
+
+from __future__ import annotations
+
+from taskiq import TaskiqScheduler
+from taskiq.abc.schedule_source import ScheduleSource
+from taskiq.scheduler.scheduled_task import ScheduledTask
+
+from app.config import load_config
+from app.tasks.broker import broker
+
+
+def _minutes_to_cron(n: int) -> str:
+    """Convert a poll interval in minutes to a cron expression.
+
+    For n<=60 returns '*/n * * * *'.  For n>60 aligns to whole hours
+    (e.g. 120 -> '0 */2 * * *').  Values that do not divide evenly into 60
+    are rounded down (e.g. 90 -> '0 */1 * * *').
+
+    Note: APScheduler's IntervalTrigger fires exactly n minutes after the
+    previous run; cron aligns to wall-clock multiples.  Acceptable difference
+    for RSS polling cadence.
+    """
+    if n <= 60:
+        return f"*/{n} * * * *"
+    return f"0 */{n // 60} * * *"
+
+
+class _AppConfigScheduleSource(ScheduleSource):
+    """Generates ScheduledTask entries from AppConfig at scheduler startup.
+
+    Reads DIGEST_TIMES (cron per delivery time) and RSS_POLL_INTERVAL_MINUTES
+    (interval converted to cron).  No runtime mutation — redeploy to change.
+    """
+
+    def __init__(self) -> None:
+        cfg = load_config()
+        self._tasks: list[ScheduledTask] = []
+
+        if cfg.digest.enabled:
+            for time_str in cfg.digest.digest_times:
+                h, m = map(int, time_str.split(":"))
+                self._tasks.append(
+                    ScheduledTask(
+                        task_name="ratatoskr.digest.run",
+                        cron=f"{m} {h} * * *",
+                        cron_offset=cfg.digest.timezone,
+                        labels={"job": f"digest_{time_str}"},
+                        args=[],
+                        kwargs={},
+                    )
+                )
+
+        signal_sources_enabled = bool(getattr(cfg.signal_ingestion, "any_enabled", False))
+        if cfg.rss.enabled or signal_sources_enabled:
+            self._tasks.append(
+                ScheduledTask(
+                    task_name="ratatoskr.rss.poll",
+                    cron=_minutes_to_cron(cfg.rss.poll_interval_minutes),
+                    labels={"job": "rss_poll"},
+                    args=[],
+                    kwargs={},
+                )
+            )
+
+    async def get_schedules(self) -> list[ScheduledTask]:
+        return self._tasks
+
+
+scheduler = TaskiqScheduler(broker=broker, sources=[_AppConfigScheduleSource()])

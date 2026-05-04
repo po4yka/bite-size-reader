@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
     from app.db.write_queue import DbWriteQueue
-    from app.infrastructure.scheduler.service import SchedulerService
 
 logger = get_logger(__name__)
 
@@ -34,7 +33,6 @@ class TelegramBot:
     cfg: AppConfig
     db: DatabaseSessionManager
     db_write_queue: DbWriteQueue | None = None
-    scheduler_dependencies: Any | None = None
 
     # Dynamically assigned by component_wiring.bind_runtime_components()
     telegram_client: Any = field(default=None, init=False, repr=False)
@@ -87,9 +85,6 @@ class TelegramBot:
         self._backup_task: asyncio.Task[None] | None = None
         self._rate_limiter_cleanup_task: asyncio.Task[None] | None = None
 
-        # Scheduler will be lazily initialized when start() is called.
-        self._scheduler: SchedulerService | None = None
-
     def _sem(self) -> asyncio.Semaphore:
         """Lazy-create a semaphore when an event loop is running.
 
@@ -109,30 +104,12 @@ class TelegramBot:
         self._backup_task = self._lifecycle.backup_task
         self._rate_limiter_cleanup_task = self._lifecycle.rate_limiter_cleanup_task
 
-        # Start background scheduler for periodic tasks
-        # Lazy import to avoid apscheduler dependency in tests
-        from app.infrastructure.scheduler.service import SchedulerService
-
-        if self.scheduler_dependencies is not None:
-            self._scheduler = SchedulerService(
-                cfg=self.cfg,
-                db=self.db,
-                deps=self.scheduler_dependencies,
-            )
-            self._scheduler.start()
-        else:
-            logger.warning("scheduler_dependencies_missing")
-
         try:
             await self.telegram_client.start(
                 self.message_handler.handle_message,
                 self.message_handler.handle_callback_query,
             )
         finally:
-            # Stop scheduler gracefully (if it was started)
-            if self._scheduler is not None:
-                self._scheduler.stop()
-
             await self._lifecycle.on_shutdown()
 
             # Close external clients and drain in-flight tasks

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Callable
 
     from app.config import AppConfig
     from app.db.session import DatabaseSessionManager
@@ -138,20 +138,6 @@ class McpRuntime:
     scope: McpScope
     chroma_state: McpServiceState = field(default_factory=McpServiceState)
     local_vector_state: McpServiceState = field(default_factory=McpServiceState)
-
-
-@dataclass(frozen=True, slots=True)
-class SchedulerDependencies:
-    digest_userbot_factory: Callable[[], Any]
-    digest_llm_factory: Callable[[], Any]
-    digest_bot_client_factory: Callable[[], Any]
-    digest_service_factory: Callable[
-        [Any, Any, Callable[[int, str, Any | None], Awaitable[None]]], Any
-    ]
-    rss_bot_client_factory: Callable[[], Any] | None = None
-    rss_delivery_factory: Callable[[], Any] | None = None
-    signal_worker_factory: Callable[[], Any] | None = None
-    source_ingestion_runner_factory: Callable[[], Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)

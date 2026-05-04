@@ -118,5 +118,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     conn.execute('SELECT 1').fetchone(); \
     conn.close()"
 
-# Default command
-CMD ["python", "-m", "bot"]
+# Default command — bot + taskiq worker + taskiq scheduler in one container.
+# The scheduler emits tasks; the worker consumes and executes them.
+# Only one scheduler instance must run per deployment.
+CMD ["sh", "-c", "\
+  taskiq worker app.tasks.broker:broker --fs-discover --workers ${TASKIQ_WORKER_CONCURRENCY:-4} & WORKER_PID=$! ; \
+  taskiq scheduler app.tasks.scheduler:scheduler --skip-first-run & SCHED_PID=$! ; \
+  python -m bot ; STATUS=$? ; \
+  kill $WORKER_PID $SCHED_PID 2>/dev/null ; exit $STATUS"]
