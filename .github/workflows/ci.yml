@@ -904,15 +904,20 @@ jobs:
       - name: Install dependencies
         run: uv pip sync --system requirements-all.txt requirements-dev.txt
 
-      - name: Run Alembic upgrade head
+      - name: Initialize database (Peewee schema + Alembic stamp to head)
         env:
           DB_PATH: /tmp/test_migration.db
-        run: alembic upgrade head
+        run: python -c "from app.db.session import DatabaseSessionManager; DatabaseSessionManager(path='/tmp/test_migration.db').migrate()"
 
       - name: Run Alembic downgrade -1
         env:
           DB_PATH: /tmp/test_migration.db
         run: alembic downgrade -1
+
+      - name: Run Alembic upgrade head
+        env:
+          DB_PATH: /tmp/test_migration.db
+        run: alembic upgrade head
 
   status-check:
     name: CI Status Check

@@ -81,32 +81,29 @@ def _stamp_head_sqlite(db_path: str, revision: str) -> None:
 
 
 def upgrade_to_head(db_path: str) -> None:
-    """Run all pending Alembic revisions, stamping legacy databases to head first.
+    """Run pending Alembic revisions, stamping untracked databases to head first.
 
-    On an existing production database that was managed by the old
-    MigrationRunner:
-    1. Detect migration_history (legacy) + no alembic_version.
-    2. Stamp the database to Alembic head without re-running any revision.
-    3. Run upgrade("head") — no-op since we just stamped to head.
-
-    On a fresh database (or one already managed by Alembic):
-    1. upgrade("head") runs all pending revisions normally.
+    When no alembic_version table exists — whether a fresh database or a legacy
+    database previously managed by MigrationRunner — Peewee create_tables(safe=True)
+    has already applied the current full schema.  Stamp to head so Alembic
+    skips re-running historical revisions (which would fail on already-existing
+    columns/tables).  Only when an alembic_version already exists do we let
+    Alembic drive incremental upgrades for any pending revisions.
     """
     from alembic import command
     from alembic.script import ScriptDirectory
 
     cfg = _build_alembic_config(db_path)
 
-    if _has_legacy_migration_history(db_path) and not _has_alembic_version(db_path):
+    if not _has_alembic_version(db_path):
         head = ScriptDirectory.from_config(cfg).get_current_head()
         logger.info(
-            "alembic_stamp_legacy_db",
+            "alembic_stamp_db",
             extra={"db_path": _mask(db_path), "head": head},
         )
         _stamp_head_sqlite(db_path, head)
         logger.info("alembic_upgrade_complete", extra={"db_path": _mask(db_path)})
-        return  # Stamp puts DB at head; upgrade() would be a no-op and risks not
-        # seeing the raw-sqlite3-written row under SA 2.x non-transactional DDL mode.
+        return
 
     command.upgrade(cfg, "head")
     logger.info("alembic_upgrade_complete", extra={"db_path": _mask(db_path)})
