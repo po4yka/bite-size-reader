@@ -301,7 +301,7 @@ Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch
 - **Chroma Vector Store** -- Semantic search via ChromaDB embeddings (`app/infrastructure/`, `app/cli/backfill_chroma_store.py`). Embedding provider switchable via `EmbeddingConfig` (local sentence-transformers or Gemini API); see `app/infrastructure/embedding/embedding_factory.py`
 - **PDF Export** -- Summary export to PDF via weasyprint
 - **Background Scheduling** -- APScheduler-based background task processing with Redis distributed locks
-- **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Telethon userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow.
+- **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Telethon userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow. Ops reference: `docs/reference/digest-subsystem-ops.md`.
 
 ### Safety Hooks
 
@@ -461,7 +461,7 @@ Full reference: `docs/environment_variables.md`
 
 ---
 
-**Last Updated:** 2026-04-30
+**Last Updated:** 2026-05-04
 
 For questions about the codebase, always refer to:
 
