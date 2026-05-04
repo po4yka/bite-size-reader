@@ -144,7 +144,9 @@ async def test_chat_streaming_tolerates_malformed_frames() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chat_streaming_logs_and_ignores_delta_callback_failures(caplog) -> None:
+async def test_chat_streaming_logs_and_ignores_delta_callback_failures() -> None:
+    from unittest.mock import patch
+
     response_handler = SimpleNamespace(handle_successful_response=AsyncMock())
     handler = ChatStreamingHandler(response_handler)
     state = StreamingState(model_reported="qwen/qwen3-max")
@@ -152,7 +154,7 @@ async def test_chat_streaming_logs_and_ignores_delta_callback_failures(caplog) -
     async def failing_callback(delta: str) -> None:
         raise RuntimeError(f"boom:{delta}")
 
-    with caplog.at_level("WARNING"):
+    with patch("app.adapters.openrouter.chat_streaming.logger") as mock_logger:
         done = await handler.process_stream_event_payload(
             payload='{"choices":[{"delta":{"content":"chunk"}}]}',
             state=state,
@@ -164,7 +166,8 @@ async def test_chat_streaming_logs_and_ignores_delta_callback_failures(caplog) -
 
     assert done is False
     assert state.stream_text_parts == ["chunk"]
-    assert "openrouter_stream_delta_callback_failed" in caplog.text
+    mock_logger.warning.assert_called_once()
+    assert mock_logger.warning.call_args[0][0] == "openrouter_stream_delta_callback_failed"
 
 
 def test_chat_streaming_empty_completion_triggers_non_stream_fallback() -> None:

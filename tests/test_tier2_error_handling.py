@@ -13,7 +13,6 @@ intent and protect against future regressions or wrapped cancellation errors.
 from __future__ import annotations
 
 import asyncio
-import logging
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -224,9 +223,9 @@ class TestAuditCommandCancelledError:
             await handler(None, ctx)  # type: ignore[arg-type]
 
     @pytest.mark.asyncio
-    async def test_swallows_regular_exception_and_logs(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    async def test_swallows_regular_exception_and_logs(self) -> None:
+        from unittest.mock import patch
+
         from app.adapters.telegram.command_handlers.decorators import audit_command
 
         @audit_command("test_event")
@@ -241,15 +240,16 @@ class TestAuditCommandCancelledError:
             audit_func=MagicMock(side_effect=RuntimeError("audit broken")),
         )
 
-        with caplog.at_level(
-            logging.DEBUG,
-            logger="app.adapters.telegram.command_handlers.decorators",
-        ):
+        with patch(
+            "app.adapters.telegram.command_handlers.decorators.logger"
+        ) as mock_logger:
             result = await handler(None, ctx)  # type: ignore[arg-type]
 
         assert result == "ok"
-        # After fix, a debug log line should be emitted
-        assert any("audit_log_failed" in r.message for r in caplog.records)
+        assert any(
+            "audit_log_failed" in str(call)
+            for call in mock_logger.warning.call_args_list
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -303,9 +303,9 @@ class TestSearchHandlerAuditCancelledError:
             )
 
     @pytest.mark.asyncio
-    async def test_swallows_regular_exception_and_logs(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    async def test_swallows_regular_exception_and_logs(self) -> None:
+        from unittest.mock import patch
+
         from app.adapters.telegram.command_handlers.search_handler import (
             SearchHandler,
         )
@@ -334,10 +334,9 @@ class TestSearchHandlerAuditCancelledError:
             audit_func=MagicMock(side_effect=RuntimeError("audit broken")),
         )
 
-        with caplog.at_level(
-            logging.DEBUG,
-            logger="app.adapters.telegram.command_handlers.search_handler",
-        ):
+        with patch(
+            "app.adapters.telegram.command_handlers.search_handler.logger"
+        ) as mock_logger:
             await sh._handle_topic_search(
                 ctx,  # type: ignore[arg-type]
                 command="/find",
@@ -352,7 +351,10 @@ class TestSearchHandlerAuditCancelledError:
                 formatter_source="test",
             )
 
-        assert any("audit_log_failed" in r.message for r in caplog.records)
+        assert any(
+            "audit_log_failed" in str(call)
+            for call in mock_logger.warning.call_args_list
+        )
 
 
 # ---------------------------------------------------------------------------
