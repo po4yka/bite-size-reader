@@ -264,26 +264,23 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
 
         # Mock LLM client
         mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.status = "ok"
-        mock_response.response_text = json.dumps(
-            {
-                "thematic_arc": "A comprehensive Python tutorial series covering basics to advanced topics.",
-                "synthesized_insights": [
-                    "Python fundamentals build progressively",
-                    "Each part builds on previous concepts",
-                ],
-                "contradictions": [],
-                "complementary_points": ["Parts complement each other well"],
-                "recommended_reading_order": [r.id for r in self.series_requests],
-                "reading_order_rationale": "Follow the natural Part 1, 2, 3 progression.",
-                "combined_key_ideas": ["Python basics", "Progressive learning"],
-                "combined_entities": ["Python"],
-                "combined_topic_tags": ["#python", "#tutorial"],
-                "total_reading_time_min": sum(5 + i for i in range(1, 4)),
-            }
-        )
-        mock_llm.chat = AsyncMock(return_value=mock_response)
+        mock_result = MagicMock()
+        mock_result.parsed.model_dump.return_value = {
+            "thematic_arc": "A comprehensive Python tutorial series covering basics to advanced topics.",
+            "synthesized_insights": [
+                "Python fundamentals build progressively",
+                "Each part builds on previous concepts",
+            ],
+            "contradictions": [],
+            "complementary_points": ["Parts complement each other well"],
+            "recommended_reading_order": [r.id for r in self.series_requests],
+            "reading_order_rationale": "Follow the natural Part 1, 2, 3 progression.",
+            "combined_key_ideas": ["Python basics", "Progressive learning"],
+            "combined_entities": ["Python"],
+            "combined_topic_tags": ["#python", "#tutorial"],
+            "total_reading_time_min": sum(5 + i for i in range(1, 4)),
+        }
+        mock_llm.chat_structured = AsyncMock(return_value=mock_result)
 
         agent = CombinedSummaryAgent(
             llm_client=mock_llm,
@@ -446,23 +443,20 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
         if rel_result.output.relationship_type != RelationshipType.UNRELATED:
             # Mock LLM for combined summary
             mock_llm = MagicMock()
-            mock_response = MagicMock()
-            mock_response.status = "ok"
-            mock_response.response_text = json.dumps(
-                {
-                    "thematic_arc": "Complete Python tutorial journey.",
-                    "synthesized_insights": ["Progressive learning works"],
-                    "contradictions": [],
-                    "complementary_points": ["Each part complements others"],
-                    "recommended_reading_order": [r.id for r in self.series_requests],
-                    "reading_order_rationale": "Sequential order.",
-                    "combined_key_ideas": ["Python mastery"],
-                    "combined_entities": ["Python"],
-                    "combined_topic_tags": ["#python"],
-                    "total_reading_time_min": 18,
-                }
-            )
-            mock_llm.chat = AsyncMock(return_value=mock_response)
+            mock_result = MagicMock()
+            mock_result.parsed.model_dump.return_value = {
+                "thematic_arc": "Complete Python tutorial journey.",
+                "synthesized_insights": ["Progressive learning works"],
+                "contradictions": [],
+                "complementary_points": ["Each part complements others"],
+                "recommended_reading_order": [r.id for r in self.series_requests],
+                "reading_order_rationale": "Sequential order.",
+                "combined_key_ideas": ["Python mastery"],
+                "combined_entities": ["Python"],
+                "combined_topic_tags": ["#python"],
+                "total_reading_time_min": 18,
+            }
+            mock_llm.chat_structured = AsyncMock(return_value=mock_result)
 
             combined_agent = CombinedSummaryAgent(
                 llm_client=mock_llm,

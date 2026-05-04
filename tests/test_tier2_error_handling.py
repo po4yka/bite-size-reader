@@ -240,16 +240,11 @@ class TestAuditCommandCancelledError:
             audit_func=MagicMock(side_effect=RuntimeError("audit broken")),
         )
 
-        with patch(
-            "app.adapters.telegram.command_handlers.decorators.logger"
-        ) as mock_logger:
+        with patch("app.adapters.telegram.command_handlers.decorators.logger") as mock_logger:
             result = await handler(None, ctx)  # type: ignore[arg-type]
 
         assert result == "ok"
-        assert any(
-            "audit_log_failed" in str(call)
-            for call in mock_logger.warning.call_args_list
-        )
+        assert any("audit_log_failed" in str(call) for call in mock_logger.warning.call_args_list)
 
 
 # ---------------------------------------------------------------------------
@@ -334,9 +329,7 @@ class TestSearchHandlerAuditCancelledError:
             audit_func=MagicMock(side_effect=RuntimeError("audit broken")),
         )
 
-        with patch(
-            "app.adapters.telegram.command_handlers.search_handler.logger"
-        ) as mock_logger:
+        with patch("app.adapters.telegram.command_handlers.search_handler.logger") as mock_logger:
             await sh._handle_topic_search(
                 ctx,  # type: ignore[arg-type]
                 command="/find",
@@ -351,10 +344,7 @@ class TestSearchHandlerAuditCancelledError:
                 formatter_source="test",
             )
 
-        assert any(
-            "audit_log_failed" in str(call)
-            for call in mock_logger.warning.call_args_list
-        )
+        assert any("audit_log_failed" in str(call) for call in mock_logger.warning.call_args_list)
 
 
 # ---------------------------------------------------------------------------
