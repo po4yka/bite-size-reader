@@ -1,4 +1,4 @@
-# How to Backup and Restore
+# Back Up and Restore
 
 Protect a Ratatoskr instance by backing up the durable host paths used by the
 current Docker Compose deployment.

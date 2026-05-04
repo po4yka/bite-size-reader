@@ -1,4 +1,4 @@
-# How to Configure YouTube Download
+# Configure YouTube Download
 
 Enable YouTube video and transcript support in Ratatoskr.
 

@@ -1,4 +1,4 @@
-# How to Setup ChromaDB Vector Search
+# Set Up ChromaDB Vector Search
 
 Enable semantic search with ChromaDB and configurable embedding providers (local sentence-transformers or Google Gemini API).
 

@@ -1,4 +1,4 @@
-# Local Development Tutorial
+# Local Development
 
 Set up a local development environment for Ratatoskr.
 

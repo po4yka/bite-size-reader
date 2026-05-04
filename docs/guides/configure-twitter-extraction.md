@@ -1,4 +1,4 @@
-# How to Configure Twitter / X Extraction
+# Configure Twitter / X Extraction
 
 Enable Twitter / X content extraction in Ratatoskr — tweets, threads,
 and X Articles.

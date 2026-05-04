@@ -1,4 +1,4 @@
-# How to Enable Web Search Enrichment
+# Enable Web Search Enrichment
 
 Add real-time web context to article summaries using web search.
 

@@ -1,4 +1,4 @@
-# First Mobile API Client Tutorial
+# Build Your First Mobile API Client
 
 Build a simple mobile client for Ratatoskr using the REST API.
 

@@ -1,4 +1,4 @@
-# Quickstart Tutorial: Your First Summary in 5 Minutes
+# Quickstart: Your First Summary in 5 Minutes
 
 Get your first article summary with Ratatoskr in 5 minutes using Docker.
 

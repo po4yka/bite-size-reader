@@ -1,4 +1,4 @@
-# How to Setup Redis Caching
+# Set Up Redis Caching
 
 Enable Redis for caching, rate limiting, and distributed locking.
 

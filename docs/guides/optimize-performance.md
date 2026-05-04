@@ -1,4 +1,4 @@
-# How to Optimize Performance
+# Optimize Performance
 
 Tune Ratatoskr for speed, cost, and resource efficiency.
 

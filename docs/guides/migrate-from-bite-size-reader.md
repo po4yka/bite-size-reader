@@ -1,4 +1,4 @@
-# How to Migrate from `bite-size-reader` to Ratatoskr
+# Migrate from `bite-size-reader` to Ratatoskr
 
 This page is the operational guide for self-hosters upgrading across
 the project rename. The rename is mechanical (no behavioural change),

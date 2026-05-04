@@ -1,4 +1,4 @@
-# How to Migrate Between Versions
+# Migrate Between Versions
 
 Upgrade Ratatoskr to a new version safely.
 
