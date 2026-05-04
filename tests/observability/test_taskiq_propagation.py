@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -10,12 +9,12 @@ import pytest
 pytest.importorskip("opentelemetry", reason="opentelemetry SDK not installed")
 pytest.importorskip("taskiq", reason="taskiq not installed")
 
-from opentelemetry import trace  # noqa: E402
-from opentelemetry.sdk.trace import TracerProvider  # noqa: E402
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # noqa: E402
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter  # noqa: E402
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from app.tasks.middleware import OTelPropagationMiddleware  # noqa: E402
+from app.tasks.middleware import OTelPropagationMiddleware
 
 
 class _FakeMessage:
@@ -90,7 +89,7 @@ async def test_pre_execute_creates_child_span() -> None:
 @pytest.mark.asyncio
 async def test_post_execute_sets_is_err_attribute() -> None:
     """post_execute must record task.is_err on the span."""
-    provider, exporter = _make_provider()
+    _provider, exporter = _make_provider()
     middleware = OTelPropagationMiddleware()
 
     message = _FakeMessage()

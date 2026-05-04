@@ -6,12 +6,11 @@ import pytest
 
 opentelemetry = pytest.importorskip("opentelemetry", reason="opentelemetry SDK not installed")
 
-from opentelemetry import trace  # noqa: E402
-from opentelemetry.sdk.trace import TracerProvider  # noqa: E402
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # noqa: E402
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter  # noqa: E402
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-import app.observability.otel as otel_module  # noqa: E402
+import app.observability.otel as otel_module
 
 
 def _make_provider() -> tuple[TracerProvider, InMemorySpanExporter]:
