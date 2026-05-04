@@ -130,16 +130,16 @@ requires-python = ">=3.13"
 dependencies = [
   "httpx[http2]>=0.28.1",
   "telethon>=1.42.0",
-  "pydantic>=2.12.5",
-  "pydantic-settings>=2.12.0",
+  "pydantic>=2.13.3",
+  "pydantic-settings>=2.14.0",
   "pyyaml>=6.0.3",
-  "peewee>=4.0.0",
+  "peewee>=4.0.5",
   "scrapling>=0.4.7",
   "browserforge>=1.2.4",
   "curl_cffi>=0.7",
   "trafilatura>=2.0.0",
   "spacy>=3.8.11,<4",
-  "json-repair>=0.55.1",
+  "json-repair>=0.59.5",
   "openai>=1.40.0",
   "instructor>=1.5.0",
   "loguru>=0.7.3",
@@ -158,8 +158,8 @@ attachment = [
 
 # Browser-based scraper fallback providers (Playwright + Crawlee)
 browser_scraper = [
-  "playwright>=1.40",
-  "crawlee[beautifulsoup,playwright]>=1.4.0",
+  "playwright>=1.59.0",
+  "crawlee[beautifulsoup,playwright]>=1.6.3",
 ]
 
 # LLM-driven last-resort scraper (lazy-imported; only fires when all other providers fail)
@@ -169,20 +169,20 @@ scraper_ai = [
 
 # Shared inference stack used by both api (semantic search) and ml (training/backfill)
 inference_core = [
-  "chromadb>=1.5.0",
-  "sentence-transformers>=5.2.2",  # semantic embedding generation
-  "onnxruntime>=1.24.1",  # Python 3.14 support (chromadb dependency)
+  "chromadb>=1.5.8",
+  "sentence-transformers>=5.4.1",  # semantic embedding generation
+  "onnxruntime>=1.25.1",  # Python 3.14 support (chromadb dependency)
 ]
 
 # Mobile REST API dependencies (FastAPI, JWT auth, vector search client)
 api = [
   "ratatoskr[inference_core]",
   "ratatoskr[browser_scraper]",
-  "fastapi>=0.128.0",
-  "uvicorn[standard]>=0.40.0",
+  "fastapi>=0.136.1",
+  "uvicorn[standard]>=0.46.0",
   "starlette>=0.50.0",
   "pyjwt>=2.12.0",
-  "python-multipart>=0.0.26",
+  "python-multipart>=0.0.27",
   "defusedxml>=0.7.1",
 ]
 
@@ -190,7 +190,7 @@ api = [
 ml = [
   "ratatoskr[inference_core]",
   "torch>=2.10.0",
-  "transformers>=5.0.0",
+  "transformers>=5.7.0",
   "scikit-learn>=1.8.0",
 ]
 
@@ -240,16 +240,16 @@ mcp = [
 
 [dependency-groups]
 dev = [
-    "fakeredis>=2.33.0",
-    "hypothesis>=6.0.0",
+    "fakeredis>=2.35.1",
+    "hypothesis>=6.152.4",
     "isort>=7.0.0",
-    "mypy>=1.19.1",
+    "mypy>=1.20.2",
     "openapi-spec-validator>=0.7.2",
-    "pre-commit>=4.5.1",
+    "pre-commit>=4.6.0",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
     "pytest-benchmark>=5.0.0",
-    "ruff>=0.14.14",
+    "ruff>=0.15.12",
 ]
 
 [tool.uv]
