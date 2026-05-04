@@ -121,6 +121,14 @@ strict_optional = false
 module = ["tests.test_telegram_retry_command"]
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = ["tests.observability.test_taskiq_propagation"]
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = ["app.infrastructure.search.reranking_service"]
+warn_unused_ignores = false
+
 [project]
 name = "ratatoskr"
 version = "0.1.0"

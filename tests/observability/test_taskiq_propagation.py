@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any
 
 import pytest
-
-if TYPE_CHECKING:
-    from taskiq.message import TaskiqMessage
 
 pytest.importorskip("opentelemetry", reason="opentelemetry SDK not installed")
 pytest.importorskip("taskiq", reason="taskiq not installed")
@@ -53,7 +50,7 @@ async def test_pre_send_injects_traceparent() -> None:
     message = _FakeMessage()
 
     with tracer.start_as_current_span("producer.root"):
-        result = await middleware.pre_send(message)
+        result = await middleware.pre_send(message)  # type: ignore[arg-type]
 
     assert result is message
     assert "traceparent" in message.labels
@@ -70,19 +67,19 @@ async def test_pre_execute_creates_child_span() -> None:
     producer_message = _FakeMessage()
     with tracer.start_as_current_span("producer.root") as parent:
         parent_ctx = trace.get_current_span().get_span_context()
-        await middleware.pre_send(producer_message)
+        await middleware.pre_send(producer_message)  # type: ignore[arg-type]
 
     # Worker side: extract context and start child span
     worker_message = _FakeMessage(task_name="my_task")
     worker_message.labels = dict(producer_message.labels)
-    await middleware.pre_execute(worker_message)
+    await middleware.pre_execute(worker_message)  # type: ignore[arg-type]
 
     span = getattr(worker_message, "_otel_span", None)
     assert span is not None
     assert span.is_recording()
 
     # Finish — post_execute ends the span
-    await middleware.post_execute(worker_message, _FakeResult(is_err=False))
+    await middleware.post_execute(worker_message, _FakeResult(is_err=False))  # type: ignore[arg-type]
 
     finished = exporter.get_finished_spans()
     child_spans = [s for s in finished if s.name == "taskiq.my_task"]
@@ -98,10 +95,10 @@ async def test_post_execute_sets_is_err_attribute() -> None:
     middleware = OTelPropagationMiddleware()
 
     message = _FakeMessage()
-    await middleware.pre_execute(message)  # creates _otel_span from empty labels
+    await middleware.pre_execute(message)  # type: ignore[arg-type]  # creates _otel_span from empty labels
 
     result = _FakeResult(is_err=True)
-    await middleware.post_execute(message, result)
+    await middleware.post_execute(message, result)  # type: ignore[arg-type]
 
     finished = exporter.get_finished_spans()
     assert any(s.attributes.get("task.is_err") is True for s in finished)
@@ -112,5 +109,5 @@ async def test_middleware_is_noop_without_active_span() -> None:
     """pre_send when no span is active must not raise and must return the message."""
     middleware = OTelPropagationMiddleware()
     message = _FakeMessage()
-    result = await middleware.pre_send(message)
+    result = await middleware.pre_send(message)  # type: ignore[arg-type]
     assert result is message
