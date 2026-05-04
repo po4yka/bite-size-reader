@@ -38,6 +38,8 @@ def _make_provider() -> tuple[TracerProvider, InMemorySpanExporter]:
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
+    # Set as global provider so middleware's trace.get_tracer() uses it
+    trace.set_tracer_provider(provider)
     return provider, exporter
 
 

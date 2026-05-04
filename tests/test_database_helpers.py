@@ -56,8 +56,10 @@ class TestDatabaseHelpers(unittest.TestCase):
             assert row is not None
 
     def test_create_backup_copy_rejects_memory_db(self):
+        # Do not call migrate() — Alembic cannot share the in-memory connection,
+        # so it would open a separate empty DB and fail on schema migrations.
+        # The backup rejection is enforced by the path check, not the schema.
         mem_db = DatabaseSessionManager(":memory:")
-        mem_db.migrate()
 
         with pytest.raises(ValueError):
             mem_db.create_backup_copy(os.path.join(self.tmp.name, "memory.db"))

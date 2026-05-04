@@ -18,7 +18,7 @@ import pytest
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.cli.migrations.migration_runner import MigrationRunner
+from app.db.alembic_runner import _build_alembic_config
 from app.db.session import DatabaseSessionManager
 
 logging.basicConfig(
@@ -50,12 +50,25 @@ def test_phase2_migration():
         db = DatabaseSessionManager(path=db_path)
         db.migrate()
 
-        runner = MigrationRunner(db)
+        # Verify that Phase 2 migration was already applied by db.migrate() via Alembic
+        from alembic.runtime.migration import MigrationContext
+        from alembic.script import ScriptDirectory
+        from sqlalchemy import create_engine
 
-        # Verify that Phase 2 migration was already applied by db.migrate()
-        pending = runner.get_pending_migrations()
-        phase2_pending = [m for m in pending if "002_" in m.name]
-        assert not phase2_pending, "Phase 2 migration should already be applied by db.migrate()"
+        alembic_cfg = _build_alembic_config(db_path)
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.connect() as conn:
+            migration_ctx = MigrationContext.configure(conn)
+            current_heads = migration_ctx.get_current_heads()
+
+        script_dir = ScriptDirectory.from_config(alembic_cfg)
+        head_revision = script_dir.get_current_head()
+
+        # All Alembic revisions should be applied (DB at head)
+        assert head_revision in current_heads, (
+            f"Phase 2 migration should already be applied by db.migrate(); "
+            f"current={current_heads}, head={head_revision}"
+        )
         print("-- Base schema and all migrations applied (including Phase 2)")
 
         # Step 2: Insert test data

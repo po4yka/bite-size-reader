@@ -59,6 +59,13 @@ class MockLLMResult:
         self.error_text = error_text
 
 
+class MockStructuredResult:
+    """Mock result returned by chat_structured (has .parsed attribute)."""
+
+    def __init__(self, parsed: object) -> None:
+        self.parsed = parsed
+
+
 class TestSearchContextBuilder(unittest.TestCase):
     """Tests for SearchContextBuilder."""
 
@@ -161,7 +168,7 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
         """Set up test fixtures."""
         self.correlation_id = "web-search-test-123"
         self.mock_llm = MagicMock()
-        self.mock_llm.chat = AsyncMock()
+        self.mock_llm.chat_structured = AsyncMock()
         self.mock_search = MagicMock()
         self.mock_search.find_articles = AsyncMock()
         self.config = MockWebSearchConfig()
@@ -189,7 +196,7 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.success)
         self.assertFalse(result.output.searched)
         self.assertIn("too short", result.output.reason)
-        self.mock_llm.chat.assert_not_called()
+        self.mock_llm.chat_structured.assert_not_called()
         self.mock_search.find_articles.assert_not_called()
 
     async def test_search_not_needed_returns_empty(self):
@@ -197,9 +204,8 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
         agent = self._create_agent()
 
         # Mock LLM response saying search not needed
-        self.mock_llm.chat.return_value = MockLLMResult(
-            status="ok",
-            response_text='{"needs_search": false, "queries": [], "reason": "Content is self-contained"}',
+        self.mock_llm.chat_structured.return_value = MockStructuredResult(
+            parsed=SearchAnalysisResult(needs_search=False, queries=[], reason="Content is self-contained")
         )
 
         input_data = WebSearchAgentInput(
@@ -218,9 +224,8 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
         agent = self._create_agent()
 
         # Mock LLM response recommending search
-        self.mock_llm.chat.return_value = MockLLMResult(
-            status="ok",
-            response_text='{"needs_search": true, "queries": ["ACME Corp acquisition 2024"], "reason": "Need context on recent merger"}',
+        self.mock_llm.chat_structured.return_value = MockStructuredResult(
+            parsed=SearchAnalysisResult(needs_search=True, queries=["ACME Corp acquisition 2024"], reason="Need context on recent merger")
         )
 
         # Mock search results
@@ -246,9 +251,8 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
         agent = self._create_agent()
 
         # Mock LLM response with more queries than allowed
-        self.mock_llm.chat.return_value = MockLLMResult(
-            status="ok",
-            response_text='{"needs_search": true, "queries": ["query1", "query2", "query3", "query4"], "reason": "Multiple topics"}',
+        self.mock_llm.chat_structured.return_value = MockStructuredResult(
+            parsed=SearchAnalysisResult(needs_search=True, queries=["query1", "query2", "query3", "query4"], reason="Multiple topics")
         )
 
         self.mock_search.find_articles.return_value = []
@@ -264,10 +268,8 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
         """Test that LLM errors are handled gracefully."""
         agent = self._create_agent()
 
-        # Mock LLM error
-        self.mock_llm.chat.return_value = MockLLMResult(
-            status="error", response_text="", error_text="Rate limit exceeded"
-        )
+        # Mock LLM error — chat_structured raises to trigger graceful failure
+        self.mock_llm.chat_structured.side_effect = RuntimeError("Rate limit exceeded")
 
         input_data = WebSearchAgentInput(content="A" * 1000, language="en")
         result = await agent.execute(input_data)
@@ -280,9 +282,8 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
         """Test that search service errors are handled gracefully."""
         agent = self._create_agent()
 
-        self.mock_llm.chat.return_value = MockLLMResult(
-            status="ok",
-            response_text='{"needs_search": true, "queries": ["test query"], "reason": "Need info"}',
+        self.mock_llm.chat_structured.return_value = MockStructuredResult(
+            parsed=SearchAnalysisResult(needs_search=True, queries=["test query"], reason="Need info")
         )
 
         # Mock search service failure
@@ -300,10 +301,8 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
         """Test that invalid LLM responses are handled gracefully."""
         agent = self._create_agent()
 
-        # Mock LLM returning invalid JSON
-        self.mock_llm.chat.return_value = MockLLMResult(
-            status="ok", response_text="This is not JSON at all"
-        )
+        # Mock LLM raising a parse error (chat_structured raises on invalid response)
+        self.mock_llm.chat_structured.side_effect = ValueError("parse error: invalid JSON")
 
         input_data = WebSearchAgentInput(content="A" * 1000, language="en")
         result = await agent.execute(input_data)
@@ -316,9 +315,8 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
         """Test that correct language prompt is selected."""
         agent = self._create_agent()
 
-        self.mock_llm.chat.return_value = MockLLMResult(
-            status="ok",
-            response_text='{"needs_search": false, "queries": [], "reason": "Self-contained"}',
+        self.mock_llm.chat_structured.return_value = MockStructuredResult(
+            parsed=SearchAnalysisResult(needs_search=False, queries=[], reason="Self-contained")
         )
 
         # Test with Russian
@@ -326,7 +324,7 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
         await agent.execute(input_data)
 
         # Verify LLM was called (we can't easily check prompt content in unit test)
-        self.mock_llm.chat.assert_called_once()
+        self.mock_llm.chat_structured.assert_called_once()
 
 
 class TestSearchAnalysisResult(unittest.TestCase):

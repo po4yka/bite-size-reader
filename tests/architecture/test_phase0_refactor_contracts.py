@@ -27,8 +27,8 @@ def test_runtime_migration_entrypoint_uses_cli_migration_runner() -> None:
     bootstrap = _read("app/db/runtime/bootstrap.py")
     migrate_db = _read("app/cli/migrate_db.py")
 
-    assert "app.cli.migrations.migration_runner" in bootstrap
-    assert "DatabaseSessionManager" in migrate_db
+    assert "app.db.alembic_runner" in bootstrap
+    assert "upgrade_to_head" in migrate_db
     assert "app.db.migrations.migration_runner" not in bootstrap
 
 
