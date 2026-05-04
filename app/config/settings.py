@@ -37,6 +37,7 @@ from .redis import RedisConfig
 from .rss import RSSConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
+from .otel import OtelConfig
 from .signal_ingestion import SignalIngestionConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig
 from .tts import ElevenLabsConfig
@@ -172,6 +173,7 @@ class AppConfig:
     model_routing: ModelRoutingConfig = field(default_factory=ModelRoutingConfig)
     rss: RSSConfig = field(default_factory=RSSConfig)
     signal_ingestion: SignalIngestionConfig = field(default_factory=SignalIngestionConfig)
+    otel: OtelConfig = field(default_factory=OtelConfig)
 
 
 class Settings(BaseSettings):
@@ -222,6 +224,7 @@ class Settings(BaseSettings):
     model_routing: ModelRoutingConfig = Field(default_factory=ModelRoutingConfig)
     rss: RSSConfig = Field(default_factory=RSSConfig)
     signal_ingestion: SignalIngestionConfig = Field(default_factory=SignalIngestionConfig)
+    otel: OtelConfig = Field(default_factory=OtelConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -355,6 +358,8 @@ class Settings(BaseSettings):
             push=self.push,
             model_routing=self.model_routing,
             rss=self.rss,
+            signal_ingestion=self.signal_ingestion,
+            otel=self.otel,
         )
 
 

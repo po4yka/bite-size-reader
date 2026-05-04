@@ -1,9 +1,6 @@
-# Grafana datasource provisioning for Ratatoskr monitoring
-
 apiVersion: 1
 
 datasources:
-  # Prometheus datasource
   - name: Prometheus
     type: prometheus
     access: proxy
@@ -15,12 +12,37 @@ datasources:
       manageAlerts: true
       prometheusType: Prometheus
 
-  # Loki datasource for logs
   - name: Loki
     type: loki
     access: proxy
     url: http://loki:3100
     isDefault: false
     editable: false
+    uid: loki
     jsonData:
       maxLines: 1000
+      derivedFields:
+        - name: TraceID
+          datasourceUid: tempo
+          matcherRegex: '"trace_id":"(\w+)"'
+          url: '${__value.raw}'
+
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    isDefault: false
+    editable: false
+    uid: tempo
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-1m'
+        spanEndTimeShift: '1m'
+        filterByTraceID: true
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false

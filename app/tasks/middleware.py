@@ -52,3 +52,58 @@ class ChronicFailureMiddleware(TaskiqMiddleware):
             logger.info("scheduler_job_recovered", extra={"task_name": task_name})
             self._consecutive_failures[task_name] = 0
         return result
+
+
+class OTelPropagationMiddleware(TaskiqMiddleware):
+    """Propagate W3C trace context across the taskiq broker hop.
+
+    Producer side: injects current span context into message.labels so the
+    trace follows the task through the Redis stream.
+    Worker side: extracts the injected context and starts a child span.
+    """
+
+    async def pre_send(self, message: TaskiqMessage) -> TaskiqMessage:
+        try:
+            from opentelemetry.propagate import inject
+            inject(message.labels)
+        except Exception:
+            pass
+        return message
+
+    async def pre_execute(self, message: TaskiqMessage) -> TaskiqMessage:
+        try:
+            from opentelemetry import trace
+            from opentelemetry.propagate import extract
+
+            ctx = extract(message.labels)
+            tracer = trace.get_tracer(__name__)
+            span = tracer.start_span(
+                f"taskiq.{message.task_name}",
+                context=ctx,
+                attributes={
+                    "taskiq.task_name": message.task_name,
+                    "taskiq.task_id": message.task_id,
+                },
+            )
+            object.__setattr__(message, "_otel_span", span)
+            cid = (message.kwargs or {}).get("correlation_id") or (
+                (message.labels or {}).get("correlation_id")
+            )
+            if cid:
+                span.set_attribute("ratatoskr.correlation_id", cid)
+        except Exception:
+            pass
+        return message
+
+    async def post_execute(
+        self, message: TaskiqMessage, result: Any
+    ) -> Any:
+        try:
+            span = getattr(message, "_otel_span", None)
+            if span is not None:
+                if hasattr(result, "is_err"):
+                    span.set_attribute("task.is_err", result.is_err)
+                span.end()
+        except Exception:
+            pass
+        return result

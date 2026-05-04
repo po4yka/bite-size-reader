@@ -4,7 +4,7 @@
   "docs/openapi/mobile_api.json": 14578,
   "docs/openapi/mobile_api.yaml": 9293,
   "ops/monitoring/grafana/provisioning/dashboards/ratatoskr-overview.json": 1666,
-  "uv.lock": 6196,
+  "uv.lock": 6352,
   "clients/web/package-lock.json": 7326,
   "clients/web/src/api/generated.ts": 9183
 }

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
 
-from app.adapter_models.llm.llm_models import LLMCallResult
+from app.adapter_models.llm.llm_models import LLMCallResult, StructuredLLMResult
 from app.application.services.signal_judge import SignalJudgeService
 from app.core.call_status import CallStatus
 
@@ -30,7 +31,15 @@ class _FakeLLM:
         )
 
     async def chat_structured(self, messages, *, response_model, **kwargs):
-        raise NotImplementedError
+        self.calls.append({"messages": messages, **kwargs})
+        data = json.loads(self._response_text)
+        parsed = response_model(**data)
+        return StructuredLLMResult(
+            parsed=parsed,
+            cost_usd=self._cost_usd,
+            latency_ms=123,
+            model_used="test-model",
+        )
 
     async def aclose(self) -> None:
         return None
@@ -82,18 +91,15 @@ async def test_signal_judge_stops_at_daily_budget() -> None:
 
 
 @pytest.mark.asyncio
-async def test_signal_judge_retries_invalid_json_once() -> None:
-    class RetryLLM(_FakeLLM):
-        async def chat(self, messages, **kwargs):
-            self.calls.append({"messages": messages, **kwargs})
-            text = (
-                "not json"
-                if len(self.calls) == 1
-                else '{"relevance_score": 0.4, "decision": "skip", "reason": "weak"}'
-            )
-            return LLMCallResult(status=CallStatus.OK, response_text=text, cost_usd=0.0)
+async def test_signal_judge_skips_candidate_on_llm_error() -> None:
+    """When chat_structured raises, the candidate is skipped (exception caught in _judge_one)."""
 
-    llm = RetryLLM("")
+    class ErrorLLM(_FakeLLM):
+        async def chat_structured(self, messages, *, response_model, **kwargs):
+            self.calls.append({"messages": messages, **kwargs})
+            raise ValueError("LLM unavailable")
+
+    llm = ErrorLLM("")
     service = SignalJudgeService(llm_client=llm, daily_budget_usd=1.0)
 
     judged = await service.judge(
@@ -101,5 +107,5 @@ async def test_signal_judge_retries_invalid_json_once() -> None:
         rows_by_item_id={1: {"title": "x"}},
     )
 
-    assert len(llm.calls) == 2
-    assert judged[1].decision == "skip"
+    assert len(llm.calls) == 1
+    assert judged == {}

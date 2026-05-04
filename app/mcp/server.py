@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -18,11 +17,8 @@ from app.mcp.semantic_service import SemanticSearchService
 from app.mcp.signal_service import SignalMcpService
 from app.mcp.tool_registrations import register_tools
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    stream=sys.stderr,
-)
+from app.core.logging_utils import setup_json_logging
+setup_json_logging()
 logger = logging.getLogger("ratatoskr.mcp")
 
 _DEFAULT_CONTEXT = McpServerContext(logger=logger)
@@ -106,6 +102,11 @@ def run_server(
     allow_unscoped_sse: bool = False,
 ) -> None:
     """Start the MCP server."""
+    try:
+        from app.observability.otel import init_tracing
+        init_tracing()
+    except Exception:
+        pass
     _DEFAULT_CONTEXT.set_user_scope(user_id)
     _DEFAULT_CONTEXT.init_runtime(db_path)
     logger.info(

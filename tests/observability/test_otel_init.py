@@ -1,0 +1,44 @@
+"""Tests for init_tracing() idempotency and no-op behavior."""
+
+from __future__ import annotations
+
+import app.observability.otel as otel_module
+
+
+def test_init_noop_when_disabled(monkeypatch: object) -> None:
+    monkeypatch.setattr(otel_module, "_initialized", False)
+    monkeypatch.setenv("OTEL_ENABLED", "false")
+    otel_module.init_tracing()
+    assert not otel_module._initialized
+
+
+def test_init_idempotent(monkeypatch: object) -> None:
+    """Second call short-circuits before _is_enabled is ever checked."""
+    monkeypatch.setattr(otel_module, "_initialized", True)
+    reached: list[bool] = []
+    original = otel_module._is_enabled
+    monkeypatch.setattr(otel_module, "_is_enabled", lambda cfg: reached.append(True) or original(cfg))
+    otel_module.init_tracing()
+    assert reached == []
+
+
+def test_get_tracer_returns_noop_when_sdk_absent(monkeypatch: object) -> None:
+    monkeypatch.setattr(otel_module, "_otel_available", False)
+    tracer = otel_module.get_tracer("test.module")
+    assert isinstance(tracer, otel_module._NoOpTracer)
+
+
+def test_noop_tracer_start_as_current_span_is_context_manager() -> None:
+    tracer = otel_module._NoOpTracer()
+    with tracer.start_as_current_span("test.span"):
+        pass  # must not raise
+
+
+def test_noop_span_methods_are_safe() -> None:
+    span = otel_module._NoOpSpan()
+    span.set_attribute("key", "value")
+    span.record_exception(ValueError("boom"))
+    span.set_status(None)
+    assert not span.is_recording()
+    with span:
+        pass  # context manager must work

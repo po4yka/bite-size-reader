@@ -96,146 +96,170 @@ class ContentScraperChain:
         mobile: bool = True,
         request_id: int | None = None,
     ) -> FirecrawlResult:
+        from app.observability.otel import get_tracer
+        _tracer = get_tracer(__name__)
         errors: list[str] = []
 
-        for provider in self._effective_providers(url):
-            name = provider.provider_name
-            try:
-                result = await provider.scrape_markdown(url, mobile=mobile, request_id=request_id)
-            except Exception as exc:
-                error_msg = f"{name}: {exc}"
-                errors.append(error_msg)
-                logger.warning(
-                    "scraper_chain_provider_exception",
-                    extra={
-                        "provider": name,
-                        "url": url,
-                        "error": str(exc),
-                        "error_type": type(exc).__name__,
-                        "request_id": request_id,
-                    },
-                )
-                continue
+        with _tracer.start_as_current_span(
+            "scraper.chain",
+            attributes={"scraper.url": url},
+        ) as chain_span:
+            for provider in self._effective_providers(url):
+                name = provider.provider_name
+                with _tracer.start_as_current_span(
+                    f"scraper.{name}",
+                    attributes={"scraper.provider": name, "scraper.url": url},
+                ) as provider_span:
+                    try:
+                        result = await provider.scrape_markdown(
+                            url, mobile=mobile, request_id=request_id
+                        )
+                    except Exception as exc:
+                        error_msg = f"{name}: {exc}"
+                        errors.append(error_msg)
+                        provider_span.set_attribute("scraper.outcome", "error")
+                        provider_span.set_attribute("error.type", type(exc).__name__)
+                        logger.warning(
+                            "scraper_chain_provider_exception",
+                            extra={
+                                "provider": name,
+                                "url": url,
+                                "error": str(exc),
+                                "error_type": type(exc).__name__,
+                                "request_id": request_id,
+                            },
+                        )
+                        continue
 
-            has_content = result.status == CallStatus.OK and (
-                bool(result.content_markdown and result.content_markdown.strip())
-                or bool(result.content_html and result.content_html.strip())
-            )
+                    has_content = result.status == CallStatus.OK and (
+                        bool(result.content_markdown and result.content_markdown.strip())
+                        or bool(result.content_html and result.content_html.strip())
+                    )
 
-            if has_content:
-                text = best_content_text(result)
+                    if has_content:
+                        text = best_content_text(result)
 
-                if _is_error_page(text):
-                    error_msg = f"{name}: error page detected ({len(text)} chars)"
+                        if _is_error_page(text):
+                            error_msg = f"{name}: error page detected ({len(text)} chars)"
+                            errors.append(error_msg)
+                            provider_span.set_attribute("scraper.outcome", "error_page")
+                            logger.info(
+                                "scraper_chain_error_page",
+                                extra={
+                                    "provider": name,
+                                    "url": url,
+                                    "content_len": len(text),
+                                    "preview": text[:200],
+                                    "request_id": request_id,
+                                },
+                            )
+                            continue
+
+                        if self._min_content_length > 0 and len(text) < self._min_content_length:
+                            error_msg = (
+                                f"{name}: content too short"
+                                f" ({len(text)} < {self._min_content_length} chars)"
+                            )
+                            errors.append(error_msg)
+                            provider_span.set_attribute("scraper.outcome", "too_short")
+                            logger.info(
+                                "scraper_chain_thin_content",
+                                extra={
+                                    "provider": name,
+                                    "url": url,
+                                    "content_len": len(text),
+                                    "threshold": self._min_content_length,
+                                    "request_id": request_id,
+                                },
+                            )
+                            continue
+
+                        quality_issue = (
+                            detect_low_value_content(result)
+                            if self._min_content_length > 0
+                            else None
+                        )
+                        if quality_issue is not None:
+                            reason = quality_issue["reason"]
+                            metrics = quality_issue["metrics"]
+                            error_msg = (
+                                f"{name}: low-value content detected"
+                                f" ({reason}, chars={metrics['char_length']},"
+                                f" words={metrics['word_count']})"
+                            )
+                            errors.append(error_msg)
+                            provider_span.set_attribute("scraper.outcome", "low_value")
+                            logger.info(
+                                "scraper_chain_low_value_content",
+                                extra={
+                                    "provider": name,
+                                    "url": url,
+                                    "reason": reason,
+                                    "metrics": metrics,
+                                    "preview": quality_issue["preview"],
+                                    "request_id": request_id,
+                                },
+                            )
+                            continue
+
+                    if has_content:
+                        provider_span.set_attribute("scraper.outcome", "success")
+                        chain_span.set_attribute("scraper.winner", name)
+                        chain_span.set_attribute("scraper.attempts", len(errors) + 1)
+                        logger.info(
+                            "scraper_chain_success",
+                            extra={
+                                "provider": name,
+                                "url": url,
+                                "latency_ms": result.latency_ms,
+                                "request_id": request_id,
+                                "tried": len(errors) + 1,
+                            },
+                        )
+                        if self._audit:
+                            self._audit(
+                                "INFO",
+                                "scraper_chain_success",
+                                {
+                                    "provider": name,
+                                    "url": url,
+                                    "latency_ms": result.latency_ms,
+                                    "request_id": request_id,
+                                },
+                            )
+                        return result
+
+                    error_msg = f"{name}: {result.error_text or 'no content'}"
                     errors.append(error_msg)
+                    provider_span.set_attribute("scraper.outcome", "no_content")
                     logger.info(
-                        "scraper_chain_error_page",
+                        "scraper_chain_provider_failed",
                         extra={
                             "provider": name,
                             "url": url,
-                            "content_len": len(text),
-                            "preview": text[:200],
+                            "error": result.error_text,
                             "request_id": request_id,
                         },
                     )
-                    continue
 
-                if self._min_content_length > 0 and len(text) < self._min_content_length:
-                    error_msg = (
-                        f"{name}: content too short"
-                        f" ({len(text)} < {self._min_content_length} chars)"
-                    )
-                    errors.append(error_msg)
-                    logger.info(
-                        "scraper_chain_thin_content",
-                        extra={
-                            "provider": name,
-                            "url": url,
-                            "content_len": len(text),
-                            "threshold": self._min_content_length,
-                            "request_id": request_id,
-                        },
-                    )
-                    continue
-
-                quality_issue = (
-                    detect_low_value_content(result) if self._min_content_length > 0 else None
-                )
-                if quality_issue is not None:
-                    reason = quality_issue["reason"]
-                    metrics = quality_issue["metrics"]
-                    error_msg = (
-                        f"{name}: low-value content detected"
-                        f" ({reason}, chars={metrics['char_length']},"
-                        f" words={metrics['word_count']})"
-                    )
-                    errors.append(error_msg)
-                    logger.info(
-                        "scraper_chain_low_value_content",
-                        extra={
-                            "provider": name,
-                            "url": url,
-                            "reason": reason,
-                            "metrics": metrics,
-                            "preview": quality_issue["preview"],
-                            "request_id": request_id,
-                        },
-                    )
-                    continue
-
-            if has_content:
-                logger.info(
-                    "scraper_chain_success",
-                    extra={
-                        "provider": name,
-                        "url": url,
-                        "latency_ms": result.latency_ms,
-                        "request_id": request_id,
-                        "tried": len(errors) + 1,
-                    },
-                )
-                if self._audit:
-                    self._audit(
-                        "INFO",
-                        "scraper_chain_success",
-                        {
-                            "provider": name,
-                            "url": url,
-                            "latency_ms": result.latency_ms,
-                            "request_id": request_id,
-                        },
-                    )
-                return result
-
-            error_msg = f"{name}: {result.error_text or 'no content'}"
-            errors.append(error_msg)
-            logger.info(
-                "scraper_chain_provider_failed",
+            # All providers failed
+            chain_span.set_attribute("scraper.attempts", len(errors))
+            logger.warning(
+                "scraper_chain_exhausted",
                 extra={
-                    "provider": name,
                     "url": url,
-                    "error": result.error_text,
+                    "providers_tried": len(errors),
+                    "errors": errors,
                     "request_id": request_id,
                 },
             )
 
-        # All providers failed
-        logger.warning(
-            "scraper_chain_exhausted",
-            extra={
-                "url": url,
-                "providers_tried": len(errors),
-                "errors": errors,
-                "request_id": request_id,
-            },
-        )
-
-        return FirecrawlResult(
-            status=CallStatus.ERROR,
-            error_text=f"All providers failed: {'; '.join(errors)}",
-            source_url=url,
-            endpoint="chain",
-        )
+            return FirecrawlResult(
+                status=CallStatus.ERROR,
+                error_text=f"All providers failed: {'; '.join(errors)}",
+                source_url=url,
+                endpoint="chain",
+            )
 
     async def aclose(self) -> None:
         for provider in self._providers:

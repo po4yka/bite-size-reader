@@ -31,37 +31,44 @@ def upgrade() -> None:
 
     or_count = 0
     if "llm_calls" in tables:
-        rows = conn.execute(text("""
+        rows = conn.execute(
+            text("""
             SELECT id, response_text, response_json,
                    openrouter_response_text, openrouter_response_json
             FROM llm_calls
             WHERE provider = 'openrouter'
               AND (TRIM(COALESCE(response_text, '')) != ''
                    OR TRIM(COALESCE(response_json, '')) != '')
-        """)).fetchall()
+        """)
+        ).fetchall()
         for row_id, resp_text, resp_json, or_text, or_json in rows:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 UPDATE llm_calls
                 SET openrouter_response_text = :ort,
                     openrouter_response_json  = :orj,
                     response_text             = NULL,
                     response_json             = NULL
                 WHERE id = :id
-            """), {
-                "ort": or_text or resp_text,
-                "orj": or_json or resp_json,
-                "id": row_id,
-            })
+            """),
+                {
+                    "ort": or_text or resp_text,
+                    "orj": or_json or resp_json,
+                    "id": row_id,
+                },
+            )
             or_count += 1
 
     fc_count = 0
     if "crawl_results" in tables:
-        rows = conn.execute(text("""
+        rows = conn.execute(
+            text("""
             SELECT id, raw_response_json
             FROM crawl_results
             WHERE raw_response_json IS NOT NULL
               AND TRIM(raw_response_json) != ''
-        """)).fetchall()
+        """)
+        ).fetchall()
         for row_id, raw in rows:
             if isinstance(raw, str):
                 try:
@@ -89,7 +96,8 @@ def upgrade() -> None:
                 error_msg = str(error_msg)
             details = payload.get("details")
             details_json = json.dumps(details) if details is not None else None
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 UPDATE crawl_results
                 SET firecrawl_success        = :success,
                     firecrawl_error_code     = :code,
@@ -97,17 +105,21 @@ def upgrade() -> None:
                     firecrawl_details_json   = :details,
                     raw_response_json        = NULL
                 WHERE id = :id
-            """), {
-                "success": success_val,
-                "code": error_code,
-                "msg": error_msg,
-                "details": details_json,
-                "id": row_id,
-            })
+            """),
+                {
+                    "success": success_val,
+                    "code": error_code,
+                    "msg": error_msg,
+                    "details": details_json,
+                    "id": row_id,
+                },
+            )
             fc_count += 1
 
     logger.info("legacy_payload_migration openrouter=%d firecrawl=%d", or_count, fc_count)
 
 
 def downgrade() -> None:
-    logger.info("legacy_payload_migration_downgrade_noop: decomposed payloads cannot be reconstructed")
+    logger.info(
+        "legacy_payload_migration_downgrade_noop: decomposed payloads cannot be reconstructed"
+    )

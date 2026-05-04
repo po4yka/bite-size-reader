@@ -37,16 +37,12 @@ _INDEXES = [
 def upgrade() -> None:
     conn = op.get_bind()
     tables = {
-        row[0]
-        for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
+        row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
     }
     for table, idx_name, cols in _INDEXES:
         if table not in tables:
             continue
-        existing = {
-            row[1]
-            for row in conn.execute(text(f"PRAGMA index_list('{table}')"))
-        }
+        existing = {row[1] for row in conn.execute(text(f"PRAGMA index_list('{table}')"))}
         if idx_name not in existing:
             op.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table}({cols})"))
 

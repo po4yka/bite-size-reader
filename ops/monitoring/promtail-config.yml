@@ -50,10 +50,12 @@ scrape_configs:
                   correlation_id: correlation_id
                   request_id: request_id
                   module: module
+                  trace_id: trace_id
             - labels:
                 level:
                 correlation_id:
                 module:
+                trace_id:
 
       # Timestamp parsing
       - timestamp:

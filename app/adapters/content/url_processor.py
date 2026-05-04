@@ -212,6 +212,22 @@ class URLProcessor:
         request: URLFlowRequest,
     ) -> URLProcessingFlowResult:
         """Execute the URL processing pipeline (extraction -> summarization -> delivery)."""
+        from app.observability.otel import get_tracer
+        _tracer = get_tracer(__name__)
+        with _tracer.start_as_current_span(
+            "url_flow.process",
+            attributes={
+                "url": request.url_text,
+                "ratatoskr.correlation_id": request.correlation_id,
+            },
+        ):
+            return await self._run_url_flow_inner(request)
+
+    async def _run_url_flow_inner(
+        self,
+        request: URLFlowRequest,
+    ) -> URLProcessingFlowResult:
+        """Inner URL processing pipeline, wrapped by _run_url_flow span."""
         context: URLFlowContext | None = None
         try:
             context = await self.context_builder.build(request)

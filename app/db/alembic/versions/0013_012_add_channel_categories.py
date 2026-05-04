@@ -22,7 +22,8 @@ def upgrade() -> None:
         row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
     }
     if "channel_categories" not in tables:
-        op.execute(text("""
+        op.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS channel_categories (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id    INTEGER NOT NULL REFERENCES users(telegram_user_id) ON DELETE CASCADE,
@@ -32,15 +33,20 @@ def upgrade() -> None:
                 created_at DATETIME NOT NULL,
                 UNIQUE(user_id, name)
             )
-        """))
+        """)
+        )
 
     if "channel_subscriptions" in tables:
-        existing = {row[1] for row in conn.execute(text("PRAGMA table_info('channel_subscriptions')"))}
+        existing = {
+            row[1] for row in conn.execute(text("PRAGMA table_info('channel_subscriptions')"))
+        }
         if "category_id" not in existing:
-            op.execute(text(
-                "ALTER TABLE channel_subscriptions ADD COLUMN category_id INTEGER"
-                " REFERENCES channel_categories(id) ON DELETE SET NULL"
-            ))
+            op.execute(
+                text(
+                    "ALTER TABLE channel_subscriptions ADD COLUMN category_id INTEGER"
+                    " REFERENCES channel_categories(id) ON DELETE SET NULL"
+                )
+            )
 
 
 def downgrade() -> None:

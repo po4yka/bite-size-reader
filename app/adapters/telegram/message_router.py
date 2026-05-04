@@ -122,60 +122,69 @@ class MessageRouter:
         limiter: RedisUserRateLimiter | UserRateLimiter = self._rate_limit_coordinator.rate_limiter
         concurrent_acquired = False
         correlation_id = generate_correlation_id()
+        from app.observability.otel import get_tracer, set_correlation_id_attr
+        _tracer = get_tracer(__name__)
 
         try:
-            route_context = await self._context_builder.prepare(message, correlation_id)
-            if route_context is None:
-                return
-
-            uid = route_context.uid
-
-            logger.info(
-                "checking_access_for_user",
-                extra={"cid": correlation_id, "user_id": uid, "user_id_type": type(uid).__name__},
-            )
-            if not await self.access_controller.check_access(
-                uid,
-                message,
-                correlation_id,
-                0,
-                start_time,
+            with _tracer.start_as_current_span(
+                "telegram.update",
+                attributes={
+                    "ratatoskr.correlation_id": correlation_id,
+                },
             ):
-                return
+                set_correlation_id_attr(correlation_id)
+                route_context = await self._context_builder.prepare(message, correlation_id)
+                if route_context is None:
+                    return
 
-            interaction_id = await self._interaction_recorder.log(route_context)
+                uid = route_context.uid
 
-            limiter = await self._rate_limit_coordinator.get_active_limiter()
-            allowed, error_msg = await self._rate_limit_coordinator.check_rate_limit(
-                limiter,
-                uid,
-                route_context.interaction_type,
-            )
-            if not allowed:
-                await self._rate_limit_coordinator.handle_rate_limit_rejection(
-                    message=message,
-                    uid=uid,
-                    interaction_type=route_context.interaction_type,
-                    correlation_id=correlation_id,
-                    error_msg=error_msg,
-                    interaction_id=interaction_id,
-                    start_time=start_time,
+                logger.info(
+                    "checking_access_for_user",
+                    extra={"cid": correlation_id, "user_id": uid, "user_id_type": type(uid).__name__},
                 )
-                return
+                if not await self.access_controller.check_access(
+                    uid,
+                    message,
+                    correlation_id,
+                    0,
+                    start_time,
+                ):
+                    return
 
-            if not await self._rate_limit_coordinator.acquire_concurrent_slot(limiter, uid):
-                await self._rate_limit_coordinator.handle_concurrent_limit_rejection(
-                    message=message,
-                    uid=uid,
-                    interaction_type=route_context.interaction_type,
-                    correlation_id=correlation_id,
-                    interaction_id=interaction_id,
-                    start_time=start_time,
+                interaction_id = await self._interaction_recorder.log(route_context)
+
+                limiter = await self._rate_limit_coordinator.get_active_limiter()
+                allowed, error_msg = await self._rate_limit_coordinator.check_rate_limit(
+                    limiter,
+                    uid,
+                    route_context.interaction_type,
                 )
-                return
-            concurrent_acquired = True
+                if not allowed:
+                    await self._rate_limit_coordinator.handle_rate_limit_rejection(
+                        message=message,
+                        uid=uid,
+                        interaction_type=route_context.interaction_type,
+                        correlation_id=correlation_id,
+                        error_msg=error_msg,
+                        interaction_id=interaction_id,
+                        start_time=start_time,
+                    )
+                    return
 
-            await self._route_content_with_tracking(route_context, interaction_id, start_time)
+                if not await self._rate_limit_coordinator.acquire_concurrent_slot(limiter, uid):
+                    await self._rate_limit_coordinator.handle_concurrent_limit_rejection(
+                        message=message,
+                        uid=uid,
+                        interaction_type=route_context.interaction_type,
+                        correlation_id=correlation_id,
+                        interaction_id=interaction_id,
+                        start_time=start_time,
+                    )
+                    return
+                concurrent_acquired = True
+
+                await self._route_content_with_tracking(route_context, interaction_id, start_time)
 
         except asyncio.CancelledError:
             await self._failure_handler.handle_cancelled(

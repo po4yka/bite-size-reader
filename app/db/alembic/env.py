@@ -60,9 +60,7 @@ def run_migrations_online() -> None:
     url = _get_db_url()
     # NullPool: close connections immediately so SQLite WAL is checkpointed and
     # alembic_version DML is not rolled back by SA 2.x pool-return cleanup.
-    connectable = create_engine(
-        url, connect_args={"check_same_thread": False}, poolclass=NullPool
-    )
+    connectable = create_engine(url, connect_args={"check_same_thread": False}, poolclass=NullPool)
     event.listen(connectable, "connect", _apply_pragmas)
 
     with connectable.connect() as connection:

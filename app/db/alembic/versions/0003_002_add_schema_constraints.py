@@ -88,11 +88,13 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # Remove orphaned llm_calls (no valid request)
-    conn.execute(text("""
+    conn.execute(
+        text("""
         DELETE FROM llm_calls
         WHERE request_id IS NULL
            OR request_id NOT IN (SELECT id FROM requests)
-    """))
+    """)
+    )
 
     # Recreate llm_calls with NOT NULL on request_id
     op.execute(text(_LLM_CALLS_DDL))
@@ -117,7 +119,8 @@ def downgrade() -> None:
     conn.execute(text("DROP TRIGGER IF EXISTS validate_request_update"))
 
     # Recreate llm_calls with nullable request_id
-    op.execute(text("""
+    op.execute(
+        text("""
         CREATE TABLE llm_calls_old (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             request_id INTEGER,
@@ -134,7 +137,8 @@ def downgrade() -> None:
             server_version INTEGER, is_deleted INTEGER DEFAULT 0, deleted_at DATETIME,
             FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL
         )
-    """))
+    """)
+    )
     conn.execute(text("INSERT INTO llm_calls_old SELECT * FROM llm_calls"))
     conn.execute(text("DROP TABLE llm_calls"))
     conn.execute(text("ALTER TABLE llm_calls_old RENAME TO llm_calls"))

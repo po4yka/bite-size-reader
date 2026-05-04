@@ -29,7 +29,7 @@ COPY pyproject.toml uv.lock ./
 # Build virtual environment with API dependencies
 # (includes sentence-transformers for /search/semantic)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --extra api
+    uv sync --frozen --no-dev --extra api --extra otel
 
 # Stage 1.5: Web - Build Carbon Web App assets
 FROM node:25-alpine AS web-builder
@@ -87,7 +87,8 @@ ENV DB_PATH=/data/ratatoskr.db \
     LOG_LEVEL=INFO \
     API_HOST=0.0.0.0 \
     API_PORT=8000 \
-    API_WORKERS=1
+    API_WORKERS=1 \
+    RATATOSKR_PROCESS_ROLE=api
 
 EXPOSE 8000
 

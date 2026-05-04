@@ -39,6 +39,8 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434/v1}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-ollama}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.3}
+      - OTEL_ENABLED=${OTEL_ENABLED:-false}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -111,6 +113,8 @@ services:
       - SCRAPER_CRAWL4AI_URL=${SCRAPER_CRAWL4AI_URL:-http://crawl4ai:11235}
       # Auth token forwarded to defuddle sidecar — empty by default (auth is opt-in)
       - SCRAPER_DEFUDDLE_TOKEN=${DEFUDDLE_AUTH_TOKEN:-}
+      - OTEL_ENABLED=${OTEL_ENABLED:-false}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
     volumes:
       - ../../data:/data
       - ../../app:/app/app:ro
@@ -175,6 +179,9 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
+      - OTEL_ENABLED=${OTEL_ENABLED:-false}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
+      - RATATOSKR_PROCESS_ROLE=mcp
     volumes:
       - ../../data:/data:ro
       - ../../config:/app/config:ro

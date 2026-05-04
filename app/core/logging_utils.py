@@ -35,6 +35,13 @@ def _json_sink(message: Any) -> None:
     for k, v in record["extra"].items():
         if k not in log_entry:
             log_entry[k] = v
+    # Rename OTel-injected fields to snake_case for Grafana Tempo derived-fields
+    if (otel_trace_id := log_entry.get("otelTraceID")) and otel_trace_id != "0":
+        log_entry["trace_id"] = otel_trace_id
+        log_entry["span_id"] = log_entry.pop("otelSpanID", "")
+        log_entry.pop("otelTraceID", None)
+        log_entry.pop("otelTraceSampled", None)
+        log_entry.pop("otelServiceName", None)
     # Include exception info when present
     if record["exception"] is not None:
         log_entry["exception"] = str(message).rstrip("\n")

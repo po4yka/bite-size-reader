@@ -12,7 +12,14 @@ from __future__ import annotations
 
 import os
 
-from app.tasks.middleware import ChronicFailureMiddleware
+from app.tasks.middleware import ChronicFailureMiddleware, OTelPropagationMiddleware
+
+# Initialise OTel tracing before broker/redis clients are constructed.
+try:
+    from app.observability.otel import init_tracing as _init_tracing
+    _init_tracing()  # reads OTEL_ENABLED / OTEL_EXPORTER_OTLP_ENDPOINT from env
+except Exception:  # pragma: no cover
+    pass
 
 _broker_type = os.getenv("TASKIQ_BROKER", "redis").lower()
 
@@ -41,5 +48,5 @@ else:
     broker = (
         RedisStreamBroker(url=_url)
         .with_result_backend(_result_backend)
-        .with_middlewares(ChronicFailureMiddleware())
+        .with_middlewares(ChronicFailureMiddleware(), OTelPropagationMiddleware())
     )

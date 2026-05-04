@@ -19,6 +19,8 @@ except ImportError:  # pragma: no cover
 
 async def main() -> None:
     cfg = load_config()
+    from app.observability.otel import init_tracing
+    init_tracing(cfg)
     cfg_holder = ConfigHolder(cfg)
     config_reloader = ConfigReloader(cfg_holder)
 

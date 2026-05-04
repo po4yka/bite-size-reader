@@ -23,7 +23,8 @@ def upgrade() -> None:
     }
     if "attachment_processing" in tables:
         return
-    op.execute(text("""
+    op.execute(
+        text("""
         CREATE TABLE IF NOT EXISTS attachment_processing (
             id                      INTEGER PRIMARY KEY AUTOINCREMENT,
             request_id              INTEGER NOT NULL UNIQUE
@@ -41,15 +42,20 @@ def upgrade() -> None:
             error_text              TEXT,
             created_at              DATETIME NOT NULL DEFAULT (datetime('now'))
         )
-    """))
-    op.execute(text(
-        "CREATE INDEX IF NOT EXISTS idx_attachment_processing_status"
-        " ON attachment_processing(status)"
-    ))
-    op.execute(text(
-        "CREATE INDEX IF NOT EXISTS idx_attachment_processing_created_at"
-        " ON attachment_processing(created_at)"
-    ))
+    """)
+    )
+    op.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS idx_attachment_processing_status"
+            " ON attachment_processing(status)"
+        )
+    )
+    op.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS idx_attachment_processing_created_at"
+            " ON attachment_processing(created_at)"
+        )
+    )
 
 
 def downgrade() -> None:

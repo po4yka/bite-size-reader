@@ -55,7 +55,8 @@ def upgrade() -> None:
         logger.warning("chroma_migration_skipped_config_error: %s", exc)
         return
 
-    rows = conn.execute(text("""
+    rows = conn.execute(
+        text("""
         SELECT se.embedding_blob, se.language,
                s.id AS summary_id, s.json_payload, s.lang,
                r.id AS request_id, r.normalized_url, r.input_url,
@@ -63,7 +64,8 @@ def upgrade() -> None:
         FROM summary_embeddings se
         JOIN summaries s ON se.summary_id = s.id
         JOIN requests r ON s.request_id = r.id
-    """)).fetchall()
+    """)
+    ).fetchall()
 
     if not rows:
         logger.info("chroma_migration_no_embeddings")
@@ -76,11 +78,23 @@ def upgrade() -> None:
 
     for row in rows:
         processed += 1
-        blob, language, summary_id, json_payload, lang, request_id, norm_url, input_url, user_id, lang_detected = row
+        (
+            blob,
+            language,
+            summary_id,
+            json_payload,
+            lang,
+            request_id,
+            norm_url,
+            input_url,
+            user_id,
+            lang_detected,
+        ) = row
         effective_lang = language or lang or lang_detected
         payload = json_payload or {}
         if isinstance(payload, str):
             import json
+
             try:
                 payload = json.loads(payload)
             except Exception:
@@ -131,7 +145,10 @@ def upgrade() -> None:
 
     logger.info(
         "chroma_migration_complete processed=%d skipped=%d failed=%d batches=%d",
-        processed, skipped, failed, len(upsert_latencies),
+        processed,
+        skipped,
+        failed,
+        len(upsert_latencies),
     )
 
 

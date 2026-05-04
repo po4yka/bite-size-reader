@@ -126,8 +126,13 @@ CREATE TABLE IF NOT EXISTS user_signals (
 
 def upgrade() -> None:
     conn = op.get_bind()
-    for ddl in (_CREATE_SOURCES, _CREATE_SUBSCRIPTIONS, _CREATE_FEED_ITEMS,
-                _CREATE_TOPICS, _CREATE_USER_SIGNALS):
+    for ddl in (
+        _CREATE_SOURCES,
+        _CREATE_SUBSCRIPTIONS,
+        _CREATE_FEED_ITEMS,
+        _CREATE_TOPICS,
+        _CREATE_USER_SIGNALS,
+    ):
         op.execute(text(ddl))
 
     tables = {
@@ -137,65 +142,116 @@ def upgrade() -> None:
     # Backfill RSS sources
     rss_sources = 0
     if "rss_feeds" in tables:
-        feeds = conn.execute(text(
-            "SELECT id, url, title, description, site_url, is_active, "
-            "fetch_error_count, last_error, last_fetched_at, last_successful_at, "
-            "etag, last_modified FROM rss_feeds"
-        )).fetchall()
+        feeds = conn.execute(
+            text(
+                "SELECT id, url, title, description, site_url, is_active, "
+                "fetch_error_count, last_error, last_fetched_at, last_successful_at, "
+                "etag, last_modified FROM rss_feeds"
+            )
+        ).fetchall()
         for f in feeds:
-            fid, url, title, desc, site_url, active, err_cnt, last_err, fetched_at, succ_at, etag, last_mod = f
+            (
+                fid,
+                url,
+                title,
+                desc,
+                site_url,
+                active,
+                err_cnt,
+                last_err,
+                fetched_at,
+                succ_at,
+                etag,
+                last_mod,
+            ) = f
             meta = json.dumps({"etag": etag, "last_modified": last_mod})
-            existing = conn.execute(text(
-                "SELECT id FROM sources WHERE kind='rss' AND external_id=:url"
-            ), {"url": url}).fetchone()
+            existing = conn.execute(
+                text("SELECT id FROM sources WHERE kind='rss' AND external_id=:url"), {"url": url}
+            ).fetchone()
             if not existing:
-                conn.execute(text("""
+                conn.execute(
+                    text("""
                     INSERT INTO sources
                         (kind, external_id, url, title, description, site_url, is_active,
                          fetch_error_count, last_error, last_fetched_at, last_successful_at,
                          metadata_json, legacy_rss_feed_id)
                     VALUES ('rss', :url, :url, :title, :desc, :site_url, :active,
                             :err_cnt, :last_err, :fetched_at, :succ_at, :meta, :fid)
-                """), {
-                    "url": url, "title": title, "desc": desc, "site_url": site_url,
-                    "active": active, "err_cnt": err_cnt, "last_err": last_err,
-                    "fetched_at": fetched_at, "succ_at": succ_at, "meta": meta, "fid": fid,
-                })
+                """),
+                    {
+                        "url": url,
+                        "title": title,
+                        "desc": desc,
+                        "site_url": site_url,
+                        "active": active,
+                        "err_cnt": err_cnt,
+                        "last_err": last_err,
+                        "fetched_at": fetched_at,
+                        "succ_at": succ_at,
+                        "meta": meta,
+                        "fid": fid,
+                    },
+                )
                 rss_sources += 1
 
     # Backfill channel sources
     channel_sources = 0
     if "channels" in tables:
-        chans = conn.execute(text(
-            "SELECT id, username, title, description, is_active, "
-            "fetch_error_count, last_error, last_fetched_at, channel_id, member_count "
-            "FROM channels"
-        )).fetchall()
+        chans = conn.execute(
+            text(
+                "SELECT id, username, title, description, is_active, "
+                "fetch_error_count, last_error, last_fetched_at, channel_id, member_count "
+                "FROM channels"
+            )
+        ).fetchall()
         for c in chans:
-            cid, uname, title, desc, active, err_cnt, last_err, fetched_at, chan_id, member_count = c
+            (
+                cid,
+                uname,
+                title,
+                desc,
+                active,
+                err_cnt,
+                last_err,
+                fetched_at,
+                chan_id,
+                member_count,
+            ) = c
             url = f"https://t.me/{uname}" if uname else None
             meta = json.dumps({"channel_id": chan_id, "member_count": member_count})
-            existing = conn.execute(text(
-                "SELECT id FROM sources WHERE kind='telegram_channel' AND external_id=:uname"
-            ), {"uname": uname}).fetchone()
+            existing = conn.execute(
+                text("SELECT id FROM sources WHERE kind='telegram_channel' AND external_id=:uname"),
+                {"uname": uname},
+            ).fetchone()
             if not existing and uname:
-                conn.execute(text("""
+                conn.execute(
+                    text("""
                     INSERT INTO sources
                         (kind, external_id, url, title, description, is_active,
                          fetch_error_count, last_error, last_fetched_at, metadata_json,
                          legacy_channel_id)
                     VALUES ('telegram_channel', :uname, :url, :title, :desc, :active,
                             :err_cnt, :last_err, :fetched_at, :meta, :cid)
-                """), {
-                    "uname": uname, "url": url, "title": title, "desc": desc,
-                    "active": active, "err_cnt": err_cnt, "last_err": last_err,
-                    "fetched_at": fetched_at, "meta": meta, "cid": cid,
-                })
+                """),
+                    {
+                        "uname": uname,
+                        "url": url,
+                        "title": title,
+                        "desc": desc,
+                        "active": active,
+                        "err_cnt": err_cnt,
+                        "last_err": last_err,
+                        "fetched_at": fetched_at,
+                        "meta": meta,
+                        "cid": cid,
+                    },
+                )
                 channel_sources += 1
 
     logger.info(
         "signal_sources_migration rss_sources=%d channel_sources=%d",
-        rss_sources, channel_sources,
+        rss_sources,
+        channel_sources,
     )
 
 

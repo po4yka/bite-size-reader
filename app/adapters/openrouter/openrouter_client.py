@@ -473,19 +473,33 @@ class OpenRouterClient:
         on_stream_delta: Callable[[str], Any] | None = None,
         per_model_timeout_sec: float | None = None,
     ) -> LLMCallResult:
-        return await self.chat_engine.chat(
-            messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            top_p=top_p,
-            stream=stream,
-            request_id=request_id,
-            response_format=response_format,
-            model_override=model_override,
-            fallback_models_override=fallback_models_override,
-            on_stream_delta=on_stream_delta,
-            per_model_timeout_sec=per_model_timeout_sec,
-        )
+        from app.observability.otel import get_tracer
+        tracer = get_tracer(__name__)
+        with tracer.start_as_current_span(
+            "llm.chat",
+            attributes={
+                "llm.provider": "openrouter",
+                "llm.model": self._model,
+            },
+        ) as span:
+            result = await self.chat_engine.chat(
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
+                stream=stream,
+                request_id=request_id,
+                response_format=response_format,
+                model_override=model_override,
+                fallback_models_override=fallback_models_override,
+                on_stream_delta=on_stream_delta,
+                per_model_timeout_sec=per_model_timeout_sec,
+            )
+            if hasattr(result, "cost_usd") and result.cost_usd:
+                span.set_attribute("llm.cost_usd", result.cost_usd)
+            if hasattr(result, "latency_ms") and result.latency_ms:
+                span.set_attribute("llm.latency_ms", result.latency_ms)
+            return result
 
     async def chat_structured(
         self,
@@ -500,6 +514,39 @@ class OpenRouterClient:
         fallback_models_override: tuple[str, ...] | list[str] | None = None,
     ) -> Any:
         """Structured chat completion via Instructor (Pydantic-validated, auto-reask)."""
+        from app.observability.otel import get_tracer as _get_tracer
+        _tracer = _get_tracer(__name__)
+        with _tracer.start_as_current_span(
+            "llm.chat_structured",
+            attributes={
+                "llm.provider": "openrouter",
+                "llm.model": self._model,
+            },
+        ):
+            return await self._chat_structured_impl(
+                messages,
+                response_model=response_model,
+                max_retries=max_retries,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                request_id=request_id,
+                model_override=model_override,
+                fallback_models_override=fallback_models_override,
+            )
+
+    async def _chat_structured_impl(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        response_model: type[Any],
+        max_retries: int = 3,
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+        request_id: int | None = None,
+        model_override: str | None = None,
+        fallback_models_override: tuple[str, ...] | list[str] | None = None,
+    ) -> Any:
+        """Inner implementation of chat_structured, called within the OTel span."""
         import time
 
         import instructor

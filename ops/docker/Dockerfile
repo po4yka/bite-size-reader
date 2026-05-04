@@ -35,8 +35,8 @@ COPY pyproject.toml uv.lock ./
 # Bot/MCP need: ml, youtube, export, scheduler, mcp, api (mcp http_auth imports app.api.routers.auth.tokens)
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=cache,target=/root/.cache/pip \
-    echo "Starting uv sync with extras: ml youtube export scheduler mcp api attachment" && \
-    uv sync --frozen --no-dev --extra ml --extra youtube --extra export --extra scheduler --extra mcp --extra api --extra browser_scraper --extra attachment --verbose && \
+    echo "Starting uv sync with extras: ml youtube export scheduler mcp api attachment otel" && \
+    uv sync --frozen --no-dev --extra ml --extra youtube --extra export --extra scheduler --extra mcp --extra api --extra browser_scraper --extra attachment --extra otel --verbose && \
     echo "uv sync completed successfully"
 
 # =============================================================================
@@ -106,7 +106,8 @@ VOLUME ["/data"]
 ENV DB_PATH=/data/ratatoskr.db \
     LOG_LEVEL=INFO \
     REQUEST_TIMEOUT_SEC=60 \
-    TEXTACY_ENABLED=1
+    TEXTACY_ENABLED=1 \
+    RATATOSKR_PROCESS_ROLE=bot
 
 # Switch to non-root user
 USER appuser

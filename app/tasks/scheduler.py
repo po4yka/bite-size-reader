@@ -9,6 +9,12 @@ Tasks are consumed and executed by the worker process.
 
 from __future__ import annotations
 
+try:
+    from app.observability.otel import init_tracing as _init_tracing
+    _init_tracing()
+except Exception:  # pragma: no cover
+    pass
+
 from taskiq import TaskiqScheduler
 from taskiq.abc.schedule_source import ScheduleSource
 from taskiq.scheduler.scheduled_task import ScheduledTask

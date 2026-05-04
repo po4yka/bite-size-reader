@@ -236,6 +236,18 @@ mcp = [
   "mcp>=1.26,<2",
 ]
 
+# OpenTelemetry distributed tracing (Tempo backend)
+otel = [
+  "opentelemetry-api>=1.41,<2",
+  "opentelemetry-sdk>=1.41,<2",
+  "opentelemetry-exporter-otlp-proto-grpc>=1.41,<2",
+  "opentelemetry-instrumentation-fastapi>=0.62b0",
+  "opentelemetry-instrumentation-httpx>=0.62b0",
+  "opentelemetry-instrumentation-redis>=0.62b0",
+  "opentelemetry-instrumentation-sqlite3>=0.62b0",
+  "opentelemetry-instrumentation-logging>=0.62b0",
+]
+
 
 # NOTE: spaCy trained models (en_core_web_sm, ru_core_news_sm) were removed because
 # the codebase only uses spacy.blank() + sentencizer, which needs no trained models.
