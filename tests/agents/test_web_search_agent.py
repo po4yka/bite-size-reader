@@ -205,7 +205,9 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
 
         # Mock LLM response saying search not needed
         self.mock_llm.chat_structured.return_value = MockStructuredResult(
-            parsed=SearchAnalysisResult(needs_search=False, queries=[], reason="Content is self-contained")
+            parsed=SearchAnalysisResult(
+                needs_search=False, queries=[], reason="Content is self-contained"
+            )
         )
 
         input_data = WebSearchAgentInput(
@@ -225,7 +227,11 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
 
         # Mock LLM response recommending search
         self.mock_llm.chat_structured.return_value = MockStructuredResult(
-            parsed=SearchAnalysisResult(needs_search=True, queries=["ACME Corp acquisition 2024"], reason="Need context on recent merger")
+            parsed=SearchAnalysisResult(
+                needs_search=True,
+                queries=["ACME Corp acquisition 2024"],
+                reason="Need context on recent merger",
+            )
         )
 
         # Mock search results
@@ -252,7 +258,11 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
 
         # Mock LLM response with more queries than allowed
         self.mock_llm.chat_structured.return_value = MockStructuredResult(
-            parsed=SearchAnalysisResult(needs_search=True, queries=["query1", "query2", "query3", "query4"], reason="Multiple topics")
+            parsed=SearchAnalysisResult(
+                needs_search=True,
+                queries=["query1", "query2", "query3", "query4"],
+                reason="Multiple topics",
+            )
         )
 
         self.mock_search.find_articles.return_value = []
@@ -283,7 +293,9 @@ class TestWebSearchAgent(unittest.IsolatedAsyncioTestCase):
         agent = self._create_agent()
 
         self.mock_llm.chat_structured.return_value = MockStructuredResult(
-            parsed=SearchAnalysisResult(needs_search=True, queries=["test query"], reason="Need info")
+            parsed=SearchAnalysisResult(
+                needs_search=True, queries=["test query"], reason="Need info"
+            )
         )
 
         # Mock search service failure

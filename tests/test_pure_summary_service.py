@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.adapter_models.llm.llm_models import StructuredLLMResult
 from app.adapters.content.pure_summary_service import PureSummaryService
 from app.adapters.content.summarization_models import (
     EnsureSummaryPayloadRequest,
@@ -55,14 +56,15 @@ def _runtime_repo_kwargs() -> dict[str, Any]:
     }
 
 
-def _ok_result(payload: dict[str, Any], *, model: str = "primary-model") -> SimpleNamespace:
-    text = json.dumps(payload)
-    return SimpleNamespace(
-        status="ok",
-        response_json={"choices": [{"message": {"content": text}}]},
-        response_text=text,
-        model=model,
-        error_text=None,
+def _ok_result(payload: dict[str, Any], *, model: str = "primary-model") -> StructuredLLMResult:
+    from app.core.summary_schema import SummaryModel
+
+    parsed = SummaryModel.model_construct(**payload)
+    return StructuredLLMResult(
+        parsed=parsed,
+        tokens_prompt=10,
+        tokens_completion=5,
+        model_used=model,
     )
 
 
@@ -102,7 +104,7 @@ async def test_long_context_model_selected(redis_cache_mock: MagicMock) -> None:
     cfg = _dummy_cfg()
     cfg.openrouter.long_context_model = "long-model"
     openrouter = MagicMock()
-    openrouter.chat = AsyncMock(
+    openrouter.chat_structured = AsyncMock(
         return_value=_ok_result({"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"})
     )
     runtime = SummarizationRuntime(
@@ -111,7 +113,9 @@ async def test_long_context_model_selected(redis_cache_mock: MagicMock) -> None:
         openrouter=openrouter,
         response_formatter=MagicMock(),
         audit_func=lambda *args, **kwargs: None,
-        sem=lambda: MagicMock(__aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock()),
+        sem=lambda: MagicMock(
+            __aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock(return_value=False)
+        ),
         **_runtime_repo_kwargs(),
     )
     service = PureSummaryService(runtime=runtime)
@@ -125,7 +129,7 @@ async def test_long_context_model_selected(redis_cache_mock: MagicMock) -> None:
         )
     )
 
-    assert openrouter.chat.await_args.kwargs["model_override"] == "long-model"
+    assert openrouter.chat_structured.await_args.kwargs["model_override"] == "long-model"
 
 
 @pytest.mark.asyncio
@@ -135,7 +139,7 @@ async def test_feedback_instructions_included(redis_cache_mock: MagicMock) -> No
     redis_cache_mock.return_value = cache_stub
 
     openrouter = MagicMock()
-    openrouter.chat = AsyncMock(
+    openrouter.chat_structured = AsyncMock(
         return_value=_ok_result({"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"})
     )
     runtime = SummarizationRuntime(
@@ -144,7 +148,9 @@ async def test_feedback_instructions_included(redis_cache_mock: MagicMock) -> No
         openrouter=openrouter,
         response_formatter=MagicMock(),
         audit_func=lambda *args, **kwargs: None,
-        sem=lambda: MagicMock(__aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock()),
+        sem=lambda: MagicMock(
+            __aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock(return_value=False)
+        ),
         **_runtime_repo_kwargs(),
     )
     service = PureSummaryService(runtime=runtime)
@@ -159,7 +165,7 @@ async def test_feedback_instructions_included(redis_cache_mock: MagicMock) -> No
         )
     )
 
-    user_message = openrouter.chat.await_args.args[0][1]["content"]
+    user_message = openrouter.chat_structured.await_args.args[0][1]["content"]
     assert "CORRECTIONS NEEDED FROM PREVIOUS ATTEMPT" in user_message
 
 
@@ -170,14 +176,8 @@ async def test_parse_failure_raises(redis_cache_mock: MagicMock) -> None:
     redis_cache_mock.return_value = cache_stub
 
     openrouter = MagicMock()
-    openrouter.chat = AsyncMock(
-        return_value=SimpleNamespace(
-            status="ok",
-            response_json={"choices": [{"message": {"content": "not json"}}]},
-            response_text="not json",
-            model="primary-model",
-            error_text=None,
-        )
+    openrouter.chat_structured = AsyncMock(
+        side_effect=ValueError("parse error: invalid JSON response from model")
     )
     runtime = SummarizationRuntime(
         cfg=cast("Any", _dummy_cfg()),
@@ -185,7 +185,9 @@ async def test_parse_failure_raises(redis_cache_mock: MagicMock) -> None:
         openrouter=openrouter,
         response_formatter=MagicMock(),
         audit_func=lambda *args, **kwargs: None,
-        sem=lambda: MagicMock(__aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock()),
+        sem=lambda: MagicMock(
+            __aenter__=AsyncMock(return_value=None), __aexit__=AsyncMock(return_value=False)
+        ),
         **_runtime_repo_kwargs(),
     )
     service = PureSummaryService(runtime=runtime)

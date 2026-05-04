@@ -169,12 +169,16 @@ async def classify_content_quality_llm(
     timeout_sec: float = 3.0,
     confidence_threshold: float = 0.7,
     request_id: int | None = None,
-) -> tuple[bool, None]:
+) -> tuple[bool, Any]:
     """Ask LLM whether extracted text is real content or a stub.
 
-    Returns (is_stub, None). On any failure, defers to the heuristic
+    Returns (is_stub, llm_result). On any failure, defers to the heuristic
     verdict by returning (True, None).
     """
+    import json as _json
+
+    from app.core.json_utils import extract_json
+
     system_prompt = _load_quality_system_prompt()
     user_message = (
         f"Text (first 500 chars): {text_preview[:500]}\n"
@@ -187,15 +191,12 @@ async def classify_content_quality_llm(
     ]
 
     try:
-        structured = await asyncio.wait_for(
-            llm_client.chat_structured(
+        llm_result = await asyncio.wait_for(
+            llm_client.chat(
                 messages,
-                response_model=_QualityVerdict,
-                max_retries=3,
                 temperature=0.0,
                 max_tokens=50,
                 model_override=flash_model,
-                fallback_models_override=flash_fallback_models,
                 request_id=request_id,
             ),
             timeout=timeout_sec,
@@ -207,9 +208,27 @@ async def classify_content_quality_llm(
         logger.warning("quality_llm_error", extra={"request_id": request_id}, exc_info=True)
         return True, None
 
-    classification = structured.parsed.classification
-    confidence = structured.parsed.confidence
+    response_text = llm_result.response_text or ""
+    parsed_data = extract_json(response_text)
+    if not isinstance(parsed_data, dict):
+        try:
+            parsed_data = _json.loads(response_text)
+        except Exception:
+            parsed_data = None
+
+    if not isinstance(parsed_data, dict):
+        logger.warning("quality_llm_parse_error", extra={"request_id": request_id})
+        return True, llm_result
+
+    try:
+        verdict = _QualityVerdict(**parsed_data)
+    except Exception:
+        logger.warning("quality_llm_parse_error", extra={"request_id": request_id})
+        return True, llm_result
+
+    classification = verdict.classification
+    confidence = verdict.confidence
 
     if classification == "real_content" and confidence >= confidence_threshold:
-        return False, None
-    return True, None
+        return False, llm_result
+    return True, llm_result

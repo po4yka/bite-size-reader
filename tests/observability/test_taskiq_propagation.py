@@ -61,6 +61,8 @@ async def test_pre_send_injects_traceparent() -> None:
 @pytest.mark.asyncio
 async def test_pre_execute_creates_child_span() -> None:
     """pre_execute must start a child span and store it on the message."""
+    from unittest.mock import patch
+
     provider, exporter = _make_provider()
     tracer = provider.get_tracer("test")
     middleware = OTelPropagationMiddleware()
@@ -71,10 +73,18 @@ async def test_pre_execute_creates_child_span() -> None:
         parent_ctx = trace.get_current_span().get_span_context()
         await middleware.pre_send(producer_message)  # type: ignore[arg-type]
 
-    # Worker side: extract context and start child span
+    # Worker side: extract context and start child span.
+    # Patch trace.get_tracer in the middleware module so it uses this test's
+    # isolated provider instead of the global one (avoids parallel-test bleed).
     worker_message = _FakeMessage(task_name="my_task")
     worker_message.labels = dict(producer_message.labels)
-    await middleware.pre_execute(worker_message)  # type: ignore[arg-type]
+    with patch("app.tasks.middleware.trace") as mock_trace:
+        mock_trace.get_tracer.return_value = tracer
+        # propagate.extract must still work via real opentelemetry
+        from opentelemetry.propagate import extract as real_extract
+
+        mock_trace.get_current_span = trace.get_current_span
+        await middleware.pre_execute(worker_message)  # type: ignore[arg-type]
 
     span = getattr(worker_message, "_otel_span", None)
     assert span is not None
@@ -93,11 +103,17 @@ async def test_pre_execute_creates_child_span() -> None:
 @pytest.mark.asyncio
 async def test_post_execute_sets_is_err_attribute() -> None:
     """post_execute must record task.is_err on the span."""
-    _provider, exporter = _make_provider()
+    from unittest.mock import patch
+
+    provider, exporter = _make_provider()
+    tracer = provider.get_tracer("test")
     middleware = OTelPropagationMiddleware()
 
     message = _FakeMessage()
-    await middleware.pre_execute(message)  # type: ignore[arg-type]  # creates _otel_span from empty labels
+    with patch("app.tasks.middleware.trace") as mock_trace:
+        mock_trace.get_tracer.return_value = tracer
+        mock_trace.get_current_span = trace.get_current_span
+        await middleware.pre_execute(message)  # type: ignore[arg-type]  # creates _otel_span from empty labels
 
     result = _FakeResult(is_err=True)
     await middleware.post_execute(message, result)  # type: ignore[arg-type]
