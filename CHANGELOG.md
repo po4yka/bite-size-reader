@@ -18,7 +18,7 @@ names, and the Loki / Promtail labels. The Karakeep integration
 is retired in the same release.
 
 **For the full breaking-change inventory and the operator checklist,
-see [docs/how-to/migrate-from-bite-size-reader.md](docs/how-to/migrate-from-bite-size-reader.md).**
+see [docs/guides/migrate-from-bite-size-reader.md](docs/guides/migrate-from-bite-size-reader.md).**
 The migration page is the canonical source — historical-record
 discipline keeps this entry short so the breaking-change list does
 not drift from the operational guide.
