@@ -810,7 +810,7 @@ The database may be corrupted. Please restore from backup.
 - Attempt recovery: `sqlite3 data/ratatoskr.db ".recover" | sqlite3 data/ratatoskr.db.recovered`
 - Restore from backup if recovery fails
 
-See: [Backup and Restore](../how-to/backup-and-restore.md)
+See: [Backup and Restore](../guides/backup-and-restore.md)
 
 ---
 

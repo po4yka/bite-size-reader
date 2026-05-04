@@ -10,8 +10,8 @@ to read first.
 themselves, integrators planning how to attach.
 **Type:** Explanation.
 **Related:** [`docs/SPEC.md`](../SPEC.md) (canonical contract),
-[`docs/HEXAGONAL_ARCHITECTURE_QUICKSTART.md`](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
-(layer rationale), [`docs/multi_agent_architecture.md`](../multi_agent_architecture.md)
+[`#layering-quick-reference`](#layering-quick-reference)
+(layer rationale), [`docs/explanation/multi-agent-architecture.md`](multi-agent-architecture.md)
 (LLM agent internals), [`docs/explanation/observability-strategy.md`](observability-strategy.md)
 (metrics, traces, logs).
 
@@ -128,7 +128,7 @@ audit logging while all artifacts land in SQLite.
 The codebase follows a hexagonal (ports-and-adapters) layout. Each
 layer has a narrow job; cross-layer references go through ports, not
 direct imports. See
-[HEXAGONAL_ARCHITECTURE_QUICKSTART.md](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
+[#layering-quick-reference](#layering-quick-reference)
 for the rationale.
 
 | Layer | Path | Role |
@@ -177,30 +177,118 @@ Each subsystem has a canonical doc; this page is the entry point.
 | Subsystem | Purpose | Canonical doc |
 | --- | --- | --- |
 | URL pipeline (Scrapling, Crawl4AI, Firecrawl self-hosted, Defuddle, Playwright, Crawlee, direct HTML, ScrapeGraphAI) | Extract clean article content from arbitrary URLs with an 8-provider fallback chain. Order overridable via `SCRAPER_PROVIDER_ORDER`. Cloud Firecrawl not used. | [`docs/explanation/scraper-chain.md`](scraper-chain.md) · [`docs/SPEC.md`](../SPEC.md) |
-| YouTube extractor | Download video (1080p), pull transcripts, store metadata. | [`docs/how-to/configure-youtube-download.md`](../how-to/configure-youtube-download.md) |
-| Twitter / X extractor | Two-tier extraction: self-hosted Firecrawl scrape by default; opt-in authenticated Playwright for protected accounts, threads, and X Articles. | [`docs/how-to/configure-twitter-extraction.md`](../how-to/configure-twitter-extraction.md) |
-| LLM summarization (multi-agent) | Extraction → summarization → validation → optional web search, with self-correction. | [`docs/multi_agent_architecture.md`](../multi_agent_architecture.md) |
-| Web search enrichment | Inject up-to-date context via self-hosted Firecrawl search (`FIRECRAWL_SELF_HOSTED_ENABLED=true`) before final summary. | [`docs/how-to/enable-web-search.md`](../how-to/enable-web-search.md) |
+| YouTube extractor | Download video (1080p), pull transcripts, store metadata. | [`docs/guides/configure-youtube-download.md`](../guides/configure-youtube-download.md) |
+| Twitter / X extractor | Two-tier extraction: self-hosted Firecrawl scrape by default; opt-in authenticated Playwright for protected accounts, threads, and X Articles. | [`docs/guides/configure-twitter-extraction.md`](../guides/configure-twitter-extraction.md) |
+| LLM summarization (multi-agent) | Extraction → summarization → validation → optional web search, with self-correction. | [`docs/explanation/multi-agent-architecture.md`](multi-agent-architecture.md) |
+| Web search enrichment | Inject up-to-date context via self-hosted Firecrawl search (`FIRECRAWL_SELF_HOSTED_ENABLED=true`) before final summary. | [`docs/guides/enable-web-search.md`](../guides/enable-web-search.md) |
 | Channel digest | Userbot reads subscribed channels; scheduled digests via `/digest`. | [`docs/SPEC.md`](../SPEC.md) (`Channel digest` section) |
 | Mixed-source aggregation | Bundle one or more links + forwards / attachments into a single synthesised result. | [`docs/SPEC.md`](../SPEC.md) (`Mixed-source aggregation` section) |
-| Search (FTS5 + vector) | Local full-text plus optional ChromaDB semantic / hybrid search. | [`docs/how-to/setup-chroma-vector-search.md`](../how-to/setup-chroma-vector-search.md) |
+| Search (FTS5 + vector) | Local full-text plus optional ChromaDB semantic / hybrid search. | [`docs/guides/setup-chroma-vector-search.md`](../guides/setup-chroma-vector-search.md) |
 | Mobile API | FastAPI + JWT, sync v2, ratelimit, summary CRUD, aggregations. | [`docs/MOBILE_API_SPEC.md`](../MOBILE_API_SPEC.md) |
 | Web frontend | React SPA served on `/web/*`; library, search, submit, collections, digest, preferences, admin. Uses a project-owned design shim under `clients/web/src/design/`. | [`docs/reference/frontend-web.md`](../reference/frontend-web.md) |
-| MCP server | Model Context Protocol server: 22 tools and 16 resources for external AI agents (OpenClaw, Claude Desktop). | [`docs/mcp_server.md`](../mcp_server.md) |
+| MCP server | Model Context Protocol server: 22 tools and 16 resources for external AI agents (OpenClaw, Claude Desktop). | [`docs/reference/mcp-server.md`](../reference/mcp-server.md) |
 | Observability | Prometheus metrics, structured logs, correlation-ID tracing, Loki / Promtail / Grafana stack. | [`docs/explanation/observability-strategy.md`](observability-strategy.md) |
-| Redis (optional) | Response cache, rate-limit store, sync session locks, distributed background-task locks. | [`docs/how-to/setup-redis-caching.md`](../how-to/setup-redis-caching.md) |
+| Redis (optional) | Response cache, rate-limit store, sync session locks, distributed background-task locks. | [`docs/guides/setup-redis-caching.md`](../guides/setup-redis-caching.md) |
 | ElevenLabs TTS (optional) | Generate audio from a stored summary on demand. | `app/adapters/elevenlabs/` (no standalone doc yet) |
 
 ---
 
 ## Where to next
 
-- New here and want to run the bot? → [Quickstart Tutorial](../tutorials/quickstart.md).
+- New here and want to run the bot? → [Quickstart Tutorial](../guides/quickstart.md).
 - Deploying to a server? → [DEPLOYMENT.md](../DEPLOYMENT.md).
 - Modifying the codebase? → [`CLAUDE.md`](../../CLAUDE.md) for the
   AI-friendly engineer's tour, then [`docs/SPEC.md`](../SPEC.md) for
   the canonical contract.
-- Curious about layer choices? → [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md).
+- Curious about layer choices? → [Layering quick reference](#layering-quick-reference).
 - Tracking down a specific request? → start with the correlation ID in
   the user-visible error message, then read
   [`docs/explanation/observability-strategy.md`](observability-strategy.md).
+
+---
+
+## Layering quick reference
+
+> The content below was previously in `HEXAGONAL_ARCHITECTURE_QUICKSTART.md`.
+
+This doc keeps our layering consistent across Telegram, CLI, and the mobile API. Keep dependencies pointing inward: Domain has no outward dependencies.
+
+## Runtime policy
+
+- DI container is always enabled in runtime entrypoints (Telegram bot and CLI harness).
+- Presentation handlers call application use cases for business workflows.
+- No presentation-layer fallback path should call repositories directly for the same workflow.
+- FastAPI routers remain transport-only: orchestration belongs in dedicated application/service classes.
+- Adapter seams should depend on protocol contracts, not concrete `*Impl` classes, at constructor/public boundaries.
+
+## Layer Map (project-specific)
+
+- Presentation: `app/adapters/telegram/*`, `app/api/*`, CLI in `app/cli/*`
+- Application: `app/application/use_cases/*`, DTOs in `app/application/dto/*`
+- Domain: `app/domain/*` (models, events, services, exceptions)
+- Infrastructure: `app/infrastructure/*`, `app/db/*`, external clients in `app/adapters/*`
+- DI: `app/di/` (split by concern: `api.py`, `application.py`, `telegram.py`, `repositories.py`, `shared.py`)
+
+## DB Layer
+
+- `DatabaseSessionManager` (`app/db/session.py`) is the sole database entry point. It handles connection management, migrations, FTS5 indexing, and async operations via `AsyncRWLock`.
+- New business workflows should go through application use cases and repository ports in `app/infrastructure/persistence/sqlite/repositories/*`, not through the session manager directly.
+
+## Current seam examples (2026-03)
+
+- `app/api/routers/digest.py` → delegates orchestration to `DigestFacade`.
+- `app/api/routers/system.py` → delegates DB/Redis/file maintenance work to `SystemMaintenanceService`.
+- Telegram callback flow delegates action execution through `CallbackActionRegistry` + `CallbackActionService`.
+- Telegram URL flow delegates security/timeout/batch/state policy through `URLBatchPolicyService` + `URLAwaitingStateStore`.
+- Formatting stack constructor seams use protocol interfaces from `app/adapters/external/formatting/protocols.py` (for example `ResponseSender`, `DataFormatter`, `TextProcessor`) instead of concrete implementation types.
+
+```mermaid
+flowchart LR
+  Presentation["Presentation\n(Telegram, FastAPI, CLI)"]
+  Application["Application\n(Use Cases, DTOs)"]
+  Domain["Domain\n(Entities, Events, Rules)"]
+  Infrastructure["Infrastructure\n(DB, External APIs, Repos)"]
+
+  Presentation --> Application --> Domain
+  Infrastructure --> Application
+  Infrastructure --> Domain
+```
+
+## Core flow we run every day
+
+```mermaid
+sequenceDiagram
+  participant TG as Telegram/FastAPI
+  participant Router as Message Router
+  participant UC as Use Cases (URL/Forward)
+  participant Extract as Extractors (ScraperChain/YouTube)
+  participant LLM as Summarizer+Validator
+  participant DB as SQLite/Persistence
+
+  TG->>Router: incoming message / API call
+  Router->>UC: normalize + route
+  UC->>Extract: fetch content (ScraperChain/yt-dlp)
+  Extract->>LLM: content chunks
+  LLM-->>UC: JSON summary (contract-validated)
+  UC->>DB: persist request/crawl/llm_call/summary
+  UC-->>Router: formatted response payload
+  Router-->>TG: reply
+```
+
+## Quickstart: add a new use case
+
+1) Domain: add/adjust entities or domain services in `app/domain/*` (no external deps).
+2) Application: create a use case in `app/application/use_cases/` that orchestrates domain + repositories.
+3) Infrastructure: ensure repository/client implementations exist in `app/infrastructure/*` or `app/adapters/*`.
+4) DI: wire it in the appropriate `app/di/` module (e.g., `application.py` for use cases, `repositories.py` for repos).
+5) Presentation: call the use case from Telegram handlers (`app/adapters/telegram/*`) or FastAPI (`app/api/*`), formatting responses via `app/adapters/external/response_formatter.py`.
+
+## When to add a use case
+
+- Any distinct workflow (e.g., mark summary read, search summaries, sync mobile).
+- Reads: use query objects; writes: use command objects.
+
+## Testing hints
+
+- Unit: pure domain rules and use cases with mocked repositories.
+- Integration: run via container wiring against test DB; validate persistence and contracts.

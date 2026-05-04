@@ -1,0 +1,9 @@
+{
+  "kanban-plugin": "basic",
+  "new-card-insertion-method": "append",
+  "lane-width": 280,
+  "show-checkboxes": false,
+  "show-add-list": true,
+  "prepend-archive-date": true,
+  "date-picker-week-start": 0
+}

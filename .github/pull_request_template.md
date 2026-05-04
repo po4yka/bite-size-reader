@@ -57,7 +57,7 @@
 - [ ] Updated README.md (if user-facing changes)
 - [ ] Updated docs/SPEC.md (if data model or API contract changes)
 - [ ] Updated environment_variables.md (if new env vars added)
-- [ ] Added/updated how-to guide in `docs/how-to/` (for new features)
+- [ ] Added/updated how-to guide in `docs/guides/` (for new features)
 - [ ] Updated relevant reference docs in `docs/reference/`
 - [ ] Updated Mobile API spec (if API changes)
 

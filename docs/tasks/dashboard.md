@@ -68,3 +68,13 @@ sort by status
 sort by priority
 group by path
 ```
+
+---
+
+## Bases views
+
+> Open these `.base` files for structured grid and card views powered by YAML frontmatter from `issues/`.
+
+- [[views/all-tasks]] — full table, sortable by any field
+- [[views/by-area]] — cards grouped by area
+- [[views/by-priority]] — cards grouped by priority

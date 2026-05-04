@@ -114,7 +114,7 @@ hosted SSE):
   rolling deployments.
 
 The full MCP surface (22 tools, 16 resources) is enumerated in
-[`docs/mcp_server.md`](../mcp_server.md).
+[`docs/reference/mcp-server.md`](../reference/mcp-server.md).
 
 ### 4. Update webhook receivers
 

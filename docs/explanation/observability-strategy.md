@@ -860,7 +860,7 @@ logger.info(f"Summary created for {url} using {tokens} tokens (correlation_id: {
 
 - [Design Philosophy](design-philosophy.md) - Overall architectural principles
 - [TROUBLESHOOTING](../TROUBLESHOOTING.md) - Common debugging scenarios
-- [How to Optimize Performance](../how-to/optimize-performance.md) - Performance tuning
+- [How to Optimize Performance](../guides/optimize-performance.md) - Performance tuning
 - [FAQ § Debugging](../FAQ.md#debugging) - Common debugging questions
 
 ---

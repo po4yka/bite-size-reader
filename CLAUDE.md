@@ -291,7 +291,7 @@ When `WEB_SEARCH_ENABLED=true`, the bot enriches summaries with current web cont
 
 ### Multi-Agent Architecture
 
-Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch) coordinate via an AgentOrchestrator (multi-step pipeline) or SingleAgentOrchestrator (single-agent execution). The SummarizationAgent implements a self-correction feedback loop (retry with error feedback up to 3x). See `docs/multi_agent_architecture.md` for complete documentation.
+Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch) coordinate via an AgentOrchestrator (multi-step pipeline) or SingleAgentOrchestrator (single-agent execution). The SummarizationAgent implements a self-correction feedback loop (retry with error feedback up to 3x). See `docs/explanation/multi-agent-architecture.md` for complete documentation.
 
 ### Additional Subsystems
 
@@ -305,7 +305,7 @@ Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch
 
 ### Safety Hooks
 
-Claude Code hooks provide automatic safety checks. See `docs/claude_code_hooks.md`.
+Claude Code hooks provide automatic safety checks. See `docs/reference/claude-code-hooks.md`.
 
 ## Common Tasks
 
@@ -481,15 +481,37 @@ Use the `repo-task-board` skill for all task-related operations.
 
 Canonical files:
 
-- `docs/tasks/backlog.md` — backlog items by area
-- `docs/tasks/active.md` — in-progress and review tasks
-- `docs/tasks/blocked.md` — blocked tasks with reasons
-- `docs/tasks/dashboard.md` — Obsidian Tasks query hub
+- `docs/tasks/issues/POY-NNN.md` — **source of truth** — one note per task (YAML frontmatter + canonical `- [ ]` line + spec)
+- `docs/tasks/active.md` — Obsidian Tasks query view (`#status/doing`, `#status/review`)
+- `docs/tasks/backlog.md` — Obsidian Tasks query view (`#status/backlog`)
+- `docs/tasks/blocked.md` — Obsidian Tasks query view (`#status/blocked`)
+- `docs/tasks/dashboard.md` — Obsidian Tasks query hub + Bases view links
+- `docs/tasks/board.md` — Kanban board (visual layer; source of truth is `issues/`)
 
-Canonical task syntax:
+Canonical task syntax (lives inside `docs/tasks/issues/POY-NNN.md`):
 
 ```md
-- [ ] #task <imperative title> #repo/ratatoskr #area/<area> #status/<status> <priority>
+- [ ] #task <imperative title> #repo/ratatoskr #area/<area> #status/<status> <priority> [[POY-NNN]]
 ```
+
+Per-task note YAML frontmatter:
+
+```yaml
+---
+id: POY-NNN
+title: Imperative task title
+status: doing          # backlog | todo | doing | review | blocked | done | dropped
+area: auth             # auth | api | kmp | sync | ci | frontend | observability | testing | content | scraper | llm | db | docs | ops
+priority: high         # critical | high | medium | low
+owner: Role name
+paperclip: POY-NNN
+blocks: []
+blocked_by: []
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+---
+```
+
+Lifecycle: create via Templater template → transitions update `status:` + `#status/*` tag → delete file on close (git history is the audit trail). Do NOT add task lines to `active.md`, `backlog.md`, or `blocked.md` — those are query-only views.
 
 Invoke the `repo-task-board` skill when the user mentions: roadmap, TODO, backlog, Kanban, task board, sprint, blocked work, or agent-ready work.

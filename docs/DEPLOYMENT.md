@@ -184,7 +184,7 @@ These profile services are not required but enhance functionality when available
 - **Self-hosted scraper sidecars** (`with-scrapers`) -- starts `firecrawl-api` (port 3002) plus its Playwright, Redis, RabbitMQ, and Postgres dependencies, `crawl4ai` (port 11235), and `defuddle-api` (port 3003). Cloud Firecrawl is not a deployment option for the article extraction path. Image defaults follow upstream `latest`; pin `FIRECRAWL_IMAGE`, `FIRECRAWL_PLAYWRIGHT_IMAGE`, and `FIRECRAWL_POSTGRES_IMAGE` in production when you need repeatable rebuilds.
 - **Cloud Ollama** (`with-cloud-ollama`) -- does not start a local model server. It configures Ratatoskr for a remote OpenAI-compatible `/v1` endpoint and runs a lightweight `/models` reachability check. Structured JSON quality depends on the remote model; OpenRouter remains the primary quality path.
 - **Monitoring** (`with-monitoring`) -- Prometheus, Grafana, Loki, Promtail, and node-exporter from the primary compose file.
-- **MCP Server** (`mcp`, `mcp-write`, `mcp-public`) -- Exposes article, search, ChromaDB, and aggregation tools/resources to external AI agents (OpenClaw, Claude Desktop, hosted SSE clients). Runs as a dedicated Docker container with SSE transport (`ratatoskr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/mcp_server.md`.
+- **MCP Server** (`mcp`, `mcp-write`, `mcp-public`) -- Exposes article, search, ChromaDB, and aggregation tools/resources to external AI agents (OpenClaw, Claude Desktop, hosted SSE clients). Runs as a dedicated Docker container with SSE transport (`ratatoskr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/reference/mcp-server.md`.
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels. Set `DIGEST_ENABLED=true` and `API_BASE_URL` to the Mobile API endpoint. Run `/init_session` in the bot to authenticate the userbot via Mini App OTP/2FA flow, then use `/subscribe @channel` to add channels.
 
 Full variable reference: `docs/environment_variables.md`
@@ -315,7 +315,7 @@ make lock-uv
 ```
 
 > **First upgrade onto Ratatoskr from `bite-size-reader`?** Read
-> [Migrate from bite-size-reader](how-to/migrate-from-bite-size-reader.md)
+> [Migrate from bite-size-reader](guides/migrate-from-bite-size-reader.md)
 > first — it covers the renamed Docker image, MCP URIs / headers,
 > Prometheus metric names, web storage keys, and the retired Karakeep
 > integration.

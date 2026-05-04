@@ -4,7 +4,7 @@ Complete reference for Ratatoskr's SQLite database schema.
 
 **Audience:** Developers, Database Administrators
 **Type:** Reference
-**Related:** [SPEC.md § Data Model](../SPEC.md#data-model-sqlite), [How to Backup and Restore](../how-to/backup-and-restore.md)
+**Related:** [SPEC.md § Data Model](../SPEC.md#data-model-sqlite), [How to Backup and Restore](../guides/backup-and-restore.md)
 
 ---
 
@@ -1325,7 +1325,7 @@ sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
 
 - [SPEC.md § Data Model](../SPEC.md#data-model-sqlite) - Canonical specification
 - [CLI Commands § Database Migration](cli-commands.md#database-migration) - Migration tool
-- [How to Backup and Restore](../how-to/backup-and-restore.md) - Backup procedures
+- [How to Backup and Restore](../guides/backup-and-restore.md) - Backup procedures
 
 ---
 

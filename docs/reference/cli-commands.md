@@ -4,7 +4,7 @@ Complete reference for all command-line tools in Ratatoskr.
 
 **Audience:** Developers, Operators
 **Type:** Reference
-**Related:** [How-To Guides](../how-to/), [TROUBLESHOOTING](../TROUBLESHOOTING.md)
+**Related:** [How-To Guides](../guides/), [TROUBLESHOOTING](../TROUBLESHOOTING.md)
 
 ---
 
@@ -55,7 +55,7 @@ Aggregation notes:
 See:
 
 - [CLI README](../../clients/cli/README.md)
-- [External Access Quickstart](../tutorials/external-access-quickstart.md)
+- [External Access Quickstart](../guides/external-access-quickstart.md)
 - [Mobile API Spec](../MOBILE_API_SPEC.md)
 
 ---
@@ -833,7 +833,7 @@ python -m app.cli.mcp_server --transport sse --user-id 123456789
 
 - `get_stats` - Database statistics
 
-See: [MCP Server Documentation](../mcp_server.md)
+See: [MCP Server Documentation](mcp-server.md)
 
 ---
 
@@ -941,7 +941,7 @@ echo $?  # 0 (success)
 
 ## See Also
 
-- [How-To Guides](../how-to/) - Step-by-step task guides
+- [How-To Guides](../guides/) - Step-by-step task guides
 - [TROUBLESHOOTING](../TROUBLESHOOTING.md) - Debugging guide
 - [Environment Variables](../environment_variables.md) - Configuration reference
 

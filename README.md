@@ -61,11 +61,11 @@ Compose profiles:
 - `mcp`, `mcp-write`, and `mcp-public` start the optional MCP server variants.
 
 For the guided walkthrough, see the
-[5-minute Quickstart Tutorial](docs/tutorials/quickstart.md). For the
+[5-minute Quickstart Tutorial](docs/guides/quickstart.md). For the
 full setup including TLS, monitoring, and backups, see
 [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 The onboarding script is tracked in
-[Clone to First Summary](docs/how-to/clone-to-first-summary.md) for repeatable
+[Clone to First Summary](docs/guides/clone-to-first-summary.md) for repeatable
 10-minute validation runs.
 
 ## What it does
@@ -84,14 +84,14 @@ live, embed, music, mobile). Pulls transcripts via
 `youtube-transcript-api` (manual subtitles preferred), downloads the
 video at 1080p with `yt-dlp` for archival, then summarizes from the
 transcript. Storage is capped per-video and in total, with optional
-auto-cleanup. See [Configure YouTube Download](docs/how-to/configure-youtube-download.md).
+auto-cleanup. See [Configure YouTube Download](docs/guides/configure-youtube-download.md).
 
 **Twitter / X.** Two-tier extraction: Firecrawl public scraping by
 default; opt-in authenticated Playwright with your own `cookies.txt`
 when you need protected accounts, deep threads, or X Articles.
 GraphQL interception for tweets / threads, DOM scraping for X
 Articles, redirect-aware article URL resolver. See
-[Configure Twitter / X Extraction](docs/how-to/configure-twitter-extraction.md).
+[Configure Twitter / X Extraction](docs/guides/configure-twitter-extraction.md).
 
 **Forwarded posts and bundles.** Forward a Telegram channel post and
 get the same structured summary; or use `/aggregate` to bundle one or
@@ -108,7 +108,7 @@ this turns subscribed channels into a periodic recap.
 | Architecture diagram, request lifecycle, subsystem index | [docs/explanation/architecture-overview.md](docs/explanation/architecture-overview.md) |
 | Mobile REST API (JWT auth, sync, aggregations) | [docs/MOBILE_API_SPEC.md](docs/MOBILE_API_SPEC.md) |
 | Web frontend (`/web/*`) | [docs/reference/frontend-web.md](docs/reference/frontend-web.md) |
-| MCP server for external AI agents | [docs/mcp_server.md](docs/mcp_server.md) |
+| MCP server for external AI agents | [docs/reference/mcp-server.md](docs/reference/mcp-server.md) |
 | FAQ / troubleshooting | [docs/FAQ.md](docs/FAQ.md) · [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
 | Full doc index | [docs/README.md](docs/README.md) |
 
@@ -116,13 +116,13 @@ this turns subscribed channels into a periodic recap.
 
 | If you want to … | Start here |
 | --- | --- |
-| **Use it.** Run the bot, try out features, configure a knob. | [Quickstart Tutorial](docs/tutorials/quickstart.md) → [How-to guides](docs/README.md#how-to-guides-goal-oriented) |
-| **Deploy and operate it.** Production install, monitoring, backups, upgrades. | [DEPLOYMENT.md](docs/DEPLOYMENT.md) → [Backup and Restore](docs/how-to/backup-and-restore.md) → [Optimize Performance](docs/how-to/optimize-performance.md) |
-| **Extend it.** Read the code, write a feature, integrate a client. | [CLAUDE.md](CLAUDE.md) (codebase tour) → [docs/SPEC.md](docs/SPEC.md) (canonical contract) → [Local Development Tutorial](docs/tutorials/local-development.md) |
+| **Use it.** Run the bot, try out features, configure a knob. | [Quickstart Tutorial](docs/guides/quickstart.md) → [How-to guides](docs/README.md#how-to-guides-goal-oriented) |
+| **Deploy and operate it.** Production install, monitoring, backups, upgrades. | [DEPLOYMENT.md](docs/DEPLOYMENT.md) → [Backup and Restore](docs/guides/backup-and-restore.md) → [Optimize Performance](docs/guides/optimize-performance.md) |
+| **Extend it.** Read the code, write a feature, integrate a client. | [CLAUDE.md](CLAUDE.md) (codebase tour) → [docs/SPEC.md](docs/SPEC.md) (canonical contract) → [Local Development Tutorial](docs/guides/local-development.md) |
 
 Upgrading from `bite-size-reader`? The rename has its own operator
 checklist:
-[Migrate from bite-size-reader](docs/how-to/migrate-from-bite-size-reader.md).
+[Migrate from bite-size-reader](docs/guides/migrate-from-bite-size-reader.md).
 
 ---
 

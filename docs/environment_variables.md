@@ -687,7 +687,7 @@ curl "$CHROMA_HOST/api/v2/heartbeat"
 
 ## Related Documentation
 
-- [Quickstart Tutorial](tutorials/quickstart.md) - Step-by-step setup guide
+- [Quickstart Tutorial](guides/quickstart.md) - Step-by-step setup guide
 - [FAQ § Configuration](FAQ.md#configuration) - Common configuration questions
 - [TROUBLESHOOTING § Configuration](TROUBLESHOOTING.md#configuration-issues) - Fix config problems
 - [DEPLOYMENT.md](DEPLOYMENT.md) - Production deployment guide

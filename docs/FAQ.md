@@ -138,7 +138,7 @@ pip install -r requirements.txt
 python bot.py
 ```
 
-See [tutorials/local-development.md](tutorials/local-development.md) for full guide.
+See [guides/local-development.md](guides/local-development.md) for full guide.
 
 ---
 
@@ -588,7 +588,7 @@ Yes. Multiple integration options:
 3. **SQLite Database**: Direct database access for custom scripts
 4. **CLI Tools**: Batch processing, search, export
 
-See [mcp_server.md](mcp_server.md) for MCP integration.
+See [reference/mcp-server.md](reference/mcp-server.md) for MCP integration.
 
 ### Does it integrate with Notion/Obsidian/Roam?
 
@@ -606,7 +606,7 @@ Not out-of-box, but adaptable:
 2. **Use hexagonal architecture** (core logic unchanged)
 3. **Implement Slack OAuth** (instead of Telegram access control)
 
-See [HEXAGONAL_ARCHITECTURE_QUICKSTART.md](HEXAGONAL_ARCHITECTURE_QUICKSTART.md) for architecture guide.
+See [Architecture Overview § Layering quick reference](explanation/architecture-overview.md#layering-quick-reference) for architecture guide.
 
 ---
 

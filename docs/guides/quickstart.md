@@ -191,11 +191,11 @@ Congratulations! You've successfully set up Ratatoskr. 🎉
 
 **Enhance your setup**:
 
-- ✨ [Enable YouTube support](../how-to/configure-youtube-download.md) - Summarize videos
-- 🔍 [Enable web search](../how-to/enable-web-search.md) - Add real-time context
+- ✨ [Enable YouTube support](../guides/configure-youtube-download.md) - Summarize videos
+- 🔍 [Enable web search](../guides/enable-web-search.md) - Add real-time context
 - 🔌 [External Access Quickstart](external-access-quickstart.md) - Onboard CLI or MCP aggregation clients
-- ⚡ [Setup Redis caching](../how-to/setup-redis-caching.md) - Faster responses
-- 🧠 [Setup ChromaDB](../how-to/setup-chroma-vector-search.md) - Semantic search
+- ⚡ [Setup Redis caching](../guides/setup-redis-caching.md) - Faster responses
+- 🧠 [Setup ChromaDB](../guides/setup-chroma-vector-search.md) - Semantic search
 - 🖥️ [Frontend Web Guide](../reference/frontend-web.md) - web app routes/auth/development
 
 **Learn more**:

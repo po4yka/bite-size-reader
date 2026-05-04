@@ -520,7 +520,7 @@ class SourceType(str, Enum):
 
 - [Design Philosophy](design-philosophy.md) - Overall architectural principles
 - [SPEC.md § Summary JSON Contract](../SPEC.md#summary-json-contract) - Full field reference
-- [Multi-Agent Architecture](../multi_agent_architecture.md) - Self-correction implementation
+- [Multi-Agent Architecture](multi-agent-architecture.md) - Self-correction implementation
 
 ---
 

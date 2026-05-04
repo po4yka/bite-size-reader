@@ -129,7 +129,7 @@ In this mode:
 - no per-request bearer auth is required
 - read tools and aggregation tools both run as that one user
 
-See [MCP Server](../mcp_server.md) for Claude Desktop and Docker examples.
+See [MCP Server](../reference/mcp-server.md) for Claude Desktop and Docker examples.
 
 ## 6. Connect to Hosted Public MCP
 
@@ -167,7 +167,7 @@ Once connected, the typical aggregation workflow is:
 3. Optionally inspect `list_aggregation_bundles(...)`
 4. Read `ratatoskr://aggregations/recent` for recent bundle context
 
-See [MCP Server](../mcp_server.md) for full header and deployment guidance.
+See [MCP Server](../reference/mcp-server.md) for full header and deployment guidance.
 
 ## 7. Recovery Paths
 
@@ -183,6 +183,6 @@ If something goes wrong:
 
 - [CLI README](../../clients/cli/README.md)
 - [Mobile API Spec](../MOBILE_API_SPEC.md)
-- [MCP Server](../mcp_server.md)
+- [MCP Server](../reference/mcp-server.md)
 - [Troubleshooting](../TROUBLESHOOTING.md)
 - [Environment Variables](../environment_variables.md)

@@ -4,7 +4,7 @@ Understanding the principles and trade-offs behind Ratatoskr's architecture.
 
 **Audience:** Developers, Architects
 **Type:** Explanation
-**Related:** [Hexagonal Architecture](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md), [Architecture Overview](architecture-overview.md)
+**Related:** [Hexagonal Architecture](architecture-overview.md#layering-quick-reference), [Architecture Overview](architecture-overview.md)
 
 ---
 
@@ -173,7 +173,7 @@ See: [Summary Contract Design](summary-contract-design.md)
 - Add new interfaces (CLI runner, Mobile API, gRPC) without touching core
 - Framework independence (Telegram adapter can change without domain changes)
 
-See: [Hexagonal Architecture Quickstart](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md)
+See: [Hexagonal Architecture](architecture-overview.md#layering-quick-reference)
 
 ---
 
@@ -190,7 +190,7 @@ See: [Hexagonal Architecture Quickstart](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md
 - Parallel execution of independent agents (web search + content extraction)
 - Agent-specific prompt engineering (extraction optimized for markdown cleaning, summarization for JSON schema adherence)
 
-See: [Multi-Agent Architecture](../multi_agent_architecture.md)
+See: [Multi-Agent Architecture](multi-agent-architecture.md)
 
 ---
 
@@ -564,8 +564,8 @@ content = content.strip("```")
 
 - [Summary Contract Design](summary-contract-design.md) - Why strict JSON schema
 - [Observability Strategy](observability-strategy.md) - Logging and debugging approach
-- [Hexagonal Architecture Quickstart](../HEXAGONAL_ARCHITECTURE_QUICKSTART.md) - Ports and Adapters pattern
-- [Multi-Agent Architecture](../multi_agent_architecture.md) - LLM pipeline design
+- [Hexagonal Architecture](architecture-overview.md#layering-quick-reference) - Ports and Adapters pattern
+- [Multi-Agent Architecture](multi-agent-architecture.md) - LLM pipeline design
 
 ---
 

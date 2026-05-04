@@ -330,7 +330,7 @@ Important auth semantics:
 - A rotated or revoked secret cannot be used for future `ratatoskr login` calls.
 - If access-token refresh fails because the refresh session was revoked or expired, run `ratatoskr login` again with an active secret.
 
-For a full onboarding flow, including hosted MCP usage, see [External Access Quickstart](../../docs/tutorials/external-access-quickstart.md).
+For a full onboarding flow, including hosted MCP usage, see [External Access Quickstart](../../docs/guides/external-access-quickstart.md).
 
 ## JSON Output
 

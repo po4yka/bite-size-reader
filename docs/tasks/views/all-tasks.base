@@ -1,0 +1,10 @@
+filters:
+  and:
+    - file.folder == "docs/tasks/issues"
+views:
+  - type: table
+    name: All tasks
+    columns: [id, title, status, area, priority, owner, paperclip, updated]
+    sort:
+      - column: updated
+        direction: desc

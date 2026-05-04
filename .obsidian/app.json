@@ -1,1 +1,7 @@
-{"useMarkdownLinks": true, "newFileLocation": "folder", "newFileFolderPath": "docs/tasks", "defaultViewMode": "source", "promptDelete": true}
+{
+  "useMarkdownLinks": true,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "docs/tasks",
+  "defaultViewMode": "source",
+  "promptDelete": true
+}

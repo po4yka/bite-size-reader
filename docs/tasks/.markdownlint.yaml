@@ -1,19 +1,4 @@
-# Inherits all global rules and disables MD022/MD024 for task files,
-# which use repeated section headers and inline headings by template design.
-MD013: false
-MD033: false
-MD041: false
-MD046:
-  style: "consistent"
-MD024: false
-MD025: false
-MD026:
-  punctuation: ".,;:"
-MD034: false
-MD040: false
-MD036: false
-MD060: false
-MD051: false
-MD012:
-  maximum: 2
-MD022: false
+# markdownlint config for docs/tasks/
+# Prose rules relaxed — task files use heading-heavy structure and long lines.
+MD013: false   # line length — long task titles and URLs
+MD033: false   # inline HTML — not used, but kept off for safety
