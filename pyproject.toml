@@ -166,7 +166,7 @@ browser_scraper = [
 
 # LLM-driven last-resort scraper (lazy-imported; only fires when all other providers fail)
 scraper_ai = [
-  "scrapegraphai>=1.0",
+  "scrapegraphai>=1.76.0",
 ]
 
 # Shared inference stack used by both api (semantic search) and ml (training/backfill)
@@ -228,7 +228,7 @@ push = [
 
 # Monitoring and observability
 monitoring = [
-  "prometheus_client>=0.21.0",
+  "prometheus_client>=0.25.0",
 ]
 
 # MCP (Model Context Protocol) server for AI agent integrations

@@ -25,7 +25,7 @@ anyio==4.13.0
     #   starlette
     #   taskiq
     #   watchfiles
-apify-fingerprint-datapoints==0.12.0
+apify-fingerprint-datapoints==0.13.0
     # via
     #   browserforge
     #   crawlee
@@ -54,16 +54,16 @@ browserforge==1.2.4
     # via
     #   crawlee
     #   ratatoskr
-build==1.4.2
+build==1.5.0
     # via chromadb
-cachetools==7.0.5
+cachetools==7.1.1
     # via crawlee
 catalogue==2.0.10
     # via
     #   spacy
     #   srsly
     #   thinc
-certifi==2026.2.25
+certifi==2026.4.22
     # via
     #   curl-cffi
     #   httpcore
@@ -82,14 +82,14 @@ charset-normalizer==3.4.7
     #   htmldate
     #   requests
     #   trafilatura
-chromadb==1.5.5
+chromadb==1.5.8
     # via ratatoskr
-click==8.3.1
+click==8.3.3
     # via
     #   browserforge
     #   typer
     #   uvicorn
-cloudpathlib==0.23.0
+cloudpathlib==0.24.0
     # via weasel
 colorama==0.4.6
     # via
@@ -107,7 +107,7 @@ confection==1.3.3
     #   weasel
 courlan==1.3.2
     # via trafilatura
-crawlee==1.6.1
+crawlee==1.6.3
     # via ratatoskr
 cryptography==47.0.0
     # via pyjwt
@@ -140,9 +140,9 @@ docstring-parser==0.18.0
     # via instructor
 durationpy==0.10
     # via kubernetes
-fastapi==0.135.3
+fastapi==0.136.1
     # via ratatoskr
-filelock==3.25.2
+filelock==3.29.0
     # via
     #   huggingface-hub
     #   tldextract
@@ -155,13 +155,13 @@ frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-fsspec==2026.3.0
+fsspec==2026.4.0
     # via
     #   huggingface-hub
     #   torch
 googleapis-common-protos==1.74.0
     # via opentelemetry-exporter-otlp-proto-grpc
-greenlet==3.3.2
+greenlet==3.5.0
     # via
     #   playwright
     #   sqlalchemy
@@ -197,14 +197,14 @@ httpx==0.28.1
     #   weasel
 httpx-sse==0.4.3
     # via mcp
-huggingface-hub==1.9.0
+huggingface-hub==1.13.0
     # via
     #   sentence-transformers
     #   tokenizers
     #   transformers
 hyperframe==6.1.0
     # via h2
-idna==3.11
+idna==3.13
     # via
     #   anyio
     #   httpx
@@ -215,7 +215,7 @@ impit==0.12.0
     # via crawlee
 importlib-metadata==8.7.1
     # via opentelemetry-api
-importlib-resources==6.5.2
+importlib-resources==7.1.0
     # via chromadb
 instructor==1.15.1
     # via ratatoskr
@@ -230,7 +230,7 @@ jiter==0.13.0
     #   openai
 joblib==1.5.3
     # via scikit-learn
-json-repair==0.58.7
+json-repair==0.59.5
     # via ratatoskr
 jsonschema==4.26.0
     # via
@@ -268,7 +268,7 @@ mdurl==0.1.2
     # via markdown-it-py
 mmh3==5.2.1
     # via chromadb
-more-itertools==11.0.1
+more-itertools==11.0.2
     # via crawlee
 mpmath==1.3.0
     # via sympy
@@ -335,7 +335,7 @@ nvidia-nvtx==13.0.85 ; sys_platform == 'linux'
     # via cuda-toolkit
 oauthlib==3.3.1
     # via requests-oauthlib
-onnxruntime==1.24.4
+onnxruntime==1.25.1
     # via
     #   chromadb
     #   ratatoskr
@@ -417,7 +417,7 @@ orjson==3.11.8
     #   scrapling
 overrides==7.7.0
     # via chromadb
-packaging==26.0
+packaging==26.2
     # via
     #   build
     #   huggingface-hub
@@ -428,11 +428,11 @@ packaging==26.0
     #   thinc
     #   transformers
     #   weasel
-peewee==4.0.4
+peewee==4.0.5
     # via ratatoskr
 pillow==12.2.0
     # via weasyprint
-playwright==1.58.0
+playwright==1.59.0
     # via
     #   crawlee
     #   ratatoskr
@@ -463,7 +463,7 @@ pycparser==3.0 ; implementation_name != 'PyPy'
     # via cffi
 pycron==3.2.0
     # via taskiq
-pydantic==2.12.5
+pydantic==2.13.3
     # via
     #   chromadb
     #   crawlee
@@ -477,11 +477,11 @@ pydantic==2.12.5
     #   taskiq
     #   thinc
     #   weasel
-pydantic-core==2.41.5
+pydantic-core==2.46.3
     # via
     #   instructor
     #   pydantic
-pydantic-settings==2.13.1
+pydantic-settings==2.14.0
     # via
     #   chromadb
     #   crawlee
@@ -514,11 +514,11 @@ python-dotenv==1.2.2
     # via
     #   pydantic-settings
     #   uvicorn
-python-multipart==0.0.26
+python-multipart==0.0.27
     # via
     #   mcp
     #   ratatoskr
-pytz==2026.1.post1
+pytz==2026.2
     # via dateparser
 pywin32==311 ; sys_platform == 'win32'
     # via mcp
@@ -538,7 +538,7 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-regex==2026.3.32
+regex==2026.4.4
     # via
     #   dateparser
     #   transformers
@@ -555,7 +555,7 @@ requests-file==3.0.1
     # via tldextract
 requests-oauthlib==2.0.0
     # via kubernetes
-rich==14.3.3
+rich==14.3.4
     # via
     #   chromadb
     #   curl-cffi
@@ -579,7 +579,7 @@ scipy==1.17.1
     #   sentence-transformers
 scrapling==0.4.7
     # via ratatoskr
-sentence-transformers==5.3.0
+sentence-transformers==5.4.1
     # via ratatoskr
 setuptools==81.0.0
     # via
@@ -593,7 +593,7 @@ six==1.17.0
     #   html5lib
     #   kubernetes
     #   python-dateutil
-smart-open==7.5.1
+smart-open==7.6.0
     # via weasel
 sniffio==1.3.1
     # via openai
@@ -614,7 +614,7 @@ srsly==2.5.3
     #   spacy
     #   thinc
     #   weasel
-sse-starlette==3.3.4
+sse-starlette==3.4.1
     # via mcp
 starlette==1.0.0
     # via
@@ -623,9 +623,7 @@ starlette==1.0.0
     #   ratatoskr
     #   sse-starlette
 sympy==1.14.0
-    # via
-    #   onnxruntime
-    #   torch
+    # via torch
 taskiq==0.12.2
     # via
     #   ratatoskr
@@ -674,13 +672,13 @@ tqdm==4.67.3
     #   transformers
 trafilatura==2.0.0
     # via ratatoskr
-transformers==5.5.0
+transformers==5.7.0
     # via
     #   ratatoskr
     #   sentence-transformers
 triton==3.6.0 ; sys_platform == 'linux'
     # via torch
-typer==0.24.1
+typer==0.25.1
     # via
     #   chromadb
     #   huggingface-hub
@@ -717,7 +715,7 @@ typing-inspection==0.4.2
     #   mcp
     #   pydantic
     #   pydantic-settings
-tzdata==2026.1 ; sys_platform == 'win32'
+tzdata==2026.2 ; sys_platform == 'win32'
     # via tzlocal
 tzlocal==5.3.1
     # via dateparser
@@ -728,7 +726,7 @@ urllib3==2.6.3
     #   kubernetes
     #   requests
     #   trafilatura
-uvicorn==0.42.0
+uvicorn==0.46.0
     # via
     #   chromadb
     #   mcp
@@ -777,7 +775,7 @@ youtube-transcript-api==1.2.4
     # via ratatoskr
 yt-dlp==2026.3.17
     # via ratatoskr
-zipp==3.23.0
+zipp==3.23.1
     # via importlib-metadata
 zopfli==0.4.1
     # via fonttools
