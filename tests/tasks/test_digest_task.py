@@ -25,6 +25,7 @@ def _stub_taskiq(monkeypatch):
             monkeypatch.setitem(sys.modules, mod_name, types.ModuleType(mod_name))
 
     taskiq_mod = sys.modules["taskiq"]
+    taskiq_mod.AsyncBroker = object  # base class used in broker.py type annotation
     taskiq_mod.TaskiqDepends = lambda fn, **_kw: None
     taskiq_mod.TaskiqMiddleware = object
     taskiq_mod.InMemoryBroker = MagicMock
