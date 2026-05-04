@@ -6,12 +6,16 @@ enabling polymorphic usage across OpenRouter, OpenAI, and Anthropic providers.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
+
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from app.adapter_models.llm.llm_models import LLMCallResult
+    from app.adapter_models.llm.llm_models import LLMCallResult, StructuredLLMResult
+
+_ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
 @runtime_checkable
@@ -71,6 +75,45 @@ class LLMClientProtocol(Protocol):
         Raises:
             RuntimeError: If the client has been closed.
             ValidationError: If the request parameters are invalid.
+        """
+        ...
+
+    async def chat_structured(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        response_model: type[_ModelT],
+        max_retries: int = 3,
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+        request_id: int | None = None,
+        model_override: str | None = None,
+        fallback_models_override: tuple[str, ...] | list[str] | None = None,
+    ) -> StructuredLLMResult[_ModelT]:
+        """Send a chat completion and parse the response into a Pydantic model.
+
+        Uses Instructor to validate the LLM's JSON output against response_model,
+        automatically reask-ing the model (up to max_retries times) when the output
+        fails validation. Replaces manual JSON repair + contract validation loops.
+
+        Does NOT support streaming; use chat() with on_stream_delta for streamed output.
+
+        Args:
+            messages: List of message dictionaries with 'role' and 'content' keys.
+            response_model: Pydantic model class to validate the response against.
+            max_retries: Reask attempts on validation failure (default 3).
+            temperature: Sampling temperature.
+            max_tokens: Maximum tokens to generate.
+            request_id: Optional internal request ID for tracing.
+            model_override: Optional model name override.
+            fallback_models_override: Optional ordered list of models to try.
+
+        Returns:
+            StructuredLLMResult with the validated model instance and usage stats.
+
+        Raises:
+            instructor.exceptions.InstructorRetryException: After max_retries failures.
+            RuntimeError: If the client has been closed or all models are exhausted.
         """
         ...
 

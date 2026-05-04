@@ -360,6 +360,14 @@ class OpenRouterClient:
 
     async def aclose(self) -> None:
         """Close pooled HTTP clients associated with the current loop/client key."""
+        oai = getattr(self, "_oai_client", None)
+        if oai is not None:
+            try:
+                await oai.close()
+            except Exception:
+                pass
+            self._oai_client = None
+            self._instructor_async_client = None
         await BaseLLMClient.aclose(cast("BaseLLMClient", self))
 
     async def _ensure_client(self) -> httpx.AsyncClient:
@@ -476,6 +484,99 @@ class OpenRouterClient:
             on_stream_delta=on_stream_delta,
             per_model_timeout_sec=per_model_timeout_sec,
         )
+
+    async def chat_structured(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        response_model: type[Any],
+        max_retries: int = 3,
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+        request_id: int | None = None,
+        model_override: str | None = None,
+        fallback_models_override: tuple[str, ...] | list[str] | None = None,
+    ) -> Any:
+        """Structured chat completion via Instructor (Pydantic-validated, auto-reask)."""
+        import time
+
+        import instructor
+        from openai import AsyncOpenAI
+
+        from app.adapter_models.llm.llm_models import StructuredLLMResult
+
+        if self._closed:
+            msg = "Client has been closed"
+            raise RuntimeError(msg)
+        if not messages:
+            msg = "Messages cannot be empty"
+            raise ValueError(msg)
+
+        # Lazy-init the Instructor-wrapped AsyncOpenAI client.
+        if getattr(self, "_instructor_async_client", None) is None:
+            timeout_sec = float(self._timeout.read or 120)
+            self._oai_client = AsyncOpenAI(
+                base_url=self._base_url,
+                api_key=self._api_key,
+                timeout=timeout_sec,
+            )
+            self._instructor_async_client = instructor.from_openai(
+                self._oai_client,
+                mode=instructor.Mode.JSON,
+            )
+
+        primary_model = model_override or self._model
+        models_to_try = (
+            list(fallback_models_override)
+            if fallback_models_override
+            else [primary_model] + [m for m in self._fallback_models if m != primary_model]
+        )
+
+        last_exc: Exception | None = None
+        for model in models_to_try:
+            started = time.perf_counter()
+            try:
+                (
+                    parsed,
+                    completion,
+                ) = await self._instructor_async_client.chat.completions.create_with_completion(
+                    model=model,
+                    messages=messages,
+                    response_model=response_model,
+                    max_retries=max_retries,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                latency = int((time.perf_counter() - started) * 1000)
+                usage = getattr(completion, "usage", None)
+                logger.debug(
+                    "chat_structured_success",
+                    extra={
+                        "model": model,
+                        "latency_ms": latency,
+                        "request_id": request_id,
+                        "response_model": response_model.__name__,
+                    },
+                )
+                return StructuredLLMResult(
+                    parsed=parsed,
+                    tokens_prompt=getattr(usage, "prompt_tokens", None),
+                    tokens_completion=getattr(usage, "completion_tokens", None),
+                    latency_ms=latency,
+                    model_used=model,
+                )
+            except Exception as exc:
+                last_exc = exc
+                logger.warning(
+                    "chat_structured_model_failed",
+                    extra={
+                        "model": model,
+                        "error": str(exc)[:200],
+                        "request_id": request_id,
+                    },
+                )
+
+        raise last_exc or RuntimeError("All models exhausted in chat_structured")
 
     async def get_models(self) -> dict[str, Any]:
         """Get available models from OpenRouter API."""

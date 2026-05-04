@@ -149,6 +149,27 @@ class AnthropicClient:
         self._closed = True
         self._client = None
 
+    async def chat_structured(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        response_model: type[Any],
+        max_retries: int = 3,
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+        request_id: int | None = None,
+        model_override: str | None = None,
+        fallback_models_override: tuple[str, ...] | list[str] | None = None,
+    ) -> Any:
+        # Instructor's Anthropic integration requires the anthropic SDK.
+        # Install it and replace this stub with instructor.from_anthropic(...)
+        # when Anthropic provider support is needed (v2 follow-up).
+        msg = (
+            f"chat_structured is not yet implemented for the Anthropic provider "
+            f"(request_id={request_id}). Use the OpenRouter or OpenAI provider instead."
+        )
+        raise NotImplementedError(msg)
+
     async def _ensure_client(self) -> httpx.AsyncClient:
         """Lazily construct or reuse a pooled AsyncClient instance."""
         return await BaseLLMClient._ensure_client(self)  # type: ignore[arg-type]

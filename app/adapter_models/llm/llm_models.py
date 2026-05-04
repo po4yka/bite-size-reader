@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
@@ -99,4 +99,21 @@ class ChatRequest(BaseModel):
     )
 
 
-__all__ = ["ChatRequest", "LLMCallResult"]
+_T = TypeVar("_T")
+
+
+class StructuredLLMResult(BaseModel, Generic[_T]):
+    """Result of a Pydantic-validated structured LLM call (via Instructor)."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    parsed: _T
+    tokens_prompt: int | None = None
+    tokens_completion: int | None = None
+    cost_usd: float | None = None
+    latency_ms: int | None = None
+    retry_count: int = 0
+    model_used: str | None = None
+
+
+__all__ = ["ChatRequest", "LLMCallResult", "StructuredLLMResult"]
