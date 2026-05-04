@@ -1,5 +1,5 @@
-import pytest
 import httpx
+import pytest
 
 from app.adapters.external.firecrawl.client import FirecrawlClient, FirecrawlClientConfig
 

@@ -32,12 +32,12 @@ from .integrations import (
 )
 from .llm import AnthropicConfig, ModelRoutingConfig, OllamaConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
+from .otel import OtelConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
 from .rss import RSSConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
-from .otel import OtelConfig
 from .signal_ingestion import SignalIngestionConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig
 from .tts import ElevenLabsConfig

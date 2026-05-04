@@ -1,6 +1,6 @@
+import httpx
 import pytest
 import pytest_asyncio
-import httpx
 
 from app.adapters.external.firecrawl.client import FirecrawlClient, FirecrawlClientConfig
 
