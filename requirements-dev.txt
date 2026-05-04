@@ -2,10 +2,16 @@
 #    uv export --only-group dev --no-hashes --format requirements-txt -p 3.13 -o requirements-dev.txt
 annotated-types==0.7.0
     # via pydantic
+anyio==4.13.0
+    # via httpx
 attrs==26.1.0
     # via
     #   jsonschema
     #   referencing
+certifi==2026.2.25
+    # via
+    #   httpcore
+    #   httpx
 cfgv==3.5.0
     # via pre-commit
 colorama==0.4.6 ; sys_platform == 'win32'
@@ -17,9 +23,19 @@ filelock==3.25.2
     # via
     #   python-discovery
     #   virtualenv
+h11==0.16.0
+    # via httpcore
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via respx
 hypothesis==6.151.10
 identify==2.6.18
     # via pre-commit
+idna==3.11
+    # via
+    #   anyio
+    #   httpx
 iniconfig==2.3.0
     # via pytest
 isort==8.0.1
@@ -95,6 +111,7 @@ referencing==0.37.0
     #   jsonschema-path
     #   jsonschema-specifications
     #   openapi-schema-validator
+respx==0.23.1
 rfc3339-validator==0.1.4
     # via openapi-schema-validator
 rpds-py==0.30.0

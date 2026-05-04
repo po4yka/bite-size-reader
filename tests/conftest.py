@@ -270,3 +270,13 @@ def make_test_app_config(
     }
     defaults.update(overrides)
     return AppConfig(**defaults)
+
+
+import respx as _respx
+
+
+@pytest.fixture
+def respx_mock():
+    """Per-test respx router; any unmocked httpx call raises immediately."""
+    with _respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
+        yield router

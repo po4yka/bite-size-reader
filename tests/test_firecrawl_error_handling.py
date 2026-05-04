@@ -1,599 +1,198 @@
-import unittest
-from typing import Any, cast
+import pytest
+import pytest_asyncio
+import httpx
 
-import app.adapters.external.firecrawl.client as _fc_client_module
 from app.adapters.external.firecrawl.client import FirecrawlClient, FirecrawlClientConfig
 
-fc_httpx = _fc_client_module.httpx
-
-
-class _SeqAsyncClient:
-    def __init__(self, handler):
-        self.handler = handler
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    async def post(self, url, headers=None, json=None):
-        return await self.handler(url, headers, json)
-
-
-class _Resp:
-    def __init__(self, status_code, data):
-        self.status_code = status_code
-        self._data = data
-        self.headers = {}
-
-    def json(self):
-        return self._data
-
-
-class TestFirecrawlErrorHandling(unittest.IsolatedAsyncioTestCase):
-    """Test Firecrawl error handling scenarios."""
-
-    async def test_firecrawl_200_with_error_in_response_body(self):
-        """Test that Firecrawl properly handles 200 status with error in response body."""
-
-        async def handler(url, headers, payload):
-            # Simulate Firecrawl returning 200 OK but with error in response body
-            return _Resp(
-                200,
-                {
-                    "error": "SCRAPE_ALL_ENGINES_FAILED",
-                    "markdown": None,
-                    "html": None,
-                    "metadata": None,
-                    "status_code": 200,
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates an error
-            assert result.status == "error"
-            assert result.http_status == 200
-            assert result.error_text == "SCRAPE_ALL_ENGINES_FAILED"
-            assert result.content_markdown is None
-            assert result.content_html is None
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_200_without_error_in_response_body(self):
-        """Test that Firecrawl properly handles 200 status without error in response body."""
-
-        async def handler(url, headers, payload):
-            # Simulate successful Firecrawl response
-            return _Resp(
-                200,
-                {
-                    "markdown": "# Test Content\n\nThis is a test.",
-                    "html": "<h1>Test Content</h1><p>This is a test.</p>",
-                    "metadata": {"title": "Test Page"},
-                    "links": [],
-                    "status_code": 200,
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates success
-            assert result.status == "ok"
-            assert result.http_status == 200
-            assert result.error_text is None
-            assert result.content_markdown == "# Test Content\n\nThis is a test."
-            assert result.content_html == "<h1>Test Content</h1><p>This is a test.</p>"
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_200_with_empty_error_field(self):
-        """Test that Firecrawl handles 200 status with empty error field (should be treated as success)."""
-
-        async def handler(url, headers, payload):
-            # Simulate Firecrawl returning 200 OK with empty error field
-            return _Resp(
-                200,
-                {
-                    "error": None,  # Empty error field
-                    "markdown": "# Test Content\n\nThis is a test.",
-                    "html": "<h1>Test Content</h1><p>This is a test.</p>",
-                    "metadata": {"title": "Test Page"},
-                    "status_code": 200,
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates success (empty error should be treated as success)
-            assert result.status == "ok"
-            assert result.http_status == 200
-            assert result.error_text is None
-            assert result.content_markdown == "# Test Content\n\nThis is a test."
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_200_with_empty_string_error(self):
-        """Test that Firecrawl handles 200 status with empty string error (should be treated as success)."""
-
-        async def handler(url, headers, payload):
-            # Simulate Firecrawl returning 200 OK with empty string error
-            return _Resp(
-                200,
-                {
-                    "error": "",  # Empty string error
-                    "markdown": "# Test Content\n\nThis is a test.",
-                    "html": "<h1>Test Content</h1><p>This is a test.</p>",
-                    "metadata": {"title": "Test Page"},
-                    "status_code": 200,
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates success (empty string error should be treated as success)
-            assert result.status == "ok"
-            assert result.http_status == 200
-            assert result.error_text is None
-            assert result.content_markdown == "# Test Content\n\nThis is a test."
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_200_with_whitespace_error(self):
-        """Test that Firecrawl handles 200 status with whitespace-only error (should be treated as success)."""
-
-        async def handler(url, headers, payload):
-            # Simulate Firecrawl returning 200 OK with whitespace-only error
-            return _Resp(
-                200,
-                {
-                    "error": "   \n\t  ",  # Whitespace-only error
-                    "markdown": "# Test Content\n\nThis is a test.",
-                    "html": "<h1>Test Content</h1><p>This is a test.</p>",
-                    "metadata": {"title": "Test Page"},
-                    "status_code": 200,
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates success (whitespace-only error should be treated as success)
-            assert result.status == "ok"
-            assert result.http_status == 200
-            assert result.error_text is None
-            assert result.content_markdown == "# Test Content\n\nThis is a test."
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_200_with_data_array_error(self):
-        """Test that Firecrawl handles 200 status with error in data array format."""
-
-        async def handler(url, headers, payload):
-            # Simulate Firecrawl returning 200 OK with error in data array
-            return _Resp(
-                200,
-                {
-                    "success": True,
-                    "data": [
-                        {
-                            "error": "SCRAPE_ALL_ENGINES_FAILED",
-                            "markdown": None,
-                            "html": None,
-                            "metadata": None,
-                        }
-                    ],
-                    "status_code": 200,
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates an error
-            assert result.status == "error"
-            assert result.http_status == 200
-            assert result.error_text == "SCRAPE_ALL_ENGINES_FAILED"
-            assert result.content_markdown is None
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_200_with_data_array_success(self):
-        """Test that Firecrawl handles 200 status with success in data array format."""
-
-        async def handler(url, headers, payload):
-            # Simulate Firecrawl returning 200 OK with success in data array
-            return _Resp(
-                200,
-                {
-                    "success": True,
-                    "data": [
-                        {
-                            "markdown": "# Test Content\n\nThis is a test.",
-                            "html": "<h1>Test Content</h1><p>This is a test.</p>",
-                            "metadata": {"title": "Test Page"},
-                            "links": [],
-                        }
-                    ],
-                    "status_code": 200,
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates success
-            assert result.status == "ok"
-            assert result.http_status == 200
-            assert result.error_text is None
-            assert result.content_markdown == "# Test Content\n\nThis is a test."
-            assert result.content_html == "<h1>Test Content</h1><p>This is a test.</p>"
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_200_with_data_object_success(self):
-        """Test that Firecrawl handles 200 status with success in data object format."""
-
-        async def handler(url, headers, payload):
-            # Simulate Firecrawl returning 200 OK with success in data object
-            return _Resp(
-                200,
-                {
-                    "success": True,
-                    "data": {
-                        "markdown": "# Test Content\n\nThis is a test.",
-                        "html": "<h1>Test Content</h1><p>This is a test.</p>",
-                        "metadata": {"title": "Test Page"},
-                        "links": [],
-                    },
-                    "status_code": 200,
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates success
-            assert result.status == "ok"
-            assert result.http_status == 200
-            assert result.error_text is None
-            assert result.content_markdown == "# Test Content\n\nThis is a test."
-            assert result.content_html == "<h1>Test Content</h1><p>This is a test.</p>"
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_200_with_data_object_error(self):
-        """Test that Firecrawl handles 200 status with error in data object format."""
-
-        async def handler(url, headers, payload):
-            # Simulate Firecrawl returning 200 OK with error in data object
-            return _Resp(
-                200,
-                {
-                    "success": True,
-                    "data": {
-                        "error": "SCRAPE_ALL_ENGINES_FAILED",
-                        "markdown": None,
-                        "html": None,
-                        "metadata": None,
-                    },
-                    "status_code": 200,
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates an error
-            assert result.status == "error"
-            assert result.http_status == 200
-            assert result.error_text == "SCRAPE_ALL_ENGINES_FAILED"
-            assert result.content_markdown is None
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_401_unauthorized(self):
-        """Test that Firecrawl handles 401 Unauthorized properly."""
-
-        async def handler(url, headers, payload):
-            return _Resp(
-                401,
-                {
-                    "error": "Unauthorized",
-                    "message": "Invalid API key",
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates an error
-            assert result.status == "error"
-            assert result.http_status == 401
-            assert "Unauthorized" in result.error_text
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_402_payment_required(self):
-        """Test that Firecrawl handles 402 Payment Required properly."""
-
-        async def handler(url, headers, payload):
-            return _Resp(
-                402,
-                {
-                    "error": "Payment Required",
-                    "message": "Insufficient credits",
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates an error
-            assert result.status == "error"
-            assert result.http_status == 402
-            assert "Payment Required" in result.error_text
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_404_not_found(self):
-        """Test that Firecrawl handles 404 Not Found properly."""
-
-        async def handler(url, headers, payload):
-            return _Resp(
-                404,
-                {
-                    "error": "Not Found",
-                    "message": "Resource not found",
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates an error
-            assert result.status == "error"
-            assert result.http_status == 404
-            assert "Not Found" in result.error_text
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-    async def test_firecrawl_429_rate_limit(self):
-        """Test that Firecrawl handles 429 Rate Limit properly."""
-
-        async def handler(url, headers, payload):
-            return _Resp(
-                429,
-                {
-                    "error": "Rate Limit Exceeded",
-                    "message": "Too many requests",
-                    "retry_after": 60,
-                },
-            )
-
-        original = fc_httpx.AsyncClient
-        try:
-
-            def _make_fc_client(*args, **kwargs):
-                return _SeqAsyncClient(handler)
-
-            fc_httpx.AsyncClient = cast("Any", _make_fc_client)
-            client = FirecrawlClient(
-                api_key="fc-test_key",
-                config=FirecrawlClientConfig(
-                    timeout_sec=30,
-                    max_retries=0,
-                    debug_payloads=True,
-                ),
-            )
-
-            result = await client.scrape_markdown("https://example.com")
-
-            # Verify that the result indicates an error
-            assert result.status == "error"
-            assert result.http_status == 429
-            assert "Rate Limit" in result.error_text
-
-        finally:
-            fc_httpx.AsyncClient = cast("Any", original)
-
-
-if __name__ == "__main__":
-    unittest.main()
+FC_SCRAPE_URL = "https://api.firecrawl.dev/v2/scrape"
+
+
+@pytest_asyncio.fixture
+async def fc_client():
+    client = FirecrawlClient(
+        api_key="fc-test_key",
+        config=FirecrawlClientConfig(timeout_sec=30, max_retries=0, debug_payloads=True),
+    )
+    yield client
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_200_with_error_in_response_body(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        200,
+        json={"error": "SCRAPE_ALL_ENGINES_FAILED", "markdown": None, "html": None,
+              "metadata": None, "status_code": 200},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "error"
+    assert result.http_status == 200
+    assert result.error_text == "SCRAPE_ALL_ENGINES_FAILED"
+    assert result.content_markdown is None
+    assert result.content_html is None
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_200_without_error_in_response_body(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        200,
+        json={"markdown": "# Test Content\n\nThis is a test.",
+              "html": "<h1>Test Content</h1><p>This is a test.</p>",
+              "metadata": {"title": "Test Page"}, "links": [], "status_code": 200},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "ok"
+    assert result.http_status == 200
+    assert result.error_text is None
+    assert result.content_markdown == "# Test Content\n\nThis is a test."
+    assert result.content_html == "<h1>Test Content</h1><p>This is a test.</p>"
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_200_with_empty_error_field(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        200,
+        json={"error": None, "markdown": "# Test Content\n\nThis is a test.",
+              "html": "<h1>Test Content</h1><p>This is a test.</p>",
+              "metadata": {"title": "Test Page"}, "status_code": 200},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "ok"
+    assert result.http_status == 200
+    assert result.error_text is None
+    assert result.content_markdown == "# Test Content\n\nThis is a test."
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_200_with_empty_string_error(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        200,
+        json={"error": "", "markdown": "# Test Content\n\nThis is a test.",
+              "html": "<h1>Test Content</h1><p>This is a test.</p>",
+              "metadata": {"title": "Test Page"}, "status_code": 200},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "ok"
+    assert result.http_status == 200
+    assert result.error_text is None
+    assert result.content_markdown == "# Test Content\n\nThis is a test."
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_200_with_whitespace_error(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        200,
+        json={"error": "   \n\t  ", "markdown": "# Test Content\n\nThis is a test.",
+              "html": "<h1>Test Content</h1><p>This is a test.</p>",
+              "metadata": {"title": "Test Page"}, "status_code": 200},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "ok"
+    assert result.http_status == 200
+    assert result.error_text is None
+    assert result.content_markdown == "# Test Content\n\nThis is a test."
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_200_with_data_array_error(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        200,
+        json={"success": True, "data": [{"error": "SCRAPE_ALL_ENGINES_FAILED",
+              "markdown": None, "html": None, "metadata": None}], "status_code": 200},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "error"
+    assert result.http_status == 200
+    assert result.error_text == "SCRAPE_ALL_ENGINES_FAILED"
+    assert result.content_markdown is None
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_200_with_data_array_success(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        200,
+        json={"success": True, "data": [{"markdown": "# Test Content\n\nThis is a test.",
+              "html": "<h1>Test Content</h1><p>This is a test.</p>",
+              "metadata": {"title": "Test Page"}, "links": []}], "status_code": 200},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "ok"
+    assert result.http_status == 200
+    assert result.error_text is None
+    assert result.content_markdown == "# Test Content\n\nThis is a test."
+    assert result.content_html == "<h1>Test Content</h1><p>This is a test.</p>"
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_200_with_data_object_success(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        200,
+        json={"success": True, "data": {"markdown": "# Test Content\n\nThis is a test.",
+              "html": "<h1>Test Content</h1><p>This is a test.</p>",
+              "metadata": {"title": "Test Page"}, "links": []}, "status_code": 200},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "ok"
+    assert result.http_status == 200
+    assert result.error_text is None
+    assert result.content_markdown == "# Test Content\n\nThis is a test."
+    assert result.content_html == "<h1>Test Content</h1><p>This is a test.</p>"
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_200_with_data_object_error(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        200,
+        json={"success": True, "data": {"error": "SCRAPE_ALL_ENGINES_FAILED",
+              "markdown": None, "html": None, "metadata": None}, "status_code": 200},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "error"
+    assert result.http_status == 200
+    assert result.error_text == "SCRAPE_ALL_ENGINES_FAILED"
+    assert result.content_markdown is None
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_401_unauthorized(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        401, json={"error": "Unauthorized", "message": "Invalid API key"},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "error"
+    assert result.http_status == 401
+    assert "Unauthorized" in result.error_text
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_402_payment_required(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        402, json={"error": "Payment Required", "message": "Insufficient credits"},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "error"
+    assert result.http_status == 402
+    assert "Payment Required" in result.error_text
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_404_not_found(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        404, json={"error": "Not Found", "message": "Resource not found"},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "error"
+    assert result.http_status == 404
+    assert "Not Found" in result.error_text
+
+
+@pytest.mark.asyncio
+async def test_firecrawl_429_rate_limit(respx_mock, fc_client):
+    respx_mock.post(FC_SCRAPE_URL).mock(return_value=httpx.Response(
+        429,
+        json={"error": "Rate Limit Exceeded", "message": "Too many requests", "retry_after": 60},
+    ))
+    result = await fc_client.scrape_markdown("https://example.com")
+    assert result.status == "error"
+    assert result.http_status == 429
+    assert "Rate Limit" in result.error_text
