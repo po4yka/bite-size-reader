@@ -1,9 +1,15 @@
-"""Schema migration helpers for DatabaseSessionManager.
+"""Startup JSON coercion helpers for DatabaseSessionManager.
 
-Column additions are now handled by versioned migration files in
-``app/cli/migrations/`` (see 005_add_schema_columns.py).  This module
-retains only the idempotent JSON coercion logic that must run on every
-startup to fix malformed data.
+This module handles only idempotent JSON coercion that must run on every
+startup to fix malformed data in existing rows.  It is NOT a schema migration
+system.
+
+Schema migrations (column additions, table creation, index changes) are owned
+exclusively by Alembic (``app/db/alembic/``).  Run ``alembic upgrade head``
+(or ``python -m app.cli.migrate_db``) to apply schema changes.
+
+The legacy hand-written scripts in ``app/cli/migrations/`` are deprecated and
+must not be run; they are retained for historical reference only.
 """
 
 from __future__ import annotations
@@ -22,8 +28,8 @@ if TYPE_CHECKING:
 class SchemaMigrator:
     """Idempotent JSON coercion for database columns.
 
-    Column additions that previously lived here have been moved to
-    ``app/cli/migrations/005_add_schema_columns.py``.
+    Handles only startup data-fixup (malformed JSON values).  Schema changes
+    (DDL) are exclusively managed by Alembic (``app/db/alembic/``).
     """
 
     def __init__(self, database: peewee.SqliteDatabase, logger: logging.Logger) -> None:
@@ -33,8 +39,9 @@ class SchemaMigrator:
     def ensure_schema_compatibility(self) -> None:
         """Run idempotent JSON coercion on startup.
 
-        Column additions are no longer performed here -- they are handled by
-        the versioned migration runner (see ``005_add_schema_columns.py``).
+        This method only fixes malformed JSON values in existing rows.
+        Schema changes (column additions, index creation) are handled by
+        Alembic (``app/db/alembic/``), not by this class.
         """
         self._coerce_json_columns()
 

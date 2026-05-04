@@ -123,6 +123,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # The scheduler emits tasks; the worker consumes and executes them.
 # Only one scheduler instance must run per deployment.
 CMD ["sh", "-c", "\
+  python -m app.cli.migrate_db \"${DB_PATH:-/data/ratatoskr.db}\" && \
   taskiq worker app.tasks.broker:broker --fs-discover --workers ${TASKIQ_WORKER_CONCURRENCY:-4} & WORKER_PID=$! ; \
   taskiq scheduler app.tasks.scheduler:scheduler --skip-first-run & SCHED_PID=$! ; \
   python -m bot ; STATUS=$? ; \

@@ -293,6 +293,7 @@ markers = [
     "benchmark: marks performance benchmark tests",
     "contracts: marks API and schema contract consistency tests",
 ]
+asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]

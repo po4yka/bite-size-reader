@@ -31,10 +31,10 @@ export default defineConfig({
       include: ["src/**/*.{ts,tsx}"],
       exclude: ["src/**/*.test.{ts,tsx}", "src/testing/**", "src/api/generated.ts", "src/vite-env.d.ts", "src/telegram.d.ts"],
       thresholds: {
-        statements: 8,
-        branches: 5,
-        functions: 5,
-        lines: 8
+        statements: 20,
+        branches: 21,
+        functions: 11,
+        lines: 18
       }
     },
     projects: [{

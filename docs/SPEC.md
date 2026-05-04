@@ -466,7 +466,7 @@ sequenceDiagram
     llm_cost_usd
   ```
 
-  Migration `app/cli/migrations/015_add_signal_sources.py` backfills RSS and Telegram channel data into these generic tables without dropping legacy tables. Existing bot/API routes continue to read legacy RSS/channel tables until source worker and API integrations are completed. Deterministic pre-LLM signal scoring requires Chroma-backed topic similarity and fails closed when Chroma is unavailable.
+  The corresponding Alembic revision backfills RSS and Telegram channel data into these generic tables without dropping legacy tables. Existing bot/API routes continue to read legacy RSS/channel tables until source worker and API integrations are completed. Deterministic pre-LLM signal scoring requires Chroma-backed topic similarity and fails closed when Chroma is unavailable.
 
 - **telegram_messages** *(full snapshot)*:
 
@@ -508,7 +508,7 @@ sequenceDiagram
   firecrawl_error_code     -- Firecrawl error code when present
   firecrawl_error_message  -- Firecrawl-provided error message
   firecrawl_details_json   -- Firecrawl error details array/object
-  raw_response_json        -- full Firecrawl payload; nulled by migration 006 after decomposition
+  raw_response_json        -- full Firecrawl payload; nulled by Alembic migration after decomposition
   latency_ms
   error_text
   ```
@@ -724,6 +724,31 @@ classDiagram
   Request "1" --> "0..*" SummaryEntity : mentions
   Request "1" --> "0..*" SummaryStat : quantifies
 ```
+
+---
+
+## Database migrations
+
+**Alembic** (`app/db/alembic/`) is the authoritative schema migration system.
+
+```bash
+# Apply all pending migrations
+alembic upgrade head
+# Equivalent convenience wrapper
+python -m app.cli.migrate_db
+```
+
+Alembic revision files live in `app/db/alembic/versions/`.  Each revision is
+auto-generated and tracks the full DDL history of the SQLite schema.
+
+The legacy hand-written scripts in `app/cli/migrations/` (15 scripts +
+`migration_runner.py`) are **deprecated**.  They must not be run against any
+database and are retained for historical reference only.  See
+`app/cli/migrations/_DEPRECATED.md` for details.
+
+`app/db/schema_migrator.py` is not a migration system — it performs only
+idempotent startup JSON coercion on existing rows (fixing malformed data) and
+runs automatically on every bot start via `DatabaseSessionManager`.
 
 ---
 
