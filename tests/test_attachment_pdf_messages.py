@@ -10,7 +10,6 @@ import pytest
 from app.adapters.attachment._attachment_llm import AttachmentLLMWorkflowService
 from app.adapters.attachment.image_extractor import ImageContent
 
-
 # ---------------------------------------------------------------------------
 # Minimal ImageContent stub
 # ---------------------------------------------------------------------------

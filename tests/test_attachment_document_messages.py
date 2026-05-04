@@ -8,9 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.adapters.attachment._attachment_content import AttachmentContentService, _MIME_TO_FORMAT
+from app.adapters.attachment._attachment_content import _MIME_TO_FORMAT, AttachmentContentService
 from app.adapters.attachment.markitdown_extractor import DocumentContent
-
 
 # ---------------------------------------------------------------------------
 # Context fixture (mirrors test_attachment_pdf_messages.py)

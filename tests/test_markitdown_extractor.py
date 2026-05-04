@@ -11,7 +11,6 @@ markitdown = pytest.importorskip("markitdown", reason="markitdown not installed"
 
 from app.adapters.attachment.markitdown_extractor import DocumentContent, MarkitdownExtractor
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

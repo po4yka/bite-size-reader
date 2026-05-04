@@ -5,8 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.cli import _runtime as cli_runtime
-from app.cli import summary as summary_cli
+from app.cli import _runtime as cli_runtime, summary as summary_cli
 
 
 def test_resolve_text_prefers_url_argument() -> None:

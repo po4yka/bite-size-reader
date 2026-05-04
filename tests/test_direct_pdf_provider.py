@@ -9,7 +9,6 @@ import pytest
 from app.adapters.content.scraper.direct_pdf_provider import DirectPDFProvider, _is_pdf_url
 from app.core.call_status import CallStatus
 
-
 # ---------------------------------------------------------------------------
 # _is_pdf_url helper
 # ---------------------------------------------------------------------------

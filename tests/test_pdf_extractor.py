@@ -13,7 +13,6 @@ import fitz
 
 from app.adapters.attachment.pdf_extractor import PDFContent, PDFExtractor
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
