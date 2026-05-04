@@ -259,9 +259,9 @@ class PDFExtractor:
 
             # Sparse pages take priority; figure pages (vector charts, embedded rasters on
             # text-rich pages) fill remaining slots up to max_vision_pages.
-            vision_pages = list(
-                dict.fromkeys(sparse_page_indices + figure_page_indices)
-            )[:max_vision_pages]
+            vision_pages = list(dict.fromkeys(sparse_page_indices + figure_page_indices))[
+                :max_vision_pages
+            ]
             figure_page_count = sum(1 for p in vision_pages if p in figure_page_indices)
 
             image_pages = PDFExtractor._render_sparse_pages(

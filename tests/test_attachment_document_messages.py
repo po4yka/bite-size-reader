@@ -28,7 +28,9 @@ def _make_context() -> MagicMock:
     ctx.cfg.openrouter.structured_output_mode = "json_schema"
     ctx.cfg.runtime.preferred_lang = "en"
     ctx.workflow.build_structured_response_format.side_effect = lambda mode=None: (
-        {"type": "json_object"} if mode == "json_object" else {"type": "json_schema", "json_schema": {}}
+        {"type": "json_object"}
+        if mode == "json_object"
+        else {"type": "json_schema", "json_schema": {}}
     )
     return ctx
 

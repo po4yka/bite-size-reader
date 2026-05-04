@@ -546,9 +546,7 @@ class AttachmentContentService:
     ) -> list[dict[str, Any]]:
         truncation_note = ""
         if doc_content.truncated:
-            truncation_note = (
-                f"\n\n[Document truncated to {_MAX_PDF_TEXT_CHARS} characters]"
-            )
+            truncation_note = f"\n\n[Document truncated to {_MAX_PDF_TEXT_CHARS} characters]"
 
         user_content = (
             f"Summarize the following {doc_content.file_format.upper()} document to the specified "

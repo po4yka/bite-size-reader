@@ -154,9 +154,7 @@ class AttachmentProcessor:
                 await self.response_formatter.safe_reply(message, size_error)
                 return
 
-            type_label = {"image": "image", "document": "document"}.get(
-                file_type, "PDF document"
-            )
+            type_label = {"image": "image", "document": "document"}.get(file_type, "PDF document")
             current_status_text = f"📥 <b>Processing {type_label}...</b>"
             progress_msg_id = await self.response_formatter.safe_reply_with_id(
                 message,

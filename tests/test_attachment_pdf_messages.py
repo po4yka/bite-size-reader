@@ -40,7 +40,9 @@ def _make_context(vision_model: str = "qwen/qwen3-vl-32b-instruct") -> MagicMock
     ctx.cfg.openrouter.top_p = 0.9
     ctx.cfg.openrouter.structured_output_mode = "json_schema"
     ctx.workflow.build_structured_response_format.side_effect = lambda mode=None: (
-        {"type": "json_object"} if mode == "json_object" else {"type": "json_schema", "json_schema": {}}
+        {"type": "json_object"}
+        if mode == "json_object"
+        else {"type": "json_schema", "json_schema": {}}
     )
     return ctx
 

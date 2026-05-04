@@ -272,11 +272,7 @@ class MultiSourceAggregationHandler:
             "• Each key claim is traceable to one or more source items through stored provenance."
         )
         sig = aggregation.relationship_signal
-        if (
-            sig is not None
-            and sig.confidence >= 0.5
-            and sig.relationship_type != "unrelated"
-        ):
+        if sig is not None and sig.confidence >= 0.5 and sig.relationship_type != "unrelated":
             parts.append(
                 "• Relationship signal: "
                 f"{html.escape(sig.relationship_type)} "

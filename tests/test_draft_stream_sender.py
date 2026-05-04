@@ -136,7 +136,9 @@ async def test_circuit_breaker_half_open_after_timeout(monkeypatch: pytest.Monke
     telegram_client = SimpleNamespace(client=SimpleNamespace(invoke=AsyncMock()))
     sender = DraftStreamSender(
         telegram_client=telegram_client,
-        settings=DraftStreamSettings(enabled=True, min_interval_ms=0, min_delta_chars=1, max_chars=256),
+        settings=DraftStreamSettings(
+            enabled=True, min_interval_ms=0, min_delta_chars=1, max_chars=256
+        ),
     )
     # Pre-set open circuit as if it tripped at t=0 (400s ago)
     sender._transport_disabled = True
@@ -153,7 +155,9 @@ async def test_circuit_breaker_half_open_after_timeout(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
-async def test_circuit_breaker_reopens_on_half_open_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_circuit_breaker_reopens_on_half_open_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Circuit re-opens with a fresh timestamp when the half-open probe also fails."""
     import app.adapters.telegram.draft_stream_sender as module
 
@@ -162,7 +166,9 @@ async def test_circuit_breaker_reopens_on_half_open_failure(monkeypatch: pytest.
     telegram_client = SimpleNamespace(client=SimpleNamespace(invoke=AsyncMock()))
     sender = DraftStreamSender(
         telegram_client=telegram_client,
-        settings=DraftStreamSettings(enabled=True, min_interval_ms=0, min_delta_chars=1, max_chars=256),
+        settings=DraftStreamSettings(
+            enabled=True, min_interval_ms=0, min_delta_chars=1, max_chars=256
+        ),
     )
     sender._transport_disabled = True
     sender._transport_disabled_since = 0.0
