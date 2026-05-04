@@ -512,4 +512,6 @@ updated: YYYY-MM-DD
 
 Lifecycle: create via Templater template → transitions update `status:` + `#status/*` tag → delete file on close (git history is the audit trail). Do NOT add task lines to `active.md`, `backlog.md`, or `blocked.md` — those are query-only views.
 
+**AI assistants must delete the issue file after implementing a task.** If the task added new docs or subsystems, also update the relevant CLAUDE.md entries and commit both changes together.
+
 Invoke the `repo-task-board` skill when the user mentions: roadmap, TODO, backlog, Kanban, task board, sprint, blocked work, or agent-ready work.
