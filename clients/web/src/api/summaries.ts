@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import { getApiSession } from "./session";
 import type { PaginationInfo, SummaryCompact, SummaryDetail } from "./types";
 import { config } from "../lib/config";
 
@@ -202,11 +203,21 @@ export async function fetchRecommendations(limit = 10): Promise<RecommendationsD
 }
 
 export async function exportSummaryPdf(summaryId: number): Promise<void> {
-  const token = localStorage.getItem("access_token");
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const session = getApiSession();
+  const headers = new Headers();
 
-  const response = await fetch(`/v1/summaries/${summaryId}/export?format=pdf`, { headers });
+  if (session.mode === "telegram-webapp" && session.initData) {
+    headers.set("X-Telegram-Init-Data", session.initData);
+  }
+
+  if (session.mode === "jwt" && session.accessToken) {
+    headers.set("Authorization", `Bearer ${session.accessToken}`);
+  }
+
+  const response = await fetch(
+    `${config.apiBaseUrl}/v1/summaries/${summaryId}/export?format=pdf`,
+    { headers },
+  );
   if (!response.ok) throw new Error(`Export failed: ${response.status}`);
 
   const blob = await response.blob();

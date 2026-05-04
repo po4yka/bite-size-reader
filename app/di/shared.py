@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -39,11 +38,9 @@ class LazySemaphoreFactory:
 
     def __init__(self, permits: int) -> None:
         self._permits = max(1, permits)
-        self._semaphore: asyncio.Semaphore | None = None
+        self._semaphore: asyncio.Semaphore = asyncio.Semaphore(self._permits)
 
     def __call__(self) -> asyncio.Semaphore:
-        if self._semaphore is None:
-            self._semaphore = asyncio.Semaphore(self._permits)
         return self._semaphore
 
 
@@ -180,8 +177,16 @@ async def close_runtime_resources(*resources: Any) -> None:
         close = getattr(resource, "aclose", None)
         if close is None:
             continue
-        with contextlib.suppress(Exception):
+        try:
             await close()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            resource_name = type(resource).__name__
+            logger.warning(
+                "shutdown_resource_close_failed",
+                extra={"resource": resource_name, "error": str(e)},
+            )
 
 
 def _build_firecrawl_client(

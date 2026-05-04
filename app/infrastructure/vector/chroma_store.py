@@ -60,8 +60,6 @@ class ChromaVectorStore:
 
     def _connect_with_retry(self, max_attempts: int = 3, base_delay: float = 2.0) -> None:
         """Try connecting with brief retries to handle Docker network startup race."""
-        import time
-
         for attempt in range(1, max_attempts + 1):
             if self._try_connect():
                 return
@@ -71,7 +69,7 @@ class ChromaVectorStore:
                     "chroma_connect_retry",
                     extra={"attempt": attempt, "next_delay_sec": delay, "host": self._host},
                 )
-                time.sleep(delay)
+                asyncio.run(asyncio.sleep(delay))
 
     def _try_connect(self) -> bool:
         """Attempt to connect to ChromaDB.

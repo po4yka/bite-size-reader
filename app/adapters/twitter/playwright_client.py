@@ -7,7 +7,6 @@ Lazy-imports playwright to fail gracefully when not installed.
 from __future__ import annotations
 
 import asyncio
-import time
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote, urlparse
 
@@ -216,11 +215,11 @@ def _extract_tweet_sync(
 
         # Scroll once to trigger thread loading (skip when initial load failed)
         if not page_load_failed:
-            time.sleep(2)
+            page.wait_for_timeout(2000)
             page.evaluate("window.scrollBy(0, window.innerHeight * 2)")
-            time.sleep(2)
+            page.wait_for_timeout(2000)
         else:
-            time.sleep(1)
+            page.wait_for_timeout(1000)
 
         page.close()
         browser.close()

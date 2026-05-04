@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { fetchCurrentUser, loginWithTelegram } from "../api/auth";
@@ -47,8 +48,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (mode === "telegram-webapp") return "loading";
     return tokens?.accessToken ? "authenticated" : "unauthenticated";
   });
+  const statusRef = useRef<AuthStatus>(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const lastReloadTimeRef = useRef<number>(0);
 
   const syncApiSession = useCallback(
     (nextTokens: AuthTokens | null) => {
@@ -79,15 +85,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [mode, syncApiSession]);
 
   const reloadUser = useCallback(async () => {
+    const currentStatus = statusRef.current;
     const shouldFetchUser =
       mode === "telegram-webapp"
-        ? status === "loading" || status === "authenticated"
-        : status === "authenticated";
+        ? currentStatus === "loading" || currentStatus === "authenticated"
+        : currentStatus === "authenticated";
 
     if (!shouldFetchUser) {
       setUser(null);
       return;
     }
+    lastReloadTimeRef.current = Date.now();
     try {
       const current = await fetchCurrentUser();
       setUser(current);
@@ -106,7 +114,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setStatus("unauthenticated");
       setUser(null);
     }
-  }, [mode, status]);
+  }, [mode]);
 
   useEffect(() => {
     void reloadUser();
@@ -118,7 +126,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible" && Date.now() - lastReloadTimeRef.current >= 30_000) {
         void reloadUser();
       }
     };

@@ -42,19 +42,17 @@ export default function LibraryPage() {
   const summariesQuery = useSummariesList({
     limit: 100,
     offset: 0,
-    isRead: filter === "HIGH" ? undefined : undefined,
+    isRead: undefined,
     isFavorited: filter === "SAVED" ? true : undefined,
     sort: "created_at_desc",
   });
 
   const summaries: SummaryCompact[] = summariesQuery.data?.summaries ?? [];
 
-  // Filter by HIGH SIGNAL: items with confidence >= 0.7
+  // Filter by HIGH SIGNAL: items that have been favorited
   const visible =
     filter === "HIGH"
-      ? summaries.filter((s) => (s as SummaryCompact & { confidence?: number }).confidence !== undefined
-          ? ((s as SummaryCompact & { confidence?: number }).confidence ?? 0) >= 0.7
-          : true)
+      ? summaries.filter((s) => s.isFavorited === true)
       : summaries;
 
   const total = summariesQuery.data?.pagination.total ?? visible.length;
@@ -78,7 +76,7 @@ export default function LibraryPage() {
         e.preventDefault();
         setCursor((c) => Math.max(c - 1, 0));
       } else if (e.key === "Enter" && visible[cursor]) {
-        navigate(`/article/${visible[cursor].id}`);
+        navigate(`/library/${visible[cursor].id}`);
       }
     };
     window.addEventListener("keydown", handleKey);
