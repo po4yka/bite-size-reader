@@ -140,57 +140,68 @@ class MultiSourceAggregationAgent(
             total_items=len(input_data.items),
         )
 
-        source_weights = [self._build_source_weight(item) for item in extracted_items]
-        weight_by_source_id = {weight.source_item_id: weight for weight in source_weights}
-        duplicate_signals = self._detect_duplicate_signals(extracted_items)
-        contradiction_hints = self._detect_contradiction_hints(extracted_items)
+        try:
+            source_weights = [self._build_source_weight(item) for item in extracted_items]
+            weight_by_source_id = {weight.source_item_id: weight for weight in source_weights}
+            duplicate_signals = self._detect_duplicate_signals(extracted_items)
+            contradiction_hints = self._detect_contradiction_hints(extracted_items)
 
-        output, llm_cost_usd = await self._generate_with_llm(
-            input_data=input_data,
-            extracted_items=extracted_items,
-            source_weights=source_weights,
-            duplicate_signals=duplicate_signals,
-            contradiction_hints=contradiction_hints,
-        )
-        if output is None:
-            output = self._build_fallback_output(
+            output, llm_cost_usd = await self._generate_with_llm(
                 input_data=input_data,
                 extracted_items=extracted_items,
                 source_weights=source_weights,
                 duplicate_signals=duplicate_signals,
                 contradiction_hints=contradiction_hints,
             )
+            if output is None:
+                output = self._build_fallback_output(
+                    input_data=input_data,
+                    extracted_items=extracted_items,
+                    source_weights=source_weights,
+                    duplicate_signals=duplicate_signals,
+                    contradiction_hints=contradiction_hints,
+                )
 
-        coverage = self._build_source_coverage(
-            items=input_data.items,
-            output=output,
-            weight_by_source_id=weight_by_source_id,
-        )
-        used_source_count = sum(1 for entry in coverage if entry.used_in_summary)
-        source_type = self._resolve_source_type(extracted_items)
-        total_estimated_consumption_time_min = self._estimate_consumption_time_minutes(
-            extracted_items
-        )
-        output = output.model_copy(
-            update={
-                "source_type": source_type,
-                "used_source_count": used_source_count,
-                "source_coverage": coverage,
-                "total_estimated_consumption_time_min": total_estimated_consumption_time_min,
-            }
-        )
+            coverage = self._build_source_coverage(
+                items=input_data.items,
+                output=output,
+                weight_by_source_id=weight_by_source_id,
+            )
+            used_source_count = sum(1 for entry in coverage if entry.used_in_summary)
+            source_type = self._resolve_source_type(extracted_items)
+            total_estimated_consumption_time_min = self._estimate_consumption_time_minutes(
+                extracted_items
+            )
+            output = output.model_copy(
+                update={
+                    "source_type": source_type,
+                    "used_source_count": used_source_count,
+                    "source_coverage": coverage,
+                    "total_estimated_consumption_time_min": total_estimated_consumption_time_min,
+                }
+            )
 
-        await self._aggregation_session_repo.async_update_aggregation_session_output(
-            input_data.session_id,
-            output.model_dump(mode="json"),
-        )
-        return AgentResult.success_result(
-            output,
-            session_id=input_data.session_id,
-            used_source_count=used_source_count,
-            source_type=source_type,
-            llm_cost_usd=llm_cost_usd,
-        )
+            await self._aggregation_session_repo.async_update_aggregation_session_output(
+                input_data.session_id,
+                output.model_dump(mode="json"),
+            )
+            return AgentResult.success_result(
+                output,
+                session_id=input_data.session_id,
+                used_source_count=used_source_count,
+                source_type=source_type,
+                llm_cost_usd=llm_cost_usd,
+            )
+        except Exception as exc:
+            self.log_error(
+                "multi_source_aggregation_failed",
+                session_id=input_data.session_id,
+                error=str(exc),
+            )
+            return AgentResult.error_result(
+                f"Aggregation failed: {exc}",
+                session_id=input_data.session_id,
+            )
 
     async def _generate_with_llm(
         self,

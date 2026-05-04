@@ -24,6 +24,7 @@ from app.application.dto.aggregation import (
     MultiSourceExtractionOutput,
     SourceSubmission,
 )
+from app.core.logging_utils import get_logger
 from app.domain.models.source import AggregationSessionStatus
 from app.observability.metrics import record_aggregation_synthesis
 
@@ -33,6 +34,8 @@ if TYPE_CHECKING:
     from app.adapters.content.content_extractor import ContentExtractor
     from app.adapters.llm import LLMClientProtocol
     from app.application.ports.aggregation_sessions import AggregationSessionRepositoryPort
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,11 +90,18 @@ class MultiSourceAggregationService:
             msg = extraction_result.error or "Bundle extraction failed"
             raise RuntimeError(msg)
 
-        relationship_signal = await self._maybe_build_relationship_signal(
-            extraction_result.output,
-            correlation_id=correlation_id,
-            language=language,
-        )
+        try:
+            relationship_signal = await self._maybe_build_relationship_signal(
+                extraction_result.output,
+                correlation_id=correlation_id,
+                language=language,
+            )
+        except Exception:
+            logger.exception(
+                "relationship_signal_failed",
+                extra={"cid": correlation_id},
+            )
+            relationship_signal = None
         aggregation_agent = MultiSourceAggregationAgent(
             aggregation_session_repo=self._aggregation_session_repo,
             llm_client=self._llm,

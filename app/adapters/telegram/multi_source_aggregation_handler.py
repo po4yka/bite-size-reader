@@ -17,7 +17,10 @@ from app.application.services.multi_source_aggregation_service import (
     MultiSourceAggregationRunResult,
     MultiSourceAggregationService,
 )
+from app.core.logging_utils import get_logger
 from app.core.url_utils import extract_all_urls
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from app.adapters.external.formatting.protocols import (
@@ -151,6 +154,10 @@ class MultiSourceAggregationHandler:
                 progress_callback=_on_progress,
             )
         except Exception:
+            logger.exception(
+                "aggregate_failed",
+                extra={"cid": correlation_id, "submission_count": len(submissions)},
+            )
             self._response_formatter.clear_message_draft(message)
             await self._response_formatter.send_error_notification(
                 message,
