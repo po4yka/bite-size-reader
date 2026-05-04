@@ -92,6 +92,8 @@ class OpenAIClient:
         self._circuit_breaker = circuit_breaker
         self._audit = audit
         self._closed = False
+        self._oai_client: Any = None
+        self._instructor_async_client: Any = None
 
         # Connection pool limits
         self._limits = httpx.Limits(

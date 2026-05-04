@@ -93,11 +93,15 @@ class PureSummaryService:
             correlation_id=request.correlation_id,
         )
 
+        use_instructor = self._runtime.cfg.openrouter.use_instructor_summary
+        system_prompt = request.system_prompt
+        if use_instructor:
+            system_prompt = self._load_instructor_prompt(request.chosen_lang)
+
         messages = [
-            {"role": "system", "content": request.system_prompt},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ]
-        response_format = self._runtime.workflow.build_structured_response_format()
         max_tokens = self.select_max_tokens(content_for_summary)
 
         logger.info(
@@ -108,8 +112,19 @@ class PureSummaryService:
                 "lang": request.chosen_lang,
                 "has_feedback": bool(request.feedback_instructions),
                 "model": model_override or self._runtime.cfg.openrouter.model,
+                "instructor": use_instructor,
             },
         )
+
+        if use_instructor:
+            return await self._summarize_with_instructor(
+                messages=messages,
+                max_tokens=max_tokens,
+                model_override=model_override,
+                correlation_id=request.correlation_id,
+            )
+
+        response_format = self._runtime.workflow.build_structured_response_format()
 
         try:
             async with self._runtime.sem():
@@ -154,6 +169,59 @@ class PureSummaryService:
             extra={"cid": request.correlation_id, "summary_keys": list(summary.keys())},
         )
         return summary
+
+    async def _summarize_with_instructor(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        max_tokens: int | None,
+        model_override: str | None,
+        correlation_id: str | None,
+    ) -> dict[str, Any]:
+        from app.core.summary_schema import SummaryModel
+
+        try:
+            async with self._runtime.sem():
+                result = await self._runtime.openrouter.chat_structured(
+                    messages,
+                    response_model=SummaryModel,
+                    max_retries=3,
+                    temperature=self._runtime.cfg.openrouter.temperature,
+                    max_tokens=max_tokens,
+                    model_override=model_override,
+                )
+        except Exception as exc:
+            logger.error(
+                "summarize_pure_instructor_failed",
+                extra={"cid": correlation_id, "error": str(exc)},
+            )
+            raise ValueError(f"Instructor LLM call failed: {exc}") from exc
+
+        summary = result.parsed.model_dump()
+        logger.info(
+            "summarize_pure_success",
+            extra={
+                "cid": correlation_id,
+                "summary_keys": list(summary.keys()),
+                "model": result.model_used,
+                "tokens_prompt": result.tokens_prompt,
+                "tokens_completion": result.tokens_completion,
+                "instructor": True,
+            },
+        )
+        return summary
+
+    @staticmethod
+    def _load_instructor_prompt(lang: str) -> str:
+        from app.core.lang import LANG_RU
+
+        lang_suffix = "ru" if lang == LANG_RU else "en"
+        prompt_path = (
+            Path(__file__).resolve().parent.parent.parent
+            / "prompts"
+            / f"summary_system_{lang_suffix}_instructor.txt"
+        )
+        return prompt_path.read_text(encoding="utf-8")
 
     async def ensure_summary_payload(self, request: EnsureSummaryPayloadRequest) -> dict[str, Any]:
         """Validate and enrich a parsed summary payload."""

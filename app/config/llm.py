@@ -69,6 +69,9 @@ class OpenRouterConfig(BaseModel):
     auto_fallback_structured: bool = Field(
         default=True, validation_alias="OPENROUTER_AUTO_FALLBACK_STRUCTURED"
     )
+    use_instructor_summary: bool = Field(
+        default=False, validation_alias="LLM_USE_INSTRUCTOR_SUMMARY"
+    )
     max_response_size_mb: int = Field(
         default=10, validation_alias="OPENROUTER_MAX_RESPONSE_SIZE_MB"
     )

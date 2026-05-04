@@ -230,6 +230,8 @@ class OpenRouterClient:
         self._base_url = "https://openrouter.ai/api/v1"
         self._enable_structured_outputs = enable_structured_outputs
         self._closed = False
+        self._oai_client: Any = None
+        self._instructor_async_client: Any = None
         self._max_response_size_bytes = int(max_response_size_mb) * 1024 * 1024
         self._enable_prompt_caching = enable_prompt_caching
         self._prompt_cache_ttl = prompt_cache_ttl
