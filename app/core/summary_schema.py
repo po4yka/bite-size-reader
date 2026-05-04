@@ -139,9 +139,9 @@ class QualityAssessment(BaseModel):
 
 
 class SummaryModel(BaseModel):
-    summary_250: str = Field(default="", max_length=250)
-    summary_1000: str = Field(default="", max_length=1000)
-    tldr: str = Field(default="")
+    summary_250: str = Field(min_length=1, max_length=250)
+    summary_1000: str = Field(min_length=1, max_length=1000)
+    tldr: str = Field(min_length=1)
     tldr_ru: str = Field(
         default="",
         description="Full Russian translation of the tldr field. Must be written entirely in Russian (Cyrillic script).",
@@ -290,6 +290,25 @@ class SummaryModel(BaseModel):
                     "source_excerpt": str(source_excerpt) if source_excerpt is not None else None,
                 }
             )
+        return result
+
+    @field_validator("answered_questions", mode="before")
+    @classmethod
+    def coerce_answered_questions(cls, v: Any) -> list[str]:
+        if not isinstance(v, list):
+            return []
+        result = []
+        for item in v:
+            if isinstance(item, str):
+                s = item.strip()
+                if s:
+                    result.append(s)
+            elif isinstance(item, dict):
+                # LLMs sometimes return {question, answer} dicts — extract the answer text
+                text = item.get("answer") or item.get("question") or ""
+                s = str(text).strip()
+                if s:
+                    result.append(s)
         return result
 
     @field_validator("hallucination_risk", mode="before")

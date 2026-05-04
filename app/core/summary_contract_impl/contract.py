@@ -53,9 +53,4 @@ def validate_and_shape_summary(payload: SummaryJSON) -> SummaryJSON:
     shape_extended_summary_fields(shaped_payload)
     shape_rag_fields(shaped_payload)
 
-    try:
-        model = SummaryModel(**shaped_payload)
-        return model.model_dump()
-    except Exception as exc:
-        logger.warning("pydantic_validation_fallback", extra={"error": str(exc)})
-        return shaped_payload
+    return SummaryModel.model_validate(shaped_payload).model_dump()
