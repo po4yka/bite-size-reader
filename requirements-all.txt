@@ -208,7 +208,7 @@ impit==0.12.0
     # via crawlee
 importlib-metadata==8.7.1
     # via opentelemetry-api
-importlib-resources==6.5.2
+importlib-resources==7.1.0
     # via chromadb
 instructor==1.15.1
     # via ratatoskr
