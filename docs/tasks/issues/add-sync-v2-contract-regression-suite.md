@@ -1,18 +1,16 @@
 ---
-id: POY-264
-title: Sync v2 contract regression suite
+title: Add Sync v2 contract regression suite
 status: backlog
 area: sync
 priority: high
 owner: unassigned
-paperclip: POY-264
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Sync v2 contract regression suite #repo/ratatoskr #area/sync #status/backlog ⏫ [[POY-264]]
+- [ ] #task Add Sync v2 contract regression suite #repo/ratatoskr #area/sync #status/backlog ⏫
 
 ## Goal
 

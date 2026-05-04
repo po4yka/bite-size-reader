@@ -1,18 +1,16 @@
 ---
-id: POY-268
-title: Mobile regression pass for Frost Phase 7
+title: Run Frost Phase 7 mobile regression pass
 status: backlog
 area: testing
 priority: medium
 owner: unassigned
-paperclip: POY-268
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Mobile regression pass for Frost Phase 7 #repo/ratatoskr #area/testing #status/backlog 🔼 [[POY-268]]
+- [ ] #task Run Frost Phase 7 mobile regression pass #repo/ratatoskr #area/testing #status/backlog 🔼
 
 ## Goal
 

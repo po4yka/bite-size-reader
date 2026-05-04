@@ -1,18 +1,16 @@
 ---
-id: POY-267
-title: LLM call retry-budget telemetry
+title: Add LLM call retry-budget telemetry
 status: backlog
 area: observability
 priority: medium
 owner: unassigned
-paperclip: POY-267
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task LLM call retry-budget telemetry #repo/ratatoskr #area/observability #status/backlog 🔼 [[POY-267]]
+- [ ] #task Add LLM call retry-budget telemetry #repo/ratatoskr #area/observability #status/backlog 🔼
 
 ## Goal
 

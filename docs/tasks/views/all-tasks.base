@@ -4,7 +4,7 @@ filters:
 views:
   - type: table
     name: All tasks
-    columns: [id, title, status, area, priority, owner, paperclip, updated]
+    columns: [title, status, area, priority, owner, updated]
     sort:
       - column: updated
         direction: desc

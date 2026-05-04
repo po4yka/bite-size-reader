@@ -10,7 +10,7 @@ This repository uses Obsidian Tasks-compatible Markdown checkboxes as the canoni
 ## Canonical task line
 
 ```md
-- [ ] #task <imperative task title> #repo/ratatoskr #area/<area> #status/<status> <priority> [paperclip:POY-N]
+- [ ] #task <imperative task title> #repo/ratatoskr #area/<area> #status/<status> <priority>
 ```
 
 ## Allowed statuses
@@ -29,7 +29,7 @@ This repository uses Obsidian Tasks-compatible Markdown checkboxes as the canoni
 
 ## Canonical files
 
-- `docs/tasks/issues/POY-NNN.md` — **source of truth** — one file per task with YAML frontmatter + canonical line + spec
+- `docs/tasks/issues/<slug>.md` — **source of truth** — one file per task with YAML frontmatter + canonical line + spec
 - `docs/tasks/backlog.md` — Obsidian Tasks query view for `#status/backlog`
 - `docs/tasks/active.md` — Obsidian Tasks query view for `#status/doing` and `#status/review`
 - `docs/tasks/blocked.md` — Obsidian Tasks query view for `#status/blocked`
@@ -47,24 +47,21 @@ This repository uses Obsidian Tasks-compatible Markdown checkboxes as the canoni
 6. Add `#blocked` alongside `#status/blocked`; add an indented reason below.
 7. When completing: change `[ ]` to `[x]`, set `#status/done`, add `✅ YYYY-MM-DD`.
 8. `docs/ROADMAP_PRIORITIES.md` is a strategic planning document — task details go in `docs/tasks/`.
-9. Preserve `[paperclip:POY-N]` cross-reference tokens on existing tasks.
-10. Do not change unrelated prose, code, or other sections.
+9. Do not change unrelated prose, code, or other sections.
 
 ## Per-task notes
 
-Each task lives in its own file at `docs/tasks/issues/POY-NNN.md`. This is the source of truth.
+Each task lives in its own file at `docs/tasks/issues/<slug>.md` (kebab-case imperative title). This is the source of truth.
 
 ### YAML frontmatter schema
 
 ```yaml
 ---
-id: POY-NNN
 title: Imperative task title
 status: doing          # backlog | todo | doing | review | blocked | done | dropped
 area: auth             # auth | api | kmp | sync | ci | frontend | observability | testing | content | scraper | llm | db | docs | ops
 priority: high         # critical | high | medium | low
 owner: Role name
-paperclip: POY-NNN
 blocks: []
 blocked_by: []
 created: YYYY-MM-DD
@@ -77,21 +74,21 @@ updated: YYYY-MM-DD
 The per-task note body contains exactly one checkbox line (the canonical task line), followed by spec sections:
 
 ```md
-- [ ] #task <title> #repo/ratatoskr #area/<area> #status/<status> <priority> [[POY-NNN]]
+- [ ] #task <title> #repo/ratatoskr #area/<area> #status/<status> <priority>
 ```
 
-The Tasks plugin picks up this line when querying across the vault — it is the same line format as before, just stored inside the per-task note instead of in `active.md`/`backlog.md`/`blocked.md`.
+The Tasks plugin picks up this line when querying across the vault — stored inside the per-task note, not in `active.md`/`backlog.md`/`blocked.md`.
 
 ### Lifecycle
 
-1. **Create** — use Templater: "Create new note from template" → `new-task.md` in `docs/tasks/templates/`. Fill prompts (ID, title, area, priority, owner).
+1. **Create** — use Templater: "Create new note from template" → `new-task.md` in `docs/tasks/templates/`. Fill prompts (title, area, priority, owner). Filename is kebab-case of the title.
 2. **Transition** — update `status:` frontmatter field AND update `#status/*` tag in the canonical line. Always update `updated: YYYY-MM-DD`.
-3. **Complete / drop** — delete `docs/tasks/issues/POY-NNN.md`. Git history is the audit trail.
-4. **Blocked** — add `#blocked` after `#status/blocked` in the canonical line; add an indented `- Blocked by: POY-…` bullet below it; populate `blocked_by:` frontmatter.
+3. **Complete / drop** — delete `docs/tasks/issues/<slug>.md`. Git history is the audit trail.
+4. **Blocked** — add `#blocked` after `#status/blocked` in the canonical line; add an indented reason bullet below it; populate `blocked_by:` frontmatter with filename stems.
 
 ### Index files are query-only
 
-`active.md`, `backlog.md`, `blocked.md`, and `dashboard.md` contain only Obsidian Tasks ` ```tasks ` query blocks. Do NOT add task lines to these files; add them only inside `issues/POY-NNN.md`.
+`active.md`, `backlog.md`, `blocked.md`, and `dashboard.md` contain only Obsidian Tasks ` ```tasks ` query blocks. Do NOT add task lines to these files; add them only inside `issues/<slug>.md`.
 
 ## Task creation workflow
 

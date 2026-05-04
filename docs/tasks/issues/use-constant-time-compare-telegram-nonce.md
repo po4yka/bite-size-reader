@@ -1,22 +1,20 @@
 ---
-id: POY-283
 title: Use constant-time compare for Telegram link nonce
 status: doing
 area: auth
 priority: high
 owner: Senior Python Backend Engineer
-paperclip: POY-283
-blocks: [POY-257]
+blocks: [review-mobile-auth-threat-model]
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Use constant-time compare for Telegram link nonce #repo/ratatoskr #area/auth #status/doing ⏫ [[POY-283]]
+- [ ] #task Use constant-time compare for Telegram link nonce #repo/ratatoskr #area/auth #status/doing ⏫
 
 ## Background
 
-From the security review on POY-257 (finding B3):
+From the security review in [[review-mobile-auth-threat-model]] (finding B3):
 
 `app/api/routers/auth/endpoints_telegram.py:146` validates the link-confirmation nonce with a plain `payload.nonce != link_nonce` comparison, while every other security-sensitive comparison in this module already uses `hmac.compare_digest` (e.g. `webapp_auth.py:68`, `telegram.py:110`, `endpoints_secret_keys.py:142`).
 
@@ -32,4 +30,4 @@ High in principle (anti-replay/CSRF-class token), low in practice (32-byte URL-s
 
 ## Definition of done
 
-Fix merged, tests pass, POY-257 unblocked on this finding.
+Fix merged, tests pass, unblocks [[review-mobile-auth-threat-model]].

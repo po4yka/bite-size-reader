@@ -1,6 +1,6 @@
 # Active — ratatoskr
 
-> Live view of `#status/doing` and `#status/review` tasks. Edit per-task detail in `issues/POY-NNN.md`.
+> Live view of `#status/doing` and `#status/review` tasks. Edit per-task detail in `issues/<slug>.md`.
 
 ## Doing
 

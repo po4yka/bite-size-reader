@@ -1,26 +1,24 @@
 ---
-id: POY-284
 title: Decide second-wave Ratatoskr auth/security policy scope
 status: doing
 area: auth
 priority: high
 owner: CTO
-paperclip: POY-284
-blocks: [POY-257]
+blocks: [review-mobile-auth-threat-model]
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Decide second-wave Ratatoskr auth/security policy scope #repo/ratatoskr #area/auth #status/doing ⏫ [[POY-284]]
+- [ ] #task Decide second-wave Ratatoskr auth/security policy scope #repo/ratatoskr #area/auth #status/doing ⏫
 
 ## Objective
 
-Decide the second-wave Ratatoskr auth/security policy scope from the Security/AppSec review in POY-257, then create the follow-up implementation/review issues that are warranted.
+Decide the second-wave Ratatoskr auth/security policy scope from the Security/AppSec review in [[review-mobile-auth-threat-model]], then create the follow-up implementation/review issues that are warranted.
 
 ## Context
 
-Security marked Ratatoskr mobile auth, secret-login, and client storage not release-ready. The three high implementation blockers were already filed as POY-280, POY-282, and POY-283 and assigned to Backend. Security deferred 11 additional follow-ups pending direction on scope.
+Security marked Ratatoskr mobile auth, secret-login, and client storage not release-ready. The three high implementation blockers — [[unify-allowed-user-ids-allowlist-semantics]], [[decouple-secret-login-pepper-from-jwt-key]], and [[use-constant-time-compare-telegram-nonce]] — were assigned to Backend. Security deferred 11 additional follow-ups pending direction on scope.
 
 ## Acceptance criteria
 
@@ -43,4 +41,4 @@ Security marked Ratatoskr mobile auth, secret-login, and client storage not rele
 
 ## Definition of done
 
-The decision memo has been posted, deferred follow-ups created or explicitly rejected, and POY-257 left with a clear Security/AppSec re-review path.
+The decision memo has been posted, deferred follow-ups created or explicitly rejected, and [[review-mobile-auth-threat-model]] left with a clear Security/AppSec re-review path.

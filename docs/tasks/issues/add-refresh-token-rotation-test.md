@@ -1,22 +1,20 @@
 ---
-id: POY-277
-title: "Backend: add refresh-token rotation test for /v1/auth/refresh"
+title: "Add refresh-token rotation test for /v1/auth/refresh"
 status: doing
 area: auth
 priority: high
 owner: Senior Python Backend Engineer
-paperclip: POY-277
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Backend: add refresh-token rotation test for /v1/auth/refresh #repo/ratatoskr #area/auth #status/doing ⏫ [[POY-277]]
+- [ ] #task Add refresh-token rotation test for /v1/auth/refresh #repo/ratatoskr #area/auth #status/doing ⏫
 
 ## Context
 
-Filed from POY-255 QA gate (row B9). Coordinate with Security Engineer (POY-257).
+Coordinate with [[review-mobile-auth-threat-model]] (security engineer).
 
 ## Objective
 

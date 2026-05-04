@@ -1,18 +1,16 @@
 ---
-id: POY-266
-title: Scraper chain failure correlation and metrics
+title: Add scraper chain failure correlation and metrics
 status: backlog
 area: observability
 priority: medium
 owner: unassigned
-paperclip: POY-266
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Scraper chain failure correlation and metrics #repo/ratatoskr #area/observability #status/backlog 🔼 [[POY-266]]
+- [ ] #task Add scraper chain failure correlation and metrics #repo/ratatoskr #area/observability #status/backlog 🔼
 
 ## Goal
 

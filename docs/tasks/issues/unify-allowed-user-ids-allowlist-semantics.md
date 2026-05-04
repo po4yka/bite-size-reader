@@ -1,22 +1,20 @@
 ---
-id: POY-280
 title: Unify ALLOWED_USER_IDS allowlist semantics across all auth paths
 status: doing
 area: auth
 priority: high
 owner: Senior Python Backend Engineer
-paperclip: POY-280
-blocks: [POY-257]
+blocks: [review-mobile-auth-threat-model]
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Unify ALLOWED_USER_IDS allowlist semantics across all auth paths #repo/ratatoskr #area/auth #status/doing ⏫ [[POY-280]]
+- [ ] #task Unify ALLOWED_USER_IDS allowlist semantics across all auth paths #repo/ratatoskr #area/auth #status/doing ⏫
 
 ## Background
 
-From the security review on POY-257 (finding B1):
+From the security review in [[review-mobile-auth-threat-model]] (finding B1):
 
 `app/api/routers/auth/dependencies.py:117-120` calls `Config.is_user_allowed(user_id, fail_open_when_empty=True)`, while `webapp_auth.py:103`, `telegram.py:117`, and `secret_auth.py:76` all pass `fail_open_when_empty=False`. The startup validator at `app/config/settings.py:315-323` prevents an empty list under production config, but is bypassed by `allow_stub_telegram=True` (the lazy-load default in `secret_auth._get_cfg`).
 
@@ -33,4 +31,4 @@ High. Any deployment that instantiates `Settings(allow_stub_telegram=True)` and 
 
 ## Definition of done
 
-Decision recorded, implementation done (or explicitly deferred with rationale), POY-257 unblocked on this finding.
+Decision recorded, implementation done (or explicitly deferred with rationale), unblocks [[review-mobile-auth-threat-model]].

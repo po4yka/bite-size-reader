@@ -1,18 +1,16 @@
 ---
-id: POY-256
 title: Add nickname + password login with Remember Me option
 status: backlog
 area: auth
 priority: medium
 owner: unassigned
-paperclip: POY-256
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Add nickname + password login with Remember Me option #repo/ratatoskr #area/auth #status/backlog 🔼 [[POY-256]]
+- [ ] #task Add nickname + password login with Remember Me option #repo/ratatoskr #area/auth #status/backlog 🔼
 
 ## Goal
 

@@ -2,18 +2,20 @@
 kanban-plugin: basic
 ---
 
+# Board — ratatoskr
+
 ## Backlog
 
-- [ ] [[POY-265]]
-- [ ] [[POY-256]]
-- [ ] [[POY-263]]
-- [ ] [[POY-264]]
-- [ ] [[POY-266]]
-- [ ] [[POY-267]]
-- [ ] [[POY-268]]
-- [ ] [[POY-269]]
-- [ ] [[POY-270]]
-- [ ] [[POY-281]]
+- [ ] [[harden-refresh-token-rotation-revocation]]
+- [ ] [[add-nickname-password-login-remember-me]]
+- [ ] [[freeze-version-mobile-api-surface]]
+- [ ] [[add-sync-v2-contract-regression-suite]]
+- [ ] [[add-scraper-chain-failure-metrics]]
+- [ ] [[add-llm-retry-budget-telemetry]]
+- [ ] [[run-frost-phase-7-mobile-regression]]
+- [ ] [[establish-playwright-visual-regression-baseline]]
+- [ ] [[add-channel-digest-scheduler-smoke-test]]
+- [ ] [[overhaul-articles-management]]
 
 ## Todo
 
@@ -21,15 +23,15 @@ kanban-plugin: basic
 
 ## Doing
 
-- [ ] [[POY-253]]
-- [ ] [[POY-260]]
-- [ ] [[POY-277]]
-- [ ] [[POY-278]]
-- [ ] [[POY-279]]
-- [ ] [[POY-280]]
-- [ ] [[POY-282]]
-- [ ] [[POY-283]]
-- [ ] [[POY-284]]
+- [ ] [[map-ratatoskr-mobile-api-contract-to-kmp-readiness]]
+- [ ] [[add-sync-apply-response-contract-fixture]]
+- [ ] [[add-refresh-token-rotation-test]]
+- [ ] [[add-sync-handler-integration-tests]]
+- [ ] [[promote-playwright-visual-to-required-ci]]
+- [ ] [[unify-allowed-user-ids-allowlist-semantics]]
+- [ ] [[decouple-secret-login-pepper-from-jwt-key]]
+- [ ] [[use-constant-time-compare-telegram-nonce]]
+- [ ] [[decide-auth-security-second-wave-scope]]
 
 ## Review
 
@@ -37,7 +39,7 @@ kanban-plugin: basic
 
 ## Blocked
 
-- [ ] [[POY-257]]
+- [ ] [[review-mobile-auth-threat-model]]
 
 %% kanban:settings
 ```{"kanban-plugin":"basic"}```

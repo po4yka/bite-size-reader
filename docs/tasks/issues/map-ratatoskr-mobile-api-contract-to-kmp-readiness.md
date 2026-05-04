@@ -1,18 +1,16 @@
 ---
-id: POY-253
 title: Map Ratatoskr mobile API contract to KMP client readiness
 status: doing
 area: kmp
 priority: high
 owner: CTO
-paperclip: POY-253
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Map Ratatoskr mobile API contract to KMP client readiness #repo/ratatoskr #area/kmp #status/doing ⏫ [[POY-253]]
+- [ ] #task Map Ratatoskr mobile API contract to KMP client readiness #repo/ratatoskr #area/kmp #status/doing ⏫
 
 ## Objective
 

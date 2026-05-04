@@ -1,6 +1,6 @@
 # Blocked — ratatoskr
 
-> Tasks that cannot proceed until an external condition resolves. Edit per-task detail in `issues/POY-NNN.md`.
+> Tasks that cannot proceed until an external condition resolves. Edit per-task detail in `issues/<slug>.md`.
 
 ```tasks
 not done

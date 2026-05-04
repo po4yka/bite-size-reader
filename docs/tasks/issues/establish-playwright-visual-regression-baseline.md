@@ -1,18 +1,16 @@
 ---
-id: POY-269
-title: Playwright visual-regression baseline and docs
+title: Establish Playwright visual-regression baseline and update docs
 status: backlog
 area: testing
 priority: medium
 owner: unassigned
-paperclip: POY-269
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Playwright visual-regression baseline and docs #repo/ratatoskr #area/testing #status/backlog 🔼 [[POY-269]]
+- [ ] #task Establish Playwright visual-regression baseline and update docs #repo/ratatoskr #area/testing #status/backlog 🔼
 
 ## Goal
 

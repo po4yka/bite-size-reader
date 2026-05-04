@@ -1,22 +1,20 @@
 ---
-id: POY-282
 title: Decouple SECRET_LOGIN_PEPPER from JWT signing key
 status: doing
 area: auth
 priority: high
 owner: Senior Python Backend Engineer
-paperclip: POY-282
-blocks: [POY-257]
+blocks: [review-mobile-auth-threat-model]
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Decouple SECRET_LOGIN_PEPPER from JWT signing key #repo/ratatoskr #area/auth #status/doing ⏫ [[POY-282]]
+- [ ] #task Decouple SECRET_LOGIN_PEPPER from JWT signing key #repo/ratatoskr #area/auth #status/doing ⏫
 
 ## Background
 
-From the security review on POY-257 (finding B2):
+From the security review in [[review-mobile-auth-threat-model]] (finding B2):
 
 `app/api/routers/auth/secret_auth.py:42-52` (`_get_secret_pepper`) returns `cfg.runtime.jwt_secret_key` when `SECRET_LOGIN_PEPPER` is unset.
 
@@ -33,4 +31,4 @@ High. Two unrelated security domains share a single secret: rotating `JWT_SECRET
 
 ## Definition of done
 
-Security Engineer + Senior Python Backend Engineer sign off on the rotation plan; POY-257 unblocked on this finding.
+Security Engineer + Senior Python Backend Engineer sign off on the rotation plan; unblocks [[review-mobile-auth-threat-model]].

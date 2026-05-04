@@ -1,19 +1,16 @@
 ---
-id: POY-257
 title: Review Ratatoskr mobile auth, secret-login, and client storage threat model
 status: blocked
 area: auth
 priority: high
 owner: Security Engineer
-paperclip: POY-257
 blocks: []
-blocked_by: [POY-280, POY-282, POY-283, POY-284]
+blocked_by: [unify-allowed-user-ids-allowlist-semantics, decouple-secret-login-pepper-from-jwt-key, use-constant-time-compare-telegram-nonce, decide-auth-security-second-wave-scope]
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Review Ratatoskr mobile auth, secret-login, and client storage threat model #repo/ratatoskr #area/auth #status/blocked #blocked ⏫ [[POY-257]]
-  - Blocked by: POY-280, POY-282, POY-283, POY-284
+- [ ] #task Review Ratatoskr mobile auth, secret-login, and client storage threat model #repo/ratatoskr #area/auth #status/blocked #blocked ⏫
 
 ## Objective
 

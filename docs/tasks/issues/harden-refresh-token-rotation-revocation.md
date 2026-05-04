@@ -1,22 +1,20 @@
 ---
-id: POY-265
-title: Refresh token rotation and revocation hardening
+title: Harden refresh-token rotation and revocation
 status: backlog
 area: auth
 priority: high
 owner: unassigned
-paperclip: POY-265
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Refresh token rotation and revocation hardening #repo/ratatoskr #area/auth #status/backlog ⏫ [[POY-265]]
+- [ ] #task Harden refresh-token rotation and revocation #repo/ratatoskr #area/auth #status/backlog ⏫
 
 ## Goal
 
-Make refresh-token issuance safe under replay and device loss. Companion to POY-256 (nickname/password login) and POY-257 (auth threat model).
+Make refresh-token issuance safe under replay and device loss. Companion to [[add-nickname-password-login-remember-me]] and [[review-mobile-auth-threat-model]].
 
 ## Scope
 
@@ -36,4 +34,4 @@ Make refresh-token issuance safe under replay and device loss. Companion to POY-
 
 - `app/api/routers/auth.py`
 - `app/db/models.py` (`RefreshToken`, `UserDevice`, `AuditLog`)
-- POY-256, POY-257
+- [[add-nickname-password-login-remember-me]], [[review-mobile-auth-threat-model]]

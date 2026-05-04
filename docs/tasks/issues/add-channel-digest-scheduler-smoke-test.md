@@ -1,18 +1,16 @@
 ---
-id: POY-270
-title: Channel digest scheduler smoke test
+title: Add channel digest scheduler smoke test
 status: backlog
 area: testing
 priority: medium
 owner: unassigned
-paperclip: POY-270
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Channel digest scheduler smoke test #repo/ratatoskr #area/testing #status/backlog 🔼 [[POY-270]]
+- [ ] #task Add channel digest scheduler smoke test #repo/ratatoskr #area/testing #status/backlog 🔼
 
 ## Goal
 

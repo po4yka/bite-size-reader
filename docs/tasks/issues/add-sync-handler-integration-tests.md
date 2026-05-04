@@ -1,22 +1,20 @@
 ---
-id: POY-278
-title: "Backend: add sync handler integration tests covering full/delta/apply + idempotency"
+title: Add sync handler integration tests covering full/delta/apply + idempotency
 status: doing
 area: sync
 priority: high
 owner: Senior Python Backend Engineer
-paperclip: POY-278
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Backend: add sync handler integration tests covering full/delta/apply + idempotency #repo/ratatoskr #area/sync #status/doing ⏫ [[POY-278]]
+- [ ] #task Add sync handler integration tests covering full/delta/apply + idempotency #repo/ratatoskr #area/sync #status/doing ⏫
 
 ## Context
 
-Filed from POY-255 QA gate (row B10).
+Related: [[add-sync-v2-contract-regression-suite]].
 
 ## Objective
 

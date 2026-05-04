@@ -481,30 +481,28 @@ Use the `repo-task-board` skill for all task-related operations.
 
 Canonical files:
 
-- `docs/tasks/issues/POY-NNN.md` — **source of truth** — one note per task (YAML frontmatter + canonical `- [ ]` line + spec)
+- `docs/tasks/issues/<slug>.md` — **source of truth** — one note per task (YAML frontmatter + canonical `- [ ]` line + spec)
 - `docs/tasks/active.md` — Obsidian Tasks query view (`#status/doing`, `#status/review`)
 - `docs/tasks/backlog.md` — Obsidian Tasks query view (`#status/backlog`)
 - `docs/tasks/blocked.md` — Obsidian Tasks query view (`#status/blocked`)
 - `docs/tasks/dashboard.md` — Obsidian Tasks query hub + Bases view links
 - `docs/tasks/board.md` — Kanban board (visual layer; source of truth is `issues/`)
 
-Canonical task syntax (lives inside `docs/tasks/issues/POY-NNN.md`):
+Canonical task syntax (lives inside `docs/tasks/issues/<slug>.md`):
 
 ```md
-- [ ] #task <imperative title> #repo/ratatoskr #area/<area> #status/<status> <priority> [[POY-NNN]]
+- [ ] #task <imperative title> #repo/ratatoskr #area/<area> #status/<status> <priority>
 ```
 
 Per-task note YAML frontmatter:
 
 ```yaml
 ---
-id: POY-NNN
 title: Imperative task title
 status: doing          # backlog | todo | doing | review | blocked | done | dropped
 area: auth             # auth | api | kmp | sync | ci | frontend | observability | testing | content | scraper | llm | db | docs | ops
 priority: high         # critical | high | medium | low
 owner: Role name
-paperclip: POY-NNN
 blocks: []
 blocked_by: []
 created: YYYY-MM-DD

@@ -1,22 +1,20 @@
 ---
-id: POY-279
-title: "Backend CI: promote web-playwright-visual to required status-check job"
+title: Promote web-playwright-visual to required CI status-check job
 status: doing
 area: ci
 priority: high
 owner: Senior Build Gradle CI Engineer
-paperclip: POY-279
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Backend CI: promote web-playwright-visual to required status-check job #repo/ratatoskr #area/ci #status/doing ⏫ [[POY-279]]
+- [ ] #task Promote web-playwright-visual to required CI status-check job #repo/ratatoskr #area/ci #status/doing ⏫
 
 ## Context
 
-Filed from POY-255 QA gate (row B14).
+Related: [[establish-playwright-visual-regression-baseline]].
 
 ## Objective
 

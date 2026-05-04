@@ -1,18 +1,16 @@
 ---
-id: POY-260
 title: Add backend sync-apply response contract fixture
 status: doing
 area: sync
 priority: high
 owner: Senior Python Backend Engineer
-paperclip: POY-260
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Add backend sync-apply response contract fixture #repo/ratatoskr #area/sync #status/doing ⏫ [[POY-260]]
+- [ ] #task Add backend sync-apply response contract fixture #repo/ratatoskr #area/sync #status/doing ⏫
 
 ## Objective
 
@@ -20,7 +18,7 @@ Add or refresh a backend contract fixture/test for `/v1/sync/apply` showing the 
 
 ## Context
 
-POY-253 contract map found backend sync-apply response is coherent and should stand: `sessionId`, `results[]`, `conflicts[]`, `hasMore`. KMP will adapt in POY-258. Backend should preserve this contract with focused test evidence so future changes do not reintroduce drift.
+Contract map found backend sync-apply response is coherent and should stand: `sessionId`, `results[]`, `conflicts[]`, `hasMore`. KMP will adapt separately. Backend should preserve this contract with focused test evidence so future changes do not reintroduce drift.
 
 ## Acceptance criteria
 
@@ -47,4 +45,4 @@ Run the smallest relevant pytest target for sync apply response contract.
 
 ## Definition of done
 
-Backend has stable automated evidence for the sync-apply response shape and POY-255 can reference it as a release gate input.
+Backend has stable automated evidence for the sync-apply response shape.

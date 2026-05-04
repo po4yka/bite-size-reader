@@ -1,18 +1,16 @@
 ---
-id: POY-281
-title: Articles management overhaul (filters, bulk actions, real signal)
+title: Overhaul articles management (filters, bulk actions, real signal)
 status: backlog
 area: frontend
 priority: medium
 owner: unassigned
-paperclip: POY-281
 blocks: []
 blocked_by: []
 created: 2026-04-30
 updated: 2026-05-04
 ---
 
-- [ ] #task Articles management overhaul (filters, bulk actions, real signal) #repo/ratatoskr #area/frontend #status/backlog 🔼 [[POY-281]]
+- [ ] #task Overhaul articles management (filters, bulk actions, real signal) #repo/ratatoskr #area/frontend #status/backlog 🔼
 
 ## Goal
 
@@ -49,4 +47,4 @@ Make the All Articles + Library screens usable as a real workspace. Today users 
 - `clients/web/src/features/articles/ArticlesPage.tsx`
 - `clients/web/src/features/library/LibraryPage.tsx`
 - `app/api/routers/summaries.py`, `app/api/routers/search.py`
-- POY-268
+- [[run-frost-phase-7-mobile-regression]]

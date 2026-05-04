@@ -292,17 +292,17 @@ This repository uses Obsidian Tasks-compatible Markdown checkboxes as the canoni
 
 Before changing task-related files, use the `repo-task-board` skill if available.
 
-**Source of truth:** `docs/tasks/issues/POY-NNN.md` — one note per task with YAML frontmatter.
+**Source of truth:** `docs/tasks/issues/<slug>.md` — one note per task (kebab-case title) with YAML frontmatter.
 
 **Query views** (do not add task lines here):
 `docs/tasks/active.md` · `docs/tasks/backlog.md` · `docs/tasks/blocked.md` · `docs/tasks/dashboard.md`
 
-Canonical syntax (lives inside `issues/POY-NNN.md`):
+Canonical syntax (lives inside `issues/<slug>.md`):
 
 ```md
-- [ ] #task <imperative title> #repo/ratatoskr #area/<area> #status/<status> <priority> [[POY-NNN]]
+- [ ] #task <imperative title> #repo/ratatoskr #area/<area> #status/<status> <priority>
 ```
 
 Allowed statuses: `#status/backlog` · `#status/todo` · `#status/doing` · `#status/review` · `#status/blocked` · `#status/done` · `#status/dropped`
 
-Rules: one `- [ ]` line per per-task note · update `status:` frontmatter AND `#status/*` tag together · add `#blocked` + indented reason + `blocked_by:` frontmatter when blocking · delete the `issues/POY-NNN.md` file when done (git history is the audit trail) · never add task lines to the query view files.
+Rules: one `- [ ]` line per per-task note · update `status:` frontmatter AND `#status/*` tag together · add `#blocked` + indented reason + `blocked_by:` frontmatter when blocking · delete the `issues/<slug>.md` file when done (git history is the audit trail) · never add task lines to the query view files.
