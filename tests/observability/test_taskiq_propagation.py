@@ -78,11 +78,8 @@ async def test_pre_execute_creates_child_span() -> None:
     # isolated provider instead of the global one (avoids parallel-test bleed).
     worker_message = _FakeMessage(task_name="my_task")
     worker_message.labels = dict(producer_message.labels)
-    with patch("app.tasks.middleware.trace") as mock_trace:
+    with patch("opentelemetry.trace") as mock_trace:
         mock_trace.get_tracer.return_value = tracer
-        # propagate.extract must still work via real opentelemetry
-        from opentelemetry.propagate import extract as real_extract
-
         mock_trace.get_current_span = trace.get_current_span
         await middleware.pre_execute(worker_message)  # type: ignore[arg-type]
 
@@ -110,7 +107,7 @@ async def test_post_execute_sets_is_err_attribute() -> None:
     middleware = OTelPropagationMiddleware()
 
     message = _FakeMessage()
-    with patch("app.tasks.middleware.trace") as mock_trace:
+    with patch("opentelemetry.trace") as mock_trace:
         mock_trace.get_tracer.return_value = tracer
         mock_trace.get_current_span = trace.get_current_span
         await middleware.pre_execute(message)  # type: ignore[arg-type]  # creates _otel_span from empty labels

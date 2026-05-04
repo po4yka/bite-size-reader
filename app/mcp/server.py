@@ -7,7 +7,6 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from app.core.logging_utils import setup_json_logging
 from app.mcp.aggregation_service import AggregationMcpService
 from app.mcp.article_service import ArticleReadService
 from app.mcp.catalog_service import CatalogReadService
@@ -18,7 +17,6 @@ from app.mcp.semantic_service import SemanticSearchService
 from app.mcp.signal_service import SignalMcpService
 from app.mcp.tool_registrations import register_tools
 
-setup_json_logging()
 logger = logging.getLogger("ratatoskr.mcp")
 
 _DEFAULT_CONTEXT = McpServerContext(logger=logger)
@@ -102,6 +100,9 @@ def run_server(
     allow_unscoped_sse: bool = False,
 ) -> None:
     """Start the MCP server."""
+    from app.core.logging_utils import setup_json_logging
+
+    setup_json_logging()
     try:
         from app.observability.otel import init_tracing
 
