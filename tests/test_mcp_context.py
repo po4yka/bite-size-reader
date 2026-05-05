@@ -40,7 +40,7 @@ def test_init_runtime_opens_sqlite_read_only(tmp_path: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_chroma_service_retries_after_backoff(
+async def test_get_vector_service_retries_after_backoff(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -54,7 +54,7 @@ async def test_get_chroma_service_retries_after_backoff(
 
     def failing_load_config(*_args: Any, **_kwargs: Any):
         attempts["count"] += 1
-        raise RuntimeError("chroma down")
+        raise RuntimeError("vector store down")
 
     monkeypatch.setattr(mcp_di.time, "monotonic", fake_monotonic)
     monkeypatch.setattr(mcp_di, "load_config", failing_load_config)
@@ -79,13 +79,13 @@ async def test_get_chroma_service_retries_after_backoff(
 
 
 @pytest.mark.asyncio
-async def test_get_chroma_service_forwards_required_and_timeout(
+async def test_get_vector_service_forwards_required_and_timeout(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import app.di.mcp as mcp_di
     import app.infrastructure.embedding.embedding_factory as embedding_factory_module
-    import app.infrastructure.search.vector_search_service as chroma_service_module
+    import app.infrastructure.search.vector_search_service as vector_service_module
     import app.infrastructure.vector.qdrant_store as qdrant_store_module
 
     captured: dict[str, Any] = {}
@@ -117,7 +117,7 @@ async def test_get_chroma_service_forwards_required_and_timeout(
     monkeypatch.setattr(embedding_factory_module, "create_embedding_service", lambda _cfg: object())
     monkeypatch.setattr(mcp_di, "resolve_embedding_space_identifier", lambda _cfg: None)
     monkeypatch.setattr(qdrant_store_module, "QdrantVectorStore", FakeStore)
-    monkeypatch.setattr(chroma_service_module, "StoreVectorSearchService", FakeService)
+    monkeypatch.setattr(vector_service_module, "StoreVectorSearchService", FakeService)
 
     db_path = tmp_path / "mcp-context.db"
     database = DatabaseSessionManager(str(db_path))

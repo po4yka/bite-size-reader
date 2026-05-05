@@ -11,9 +11,8 @@ class VectorQueryHit:
     """A single hit from a vector similarity query.
 
     ``distance`` is normalised to the range [0, 2] where 0 means identical and
-    higher values mean less similar.  Both the Chroma and Qdrant adapters are
-    responsible for converting their native score/distance representation to this
-    convention before populating this field.
+    higher values mean less similar.  The Qdrant adapter converts its native
+    similarity score to this convention before populating this field.
     """
 
     id: str

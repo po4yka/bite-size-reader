@@ -3,12 +3,6 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import MagicMock
-
-sys.modules.setdefault("chromadb", MagicMock())
-sys.modules.setdefault("chromadb.config", MagicMock())
-sys.modules.setdefault("chromadb.errors", MagicMock())
-
 from app.api.dependencies import database as database_dependency
 from app.di import database as di_database
 

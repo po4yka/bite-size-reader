@@ -3,7 +3,6 @@ import logging
 import sys
 from enum import Enum
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -34,11 +33,6 @@ import app.di.database as _di_database
 from app.api.dependencies.database import clear_session_manager
 from app.db.models import Request, Summary, User, database_proxy
 from app.db.session import DatabaseSessionManager
-
-# Mock chromadb to avoid Pydantic V2 compatibility issues in tests
-sys.modules["chromadb"] = MagicMock()
-sys.modules["chromadb.config"] = MagicMock()
-sys.modules["chromadb.errors"] = MagicMock()
 
 logger = logging.getLogger("peewee")
 logger.addHandler(logging.StreamHandler())

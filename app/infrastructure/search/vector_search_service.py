@@ -218,7 +218,7 @@ class VectorSearchService:
 
 
 # ---------------------------------------------------------------------------
-# Store-backed vector search (previously chroma_vector_search_service.py)
+# Store-backed vector search
 # ---------------------------------------------------------------------------
 
 

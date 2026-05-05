@@ -27,7 +27,7 @@ class _FakeVectorStore:
         self.upserts.append({"vectors": vectors, "metadatas": metadatas, "ids": ids})
 
 
-def test_signal_personalization_reports_unready_when_chroma_is_down() -> None:
+def test_signal_personalization_reports_unready_when_vector_store_is_down() -> None:
     vector_store = _FakeVectorStore()
     vector_store.available = False
     vector_store.health_check = lambda: False  # type: ignore[method-assign]
@@ -40,7 +40,7 @@ def test_signal_personalization_reports_unready_when_chroma_is_down() -> None:
 
 
 @pytest.mark.asyncio
-async def test_signal_personalization_embeds_topic_into_chroma() -> None:
+async def test_signal_personalization_embeds_topic_into_vector_store() -> None:
     vector_store = _FakeVectorStore()
     embedding_service = _FakeEmbeddingService()
     service = SignalPersonalizationService(
@@ -66,7 +66,7 @@ async def test_signal_personalization_embeds_topic_into_chroma() -> None:
 
 
 @pytest.mark.asyncio
-async def test_signal_personalization_embeds_liked_feed_item_into_chroma() -> None:
+async def test_signal_personalization_embeds_liked_feed_item_into_vector_store() -> None:
     vector_store = _FakeVectorStore()
     service = SignalPersonalizationService(
         vector_store=vector_store,

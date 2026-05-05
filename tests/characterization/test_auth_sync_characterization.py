@@ -5,11 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# Avoid importing optional heavy vector deps while loading API routers package.
-sys.modules.setdefault("chromadb", MagicMock())
-sys.modules.setdefault("chromadb.config", MagicMock())
-sys.modules.setdefault("chromadb.errors", MagicMock())
-
 from app.api.models.auth import TelegramLoginRequest
 from app.api.models.requests import SyncSessionRequest
 from app.api.routers import sync as sync_router

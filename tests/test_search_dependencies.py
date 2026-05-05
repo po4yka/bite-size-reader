@@ -7,9 +7,9 @@ import pytest
 
 from app.di import search as search_di
 from tests.api.dependencies.search_resources_helpers import (
-    get_test_chroma_service,
-    set_chroma_factories,
-    shutdown_test_chroma_service,
+    get_test_vector_service,
+    set_vector_factories,
+    shutdown_test_vector_service,
 )
 
 
@@ -36,8 +36,8 @@ class DummyVectorStore:
 
 
 @pytest.mark.asyncio
-async def test_chroma_resource_manager_reuses_singleton_and_shuts_down():
-    set_chroma_factories(
+async def test_vector_resource_manager_reuses_singleton_and_shuts_down():
+    set_vector_factories(
         embedding_factory=DummyEmbeddingService,
         vector_store_factory=lambda config: DummyVectorStore(),
         config_factory=lambda: SimpleNamespace(
@@ -50,47 +50,47 @@ async def test_chroma_resource_manager_reuses_singleton_and_shuts_down():
     )
 
     try:
-        first = await get_test_chroma_service()
-        second = await get_test_chroma_service()
+        first = await get_test_vector_service()
+        second = await get_test_vector_service()
 
         assert first is second
 
         embedding = getattr(first, "_embedding_service", None)
         vector_store = getattr(first, "_vector_store", None)
 
-        await shutdown_test_chroma_service()
+        await shutdown_test_vector_service()
 
         assert embedding.closed is True
         assert vector_store.closed is True
 
-        fresh = await get_test_chroma_service()
+        fresh = await get_test_vector_service()
         assert fresh is not first
     finally:
-        set_chroma_factories()
-        await shutdown_test_chroma_service()
+        set_vector_factories()
+        await shutdown_test_vector_service()
 
 
 @pytest.mark.asyncio
-async def test_chroma_resource_test_factories_build_service_without_api_runtime():
-    set_chroma_factories(
+async def test_vector_resource_test_factories_build_service_without_api_runtime():
+    set_vector_factories(
         embedding_factory=DummyEmbeddingService,
         vector_store_factory=lambda config: DummyVectorStore(),
         config_factory=lambda: SimpleNamespace(host="http://localhost"),
     )
 
     try:
-        service = await get_test_chroma_service()
+        service = await get_test_vector_service()
         assert getattr(service, "_embedding_service", None) is not None
         assert getattr(service, "_vector_store", None) is not None
     finally:
-        set_chroma_factories()
-        await shutdown_test_chroma_service()
+        set_vector_factories()
+        await shutdown_test_vector_service()
 
 
-def test_build_search_dependencies_raises_when_chroma_is_required(monkeypatch) -> None:
+def test_build_search_dependencies_raises_when_vector_store_is_required(monkeypatch) -> None:
     class FailingStore:
         def __init__(self, **_kwargs) -> None:
-            raise RuntimeError("chroma down")
+            raise RuntimeError("store unavailable")
 
     monkeypatch.setattr(
         "app.infrastructure.vector.qdrant_store.QdrantVectorStore",
@@ -111,7 +111,7 @@ def test_build_search_dependencies_raises_when_chroma_is_required(monkeypatch) -
         embedding=SimpleNamespace(provider="local", max_token_length=512),
     )
 
-    with pytest.raises(RuntimeError, match="chroma down"):
+    with pytest.raises(RuntimeError, match="store unavailable"):
         search_di.build_search_dependencies(
             cast("Any", cfg),
             db=MagicMock(),

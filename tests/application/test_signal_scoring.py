@@ -53,7 +53,7 @@ async def test_signal_scoring_rejects_90_percent_before_llm_judge():
 
 
 @pytest.mark.asyncio
-async def test_signal_scoring_fails_closed_when_chroma_unavailable():
+async def test_signal_scoring_fails_closed_when_vector_store_unavailable():
     candidate = SignalCandidate(
         feed_item_id=1,
         source_id=1,

@@ -11,8 +11,7 @@ from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
 class QdrantQueryFilters(BaseModel):
     """Validated query filters translated to a ``qdrant_client.models.Filter``.
 
-    Mirrors ``ChromaQueryFilters`` field-for-field so that callers can swap
-    filter builders without changing their own code.
+    Translates generic filter params into a ``qdrant_client.models.Filter``.
     """
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -59,7 +58,7 @@ class QdrantQueryFilters(BaseModel):
         """Build a Qdrant ``Filter`` from the validated fields.
 
         Each tag must appear in the ``tags`` array (AND semantics —
-        mirrors Chroma's ``$contains`` inside ``$and``).
+        each tag match uses AND semantics via ``must`` conditions).
         """
         must: list[Any] = [
             FieldCondition(key="environment", match=MatchValue(value=self.environment)),

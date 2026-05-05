@@ -40,7 +40,7 @@ def build_note_text(
         max_length: Maximum token approximation passed to the embedding helper.
 
     Returns:
-        NoteText with combined text and metadata suitable for Chroma filters.
+        NoteText with combined text and metadata suitable for vector store filters.
     """
 
     payload = payload or {}

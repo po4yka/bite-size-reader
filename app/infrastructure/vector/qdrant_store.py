@@ -1,8 +1,4 @@
-"""Qdrant-backed vector store.
-
-Drop-in replacement for ``ChromaVectorStore`` that satisfies the same
-``VectorStore`` protocol and graceful-degradation contract.
-"""
+"""Qdrant-backed vector store implementing the VectorStore protocol."""
 
 from __future__ import annotations
 
@@ -47,7 +43,7 @@ class QdrantVectorStore:
     """Synchronous vector store wrapper around Qdrant.
 
     Uses the synchronous ``QdrantClient`` so callers can wrap it in
-    ``asyncio.to_thread`` exactly as they do with ``ChromaVectorStore``.
+    ``asyncio.to_thread``.
     All connection retries use ``time.sleep`` (not ``asyncio.sleep``) so
     ``__init__`` is safe to call from inside a running event loop.
 
@@ -128,7 +124,7 @@ class QdrantVectorStore:
         version: str,
         embedding_space: str | None = None,
     ) -> str:
-        """Produce the same collection name scheme as ChromaVectorStore."""
+        """Build the collection name from environment/scope/version/space."""
         safe_env = environment.replace(" ", "_")
         safe_scope = user_scope.replace(" ", "_")
         safe_version = version.replace(" ", "_")
@@ -217,7 +213,7 @@ class QdrantVectorStore:
 
     @staticmethod
     def _extract_id(metadata: dict[str, Any]) -> str:
-        """Derive a stable string key from metadata (mirrors ChromaVectorStore._extract_id)."""
+        """Derive a stable string key from metadata."""
         request_id = metadata.get("request_id")
         summary_id = metadata.get("summary_id")
         chunk_id = metadata.get("chunk_id")

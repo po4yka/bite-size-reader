@@ -291,7 +291,7 @@ async def test_semantic_search_uses_request_scoped_identity(
 
 
 @pytest.mark.asyncio
-async def test_chroma_sync_gap_reports_missing_and_extra(
+async def test_vector_sync_gap_reports_missing_and_extra(
     mcp_test_db: DatabaseSessionManager,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

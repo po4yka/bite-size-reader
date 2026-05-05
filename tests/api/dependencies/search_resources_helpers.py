@@ -1,8 +1,8 @@
-"""Test helpers for Chroma search dependency injection.
+"""Test helpers for vector search dependency injection.
 
 Use FastAPI's dependency_overrides for most tests. This module provides a
-factory-based helper for tests that need to exercise the Chroma initialization
-path itself (e.g. singleton caching, lifecycle management).
+factory-based helper for tests that need to exercise the vector search
+initialization path itself (e.g. singleton caching, lifecycle management).
 """
 
 from __future__ import annotations
@@ -22,13 +22,13 @@ _test_vector_store_factory: Callable[[Any], Any] | None = None
 _test_config_factory: Callable[[], Any] | None = None
 
 
-def set_chroma_factories(
+def set_vector_factories(
     *,
     embedding_factory: Callable[[], EmbeddingServiceProtocol] | None = None,
     vector_store_factory: Callable[[Any], Any] | None = None,
     config_factory: Callable[[], Any] | None = None,
 ) -> None:
-    """Configure factory callables used by get_test_chroma_service.
+    """Configure factory callables used by get_test_vector_service.
 
     Call with no arguments (or all-None) to clear the factories and reset state.
     """
@@ -40,14 +40,14 @@ def set_chroma_factories(
         reset_test_service()
 
 
-async def get_test_chroma_service() -> Any:
+async def get_test_vector_service() -> Any:
     """Build (and cache) a Chroma search service from the registered factories."""
     global _test_service, _test_embedding, _test_vector_store
     if _test_service is not None:
         return _test_service
 
     if not (_test_embedding_factory and _test_vector_store_factory and _test_config_factory):
-        msg = "Call set_chroma_factories() before get_test_chroma_service()"
+        msg = "Call set_vector_factories() before get_test_vector_service()"
         raise RuntimeError(msg)
 
     config = _test_config_factory()
@@ -64,8 +64,8 @@ async def get_test_chroma_service() -> Any:
     return _test_service
 
 
-async def shutdown_test_chroma_service() -> None:
-    """Release resources created by get_test_chroma_service."""
+async def shutdown_test_vector_service() -> None:
+    """Release resources created by get_test_vector_service."""
     if _test_vector_store is not None:
         await _test_vector_store.aclose()
     if _test_embedding is not None:

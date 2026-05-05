@@ -9,7 +9,6 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -106,22 +105,6 @@ def manage_database_proxy():
     yield
     if database_proxy.obj is not old_obj:
         database_proxy.initialize(old_obj)
-
-
-@pytest.fixture(autouse=True)
-def mock_chroma_client():
-    """Stub chromadb in sys.modules to prevent any import of the real package.
-
-    The chroma_store module is now a no-op stub so there is nothing to patch;
-    we only need to ensure 'chromadb' resolves to a safe mock for any legacy
-    code path that may still reference it at import time.
-    """
-    chroma_stub = MagicMock()
-    chroma_stub.HttpClient = MagicMock()
-    chroma_stub.errors.ChromaError = Exception
-    sys.modules.setdefault("chromadb", chroma_stub)
-    sys.modules.setdefault("chromadb.errors", chroma_stub.errors)
-    yield chroma_stub.HttpClient.return_value
 
 
 class MockSummaryRepository:

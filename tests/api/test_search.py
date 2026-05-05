@@ -568,7 +568,7 @@ def test_semantic_search_error_handling(client, search_token):
     with patch.object(
         SearchService,
         "semantic_search_summaries",
-        AsyncMock(side_effect=Exception("Chroma error")),
+        AsyncMock(side_effect=Exception("vector store error")),
     ):
         response = client.get(
             "/v1/search/semantic",
