@@ -828,7 +828,7 @@ export interface paths {
         };
         /**
          * Semantic Search Summaries
-         * @description Semantic search across summaries using Chroma embeddings.
+         * @description Semantic search across summaries using Qdrant embeddings.
          */
         get: operations["semantic_search_summaries_v1_search_semantic_get"];
         put?: never;
@@ -2829,7 +2829,7 @@ export interface paths {
         };
         /**
          * Signal Health
-         * @description Return Chroma readiness and source health counts for signal scoring.
+         * @description Return Qdrant readiness and source health counts for signal scoring.
          */
         get: operations["signal_health_v1_signals_health_get"];
         put?: never;
@@ -3483,7 +3483,7 @@ export interface components {
         };
         SignalHealthResponseEnvelope: components["schemas"]["BaseSuccessResponse"] & {
             data: {
-                chroma?: {
+                vector?: {
                     ready?: boolean;
                     required?: boolean;
                     collection?: string | null;
