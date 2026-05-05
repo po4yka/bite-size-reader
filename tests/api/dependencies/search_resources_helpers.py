@@ -41,7 +41,7 @@ def set_vector_factories(
 
 
 async def get_test_vector_service() -> Any:
-    """Build (and cache) a Chroma search service from the registered factories."""
+    """Build (and cache) a vector search service from the registered factories."""
     global _test_service, _test_embedding, _test_vector_store
     if _test_service is not None:
         return _test_service
