@@ -42,8 +42,8 @@ def upgrade() -> None:
         chroma_cfg = app_cfg.vector_store
         embedding_service = create_embedding_service()
         vector_store = ChromaVectorStore(
-            host=chroma_cfg.host,
-            auth_token=chroma_cfg.auth_token,
+            host=chroma_cfg.host,  # type: ignore[attr-defined]
+            auth_token=chroma_cfg.auth_token,  # type: ignore[attr-defined]
             environment=chroma_cfg.environment,
             user_scope=chroma_cfg.user_scope,
             collection_version=chroma_cfg.collection_version,

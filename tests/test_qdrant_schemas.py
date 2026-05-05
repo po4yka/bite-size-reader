@@ -9,7 +9,7 @@ from app.infrastructure.vector.qdrant_schemas import QdrantQueryFilters
 
 
 def _must(f: Filter) -> list[FieldCondition]:
-    return list(f.must or [])
+    return list(f.must or [])  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
