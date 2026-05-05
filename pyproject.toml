@@ -279,6 +279,10 @@ dev = [
 [tool.uv]
 override-dependencies = ["protobuf>=7.34.1"]
 
+[[tool.uv.index]]
+name = "safety"
+url = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/"
+default = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
