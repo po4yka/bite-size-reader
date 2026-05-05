@@ -75,9 +75,9 @@ async def test_aggregation_detail_resource_returns_session_payload() -> None:
         processing_stats=MagicMock(return_value={"jobs": 0}),
     )
     semantic_service = SimpleNamespace(
-        chroma_health=AsyncMock(return_value={"status": "ok"}),
-        chroma_index_stats=AsyncMock(return_value={"coverage": 1.0}),
-        chroma_sync_gap=AsyncMock(return_value={"gap": 0}),
+        vector_health=AsyncMock(return_value={"status": "ok"}),
+        vector_index_stats=AsyncMock(return_value={"coverage": 1.0}),
+        vector_sync_gap=AsyncMock(return_value={"gap": 0}),
     )
     signal_service = SimpleNamespace(
         list_sources=MagicMock(return_value={"sources": []}),
@@ -135,9 +135,9 @@ def test_hosted_mcp_resource_uses_request_scoped_identity(mcp_test_db, monkeypat
         processing_stats=MagicMock(return_value={"jobs": 0}),
     )
     semantic_service = SimpleNamespace(
-        chroma_health=AsyncMock(return_value={"status": "ok"}),
-        chroma_index_stats=AsyncMock(return_value={"coverage": 1.0}),
-        chroma_sync_gap=AsyncMock(return_value={"gap": 0}),
+        vector_health=AsyncMock(return_value={"status": "ok"}),
+        vector_index_stats=AsyncMock(return_value={"coverage": 1.0}),
+        vector_sync_gap=AsyncMock(return_value={"gap": 0}),
     )
 
     register_resources(

@@ -51,23 +51,23 @@ async def build_semantic_hits(
     user_id: int,
     fetch_limit: int,
     min_similarity: float,
-    get_chroma_service: Callable[[], Awaitable[Any]],
+    get_vector_service: Callable[[], Awaitable[Any]],
 ) -> dict[int, dict[str, Any]]:
     hits: dict[int, dict[str, Any]] = {}
     if resolved_mode not in {"semantic", "hybrid"}:
         return hits
 
     try:
-        chroma_service = await get_chroma_service()
+        vector_service = await get_vector_service()
     except Exception:
-        chroma_service = None
-        logger.warning("search_chroma_unavailable", exc_info=True)
+        vector_service = None
+        logger.warning("search_vector_unavailable", exc_info=True)
 
     semantic_tags = filters.tags or extract_query_tags(q) or None
-    if chroma_service is None:
+    if vector_service is None:
         return hits
 
-    semantic_results = await chroma_service.search(
+    semantic_results = await vector_service.search(
         q,
         language=filters.language,
         tags=semantic_tags,

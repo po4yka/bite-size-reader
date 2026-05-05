@@ -110,18 +110,18 @@ def manage_database_proxy():
 
 @pytest.fixture(autouse=True)
 def mock_chroma_client():
-    """Mock ChromaDB client to prevent connection attempts."""
-    # Avoid importing the real chromadb package (pydantic v1 dependency) during tests.
+    """Stub chromadb in sys.modules to prevent any import of the real package.
+
+    The chroma_store module is now a no-op stub so there is nothing to patch;
+    we only need to ensure 'chromadb' resolves to a safe mock for any legacy
+    code path that may still reference it at import time.
+    """
     chroma_stub = MagicMock()
     chroma_stub.HttpClient = MagicMock()
     chroma_stub.errors.ChromaError = Exception
-    sys.modules["chromadb"] = chroma_stub
-    sys.modules["chromadb.errors"] = chroma_stub.errors
-
-    with patch("app.infrastructure.vector.chroma_store.chromadb.HttpClient") as mock_client:
-        mock_instance = MagicMock()
-        mock_client.return_value = mock_instance
-        yield mock_instance
+    sys.modules.setdefault("chromadb", chroma_stub)
+    sys.modules.setdefault("chromadb.errors", chroma_stub.errors)
+    yield chroma_stub.HttpClient.return_value
 
 
 class MockSummaryRepository:

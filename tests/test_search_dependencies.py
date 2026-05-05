@@ -5,11 +5,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-mock_chromadb = MagicMock()
-mock_chromadb.errors.ChromaError = Exception
-sys.modules["chromadb"] = mock_chromadb
-sys.modules["chromadb.errors"] = mock_chromadb.errors
-
 from app.di import search as search_di
 from tests.api.dependencies.search_resources_helpers import (
     get_test_chroma_service,

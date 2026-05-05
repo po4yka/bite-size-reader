@@ -37,7 +37,7 @@ class FakeVectorResult:
 
 
 def _wrap_vector_results(results: list[FakeVectorResult]) -> SimpleNamespace:
-    """Wrap results in a ChromaVectorSearchResults-like object."""
+    """Wrap results in a StoreVectorSearchResults-like object."""
     return SimpleNamespace(results=results, has_more=False)
 
 

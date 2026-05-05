@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from app.api.dependencies.search_resources import get_chroma_search_service
+from app.api.dependencies.search_resources import get_vector_search_service
 from app.api.models.responses import PaginationInfo, SearchResultsData
 from app.api.search_helpers import SearchFilters, build_facets, infer_intent, isotime, resolve_mode
 from app.api.search_insights import compute_search_insights_payload
@@ -35,10 +35,10 @@ class SearchService:
         self,
         *,
         search_read_model: SearchReadModelUseCase,
-        get_chroma_service: Callable[..., Awaitable[Any]] = get_chroma_search_service,
+        get_vector_service: Callable[..., Awaitable[Any]] = get_vector_search_service,
     ) -> None:
         self._search_read_model = search_read_model
-        self._get_chroma_service = get_chroma_service
+        self._get_vector_service = get_vector_service
 
     async def search_summaries(
         self,
@@ -69,7 +69,7 @@ class SearchService:
             user_id=user_id,
             fetch_limit=fetch_limit,
             min_similarity=min_similarity,
-            get_chroma_service=self._get_chroma_service,
+            get_vector_service=self._get_vector_service,
         )
         request_ids = candidate_request_ids(
             resolved_mode,
@@ -122,8 +122,8 @@ class SearchService:
         min_similarity: float,
         filters: SearchFilters,
     ) -> SearchResultsData:
-        chroma_service = await self._get_chroma_service()
-        search_results = await chroma_service.search(
+        vector_service = await self._get_vector_service()
+        search_results = await vector_service.search(
             q,
             language=filters.language,
             tags=filters.tags,

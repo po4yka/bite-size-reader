@@ -64,17 +64,17 @@ async def test_get_chroma_service_retries_after_backoff(
     database.migrate()
     database._database.close()
 
-    context = McpServerContext(db_path=str(db_path), chroma_retry_interval_sec=60.0)
+    context = McpServerContext(db_path=str(db_path), vector_retry_interval_sec=60.0)
 
-    assert await context.init_chroma_service() is None
+    assert await context.init_vector_service() is None
     assert attempts["count"] == 1
 
     clock["now"] = 10.0
-    assert await context.init_chroma_service() is None
+    assert await context.init_vector_service() is None
     assert attempts["count"] == 1
 
     clock["now"] = 61.0
-    assert await context.init_chroma_service() is None
+    assert await context.init_vector_service() is None
     assert attempts["count"] == 2
 
 
@@ -85,7 +85,7 @@ async def test_get_chroma_service_forwards_required_and_timeout(
 ) -> None:
     import app.di.mcp as mcp_di
     import app.infrastructure.embedding.embedding_factory as embedding_factory_module
-    import app.infrastructure.search.chroma_vector_search_service as chroma_service_module
+    import app.infrastructure.search.vector_search_service as chroma_service_module
     import app.infrastructure.vector.qdrant_store as qdrant_store_module
 
     captured: dict[str, Any] = {}
@@ -117,7 +117,7 @@ async def test_get_chroma_service_forwards_required_and_timeout(
     monkeypatch.setattr(embedding_factory_module, "create_embedding_service", lambda _cfg: object())
     monkeypatch.setattr(mcp_di, "resolve_embedding_space_identifier", lambda _cfg: None)
     monkeypatch.setattr(qdrant_store_module, "QdrantVectorStore", FakeStore)
-    monkeypatch.setattr(chroma_service_module, "ChromaVectorSearchService", FakeService)
+    monkeypatch.setattr(chroma_service_module, "StoreVectorSearchService", FakeService)
 
     db_path = tmp_path / "mcp-context.db"
     database = DatabaseSessionManager(str(db_path))
@@ -125,7 +125,7 @@ async def test_get_chroma_service_forwards_required_and_timeout(
     database._database.close()
 
     context = McpServerContext(db_path=str(db_path))
-    await context.init_chroma_service()
+    await context.init_vector_service()
 
     assert captured["store_kwargs"] == {
         "url": "http://localhost:6333",

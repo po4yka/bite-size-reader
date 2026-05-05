@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from app.db.session import DatabaseSessionManager
 
 
-class FakeChromaResult:
+class FakeVectorResult:
     def __init__(
         self,
         *,
@@ -47,18 +47,18 @@ class FakeChromaResult:
         self.local_summary = snippet
 
 
-class FakeChromaSearchPayload:
-    def __init__(self, results: list[FakeChromaResult], has_more: bool = False) -> None:
+class FakeVectorSearchPayload:
+    def __init__(self, results: list[FakeVectorResult], has_more: bool = False) -> None:
         self.results = results
         self.has_more = has_more
 
 
-class FakeChromaService:
-    def __init__(self, results: list[FakeChromaResult]) -> None:
+class FakeVectorService:
+    def __init__(self, results: list[FakeVectorResult]) -> None:
         self._results = results
 
-    async def search(self, *_args: Any, **_kwargs: Any) -> FakeChromaSearchPayload:
-        return FakeChromaSearchPayload(self._results, has_more=False)
+    async def search(self, *_args: Any, **_kwargs: Any) -> FakeVectorSearchPayload:
+        return FakeVectorSearchPayload(self._results, has_more=False)
 
 
 @pytest.mark.asyncio
@@ -87,7 +87,7 @@ async def test_semantic_search_groups_chunks_and_min_similarity(
     context = McpServerContext(user_id=1)
     service = SemanticSearchService(context, ArticleReadService(context))
     fake_results = [
-        FakeChromaResult(
+        FakeVectorResult(
             request_id=req1,
             summary_id=sid1,
             similarity_score=0.91,
@@ -95,7 +95,7 @@ async def test_semantic_search_groups_chunks_and_min_similarity(
             chunk_id="chunk-a",
             window_id="w-a",
         ),
-        FakeChromaResult(
+        FakeVectorResult(
             request_id=req1,
             summary_id=sid1,
             similarity_score=0.83,
@@ -103,7 +103,7 @@ async def test_semantic_search_groups_chunks_and_min_similarity(
             chunk_id="chunk-b",
             window_id="w-b",
         ),
-        FakeChromaResult(
+        FakeVectorResult(
             request_id=req2,
             summary_id=sid2,
             similarity_score=0.61,
@@ -113,10 +113,10 @@ async def test_semantic_search_groups_chunks_and_min_similarity(
         ),
     ]
 
-    async def fake_chroma() -> FakeChromaService:
-        return FakeChromaService(fake_results)
+    async def fake_vector() -> FakeVectorService:
+        return FakeVectorService(fake_results)
 
-    monkeypatch.setattr(context, "init_vector_service",fake_chroma)
+    monkeypatch.setattr(context, "init_vector_service", fake_vector)
 
     payload = await service.semantic_search(
         "ai policy",
@@ -142,13 +142,13 @@ async def test_semantic_search_keyword_fallback_when_semantic_unavailable(
     article_service = ArticleReadService(context)
     service = SemanticSearchService(context, article_service)
 
-    async def no_chroma() -> None:
+    async def no_vector() -> None:
         return None
 
     async def no_local(*_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
         return []
 
-    monkeypatch.setattr(context, "init_vector_service",no_chroma)
+    monkeypatch.setattr(context, "init_vector_service", no_vector)
     monkeypatch.setattr(service, "_search_local_vectors", no_local)
     monkeypatch.setattr(
         article_service,
@@ -192,7 +192,7 @@ async def test_find_similar_articles_excludes_source_summary(
     context = McpServerContext(user_id=1)
     service = SemanticSearchService(context, ArticleReadService(context))
     fake_results = [
-        FakeChromaResult(
+        FakeVectorResult(
             request_id=req1,
             summary_id=sid1,
             similarity_score=0.95,
@@ -200,7 +200,7 @@ async def test_find_similar_articles_excludes_source_summary(
             chunk_id="chunk-seed",
             window_id="w-seed",
         ),
-        FakeChromaResult(
+        FakeVectorResult(
             request_id=req2,
             summary_id=sid2,
             similarity_score=0.88,
@@ -210,10 +210,10 @@ async def test_find_similar_articles_excludes_source_summary(
         ),
     ]
 
-    async def fake_chroma() -> FakeChromaService:
-        return FakeChromaService(fake_results)
+    async def fake_vector() -> FakeVectorService:
+        return FakeVectorService(fake_results)
 
-    monkeypatch.setattr(context, "init_vector_service",fake_chroma)
+    monkeypatch.setattr(context, "init_vector_service", fake_vector)
 
     payload = await service.find_similar_articles(summary_id=sid1, limit=10)
     result_ids = [row["summary_id"] for row in payload["results"]]
@@ -247,7 +247,7 @@ async def test_semantic_search_uses_request_scoped_identity(
     context = McpServerContext(user_id=9999)
     service = SemanticSearchService(context, ArticleReadService(context))
     fake_results = [
-        FakeChromaResult(
+        FakeVectorResult(
             request_id=req1,
             summary_id=sid1,
             similarity_score=0.92,
@@ -255,7 +255,7 @@ async def test_semantic_search_uses_request_scoped_identity(
             chunk_id="chunk-user1",
             window_id="w-user1",
         ),
-        FakeChromaResult(
+        FakeVectorResult(
             request_id=req2,
             summary_id=sid2,
             similarity_score=0.87,
@@ -265,10 +265,10 @@ async def test_semantic_search_uses_request_scoped_identity(
         ),
     ]
 
-    async def fake_chroma() -> FakeChromaService:
-        return FakeChromaService(fake_results)
+    async def fake_vector() -> FakeVectorService:
+        return FakeVectorService(fake_results)
 
-    monkeypatch.setattr(context, "init_vector_service",fake_chroma)
+    monkeypatch.setattr(context, "init_vector_service", fake_vector)
 
     with context.request_identity_scope(
         McpRequestIdentity(
@@ -323,17 +323,17 @@ async def test_chroma_sync_gap_reports_missing_and_extra(
             _ = (user_id, limit)
             return {sid2, 99999}
 
-    class FakeChroma:
+    class FakeVector:
         _vector_store = FakeStore()
 
-    async def fake_chroma() -> FakeChroma:
-        return FakeChroma()
+    async def fake_vector() -> FakeVector:
+        return FakeVector()
 
     context = McpServerContext(user_id=1)
     service = SemanticSearchService(context, ArticleReadService(context))
-    monkeypatch.setattr(context, "init_vector_service", fake_chroma)
+    monkeypatch.setattr(context, "init_vector_service", fake_vector)
 
-    payload = await service.chroma_sync_gap(max_scan=1000, sample_size=10)
+    payload = await service.vector_sync_gap(max_scan=1000, sample_size=10)
     assert payload["missing_in_vector_count"] == 1
     assert sid1 in payload["missing_in_vector_sample"]
     assert payload["missing_in_sqlite_count"] == 1

@@ -22,14 +22,11 @@ class VectorStoreUnavailableError(RuntimeError):
     """Raised when signal scoring cannot use the required vector similarity store."""
 
 
-ChromaUnavailableError = VectorStoreUnavailableError  # backward-compat alias
-
-
 class TopicSimilarityPort(Protocol):
-    """Required Chroma-backed topic similarity port."""
+    """Required vector-backed topic similarity port."""
 
     def is_ready(self) -> bool:
-        """Return whether Chroma topic similarity can serve requests."""
+        """Return whether vector topic similarity can serve requests."""
 
     async def score_item(self, candidate: SignalCandidate) -> float:
         """Return a normalized topic similarity score for a candidate."""

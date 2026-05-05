@@ -10,7 +10,7 @@ from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.application.services.topic_search import LocalTopicSearchService
-    from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchResult
+    from app.infrastructure.search.vector_search_service import StoreVectorSearchResult
     from app.infrastructure.search.query_expansion_service import QueryExpansionService
     from app.infrastructure.search.search_filters import SearchFilters
 
@@ -148,7 +148,7 @@ class HybridSearchService:
     def _combine_results(
         self,
         fts_results: list[TopicArticle],
-        vector_results: list[ChromaVectorSearchResult],
+        vector_results: list[StoreVectorSearchResult],
     ) -> list[dict]:
         fts_scores: dict[str, float] = {}
         fts_data: dict[str, TopicArticle] = {}
@@ -161,7 +161,7 @@ class HybridSearchService:
                 fts_data[result_id] = result
 
         vector_scores: dict[str, float] = {}
-        vector_data: dict[str, ChromaVectorSearchResult] = {}
+        vector_data: dict[str, StoreVectorSearchResult] = {}
         for vector_result in vector_results:
             result_id = self._vector_result_id(vector_result)
             if result_id:
@@ -216,5 +216,5 @@ class HybridSearchService:
         return combined
 
     @staticmethod
-    def _vector_result_id(result: ChromaVectorSearchResult) -> str | None:
+    def _vector_result_id(result: StoreVectorSearchResult) -> str | None:
         return getattr(result, "url", None) or getattr(result, "chunk_id", None)

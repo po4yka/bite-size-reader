@@ -190,7 +190,7 @@ def create_signal_ingestion_worker(cfg: AppConfig, db: DatabaseSessionManager) -
     from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
         SqliteSignalSourceRepositoryAdapter,
     )
-    from app.infrastructure.search.chroma_topic_similarity import ChromaTopicSimilarityAdapter
+    from app.infrastructure.search.vector_topic_similarity import VectorTopicSimilarityAdapter
     from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 
     embedding_service = create_embedding_service(cfg.embedding)
@@ -207,7 +207,7 @@ def create_signal_ingestion_worker(cfg: AppConfig, db: DatabaseSessionManager) -
     return SignalIngestionWorker(
         repository=SqliteSignalSourceRepositoryAdapter(db),
         scorer=SignalScoringService(
-            topic_similarity=ChromaTopicSimilarityAdapter(
+            topic_similarity=VectorTopicSimilarityAdapter(
                 vector_store=vector_store,
                 embedding_service=embedding_service,
             )

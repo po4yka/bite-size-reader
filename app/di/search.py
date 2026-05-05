@@ -114,9 +114,9 @@ def build_search_dependencies(
 
     vector_search_service: Any | None = None
     if vector_store is not None:
-        from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchService
+        from app.infrastructure.search.vector_search_service import StoreVectorSearchService
 
-        vector_search_service = ChromaVectorSearchService(
+        vector_search_service = StoreVectorSearchService(
             vector_store=vector_store,
             embedding_service=embedding_service,
             default_top_k=max_results * 2,

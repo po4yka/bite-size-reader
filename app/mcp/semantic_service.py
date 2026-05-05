@@ -654,8 +654,8 @@ class SemanticSearchService:
 
             now = time.monotonic()
             vector_failed_for = (
-                round(now - self.context.chroma_last_failed_at, 2)
-                if self.context.chroma_last_failed_at is not None
+                round(now - self.context.vector_last_failed_at, 2)
+                if self.context.vector_last_failed_at is not None
                 else None
             )
             local_failed_for = (
@@ -676,8 +676,6 @@ class SemanticSearchService:
         except Exception as exc:
             logger.exception("vector_health failed")
             return {"error": str(exc)}
-
-    chroma_health = vector_health  # backward-compat alias
 
     async def vector_index_stats(self, scan_limit: int = 5000) -> dict[str, Any]:
         from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
@@ -735,8 +733,6 @@ class SemanticSearchService:
         except Exception as exc:
             logger.exception("vector_index_stats failed")
             return {"error": str(exc)}
-
-    chroma_index_stats = vector_index_stats  # backward-compat alias
 
     async def vector_sync_gap(self, max_scan: int = 5000, sample_size: int = 20) -> dict[str, Any]:
         from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
@@ -801,4 +797,3 @@ class SemanticSearchService:
             logger.exception("vector_sync_gap failed")
             return {"error": str(exc)}
 
-    chroma_sync_gap = vector_sync_gap  # backward-compat alias

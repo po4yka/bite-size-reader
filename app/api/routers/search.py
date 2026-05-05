@@ -98,7 +98,7 @@ async def semantic_search_summaries(
     user: dict[str, Any] = Depends(get_current_user),
     search_service: SearchService = Depends(_get_search_service),
 ):
-    """Semantic search across summaries using Chroma embeddings."""
+    """Semantic search across summaries using Qdrant embeddings."""
     try:
         result = await search_service.semantic_search_summaries(
             q=q,

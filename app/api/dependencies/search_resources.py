@@ -28,9 +28,6 @@ async def get_vector_search_service(
     raise RuntimeError(msg)
 
 
-get_chroma_search_service = get_vector_search_service  # backward-compat alias
-
-
 async def shutdown_vector_search_resources() -> None:
     """Release only API search resources without tearing down the whole runtime."""
     try:
@@ -44,4 +41,3 @@ async def shutdown_vector_search_resources() -> None:
         await runtime.search.embedding_service.aclose()
 
 
-shutdown_chroma_search_resources = shutdown_vector_search_resources  # backward-compat alias

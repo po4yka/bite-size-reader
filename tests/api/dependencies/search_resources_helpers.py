@@ -54,9 +54,9 @@ async def get_test_chroma_service() -> Any:
     _test_embedding = _test_embedding_factory()
     _test_vector_store = _test_vector_store_factory(config)
 
-    from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchService
+    from app.infrastructure.search.vector_search_service import StoreVectorSearchService
 
-    _test_service = ChromaVectorSearchService(
+    _test_service = StoreVectorSearchService(
         vector_store=_test_vector_store,
         embedding_service=_test_embedding,
         default_top_k=25,

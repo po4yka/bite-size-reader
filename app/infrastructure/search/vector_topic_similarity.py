@@ -1,4 +1,4 @@
-"""Chroma-backed topic similarity for signal scoring."""
+"""Vector-store-backed topic similarity for signal scoring."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class ChromaQueryStore(Protocol):
+class VectorQueryStore(Protocol):
     """Subset of the vector store used by signal topic similarity."""
 
     def query(
@@ -29,13 +29,13 @@ class ChromaQueryStore(Protocol):
         """Query similar vectors."""
 
 
-class ChromaTopicSimilarityAdapter:
-    """Topic similarity adapter backed by the existing Chroma summary collection."""
+class VectorTopicSimilarityAdapter:
+    """Topic similarity adapter backed by the vector summary collection."""
 
     def __init__(
         self,
         *,
-        vector_store: ChromaQueryStore,
+        vector_store: VectorQueryStore,
         embedding_service: EmbeddingServiceProtocol,
         user_id: int | None = None,
         top_k: int = 8,
@@ -75,7 +75,7 @@ class ChromaTopicSimilarityAdapter:
             )
         except Exception:
             logger.warning(
-                "signal_chroma_similarity_failed",
+                "signal_vector_similarity_failed",
                 extra={"feed_item_id": candidate.feed_item_id},
                 exc_info=True,
             )
@@ -101,3 +101,4 @@ class ChromaTopicSimilarityAdapter:
         except (TypeError, ValueError):
             return 0.0
         return max(0.0, min(1.0, 1.0 - distance))
+

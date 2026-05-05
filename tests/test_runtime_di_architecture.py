@@ -24,7 +24,7 @@ PATTERNS = [
     "ResponseFormatter(",
     "LocalTopicSearchService(",
     "SummaryEmbeddingGenerator(",
-    "ChromaVectorStore(",
+    "QdrantVectorStore(",
 ]
 ROOT_SQLITE_REPOSITORY_MODULES = [
     APP_ROOT

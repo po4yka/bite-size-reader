@@ -1,4 +1,4 @@
-"""Chroma-backed personalization helpers for signal scoring."""
+"""Vector-store personalization helpers for signal scoring."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ logger = get_logger(__name__)
 
 
 class SignalPersonalizationService:
-    """Maintain signal-scoring personalization vectors in Chroma."""
+    """Maintain signal-scoring personalization vectors in the vector store."""
 
     def __init__(
         self,
@@ -37,7 +37,7 @@ class SignalPersonalizationService:
         description: str | None,
         weight: float,
     ) -> str | None:
-        """Generate and upsert a user topic embedding into Chroma."""
+        """Generate and upsert a user topic embedding into the vector store."""
         if not self.is_ready():
             return None
 

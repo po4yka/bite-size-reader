@@ -7,9 +7,9 @@ import datetime as dt
 import pytest
 
 from app.application.services.signal_scoring import (
-    ChromaUnavailableError,
     SignalCandidate,
     SignalScoringService,
+    VectorStoreUnavailableError,
 )
 from app.core.time_utils import UTC
 
@@ -63,7 +63,7 @@ async def test_signal_scoring_fails_closed_when_chroma_unavailable():
     )
     service = SignalScoringService(topic_similarity=_FakeTopicSimilarity({}, ready=False))
 
-    with pytest.raises(ChromaUnavailableError):
+    with pytest.raises(VectorStoreUnavailableError):
         await service.score([candidate])
 
 

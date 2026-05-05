@@ -85,9 +85,9 @@ async def test_mcp_tool_registration_records_success_metrics() -> None:
         semantic_search=AsyncMock(return_value={"items": []}),
         hybrid_search=AsyncMock(return_value={"items": []}),
         find_similar_articles=AsyncMock(return_value={"items": []}),
-        chroma_health=AsyncMock(return_value={"status": "ok"}),
-        chroma_index_stats=AsyncMock(return_value={"coverage": 1.0}),
-        chroma_sync_gap=AsyncMock(return_value={"gap": 0}),
+        vector_health=AsyncMock(return_value={"status": "ok"}),
+        vector_index_stats=AsyncMock(return_value={"coverage": 1.0}),
+        vector_sync_gap=AsyncMock(return_value={"gap": 0}),
     )
     signal_service = SimpleNamespace(
         list_sources=MagicMock(return_value={"sources": []}),
@@ -155,9 +155,9 @@ async def test_mcp_tool_registration_records_error_metrics_for_service_errors() 
         semantic_search=AsyncMock(return_value={"items": []}),
         hybrid_search=AsyncMock(return_value={"items": []}),
         find_similar_articles=AsyncMock(return_value={"items": []}),
-        chroma_health=AsyncMock(return_value={"status": "ok"}),
-        chroma_index_stats=AsyncMock(return_value={"coverage": 1.0}),
-        chroma_sync_gap=AsyncMock(return_value={"gap": 0}),
+        vector_health=AsyncMock(return_value={"status": "ok"}),
+        vector_index_stats=AsyncMock(return_value={"coverage": 1.0}),
+        vector_sync_gap=AsyncMock(return_value={"gap": 0}),
     )
 
     register_tools(
@@ -267,9 +267,9 @@ def test_hosted_mcp_tool_uses_request_scoped_identity_and_client_id(
         semantic_search=AsyncMock(return_value={"items": []}),
         hybrid_search=AsyncMock(return_value={"items": []}),
         find_similar_articles=AsyncMock(return_value={"items": []}),
-        chroma_health=AsyncMock(return_value={"status": "ok"}),
-        chroma_index_stats=AsyncMock(return_value={"coverage": 1.0}),
-        chroma_sync_gap=AsyncMock(return_value={"gap": 0}),
+        vector_health=AsyncMock(return_value={"status": "ok"}),
+        vector_index_stats=AsyncMock(return_value={"coverage": 1.0}),
+        vector_sync_gap=AsyncMock(return_value={"gap": 0}),
     )
 
     register_tools(

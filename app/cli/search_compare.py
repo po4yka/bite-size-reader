@@ -26,9 +26,9 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
     from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
         SqliteTopicSearchRepositoryAdapter,
     )
-    from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchService
     from app.infrastructure.search.hybrid_search_service import HybridSearchService
-    from app.infrastructure.vector.chroma_store import ChromaVectorStore
+    from app.infrastructure.search.vector_search_service import StoreVectorSearchService
+    from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 
     cfg = load_config(allow_stub_telegram=True)
     db = DatabaseSessionManager(path=db_path)
@@ -38,18 +38,18 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
     fts_service = LocalTopicSearchService(
         repository=SqliteTopicSearchRepositoryAdapter(db), max_results=max_results
     )
-    chroma_cfg = cfg.vector_store
-    vector_store = ChromaVectorStore(
-        host=chroma_cfg.host,
-        auth_token=chroma_cfg.auth_token,
-        environment=chroma_cfg.environment,
-        user_scope=chroma_cfg.user_scope,
-        collection_version=chroma_cfg.collection_version,
+    qdrant_cfg = cfg.vector_store
+    vector_store = QdrantVectorStore(
+        url=qdrant_cfg.url,
+        api_key=qdrant_cfg.api_key,
+        environment=qdrant_cfg.environment,
+        user_scope=qdrant_cfg.user_scope,
+        collection_version=qdrant_cfg.collection_version,
         embedding_space=resolve_embedding_space_identifier(cfg.embedding),
-        required=chroma_cfg.required,
-        connection_timeout=chroma_cfg.connection_timeout,
+        required=qdrant_cfg.required,
+        connection_timeout=qdrant_cfg.connection_timeout,
     )
-    vector_service = ChromaVectorSearchService(
+    vector_service = StoreVectorSearchService(
         vector_store=vector_store,
         embedding_service=embedding_service,
         default_top_k=max_results,

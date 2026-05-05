@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from app.config import AppConfig
 
 VECTOR_RETRY_INTERVAL_SEC = 60.0
-CHROMA_RETRY_INTERVAL_SEC = VECTOR_RETRY_INTERVAL_SEC  # backward-compat alias for mcp/context.py
 LOCAL_VECTOR_RETRY_INTERVAL_SEC = 60.0
 
 logger = get_logger(__name__)
@@ -94,9 +93,7 @@ async def ensure_mcp_vector_service(runtime: McpRuntime) -> Any:
 
     async def _create() -> Any:
         from app.infrastructure.embedding.embedding_factory import create_embedding_service
-        from app.infrastructure.search.chroma_vector_search_service import (
-            ChromaVectorSearchService,
-        )
+        from app.infrastructure.search.vector_search_service import StoreVectorSearchService
         from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 
         if runtime.cfg is None:
@@ -114,7 +111,7 @@ async def ensure_mcp_vector_service(runtime: McpRuntime) -> Any:
             connection_timeout=cfg.connection_timeout,
         )
         runtime.vector_state.resources = (store, embedding)
-        return ChromaVectorSearchService(
+        return StoreVectorSearchService(
             vector_store=store,
             embedding_service=embedding,
             default_top_k=100,
@@ -128,7 +125,6 @@ async def ensure_mcp_vector_service(runtime: McpRuntime) -> Any:
     )
 
 
-ensure_mcp_chroma_service = ensure_mcp_vector_service  # backward-compat alias
 
 
 async def ensure_mcp_local_vector_service(runtime: McpRuntime) -> Any:

@@ -26,7 +26,7 @@ class McpServerContext:
         db_path: str | None = None,
         user_id: int | None = None,
         logger: logging.Logger | None = None,
-        chroma_retry_interval_sec: float | None = None,
+        vector_retry_interval_sec: float | None = None,
         local_vector_retry_interval_sec: float | None = None,
     ) -> None:
         self.logger = logger or logging.getLogger("ratatoskr.mcp")
@@ -45,10 +45,10 @@ class McpServerContext:
             default=_NO_REQUEST_USER_SCOPE,
         )
         self._api_runtime_lock: asyncio.Lock | None = None
-        self._chroma_retry_interval_sec = (
-            chroma_retry_interval_sec
-            if chroma_retry_interval_sec is not None
-            else mcp_di.CHROMA_RETRY_INTERVAL_SEC
+        self._vector_retry_interval_sec = (
+            vector_retry_interval_sec
+            if vector_retry_interval_sec is not None
+            else mcp_di.VECTOR_RETRY_INTERVAL_SEC
         )
         self._local_vector_retry_interval_sec = (
             local_vector_retry_interval_sec
@@ -100,12 +100,10 @@ class McpServerContext:
         return self._api_runtime
 
     @property
-    def chroma_last_failed_at(self) -> float | None:
+    def vector_last_failed_at(self) -> float | None:
         if self._runtime is None:
             return None
         return self._runtime.vector_state.last_failed_at
-
-    vector_last_failed_at = chroma_last_failed_at
 
     @property
     def local_vector_last_failed_at(self) -> float | None:
@@ -117,7 +115,7 @@ class McpServerContext:
         """Initialize the read-only MCP runtime immediately."""
         if db_path:
             self.db_path = db_path
-        mcp_di.CHROMA_RETRY_INTERVAL_SEC = self._chroma_retry_interval_sec
+        mcp_di.VECTOR_RETRY_INTERVAL_SEC = self._vector_retry_interval_sec
         mcp_di.LOCAL_VECTOR_RETRY_INTERVAL_SEC = self._local_vector_retry_interval_sec
         # Request-scoped overrides are transient and must not leak into the shared runtime.
         self._runtime = mcp_di.build_mcp_runtime(db_path=self.db_path, user_id=self._user_id)
@@ -228,8 +226,6 @@ class McpServerContext:
         else:
             self.logger.info("Vector search service initialised")
         return service
-
-    init_chroma_service = init_vector_service  # backward-compat alias
 
     async def init_local_vector_service(self) -> Any:
         """Initialize (or return cached) runtime-owned local embedding fallback service."""
