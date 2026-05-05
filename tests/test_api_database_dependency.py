@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any, cast
+
 from app.api.dependencies import database as database_dependency
 from app.di import database as di_database
 

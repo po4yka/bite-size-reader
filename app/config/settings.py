@@ -25,9 +25,9 @@ from .digest import ChannelDigestConfig
 from .firecrawl import FirecrawlConfig  # noqa: TC001
 from .integrations import (
     BatchAnalysisConfig,
-    QdrantConfig,
     EmbeddingConfig,
     McpConfig,
+    QdrantConfig,
     WebSearchConfig,
 )
 from .llm import AnthropicConfig, ModelRoutingConfig, OllamaConfig, OpenAIConfig, OpenRouterConfig

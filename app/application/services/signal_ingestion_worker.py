@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.application.services.signal_scoring import (
-    VectorStoreUnavailableError,
     SignalCandidate,
     SignalScoringService,
+    VectorStoreUnavailableError,
 )
 from app.core.logging_utils import get_logger
 

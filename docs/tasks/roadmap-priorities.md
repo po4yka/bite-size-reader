@@ -1,6 +1,6 @@
 # Cross-Project Roadmap Priorities
 
-> Active task board: [docs/tasks/dashboard.md](tasks/dashboard.md) · Per-issue backlog: [docs/tasks/backlog.md](tasks/backlog.md)
+> Active task board: [docs/tasks/dashboard.md](dashboard.md) · Per-issue backlog: [docs/tasks/backlog.md](backlog.md)
 
 Last updated: 2026-05-02
 
@@ -93,11 +93,11 @@ non-rooted Android devices.
 
 - Confirm Ratatoskr mobile contract readiness remains the top company priority
   until all auth, sync, summary, collections, search, digest, and signal
-  contract tasks in the [task board](tasks/dashboard.md) are resolved.
+  contract tasks in the [task board](dashboard.md) are resolved.
 - Confirm RIPDPI stays isolated from Ratatoskr implementation capacity until
   leadership provides sequencing for ownerless critical epics.
 - Confirm no additional roadmap expansion starts until active QA/security gate
-  tasks in the [task board](tasks/dashboard.md) report completion.
+  tasks in the [task board](dashboard.md) report completion.
 
 ### P2 Backlog
 

@@ -128,7 +128,7 @@ class _NoOpTracer:
     def start_as_current_span(self, name: str, **kwargs: Any):
         import contextlib
 
-        return contextlib.nullcontext()
+        return contextlib.nullcontext(_NoOpSpan())
 
     def start_span(self, name: str, **kwargs: Any) -> Any:
         return _NoOpSpan()

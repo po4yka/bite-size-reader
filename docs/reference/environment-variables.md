@@ -689,7 +689,7 @@ curl "$QDRANT_URL/healthz"
 
 - [Quickstart Tutorial](../guides/quickstart.md) - Step-by-step setup guide
 - [FAQ § Configuration](../explanation/faq.md#configuration) - Common configuration questions
-- [TROUBLESHOOTING § Configuration](TROUBLESHOOTING.md#configuration-issues) - Fix config problems
+- [TROUBLESHOOTING § Configuration](troubleshooting.md#configuration-issues) - Fix config problems
 - [DEPLOYMENT.md](../guides/deploy-production.md) - Production deployment guide
 
 ---

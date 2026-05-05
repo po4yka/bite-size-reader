@@ -10,9 +10,9 @@ from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.application.services.topic_search import LocalTopicSearchService
-    from app.infrastructure.search.vector_search_service import StoreVectorSearchResult
     from app.infrastructure.search.query_expansion_service import QueryExpansionService
     from app.infrastructure.search.search_filters import SearchFilters
+    from app.infrastructure.search.vector_search_service import StoreVectorSearchResult
 
 
 class RerankerProtocol(Protocol):
