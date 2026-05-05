@@ -309,6 +309,7 @@ async def migrate(
         user_scope=resolved_qdrant_cfg.user_scope,
         collection_version=resolved_qdrant_cfg.collection_version,
         embedding_space=embedding_space,
+        embedding_dim=app_cfg.embedding.embedding_dim,
         required=True,
         connection_timeout=resolved_qdrant_cfg.connection_timeout,
     )

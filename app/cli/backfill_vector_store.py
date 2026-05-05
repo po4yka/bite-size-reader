@@ -84,6 +84,7 @@ async def backfill_vector_store(
         user_scope=qdrant_cfg.user_scope,
         collection_version=qdrant_cfg.collection_version,
         embedding_space=resolve_embedding_space_identifier(app_cfg.embedding),
+        embedding_dim=app_cfg.embedding.embedding_dim,
         required=qdrant_cfg.required,
         connection_timeout=qdrant_cfg.connection_timeout,
     )

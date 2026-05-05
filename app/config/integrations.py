@@ -341,6 +341,13 @@ class EmbeddingConfig(BaseModel):
     gemini_dimensions: int = Field(default=768, validation_alias="GEMINI_EMBEDDING_DIMENSIONS")
     max_token_length: int = Field(default=512, validation_alias="EMBEDDING_MAX_TOKEN_LENGTH")
 
+    @property
+    def embedding_dim(self) -> int:
+        """Return vector dimension for the configured embedding provider."""
+        if self.provider == "gemini":
+            return self.gemini_dimensions
+        return 384  # all local sentence-transformers models produce 384-dim vectors
+
     @field_validator("provider", mode="before")
     @classmethod
     def _validate_provider(cls, value: Any) -> str:
