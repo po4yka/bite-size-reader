@@ -48,12 +48,17 @@ def _str_to_uuid(s: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+_CHROMA_TENANT = "default_tenant"
+_CHROMA_DATABASE = "default_database"
+_CHROMA_V2_BASE = f"/api/v2/tenants/{_CHROMA_TENANT}/databases/{_CHROMA_DATABASE}"
+
+
 async def _chroma_list_collections(base_url: str, auth_token: str | None) -> list[dict[str, Any]]:
     import httpx
 
     headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
     async with httpx.AsyncClient(base_url=base_url, timeout=30) as client:
-        resp = await client.get("/api/v1/collections", headers=headers)
+        resp = await client.get(f"{_CHROMA_V2_BASE}/collections", headers=headers)
         resp.raise_for_status()
         return resp.json()
 
@@ -65,7 +70,7 @@ async def _chroma_get_collection(
 
     headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else {}
     async with httpx.AsyncClient(base_url=base_url, timeout=30) as client:
-        resp = await client.get(f"/api/v1/collections/{name}", headers=headers)
+        resp = await client.get(f"{_CHROMA_V2_BASE}/collections/{name}", headers=headers)
         if resp.status_code == 404:
             return None
         resp.raise_for_status()
@@ -90,7 +95,7 @@ async def _chroma_get_batch(
     }
     async with httpx.AsyncClient(base_url=base_url, timeout=60) as client:
         resp = await client.post(
-            f"/api/v1/collections/{collection_id}/get",
+            f"{_CHROMA_V2_BASE}/collections/{collection_id}/get",
             json=body,
             headers=headers,
         )
