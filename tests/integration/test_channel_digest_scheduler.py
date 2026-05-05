@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib
 import logging
 import sys
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import peewee
@@ -65,7 +66,7 @@ def populated_db(db_mem):
 def fake_redis():
     """In-process fake Redis — no network, no external process required."""
     try:
-        import fakeredis.aioredis  # noqa: PLC0415
+        import fakeredis.aioredis
     except (ImportError, TypeError) as exc:
         pytest.skip(f"fakeredis unavailable on this platform: {exc}")
     return fakeredis.aioredis.FakeRedis(decode_responses=True)
@@ -134,7 +135,7 @@ def _no_redis() -> AsyncMock:
     return AsyncMock(return_value=None)
 
 
-def _with_redis(fake: fakeredis.aioredis.FakeRedis) -> AsyncMock:
+def _with_redis(fake: Any) -> AsyncMock:
     """Return an AsyncMock for get_redis that resolves to the given fake Redis."""
     return AsyncMock(return_value=fake)
 
