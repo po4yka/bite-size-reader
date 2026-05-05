@@ -4,7 +4,6 @@ This module provides common fixtures for all tests.
 """
 
 import os
-import sys
 from datetime import datetime
 from enum import Enum
 from pathlib import Path

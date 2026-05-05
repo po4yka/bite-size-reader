@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import uuid
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +10,9 @@ from qdrant_client import QdrantClient
 
 from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 from app.infrastructure.vector.result_types import VectorQueryResult
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 EMBEDDING_DIM = 3
 
@@ -19,8 +22,8 @@ def _make_in_memory_client(**_kwargs: object) -> QdrantClient:
     return QdrantClient(":memory:")
 
 
-@pytest.fixture()
-def store() -> QdrantVectorStore:
+@pytest.fixture
+def store() -> Generator[QdrantVectorStore]:
     with patch(
         "app.infrastructure.vector.qdrant_store.QdrantClient",
         side_effect=_make_in_memory_client,

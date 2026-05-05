@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from types import SimpleNamespace
 from typing import Any, cast
 from app.api.dependencies import database as database_dependency

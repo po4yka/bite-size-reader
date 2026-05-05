@@ -25,7 +25,7 @@ def test_hit_is_frozen() -> None:
     hit = VectorQueryHit(id="x", distance=0.5, metadata={})
     try:
         hit.distance = 0.9  # type: ignore[misc]
-        assert False, "should have raised"
+        pytest.fail("should have raised")
     except Exception:
         pass
 
@@ -34,7 +34,7 @@ def test_result_is_frozen() -> None:
     result = VectorQueryResult.empty()
     try:
         result.hits = []  # type: ignore[misc]
-        assert False, "should have raised"
+        pytest.fail("should have raised")
     except Exception:
         pass
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
 
 from app.infrastructure.vector.qdrant_schemas import QdrantQueryFilters
@@ -87,7 +88,7 @@ def test_tags_deduplication() -> None:
 
 
 def test_tags_none_produces_empty() -> None:
-    fq = QdrantQueryFilters(environment="dev", user_scope="public", tags=None)  # type: ignore[arg-type]
+    fq = QdrantQueryFilters(environment="dev", user_scope="public", tags=None)
     assert fq.tags == []
 
 
@@ -126,15 +127,15 @@ def test_full_filter_condition_count() -> None:
 
 
 def test_request_id_negative_raises() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         QdrantQueryFilters(environment="dev", user_scope="public", request_id=-1)
 
 
 def test_user_id_zero_raises() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         QdrantQueryFilters(environment="dev", user_scope="public", user_id=0)
 
 
 def test_extra_fields_forbidden() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         QdrantQueryFilters(environment="dev", user_scope="public", unknown_field="x")  # type: ignore[call-arg]

@@ -1,4 +1,3 @@
-import sys
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import MagicMock
