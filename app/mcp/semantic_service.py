@@ -796,4 +796,3 @@ class SemanticSearchService:
         except Exception as exc:
             logger.exception("vector_sync_gap failed")
             return {"error": str(exc)}
-
