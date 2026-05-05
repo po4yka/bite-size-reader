@@ -9,6 +9,7 @@ from chromadb.errors import ChromaError
 
 from app.core.logging_utils import get_logger
 from app.infrastructure.vector.chroma_schemas import ChromaMetadata, ChromaQueryFilters
+from app.infrastructure.vector.result_types import VectorQueryHit, VectorQueryResult
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -356,11 +357,11 @@ class ChromaVectorStore:
         query_vector: Sequence[float],
         filters: dict[str, Any] | None,
         top_k: int,
-    ) -> dict[str, Any]:
+    ) -> VectorQueryResult:
         """Query for most similar notes.
 
-        When ChromaDB is unavailable and not required, this method returns empty
-        results instead of raising an exception.
+        When ChromaDB is unavailable and not required, this method returns an
+        empty result instead of raising an exception.
         """
         if not self._available:
             self.ensure_available()
@@ -369,7 +370,7 @@ class ChromaVectorStore:
                 "chroma_query_skipped",
                 extra={"reason": "not_available", "top_k": top_k},
             )
-            return {"ids": [[]], "distances": [[]], "metadatas": [[]]}
+            return VectorQueryResult.empty()
 
         if top_k <= 0:
             msg = "top_k must be positive"
@@ -388,12 +389,15 @@ class ChromaVectorStore:
 
         try:
             collection = cast("Any", self._collection)
-            result = collection.query(
-                query_embeddings=[list(query_vector)],
-                where=validated_filters,
-                n_results=top_k,
+            raw = cast(
+                "dict[str, Any]",
+                collection.query(
+                    query_embeddings=[list(query_vector)],
+                    where=validated_filters,
+                    n_results=top_k,
+                ),
             )
-            return cast("dict[str, Any]", result)
+            return self._raw_to_result(raw)
         except ChromaError as e:
             logger.error(
                 "chroma_query_failed",
@@ -402,7 +406,26 @@ class ChromaVectorStore:
             if self._required:
                 raise
             self._available = False
-            return {"ids": [[]], "distances": [[]], "metadatas": [[]]}
+            return VectorQueryResult.empty()
+
+    @staticmethod
+    def _raw_to_result(raw: dict[str, Any]) -> VectorQueryResult:
+        """Convert the Chroma query dict to a VectorQueryResult."""
+        ids_batches = raw.get("ids") or [[]]
+        dist_batches = raw.get("distances") or [[]]
+        meta_batches = raw.get("metadatas") or [[]]
+
+        ids_flat: list[str] = ids_batches[0] if ids_batches else []
+        dist_flat: list[float] = dist_batches[0] if dist_batches else []
+        meta_flat: list[dict[str, Any]] = meta_batches[0] if meta_batches else []
+
+        hits: list[VectorQueryHit] = []
+        for i, point_id in enumerate(ids_flat):
+            distance = float(dist_flat[i]) if i < len(dist_flat) else 0.0
+            metadata = meta_flat[i] if i < len(meta_flat) else {}
+            hits.append(VectorQueryHit(id=str(point_id), distance=distance, metadata=metadata))
+
+        return VectorQueryResult(hits=hits)
 
     def delete_by_request_id(self, request_id: int | str) -> None:
         """Delete embeddings associated with a specific request ID.

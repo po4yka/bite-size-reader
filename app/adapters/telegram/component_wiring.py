@@ -41,7 +41,7 @@ class TelegramComponentWiring:
         bot.topic_searcher = components.search.topic_searcher
         bot.local_searcher = components.search.local_searcher
         bot.embedding_service = components.search.embedding_service
-        bot.vector_search_service = components.search.chroma_vector_search_service
+        bot.vector_search_service = components.search.vector_search_service
         bot.query_expansion_service = components.search.query_expansion_service
         bot.hybrid_search_service = components.search.hybrid_search_service
         bot.vector_store = components.search.vector_store

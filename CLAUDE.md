@@ -29,7 +29,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - pydantic / pydantic-settings (validation, configuration)
 - trafilatura, spacy (lightweight sentence tokenizer via spacy.blank())
 - json-repair (JSON recovery from LLM output)
-- scikit-learn, sentence-transformers, chromadb (search, local embeddings, vector store)
+- scikit-learn, sentence-transformers, qdrant-client (search, local embeddings, vector store)
 - google-genai (optional: Gemini Embedding 2 API provider)
 - loguru, orjson (structured logging, fast JSON serialization)
 - FastAPI / uvicorn (Mobile REST API)
@@ -94,7 +94,7 @@ app/
 +-- types/              # Type definitions
 +-- utils/              # Helper utilities (progress, formatting, validation)
 clients/
-+-- cli/                # CLI tools (summary runner, search, MCP server, migrations, Chroma backfill)
++-- cli/                # CLI tools (summary runner, search, MCP server, migrations, vector store backfill)
 +-- browser-extension/  # Browser extension assets and docs
 +-- web/                # Web interface (React + TypeScript + Vite)
 integrations/
@@ -298,7 +298,7 @@ Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch
 - **Collections** -- User-created collections with items, collaborators, and invite links (`app/db/models.py`: Collection, CollectionItem, CollectionCollaborator, CollectionInvite)
 - **Device Sync** -- Multi-device sync with full/delta modes and conflict resolution (`app/api/routers/sync.py`, UserDevice model)
 - **Event Bus** -- Internal event publishing/subscribing (`app/infrastructure/messaging/`)
-- **Chroma Vector Store** -- Semantic search via ChromaDB embeddings (`app/infrastructure/`, `app/cli/backfill_chroma_store.py`). Embedding provider switchable via `EmbeddingConfig` (local sentence-transformers or Gemini API); see `app/infrastructure/embedding/embedding_factory.py`
+- **Qdrant Vector Store** -- Semantic search via Qdrant embeddings (`app/infrastructure/vector/qdrant_store.py`, `app/cli/backfill_vector_store.py`). Embedding provider switchable via `EmbeddingConfig` (local sentence-transformers or Gemini API); see `app/infrastructure/embedding/embedding_factory.py`
 - **PDF Export** -- Summary export to PDF via weasyprint
 - **Background Scheduling** -- APScheduler-based background task processing with Redis distributed locks
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Telethon userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow. Ops reference: `docs/reference/digest-subsystem-ops.md`.

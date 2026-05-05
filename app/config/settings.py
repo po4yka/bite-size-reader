@@ -25,7 +25,7 @@ from .digest import ChannelDigestConfig
 from .firecrawl import FirecrawlConfig  # noqa: TC001
 from .integrations import (
     BatchAnalysisConfig,
-    ChromaConfig,
+    QdrantConfig,
     EmbeddingConfig,
     McpConfig,
     WebSearchConfig,
@@ -153,7 +153,7 @@ class AppConfig:
     telegram_limits: TelegramLimitsConfig
     database: DatabaseConfig
     content_limits: ContentLimitsConfig
-    vector_store: ChromaConfig
+    vector_store: QdrantConfig
     redis: RedisConfig
     api_limits: ApiLimitsConfig
     auth: AuthConfig
@@ -204,7 +204,7 @@ class Settings(BaseSettings):
     telegram_limits: TelegramLimitsConfig = Field(default_factory=TelegramLimitsConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     content_limits: ContentLimitsConfig = Field(default_factory=ContentLimitsConfig)
-    vector_store: ChromaConfig = Field(default_factory=ChromaConfig)
+    vector_store: QdrantConfig = Field(default_factory=QdrantConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     api_limits: ApiLimitsConfig = Field(default_factory=ApiLimitsConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)

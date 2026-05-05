@@ -18,8 +18,11 @@ MINHASH_NEAR_DUPLICATE_THRESHOLD = 0.55
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
-class ChromaUnavailableError(RuntimeError):
-    """Raised when signal scoring cannot use required Chroma similarity."""
+class VectorStoreUnavailableError(RuntimeError):
+    """Raised when signal scoring cannot use the required vector similarity store."""
+
+
+ChromaUnavailableError = VectorStoreUnavailableError  # backward-compat alias
 
 
 class TopicSimilarityPort(Protocol):
@@ -71,7 +74,7 @@ class SignalScoringService:
         now: datetime | None = None,
     ) -> list[ScoredSignal]:
         if not self._topic_similarity.is_ready():
-            raise ChromaUnavailableError("Chroma topic similarity is required for signal scoring")
+            raise VectorStoreUnavailableError("Vector topic similarity is required for signal scoring")
 
         now = now or datetime.now(UTC)
         deduped = self._dedupe(candidates)

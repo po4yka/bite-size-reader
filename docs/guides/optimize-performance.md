@@ -197,13 +197,10 @@ SCRAPER_JS_HEAVY_HOSTS=example.com,spa-site.io
 
 ```bash
 # Use smallest embedding model
-CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2  # 90 MB
+EMBEDDING_PROVIDER=local  # 90 MB
 
-# Disable ChromaDB if not using search
-CHROMA_REQUIRED=false
-
-# Limit ChromaDB memory
-CHROMA_MAX_MEMORY_MB=256
+# Disable Qdrant if not using search
+QDRANT_REQUIRED=false
 
 # Reduce Redis connections
 REDIS_MAX_CONNECTIONS=5  # Default: 10
@@ -213,10 +210,10 @@ REDIS_MAX_CONNECTIONS=5  # Default: 10
 
 ```bash
 # Force CPU for embeddings (if GPU unavailable)
-CHROMA_DEVICE=cpu
+EMBEDDING_PROVIDER=local  # sentence-transformers runs on CPU by default
 
-# Reduce embedding batch size
-CHROMA_BATCH_SIZE=10  # Default: 50
+# Reduce embedding batch size (in backfill CLI)
+# python -m app.cli.backfill_vector_store --batch-size 10  # Default: 100
 
 # Disable token counting (use approximation)
 TOKEN_COUNTING_MODE=fast  # len(text)//4 approximation
@@ -282,7 +279,7 @@ sqlite3 data/ratatoskr.db "
 # Target: 512 MB RAM, minimal cost
 OPENROUTER_MODEL=google/gemini-2.0-flash-001:free
 MAX_CONCURRENT_CALLS=2
-CHROMA_REQUIRED=false
+QDRANT_REQUIRED=false
 REDIS_ENABLED=false
 WEB_SEARCH_ENABLED=false
 YOUTUBE_DOWNLOAD_ENABLED=false
@@ -294,11 +291,11 @@ YOUTUBE_DOWNLOAD_ENABLED=false
 # Target: 1 GB RAM, ~$15/month
 OPENROUTER_MODEL=qwen/qwen3-max
 MAX_CONCURRENT_CALLS=4
-CHROMA_REQUIRED=true
+QDRANT_REQUIRED=true
 REDIS_ENABLED=true
 WEB_SEARCH_ENABLED=false
 YOUTUBE_DOWNLOAD_ENABLED=true
-CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2
+EMBEDDING_PROVIDER=local
 ```
 
 ### High Performance (No Cost Constraints)
@@ -307,12 +304,12 @@ CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2
 # Target: 2 GB RAM, ~$50/month, <3s summaries
 OPENROUTER_MODEL=qwen/qwen3-max
 MAX_CONCURRENT_CALLS=10
-CHROMA_REQUIRED=true
+QDRANT_REQUIRED=true
 REDIS_ENABLED=true
 WEB_SEARCH_ENABLED=true
 YOUTUBE_DOWNLOAD_ENABLED=true
-CHROMA_EMBEDDING_MODEL=all-mpnet-base-v2
-CHROMA_DEVICE=cuda  # If GPU available
+EMBEDDING_MODEL=all-mpnet-base-v2
+# For GPU-accelerated embeddings, set up a GPU-enabled sentence-transformers env
 ```
 
 ---
@@ -395,7 +392,7 @@ htop  # or top
 
 **Solutions:**
 
-- Disable ChromaDB or use smaller model
+- Disable Qdrant or use smaller embedding model
 - Reduce Redis connection pool
 - Reduce concurrent calls
 

@@ -21,7 +21,7 @@ services:
     environment:
       - TEXTACY_ENABLED=1
       - DB_PATH=/data/ratatoskr.db
-      - CHROMA_HOST=http://chroma:8000
+      - QDRANT_URL=http://qdrant:6333
       - REDIS_ENABLED=1
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -62,9 +62,9 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      chroma:
+      qdrant:
         condition: service_healthy
-        required: false # Allow bot to start without ChromaDB (graceful degradation)
+        required: false # Allow bot to start without Qdrant (graceful degradation)
       # only enforced when --profile with-scrapers is active
       crawl4ai:
         condition: service_healthy
@@ -98,7 +98,7 @@ services:
       - API_PORT=8000
       - API_WORKERS=${API_WORKERS:-1}
       - DB_PATH=/data/ratatoskr.db
-      - CHROMA_HOST=http://chroma:8000
+      - QDRANT_URL=http://qdrant:6333
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434/v1}
@@ -126,9 +126,9 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      chroma:
+      qdrant:
         condition: service_healthy
-        required: false # Allow API to start without ChromaDB (graceful degradation)
+        required: false # Allow API to start without Qdrant (graceful degradation)
       # only enforced when --profile with-scrapers is active
       crawl4ai:
         condition: service_healthy
@@ -175,7 +175,7 @@ services:
       - MCP_USER_ID=${MCP_USER_ID:-}
       - MCP_ALLOW_REMOTE_SSE=true
       - DB_PATH=/data/ratatoskr.db
-      - CHROMA_HOST=http://chroma:8000
+      - QDRANT_URL=http://qdrant:6333
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -192,7 +192,7 @@ services:
     ports:
       - "127.0.0.1:8200:8200"
     depends_on:
-      chroma:
+      qdrant:
         condition: service_healthy
         required: false
     restart: unless-stopped
@@ -237,7 +237,7 @@ services:
       - MCP_USER_ID=${MCP_USER_ID:-}
       - MCP_ALLOW_REMOTE_SSE=true
       - DB_PATH=/data/ratatoskr.db
-      - CHROMA_HOST=http://chroma:8000
+      - QDRANT_URL=http://qdrant:6333
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -251,7 +251,7 @@ services:
     ports:
       - "127.0.0.1:8201:8200"
     depends_on:
-      chroma:
+      qdrant:
         condition: service_healthy
         required: false
     restart: unless-stopped
@@ -299,7 +299,7 @@ services:
       - MCP_FORWARDED_SECRET_HEADER=${MCP_FORWARDED_SECRET_HEADER:-X-Ratatoskr-MCP-Forwarding-Secret}
       - MCP_FORWARDING_SECRET=${MCP_FORWARDING_SECRET:-}
       - DB_PATH=/data/ratatoskr.db
-      - CHROMA_HOST=http://chroma:8000
+      - QDRANT_URL=http://qdrant:6333
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
@@ -313,7 +313,7 @@ services:
     ports:
       - "127.0.0.1:8202:8200"
     depends_on:
-      chroma:
+      qdrant:
         condition: service_healthy
         required: false
     restart: unless-stopped
@@ -706,42 +706,29 @@ services:
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 30s
-  chroma:
-    image: ratatoskr-chroma:1.5.2
-    build:
-      context: ../..
-      dockerfile: ops/docker/Dockerfile.chroma
-    container_name: ratatoskr-chroma
-    init: true
-    volumes:
-      - ../../chroma_data:/data
-    ports:
-      - "127.0.0.1:8001:8000" # Bind to localhost only - internal service
-    environment:
-      - IS_PERSISTENT=TRUE
-      - COMPONENT=server
-      - CHROMA_HOST=0.0.0.0
-      - CHROMA_PORT=8000
-      - PERSIST_DIRECTORY=/data
-      - CHROMA_TELEMETRY_ENABLED=false
-      - ANONYMIZED_TELEMETRY=FALSE
-      - CHROMA_SERVER_LOG_LEVEL=INFO
-      - CHROMA_SERVER_WORKERS=1
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    container_name: ratatoskr-qdrant
     restart: unless-stopped
-    ulimits:
-      nofile:
-        soft: 1048576
-        hard: 1048576
+    volumes:
+      - ../../qdrant_data:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333" # HTTP — loopback only
+      - "127.0.0.1:6334:6334" # gRPC — loopback only
+    environment:
+      - QDRANT__LOG_LEVEL=INFO
+      - QDRANT__TELEMETRY_DISABLED=true
+      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:-}
     deploy:
       resources:
         limits:
           memory: 512M
-          cpus: "0.25"
+          cpus: "0.50"
         reservations:
           memory: 256M
           cpus: "0.10"
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8000"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:6333/healthz || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

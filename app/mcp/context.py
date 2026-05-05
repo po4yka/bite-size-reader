@@ -103,7 +103,9 @@ class McpServerContext:
     def chroma_last_failed_at(self) -> float | None:
         if self._runtime is None:
             return None
-        return self._runtime.chroma_state.last_failed_at
+        return self._runtime.vector_state.last_failed_at
+
+    vector_last_failed_at = chroma_last_failed_at
 
     @property
     def local_vector_last_failed_at(self) -> float | None:
@@ -218,14 +220,16 @@ class McpServerContext:
             filters.append(collection_model.user == self.user_id)
         return filters
 
-    async def init_chroma_service(self) -> Any:
-        """Initialize (or return cached) runtime-owned Chroma search service."""
-        service = await mcp_di.ensure_mcp_chroma_service(self.ensure_runtime())
+    async def init_vector_service(self) -> Any:
+        """Initialize (or return cached) runtime-owned vector search service."""
+        service = await mcp_di.ensure_mcp_vector_service(self.ensure_runtime())
         if service is None:
-            self.logger.warning("ChromaDB unavailable — semantic_search tool will be disabled")
+            self.logger.warning("Vector store unavailable — semantic_search tool will be disabled")
         else:
-            self.logger.info("ChromaDB search service initialised")
+            self.logger.info("Vector search service initialised")
         return service
+
+    init_chroma_service = init_vector_service  # backward-compat alias
 
     async def init_local_vector_service(self) -> Any:
         """Initialize (or return cached) runtime-owned local embedding fallback service."""

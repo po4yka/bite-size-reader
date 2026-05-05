@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.application.services.signal_scoring import (
-    ChromaUnavailableError,
+    VectorStoreUnavailableError,
     SignalCandidate,
     SignalScoringService,
 )
@@ -60,8 +60,8 @@ class SignalIngestionWorker:
         candidates = [self._candidate_from_row(row) for row in rows]
         try:
             scored = await self._scorer.score(candidates, now=now)
-        except ChromaUnavailableError:
-            logger.warning("signal_ingestion_disabled_chroma_unavailable")
+        except VectorStoreUnavailableError:
+            logger.warning("signal_ingestion_disabled_vector_unavailable")
             return SignalIngestionStats(
                 candidates=len(candidates),
                 persisted=0,

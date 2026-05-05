@@ -363,8 +363,8 @@ docker logs ratatoskr
 # Rebuild search index
 python -m app.cli.rebuild_indexes
 
-# Backfill ChromaDB embeddings (if enabled)
-python -m app.cli.backfill_chroma_store
+# Backfill vector store embeddings (if enabled)
+python -m app.cli.backfill_vector_store
 
 # Verify
 sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summaries;"

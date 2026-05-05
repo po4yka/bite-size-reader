@@ -12,7 +12,7 @@ This guide helps you diagnose and resolve common issues with Ratatoskr.
 - [YouTube Issues](#youtube-issues)
 - [Database Issues](#database-issues)
 - [Redis Issues](#redis-issues)
-- [ChromaDB Issues](#chromadb-issues)
+- [Qdrant Issues](#qdrant-issues)
 - [Mobile API Issues](#mobile-api-issues)
 - [External Aggregation and Auth Issues](#external-aggregation-and-auth-issues)
 - [MCP Server Issues](#mcp-server-issues)
@@ -137,7 +137,7 @@ ffmpeg -version
 
 **Symptom**: `pip install` fails with compilation errors (especially on ARM/M1 Macs).
 
-**Cause**: Some packages (like chromadb, sentence-transformers) require system libraries.
+**Cause**: Some packages (like qdrant-client, sentence-transformers) require system libraries.
 
 **Solution**:
 
@@ -706,29 +706,29 @@ echo "REDIS_LLM_TTL_SECONDS=3600" >> .env  # Default: 1 hour
 
 ---
 
-## ChromaDB Issues
+## Qdrant Issues
 
 ### Connection Failures
 
-**Symptom**: Search fails with "Failed to connect to ChromaDB".
+**Symptom**: Search fails with "Failed to connect to Qdrant".
 
-**Cause**: ChromaDB server not running or wrong URL.
+**Cause**: Qdrant server not running or wrong URL.
 
 **Solution**:
 
 ```bash
-# Check if ChromaDB is running
-curl http://localhost:8000/api/v1/heartbeat
+# Check if Qdrant is running
+curl http://localhost:6333/healthz
 
-# If not, start ChromaDB
+# If not, start Qdrant
 # Docker
-docker run -d -p 8000:8000 chromadb/chroma:latest
+docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.12.4
 
-# Or local
-chroma run --host localhost --port 8000
+# Or via compose
+docker compose -f ops/docker/docker-compose.yml up -d qdrant
 
 # Update connection settings
-echo "CHROMA_HOST=http://localhost:8000" >> .env
+echo "QDRANT_URL=http://localhost:6333" >> .env
 
 # Restart bot
 docker restart ratatoskr
@@ -738,19 +738,13 @@ docker restart ratatoskr
 
 **Symptom**: Search fails with "Failed to generate embeddings".
 
-**Cause**: Sentence-transformers model not downloaded or GPU issues.
+**Cause**: Sentence-transformers model not downloaded.
 
 **Solution**:
 
 ```bash
 # Download embedding model manually
 python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-
-# If GPU issues, force CPU
-echo "CHROMA_DEVICE=cpu" >> .env
-
-# Or try different embedding model
-echo "CHROMA_EMBEDDING_MODEL=all-mpnet-base-v2" >> .env
 
 # Restart bot
 docker restart ratatoskr
@@ -760,19 +754,19 @@ docker restart ratatoskr
 
 **Symptom**: "Collection 'summaries' does not exist".
 
-**Cause**: ChromaDB database not initialized or wiped.
+**Cause**: Qdrant database not initialized or wiped.
 
 **Solution**:
 
 ```bash
 # Recreate collection and backfill embeddings
-python -m app.cli.backfill_chroma_store
+python -m app.cli.backfill_vector_store
 
-# Check collection exists
-curl http://localhost:8000/api/v1/collections
+# Check collections
+curl http://localhost:6333/collections
 
 # Verify count
-curl http://localhost:8000/api/v1/collections/summaries/count
+curl http://localhost:6333/collections/summaries
 ```
 
 ---
@@ -1115,19 +1109,16 @@ docker restart ratatoskr
 
 **Symptom**: Bot crashes with "Out of memory" or high RAM usage.
 
-**Cause**: Large embedding models or ChromaDB in-memory storage.
+**Cause**: Large embedding models or Qdrant index memory usage.
 
 **Solution**:
 
 ```bash
 # Use smaller embedding model
-echo "CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2" >> .env  # Smallest, still good quality
+EMBEDDING_PROVIDER=local  # uses all-MiniLM-L6-v2 by default (~100 MB)
 
-# Limit ChromaDB memory
-echo "CHROMA_MAX_MEMORY_MB=512" >> .env
-
-# Disable ChromaDB if not needed
-echo "CHROMA_REQUIRED=false" >> .env
+# Disable Qdrant if not needed
+echo "QDRANT_REQUIRED=false" >> .env
 
 # Restart bot with memory limit (Docker)
 docker run --memory=1g ratatoskr
@@ -1194,8 +1185,8 @@ python -m app.cli.search --query "python tutorial"
 # Test database
 sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summaries;"
 
-# Test ChromaDB
-python -m app.cli.backfill_chroma_store --dry-run
+# Test Qdrant
+python -m app.cli.backfill_vector_store --dry-run
 ```
 
 ### 4. Inspect Database
@@ -1269,7 +1260,7 @@ docker run ratatoskr
 Strip down to simplest failing case:
 
 1. Test with single, simple URL (not complex SPA or paywalled site)
-2. Disable optional features (web search, ChromaDB, Redis)
+2. Disable optional features (web search, Qdrant, Redis)
 3. Use minimal config (only required env vars)
 4. Test with default models (not experimental or unstable models)
 

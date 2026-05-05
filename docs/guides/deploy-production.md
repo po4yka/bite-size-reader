@@ -122,14 +122,14 @@ services:
     build: .
     env_file: .env
     volumes: [./data:/data]
-    depends_on: [redis, chroma (optional)]
+    depends_on: [redis, qdrant (optional)]
     healthcheck: SQLite SELECT 1 every 30s
 
   mobile-api:       # FastAPI REST API
     build: {context: ../.., dockerfile: ops/docker/Dockerfile.api}
     env_file: .env
     ports: ["127.0.0.1:18000:8000"]
-    depends_on: [redis, chroma (optional)]
+    depends_on: [redis, qdrant (optional)]
     healthcheck: HTTP /health every 30s
 
   mcp:              # MCP server (SSE transport)
@@ -137,7 +137,7 @@ services:
     command: ["python", "-m", "app.cli.mcp_server"]
     volumes: [./data:/data:ro]  # read-only
     ports: ["127.0.0.1:8200:8200"]
-    depends_on: [chroma (optional)]
+    depends_on: [qdrant (optional)]
     healthcheck: TCP socket check on port 8200 every 30s
 
   redis:            # Caching, rate limits, sync locks
@@ -145,11 +145,10 @@ services:
     ports: ["127.0.0.1:6379:6379"]
     healthcheck: redis-cli ping every 10s
 
-  chroma:           # Vector search (ChromaDB)
-    image: ratatoskr-chroma:1.5.2
-    build: {context: ../.., dockerfile: ops/docker/Dockerfile.chroma}
-    ports: ["127.0.0.1:8001:8000"]
-    healthcheck: HTTP /api/v2/heartbeat every 30s
+  qdrant:           # Vector search (Qdrant)
+    image: qdrant/qdrant:v1.12.4
+    ports: ["127.0.0.1:6333:6333", "127.0.0.1:6334:6334"]
+    healthcheck: HTTP /healthz every 30s
 ```
 
 Run the core stack: `docker compose -f ops/docker/docker-compose.yml up -d --build`
@@ -184,7 +183,7 @@ These profile services are not required but enhance functionality when available
 - **Self-hosted scraper sidecars** (`with-scrapers`) -- starts `firecrawl-api` (port 3002) plus its Playwright, Redis, RabbitMQ, and Postgres dependencies, `crawl4ai` (port 11235), and `defuddle-api` (port 3003). Cloud Firecrawl is not a deployment option for the article extraction path. Image defaults follow upstream `latest`; pin `FIRECRAWL_IMAGE`, `FIRECRAWL_PLAYWRIGHT_IMAGE`, and `FIRECRAWL_POSTGRES_IMAGE` in production when you need repeatable rebuilds.
 - **Cloud Ollama** (`with-cloud-ollama`) -- does not start a local model server. It configures Ratatoskr for a remote OpenAI-compatible `/v1` endpoint and runs a lightweight `/models` reachability check. Structured JSON quality depends on the remote model; OpenRouter remains the primary quality path.
 - **Monitoring** (`with-monitoring`) -- Prometheus, Grafana, Loki, Promtail, and node-exporter from the primary compose file.
-- **MCP Server** (`mcp`, `mcp-write`, `mcp-public`) -- Exposes article, search, ChromaDB, and aggregation tools/resources to external AI agents (OpenClaw, Claude Desktop, hosted SSE clients). Runs as a dedicated Docker container with SSE transport (`ratatoskr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/reference/mcp-server.md`.
+- **MCP Server** (`mcp`, `mcp-write`, `mcp-public`) -- Exposes article, search, Qdrant, and aggregation tools/resources to external AI agents (OpenClaw, Claude Desktop, hosted SSE clients). Runs as a dedicated Docker container with SSE transport (`ratatoskr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/reference/mcp-server.md`.
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels. Set `DIGEST_ENABLED=true` and `API_BASE_URL` to the Mobile API endpoint. Run `/init_session` in the bot to authenticate the userbot via Mini App OTP/2FA flow, then use `/subscribe @channel` to add channels.
 
 Full variable reference: `docs/reference/environment-variables.md`
@@ -283,7 +282,7 @@ Rollback triggers and actions:
 | mobile-api | HTTP `GET /health` | 30s | Returns 200 when API is ready; 5 retries, 60s start period |
 | mcp | TCP socket on port 8200 | 30s | SSE server liveness check; 3 retries, 30s start period |
 | redis | `redis-cli ping` | 10s | Standard Redis liveness check; 5 retries |
-| chroma | HTTP `GET /api/v2/heartbeat` | 30s | ChromaDB heartbeat endpoint; 3 retries, 60s start period |
+| qdrant | HTTP `GET /healthz` | 30s | Qdrant health endpoint; 3 retries, 60s start period |
 
 ## Updating a Running Instance
 

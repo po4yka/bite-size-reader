@@ -31,7 +31,7 @@ Ratatoskr is an AI-powered Telegram bot that transforms long web articles, YouTu
 
 - Strict JSON summary contract (35+ fields)
 - Multi-language support (English, Russian)
-- Semantic search (ChromaDB, vector embeddings)
+- Semantic search (Qdrant, vector embeddings)
 - Mobile API (JWT auth, multi-device sync)
 - YouTube video + transcript support
 - Mixed-source aggregation across X, Threads, Instagram, YouTube, web, and Telegram-native sources
@@ -86,7 +86,7 @@ See [Cost Optimization](#cost-optimization) for ways to minimize costs.
 **Minimum**:
 
 - Python 3.13+
-- 512 MB RAM (1 GB recommended with ChromaDB)
+- 512 MB RAM (1 GB recommended with Qdrant)
 - 5 GB disk space (more if storing YouTube videos)
 - Linux, macOS, or Windows (WSL recommended on Windows)
 
@@ -96,26 +96,26 @@ See [Cost Optimization](#cost-optimization) for ways to minimize costs.
 
 **Optional (for semantic search)**:
 
-- ChromaDB server (or use embedded mode)
+- Qdrant server
 
 ### Can I run it on a Raspberry Pi?
 
 Yes, but with caveats:
 
-- **Pi 4 (4GB+)**: Works well, but disable ChromaDB or use CPU-only mode
-- **Pi 3 or older**: Too slow, ChromaDB embeddings will struggle
+- **Pi 4 (4GB+)**: Works well, but disable Qdrant or use a small embedding model
+- **Pi 3 or older**: Too slow, vector embeddings will struggle
 - **Docker**: Recommended for easy deployment on Pi
 
 ```bash
 # Pi-optimized config
-CHROMA_DEVICE=cpu
-CHROMA_REQUIRED=false  # Or use lightweight embedding model
+QDRANT_REQUIRED=false  # Or run Qdrant on a separate host
+EMBEDDING_PROVIDER=local  # Uses CPU-based sentence-transformers
 YOUTUBE_VIDEO_QUALITY=720  # Lower quality for smaller downloads
 ```
 
 ### Does it support ARM (M1/M2 Macs, Raspberry Pi)?
 
-Yes. Some dependencies (chromadb, sentence-transformers) may need compilation:
+Yes. Some dependencies (qdrant-client, sentence-transformers) may need compilation:
 
 ```bash
 # macOS M1/M2
@@ -254,7 +254,7 @@ Yes. Three search modes:
    SELECT * FROM topic_search_index WHERE topic_search_index MATCH 'python tutorial';
    ```
 
-2. **Semantic Search** (ChromaDB): Natural language queries
+2. **Semantic Search** (Qdrant): Natural language queries
 
    ```bash
    # Via CLI
@@ -465,21 +465,18 @@ Yes. Several optimizations:
 
 **Common causes**:
 
-1. **ChromaDB embeddings** (sentence-transformers model): 500 MB - 1 GB
+1. **Vector embeddings** (sentence-transformers model): 500 MB - 1 GB
 2. **YouTube downloads** in memory before writing to disk
 3. **LLM response buffering**
 
 **Solutions**:
 
 ```bash
-# Use smaller embedding model
-CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2  # ~100 MB
+# Use smaller embedding model (default: all-MiniLM-L6-v2, ~100 MB)
+EMBEDDING_PROVIDER=local
 
-# Disable ChromaDB if not using search
-CHROMA_REQUIRED=false
-
-# Limit ChromaDB memory
-CHROMA_MAX_MEMORY_MB=512
+# Disable Qdrant if not using search
+QDRANT_REQUIRED=false
 ```
 
 ### Can I batch-process multiple URLs?

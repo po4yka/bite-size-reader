@@ -9,7 +9,7 @@ from .config_holder import ConfigHolder, ConfigReloader
 from .content import ContentLimitsConfig
 from .database import DatabaseConfig
 from .firecrawl import FirecrawlConfig
-from .integrations import ChromaConfig, EmbeddingConfig, McpConfig, WebSearchConfig
+from .integrations import ChromaConfig, EmbeddingConfig, McpConfig, QdrantConfig, WebSearchConfig
 from .llm import AnthropicConfig, ModelRoutingConfig, OllamaConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
 from .push import PushNotificationConfig
@@ -48,6 +48,7 @@ __all__ = [
     "OpenAIConfig",
     "OpenRouterConfig",
     "PushNotificationConfig",
+    "QdrantConfig",
     "RSSConfig",
     "RedisConfig",
     "RuntimeConfig",

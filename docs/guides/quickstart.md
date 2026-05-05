@@ -195,7 +195,7 @@ Congratulations! You've successfully set up Ratatoskr. 🎉
 - 🔍 [Enable web search](../guides/enable-web-search.md) - Add real-time context
 - 🔌 [External Access Quickstart](external-access-quickstart.md) - Onboard CLI or MCP aggregation clients
 - ⚡ [Setup Redis caching](../guides/setup-redis-caching.md) - Faster responses
-- 🧠 [Setup ChromaDB](../guides/setup-chroma-vector-search.md) - Semantic search
+- 🧠 [Setup Qdrant](../guides/setup-qdrant-vector-search.md) - Semantic search
 - 🖥️ [Frontend Web Guide](../reference/frontend-web.md) - web app routes/auth/development
 
 **Learn more**:

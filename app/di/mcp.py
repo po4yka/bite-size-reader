@@ -16,7 +16,8 @@ if TYPE_CHECKING:
 
     from app.config import AppConfig
 
-CHROMA_RETRY_INTERVAL_SEC = 60.0
+VECTOR_RETRY_INTERVAL_SEC = 60.0
+CHROMA_RETRY_INTERVAL_SEC = VECTOR_RETRY_INTERVAL_SEC  # backward-compat alias for mcp/context.py
 LOCAL_VECTOR_RETRY_INTERVAL_SEC = 60.0
 
 logger = get_logger(__name__)
@@ -88,23 +89,23 @@ async def _init_lazy_service(
             return None
 
 
-async def ensure_mcp_chroma_service(runtime: McpRuntime) -> Any:
-    """Initialize and cache the MCP Chroma search service with retry backoff."""
+async def ensure_mcp_vector_service(runtime: McpRuntime) -> Any:
+    """Initialize and cache the MCP vector search service with retry backoff."""
 
     async def _create() -> Any:
         from app.infrastructure.embedding.embedding_factory import create_embedding_service
         from app.infrastructure.search.chroma_vector_search_service import (
             ChromaVectorSearchService,
         )
-        from app.infrastructure.vector.chroma_store import ChromaVectorStore
+        from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 
         if runtime.cfg is None:
             runtime.cfg = load_config(allow_stub_telegram=True)
         cfg = runtime.cfg.vector_store
         embedding = create_embedding_service(runtime.cfg.embedding)
-        store = ChromaVectorStore(
-            host=cfg.host,
-            auth_token=cfg.auth_token,
+        store = QdrantVectorStore(
+            url=cfg.url,
+            api_key=cfg.api_key,
             environment=cfg.environment,
             user_scope=cfg.user_scope,
             collection_version=cfg.collection_version,
@@ -112,7 +113,7 @@ async def ensure_mcp_chroma_service(runtime: McpRuntime) -> Any:
             required=cfg.required,
             connection_timeout=cfg.connection_timeout,
         )
-        runtime.chroma_state.resources = (store, embedding)
+        runtime.vector_state.resources = (store, embedding)
         return ChromaVectorSearchService(
             vector_store=store,
             embedding_service=embedding,
@@ -120,11 +121,14 @@ async def ensure_mcp_chroma_service(runtime: McpRuntime) -> Any:
         )
 
     return await _init_lazy_service(
-        runtime.chroma_state,
+        runtime.vector_state,
         _create,
-        CHROMA_RETRY_INTERVAL_SEC,
-        "mcp_chroma_init_failed",
+        VECTOR_RETRY_INTERVAL_SEC,
+        "mcp_vector_init_failed",
     )
+
+
+ensure_mcp_chroma_service = ensure_mcp_vector_service  # backward-compat alias
 
 
 async def ensure_mcp_local_vector_service(runtime: McpRuntime) -> Any:
@@ -149,7 +153,7 @@ async def ensure_mcp_local_vector_service(runtime: McpRuntime) -> Any:
 
 async def close_mcp_runtime(runtime: McpRuntime) -> None:
     """Release lazily-created MCP resources."""
-    for state in (runtime.chroma_state, runtime.local_vector_state):
+    for state in (runtime.vector_state, runtime.local_vector_state):
         resources = state.resources
         state.service = None
         state.resources = ()

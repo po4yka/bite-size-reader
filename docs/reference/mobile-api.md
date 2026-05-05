@@ -446,9 +446,9 @@ Execution failures:
 
 `GET /v1/signals/health` returns Phase 3 readiness for signal scoring:
 
-- `chroma.ready`: whether the vector store health check currently passes
-- `chroma.required`: whether vector search is required by runtime config
-- `chroma.collection`: active vector collection name when available
+- `vector.ready`: whether the vector store health check currently passes
+- `vector.required`: whether vector search is required by runtime config
+- `vector.collection`: active vector collection name when available
 - `sources.total`, `sources.active`, and `sources.errored`: source health counts visible to the user
 
 `GET /v1/signals/sources/health` returns per-source rows for the authenticated user's subscriptions. Rows include source identity, active state, fetch error counts, last fetch/success timestamps, subscription active state, cadence, and next fetch time.

@@ -105,7 +105,7 @@ this turns subscribed channels into a periodic recap.
 - **Mobile REST API** — JWT-authenticated REST API with device sync, collections, and aggregations. See [Mobile API Reference](docs/reference/mobile-api.md).
 - **MCP server** — Expose summaries and search to external AI agents via the Model Context Protocol. See [MCP Server](docs/reference/mcp-server.md).
 - **Multi-agent pipeline** — ContentExtraction, Summarization, Validation, and WebSearch agents coordinate via an orchestrator with self-correction. See [Multi-Agent Architecture](docs/explanation/multi-agent-architecture.md).
-- **Semantic search** — ChromaDB vector store with local (sentence-transformers) or Gemini embedding providers.
+- **Semantic search** — Qdrant vector store with local (sentence-transformers) or Gemini embedding providers.
 - **Channel digests** — Subscribe to Telegram channels and receive periodic structured recaps.
 - **RSS feeds** — Ingest RSS feed items as summarization sources.
 - **Text-to-speech** — Optional ElevenLabs TTS audio generation for summaries.
@@ -145,7 +145,7 @@ Built on the shoulders of [Telethon](https://github.com/LonamiWebs/Telethon),
 [Playwright](https://playwright.dev/),
 [Crawlee](https://crawlee.dev/),
 [ScrapeGraphAI](https://github.com/ScrapeGraphAI/Scrapegraph-ai),
-[ChromaDB](https://github.com/chroma-core/chroma),
+[Qdrant](https://github.com/qdrant/qdrant),
 [Pydantic](https://docs.pydantic.dev/),
 [OpenRouter](https://openrouter.ai/),
 [FastAPI](https://fastapi.tiangolo.com/),

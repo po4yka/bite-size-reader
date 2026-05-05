@@ -358,10 +358,10 @@ class SemanticSearchService:
         min_similarity = clamp_similarity(min_similarity)
         fetch_limit = max(limit * 6, limit + 8)
 
-        chroma = await self.context.init_chroma_service()
-        if chroma is not None:
+        vector_svc = await self.context.init_vector_service()
+        if vector_svc is not None:
             try:
-                chroma_results = await chroma.search(
+                vector_results = await vector_svc.search(
                     query.strip(),
                     language=language,
                     tags=self._extract_query_tags(query),
@@ -370,11 +370,11 @@ class SemanticSearchService:
                     offset=0,
                 )
 
-                chroma_rows: list[dict[str, Any]] = []
-                for hit in chroma_results.results:
+                vector_rows: list[dict[str, Any]] = []
+                for hit in vector_results.results:
                     if float(hit.similarity_score) < min_similarity:
                         continue
-                    chroma_rows.append(
+                    vector_rows.append(
                         {
                             "request_id": hit.request_id,
                             "summary_id": hit.summary_id,
@@ -398,8 +398,8 @@ class SemanticSearchService:
 
                 enriched = self._build_semantic_results(
                     query=query,
-                    rows=chroma_rows,
-                    backend="chroma",
+                    rows=vector_rows,
+                    backend="vector",
                     limit=limit,
                     include_chunks=include_chunks,
                     rerank=rerank,
@@ -407,12 +407,12 @@ class SemanticSearchService:
                 if enriched:
                     return {
                         "results": enriched,
-                        "has_more": bool(chroma_results.has_more),
+                        "has_more": bool(vector_results.has_more),
                         "search_type": "semantic",
-                        "search_backend": "chroma",
+                        "search_backend": "vector",
                     }
             except Exception:
-                logger.exception("semantic_chroma_search_failed")
+                logger.exception("semantic_vector_search_failed")
 
         local_rows = await self._search_local_vectors(
             query,
@@ -646,14 +646,14 @@ class SemanticSearchService:
             logger.exception("find_similar_articles failed")
             return {"error": str(exc), "summary_id": summary_id}
 
-    async def chroma_health(self) -> dict[str, Any] | McpErrorResult:
+    async def vector_health(self) -> dict[str, Any] | McpErrorResult:
         try:
-            chroma = await self.context.init_chroma_service()
+            vector_svc = await self.context.init_vector_service()
             local = await self.context.init_local_vector_service()
-            chroma_store = getattr(chroma, "_vector_store", None) if chroma else None
+            vector_store = getattr(vector_svc, "_vector_store", None) if vector_svc else None
 
             now = time.monotonic()
-            chroma_failed_for = (
+            vector_failed_for = (
                 round(now - self.context.chroma_last_failed_at, 2)
                 if self.context.chroma_last_failed_at is not None
                 else None
@@ -665,33 +665,35 @@ class SemanticSearchService:
             )
 
             return {
-                "chroma_available": bool(chroma is not None),
+                "vector_available": bool(vector_svc is not None),
                 "local_vector_available": bool(local is not None),
-                "collection_name": getattr(chroma_store, "collection_name", None),
-                "environment": getattr(chroma_store, "environment", None),
-                "user_scope": getattr(chroma_store, "user_scope", None),
-                "chroma_last_failed_seconds_ago": chroma_failed_for,
+                "collection_name": getattr(vector_store, "collection_name", None),
+                "environment": getattr(vector_store, "environment", None),
+                "user_scope": getattr(vector_store, "user_scope", None),
+                "vector_last_failed_seconds_ago": vector_failed_for,
                 "local_last_failed_seconds_ago": local_failed_for,
             }
         except Exception as exc:
-            logger.exception("chroma_health failed")
+            logger.exception("vector_health failed")
             return {"error": str(exc)}
 
-    async def chroma_index_stats(self, scan_limit: int = 5000) -> dict[str, Any]:
+    chroma_health = vector_health  # backward-compat alias
+
+    async def vector_index_stats(self, scan_limit: int = 5000) -> dict[str, Any]:
         from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         scan_limit = max(100, min(50000, int(scan_limit)))
 
         try:
-            chroma = await self.context.init_chroma_service()
-            if chroma is None:
-                return {"error": "ChromaDB unavailable", "chroma_available": False}
+            vector_svc = await self.context.init_vector_service()
+            if vector_svc is None:
+                return {"error": "Vector store unavailable", "vector_available": False}
 
-            chroma_store = getattr(chroma, "_vector_store", None)
-            if chroma_store is None:
-                return {"error": "Chroma store unavailable", "chroma_available": False}
+            vector_store = getattr(vector_svc, "_vector_store", None)
+            if vector_store is None:
+                return {"error": "Vector store unavailable", "vector_available": False}
 
-            chroma_ids = chroma_store.get_indexed_summary_ids(
+            vector_ids = vector_store.get_indexed_summary_ids(
                 user_id=self.context.user_id, limit=scan_limit
             )
             overlap_count = 0
@@ -715,45 +717,47 @@ class SemanticSearchService:
                 if not batch_ids:
                     break
                 sqlite_count += len(batch_ids)
-                overlap_count += len(batch_ids.intersection(chroma_ids))
+                overlap_count += len(batch_ids.intersection(vector_ids))
                 offset += batch_size
                 if sqlite_count >= scan_limit:
                     break
 
             coverage_pct = round((overlap_count / sqlite_count * 100), 2) if sqlite_count else 0.0
             return {
-                "chroma_available": True,
+                "vector_available": True,
                 "user_scope_id": self.context.user_id,
                 "scan_limit": scan_limit,
                 "sqlite_summary_count": sqlite_count,
-                "chroma_indexed_count": len(chroma_ids),
+                "vector_indexed_count": len(vector_ids),
                 "overlap_count": overlap_count,
                 "coverage_percent": coverage_pct,
             }
         except Exception as exc:
-            logger.exception("chroma_index_stats failed")
+            logger.exception("vector_index_stats failed")
             return {"error": str(exc)}
 
-    async def chroma_sync_gap(self, max_scan: int = 5000, sample_size: int = 20) -> dict[str, Any]:
+    chroma_index_stats = vector_index_stats  # backward-compat alias
+
+    async def vector_sync_gap(self, max_scan: int = 5000, sample_size: int = 20) -> dict[str, Any]:
         from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
         max_scan = max(100, min(50000, int(max_scan)))
         sample_size = max(1, min(100, int(sample_size)))
 
         try:
-            chroma = await self.context.init_chroma_service()
-            if chroma is None:
-                return {"error": "ChromaDB unavailable", "chroma_available": False}
+            vector_svc = await self.context.init_vector_service()
+            if vector_svc is None:
+                return {"error": "Vector store unavailable", "vector_available": False}
 
-            chroma_store = getattr(chroma, "_vector_store", None)
-            if chroma_store is None:
-                return {"error": "Chroma store unavailable", "chroma_available": False}
+            vector_store = getattr(vector_svc, "_vector_store", None)
+            if vector_store is None:
+                return {"error": "Vector store unavailable", "vector_available": False}
 
-            chroma_ids = chroma_store.get_indexed_summary_ids(
+            vector_ids = vector_store.get_indexed_summary_ids(
                 user_id=self.context.user_id, limit=max_scan
             )
-            missing_in_chroma = set()
-            missing_in_sqlite = set(chroma_ids)
+            missing_in_vector = set()
+            missing_in_sqlite = set(vector_ids)
             sqlite_count = 0
             offset = 0
             batch_size = 500
@@ -774,25 +778,27 @@ class SemanticSearchService:
                 if not batch_ids:
                     break
                 sqlite_count += len(batch_ids)
-                missing_in_chroma.update(batch_ids - chroma_ids)
+                missing_in_vector.update(batch_ids - vector_ids)
                 missing_in_sqlite.difference_update(batch_ids)
                 offset += batch_size
                 if sqlite_count >= max_scan:
                     break
 
-            sorted_missing_chroma = sorted(missing_in_chroma)
+            sorted_missing_vector = sorted(missing_in_vector)
             sorted_missing_sqlite = sorted(missing_in_sqlite)
             return {
-                "chroma_available": True,
+                "vector_available": True,
                 "user_scope_id": self.context.user_id,
                 "max_scan": max_scan,
                 "sqlite_summary_count": sqlite_count,
-                "chroma_indexed_count": len(chroma_ids),
-                "missing_in_chroma_count": len(sorted_missing_chroma),
+                "vector_indexed_count": len(vector_ids),
+                "missing_in_vector_count": len(sorted_missing_vector),
                 "missing_in_sqlite_count": len(sorted_missing_sqlite),
-                "missing_in_chroma_sample": sorted_missing_chroma[:sample_size],
+                "missing_in_vector_sample": sorted_missing_vector[:sample_size],
                 "missing_in_sqlite_sample": sorted_missing_sqlite[:sample_size],
             }
         except Exception as exc:
-            logger.exception("chroma_sync_gap failed")
+            logger.exception("vector_sync_gap failed")
             return {"error": str(exc)}
+
+    chroma_sync_gap = vector_sync_gap  # backward-compat alias

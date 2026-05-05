@@ -1,6 +1,6 @@
-# Set Up ChromaDB Vector Search
+# Set Up Qdrant Vector Search
 
-Enable semantic search with ChromaDB and configurable embedding providers (local sentence-transformers or Google Gemini API).
+Enable semantic search with Qdrant and configurable embedding providers (local sentence-transformers or Google Gemini API).
 
 **Audience:** Operators
 **Difficulty:** Intermediate
@@ -8,9 +8,9 @@ Enable semantic search with ChromaDB and configurable embedding providers (local
 
 ---
 
-## What ChromaDB Provides
+## What Qdrant Provides
 
-ChromaDB enables **semantic search** over your summaries:
+Qdrant enables **semantic search** over your summaries:
 
 - **Natural language queries**: "machine learning tutorials" finds relevant articles even if they use different terms
 - **Vector embeddings**: Converts text to vectors using sentence-transformers (384-dim, local) or Gemini Embedding 2 API (768-dim, remote)
@@ -18,6 +18,8 @@ ChromaDB enables **semantic search** over your summaries:
 - **Hybrid search**: Combines semantic search with full-text search and reranking
 
 **Use case**: Search past summaries by meaning, not just keywords.
+
+Qdrant is lighter than ChromaDB, ships a first-class arm64 Docker image, and has no `onnxruntime` dependency — making it suitable for Raspberry Pi and Apple Silicon hosts.
 
 ---
 
@@ -31,35 +33,31 @@ ChromaDB enables **semantic search** over your summaries:
 
 ## Steps
 
-### 1. Install ChromaDB
+### 1. Install Qdrant
 
 **Option A: Docker (Recommended)**
 
 ```bash
-# Start ChromaDB container
+# Start Qdrant container
 docker run -d \
-  --name chromadb \
-  -p 8000:8000 \
-  -v $(pwd)/chroma_data:/chroma/chroma \
+  --name qdrant \
+  -p 6333:6333 \
+  -p 6334:6334 \
+  -v $(pwd)/qdrant_data:/qdrant/storage \
   --restart unless-stopped \
-  chromadb/chroma:latest
+  qdrant/qdrant:v1.12.4
 
 # Verify running
-curl http://localhost:8000/api/v1/heartbeat
-# Should return: OK or heartbeat timestamp
+curl http://localhost:6333/healthz
+# Should return: {"title":"qdrant - vector search engine","version":"..."}
 ```
 
-**Option B: Local Installation**
+**Option B: Docker Compose (recommended for the full stack)**
+
+The `ops/docker/docker-compose.yml` already includes a `qdrant` service. Start it with:
 
 ```bash
-# Install chromadb
-pip install chromadb
-
-# Start ChromaDB server
-chroma run --host localhost --port 8000 --path ./chroma_data
-
-# Or run in background
-nohup chroma run --host localhost --port 8000 --path ./chroma_data > chroma.log 2>&1 &
+docker compose -f ops/docker/docker-compose.yml up -d qdrant
 ```
 
 ---
@@ -69,20 +67,20 @@ nohup chroma run --host localhost --port 8000 --path ./chroma_data > chroma.log 
 Add to your `.env` file:
 
 ```bash
-# Enable ChromaDB
-CHROMA_REQUIRED=true
+# Enable Qdrant
+QDRANT_REQUIRED=true
 
-# ChromaDB server
-CHROMA_HOST=http://localhost:8000
+# Qdrant server
+QDRANT_URL=http://localhost:6333
 
-# Embedding model (default: all-MiniLM-L6-v2)
-CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2
+# Optional: API key for secured Qdrant instances
+# QDRANT_API_KEY=your-api-key
 
-# Device (cpu or cuda)
-CHROMA_DEVICE=cpu
+# Environment label for collection namespacing
+QDRANT_ENV=dev
 
-# Collection name
-CHROMA_COLLECTION_NAME=summaries
+# Collection version suffix
+QDRANT_COLLECTION_VERSION=v1
 ```
 
 ---
@@ -109,7 +107,7 @@ print('Model downloaded successfully')
 
 ```bash
 # Backfill embeddings for existing summaries
-python -m app.cli.backfill_chroma_store
+python -m app.cli.backfill_vector_store
 
 # Expected output:
 # INFO: Found 150 summaries to backfill
@@ -119,12 +117,12 @@ python -m app.cli.backfill_chroma_store
 # INFO: Backfill complete: 150 summaries
 
 # Verify collection created
-curl http://localhost:8000/api/v1/collections
+curl http://localhost:6333/collections
 # Should show: "summaries" collection
 
 # Check count
-curl http://localhost:8000/api/v1/collections/summaries/count
-# Should match summary count in database
+curl http://localhost:6333/collections/summaries
+# Should show pointsCount matching summary count in database
 ```
 
 ---
@@ -163,21 +161,21 @@ python -m app.cli.search --query "machine learning basics"
 - Results ranked by relevance (semantic similarity + reranking)
 - Fast response (~200-500ms for typical collection)
 
-### Verify ChromaDB
+### Verify Qdrant
 
 ```bash
-# Check collection exists
-curl http://localhost:8000/api/v1/collections
+# Check collections
+curl http://localhost:6333/collections
 
-# Get collection count
-curl http://localhost:8000/api/v1/collections/summaries/count
+# Get collection info
+curl http://localhost:6333/collections/summaries
 
 # Query collection directly
-curl -X POST http://localhost:8000/api/v1/collections/summaries/query \
+curl -X POST http://localhost:6333/collections/summaries/points/search \
   -H "Content-Type: application/json" \
   -d '{
-    "query_texts": ["machine learning"],
-    "n_results": 5
+    "vector": [0.1, 0.2, ...],
+    "limit": 5
   }'
 ```
 
@@ -185,25 +183,25 @@ curl -X POST http://localhost:8000/api/v1/collections/summaries/query \
 
 ## Troubleshooting
 
-### ChromaDB connection failed
+### Qdrant connection failed
 
-**Symptom:** Warning logs "Failed to connect to ChromaDB"
+**Symptom:** Warning logs "Failed to connect to Qdrant"
 
 **Solution:**
 
 ```bash
-# Check if ChromaDB is running
-curl http://localhost:8000/api/v1/heartbeat
+# Check if Qdrant is running
+curl http://localhost:6333/healthz
 
 # If not running, start it
 # Docker:
-docker start chromadb
+docker start qdrant
 
-# Local:
-chroma run --host localhost --port 8000
+# Via compose:
+docker compose -f ops/docker/docker-compose.yml up -d qdrant
 
 # Verify connection settings
-grep CHROMA_HOST .env
+grep QDRANT_URL .env
 ```
 
 ---
@@ -221,21 +219,13 @@ grep CHROMA_HOST .env
    python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
    ```
 
-2. **GPU/CUDA issues (if using GPU):**
+2. **Out of memory:**
 
    ```bash
-   # Force CPU mode
-   CHROMA_DEVICE=cpu
-   ```
-
-3. **Out of memory:**
-
-   ```bash
-   # Use smaller model
-   CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2  # Smallest (90 MB)
-
-   # Or reduce batch size
-   CHROMA_BATCH_SIZE=10  # Default: 50
+   # Use smaller model (default, 90 MB)
+   EMBEDDING_PROVIDER=local
+   # Or reduce batch size in backfill
+   python -m app.cli.backfill_vector_store --batch-size 10
    ```
 
 **Gemini provider causes & solutions:**
@@ -267,10 +257,10 @@ grep CHROMA_HOST .env
 
 ```bash
 # Recreate collection and backfill
-python -m app.cli.backfill_chroma_store
+python -m app.cli.backfill_vector_store
 
 # Verify collection created
-curl http://localhost:8000/api/v1/collections
+curl http://localhost:6333/collections
 ```
 
 ---
@@ -282,15 +272,15 @@ curl http://localhost:8000/api/v1/collections
 **Diagnostics:**
 
 ```bash
-# Check collection count
-curl http://localhost:8000/api/v1/collections/summaries/count
-# Should be > 0
+# Check collection info
+curl http://localhost:6333/collections/summaries
+# pointsCount should be > 0
 
 # Check database has summaries
 sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summaries;"
 
 # If count mismatch, backfill again
-python -m app.cli.backfill_chroma_store
+python -m app.cli.backfill_vector_store
 ```
 
 ---
@@ -323,13 +313,13 @@ EMBEDDING_MAX_TOKEN_LENGTH=2048                      # Gemini supports up to 819
 ```
 
 Gemini uses task-type-aware embeddings automatically: `RETRIEVAL_DOCUMENT` when indexing summaries, `RETRIEVAL_QUERY` when searching. The `google-genai` package is lazily imported and only required when `EMBEDDING_PROVIDER=gemini`.
-Gemini-backed Chroma collections are automatically namespaced by model + output dimensionality so newer Gemini Embedding 2 indexes do not collide with older embedding spaces.
+Qdrant collections are automatically namespaced by model + output dimensionality so newer Gemini Embedding 2 indexes do not collide with older embedding spaces.
 
 **Switching providers** requires re-embedding all data (dimensions differ):
 
 ```bash
 python -m app.cli.backfill_embeddings --force
-python -m app.cli.backfill_chroma_store --force
+python -m app.cli.backfill_vector_store --force
 ```
 
 ---
@@ -341,7 +331,7 @@ These options only apply when `EMBEDDING_PROVIDER=local`.
 **Small & Fast (Recommended):**
 
 ```bash
-CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2
+EMBEDDING_MODEL=all-MiniLM-L6-v2
 # Size: 90 MB
 # Embedding dim: 384
 # Speed: Fast
@@ -351,7 +341,7 @@ CHROMA_EMBEDDING_MODEL=all-MiniLM-L6-v2
 **Balanced:**
 
 ```bash
-CHROMA_EMBEDDING_MODEL=all-mpnet-base-v2
+EMBEDDING_MODEL=all-mpnet-base-v2
 # Size: 420 MB
 # Embedding dim: 768
 # Speed: Medium
@@ -361,7 +351,7 @@ CHROMA_EMBEDDING_MODEL=all-mpnet-base-v2
 **Large & Accurate:**
 
 ```bash
-CHROMA_EMBEDDING_MODEL=all-roberta-large-v1
+EMBEDDING_MODEL=all-roberta-large-v1
 # Size: 1.4 GB
 # Embedding dim: 1024
 # Speed: Slow
@@ -370,34 +360,22 @@ CHROMA_EMBEDDING_MODEL=all-roberta-large-v1
 
 ---
 
-### GPU Acceleration
+### HNSW Index Configuration
 
-Applies to `EMBEDDING_PROVIDER=local` only.
-
-```bash
-# Enable CUDA (requires NVIDIA GPU)
-CHROMA_DEVICE=cuda
-
-# Verify GPU available
-python -c "import torch; print(torch.cuda.is_available())"
-
-# Should output: True
-```
-
----
-
-### Distance Metrics
+Qdrant uses HNSW for approximate nearest-neighbor search. Parameters are set on the collection config:
 
 ```bash
-# Similarity metric (default: cosine)
-CHROMA_DISTANCE_METRIC=cosine  # or: l2, ip (inner product)
+# HNSW index parameters (advanced, set at collection creation)
+QDRANT_HNSW_M=16               # Number of connections per layer
+QDRANT_HNSW_EF_CONSTRUCTION=200  # Quality vs speed tradeoff at index time
+QDRANT_HNSW_EF=100             # Search-time quality (ef parameter)
 ```
 
 **Recommendations:**
 
-- **Cosine**: Best for semantic search (normalized vectors)
-- **L2**: Euclidean distance (faster, but unnormalized)
-- **IP**: Inner product (for specific use cases)
+- **Higher `m`**: Better recall, more memory
+- **Higher `ef_construction`**: Slower indexing, better index quality
+- **Higher `ef`**: Slower search, better recall
 
 ---
 
@@ -422,36 +400,17 @@ RERANKING_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
 
 ## Performance Tuning
 
-### Memory Optimization
-
-```bash
-# Limit ChromaDB memory usage
-CHROMA_MAX_MEMORY_MB=512
-
-# Use memory-mapped files (slower but lower RAM)
-CHROMA_USE_MMAP=true
-```
-
 ### Batch Processing
 
 ```bash
-# Batch size for embedding generation
-CHROMA_BATCH_SIZE=50  # Default
+# Batch size for backfill upsert operations
+python -m app.cli.backfill_vector_store --batch-size 100  # Default
 
 # Increase for faster backfill (requires more RAM)
-CHROMA_BATCH_SIZE=100
+python -m app.cli.backfill_vector_store --batch-size 200
 
 # Decrease if running out of memory
-CHROMA_BATCH_SIZE=10
-```
-
-### Index Configuration
-
-```bash
-# HNSW index parameters (advanced)
-CHROMA_HNSW_M=16               # Number of connections per layer
-CHROMA_HNSW_EF_CONSTRUCTION=200  # Quality vs speed tradeoff
-CHROMA_HNSW_EF_SEARCH=100      # Search-time quality
+python -m app.cli.backfill_vector_store --batch-size 25
 ```
 
 ---
@@ -461,11 +420,8 @@ CHROMA_HNSW_EF_SEARCH=100      # Search-time quality
 ### Collection Statistics
 
 ```bash
-# Get collection info
-curl http://localhost:8000/api/v1/collections/summaries
-
-# Count embeddings
-curl http://localhost:8000/api/v1/collections/summaries/count
+# Get collection info (includes point count and config)
+curl http://localhost:6333/collections/summaries
 
 # Check collection metadata
 sqlite3 data/ratatoskr.db "
@@ -494,10 +450,10 @@ time python -m app.cli.search --query "machine learning"
 
 ```bash
 # Rebuild all embeddings (if model changed or collection corrupted)
-python -m app.cli.backfill_chroma_store --rebuild
+python -m app.cli.backfill_vector_store --rebuild
 
 # Incremental update (only new summaries)
-python -m app.cli.backfill_chroma_store
+python -m app.cli.backfill_vector_store
 ```
 
 ### Clean Orphaned Embeddings
@@ -507,28 +463,49 @@ python -m app.cli.backfill_chroma_store
 python -m app.cli.cleanup_embeddings
 ```
 
-### Backup ChromaDB
+### Backup Qdrant
 
 ```bash
-# Backup collection data
-docker cp chromadb:/chroma/chroma ./chroma_backup
+# Qdrant native snapshot API
+curl -X POST http://localhost:6333/collections/summaries/snapshots
+# Returns snapshot name; download it from /collections/{name}/snapshots/{snapshot}
 
-# Or if running locally
-cp -r ./chroma_data ./chroma_backup
+# Or back up the data directory directly (stop Qdrant first for consistency)
+docker stop qdrant
+tar -C . -czf qdrant_backup_$(date +%Y%m%d).tar.gz qdrant_data
+docker start qdrant
 
-# Restore from backup
-docker cp ./chroma_backup chromadb:/chroma/chroma
-# Restart ChromaDB
-docker restart chromadb
+# Restore from directory backup
+docker stop qdrant
+rm -rf qdrant_data
+tar -xzf qdrant_backup_YYYYMMDD.tar.gz
+docker start qdrant
 ```
 
 ---
 
-## Disable ChromaDB (Rollback)
+## Migrate from ChromaDB (one-shot cutover)
+
+If you have an existing ChromaDB instance, use the migration tool to copy vectors to Qdrant:
+
+```bash
+# One-shot Chroma → Qdrant cutover
+python -m app.cli.migrate_vector_store \
+  --chroma-host http://localhost:8000 \
+  --qdrant-url http://localhost:6333
+
+# After migration, verify count matches
+curl http://localhost:6333/collections/summaries
+sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summary_embeddings;"
+```
+
+---
+
+## Disable Qdrant (Rollback)
 
 ```bash
 # Set to false in .env
-CHROMA_REQUIRED=false
+QDRANT_REQUIRED=false
 
 # Restart bot
 docker restart ratatoskr
@@ -540,11 +517,11 @@ docker restart ratatoskr
 
 ## See Also
 
-- [FAQ § Search](../FAQ.md#can-i-search-my-summaries)
-- [TROUBLESHOOTING § ChromaDB Issues](../TROUBLESHOOTING.md#chromadb-issues)
-- [environment_variables.md § ChromaDB](../environment_variables.md)
+- [FAQ § Search](../explanation/faq.md#can-i-search-my-summaries)
+- [Troubleshooting § Qdrant Issues](../reference/troubleshooting.md)
+- [Environment Variables](../reference/environment-variables.md)
 - [SPEC.md § Search](../SPEC.md) - Search architecture
 
 ---
 
-**Last Updated:** 2026-03-12
+**Last Updated:** 2026-05-05

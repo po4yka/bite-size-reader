@@ -69,7 +69,7 @@ def test_signal_feed_feedback_and_source_health(client: TestClient, db):
     assert signal.status == "liked"
 
 
-def test_signal_health_reports_chroma_readiness(client: TestClient, db):
+def test_signal_health_reports_vector_readiness(client: TestClient, db):
     user = User.create(telegram_user_id=777002, username="signals-health", is_owner=False)
     headers = _headers(user.telegram_user_id)
 
@@ -78,6 +78,6 @@ def test_signal_health_reports_chroma_readiness(client: TestClient, db):
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert "chroma" in data
-    assert "ready" in data["chroma"]
+    assert "vector" in data
+    assert "ready" in data["vector"]
     assert "sources" in data

@@ -10,6 +10,15 @@ sys.modules["chromadb"] = mock_chromadb
 sys.modules["chromadb.errors"] = mock_chromadb.errors
 
 from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchService
+from app.infrastructure.vector.result_types import VectorQueryHit, VectorQueryResult
+
+
+def _make_result(ids: list[str], metadatas: list[dict], distances: list[float]) -> VectorQueryResult:
+    hits = [
+        VectorQueryHit(id=i, distance=d, metadata=m)
+        for i, d, m in zip(ids, distances, metadatas)
+    ]
+    return VectorQueryResult(hits=hits)
 
 
 @pytest.mark.asyncio
@@ -26,17 +35,14 @@ async def test_find_duplicates():
     )
 
     # Mock query results
-    # query returns dict with ids, metadatas, distances
-    mock_results = {
-        "ids": [["id1", "id2"]],
-        "metadatas": [
-            [
-                {"text": "similar note 1", "request_id": 1, "summary_id": 101},
-                {"text": "similar note 2", "request_id": 2, "summary_id": 102},
-            ]
+    mock_results = _make_result(
+        ids=["id1", "id2"],
+        metadatas=[
+            {"text": "similar note 1", "request_id": 1, "summary_id": 101},
+            {"text": "similar note 2", "request_id": 2, "summary_id": 102},
         ],
-        "distances": [[0.05, 0.08]],  # 0.95 and 0.92 similarity
-    }
+        distances=[0.05, 0.08],  # 0.95 and 0.92 similarity
+    )
     vector_store.query.return_value = mock_results
 
     # Execute
@@ -77,16 +83,14 @@ async def test_find_duplicates_filters_by_threshold():
     )
 
     # Mock query results
-    mock_results = {
-        "ids": [["id1", "id2"]],
-        "metadatas": [
-            [
-                {"text": "highly similar", "request_id": 1, "summary_id": 101},
-                {"text": "somewhat similar", "request_id": 2, "summary_id": 102},
-            ]
+    mock_results = _make_result(
+        ids=["id1", "id2"],
+        metadatas=[
+            {"text": "highly similar", "request_id": 1, "summary_id": 101},
+            {"text": "somewhat similar", "request_id": 2, "summary_id": 102},
         ],
-        "distances": [[0.05, 0.2]],  # 0.95 and 0.8 similarity
-    }
+        distances=[0.05, 0.2],  # 0.95 and 0.8 similarity
+    )
     vector_store.query.return_value = mock_results
 
     # Execute with threshold 0.9

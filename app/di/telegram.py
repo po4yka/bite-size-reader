@@ -150,7 +150,7 @@ def build_telegram_runtime(
         "telegram_runtime_initialized",
         extra={
             "topic_search_max_results": topic_search_max_results,
-            "vector_search_enabled": search.chroma_vector_search_service is not None,
+            "vector_search_enabled": search.vector_search_service is not None,
         },
     )
     return TelegramRuntime(

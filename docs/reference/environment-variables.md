@@ -324,17 +324,17 @@ uv run python tools/scripts/twitter_article_live_smoke.py \
 | `REDIS_FIRECRAWL_TTL_SECONDS` | `21600` | Firecrawl response cache TTL (6h) |
 | `REDIS_LLM_TTL_SECONDS` | `7200` | LLM response cache TTL (2h) |
 
-## Vector Search / ChromaDB
+## Vector Search / Qdrant
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `CHROMA_HOST` | `http://localhost:8000` | Chroma HTTP endpoint |
-| `CHROMA_AUTH_TOKEN` | _(none)_ | Bearer token for secured Chroma |
-| `CHROMA_ENV` | `dev` | Environment label for collection namespacing |
-| `CHROMA_USER_SCOPE` | `public` | Tenant scope for collections |
-| `CHROMA_COLLECTION_VERSION` | `v1` | Collection version suffix |
-| `CHROMA_REQUIRED` | `false` | Fail startup if ChromaDB unavailable |
-| `CHROMA_CONNECTION_TIMEOUT` | `10.0` | Connection timeout (seconds) |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant HTTP endpoint |
+| `QDRANT_API_KEY` | _(none)_ | API key for secured Qdrant instances |
+| `QDRANT_ENV` | `dev` | Environment label for collection namespacing |
+| `QDRANT_USER_SCOPE` | `public` | Tenant scope for collections |
+| `QDRANT_COLLECTION_VERSION` | `v1` | Collection version suffix |
+| `QDRANT_REQUIRED` | `false` | Fail startup if Qdrant unavailable |
+| `QDRANT_CONNECTION_TIMEOUT` | `10.0` | Connection timeout (seconds) |
 
 ## Embedding Provider
 
@@ -350,8 +350,8 @@ Controls which embedding backend generates vectors for semantic search.
 
 **Notes:**
 
-- Switching providers or Gemini output dimensions changes the embedding space. Re-embed all data after switching: `python -m app.cli.backfill_embeddings --force` then `python -m app.cli.backfill_chroma_store --force`.
-- Chroma collections are automatically namespaced by Gemini model + dimensionality to avoid mixing incompatible embedding spaces such as `gemini-embedding-001` and `gemini-embedding-2-preview`.
+- Switching providers or Gemini output dimensions changes the embedding space. Re-embed all data after switching: `python -m app.cli.backfill_embeddings --force` then `python -m app.cli.backfill_vector_store --force`.
+- Qdrant collections are automatically namespaced by Gemini model + dimensionality to avoid mixing incompatible embedding spaces such as `gemini-embedding-001` and `gemini-embedding-2-preview`.
 - `google-genai` package is an optional dependency (`pip install ratatoskr[gemini]`). The app works without it when `EMBEDDING_PROVIDER=local`.
 - Gemini uses task-type-aware embeddings: `RETRIEVAL_DOCUMENT` for indexing, `RETRIEVAL_QUERY` for search queries.
 
@@ -549,7 +549,7 @@ Use this checklist to verify your configuration before deploying:
 - [ ] **YouTube**: `YOUTUBE_DOWNLOAD_ENABLED=true` → ffmpeg installed
 - [ ] **Web Search**: `WEB_SEARCH_ENABLED=true` → Firecrawl search API accessible
 - [ ] **Redis**: `REDIS_ENABLED=true` → Redis server running at `REDIS_URL`
-- [ ] **ChromaDB**: `CHROMA_HOST` points to a running ChromaDB server
+- [ ] **Qdrant**: `QDRANT_URL` points to a running Qdrant server
 - [ ] **Mobile API**: `JWT_SECRET_KEY` set → Strong secret (32+ characters)
 - [ ] **MCP Server**: `MCP_ENABLED=true` → Claude Desktop config updated
 - [ ] **Channel Digest**: `DIGEST_ENABLED=true` → `API_BASE_URL` set, `/init_session` completed
@@ -679,8 +679,8 @@ curl -H "Authorization: Bearer $OPENROUTER_API_KEY" \
 # Test Redis connection (if enabled)
 redis-cli -u $REDIS_URL ping
 
-# Test ChromaDB connection (if enabled)
-curl "$CHROMA_HOST/api/v2/heartbeat"
+# Test Qdrant connection (if enabled)
+curl "$QDRANT_URL/healthz"
 ```
 
 ---

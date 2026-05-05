@@ -1014,20 +1014,20 @@ Retry-After: 300
 
 ---
 
-## ChromaDB Errors (CHROMA)
+## Vector Store Errors (VECTOR)
 
-### CHROMA001: Connection Failed
+### VECTOR001: Connection Failed
 
 **HTTP Status:** N/A (warning only)
 
-**Cause:** Cannot connect to ChromaDB server
+**Cause:** Cannot connect to Qdrant server
 
 **Logged Details:**
 
 ```json
 {
-  "error_code": "CHROMA001",
-  "chroma_host": "localhost:8000",
+  "error_code": "VECTOR001",
+  "qdrant_url": "http://localhost:6333",
   "connection_error": "Connection refused",
   "fallback": "vector search disabled"
 }
@@ -1035,8 +1035,8 @@ Retry-After: 300
 
 **Resolution:**
 
-- Start ChromaDB: `docker run -d -p 8000:8000 chromadb/chroma`
-- Verify `CHROMA_HOST` env var is correct
+- Start Qdrant: `docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.12.4`
+- Verify `QDRANT_URL` env var is correct
 - Bot continues without vector search
 
 ---
@@ -1103,9 +1103,9 @@ Retry-After: 300
 
 - `REDIS001` - Connection Failed (non-fatal)
 
-**ChromaDB (CHROMA):**
+**Vector Store (VECTOR):**
 
-- `CHROMA001` - Connection Failed (non-fatal)
+- `VECTOR001` - Connection Failed (non-fatal)
 
 ---
 

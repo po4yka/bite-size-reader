@@ -469,3 +469,91 @@ class ChromaConfig(BaseModel):
             msg = "Collection version cannot be empty"
             raise ValueError(msg)
         return cleaned.lower()
+
+
+class QdrantConfig(BaseModel):
+    """Vector store configuration for Qdrant."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    url: str = Field(
+        default="http://localhost:6333",
+        validation_alias="QDRANT_URL",
+        description="Qdrant HTTP endpoint (scheme + host + port)",
+    )
+    api_key: str | None = Field(
+        default=None,
+        validation_alias="QDRANT_API_KEY",
+        description="Optional API key for secured Qdrant deployments",
+    )
+    environment: str = Field(
+        default="dev",
+        validation_alias=AliasChoices("QDRANT_ENV", "APP_ENV", "ENVIRONMENT"),
+        description="Environment label used for namespacing collections",
+    )
+    user_scope: str = Field(
+        default="public",
+        validation_alias="QDRANT_USER_SCOPE",
+        description="User or tenant scope used for namespacing collections",
+    )
+    collection_version: str = Field(
+        default="v1",
+        validation_alias="QDRANT_COLLECTION_VERSION",
+        description="Collection version suffix to prevent bleed-over between schema changes",
+    )
+    required: bool = Field(
+        default=False,
+        validation_alias="QDRANT_REQUIRED",
+        description="If true, fail startup when Qdrant is unavailable. Default false for graceful degradation.",
+    )
+    connection_timeout: float = Field(
+        default=10.0,
+        validation_alias="QDRANT_CONNECTION_TIMEOUT",
+        description="Connection timeout in seconds for Qdrant HTTP client",
+    )
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def _validate_url(cls, value: Any) -> str:
+        url = str(value or "").strip()
+        if not url:
+            msg = "Qdrant URL must be provided"
+            raise ValueError(msg)
+        if len(url) > 200:
+            msg = "Qdrant URL value appears to be too long"
+            raise ValueError(msg)
+        if "\x00" in url:
+            msg = "Qdrant URL contains invalid characters"
+            raise ValueError(msg)
+        return url
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def _validate_api_key(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        key = str(value).strip()
+        if len(key) > 500:
+            msg = "Qdrant API key appears to be too long"
+            raise ValueError(msg)
+        return key
+
+    @field_validator("environment", "user_scope", mode="before")
+    @classmethod
+    def _sanitize_names(cls, value: Any, info: ValidationInfo) -> str:
+        raw = str(value or "").strip() or cls.model_fields[info.field_name].default
+        cleaned = "".join(ch for ch in raw if ch.isalnum() or ch in {"-", "_"})
+        if not cleaned:
+            msg = f"{info.field_name.replace('_', ' ').capitalize()} cannot be empty"
+            raise ValueError(msg)
+        return cleaned.lower()
+
+    @field_validator("collection_version", mode="before")
+    @classmethod
+    def _sanitize_version(cls, value: Any) -> str:
+        raw = str(value or "").strip() or "v1"
+        cleaned = "".join(ch for ch in raw if ch.isalnum() or ch in {"-", "_"})
+        if not cleaned:
+            msg = "Collection version cannot be empty"
+            raise ValueError(msg)
+        return cleaned.lower()

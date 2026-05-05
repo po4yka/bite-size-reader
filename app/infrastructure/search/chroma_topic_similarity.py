@@ -12,19 +12,20 @@ if TYPE_CHECKING:
 
     from app.application.services.signal_scoring import SignalCandidate
     from app.infrastructure.embedding.embedding_protocol import EmbeddingServiceProtocol
+    from app.infrastructure.vector.result_types import VectorQueryResult
 
 logger = get_logger(__name__)
 
 
 class ChromaQueryStore(Protocol):
-    """Subset of the Chroma store used by signal topic similarity."""
+    """Subset of the vector store used by signal topic similarity."""
 
     def query(
         self,
         query_vector: Sequence[float],
         filters: dict[str, Any] | None,
         top_k: int,
-    ) -> dict[str, Any]:
+    ) -> VectorQueryResult:
         """Query similar vectors."""
 
 
@@ -66,7 +67,7 @@ class ChromaTopicSimilarityAdapter:
             filters: dict[str, Any] = {}
             if self._user_id is not None:
                 filters["user_id"] = self._user_id
-            raw = await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 self._vector_store.query,
                 query_embedding,
                 filters,
@@ -80,11 +81,7 @@ class ChromaTopicSimilarityAdapter:
             )
             return 0.0
 
-        distances = raw.get("distances") if isinstance(raw, dict) else None
-        if not distances or not isinstance(distances, list):
-            return 0.0
-        first_batch = distances[0] if distances and isinstance(distances[0], list) else []
-        scores = [self._distance_to_similarity(value) for value in first_batch]
+        scores = [self._distance_to_similarity(hit.distance) for hit in result.hits]
         return max(scores, default=0.0)
 
     @staticmethod

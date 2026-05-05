@@ -62,11 +62,11 @@ def build_search_dependencies(
     vector_store: Any | None = None
 
     try:
-        from app.infrastructure.vector.chroma_store import ChromaVectorStore
+        from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 
-        vector_store = ChromaVectorStore(
-            host=cfg.vector_store.host,
-            auth_token=cfg.vector_store.auth_token,
+        vector_store = QdrantVectorStore(
+            url=cfg.vector_store.url,
+            api_key=cfg.vector_store.api_key,
             environment=cfg.vector_store.environment,
             user_scope=cfg.vector_store.user_scope,
             collection_version=cfg.vector_store.collection_version,
@@ -76,15 +76,15 @@ def build_search_dependencies(
         )
         if not vector_store.available:
             logger.warning(
-                "chroma_not_available_continuing",
-                extra={"host": cfg.vector_store.host},
+                "vector_not_available_continuing",
+                extra={"url": cfg.vector_store.url},
             )
     except Exception as exc:
         if cfg.vector_store.required:
             raise
         logger.warning(
-            "chroma_init_failed_continuing_without_vector_search",
-            extra={"error": str(exc), "host": cfg.vector_store.host},
+            "vector_init_failed_continuing_without_vector_search",
+            extra={"error": str(exc), "url": cfg.vector_store.url},
         )
         vector_store = None
 
@@ -112,11 +112,11 @@ def build_search_dependencies(
     )
     query_expansion_service = QueryExpansionService(max_expansions=5, use_synonyms=True)
 
-    chroma_vector_search_service: Any | None = None
+    vector_search_service: Any | None = None
     if vector_store is not None:
         from app.infrastructure.search.chroma_vector_search_service import ChromaVectorSearchService
 
-        chroma_vector_search_service = ChromaVectorSearchService(
+        vector_search_service = ChromaVectorSearchService(
             vector_store=vector_store,
             embedding_service=embedding_service,
             default_top_k=max_results * 2,
@@ -129,9 +129,9 @@ def build_search_dependencies(
     )
     hybrid_search_service = HybridSearchService(
         fts_service=local_searcher,
-        vector_service=chroma_vector_search_service,
-        fts_weight=1.0 if chroma_vector_search_service is None else 0.4,
-        vector_weight=0.0 if chroma_vector_search_service is None else 0.6,
+        vector_service=vector_search_service,
+        fts_weight=1.0 if vector_search_service is None else 0.4,
+        vector_weight=0.0 if vector_search_service is None else 0.6,
         max_results=max_results,
         query_expansion=query_expansion_service,
         reranking=reranking_service,
@@ -143,7 +143,7 @@ def build_search_dependencies(
         embedding_service=embedding_service,
         embedding_generator=embedding_generator,
         vector_store=vector_store,
-        chroma_vector_search_service=chroma_vector_search_service,
+        vector_search_service=vector_search_service,
         hybrid_search_service=hybrid_search_service,
         query_expansion_service=query_expansion_service,
     )

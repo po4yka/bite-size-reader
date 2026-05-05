@@ -43,7 +43,7 @@ async def signal_health(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     sources = await repo.async_list_source_health(user_id=_user_id(user))
-    chroma = {"ready": False, "required": True, "collection": None}
+    vector = {"ready": False, "required": True, "collection": None}
     try:
         runtime = resolve_api_runtime(request)
         vector_store = getattr(runtime.search, "vector_store", None)
@@ -55,7 +55,7 @@ async def signal_health(
                 if callable(health_check)
                 else bool(getattr(vector_store, "available", False))
             )
-        chroma = {
+        vector = {
             "ready": ready,
             "required": bool(getattr(runtime.cfg.vector_store, "required", True)),
             "collection": getattr(vector_store, "collection_name", None),
@@ -64,7 +64,7 @@ async def signal_health(
         pass
     return success_response(
         {
-            "chroma": chroma,
+            "vector": vector,
             "sources": {
                 "total": len(sources),
                 "active": sum(1 for row in sources if row.get("is_active")),

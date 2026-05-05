@@ -311,24 +311,24 @@ def register_tools(
         )
 
     @mcp.tool()
-    async def chroma_health() -> str:
-        """Check Chroma availability and fallback readiness."""
-        return to_json(await _call_async("chroma_health", semantic_service.chroma_health))
+    async def vector_health() -> str:
+        """Check vector store availability and fallback readiness."""
+        return to_json(await _call_async("vector_health", semantic_service.vector_health))
 
     @mcp.tool()
-    async def chroma_index_stats(scan_limit: int = 5000) -> str:
-        """Return index coverage stats between SQLite summaries and Chroma."""
+    async def vector_index_stats(scan_limit: int = 5000) -> str:
+        """Return index coverage stats between SQLite summaries and the vector store."""
         return to_json(
-            await _call_async("chroma_index_stats", semantic_service.chroma_index_stats, scan_limit)
+            await _call_async("vector_index_stats", semantic_service.vector_index_stats, scan_limit)
         )
 
     @mcp.tool()
-    async def chroma_sync_gap(max_scan: int = 5000, sample_size: int = 20) -> str:
-        """Report sync gaps between SQLite summaries and Chroma index."""
+    async def vector_sync_gap(max_scan: int = 5000, sample_size: int = 20) -> str:
+        """Report sync gaps between SQLite summaries and the vector store index."""
         return to_json(
             await _call_async(
-                "chroma_sync_gap",
-                semantic_service.chroma_sync_gap,
+                "vector_sync_gap",
+                semantic_service.vector_sync_gap,
                 max_scan,
                 sample_size,
             )

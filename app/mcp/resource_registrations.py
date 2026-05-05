@@ -94,20 +94,20 @@ def register_resources(
         """Processing statistics: LLM call counts, token usage, model breakdown."""
         return to_json(catalog_service.processing_stats())
 
-    @mcp.resource("ratatoskr://chroma/health")
-    async def chroma_health_resource() -> str:
-        """Chroma availability status for semantic MCP tools."""
-        return to_json(await semantic_service.chroma_health())
+    @mcp.resource("ratatoskr://vector/health")
+    async def vector_health_resource() -> str:
+        """Vector store availability status for semantic MCP tools."""
+        return to_json(await semantic_service.vector_health())
 
-    @mcp.resource("ratatoskr://chroma/index-stats")
-    async def chroma_index_stats_resource() -> str:
-        """Chroma index coverage compared to SQLite summaries."""
-        return to_json(await semantic_service.chroma_index_stats())
+    @mcp.resource("ratatoskr://vector/index-stats")
+    async def vector_index_stats_resource() -> str:
+        """Vector store index coverage compared to SQLite summaries."""
+        return to_json(await semantic_service.vector_index_stats())
 
-    @mcp.resource("ratatoskr://chroma/sync-gap")
-    async def chroma_sync_gap_resource() -> str:
-        """Chroma/SQLite sync gap sample using default scan limits."""
-        return to_json(await semantic_service.chroma_sync_gap())
+    @mcp.resource("ratatoskr://vector/sync-gap")
+    async def vector_sync_gap_resource() -> str:
+        """Vector store/SQLite sync gap sample using default scan limits."""
+        return to_json(await semantic_service.vector_sync_gap())
 
     @mcp.resource("ratatoskr://signals/recent")
     def recent_signals_resource() -> str:

@@ -26,7 +26,7 @@ def _env_map(service: dict[str, Any]) -> dict[str, str]:
 def test_default_compose_stack_contains_core_services_without_profiles() -> None:
     services = _compose()["services"]
 
-    for name in ("ratatoskr", "mobile-api", "redis", "chroma"):
+    for name in ("ratatoskr", "mobile-api", "redis", "qdrant"):
         assert name in services
         assert "profiles" not in services[name]
 

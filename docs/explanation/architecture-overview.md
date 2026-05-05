@@ -100,7 +100,7 @@ flowchart LR
     Redis[(Redis)] -.-> ContentExtractor
     Redis -.-> LLMSummarizer
     Redis -.-> MobileAPI
-    ChromaDB[(ChromaDB)] -.-> SearchService
+    Qdrant[(Qdrant)] -.-> SearchService
     MCPServer[MCP server] -.-> SQLite
     MCPServer -.-> SearchService
   end
@@ -211,7 +211,7 @@ Each subsystem has a canonical doc; this page is the entry point.
 | Web search enrichment | Inject up-to-date context via self-hosted Firecrawl search (`FIRECRAWL_SELF_HOSTED_ENABLED=true`) before final summary. | [`docs/guides/enable-web-search.md`](../guides/enable-web-search.md) |
 | Channel digest | Userbot reads subscribed channels; scheduled digests via `/digest`. | [`docs/SPEC.md`](../SPEC.md) (`Channel digest` section) |
 | Mixed-source aggregation | Bundle one or more links + forwards / attachments into a single synthesised result. | [`docs/SPEC.md`](../SPEC.md) (`Mixed-source aggregation` section) |
-| Search (FTS5 + vector) | Local full-text plus optional ChromaDB semantic / hybrid search. | [`docs/guides/setup-chroma-vector-search.md`](../guides/setup-chroma-vector-search.md) |
+| Search (FTS5 + vector) | Local full-text plus optional Qdrant semantic / hybrid search. | [`docs/guides/setup-qdrant-vector-search.md`](../guides/setup-qdrant-vector-search.md) |
 | Mobile API | FastAPI + JWT, sync v2, ratelimit, summary CRUD, aggregations. | [`docs/reference/mobile-api.md`](../reference/mobile-api.md) |
 | Web frontend | React SPA served on `/web/*`; library, search, submit, collections, digest, preferences, admin. Uses a project-owned design shim under `clients/web/src/design/`. | [`docs/reference/frontend-web.md`](../reference/frontend-web.md) |
 | MCP server | Model Context Protocol server: 22 tools and 16 resources for external AI agents (OpenClaw, Claude Desktop). | [`docs/reference/mcp-server.md`](../reference/mcp-server.md) |

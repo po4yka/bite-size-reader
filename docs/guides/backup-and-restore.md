@@ -20,7 +20,7 @@ Durable data is split across these locations:
 | ---- | ------------ | ------ |
 | SQLite database | `data/ratatoskr.db` on the host, `/data/ratatoskr.db` in containers | `DB_PATH=/data/ratatoskr.db` |
 | Automatic SQLite snapshots | `data/backups/` unless `DB_BACKUP_DIR` is set | bot backup loop |
-| ChromaDB vector store | `chroma_data/` on the host, `/data` in the Chroma container | Chroma `PERSIST_DIRECTORY=/data` |
+| Qdrant vector store | `qdrant_data/` on the host, `/qdrant/storage` in the Qdrant container | Qdrant volume mount |
 | YouTube downloads | `data/videos/` | `YOUTUBE_STORAGE_PATH` default `/data/videos` |
 | Attachments and non-YouTube media | `data/attachments/`, `data/video-sources/` | attachment defaults |
 | TTS audio cache | `data/audio/` | `ELEVENLABS_AUDIO_PATH` default `/data/audio` |
@@ -29,7 +29,7 @@ Durable data is split across these locations:
 
 The API `/v1/backups` and Telegram `/backup` flows create per-user export ZIPs
 under `data/backups/<user_id>/`. They are useful for user data export, but they
-are not a full instance backup because they do not include Chroma, media files,
+are not a full instance backup because they do not include Qdrant, media files,
 all operational tables, or config.
 
 ---
@@ -51,14 +51,14 @@ docker compose -f ops/docker/docker-compose.yml ps
 ```
 
 For the most consistent backup, stop services that can write to SQLite or
-Chroma:
+Qdrant:
 
 ```bash
-docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write chroma
+docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write qdrant
 ```
 
 If you need a low-downtime SQLite-only backup, use the `.backup` command in the
-next section while services keep running, then archive Chroma/media during a
+next section while services keep running, then archive Qdrant/media during a
 maintenance window.
 
 ---
@@ -93,23 +93,30 @@ Ratatoskr also creates automatic SQLite snapshots from the bot process when
 14 snapshot files, not 14 days. Without `DB_BACKUP_DIR`, snapshots land in
 `data/backups/`.
 
-### ChromaDB
+### Qdrant
 
-The default Chroma service persists its database through the host bind mount
-`chroma_data:/data`. Back it up after stopping `chroma`:
+The default Qdrant service persists its database through the host bind mount
+`qdrant_data:/qdrant/storage`. Back it up after stopping `qdrant`:
 
 ```bash
-tar -C . -czf "$BACKUP_DIR/chroma_data.tar.gz" chroma_data
+tar -C . -czf "$BACKUP_DIR/qdrant_data.tar.gz" qdrant_data
 ```
 
-Chroma data is rebuildable from SQLite for summaries that have enough stored
+Alternatively, use Qdrant's native snapshot API (can run while Qdrant is live):
+
+```bash
+curl -X POST http://localhost:6333/collections/summaries/snapshots
+# Download the snapshot file from /collections/summaries/snapshots/{snapshot_name}
+```
+
+Qdrant data is rebuildable from SQLite for summaries that have enough stored
 text and embedding inputs:
 
 ```bash
-python -m app.cli.backfill_chroma_store --rebuild
+python -m app.cli.backfill_vector_store --rebuild
 ```
 
-Backing up `chroma_data/` is still faster and preserves the exact current vector
+Backing up `qdrant_data/` is still faster and preserves the exact current vector
 store. Rebuild when the archive is missing, corrupted, or intentionally stale
 after an embedding model or namespace change.
 
@@ -182,7 +189,7 @@ Store the passphrase outside the host. Do not commit backup archives or copied
 ```bash
 find "$BACKUP_DIR" -maxdepth 1 -type f -print -exec ls -lh {} \;
 sqlite3 "$BACKUP_DIR/ratatoskr.db" "PRAGMA quick_check;"
-[ ! -f "$BACKUP_DIR/chroma_data.tar.gz" ] || tar -tzf "$BACKUP_DIR/chroma_data.tar.gz" >/dev/null
+[ ! -f "$BACKUP_DIR/qdrant_data.tar.gz" ] || tar -tzf "$BACKUP_DIR/qdrant_data.tar.gz" >/dev/null
 [ ! -f "$BACKUP_DIR/config.tar.gz" ] || tar -tzf "$BACKUP_DIR/config.tar.gz" >/dev/null
 ```
 
@@ -201,7 +208,7 @@ docker compose -f ops/docker/docker-compose.yml up -d
 Stop all services that can read or write restored state:
 
 ```bash
-docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write chroma redis
+docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write qdrant redis
 ```
 
 Keep a pre-restore copy of the current state:
@@ -209,7 +216,7 @@ Keep a pre-restore copy of the current state:
 ```bash
 mkdir -p "restore-safety/$BACKUP_TS"
 [ -f data/ratatoskr.db ] && cp data/ratatoskr.db "restore-safety/$BACKUP_TS/ratatoskr.db.before-restore"
-[ -d chroma_data ] && tar -C . -czf "restore-safety/$BACKUP_TS/chroma_data.before-restore.tar.gz" chroma_data
+[ -d qdrant_data ] && tar -C . -czf "restore-safety/$BACKUP_TS/qdrant_data.before-restore.tar.gz" qdrant_data
 ```
 
 Restore SQLite:
@@ -219,12 +226,12 @@ cp "$BACKUP_DIR/ratatoskr.db" data/ratatoskr.db
 sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
 ```
 
-Restore Chroma if you backed it up:
+Restore Qdrant if you backed it up:
 
 ```bash
-if [ -f "$BACKUP_DIR/chroma_data.tar.gz" ]; then
-  rm -rf chroma_data
-  tar -C . -xzf "$BACKUP_DIR/chroma_data.tar.gz"
+if [ -f "$BACKUP_DIR/qdrant_data.tar.gz" ]; then
+  rm -rf qdrant_data
+  tar -C . -xzf "$BACKUP_DIR/qdrant_data.tar.gz"
 fi
 ```
 
@@ -257,10 +264,10 @@ python -m app.cli.migrate_db --status
 python -m app.cli.migrate_db data/ratatoskr.db
 ```
 
-If Chroma was not restored, rebuild it after Chroma is healthy:
+If Qdrant was not restored, rebuild it after Qdrant is healthy:
 
 ```bash
-python -m app.cli.backfill_chroma_store --rebuild
+python -m app.cli.backfill_vector_store --rebuild
 ```
 
 ### Restore To A New Host
@@ -282,7 +289,7 @@ export BACKUP_DIR="backups/$BACKUP_TS"
 
 cp "$BACKUP_DIR/ratatoskr.db" data/ratatoskr.db
 [ -f "$BACKUP_DIR/config.tar.gz" ] && tar -C . -xzf "$BACKUP_DIR/config.tar.gz"
-[ -f "$BACKUP_DIR/chroma_data.tar.gz" ] && tar -C . -xzf "$BACKUP_DIR/chroma_data.tar.gz"
+[ -f "$BACKUP_DIR/qdrant_data.tar.gz" ] && tar -C . -xzf "$BACKUP_DIR/qdrant_data.tar.gz"
 
 for archive in "$BACKUP_DIR"/data_*.tar.gz; do
   [ -e "$archive" ] || continue
@@ -309,16 +316,16 @@ If the new host uses different paths, update `.env` or `ratatoskr.yaml` for
 
 Run this on a staging host or disposable VM before a release:
 
-1. Create a full backup with SQLite, Chroma, media, and config.
+1. Create a full backup with SQLite, Qdrant, media, and config.
 2. Restore it into an empty checkout.
 3. Run `sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"`.
 4. Run `docker compose -f ops/docker/docker-compose.yml config`.
 5. Start the stack with `docker compose -f ops/docker/docker-compose.yml up -d`.
-6. Confirm `ratatoskr`, `mobile-api`, `redis`, and `chroma` are healthy or
+6. Confirm `ratatoskr`, `mobile-api`, `redis`, and `qdrant` are healthy or
    intentionally disabled by profile/config.
 7. Open the web/API and verify existing summaries are visible.
-8. Run a semantic search. If Chroma was rebuilt instead of restored, run
-   `python -m app.cli.backfill_chroma_store --rebuild` first.
+8. Run a semantic search. If Qdrant was rebuilt instead of restored, run
+   `python -m app.cli.backfill_vector_store --rebuild` first.
 9. Open a restored YouTube summary with a `video_file_path` and confirm the
    file path exists under `data/videos/`, or accept that the media cache was not
    restored.
@@ -356,6 +363,6 @@ If recovery fails, restore the newest backup that passes `PRAGMA integrity_check
 
 - [Deployment](../DEPLOYMENT.md)
 - [How to Migrate Versions](migrate-versions.md)
-- [ChromaDB Vector Search](setup-chroma-vector-search.md)
+- [Qdrant Vector Search](setup-qdrant-vector-search.md)
 - [YouTube Downloads](configure-youtube-download.md)
 - [Config File Reference](../reference/config-file.md)

@@ -77,8 +77,8 @@ logs/
 # Application data directory (SQLite DB, session files, backups)
 data/
 
-# Local ChromaDB vector store data
-chroma_data/
+# Local Qdrant vector store data
+qdrant_data/
 
 # --- Temporary/Data Files ---
 # Export files, data dumps, and temporary text files

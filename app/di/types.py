@@ -29,7 +29,7 @@ class SearchDependencies:
     embedding_service: Any
     embedding_generator: Any
     vector_store: Any | None
-    chroma_vector_search_service: Any | None
+    vector_search_service: Any | None
     hybrid_search_service: Any
     query_expansion_service: Any | None = None
 
@@ -136,7 +136,7 @@ class McpRuntime:
     db_path: str
     database: Any
     scope: McpScope
-    chroma_state: McpServiceState = field(default_factory=McpServiceState)
+    vector_state: McpServiceState = field(default_factory=McpServiceState)
     local_vector_state: McpServiceState = field(default_factory=McpServiceState)
 
 

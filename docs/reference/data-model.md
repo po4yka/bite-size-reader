@@ -390,7 +390,7 @@ CREATE TABLE feed_items (
 
 ### topics
 
-**Purpose:** Single-user interest topics used by signal scoring and Chroma-backed personalization.
+**Purpose:** Single-user interest topics used by signal scoring and vector-backed personalization.
 
 **Schema summary:**
 
@@ -446,7 +446,7 @@ CREATE TABLE user_signals (
 
 - Unique `(user_id, feed_item_id)`.
 - Non-unique `(user_id, status)` and `final_score`.
-- Signal scoring fails closed when Chroma topic similarity is unavailable; it does not silently degrade to SQLite-only matching.
+- Signal scoring fails closed when vector topic similarity is unavailable; it does not silently degrade to SQLite-only matching.
 
 **Migration and rollback notes:**
 

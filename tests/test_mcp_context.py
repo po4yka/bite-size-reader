@@ -86,7 +86,7 @@ async def test_get_chroma_service_forwards_required_and_timeout(
     import app.di.mcp as mcp_di
     import app.infrastructure.embedding.embedding_factory as embedding_factory_module
     import app.infrastructure.search.chroma_vector_search_service as chroma_service_module
-    import app.infrastructure.vector.chroma_store as chroma_store_module
+    import app.infrastructure.vector.qdrant_store as qdrant_store_module
 
     captured: dict[str, Any] = {}
 
@@ -103,8 +103,8 @@ async def test_get_chroma_service_forwards_required_and_timeout(
         "load_config",
         lambda *_args, **_kwargs: SimpleNamespace(
             vector_store=SimpleNamespace(
-                host="http://localhost:8000",
-                auth_token="token",
+                url="http://localhost:6333",
+                api_key="token",
                 environment="test",
                 user_scope="scope",
                 collection_version="v5",
@@ -115,7 +115,8 @@ async def test_get_chroma_service_forwards_required_and_timeout(
         ),
     )
     monkeypatch.setattr(embedding_factory_module, "create_embedding_service", lambda _cfg: object())
-    monkeypatch.setattr(chroma_store_module, "ChromaVectorStore", FakeStore)
+    monkeypatch.setattr(mcp_di, "resolve_embedding_space_identifier", lambda _cfg: None)
+    monkeypatch.setattr(qdrant_store_module, "QdrantVectorStore", FakeStore)
     monkeypatch.setattr(chroma_service_module, "ChromaVectorSearchService", FakeService)
 
     db_path = tmp_path / "mcp-context.db"
@@ -127,8 +128,8 @@ async def test_get_chroma_service_forwards_required_and_timeout(
     await context.init_chroma_service()
 
     assert captured["store_kwargs"] == {
-        "host": "http://localhost:8000",
-        "auth_token": "token",
+        "url": "http://localhost:6333",
+        "api_key": "token",
         "environment": "test",
         "user_scope": "scope",
         "collection_version": "v5",
@@ -165,7 +166,7 @@ def test_init_runtime_uses_startup_scope_even_with_request_override(
         return SimpleNamespace(
             db_path=db_path,
             scope=SimpleNamespace(user_id=user_id),
-            chroma_state=SimpleNamespace(last_failed_at=None),
+            vector_state=SimpleNamespace(last_failed_at=None),
             local_vector_state=SimpleNamespace(last_failed_at=None),
         )
 
@@ -185,7 +186,7 @@ def test_nested_request_user_scopes_restore_without_mutating_runtime_scope() -> 
     context = McpServerContext(user_id=111)
     context._runtime = SimpleNamespace(
         scope=SimpleNamespace(user_id=111),
-        chroma_state=SimpleNamespace(last_failed_at=None),
+        vector_state=SimpleNamespace(last_failed_at=None),
         local_vector_state=SimpleNamespace(last_failed_at=None),
     )
 

@@ -42,7 +42,7 @@ Machine-readable contract: `docs/openapi/mobile_api.yaml` / `docs/openapi/mobile
 
 ## API Contracts and Error Codes
 
-External service API shapes (Firecrawl, OpenRouter, Telethon, yt-dlp) with request/response examples, rate limits, and error handling; plus the full internal error-code catalog (AUTH, VAL, EXT, LLM, YT, DB, SYNC, RATE, SYS, REDIS, CHROMA families).
+External service API shapes (Firecrawl, OpenRouter, Telethon, yt-dlp) with request/response examples, rate limits, and error handling; plus the full internal error-code catalog (AUTH, VAL, EXT, LLM, YT, DB, SYNC, RATE, SYS, REDIS, VECTOR families).
 
 → [External API Contracts](reference/api-contracts.md) · [Error Codes Reference](reference/api-error-codes.md)
 

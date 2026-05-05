@@ -16,7 +16,7 @@ Ratatoskr provides CLI tools for:
 - Testing summarization without Telegram (`summary.py`)
 - Database migrations (`migrate_db.py`)
 - Search functionality testing (`search.py`, `search_compare.py`)
-- Embedding and vector store management (`backfill_embeddings.py`, `backfill_chroma_store.py`)
+- Embedding and vector store management (`backfill_embeddings.py`, `backfill_vector_store.py`, `migrate_vector_store.py`)
 - Signal-scoring eval export and precision checks (`signal_eval.py`)
 - Performance optimization (`add_performance_indexes.py`)
 - MCP server (`mcp_server.py`)
@@ -369,7 +369,7 @@ python -m app.cli.search "машинное обучение" --lang ru
 
 **Vector:**
 
-- ChromaDB vector search on `summary_embeddings`
+- Qdrant vector search on `summary_embeddings`
 - Slower (50-200ms)
 - Best for semantic similarity
 
@@ -528,34 +528,34 @@ python -m app.cli.backfill_embeddings --limit 10
 
 ---
 
-## Backfill ChromaDB
+## Backfill Vector Store
 
-**Command:** `python -m app.cli.backfill_chroma_store`
+**Command:** `python -m app.cli.backfill_vector_store`
 
-**Purpose:** Populate ChromaDB vector store with embeddings.
+**Purpose:** Populate Qdrant vector store with embeddings.
 
 ### Basic Usage
 
 ```bash
-# Backfill all embeddings to ChromaDB
-python -m app.cli.backfill_chroma_store
+# Backfill all embeddings to Qdrant
+python -m app.cli.backfill_vector_store
 
-# Rebuild ChromaDB collection (delete and recreate)
-python -m app.cli.backfill_chroma_store --rebuild
+# Rebuild Qdrant collection (delete and recreate)
+python -m app.cli.backfill_vector_store --rebuild
 ```
 
 ### Options
 
 | Option | Type | Default | Description |
 | -------- | ------ | --------- | ------------- |
-| `--rebuild` | flag | false | Delete and rebuild ChromaDB collection |
+| `--rebuild` | flag | false | Delete and rebuild Qdrant collection |
 | `--batch-size` | int | 100 | Documents per batch |
-| `--collection` | string | summaries | ChromaDB collection name |
-| `--chroma-host` | string | config/env | Override Chroma host URL |
-| `--chroma-token` | string | config/env | Override Chroma auth credential (prefer env var in automation) |
-| `--chroma-env` | string | config/env | Override environment namespace |
-| `--chroma-scope` | string | config/env | Override user/tenant scope |
-| `--chroma-version` | string | config/env | Override collection version suffix |
+| `--collection` | string | summaries | Qdrant collection name |
+| `--qdrant-url` | string | config/env | Override Qdrant URL |
+| `--qdrant-api-key` | string | config/env | Override Qdrant API key (prefer env var in automation) |
+| `--qdrant-env` | string | config/env | Override environment namespace |
+| `--qdrant-scope` | string | config/env | Override user/tenant scope |
+| `--qdrant-version` | string | config/env | Override collection version suffix |
 | `--limit` | int | - | Limit to N summaries (for testing) |
 | `--force` | flag | false | Recompute/re-upsert even when embeddings already exist |
 
@@ -564,11 +564,11 @@ python -m app.cli.backfill_chroma_store --rebuild
 **Initial Backfill:**
 
 ```bash
-python -m app.cli.backfill_chroma_store
+python -m app.cli.backfill_vector_store
 
 # Output:
-# Connecting to ChromaDB at localhost:8000...
-# Collection 'summaries' has 0 documents
+# Connecting to Qdrant at http://localhost:6333...
+# Collection 'summaries' has 0 points
 # Found 1234 summaries with embeddings
 # Upserting batch 1/13: 100 documents (1.2s)
 # Upserting batch 2/13: 100 documents (1.1s)
@@ -579,10 +579,10 @@ python -m app.cli.backfill_chroma_store
 **Rebuild Collection:**
 
 ```bash
-python -m app.cli.backfill_chroma_store --rebuild
+python -m app.cli.backfill_vector_store --rebuild
 
 # Output:
-# WARNING: This will DELETE all documents in 'summaries' collection!
+# WARNING: This will DELETE all points in 'summaries' collection!
 # Continue? [y/N] y
 # Deleting collection...
 # Creating new collection...
@@ -593,36 +593,84 @@ python -m app.cli.backfill_chroma_store --rebuild
 **Test Connection:**
 
 ```bash
-python -m app.cli.backfill_chroma_store --limit 1
+python -m app.cli.backfill_vector_store --limit 1
 
 # Output:
-# Connecting to ChromaDB at localhost:8000...
+# Connecting to Qdrant at http://localhost:6333...
 # Connection successful!
 # Collection 'summaries' exists
 # Upserting 1 document (test mode)
 # Success!
 ```
 
-**Security note:** Some credential-bearing options (such as `--chroma-token`) are intentionally minimized in inline CLI help text. They remain supported, but prefer environment variables/secrets managers in CI and production shells.
+**Security note:** Some credential-bearing options (such as `--qdrant-api-key`) are intentionally minimized in inline CLI help text. They remain supported, but prefer environment variables/secrets managers in CI and production shells.
 
 ### Prerequisites
 
-**ChromaDB Server:**
+**Qdrant Server:**
 
 ```bash
-# Start ChromaDB server first
-docker run -d -p 8000:8000 chromadb/chroma
+# Start Qdrant server first
+docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant:v1.12.4
 
-# Or via docker-compose
-docker-compose up -d chroma
+# Or via docker compose
+docker compose -f ops/docker/docker-compose.yml up -d qdrant
 ```
 
 **Environment Variables:**
 
 ```bash
-CHROMA_HOST=http://localhost:8000
-CHROMA_COLLECTION_VERSION=v1
-CHROMA_REQUIRED=true
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION_VERSION=v1
+QDRANT_REQUIRED=true
+```
+
+---
+
+## Migrate Vector Store
+
+**Command:** `python -m app.cli.migrate_vector_store`
+
+**Purpose:** One-shot Chroma → Qdrant cutover tool. Reads all vectors from a running ChromaDB instance and writes them to Qdrant.
+
+### Basic Usage
+
+```bash
+# Migrate from local ChromaDB to local Qdrant
+python -m app.cli.migrate_vector_store \
+  --chroma-host http://localhost:8000 \
+  --qdrant-url http://localhost:6333
+```
+
+### Options
+
+| Option | Type | Default | Description |
+| -------- | ------ | --------- | ------------- |
+| `--chroma-host` | string | `http://localhost:8000` | ChromaDB source host URL |
+| `--chroma-token` | string | - | ChromaDB bearer token (if secured) |
+| `--qdrant-url` | string | config/env | Qdrant destination URL |
+| `--qdrant-api-key` | string | config/env | Qdrant API key (if secured) |
+| `--collection` | string | summaries | Collection name (same in both stores) |
+| `--batch-size` | int | 100 | Vectors per upsert batch |
+| `--dry-run` | flag | false | Read from Chroma but do not write to Qdrant |
+
+### Examples
+
+```bash
+# Dry-run to verify read access
+python -m app.cli.migrate_vector_store \
+  --chroma-host http://localhost:8000 \
+  --qdrant-url http://localhost:6333 \
+  --dry-run
+
+# Full migration
+python -m app.cli.migrate_vector_store \
+  --chroma-host http://localhost:8000 \
+  --qdrant-url http://localhost:6333
+
+# Verify counts after migration
+curl http://localhost:6333/collections/summaries
+sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summary_embeddings;"
 ```
 
 ---
@@ -860,8 +908,8 @@ sqlite3 data/ratatoskr.db "SELECT error_message FROM llm_calls WHERE request_id 
 # 1. Backfill embeddings if missing
 python -m app.cli.backfill_embeddings
 
-# 2. Backfill ChromaDB
-python -m app.cli.backfill_chroma_store
+# 2. Backfill Qdrant
+python -m app.cli.backfill_vector_store
 
 # 3. Compare search modes
 python -m app.cli.search_compare "test query"
@@ -899,10 +947,10 @@ DB_PATH=/data/ratatoskr.db
 # Logging
 LOG_LEVEL=INFO         # DEBUG for CLI debugging
 
-# ChromaDB
-CHROMA_HOST=http://localhost:8000
-CHROMA_COLLECTION_VERSION=v1
-CHROMA_REQUIRED=true
+# Qdrant
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION_VERSION=v1
+QDRANT_REQUIRED=true
 
 # LLM (for summary CLI)
 OPENROUTER_API_KEY=...
@@ -923,7 +971,7 @@ SCRAPER_DEFUDDLE_API_BASE_URL=http://defuddle-api:3003
 
 - `0` - Success
 - `1` - Validation error (invalid arguments, missing env vars)
-- `2` - External service error (Firecrawl, OpenRouter, ChromaDB)
+- `2` - External service error (Firecrawl, OpenRouter, Qdrant)
 - `3` - Database error (connection failed, query failed)
 - `4` - Internal error (unexpected exception)
 

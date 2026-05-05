@@ -210,7 +210,7 @@ Note: digest endpoints require Telegram WebApp auth context.
 Signals flow (`/web/signals`) includes:
 
 - Ranked signal queue from `GET /v1/signals`
-- Chroma/source readiness from `GET /v1/signals/health`
+- Vector store/source readiness from `GET /v1/signals/health`
 - Source health and pause/resume controls from `/v1/signals/sources/*`
 - Feedback actions: like, queue, skip, hide source
 - Topic preference creation via `POST /v1/signals/topics`

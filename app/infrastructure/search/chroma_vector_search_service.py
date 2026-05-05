@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from chromadb.errors import ChromaError
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.lang import detect_language
@@ -15,7 +14,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from app.infrastructure.embedding.embedding_protocol import EmbeddingServiceProtocol
-    from app.infrastructure.vector.chroma_store import ChromaVectorStore
 
 logger = get_logger(__name__)
 
@@ -64,7 +62,7 @@ class ChromaVectorSearchService:
     def __init__(
         self,
         *,
-        vector_store: ChromaVectorStore,
+        vector_store: Any,
         embedding_service: EmbeddingServiceProtocol,
         default_top_k: int = 25,
     ) -> None:
@@ -125,31 +123,23 @@ class ChromaVectorSearchService:
         }
 
         try:
-            raw = await asyncio.to_thread(
+            query_result = await asyncio.to_thread(
                 self._vector_store.query,
                 query_embedding,
                 filters,
                 fetch_limit,
             )
-        except ChromaError:
-            logger.exception("chroma_search_query_failed")
-            return ChromaVectorSearchResults(results=[], has_more=False)
         except Exception:
             logger.exception("chroma_search_unexpected_error")
             return ChromaVectorSearchResults(results=[], has_more=False)
 
-        metadatas = raw.get("metadatas") or []
-        distances = raw.get("distances") or []
-
-        if not metadatas or not isinstance(metadatas, list):
+        if not query_result.hits:
             return ChromaVectorSearchResults(results=[], has_more=False)
-
-        first_batch = metadatas[0] or []
-        distance_batch = distances[0] if distances else []
 
         results: list[ChromaVectorSearchResult] = []
 
-        for idx, metadata in enumerate(first_batch):
+        for hit in query_result.hits:
+            metadata = hit.metadata
             if not isinstance(metadata, dict):
                 continue
 
@@ -159,7 +149,7 @@ class ChromaVectorSearchService:
             if request_id is None or summary_id is None:
                 continue
 
-            similarity_score = self._compute_similarity(distance_batch, idx)
+            similarity_score = max(0.0, min(1.0, 1.0 - hit.distance))
             raw_text = metadata.get("text")
             snippet = metadata.get("local_summary") or raw_text
             if snippet and len(str(snippet)) > 300:

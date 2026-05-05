@@ -10,15 +10,22 @@ import pytest
 
 from app.application.services.signal_scoring import SignalCandidate
 from app.infrastructure.search.chroma_topic_similarity import ChromaTopicSimilarityAdapter
+from app.infrastructure.vector.result_types import VectorQueryHit, VectorQueryResult
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
+def _make_result(distances: list[float]) -> VectorQueryResult:
+    return VectorQueryResult(
+        hits=[VectorQueryHit(id=str(i), distance=d, metadata={}) for i, d in enumerate(distances)]
+    )
+
+
 class _FakeVectorStore:
-    def __init__(self, *, available: bool = True, raw: dict | None = None) -> None:
+    def __init__(self, *, available: bool = True, result: VectorQueryResult | None = None) -> None:
         self.available = available
-        self.raw = raw or {"distances": [[0.2, 0.7]], "metadatas": [[{}, {}]]}
+        self.result = result if result is not None else _make_result([0.2, 0.7])
         self.queries: list[tuple[list[float], dict, int]] = []
 
     def health_check(self) -> bool:
@@ -29,9 +36,9 @@ class _FakeVectorStore:
         query_vector: Sequence[float],
         filters: dict[str, Any] | None,
         top_k: int,
-    ) -> dict[str, Any]:
+    ) -> VectorQueryResult:
         self.queries.append((list(query_vector), dict(filters or {}), top_k))
-        return self.raw
+        return self.result
 
 
 @pytest.mark.asyncio
@@ -69,7 +76,7 @@ async def test_chroma_topic_similarity_returns_zero_when_query_fails() -> None:
             query_vector: Sequence[float],
             filters: dict[str, Any] | None,
             top_k: int,
-        ) -> dict[str, Any]:
+        ) -> VectorQueryResult:
             raise RuntimeError("chroma down")
 
     embedding = SimpleNamespace(generate_embedding=AsyncMock(return_value=[0.1]))

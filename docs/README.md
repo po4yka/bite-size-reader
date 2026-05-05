@@ -68,7 +68,7 @@ You want to deploy, monitor, and maintain Ratatoskr in production.
 **Next steps**:
 
 - [How to setup Redis caching](guides/setup-redis-caching.md)
-- [How to setup ChromaDB](guides/setup-chroma-vector-search.md)
+- [How to setup Qdrant](guides/setup-qdrant-vector-search.md)
 - [How to backup and restore](guides/backup-and-restore.md)
 - [How to optimize performance](guides/optimize-performance.md)
 
@@ -132,7 +132,7 @@ You want to integrate Ratatoskr with other tools or build a client.
 - **Onboard an external CLI or MCP client** → [External Access Quickstart](guides/external-access-quickstart.md)
 - **Enable web search enrichment** → [How to enable web search](guides/enable-web-search.md)
 - **Setup Redis caching** → [How to setup Redis caching](guides/setup-redis-caching.md)
-- **Setup semantic search (ChromaDB)** → [How to setup ChromaDB](guides/setup-chroma-vector-search.md)
+- **Setup semantic search (Qdrant)** → [How to setup Qdrant](guides/setup-qdrant-vector-search.md)
 - **See all config options** → [Environment variables reference](reference/environment-variables.md)
 
 ### 🐛 Troubleshooting
@@ -200,7 +200,7 @@ Step-by-step lessons and practical recipes, all in `docs/guides/`.
 | [Deploy to Production](guides/deploy-production.md) | Full production setup with TLS, monitoring, and backups | Operators | |
 | [Enable Web Search](guides/enable-web-search.md) | Add real-time web context | Users, Operators | |
 | [Setup Redis Caching](guides/setup-redis-caching.md) | Configure Redis | Operators | |
-| [Setup ChromaDB](guides/setup-chroma-vector-search.md) | Enable semantic search | Operators | |
+| [Setup Qdrant](guides/setup-qdrant-vector-search.md) | Enable semantic search | Operators | |
 | [Optimize Performance](guides/optimize-performance.md) | Tune for speed/cost | Operators | |
 | [Backup and Restore](guides/backup-and-restore.md) | Data protection | Operators | |
 | [Migrate Versions](guides/migrate-versions.md) | Upgrade between versions | Operators | |
@@ -291,7 +291,7 @@ Project planning, roadmap, and task tracking.
 - **Hexagonal Architecture**: Design pattern separating core logic from adapters (Telegram, Firecrawl, database)
 - **Multi-Agent Pipeline**: LLM architecture with specialized agents (extraction, summarization, validation, web search)
 - **MCP Server**: Model Context Protocol server exposing Ratatoskr to AI agents (Claude Desktop, etc.)
-- **ChromaDB**: Vector database for semantic search
+- **Qdrant**: Vector database for semantic search
 - **Deduplication Hash**: SHA256 of normalized URL to prevent re-processing same article
 
 See the [Architecture Overview](explanation/architecture-overview.md) for an annotated component diagram, the [SPEC.md](SPEC.md) data-model and API contracts, and the [Multi-Agent Architecture](explanation/multi-agent-architecture.md) explanation for the LLM pipeline-specific terms.
@@ -307,7 +307,7 @@ See the [Architecture Overview](explanation/architecture-overview.md) for an ann
 | **API integration** | [Mobile API Reference](reference/mobile-api.md), [First Mobile API Client Tutorial](guides/first-mobile-api-client.md) |
 | **Architecture** | [Architecture Overview](explanation/architecture-overview.md), [Layering quick reference](explanation/architecture-overview.md#layering-quick-reference) |
 | **Backup** | [How to backup and restore](guides/backup-and-restore.md), [Troubleshooting § Database](reference/troubleshooting.md#database-issues) |
-| **ChromaDB** | [How to setup ChromaDB](guides/setup-chroma-vector-search.md), [Troubleshooting § ChromaDB](reference/troubleshooting.md#chromadb-issues) |
+| **Qdrant** | [How to setup Qdrant](guides/setup-qdrant-vector-search.md), [Troubleshooting § Qdrant](reference/troubleshooting.md#qdrant-issues) |
 | **Configuration** | [Environment Variables](reference/environment-variables.md), [FAQ § Configuration](explanation/faq.md#configuration) |
 | **Cost optimization** | [FAQ § Cost Optimization](explanation/faq.md#cost-optimization) |
 | **Database** | [SPEC.md § Database Schema](SPEC.md#database-schema), [Troubleshooting § Database](reference/troubleshooting.md#database-issues) |
@@ -324,7 +324,7 @@ See the [Architecture Overview](explanation/architecture-overview.md) for an ann
 | **OpenRouter** | [Environment Variables](reference/environment-variables.md), [Troubleshooting § OpenRouter](reference/troubleshooting.md#openrouter-issues) |
 | **Performance** | [How to optimize performance](guides/optimize-performance.md), [Troubleshooting § Performance](reference/troubleshooting.md#performance-issues) |
 | **Redis** | [How to setup Redis](guides/setup-redis-caching.md), [Troubleshooting § Redis](reference/troubleshooting.md#redis-issues) |
-| **Search** | [SPEC.md § Search](SPEC.md#search), [How to setup ChromaDB](guides/setup-chroma-vector-search.md) |
+| **Search** | [SPEC.md § Search](SPEC.md#search), [How to setup Qdrant](guides/setup-qdrant-vector-search.md) |
 | **Security** | [FAQ § Security](explanation/faq.md#security) |
 | **Summary contract** | [Summary Contract](reference/summary-contract.md), [Summary Contract Design](explanation/summary-contract-design.md) |
 | **Testing** | [Local Development Tutorial § Testing](guides/local-development.md), [CLAUDE.md § Testing](../CLAUDE.md#testing) |

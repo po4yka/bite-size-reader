@@ -179,9 +179,8 @@ scraper_ai = [
 
 # Shared inference stack used by both api (semantic search) and ml (training/backfill)
 inference_core = [
-  "chromadb>=1.5.0",
+  "qdrant-client>=1.12.0",
   "sentence-transformers>=5.2.2",  # semantic embedding generation
-  "onnxruntime>=1.24.1",  # Python 3.14 support (chromadb dependency)
 ]
 
 # Mobile REST API dependencies (FastAPI, JWT auth, vector search client)

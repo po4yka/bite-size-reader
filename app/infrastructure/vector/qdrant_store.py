@@ -1,0 +1,544 @@
+"""Qdrant-backed vector store.
+
+Drop-in replacement for ``ChromaVectorStore`` that satisfies the same
+``VectorStore`` protocol and graceful-degradation contract.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import time
+import uuid
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
+
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    FilterSelector,
+    MatchValue,
+    PayloadSchemaType,
+    PointIdsList,
+    PointStruct,
+    VectorParams,
+)
+
+from app.core.logging_utils import get_logger
+from app.infrastructure.vector.protocol import VectorStoreError
+from app.infrastructure.vector.qdrant_schemas import QdrantQueryFilters
+from app.infrastructure.vector.result_types import VectorQueryHit, VectorQueryResult
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+logger = get_logger(__name__)
+
+_UUID_NAMESPACE = uuid.NAMESPACE_OID
+
+
+def _str_to_uuid(s: str) -> str:
+    """Hash an arbitrary string to a deterministic UUID string for use as a Qdrant point ID."""
+    return str(uuid.uuid5(_UUID_NAMESPACE, s))
+
+
+class QdrantVectorStore:
+    """Synchronous vector store wrapper around Qdrant.
+
+    Uses the synchronous ``QdrantClient`` so callers can wrap it in
+    ``asyncio.to_thread`` exactly as they do with ``ChromaVectorStore``.
+    All connection retries use ``time.sleep`` (not ``asyncio.sleep``) so
+    ``__init__`` is safe to call from inside a running event loop.
+
+    Graceful degradation: when ``required=False`` (default), every public
+    method logs a warning on failure rather than raising an exception.
+    """
+
+    def __init__(
+        self,
+        *,
+        url: str,
+        api_key: str | None,
+        environment: str,
+        user_scope: str,
+        collection_version: str = "v1",
+        embedding_space: str | None = None,
+        embedding_dim: int = 768,
+        required: bool = False,
+        connection_timeout: float = 10.0,
+    ) -> None:
+        if not url:
+            msg = "Qdrant URL must be provided"
+            raise ValueError(msg)
+
+        self._url = url
+        self._api_key = api_key
+        self._environment = environment
+        self._user_scope = user_scope
+        self._collection_version = collection_version
+        self._embedding_space = embedding_space
+        self._embedding_dim = embedding_dim
+        self._required = required
+        self._connection_timeout = connection_timeout
+        self._available = False
+        self._client: QdrantClient | None = None
+        self._collection_name = self._build_collection_name(
+            environment, user_scope, collection_version, embedding_space
+        )
+
+        self._connect_with_retry()
+
+    # ------------------------------------------------------------------
+    # Properties
+    # ------------------------------------------------------------------
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    @property
+    def environment(self) -> str:
+        return self._environment
+
+    @property
+    def user_scope(self) -> str:
+        return self._user_scope
+
+    @property
+    def collection_version(self) -> str:
+        return self._collection_version
+
+    @property
+    def embedding_space(self) -> str | None:
+        return self._embedding_space
+
+    @property
+    def collection_name(self) -> str:
+        return self._collection_name
+
+    # ------------------------------------------------------------------
+    # Connection helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_collection_name(
+        environment: str,
+        user_scope: str,
+        version: str,
+        embedding_space: str | None = None,
+    ) -> str:
+        """Produce the same collection name scheme as ChromaVectorStore."""
+        safe_env = environment.replace(" ", "_")
+        safe_scope = user_scope.replace(" ", "_")
+        safe_version = version.replace(" ", "_")
+        base_name = f"notes_{safe_env}_{safe_scope}_{safe_version}"
+        if not embedding_space:
+            return base_name
+        safe_es = "".join(
+            c if c.isalnum() or c in {"-", "_"} else "_"
+            for c in str(embedding_space).strip().lower()
+        ).strip("_")
+        return f"{base_name}_{safe_es}" if safe_es else base_name
+
+    def _connect_with_retry(self, max_attempts: int = 3, base_delay: float = 2.0) -> None:
+        for attempt in range(1, max_attempts + 1):
+            if self._try_connect():
+                return
+            if attempt < max_attempts:
+                delay = base_delay * attempt
+                logger.info(
+                    "vector_connect_retry",
+                    extra={"attempt": attempt, "next_delay_sec": delay, "url": self._url},
+                )
+                time.sleep(delay)  # safe — not asyncio.run(sleep(...))
+
+    def _try_connect(self) -> bool:
+        try:
+            client = QdrantClient(
+                url=self._url,
+                api_key=self._api_key,
+                timeout=int(self._connection_timeout),
+            )
+            client.get_collections()  # probe / auth check
+
+            if not client.collection_exists(self._collection_name):
+                client.create_collection(
+                    collection_name=self._collection_name,
+                    vectors_config=VectorParams(
+                        size=self._embedding_dim,
+                        distance=Distance.COSINE,
+                    ),
+                )
+                for field, schema in [
+                    ("request_id", PayloadSchemaType.INTEGER),
+                    ("summary_id", PayloadSchemaType.INTEGER),
+                    ("user_id", PayloadSchemaType.INTEGER),
+                    ("environment", PayloadSchemaType.KEYWORD),
+                    ("user_scope", PayloadSchemaType.KEYWORD),
+                    ("language", PayloadSchemaType.KEYWORD),
+                    ("tags", PayloadSchemaType.KEYWORD),
+                ]:
+                    client.create_payload_index(
+                        collection_name=self._collection_name,
+                        field_name=field,
+                        field_schema=schema,
+                    )
+
+            self._client = client
+            self._available = True
+            logger.info(
+                "vector_collection_initialized",
+                extra={
+                    "collection": self._collection_name,
+                    "url": self._url,
+                    "environment": self._environment,
+                    "version": self._collection_version,
+                },
+            )
+            return True
+        except Exception as exc:
+            logger.error(
+                "vector_initialization_failed",
+                extra={"url": self._url, "error": str(exc), "required": self._required},
+            )
+            self._available = False
+            if self._required:
+                raise VectorStoreError(str(exc)) from exc
+            return False
+
+    def ensure_available(self) -> bool:
+        logger.info("vector_reconnect_attempt", extra={"url": self._url})
+        return self._try_connect()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_id(metadata: dict[str, Any]) -> str:
+        """Derive a stable string key from metadata (mirrors ChromaVectorStore._extract_id)."""
+        request_id = metadata.get("request_id")
+        summary_id = metadata.get("summary_id")
+        chunk_id = metadata.get("chunk_id")
+        window_id = metadata.get("window_id")
+
+        if request_id is not None:
+            base = str(request_id)
+            if chunk_id:
+                return f"{base}:{chunk_id}"
+            if window_id:
+                return f"{base}:{window_id}"
+            if summary_id is not None:
+                return f"{base}:{summary_id}"
+            return base
+
+        return uuid4().hex
+
+    def _build_points(
+        self,
+        vectors: Sequence[Sequence[float]],
+        metadatas: Sequence[dict[str, Any]],
+        ids: Sequence[str],
+    ) -> list[PointStruct]:
+        points = []
+        for vec, meta, raw_id in zip(vectors, metadatas, ids, strict=True):
+            # Drop empty lists — Qdrant rejects them for KEYWORD-indexed array fields
+            clean = {k: v for k, v in meta.items() if not (isinstance(v, list) and not v)}
+            # Inject scope fields so query filters always match stored points
+            clean["environment"] = self._environment
+            clean["user_scope"] = self._user_scope
+            points.append(
+                PointStruct(
+                    id=_str_to_uuid(raw_id),
+                    vector=list(vec),
+                    payload=clean,
+                )
+            )
+        return points
+
+    def _fetch_request_point_ids(self, request_id: int | str) -> set[str]:
+        """Return all Qdrant point UUID strings stored for a request."""
+        client = self._client
+        try:
+            req_filter = Filter(
+                must=[FieldCondition(key="request_id", match=MatchValue(value=int(request_id)))]
+            )
+            records, _ = client.scroll(
+                collection_name=self._collection_name,
+                scroll_filter=req_filter,
+                limit=10_000,
+                with_payload=False,
+                with_vectors=False,
+            )
+            return {str(r.id) for r in records}
+        except Exception:
+            logger.warning("vector_fetch_request_ids_failed", extra={"request_id": request_id})
+            return set()
+
+    # ------------------------------------------------------------------
+    # Write operations
+    # ------------------------------------------------------------------
+
+    def upsert_notes(
+        self,
+        vectors: Sequence[Sequence[float]],
+        metadatas: Sequence[dict[str, Any]],
+        ids: Sequence[str] | None = None,
+    ) -> None:
+        if not self._available:
+            self.ensure_available()
+        if not self._available:
+            logger.warning("vector_upsert_skipped", extra={"reason": "not_available", "count": len(vectors)})
+            return
+
+        if len(vectors) != len(metadatas):
+            msg = "vectors and metadatas must have the same length"
+            raise ValueError(msg)
+        if ids and len(ids) != len(vectors):
+            msg = "ids must have the same length as vectors"
+            raise ValueError(msg)
+
+        final_ids = list(ids) if ids else [self._extract_id(m) for m in metadatas]
+        points = self._build_points(vectors, metadatas, final_ids)
+
+        try:
+            self._client.upsert(
+                collection_name=self._collection_name,
+                points=points,
+                wait=True,
+            )
+        except Exception as exc:
+            logger.error("vector_upsert_failed", extra={"count": len(vectors), "error": str(exc)})
+            if self._required:
+                raise VectorStoreError(str(exc)) from exc
+            self._available = False
+
+    def replace_request_notes(
+        self,
+        request_id: int | str,
+        vectors: Sequence[Sequence[float]],
+        metadatas: Sequence[dict[str, Any]],
+        ids: Sequence[str] | None = None,
+    ) -> None:
+        if not self._available:
+            self.ensure_available()
+        if not self._available:
+            logger.warning(
+                "vector_replace_skipped",
+                extra={"reason": "not_available", "request_id": request_id, "count": len(vectors)},
+            )
+            return
+
+        if len(vectors) != len(metadatas):
+            msg = "vectors and metadatas must have the same length"
+            raise ValueError(msg)
+        if ids and len(ids) != len(vectors):
+            msg = "ids must have the same length as vectors"
+            raise ValueError(msg)
+
+        final_ids = list(ids) if ids else [self._extract_id(m) for m in metadatas]
+        new_uuid_strs = {_str_to_uuid(raw_id) for raw_id in final_ids}
+        points = self._build_points(vectors, metadatas, final_ids)
+
+        client = self._client
+        try:
+            existing_uuid_strs = self._fetch_request_point_ids(request_id)
+            client.upsert(collection_name=self._collection_name, points=points, wait=True)
+            stale = existing_uuid_strs - new_uuid_strs
+            if stale:
+                client.delete(
+                    collection_name=self._collection_name,
+                    points_selector=PointIdsList(points=list(stale)),
+                    wait=True,
+                )
+        except Exception as exc:
+            logger.error(
+                "vector_replace_failed",
+                extra={"request_id": request_id, "count": len(vectors), "error": str(exc)},
+            )
+            if self._required:
+                raise VectorStoreError(str(exc)) from exc
+            self._available = False
+
+    # ------------------------------------------------------------------
+    # Read operations
+    # ------------------------------------------------------------------
+
+    def query(
+        self,
+        query_vector: Sequence[float],
+        filters: dict[str, Any] | None,
+        top_k: int,
+    ) -> VectorQueryResult:
+        if not self._available:
+            self.ensure_available()
+        if not self._available:
+            logger.warning("vector_query_skipped", extra={"reason": "not_available", "top_k": top_k})
+            return VectorQueryResult.empty()
+
+        if top_k <= 0:
+            msg = "top_k must be positive"
+            raise ValueError(msg)
+
+        filter_payload = {
+            key: value
+            for key, value in (filters or {}).items()
+            if key not in {"environment", "user_scope"}
+        }
+        qdrant_filter = QdrantQueryFilters(
+            environment=self._environment,
+            user_scope=self._user_scope,
+            **filter_payload,
+        ).to_filter()
+
+        try:
+            client = self._client
+            response = client.query_points(
+                collection_name=self._collection_name,
+                query=list(query_vector),
+                query_filter=qdrant_filter,
+                limit=top_k,
+                with_payload=True,
+            )
+            # Qdrant COSINE returns similarity (1=identical).
+            # Convert to distance convention: distance = 1 - similarity.
+            hits = [
+                VectorQueryHit(
+                    id=str(p.id),
+                    distance=max(0.0, 1.0 - float(p.score)),
+                    metadata=dict(p.payload or {}),
+                )
+                for p in response.points
+            ]
+            return VectorQueryResult(hits=hits)
+        except Exception as exc:
+            logger.error("vector_query_failed", extra={"error": str(exc)})
+            if self._required:
+                raise VectorStoreError(str(exc)) from exc
+            self._available = False
+            return VectorQueryResult.empty()
+
+    def delete_by_request_id(self, request_id: int | str) -> None:
+        if not self._available:
+            self.ensure_available()
+        if not self._available:
+            logger.warning("vector_delete_skipped", extra={"reason": "not_available", "request_id": request_id})
+            return
+        try:
+            self._client.delete(
+                collection_name=self._collection_name,
+                points_selector=FilterSelector(
+                    filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="request_id",
+                                match=MatchValue(value=int(request_id)),
+                            )
+                        ]
+                    )
+                ),
+                wait=True,
+            )
+        except Exception as exc:
+            logger.error("vector_delete_failed", extra={"request_id": request_id, "error": str(exc)})
+            if self._required:
+                raise VectorStoreError(str(exc)) from exc
+            self._available = False
+
+    def health_check(self) -> bool:
+        if not self._available or self._client is None:
+            return False
+        try:
+            self._client.get_collections()
+            return True
+        except Exception:
+            self._available = False
+            return False
+
+    def get_indexed_summary_ids(
+        self, *, user_id: int | None = None, limit: int | None = 5000
+    ) -> set[int]:
+        if not self._available:
+            self.ensure_available()
+        if not self._available:
+            return set()
+
+        scroll_filter = Filter(
+            must=[
+                FieldCondition(key="environment", match=MatchValue(value=self._environment)),
+                FieldCondition(key="user_scope", match=MatchValue(value=self._user_scope)),
+                *(
+                    [FieldCondition(key="user_id", match=MatchValue(value=user_id))]
+                    if user_id is not None
+                    else []
+                ),
+            ]
+        )
+        try:
+            client = self._client
+            records, _ = client.scroll(
+                collection_name=self._collection_name,
+                scroll_filter=scroll_filter,
+                limit=limit or 5000,
+                with_payload=["summary_id"],
+                with_vectors=False,
+            )
+            summary_ids: set[int] = set()
+            for record in records:
+                raw = (record.payload or {}).get("summary_id")
+                try:
+                    if raw is not None:
+                        summary_ids.add(int(raw))
+                except (TypeError, ValueError):
+                    continue
+            return summary_ids
+        except Exception as exc:
+            logger.error("vector_get_indexed_summary_ids_failed", extra={"error": str(exc)})
+            if self._required:
+                raise VectorStoreError(str(exc)) from exc
+            return set()
+
+    def reset(self) -> None:
+        client = self._client
+        try:
+            client.delete_collection(self._collection_name)
+            client.create_collection(
+                collection_name=self._collection_name,
+                vectors_config=VectorParams(size=self._embedding_dim, distance=Distance.COSINE),
+            )
+        except Exception as exc:
+            logger.error("vector_reset_failed", extra={"error": str(exc)})
+            raise
+
+    def count(self) -> int:
+        if not self._available:
+            self.ensure_available()
+        if not self._available:
+            return 0
+        try:
+            result = self._client.count(
+                collection_name=self._collection_name,
+                exact=True,
+            )
+            return result.count
+        except Exception:
+            return 0
+
+    def close(self) -> None:
+        client = getattr(self, "_client", None)
+        if client is None:
+            return
+        try:
+            client.close()
+        except Exception as exc:
+            logger.warning("vector_client_close_failed", extra={"error": str(exc)})
+        finally:
+            self._client = None
+            self._available = False
+
+    async def aclose(self) -> None:
+        try:
+            await asyncio.to_thread(self.close)
+        except Exception:
+            logger.exception("vector_client_async_close_failed")

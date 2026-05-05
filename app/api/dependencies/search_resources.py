@@ -1,4 +1,4 @@
-"""Chroma search accessors backed by the shared API runtime."""
+"""Vector search accessors backed by the shared API runtime."""
 
 from __future__ import annotations
 
@@ -10,25 +10,28 @@ from app.di.api import ensure_api_runtime, get_current_api_runtime, resolve_api_
 logger = get_logger(__name__)
 
 
-async def get_chroma_search_service(
+async def get_vector_search_service(
     request: Any = None,
 ) -> Any:
-    """FastAPI dependency for the shared Chroma search service."""
+    """FastAPI dependency for the shared vector search service."""
     runtime = None
     try:
         runtime = resolve_api_runtime(request)
     except RuntimeError:
         runtime = await ensure_api_runtime()
 
-    service = runtime.search.chroma_vector_search_service
+    service = runtime.search.vector_search_service
     if service is not None:
         return service
 
-    msg = "Chroma search service is unavailable"
+    msg = "Vector search service is unavailable"
     raise RuntimeError(msg)
 
 
-async def shutdown_chroma_search_resources() -> None:
+get_chroma_search_service = get_vector_search_service  # backward-compat alias
+
+
+async def shutdown_vector_search_resources() -> None:
     """Release only API search resources without tearing down the whole runtime."""
     try:
         runtime = get_current_api_runtime()
@@ -39,3 +42,6 @@ async def shutdown_chroma_search_resources() -> None:
         if runtime.search.vector_store is not None:
             await runtime.search.vector_store.aclose()
         await runtime.search.embedding_service.aclose()
+
+
+shutdown_chroma_search_resources = shutdown_vector_search_resources  # backward-compat alias

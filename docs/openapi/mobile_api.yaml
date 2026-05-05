@@ -2107,7 +2107,7 @@ paths:
       tags:
       - Search
       summary: Semantic Search Summaries
-      description: Semantic search across summaries using Chroma embeddings.
+      description: Semantic search across summaries using Qdrant embeddings.
       operationId: semantic_search_summaries_v1_search_semantic_get
       security:
       - HTTPBearer: []
@@ -6211,7 +6211,7 @@ paths:
       tags:
       - Signals
       summary: Signal Health
-      description: Return Chroma readiness and source health counts for signal scoring.
+      description: Return Qdrant readiness and source health counts for signal scoring.
       operationId: signal_health_v1_signals_health_get
       security:
       - HTTPBearer: []
@@ -7772,7 +7772,7 @@ components:
           data:
             type: object
             properties:
-              chroma:
+              vector:
                 type: object
                 properties:
                   ready:

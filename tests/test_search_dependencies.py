@@ -98,15 +98,15 @@ def test_build_search_dependencies_raises_when_chroma_is_required(monkeypatch) -
             raise RuntimeError("chroma down")
 
     monkeypatch.setattr(
-        "app.infrastructure.vector.chroma_store.ChromaVectorStore",
+        "app.infrastructure.vector.qdrant_store.QdrantVectorStore",
         FailingStore,
     )
 
     cfg = SimpleNamespace(
         runtime=SimpleNamespace(topic_search_max_results=5, request_timeout_sec=5.0),
         vector_store=SimpleNamespace(
-            host="http://localhost:8000",
-            auth_token=None,
+            url="http://localhost:6333",
+            api_key=None,
             environment="test",
             user_scope="public",
             collection_version="v1",

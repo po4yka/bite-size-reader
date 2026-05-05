@@ -191,12 +191,12 @@ def create_signal_ingestion_worker(cfg: AppConfig, db: DatabaseSessionManager) -
         SqliteSignalSourceRepositoryAdapter,
     )
     from app.infrastructure.search.chroma_topic_similarity import ChromaTopicSimilarityAdapter
-    from app.infrastructure.vector.chroma_store import ChromaVectorStore
+    from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 
     embedding_service = create_embedding_service(cfg.embedding)
-    vector_store = ChromaVectorStore(
-        host=cfg.vector_store.host,
-        auth_token=cfg.vector_store.auth_token,
+    vector_store = QdrantVectorStore(
+        url=cfg.vector_store.url,
+        api_key=cfg.vector_store.api_key,
         environment=cfg.vector_store.environment,
         user_scope=cfg.vector_store.user_scope,
         collection_version=cfg.vector_store.collection_version,
