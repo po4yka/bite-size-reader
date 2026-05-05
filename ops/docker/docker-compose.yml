@@ -15,6 +15,7 @@ services:
       - ../../app:/app/app:ro
       - ../../bot.py:/app/bot.py:ro
       - ../../config:/app/config:ro
+      - ../../alembic.ini:/app/alembic.ini:ro
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
       - /tmp
@@ -119,6 +120,7 @@ services:
       - ../../app:/app/app:ro
       - ../../bot.py:/app/bot.py:ro
       - ../../config:/app/config:ro
+      - ../../alembic.ini:/app/alembic.ini:ro
       - /etc/localtime:/etc/localtime:ro
     ports:
       - "127.0.0.1:18000:8000"

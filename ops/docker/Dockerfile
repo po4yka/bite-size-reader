@@ -92,6 +92,7 @@ RUN set -eux; \
 # Copy application code
 COPY app ./app
 COPY bot.py ./
+COPY alembic.ini ./
 
 # Copy built Carbon web assets
 COPY --from=web-builder /app/static/web /app/app/static/web
