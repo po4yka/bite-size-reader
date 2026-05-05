@@ -11,7 +11,7 @@ short checklist of follow-up actions.
 intermediate if you operate Grafana / Prometheus dashboards or have
 external MCP / webhook integrations.
 **Estimated Time:** 5–15 minutes depending on integrations.
-**Related:** [DEPLOYMENT.md](../DEPLOYMENT.md),
+**Related:** [DEPLOYMENT.md](deploy-production.md),
 [Migrate Versions (general)](migrate-versions.md),
 [`CHANGELOG.md`](../../CHANGELOG.md) for the canonical breaking-change list.
 

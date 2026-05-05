@@ -266,9 +266,9 @@ sqlite3 data/ratatoskr.db "
 
 ## See Also
 
-- [FAQ § Web Search](../FAQ.md#web-search)
-- [TROUBLESHOOTING § Web Search Issues](../TROUBLESHOOTING.md)
-- [environment_variables.md § Web Search](../environment_variables.md)
+- [FAQ § Web Search](../explanation/faq.md#web-search)
+- [TROUBLESHOOTING § Web Search Issues](../reference/troubleshooting.md)
+- [environment_variables.md § Web Search](../reference/environment-variables.md)
 - [multi-agent-architecture.md](../explanation/multi-agent-architecture.md) - WebSearchAgent design
 
 ---

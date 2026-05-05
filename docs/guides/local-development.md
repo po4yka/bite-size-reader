@@ -645,8 +645,8 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 **Get help**:
 
-- [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) - Debugging guide
-- [FAQ](../FAQ.md) - Common questions
+- [TROUBLESHOOTING.md](../reference/troubleshooting.md) - Debugging guide
+- [FAQ](../explanation/faq.md) - Common questions
 - [GitHub Issues](https://github.com/po4yka/ratatoskr/issues) - Ask questions
 
 ---

@@ -71,7 +71,9 @@ class SignalScoringService:
         now: datetime | None = None,
     ) -> list[ScoredSignal]:
         if not self._topic_similarity.is_ready():
-            raise VectorStoreUnavailableError("Vector topic similarity is required for signal scoring")
+            raise VectorStoreUnavailableError(
+                "Vector topic similarity is required for signal scoring"
+            )
 
         now = now or datetime.now(UTC)
         deduped = self._dedupe(candidates)

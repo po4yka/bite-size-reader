@@ -460,10 +460,10 @@ docker restart ratatoskr
 
 ## See Also
 
-- [FAQ § Redis](../FAQ.md)
-- [TROUBLESHOOTING § Redis Issues](../TROUBLESHOOTING.md#redis-issues)
-- [environment_variables.md § Redis](../environment_variables.md)
-- [DEPLOYMENT.md](../DEPLOYMENT.md) - Production Redis setup
+- [FAQ § Redis](../explanation/faq.md)
+- [TROUBLESHOOTING § Redis Issues](../reference/troubleshooting.md#redis-issues)
+- [environment_variables.md § Redis](../reference/environment-variables.md)
+- [DEPLOYMENT.md](deploy-production.md) - Production Redis setup
 
 ---
 

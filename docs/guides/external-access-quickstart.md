@@ -182,7 +182,7 @@ If something goes wrong:
 ## Related Docs
 
 - [CLI README](../../clients/cli/README.md)
-- [Mobile API Spec](../MOBILE_API_SPEC.md)
+- [Mobile API Spec](../reference/mobile-api.md)
 - [MCP Server](../reference/mcp-server.md)
-- [Troubleshooting](../TROUBLESHOOTING.md)
-- [Environment Variables](../environment_variables.md)
+- [Troubleshooting](../reference/troubleshooting.md)
+- [Environment Variables](../reference/environment-variables.md)

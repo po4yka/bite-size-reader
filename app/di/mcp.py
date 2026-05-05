@@ -125,8 +125,6 @@ async def ensure_mcp_vector_service(runtime: McpRuntime) -> Any:
     )
 
 
-
-
 async def ensure_mcp_local_vector_service(runtime: McpRuntime) -> Any:
     """Initialize and cache the local embedding fallback used by MCP tools."""
 

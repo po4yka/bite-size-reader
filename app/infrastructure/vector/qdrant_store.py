@@ -285,7 +285,9 @@ class QdrantVectorStore:
         if not self._available:
             self.ensure_available()
         if not self._available:
-            logger.warning("vector_upsert_skipped", extra={"reason": "not_available", "count": len(vectors)})
+            logger.warning(
+                "vector_upsert_skipped", extra={"reason": "not_available", "count": len(vectors)}
+            )
             return
 
         if len(vectors) != len(metadatas):
@@ -370,7 +372,9 @@ class QdrantVectorStore:
         if not self._available:
             self.ensure_available()
         if not self._available:
-            logger.warning("vector_query_skipped", extra={"reason": "not_available", "top_k": top_k})
+            logger.warning(
+                "vector_query_skipped", extra={"reason": "not_available", "top_k": top_k}
+            )
             return VectorQueryResult.empty()
 
         if top_k <= 0:
@@ -419,7 +423,9 @@ class QdrantVectorStore:
         if not self._available:
             self.ensure_available()
         if not self._available:
-            logger.warning("vector_delete_skipped", extra={"reason": "not_available", "request_id": request_id})
+            logger.warning(
+                "vector_delete_skipped", extra={"reason": "not_available", "request_id": request_id}
+            )
             return
         try:
             self._client.delete(
@@ -437,7 +443,9 @@ class QdrantVectorStore:
                 wait=True,
             )
         except Exception as exc:
-            logger.error("vector_delete_failed", extra={"request_id": request_id, "error": str(exc)})
+            logger.error(
+                "vector_delete_failed", extra={"request_id": request_id, "error": str(exc)}
+            )
             if self._required:
                 raise VectorStoreError(str(exc)) from exc
             self._available = False

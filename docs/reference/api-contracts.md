@@ -4,7 +4,7 @@ Reference for external service APIs used by Ratatoskr.
 
 **Audience:** Developers, Integrators
 **Type:** Reference
-**Related:** [SPEC.md § External Systems](../SPEC.md#external-systems--authoritative-docs), [TROUBLESHOOTING](../TROUBLESHOOTING.md)
+**Related:** [SPEC.md § External Systems](../SPEC.md#external-systems--authoritative-docs), [TROUBLESHOOTING](troubleshooting.md)
 
 ---
 
@@ -590,7 +590,7 @@ YOUTUBE_DOWNLOAD_TRANSCRIPT=true
 ## See Also
 
 - [SPEC.md § External Systems](../SPEC.md#external-systems--authoritative-docs) - Canonical documentation links
-- [TROUBLESHOOTING § External API Errors](../TROUBLESHOOTING.md#external-api-errors) - Common issues
+- [TROUBLESHOOTING § External API Errors](troubleshooting.md#external-api-errors) - Common issues
 - [API Error Codes](api-error-codes.md) - Complete error reference
 
 ---

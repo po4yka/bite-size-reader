@@ -434,4 +434,3 @@ class StoreVectorSearchService:
                     clean.append(text)
             return clean
         return []
-

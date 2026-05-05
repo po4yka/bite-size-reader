@@ -4,7 +4,7 @@ Complete reference of error codes returned by Ratatoskr's external APIs and inte
 
 **Audience:** Developers, Integrators
 **Type:** Reference
-**Related:** [TROUBLESHOOTING](../TROUBLESHOOTING.md), [Mobile API Spec](../MOBILE_API_SPEC.md)
+**Related:** [TROUBLESHOOTING](troubleshooting.md), [Mobile API Spec](mobile-api.md)
 
 ---
 
@@ -1111,9 +1111,9 @@ Retry-After: 300
 
 ## See Also
 
-- [TROUBLESHOOTING](../TROUBLESHOOTING.md) - Debugging guide
-- [Mobile API Spec](../MOBILE_API_SPEC.md) - API documentation
-- [FAQ § Errors](../FAQ.md#errors) - Common error questions
+- [TROUBLESHOOTING](troubleshooting.md) - Debugging guide
+- [Mobile API Spec](mobile-api.md) - API documentation
+- [FAQ § Errors](../explanation/faq.md#errors) - Common error questions
 
 ---
 

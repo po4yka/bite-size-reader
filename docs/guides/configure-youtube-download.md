@@ -304,9 +304,9 @@ https://music.youtube.com/watch?v=VIDEO_ID
 
 ## See Also
 
-- [FAQ § YouTube Support](../FAQ.md#youtube-support)
-- [TROUBLESHOOTING § YouTube Issues](../TROUBLESHOOTING.md#youtube-issues)
-- [environment_variables.md § YouTube](../environment_variables.md) - Full variable reference
+- [FAQ § YouTube Support](../explanation/faq.md#youtube-support)
+- [TROUBLESHOOTING § YouTube Issues](../reference/troubleshooting.md#youtube-issues)
+- [environment_variables.md § YouTube](../reference/environment-variables.md) - Full variable reference
 
 ---
 

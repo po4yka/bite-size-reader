@@ -4,7 +4,7 @@ Complete reference for all command-line tools in Ratatoskr.
 
 **Audience:** Developers, Operators
 **Type:** Reference
-**Related:** [How-To Guides](../guides/), [TROUBLESHOOTING](../TROUBLESHOOTING.md)
+**Related:** [How-To Guides](../guides/), [TROUBLESHOOTING](troubleshooting.md)
 
 ---
 
@@ -56,7 +56,7 @@ See:
 
 - [CLI README](../../clients/cli/README.md)
 - [External Access Quickstart](../guides/external-access-quickstart.md)
-- [Mobile API Spec](../MOBILE_API_SPEC.md)
+- [Mobile API Spec](mobile-api.md)
 
 ---
 
@@ -990,8 +990,8 @@ echo $?  # 0 (success)
 ## See Also
 
 - [How-To Guides](../guides/) - Step-by-step task guides
-- [TROUBLESHOOTING](../TROUBLESHOOTING.md) - Debugging guide
-- [Environment Variables](../environment_variables.md) - Configuration reference
+- [TROUBLESHOOTING](troubleshooting.md) - Debugging guide
+- [Environment Variables](environment-variables.md) - Configuration reference
 
 ---
 

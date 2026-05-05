@@ -39,5 +39,3 @@ async def shutdown_vector_search_resources() -> None:
         if runtime.search.vector_store is not None:
             await runtime.search.vector_store.aclose()
         await runtime.search.embedding_service.aclose()
-
-

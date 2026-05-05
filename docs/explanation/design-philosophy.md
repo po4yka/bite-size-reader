@@ -229,7 +229,7 @@ See: [Summary Contract Design](summary-contract-design.md)
 
 **Rationale:** For 99% of users, sharing means "deploy a second bot for your friend" (trivial with Docker). The 1% who need multi-user can fork and add proper auth.
 
-See: [FAQ § Security](../FAQ.md#security)
+See: [FAQ § Security](faq.md#security)
 
 ---
 

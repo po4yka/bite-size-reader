@@ -109,7 +109,7 @@ docker logs ratatoskr
 # INFO: Listening for messages...
 ```
 
-> This quickstart starts the Telegram bot runtime only. The web interface (`/web/*`) is served by the FastAPI `mobile-api` service; see [DEPLOYMENT.md](../DEPLOYMENT.md) and [Frontend Web Guide](../reference/frontend-web.md) for that setup.
+> This quickstart starts the Telegram bot runtime only. The web interface (`/web/*`) is served by the FastAPI `mobile-api` service; see [DEPLOYMENT.md](deploy-production.md) and [Frontend Web Guide](../reference/frontend-web.md) for that setup.
 
 **Troubleshooting**: If you see errors, check:
 
@@ -200,9 +200,9 @@ Congratulations! You've successfully set up Ratatoskr. 🎉
 
 **Learn more**:
 
-- [FAQ](../FAQ.md) - Common questions
-- [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) - Fix issues
-- [Environment variables reference](../environment_variables.md) - Full config options
+- [FAQ](../explanation/faq.md) - Common questions
+- [TROUBLESHOOTING.md](../reference/troubleshooting.md) - Fix issues
+- [Environment variables reference](../reference/environment-variables.md) - Full config options
 
 ---
 
@@ -324,7 +324,7 @@ See [Local Development Tutorial](local-development.md) for full guide.
 
 You now have a working Ratatoskr setup. Try summarizing a few articles to get familiar with the output format.
 
-**Questions?** Check [FAQ](../FAQ.md) or [open an issue](https://github.com/po4yka/ratatoskr/issues).
+**Questions?** Check [FAQ](../explanation/faq.md) or [open an issue](https://github.com/po4yka/ratatoskr/issues).
 
 ---
 

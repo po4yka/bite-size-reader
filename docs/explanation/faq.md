@@ -714,7 +714,7 @@ REDIS_LLM_TTL_SECONDS=604800  # 7 days
 
 ## Related Documentation
 
-- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Debugging guide
+- [TROUBLESHOOTING.md](../reference/troubleshooting.md) - Debugging guide
 - [environment_variables.md](../reference/environment-variables.md) - Configuration reference
 - [DEPLOYMENT.md](../guides/deploy-production.md) - Setup and deployment
 - [MOBILE_API_SPEC.md](../reference/mobile-api.md) - REST API specification
@@ -725,4 +725,4 @@ REDIS_LLM_TTL_SECONDS=604800  # 7 days
 
 **Last Updated**: 2026-03-28
 
-**Have a question not answered here?** [Open an issue](https://github.com/po4yka/ratatoskr/issues) or check [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+**Have a question not answered here?** [Open an issue](https://github.com/po4yka/ratatoskr/issues) or check [TROUBLESHOOTING.md](../reference/troubleshooting.md).

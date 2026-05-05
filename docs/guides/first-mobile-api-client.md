@@ -34,7 +34,7 @@ curl http://localhost:8000/health
 # {"status":"healthy","version":"1.0.0"}
 ```
 
-If not running, see [DEPLOYMENT.md](../DEPLOYMENT.md) for setup.
+If not running, see [DEPLOYMENT.md](deploy-production.md) for setup.
 
 ### 2. Required Environment Variables
 
@@ -656,15 +656,15 @@ for attempt in range(3):
 - Swift iOS app
 - Kotlin Android app
 
-**See full API spec:** [MOBILE_API_SPEC.md](../MOBILE_API_SPEC.md)
+**See full API spec:** [MOBILE_API_SPEC.md](../reference/mobile-api.md)
 
 ---
 
 ## See Also
 
-- [MOBILE_API_SPEC.md](../MOBILE_API_SPEC.md) - Complete API reference
-- [FAQ § Integration](../FAQ.md#integration) - Integration questions
-- [TROUBLESHOOTING § Mobile API](../TROUBLESHOOTING.md#mobile-api-issues)
+- [MOBILE_API_SPEC.md](../reference/mobile-api.md) - Complete API reference
+- [FAQ § Integration](../explanation/faq.md#integration) - Integration questions
+- [TROUBLESHOOTING § Mobile API](../reference/troubleshooting.md#mobile-api-issues)
 
 ---
 

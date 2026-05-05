@@ -426,10 +426,10 @@ sqlite3 data/ratatoskr.db "
 
 ## See Also
 
-- [FAQ § Performance](../FAQ.md#performance)
-- [FAQ § Cost Optimization](../FAQ.md#cost-optimization)
-- [environment_variables.md](../environment_variables.md) - All performance variables
-- [TROUBLESHOOTING § Performance Issues](../TROUBLESHOOTING.md#performance-issues)
+- [FAQ § Performance](../explanation/faq.md#performance)
+- [FAQ § Cost Optimization](../explanation/faq.md#cost-optimization)
+- [environment_variables.md](../reference/environment-variables.md) - All performance variables
+- [TROUBLESHOOTING § Performance Issues](../reference/troubleshooting.md#performance-issues)
 
 ---
 

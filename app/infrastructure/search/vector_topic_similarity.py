@@ -101,4 +101,3 @@ class VectorTopicSimilarityAdapter:
         except (TypeError, ValueError):
             return 0.0
         return max(0.0, min(1.0, 1.0 - distance))
-

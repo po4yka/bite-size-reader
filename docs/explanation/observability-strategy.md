@@ -4,7 +4,7 @@ How Ratatoskr implements logging, tracing, and debugging to ensure production re
 
 **Audience:** Developers, Operators
 **Type:** Explanation
-**Related:** [Design Philosophy](design-philosophy.md), [TROUBLESHOOTING](../TROUBLESHOOTING.md)
+**Related:** [Design Philosophy](design-philosophy.md), [TROUBLESHOOTING](../reference/troubleshooting.md)
 
 ---
 
@@ -859,9 +859,9 @@ logger.info(f"Summary created for {url} using {tokens} tokens (correlation_id: {
 ## See Also
 
 - [Design Philosophy](design-philosophy.md) - Overall architectural principles
-- [TROUBLESHOOTING](../TROUBLESHOOTING.md) - Common debugging scenarios
+- [TROUBLESHOOTING](../reference/troubleshooting.md) - Common debugging scenarios
 - [How to Optimize Performance](../guides/optimize-performance.md) - Performance tuning
-- [FAQ § Debugging](../FAQ.md#debugging) - Common debugging questions
+- [FAQ § Debugging](faq.md#debugging) - Common debugging questions
 
 ---
 

@@ -332,7 +332,9 @@ async def migrate(
                 collection_info = await _chroma_get_collection(
                     chroma_host, collection_name, chroma_auth
                 )
-                chroma_count = collection_info.get("metadata", {}).get("count", 0) if collection_info else 0
+                chroma_count = (
+                    collection_info.get("metadata", {}).get("count", 0) if collection_info else 0
+                )
                 effective_strategy = "export" if chroma_count > 0 else "reembed"
             else:
                 effective_strategy = "reembed"

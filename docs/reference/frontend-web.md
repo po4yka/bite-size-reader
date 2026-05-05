@@ -4,7 +4,7 @@ Reference for the web interface implemented in `clients/web/`.
 
 **Audience:** Frontend developers, integrators, operators
 **Type:** Reference
-**Related:** [Mobile API Spec](../MOBILE_API_SPEC.md), [Deployment Guide](../DEPLOYMENT.md)
+**Related:** [Mobile API Spec](mobile-api.md), [Deployment Guide](../guides/deploy-production.md)
 
 ---
 

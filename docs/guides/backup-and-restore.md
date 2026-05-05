@@ -361,7 +361,7 @@ If recovery fails, restore the newest backup that passes `PRAGMA integrity_check
 
 ## See Also
 
-- [Deployment](../DEPLOYMENT.md)
+- [Deployment](deploy-production.md)
 - [How to Migrate Versions](migrate-versions.md)
 - [Qdrant Vector Search](setup-qdrant-vector-search.md)
 - [YouTube Downloads](configure-youtube-download.md)
