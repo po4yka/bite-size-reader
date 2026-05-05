@@ -8,8 +8,8 @@ and configuration recipes.
 or extend the content-extraction pipeline.
 **Type:** Explanation.
 **Related:** [`docs/explanation/architecture-overview.md`](architecture-overview.md)
-(parent), [`docs/environment_variables.md`](../environment_variables.md)
-(full env-var reference), [`docs/FAQ.md`](../FAQ.md) (operational tips).
+(parent), [`docs/reference/environment-variables.md`](../reference/environment-variables.md)
+(full env-var reference), [`docs/explanation/faq.md`](../explanation/faq.md) (operational tips).
 **Source:**
 [`app/adapters/content/scraper/chain.py`](../../app/adapters/content/scraper/chain.py),
 [`factory.py`](../../app/adapters/content/scraper/factory.py),
@@ -268,8 +268,8 @@ SCRAPER_SCRAPEGRAPH_ENABLED=false
 ## Cross-references
 
 - Parent architecture: [`docs/explanation/architecture-overview.md`](architecture-overview.md)
-- All scraper env vars: [`docs/environment_variables.md`](../environment_variables.md)
-- Operational tips: [`docs/FAQ.md`](../FAQ.md)
+- All scraper env vars: [`docs/reference/environment-variables.md`](../reference/environment-variables.md)
+- Operational tips: [`docs/explanation/faq.md`](../explanation/faq.md)
 - Source — chain: [`app/adapters/content/scraper/chain.py`](../../app/adapters/content/scraper/chain.py)
 - Source — factory: [`app/adapters/content/scraper/factory.py`](../../app/adapters/content/scraper/factory.py)
 - Source — protocol: [`app/adapters/content/scraper/protocol.py`](../../app/adapters/content/scraper/protocol.py)

@@ -14,7 +14,7 @@ updated: 2026-05-04
 
 ## Goal
 
-Lock the Mobile API surface against `docs/MOBILE_API_SPEC.md` and `docs/openapi/mobile_api.yaml` so the KMP client ([[map-ratatoskr-mobile-api-contract-to-kmp-readiness]]) can ship without contract drift.
+Lock the Mobile API surface against `docs/reference/mobile-api.md` and `docs/openapi/mobile_api.yaml` so the KMP client ([[map-ratatoskr-mobile-api-contract-to-kmp-readiness]]) can ship without contract drift.
 
 ## Scope
 
@@ -31,6 +31,6 @@ Lock the Mobile API surface against `docs/MOBILE_API_SPEC.md` and `docs/openapi/
 
 ## References
 
-- `docs/MOBILE_API_SPEC.md`, `docs/openapi/mobile_api.yaml`
+- `docs/reference/mobile-api.md`, `docs/openapi/mobile_api.yaml`
 - `app/api/main.py`, `app/api/routers/`
 - [[map-ratatoskr-mobile-api-contract-to-kmp-readiness]]

@@ -57,7 +57,7 @@ def test_monitoring_alert_names_use_ratatoskr_prefix() -> None:
 
 def test_deployment_docs_match_current_firecrawl_compose_shape() -> None:
     compose = _read("ops/docker/docker-compose.yml")
-    deployment = _read("docs/DEPLOYMENT.md")
+    deployment = _read("docs/guides/deploy-production.md")
 
     compose_has_firecrawl_service = "\n  firecrawl" in compose
     if compose_has_firecrawl_service:

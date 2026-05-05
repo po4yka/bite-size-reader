@@ -457,7 +457,7 @@ ELEVENLABS_ENABLED=false              # Enable text-to-speech
 ELEVENLABS_API_KEY=                   # ElevenLabs API key
 ```
 
-Full reference: `docs/environment_variables.md`
+Full reference: `docs/reference/environment-variables.md`
 
 ---
 

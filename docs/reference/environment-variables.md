@@ -4,7 +4,7 @@ Complete reference for all Ratatoskr configuration. Source of truth: `app/config
 
 **Phase 1 status**: `.env.example` is intentionally minimal. Optional
 power-user settings should move to `ratatoskr.yaml`; see
-[Optional YAML Configuration](reference/config-file.md).
+[Optional YAML Configuration](config-file.md).
 
 **Last Updated**: 2026-04-30
 
@@ -687,13 +687,13 @@ curl "$CHROMA_HOST/api/v2/heartbeat"
 
 ## Related Documentation
 
-- [Quickstart Tutorial](guides/quickstart.md) - Step-by-step setup guide
-- [FAQ § Configuration](FAQ.md#configuration) - Common configuration questions
+- [Quickstart Tutorial](../guides/quickstart.md) - Step-by-step setup guide
+- [FAQ § Configuration](../explanation/faq.md#configuration) - Common configuration questions
 - [TROUBLESHOOTING § Configuration](TROUBLESHOOTING.md#configuration-issues) - Fix config problems
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Production deployment guide
+- [DEPLOYMENT.md](../guides/deploy-production.md) - Production deployment guide
 
 ---
 
 **Last Updated**: 2026-03-28
 
-**Found an error or have a question?** [Open an issue](https://github.com/po4yka/ratatoskr/issues) or check [FAQ](FAQ.md).
+**Found an error or have a question?** [Open an issue](https://github.com/po4yka/ratatoskr/issues) or check [FAQ](../explanation/faq.md).

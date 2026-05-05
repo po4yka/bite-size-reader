@@ -25,7 +25,7 @@ High. Any deployment that instantiates `Settings(allow_stub_telegram=True)` and 
 ## Acceptance criteria
 
 - [ ] Decision recorded: keep fail-open for JWT (multi-user) OR unify to fail-closed.
-- [ ] If kept: add a startup `WARNING` log when `ALLOWED_USER_IDS` is empty AND any JWT path is used; document in `docs/MOBILE_API_SPEC.md` §Authentication.
+- [ ] If kept: add a startup `WARNING` log when `ALLOWED_USER_IDS` is empty AND any JWT path is used; document in `docs/reference/mobile-api.md` §Authentication.
 - [ ] If unified: change `dependencies.py:117-120` to `fail_open_when_empty=False` and update `tests/api/auth/` with a matrix test (empty | populated-include | populated-exclude) × {JWT, WebApp, Telegram-Login, secret-login}.
 - [ ] No regression in existing WebApp / secret-login tests.
 

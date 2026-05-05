@@ -42,7 +42,7 @@ The default scraper chain order is: `scrapling -> crawl4ai -> firecrawl_self_hos
 - **ScrapeGraphAI**: in-process last-resort LLM provider, no sidecar required. Enable with `SCRAPER_SCRAPEGRAPH_ENABLED=true`.
 - Breaking rename note: legacy vars (`SCRAPLING_*`, `SCRAPER_DIRECT_HTTP_ENABLED`) now fail fast at startup.
 
-See `docs/environment_variables.md` for the full multi-provider scraper chain configuration.
+See `docs/reference/environment-variables.md` for the full multi-provider scraper chain configuration.
 
 ## Environment Variables (essentials)
 
@@ -187,7 +187,7 @@ These profile services are not required but enhance functionality when available
 - **MCP Server** (`mcp`, `mcp-write`, `mcp-public`) -- Exposes article, search, ChromaDB, and aggregation tools/resources to external AI agents (OpenClaw, Claude Desktop, hosted SSE clients). Runs as a dedicated Docker container with SSE transport (`ratatoskr-mcp`) or standalone via `python -m app.cli.mcp_server`. See `docs/reference/mcp-server.md`.
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels. Set `DIGEST_ENABLED=true` and `API_BASE_URL` to the Mobile API endpoint. Run `/init_session` in the bot to authenticate the userbot via Mini App OTP/2FA flow, then use `/subscribe @channel` to add channels.
 
-Full variable reference: `docs/environment_variables.md`
+Full variable reference: `docs/reference/environment-variables.md`
 
 ## Security & Hardening
 
@@ -315,7 +315,7 @@ make lock-uv
 ```
 
 > **First upgrade onto Ratatoskr from `bite-size-reader`?** Read
-> [Migrate from bite-size-reader](guides/migrate-from-bite-size-reader.md)
+> [Migrate from bite-size-reader](migrate-from-bite-size-reader.md)
 > first — it covers the renamed Docker image, MCP URIs / headers,
 > Prometheus metric names, web storage keys, and the retired Karakeep
 > integration.
@@ -355,7 +355,7 @@ docker compose -f ops/docker/docker-compose.yml up -d --build
 ## Troubleshooting
 
 - "Access denied": verify `ALLOWED_USER_IDS` contains your Telegram numeric ID.
-- "Failed to fetch content": scraper chain exhausted all providers; check sidecar health (`curl localhost:3002/health`, `curl localhost:11235/health`, `curl localhost:3003/health`) and review logs for `scraper_chain_exhausted`. See `docs/TROUBLESHOOTING.md` for diagnosis steps.
+- "Failed to fetch content": scraper chain exhausted all providers; check sidecar health (`curl localhost:3002/health`, `curl localhost:11235/health`, `curl localhost:3003/health`) and review logs for `scraper_chain_exhausted`. See `docs/reference/troubleshooting.md` for diagnosis steps.
 - "LLM error": OpenRouter API issue or model outage; rely on built-in retries/fallbacks; check logs.
 - Missing deps after update: rebuild the Docker image.
 - Secrets/env issues: recheck `.env` (quote special chars).

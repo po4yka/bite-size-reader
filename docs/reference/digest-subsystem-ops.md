@@ -36,7 +36,7 @@ Taskiq Worker process  (one or more replicas)
 | `DIGEST_CONCURRENCY` | `3` | Parallel LLM analysis calls |
 | `DIGEST_SESSION_NAME` | `channel_digest_userbot` | Telethon session file name |
 
-Full reference: `docs/environment_variables.md`.
+Full reference: `docs/reference/environment-variables.md`.
 
 ## Starting the Scheduler
 

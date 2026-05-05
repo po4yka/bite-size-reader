@@ -199,9 +199,9 @@ OPENROUTER_API_KEY=your_key
 EOF
 ```
 
-See [environment_variables.md](environment_variables.md) for full reference.
+See [environment_variables.md](environment-variables.md) for full reference.
 
-> **Breaking scraper rename**: startup now fails if legacy vars are present (`SCRAPLING_ENABLED`, `SCRAPLING_TIMEOUT_SEC`, `SCRAPLING_STEALTH_FALLBACK`, `SCRAPER_DIRECT_HTTP_ENABLED`). Use the new `SCRAPER_*` names from `docs/environment_variables.md`.
+> **Breaking scraper rename**: startup now fails if legacy vars are present (`SCRAPLING_ENABLED`, `SCRAPLING_TIMEOUT_SEC`, `SCRAPLING_STEALTH_FALLBACK`, `SCRAPER_DIRECT_HTTP_ENABLED`). Use the new `SCRAPER_*` names from `docs/reference/environment-variables.md`.
 
 ### Invalid API Keys
 
@@ -252,7 +252,7 @@ docker restart ratatoskr
 
 ## Content Extraction / Scraper Chain Issues
 
-> **Multi-provider fallback**: Content extraction uses an ordered chain of providers (default: Scrapling → Crawl4AI → Firecrawl self-hosted → Defuddle → Playwright → Crawlee → direct HTML → ScrapeGraphAI). If one provider fails, the next is tried automatically. Cloud Firecrawl is not used; `FIRECRAWL_API_KEY` is not required. The self-hosted sidecar stack (Firecrawl, Crawl4AI, Defuddle) is started with `--profile with-scrapers`. See `docs/environment_variables.md` for scraper chain configuration.
+> **Multi-provider fallback**: Content extraction uses an ordered chain of providers (default: Scrapling → Crawl4AI → Firecrawl self-hosted → Defuddle → Playwright → Crawlee → direct HTML → ScrapeGraphAI). If one provider fails, the next is tried automatically. Cloud Firecrawl is not used; `FIRECRAWL_API_KEY` is not required. The self-hosted sidecar stack (Firecrawl, Crawl4AI, Defuddle) is started with `--profile with-scrapers`. See `docs/reference/environment-variables.md` for scraper chain configuration.
 
 ### Self-Hosted Sidecar Rate / Capacity Issues
 
@@ -1317,10 +1317,10 @@ If you're still stuck after trying these steps:
 
 ## Related Documentation
 
-- [environment_variables.md](environment_variables.md) - Full configuration reference
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Setup and deployment guides
-- [FAQ.md](FAQ.md) - Frequently asked questions
-- [SPEC.md](SPEC.md) - Technical specification
+- [environment_variables.md](environment-variables.md) - Full configuration reference
+- [DEPLOYMENT.md](../guides/deploy-production.md) - Setup and deployment guides
+- [FAQ.md](../explanation/faq.md) - Frequently asked questions
+- [SPEC.md](../SPEC.md) - Technical specification
 
 ---
 

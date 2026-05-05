@@ -17,6 +17,34 @@ themselves, integrators planning how to attach.
 
 ---
 
+## Goals and Non-Goals
+
+**Goals:**
+
+- Robust URL → content → LLM → JSON summary pipeline.
+- End-to-end data capture: Telegram request, full scraper-chain output, raw LLM response, final JSON summary.
+- Deterministic Summary JSON contract with validation (length caps, types, dedupe).
+- Idempotence for URLs (normalized URL hash).
+- Clear observability (structured logs, audit trail, latency and token metrics).
+- Single-user security hardening (allowlist).
+
+**Non-Goals:**
+
+- Multi-tenant access control.
+- Long-term vector search, RAG, or analytics dashboards (future work).
+- Real-time streaming summaries.
+
+---
+
+## User and Access Control
+
+- **Telegram bot access** is allowlist-first via `ALLOWED_USER_IDS` (comma-separated); group/supergroup chats and unauthorized DMs are rejected generically.
+- **JWT API and hosted MCP auth** are allowlist-aware but intentionally fail-open when `ALLOWED_USER_IDS` is empty, which enables explicit multi-user external deployments.
+- **Client-level external access** can be constrained independently via `ALLOWED_CLIENT_IDS`, secret-login provisioning rules, and rollout stages.
+- All secrets pass via env vars or hashed secret storage; no plaintext secrets in DB or logs.
+
+---
+
 ## Component diagram
 
 ```mermaid
@@ -184,7 +212,7 @@ Each subsystem has a canonical doc; this page is the entry point.
 | Channel digest | Userbot reads subscribed channels; scheduled digests via `/digest`. | [`docs/SPEC.md`](../SPEC.md) (`Channel digest` section) |
 | Mixed-source aggregation | Bundle one or more links + forwards / attachments into a single synthesised result. | [`docs/SPEC.md`](../SPEC.md) (`Mixed-source aggregation` section) |
 | Search (FTS5 + vector) | Local full-text plus optional ChromaDB semantic / hybrid search. | [`docs/guides/setup-chroma-vector-search.md`](../guides/setup-chroma-vector-search.md) |
-| Mobile API | FastAPI + JWT, sync v2, ratelimit, summary CRUD, aggregations. | [`docs/MOBILE_API_SPEC.md`](../MOBILE_API_SPEC.md) |
+| Mobile API | FastAPI + JWT, sync v2, ratelimit, summary CRUD, aggregations. | [`docs/reference/mobile-api.md`](../reference/mobile-api.md) |
 | Web frontend | React SPA served on `/web/*`; library, search, submit, collections, digest, preferences, admin. Uses a project-owned design shim under `clients/web/src/design/`. | [`docs/reference/frontend-web.md`](../reference/frontend-web.md) |
 | MCP server | Model Context Protocol server: 22 tools and 16 resources for external AI agents (OpenClaw, Claude Desktop). | [`docs/reference/mcp-server.md`](../reference/mcp-server.md) |
 | Observability | Prometheus metrics, structured logs, correlation-ID tracing, Loki / Promtail / Grafana stack. | [`docs/explanation/observability-strategy.md`](observability-strategy.md) |
@@ -196,7 +224,7 @@ Each subsystem has a canonical doc; this page is the entry point.
 ## Where to next
 
 - New here and want to run the bot? → [Quickstart Tutorial](../guides/quickstart.md).
-- Deploying to a server? → [DEPLOYMENT.md](../DEPLOYMENT.md).
+- Deploying to a server? → [guides/deploy-production.md](../guides/deploy-production.md).
 - Modifying the codebase? → [`CLAUDE.md`](../../CLAUDE.md) for the
   AI-friendly engineer's tour, then [`docs/SPEC.md`](../SPEC.md) for
   the canonical contract.

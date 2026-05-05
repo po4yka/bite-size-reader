@@ -25,7 +25,7 @@ This phase evolves the existing MCP server rather than adding a separate MCP gat
 | `MCP_FORWARDED_SECRET_HEADER` | `X-Ratatoskr-MCP-Forwarding-Secret` | Trusted-gateway header carrying the shared forwarding secret |
 | `MCP_FORWARDING_SECRET` | _(none)_ | Shared secret required before trusting forwarded access-token headers |
 
-See `docs/environment_variables.md` for full config reference.
+See `docs/reference/environment-variables.md` for full config reference.
 
 ## Running
 

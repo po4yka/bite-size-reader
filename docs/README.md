@@ -25,9 +25,9 @@ You want to use Ratatoskr to summarize articles, videos, or mixed-source bundles
 
 1. [Quickstart Tutorial](guides/quickstart.md) - Get your first summary in 5 minutes
 2. [External Access Quickstart](guides/external-access-quickstart.md) - First CLI or MCP aggregation session
-3. [FAQ](FAQ.md) - Common questions answered
-4. [DEPLOYMENT.md](DEPLOYMENT.md) - Setup and installation
-5. [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Fix common issues
+3. [FAQ](explanation/faq.md) - Common questions answered
+4. [Deploy to Production](guides/deploy-production.md) - Setup and installation
+5. [Troubleshooting](reference/troubleshooting.md) - Fix common issues
 
 **Next steps**:
 
@@ -35,7 +35,7 @@ You want to use Ratatoskr to summarize articles, videos, or mixed-source bundles
 - [How to enable web search](guides/enable-web-search.md)
 - [External Access Quickstart](guides/external-access-quickstart.md)
 - [SPEC.md § Mixed-source aggregation foundation](SPEC.md#data-model-sqlite)
-- [Environment variables reference](environment_variables.md)
+- [Environment variables reference](reference/environment-variables.md)
 
 ### 💻 I'm a Developer
 
@@ -61,9 +61,9 @@ You want to deploy, monitor, and maintain Ratatoskr in production.
 
 **Start here**:
 
-1. [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guide
-2. [Environment variables reference](environment_variables.md) - Configuration
-3. [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Debugging
+1. [Deploy to Production](guides/deploy-production.md) - Deployment guide
+2. [Environment variables reference](reference/environment-variables.md) - Configuration
+3. [Troubleshooting](reference/troubleshooting.md) - Debugging
 
 **Next steps**:
 
@@ -94,7 +94,7 @@ You want to integrate Ratatoskr with other tools or build a client.
 
 **Start here**:
 
-1. [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) - REST API specification
+1. [Mobile API Reference](reference/mobile-api.md) - REST API specification
 2. [Frontend Web Guide](reference/frontend-web.md) - Web client routes, auth, and API usage
 3. [MCP Server Guide](reference/mcp-server.md) - AI agent integration
 4. [External Access Quickstart](guides/external-access-quickstart.md)
@@ -104,7 +104,7 @@ You want to integrate Ratatoskr with other tools or build a client.
 
 - [OpenAPI Schema](openapi/) - Machine-readable API spec
 - [Database Schema Reference](SPEC.md#database-schema) - Direct database access
-- [Summary Contract Reference](SPEC.md#summary-json-contract) - JSON output format
+- [Summary Contract Reference](reference/summary-contract.md) - JSON output format
 
 ---
 
@@ -116,9 +116,9 @@ You want to integrate Ratatoskr with other tools or build a client.
 
 - **Get my first summary in 5 minutes** → [Quickstart Tutorial](guides/quickstart.md)
 - **Submit an aggregation bundle from CLI or MCP** → [External Access Quickstart](guides/external-access-quickstart.md)
-- **Install on my server** → [DEPLOYMENT.md](DEPLOYMENT.md)
+- **Install on my server** → [Deploy to Production](guides/deploy-production.md)
 - **Understand what this project does** → [README.md](../README.md) (project root)
-- **Decide if this is right for me** → [FAQ](FAQ.md)
+- **Decide if this is right for me** → [FAQ](explanation/faq.md)
 - **Open the web UI** → [Frontend Web Guide](reference/frontend-web.md)
 
 ### 🛠 Configuring Features
@@ -133,17 +133,17 @@ You want to integrate Ratatoskr with other tools or build a client.
 - **Enable web search enrichment** → [How to enable web search](guides/enable-web-search.md)
 - **Setup Redis caching** → [How to setup Redis caching](guides/setup-redis-caching.md)
 - **Setup semantic search (ChromaDB)** → [How to setup ChromaDB](guides/setup-chroma-vector-search.md)
-- **See all config options** → [Environment variables reference](environment_variables.md)
+- **See all config options** → [Environment variables reference](reference/environment-variables.md)
 
 ### 🐛 Troubleshooting
 
 **I'm experiencing...**
 
-- **Bot not starting** → [TROUBLESHOOTING.md § Configuration Issues](TROUBLESHOOTING.md#configuration-issues)
-- **Summaries failing** → [TROUBLESHOOTING.md § Firecrawl/OpenRouter Issues](TROUBLESHOOTING.md#firecrawl-issues)
-- **YouTube downloads failing** → [TROUBLESHOOTING.md § YouTube Issues](TROUBLESHOOTING.md#youtube-issues)
-- **Slow performance** → [TROUBLESHOOTING.md § Performance Issues](TROUBLESHOOTING.md#performance-issues)
-- **Something else** → [TROUBLESHOOTING.md](TROUBLESHOOTING.md) (full guide)
+- **Bot not starting** → [Troubleshooting § Configuration Issues](reference/troubleshooting.md#configuration-issues)
+- **Summaries failing** → [Troubleshooting § Scraper/OpenRouter Issues](reference/troubleshooting.md)
+- **YouTube downloads failing** → [Troubleshooting § YouTube Issues](reference/troubleshooting.md#youtube-issues)
+- **Slow performance** → [Troubleshooting § Performance Issues](reference/troubleshooting.md#performance-issues)
+- **Something else** → [Troubleshooting](reference/troubleshooting.md) (full guide)
 
 ### 🔍 Understanding the System
 
@@ -175,7 +175,7 @@ You want to integrate Ratatoskr with other tools or build a client.
 - **Build or extend web client** → [Frontend Web Guide](reference/frontend-web.md)
 - **Integrate with Claude Desktop** → [MCP Server Guide](reference/mcp-server.md)
 - **Access the database directly** → [SPEC.md § Database Schema](SPEC.md#database-schema)
-- **See the full API spec** → [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md)
+- **See the full API spec** → [Mobile API Reference](reference/mobile-api.md)
 
 ---
 
@@ -197,6 +197,7 @@ Step-by-step lessons and practical recipes, all in `docs/guides/`.
 | [Configure YouTube Download](guides/configure-youtube-download.md) | Enable YouTube support | Users, Operators | |
 | [Configure Twitter / X Extraction](guides/configure-twitter-extraction.md) | Two-tier (Firecrawl + Playwright) tweet, thread, and X Article extraction | Users, Operators | |
 | [Configure Source Ingestors](guides/configure-source-ingestors.md) | Tune the scraper chain providers | Operators | |
+| [Deploy to Production](guides/deploy-production.md) | Full production setup with TLS, monitoring, and backups | Operators | |
 | [Enable Web Search](guides/enable-web-search.md) | Add real-time web context | Users, Operators | |
 | [Setup Redis Caching](guides/setup-redis-caching.md) | Configure Redis | Operators | |
 | [Setup ChromaDB](guides/setup-chroma-vector-search.md) | Enable semantic search | Operators | |
@@ -213,12 +214,19 @@ Technical facts, API specs, and complete references.
 | Reference | Description | Audience |
 | ----------- | ------------- | ---------- |
 | [SPEC.md](SPEC.md) | Complete technical specification | Developers, Integrators |
-| [Environment Variables](environment_variables.md) | Full configuration reference (250+ vars) | All |
-| [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) | REST API specification | Integrators |
+| [Environment Variables](reference/environment-variables.md) | Full configuration reference (250+ vars) | All |
+| [Mobile API Reference](reference/mobile-api.md) | REST API specification | Integrators |
 | [Frontend Web Guide](reference/frontend-web.md) | web app architecture, auth, and workflows | Developers, Integrators |
 | [OpenAPI Schema](openapi/) | Machine-readable API spec | Integrators |
-| [Summary Contract](SPEC.md#summary-json-contract) | JSON output format (35+ fields) | Developers, Integrators |
+| [Summary Contract](reference/summary-contract.md) | JSON output format (35+ fields) | Developers, Integrators |
 | [Database Schema](SPEC.md#database-schema) | Database tables and relationships | Developers, Integrators |
+| [API Contracts](reference/api-contracts.md) | API envelope and response contracts | Developers, Integrators |
+| [API Error Codes](reference/api-error-codes.md) | API error code catalog | Developers, Integrators |
+| [CLI Commands](reference/cli-commands.md) | CLI command reference | Developers, Operators |
+| [Optional YAML Config](reference/config-file.md) | Optional YAML configuration reference | Operators |
+| [Data Model](reference/data-model.md) | SQLite schema and Peewee model reference | Developers |
+| [Digest Subsystem Ops](reference/digest-subsystem-ops.md) | Channel digest operations reference | Operators |
+| [Visual Regression](reference/visual-regression.md) | Visual regression testing reference | Developers |
 
 ### Explanation (Understanding-Oriented)
 
@@ -229,8 +237,18 @@ Background, context, and "why" discussions.
 | [Architecture Overview](explanation/architecture-overview.md) | Component diagram, request lifecycle, subsystem index | Operators, Developers, Integrators |
 | [Hexagonal Architecture](explanation/architecture-overview.md#layering-quick-reference) | Why ports and adapters (see Architecture Overview) | Developers |
 | [Multi-Agent Architecture](explanation/multi-agent-architecture.md) | Why specialized agents | Developers |
+| [FAQ](explanation/faq.md) | Frequently asked questions | All |
+| [Observability Strategy](explanation/observability-strategy.md) | Observability and telemetry strategy | Operators, Developers |
 | [MCP Server](reference/mcp-server.md) | AI agent integration explained | Integrators |
 | [Claude Code Hooks](reference/claude-code-hooks.md) | Safety hooks explained | Developers |
+
+### Tasks (Planning-Oriented)
+
+Project planning, roadmap, and task tracking.
+
+| Document | Description | Audience |
+| ---------- | ------------- | ---------- |
+| [Roadmap Priorities](tasks/roadmap-priorities.md) | Project roadmap and priorities | Developers, Operators |
 
 ---
 
@@ -243,17 +261,17 @@ Background, context, and "why" discussions.
 | [README.md](../README.md) | Project overview, quick start | First time using the project |
 | [SPEC.md](SPEC.md) | Technical specification | Deep dive into system design |
 | [CLAUDE.md](../CLAUDE.md) | AI assistant guide | Comprehensive codebase overview |
-| [FAQ.md](FAQ.md) | Frequently asked questions | Quick answers to common questions |
-| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Debugging guide | When something goes wrong |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Setup and deployment | Initial setup, production deploy |
-| [environment_variables.md](environment_variables.md) | Config reference | Configuring the system |
+| [FAQ](explanation/faq.md) | Frequently asked questions | Quick answers to common questions |
+| [Troubleshooting](reference/troubleshooting.md) | Debugging guide | When something goes wrong |
+| [Deploy to Production](guides/deploy-production.md) | Setup and deployment | Initial setup, production deploy |
+| [Environment Variables](reference/environment-variables.md) | Config reference | Configuring the system |
 | [CHANGELOG.md](../CHANGELOG.md) | Version history | Tracking changes over time |
 
 ### Specialized Documentation
 
 | File | Description | When to Read |
 | ------ | ------------- | -------------- |
-| [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) | REST API spec, including aggregation endpoints | Building mobile client |
+| [Mobile API Reference](reference/mobile-api.md) | REST API spec, including aggregation endpoints | Building mobile client |
 | [Frontend Web Guide](reference/frontend-web.md) | Web routes/auth/build details | Building or debugging web UI |
 | [Architecture Overview § Layering](explanation/architecture-overview.md#layering-quick-reference) | Architecture guide (layering section) | Understanding code structure |
 | [multi-agent-architecture.md](explanation/multi-agent-architecture.md) | Multi-agent LLM | Understanding summarization pipeline |
@@ -286,34 +304,34 @@ See the [Architecture Overview](explanation/architecture-overview.md) for an ann
 
 | Keyword | See Documentation |
 | --------- | ------------------- |
-| **API integration** | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md), [First Mobile API Client Tutorial](guides/first-mobile-api-client.md) |
+| **API integration** | [Mobile API Reference](reference/mobile-api.md), [First Mobile API Client Tutorial](guides/first-mobile-api-client.md) |
 | **Architecture** | [Architecture Overview](explanation/architecture-overview.md), [Layering quick reference](explanation/architecture-overview.md#layering-quick-reference) |
-| **Backup** | [How to backup and restore](guides/backup-and-restore.md), [TROUBLESHOOTING.md § Database](TROUBLESHOOTING.md#database-issues) |
-| **ChromaDB** | [How to setup ChromaDB](guides/setup-chroma-vector-search.md), [TROUBLESHOOTING.md § ChromaDB](TROUBLESHOOTING.md#chromadb-issues) |
-| **Configuration** | [environment_variables.md](environment_variables.md), [FAQ § Configuration](FAQ.md#configuration) |
-| **Cost optimization** | [FAQ § Cost Optimization](FAQ.md#cost-optimization) |
-| **Database** | [SPEC.md § Database Schema](SPEC.md#database-schema), [TROUBLESHOOTING.md § Database](TROUBLESHOOTING.md#database-issues) |
-| **Debugging** | [TROUBLESHOOTING.md](TROUBLESHOOTING.md), [SPEC.md § Correlation IDs](SPEC.md#correlation-ids) |
-| **Deployment** | [DEPLOYMENT.md](DEPLOYMENT.md), [Quickstart Tutorial](guides/quickstart.md) |
-| **Docker** | [DEPLOYMENT.md § Docker](DEPLOYMENT.md), [FAQ § Installation](FAQ.md#installation) |
-| **Firecrawl** | [Scraper chain explainer](explanation/scraper-chain.md), [TROUBLESHOOTING.md § Firecrawl](TROUBLESHOOTING.md#firecrawl-issues) |
-| **Installation** | [DEPLOYMENT.md](DEPLOYMENT.md), [FAQ § Installation](FAQ.md#installation) |
-| **LLM models** | [environment_variables.md § LLM](environment_variables.md), [FAQ § Cost](FAQ.md#what-are-the-cheapest-models-that-work-well) |
-| **MCP Server** | [reference/mcp-server.md](reference/mcp-server.md), [TROUBLESHOOTING.md § MCP](TROUBLESHOOTING.md#mcp-server-issues) |
-| **Mobile API** | [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md), [First Mobile API Client Tutorial](guides/first-mobile-api-client.md) |
-| **Mixed-source aggregation** | [SPEC.md](SPEC.md), [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md), [environment_variables.md](environment_variables.md) |
+| **Backup** | [How to backup and restore](guides/backup-and-restore.md), [Troubleshooting § Database](reference/troubleshooting.md#database-issues) |
+| **ChromaDB** | [How to setup ChromaDB](guides/setup-chroma-vector-search.md), [Troubleshooting § ChromaDB](reference/troubleshooting.md#chromadb-issues) |
+| **Configuration** | [Environment Variables](reference/environment-variables.md), [FAQ § Configuration](explanation/faq.md#configuration) |
+| **Cost optimization** | [FAQ § Cost Optimization](explanation/faq.md#cost-optimization) |
+| **Database** | [SPEC.md § Database Schema](SPEC.md#database-schema), [Troubleshooting § Database](reference/troubleshooting.md#database-issues) |
+| **Debugging** | [Troubleshooting](reference/troubleshooting.md), [SPEC.md § Correlation IDs](SPEC.md#correlation-ids) |
+| **Deployment** | [Deploy to Production](guides/deploy-production.md), [Quickstart Tutorial](guides/quickstart.md) |
+| **Docker** | [Deploy to Production](guides/deploy-production.md), [FAQ § Installation](explanation/faq.md#installation) |
+| **Firecrawl** | [Scraper chain explainer](explanation/scraper-chain.md), [Troubleshooting](reference/troubleshooting.md) |
+| **Installation** | [Deploy to Production](guides/deploy-production.md), [FAQ § Installation](explanation/faq.md#installation) |
+| **LLM models** | [Environment Variables](reference/environment-variables.md), [FAQ § Cost](explanation/faq.md#what-are-the-cheapest-models-that-work-well) |
+| **MCP Server** | [reference/mcp-server.md](reference/mcp-server.md), [Troubleshooting § MCP](reference/troubleshooting.md#mcp-server-issues) |
+| **Mobile API** | [Mobile API Reference](reference/mobile-api.md), [First Mobile API Client Tutorial](guides/first-mobile-api-client.md) |
+| **Mixed-source aggregation** | [SPEC.md](SPEC.md), [Mobile API Reference](reference/mobile-api.md), [Environment Variables](reference/environment-variables.md) |
 | **Multi-agent** | [multi-agent-architecture.md](explanation/multi-agent-architecture.md) |
-| **OpenRouter** | [environment_variables.md § OpenRouter](environment_variables.md), [TROUBLESHOOTING.md § OpenRouter](TROUBLESHOOTING.md#openrouter-issues) |
-| **Performance** | [How to optimize performance](guides/optimize-performance.md), [TROUBLESHOOTING.md § Performance](TROUBLESHOOTING.md#performance-issues) |
-| **Redis** | [How to setup Redis](guides/setup-redis-caching.md), [TROUBLESHOOTING.md § Redis](TROUBLESHOOTING.md#redis-issues) |
+| **OpenRouter** | [Environment Variables](reference/environment-variables.md), [Troubleshooting § OpenRouter](reference/troubleshooting.md#openrouter-issues) |
+| **Performance** | [How to optimize performance](guides/optimize-performance.md), [Troubleshooting § Performance](reference/troubleshooting.md#performance-issues) |
+| **Redis** | [How to setup Redis](guides/setup-redis-caching.md), [Troubleshooting § Redis](reference/troubleshooting.md#redis-issues) |
 | **Search** | [SPEC.md § Search](SPEC.md#search), [How to setup ChromaDB](guides/setup-chroma-vector-search.md) |
-| **Security** | [FAQ § Security](FAQ.md#security) |
-| **Summary contract** | [SPEC.md § Summary JSON Contract](SPEC.md#summary-json-contract), [Summary Contract Design](explanation/summary-contract-design.md) |
+| **Security** | [FAQ § Security](explanation/faq.md#security) |
+| **Summary contract** | [Summary Contract](reference/summary-contract.md), [Summary Contract Design](explanation/summary-contract-design.md) |
 | **Testing** | [Local Development Tutorial § Testing](guides/local-development.md), [CLAUDE.md § Testing](../CLAUDE.md#testing) |
-| **Troubleshooting** | [TROUBLESHOOTING.md](TROUBLESHOOTING.md), [FAQ](FAQ.md) |
-| **Web interface** | [Frontend Web Guide](reference/frontend-web.md), [README.md § Web Interface](../README.md#web-interface-v1) |
-| **Web search** | [How to enable web search](guides/enable-web-search.md), [FAQ § Web Search](FAQ.md#web-search) |
-| **YouTube** | [How to configure YouTube](guides/configure-youtube-download.md), [TROUBLESHOOTING.md § YouTube](TROUBLESHOOTING.md#youtube-issues) |
+| **Troubleshooting** | [Troubleshooting](reference/troubleshooting.md), [FAQ](explanation/faq.md) |
+| **Web interface** | [Frontend Web Guide](reference/frontend-web.md), [README.md](../README.md) |
+| **Web search** | [How to enable web search](guides/enable-web-search.md), [FAQ § Web Search](explanation/faq.md#web-search) |
+| **YouTube** | [How to configure YouTube](guides/configure-youtube-download.md), [Troubleshooting § YouTube](reference/troubleshooting.md#youtube-issues) |
 
 ---
 
@@ -333,4 +351,4 @@ Found a typo? Documentation unclear? Want to add a tutorial?
 
 **Last Updated**: 2026-04-28
 
-**Questions?** Check [FAQ](FAQ.md) or open an [issue](https://github.com/po4yka/ratatoskr/issues).
+**Questions?** Check [FAQ](explanation/faq.md) or open an [issue](https://github.com/po4yka/ratatoskr/issues).

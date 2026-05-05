@@ -34,5 +34,5 @@ Lock `/v1/sync` semantics with a pytest suite so KMP offline-first work (Roadmap
 ## References
 
 - `app/api/routers/sync.py`
-- `docs/MOBILE_API_SPEC.md` (Sync v2 section)
+- `docs/reference/mobile-api.md` (Sync v2 section)
 - `.cursor/rules/mobile_api.mdc`

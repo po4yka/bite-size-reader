@@ -1321,12 +1321,67 @@ sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
 
 ---
 
+## Mixed-Source Aggregation: Source Model
+
+`SourceKind` is the shared source taxonomy for bundle items: `x_post`, `x_article`, `threads_post`, `instagram_post`, `instagram_carousel`, `instagram_reel`, `web_article`, `telegram_post`, `telegram_post_with_images`, `telegram_album`, and `youtube_video`.
+
+`SourceItem` is the normalized source identity object. URL-backed items dedupe on normalized URL unless a stronger platform identifier is available (`external_id` such as a tweet ID or YouTube video ID). Telegram-native items dedupe on `(chat_id, message_id)` or `(chat_id, media_group_id)`.
+
+`NormalizedSourceDocument` is the extractor output contract: `{source_item_id, source_kind, title?, text, detected_language?, text_blocks[], media[], metadata{}, provenance{...}}`.
+
+Failures are stored at two levels: bundle-level on `aggregation_sessions` and item-level on `aggregation_session_items`, both using `failure_code`, `failure_message`, and JSON `failure_details`.
+
+**Rollout flags:**
+
+- `AGGREGATION_BUNDLE_ENABLED=false` disables the surface entirely.
+- `AGGREGATION_ROLLOUT_STAGE` supports `disabled`, `internal`, `owner_beta`, and `enabled`.
+- `AGGREGATION_META_EXTRACTORS_ENABLED=false` disables dedicated Threads/Instagram extraction while leaving bundle orchestration enabled.
+- `AGGREGATION_ARTICLE_MEDIA_ENABLED=false` disables multimodal article/X image propagation while leaving text extraction intact.
+- `AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED=false` disables shared Telegram/Meta video normalization.
+
+---
+
+## Database Migrations
+
+**Alembic** (`app/db/alembic/`) is the authoritative schema migration system.
+
+```bash
+# Apply all pending migrations
+alembic upgrade head
+# Equivalent convenience wrapper
+python -m app.cli.migrate_db
+```
+
+Alembic revision files live in `app/db/alembic/versions/`. Each revision is auto-generated and tracks the full DDL history of the SQLite schema.
+
+The legacy hand-written scripts in `app/cli/migrations/` (15 scripts + `migration_runner.py`) are **deprecated**. They must not be run against any database and are retained for historical reference only. See `app/cli/migrations/_DEPRECATED.md` for details.
+
+`app/db/schema_migrator.py` is not a migration system — it performs only idempotent startup JSON coercion on existing rows (fixing malformed data) and runs automatically on every bot start via `DatabaseSessionManager`.
+
+---
+
+## URL Normalization and Deduplication
+
+Every URL submitted to the pipeline is normalized before storage and deduplication:
+
+- Lowercase scheme and host.
+- Strip fragment (`#…`).
+- Sort query parameters alphabetically.
+- Remove known tracking parameters (configurable list).
+- Collapse trailing slash.
+
+The normalized URL is hashed: `sha256(normalized_url)` → `requests.dedupe_hash` (unique index). If a repeat is seen, the existing `crawl_results` row is reused unless `--force` is passed. This ensures the same article submitted multiple times produces exactly one crawl and one LLM call.
+
+Source: `app/core/url_utils.py`.
+
+---
+
 ## See Also
 
-- [SPEC.md § Data Model](../SPEC.md#data-model-sqlite) - Canonical specification
+- [SPEC.md](../SPEC.md) - Navigation index
 - [CLI Commands § Database Migration](cli-commands.md#database-migration) - Migration tool
 - [How to Backup and Restore](../guides/backup-and-restore.md) - Backup procedures
 
 ---
 
-**Last Updated:** 2026-04-28
+**Last Updated:** 2026-05-05

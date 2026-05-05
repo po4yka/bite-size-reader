@@ -18,7 +18,7 @@ Scope:
    This is the first company priority because it gates every useful mobile-client
    release. The backend must prove that auth, refresh, sync sessions, summaries,
    collections, search, digest, signal endpoints, response envelopes, and error
-   IDs match `docs/MOBILE_API_SPEC.md` and `docs/openapi/mobile_api.yaml`.
+   IDs match `docs/reference/mobile-api.md` and `docs/openapi/mobile_api.yaml`.
    Trade-off: backend contract work wins over new web features because mobile
    integration churn is more expensive after the client starts relying on the
    contract.
@@ -44,7 +44,7 @@ non-rooted Android devices.
 ### P1 Next Sprint
 
 1. Ratatoskr backend: freeze and verify the Mobile API surface against
-   `docs/MOBILE_API_SPEC.md` and `docs/openapi/mobile_api.yaml` before mobile
+   `docs/reference/mobile-api.md` and `docs/openapi/mobile_api.yaml` before mobile
    client release work. Success means the KMP client can rely on auth, sync,
    summaries, collections, search, digest, and signal endpoints without contract
    drift.

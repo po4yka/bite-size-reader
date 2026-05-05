@@ -18,7 +18,7 @@ Produce a cross-repo contract map between the Ratatoskr FastAPI mobile API and t
 
 ## Context
 
-Ratatoskr CLAUDE.md, docs/SPEC.md, docs/MOBILE_API_SPEC.md, DESIGN.md, ratatoskr-client AGENTS.md, composeApp/AGENTS.md, DESIGN.md, and docs/ARCHITECTURE.md were read for context. The backend mobile API source of truth is docs/openapi/mobile_api.yaml/json and uses /v1 envelope responses, bearer auth, Telegram initData, secret-login, session sync, summaries/articles aliases, collections, search, digest, signals, and mixed-source aggregation surfaces. The KMP client uses Kotlin Multiplatform, Decompose navigation, SQLDelight/offline-first data, Ktor auth refresh, secure storage, and Frost design rules. Do not edit docs/openapi/mobile_api.yaml directly.
+Ratatoskr CLAUDE.md, docs/SPEC.md, docs/reference/mobile-api.md, DESIGN.md, ratatoskr-client AGENTS.md, composeApp/AGENTS.md, DESIGN.md, and docs/ARCHITECTURE.md were read for context. The backend mobile API source of truth is docs/openapi/mobile_api.yaml/json and uses /v1 envelope responses, bearer auth, Telegram initData, secret-login, session sync, summaries/articles aliases, collections, search, digest, signals, and mixed-source aggregation surfaces. The KMP client uses Kotlin Multiplatform, Decompose navigation, SQLDelight/offline-first data, Ktor auth refresh, secure storage, and Frost design rules. Do not edit docs/openapi/mobile_api.yaml directly.
 
 ## Owner
 
@@ -28,7 +28,7 @@ CTO. Coordinate with Senior Python Backend Engineer, Senior KMP/Compose Engineer
 
 - [ ] Identify current backend mobile API surfaces that the KMP client depends on: auth, refresh/logout, summaries/articles aliases, sync sessions/full/delta/apply, collections, search, digest, signals, system/health as applicable.
 - [ ] Identify current ratatoskr-client modules/features that consume those surfaces and any gaps or uncertain contracts.
-- [ ] Call out whether docs/openapi/mobile_api.yaml, docs/MOBILE_API_SPEC.md, client DTOs, client repositories, or tests are out of sync.
+- [ ] Call out whether docs/openapi/mobile_api.yaml, docs/reference/mobile-api.md, client DTOs, client repositories, or tests are out of sync.
 - [ ] Split concrete follow-up issues only where ownership is clear; do not start implementation in this issue.
 - [ ] Include security/privacy implications for secret-login, refresh tokens, secure storage, and deletion/account endpoints.
 

@@ -138,7 +138,7 @@ pip install -r requirements.txt
 python bot.py
 ```
 
-See [guides/local-development.md](guides/local-development.md) for full guide.
+See [guides/local-development.md](../guides/local-development.md) for full guide.
 
 ---
 
@@ -171,7 +171,7 @@ DB_PATH=/data/ratatoskr.db
 LOG_LEVEL=INFO
 ```
 
-See [environment_variables.md](environment_variables.md) for full reference (250+ variables).
+See [environment_variables.md](../reference/environment-variables.md) for full reference (250+ variables).
 
 ### How do I find my Telegram user ID?
 
@@ -266,7 +266,7 @@ Yes. Three search modes:
 
 3. **Hybrid Search**: Combines full-text + semantic + reranking
 
-See [SPEC.md § Search](SPEC.md#search) for details.
+See [SPEC.md § Search](../SPEC.md#search) for details.
 
 ### What is the summary JSON contract?
 
@@ -277,7 +277,7 @@ Every summary follows a strict schema with 35+ fields:
 - **Semantic**: `topic_tags`, `entities`, `semantic_chunks`, `seo_keywords`
 - **Quality**: `confidence`, `readability`, `hallucination_risk`
 
-See [reference/summary-contract.md](reference/summary-contract.md) for full specification.
+See [reference/summary-contract.md](../reference/summary-contract.md) for full specification.
 
 ### Can I export summaries?
 
@@ -575,7 +575,7 @@ Yes. **Mobile API** (FastAPI) provides:
 - Collection management
 - Offline-first support
 
-See [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) for API reference.
+See [MOBILE_API_SPEC.md](../reference/mobile-api.md) for API reference.
 
 **Note**: Mobile app UI not included (API only). Build your own client or use Telegram bot.
 
@@ -588,7 +588,7 @@ Yes. Multiple integration options:
 3. **SQLite Database**: Direct database access for custom scripts
 4. **CLI Tools**: Batch processing, search, export
 
-See [reference/mcp-server.md](reference/mcp-server.md) for MCP integration.
+See [reference/mcp-server.md](../reference/mcp-server.md) for MCP integration.
 
 ### Does it integrate with Notion/Obsidian/Roam?
 
@@ -606,7 +606,7 @@ Not out-of-box, but adaptable:
 2. **Use hexagonal architecture** (core logic unchanged)
 3. **Implement Slack OAuth** (instead of Telegram access control)
 
-See [Architecture Overview § Layering quick reference](explanation/architecture-overview.md#layering-quick-reference) for architecture guide.
+See [Architecture Overview § Layering quick reference](architecture-overview.md#layering-quick-reference) for architecture guide.
 
 ---
 
@@ -718,10 +718,10 @@ REDIS_LLM_TTL_SECONDS=604800  # 7 days
 ## Related Documentation
 
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Debugging guide
-- [environment_variables.md](environment_variables.md) - Configuration reference
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Setup and deployment
-- [MOBILE_API_SPEC.md](MOBILE_API_SPEC.md) - REST API specification
-- [SPEC.md](SPEC.md) - Technical specification
+- [environment_variables.md](../reference/environment-variables.md) - Configuration reference
+- [DEPLOYMENT.md](../guides/deploy-production.md) - Setup and deployment
+- [MOBILE_API_SPEC.md](../reference/mobile-api.md) - REST API specification
+- [SPEC.md](../SPEC.md) - Technical specification
 - [README.md](../README.md) - Project overview
 
 ---
