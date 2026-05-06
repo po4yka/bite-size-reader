@@ -128,6 +128,12 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_embedding_repository_postgres.py -q`
   → `2 passed`.
+- Ported `audio_generation_repository.py` to SQLAlchemy/AsyncSession with
+  PostgreSQL upsert semantics for one audio generation row per summary and live
+  coverage for started/completed/failed state transitions.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_audio_generation_repository_postgres.py -q`
+  → `2 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
