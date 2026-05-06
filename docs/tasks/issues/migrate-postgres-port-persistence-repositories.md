@@ -218,6 +218,11 @@ Conventions for the port:
 - Verified the expanded focused repository suite with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_signal_source_repository.py -q`
   → `57 passed`.
+- Ported `sync_aux_read_adapter.py` to SQLAlchemy/AsyncSession and updated the
+  sync auxiliary read port/collector path to await those Postgres-backed reads.
+- Verified the expanded focused repository suite with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_sync_aux_read_adapter_postgres.py -q`
+  → `58 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

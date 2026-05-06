@@ -365,7 +365,7 @@ class TestCollectRecords:
             ]
         )
 
-        sync_service._get_highlights_for_user = MagicMock(return_value=[])
+        sync_service._get_highlights_for_user = AsyncMock(return_value=[])
 
         records = await sync_service._collect_records(123)
 
@@ -384,7 +384,7 @@ class TestCollectRecords:
         sync_service._summary_repo.async_get_all_for_user = AsyncMock(return_value=[])
         sync_service._crawl_repo.async_get_all_for_user = AsyncMock(return_value=[])
         sync_service._llm_repo.async_get_all_for_user = AsyncMock(return_value=[])
-        sync_service._get_highlights_for_user = MagicMock(return_value=[])
+        sync_service._get_highlights_for_user = AsyncMock(return_value=[])
 
         records = await sync_service._collect_records(123)
 

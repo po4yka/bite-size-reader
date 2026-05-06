@@ -66,13 +66,13 @@ class _NullRepository:
 
 
 class _NullSyncAuxReadPort:
-    def get_highlights_for_user(self, _user_id: int) -> list[dict[str, Any]]:
+    async def get_highlights_for_user(self, _user_id: int) -> list[dict[str, Any]]:
         return []
 
-    def get_tags_for_user(self, _user_id: int) -> list[dict[str, Any]]:
+    async def get_tags_for_user(self, _user_id: int) -> list[dict[str, Any]]:
         return []
 
-    def get_summary_tags_for_user(self, _user_id: int) -> list[dict[str, Any]]:
+    async def get_summary_tags_for_user(self, _user_id: int) -> list[dict[str, Any]]:
         return []
 
 
@@ -219,14 +219,14 @@ class SyncService:
     def _serialize_summary_tag(self, st: dict[str, Any]) -> SyncEntityEnvelope:
         return self._serializer.serialize_summary_tag(st)
 
-    def _get_highlights_for_user(self, user_id: int) -> list[dict[str, Any]]:
-        return self._aux_read_port.get_highlights_for_user(user_id)
+    async def _get_highlights_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        return await self._aux_read_port.get_highlights_for_user(user_id)
 
-    def _get_tags_for_user(self, user_id: int) -> list[dict[str, Any]]:
-        return self._aux_read_port.get_tags_for_user(user_id)
+    async def _get_tags_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        return await self._aux_read_port.get_tags_for_user(user_id)
 
-    def _get_summary_tags_for_user(self, user_id: int) -> list[dict[str, Any]]:
-        return self._aux_read_port.get_summary_tags_for_user(user_id)
+    async def _get_summary_tags_for_user(self, user_id: int) -> list[dict[str, Any]]:
+        return await self._aux_read_port.get_summary_tags_for_user(user_id)
 
     async def _collect_records(self, user_id: int) -> list[SyncEntityEnvelope]:
         records: list[SyncEntityEnvelope] = []
@@ -251,13 +251,13 @@ class SyncService:
         for call in llm_calls:
             records.append(self._serialize_llm_call(call))
 
-        for highlight in self._get_highlights_for_user(user_id):
+        for highlight in await self._get_highlights_for_user(user_id):
             records.append(self._serialize_highlight(highlight))
 
-        for tag in self._get_tags_for_user(user_id):
+        for tag in await self._get_tags_for_user(user_id):
             records.append(self._serialize_tag(tag))
 
-        for st in self._get_summary_tags_for_user(user_id):
+        for st in await self._get_summary_tags_for_user(user_id):
             records.append(self._serialize_summary_tag(st))
 
         records.sort(key=lambda r: (r.server_version, str(r.id)))

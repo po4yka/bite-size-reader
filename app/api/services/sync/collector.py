@@ -13,11 +13,11 @@ if TYPE_CHECKING:
 
 
 class SyncAuxReadPort(Protocol):
-    def get_highlights_for_user(self, user_id: int) -> list[dict[str, Any]]: ...
+    async def get_highlights_for_user(self, user_id: int) -> list[dict[str, Any]]: ...
 
-    def get_tags_for_user(self, user_id: int) -> list[dict[str, Any]]: ...
+    async def get_tags_for_user(self, user_id: int) -> list[dict[str, Any]]: ...
 
-    def get_summary_tags_for_user(self, user_id: int) -> list[dict[str, Any]]: ...
+    async def get_summary_tags_for_user(self, user_id: int) -> list[dict[str, Any]]: ...
 
 
 class SyncRecordCollector:
@@ -63,15 +63,15 @@ class SyncRecordCollector:
         for call in llm_calls:
             records.append(self._serializer.serialize_llm_call(call))
 
-        highlights = self._aux_read_port.get_highlights_for_user(user_id)
+        highlights = await self._aux_read_port.get_highlights_for_user(user_id)
         for highlight in highlights:
             records.append(self._serializer.serialize_highlight(highlight))
 
-        tags = self._aux_read_port.get_tags_for_user(user_id)
+        tags = await self._aux_read_port.get_tags_for_user(user_id)
         for tag in tags:
             records.append(self._serializer.serialize_tag(tag))
 
-        summary_tags = self._aux_read_port.get_summary_tags_for_user(user_id)
+        summary_tags = await self._aux_read_port.get_summary_tags_for_user(user_id)
         for st in summary_tags:
             records.append(self._serializer.serialize_summary_tag(st))
 

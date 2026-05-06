@@ -151,7 +151,7 @@ async def build_api_runtime(
         llm_repository=llm_repository,
     )
     sync_serializer = SyncEnvelopeSerializer()
-    sync_aux_reads = SqliteSyncAuxReadAdapter()
+    sync_aux_reads = SqliteSyncAuxReadAdapter(database)
     sync_session_store = FallbackSyncSessionStore(
         redis_store=RedisSyncSessionStore(app_cfg),
         fallback_store=InMemorySyncSessionStore(),
