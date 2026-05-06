@@ -152,6 +152,22 @@ docker-deploy: docker-build docker-stop docker-run
 	@echo "=== Deployment complete ==="
 	@echo "Check logs with: make docker-logs"
 
+# Build the arm64 image locally (Mac) and stream it to the Pi over SSH so the
+# Pi never has to run the heavy build. Override SERVICE=mobile-api to ship
+# the API image instead. See tools/scripts/build-and-deploy-pi.sh for flags
+# and env vars (RASPI_HOST, RASPI_REMOTE_PATH, COMPOSE_PROJECT).
+.PHONY: pi-deploy pi-deploy-no-cache pi-build-only
+SERVICE ?= ratatoskr
+
+pi-deploy:
+	bash tools/scripts/build-and-deploy-pi.sh --service $(SERVICE)
+
+pi-deploy-no-cache:
+	bash tools/scripts/build-and-deploy-pi.sh --service $(SERVICE) --no-cache
+
+pi-build-only:
+	bash tools/scripts/build-and-deploy-pi.sh --service $(SERVICE) --no-restart
+
 docker-health:
 	@docker compose -f $(COMPOSE_FILE) ps
 	@echo ""

@@ -161,6 +161,17 @@ docker compose -f ops/docker/docker-compose.yml down && docker compose -f ops/do
 docker build -f ops/docker/Dockerfile -t ratatoskr:latest .
 docker run --env-file .env -v $(pwd)/data:/data --name ratatoskr ratatoskr:latest
 
+# Pi deployment -- build locally on Mac (arm64), stream image to Pi over SSH,
+# restart via the Pi compose overlay. The Pi never runs `docker build`,
+# avoiding the heavy CPU/memory load. Requires `ssh raspi` to work and
+# `~/ratatoskr` to exist on the Pi (override with RASPI_REMOTE_PATH).
+make pi-deploy                                # build + ship + restart `ratatoskr`
+make pi-deploy SERVICE=mobile-api             # ship the mobile-api image instead
+make pi-deploy-no-cache                       # full rebuild before shipping
+make pi-build-only                            # ship without restarting on the Pi
+# Or call the script directly for full flag/env coverage:
+bash tools/scripts/build-and-deploy-pi.sh --help
+
 # CLI Summary Runner
 python -m app.cli.summary --url https://example.com/article
 python -m app.cli.summary --accept-multiple --json-path out.json --log-level DEBUG

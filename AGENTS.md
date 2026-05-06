@@ -58,6 +58,14 @@ make lint            # ruff
 make type            # mypy
 cd clients/web && npm run check:static && npm run test  # Web frontend
 python -m app.cli.summary --url <URL>           # CLI test runner
+
+# Pi deployment: build linux/arm64 image on the Mac, stream to the Pi over
+# SSH, restart via compose. The Pi never runs `docker build`. Requires
+# `ssh raspi`, expects repo at `~/ratatoskr` on the Pi (override with
+# RASPI_REMOTE_PATH). Pass SERVICE=mobile-api to ship the API image instead.
+make pi-deploy                                  # build + ship + restart
+make pi-deploy SERVICE=mobile-api
+bash tools/scripts/build-and-deploy-pi.sh --help
 ```
 
 ## Code Conventions
