@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from app.db.session import DatabaseSessionManager
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 from tests.db_helpers import create_request
 

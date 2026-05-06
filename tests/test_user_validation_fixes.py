@@ -9,7 +9,10 @@ import pytest
 
 from app.adapter_models.telegram.telegram_models import ChatType, TelegramMessage, TelegramUser
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.db.session import DatabaseSessionManager
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from tests.conftest import make_test_app_config
 
 

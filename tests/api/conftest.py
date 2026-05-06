@@ -30,8 +30,11 @@ class NotRequired(metaclass=_NotRequiredMeta):
 
 import app.di.database as _di_database
 from app.api.dependencies.database import clear_session_manager
-from app.db.models import Request, Summary, User, database_proxy
-from app.db.session import DatabaseSessionManager
+from app.cli._legacy_peewee_models import Request, Summary, User, database_proxy
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger("peewee")
 logger.addHandler(logging.StreamHandler())

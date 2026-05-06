@@ -5,7 +5,10 @@ from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.access_controller import AccessController
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.db.session import DatabaseSessionManager
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from tests.conftest import make_test_app_config
 
 

@@ -78,3 +78,18 @@ Approach:
   need to wait for CI.
 - `expire_on_commit=False` on the test session is consistent with the
   production session; tests should not rely on auto-refresh.
+
+## Pre-existing defensive shim (2026-05-06)
+
+To unblock test collection mid-migration, ~30 test files in `tests/` were
+patched to import `database_proxy`, `model_to_dict`, and the Peewee model
+classes (`Request`, `Summary`, `User`, `Channel`, `ChannelSubscription`,
+`ClientSecret`, `CrawlResult`, `LLMCall`, etc.) from
+`app.cli._legacy_peewee_models` instead of `app.db.models`, and
+`DatabaseSessionManager` imports were wrapped in `try/except ImportError` with
+a `None` fallback. This is a stop-gap, not the T3 port — test bodies still
+exercise Peewee CRUD against an in-memory SQLite-backed `database_proxy`.
+When this task lands, every redirected import must be replaced with the new
+async helpers and every `try/except ImportError` shim around
+`DatabaseSessionManager` must be removed (the class no longer exists).
+Touched files were enumerated in the commit that introduced the shim.

@@ -8,7 +8,10 @@ from unittest.mock import AsyncMock, patch
 from app.adapter_models.llm.llm_models import LLMCallResult
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.core.url_utils import normalize_url, url_hash_sha256
-from app.db.session import DatabaseSessionManager
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from tests.conftest import make_test_app_config
 from tests.db_helpers import (
     create_request,

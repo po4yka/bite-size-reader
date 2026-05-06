@@ -6,8 +6,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
-from app.db.models import database_proxy
-from app.db.session import DatabaseSessionManager
+from app.cli._legacy_peewee_models import database_proxy
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from tests.conftest import make_test_app_config
 
 

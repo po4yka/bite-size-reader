@@ -19,7 +19,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.db.alembic_runner import _build_alembic_config
-from app.db.session import DatabaseSessionManager
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 
 logging.basicConfig(
     level=logging.INFO,

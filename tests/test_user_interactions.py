@@ -10,7 +10,10 @@ import pytest
 from app.adapters.telegram.routing.interactions import MessageInteractionRecorder
 from app.adapters.telegram.routing.models import PreparedRouteContext
 from app.config import AppConfig  # noqa: TC001 - used for type annotation
-from app.db.session import DatabaseSessionManager
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from app.db.user_interactions import (
     async_safe_update_user_interaction,
     safe_update_user_interaction,

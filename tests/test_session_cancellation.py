@@ -20,7 +20,10 @@ import time
 import unittest
 from typing import Any
 
-from app.db.session import DatabaseSessionManager
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 
 
 def _make_session_manager() -> DatabaseSessionManager:

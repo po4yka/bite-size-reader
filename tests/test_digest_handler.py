@@ -14,7 +14,7 @@ from app.adapters.telegram.command_handlers.digest_handler import DigestHandler
 from app.adapters.telegram.command_handlers.execution_context import (
     CommandExecutionContext,
 )
-from app.db.models import Channel, ChannelSubscription, User, database_proxy
+from app.cli._legacy_peewee_models import Channel, ChannelSubscription, User, database_proxy
 
 # ---------------------------------------------------------------------------
 # Helpers

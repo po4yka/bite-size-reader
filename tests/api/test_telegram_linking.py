@@ -7,8 +7,11 @@ from app.api.dependencies.database import clear_session_manager
 from app.api.exceptions import ValidationError
 from app.api.models.auth import TelegramLinkCompleteRequest
 from app.api.routers.auth import endpoints as auth_endpoints, secret_auth
-from app.db.models import User, database_proxy
-from app.db.session import DatabaseSessionManager
+from app.cli._legacy_peewee_models import User, database_proxy
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 
 
 def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:

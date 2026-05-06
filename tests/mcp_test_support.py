@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from app.db.models import database_proxy
-from app.db.session import DatabaseSessionManager
+from app.cli._legacy_peewee_models import database_proxy
+
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 
 
 @pytest.fixture

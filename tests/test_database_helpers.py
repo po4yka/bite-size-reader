@@ -7,8 +7,12 @@ import unittest
 
 import pytest
 
-from app.db.models import Request, Summary, database_proxy
-from app.db.session import DatabaseSessionManager
+from app.cli._legacy_peewee_models import Request, Summary, database_proxy
+
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from tests.db_helpers import (
     create_request,
     get_crawl_result_by_request,

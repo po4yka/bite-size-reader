@@ -56,3 +56,8 @@ Do **not** execute this task earlier — keeping the migrator code present for
 30 days is cheap insurance. If the Postgres instance ever needs to be
 rebuilt from the original SQLite snapshot, the migrator is the only practical
 path.
+
+A defensive test-import shim (introduced 2026-05-06) currently lets ~30 files
+in `tests/` consume the legacy snapshot to keep collection green. T3
+(`migrate-postgres-add-test-fixtures-and-ci`) is the prerequisite that
+removes the shim; until T3 lands, this task cannot proceed.

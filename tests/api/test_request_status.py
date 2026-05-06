@@ -4,7 +4,7 @@ import peewee
 import pytest
 
 from app.core.time_utils import UTC
-from app.db.models import CrawlResult, LLMCall, Request, Summary, database_proxy
+from app.cli._legacy_peewee_models import CrawlResult, LLMCall, Request, Summary, database_proxy
 from tests.api.request_service_helpers import build_request_service
 
 

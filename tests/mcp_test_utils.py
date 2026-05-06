@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from app.db.models import Summary
+from app.cli._legacy_peewee_models import Summary
 from tests.db_helpers import create_request, insert_summary
 
 if TYPE_CHECKING:

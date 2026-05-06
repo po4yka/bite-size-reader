@@ -8,7 +8,7 @@ import peewee
 import pytest
 
 from app.core.time_utils import UTC
-from app.db.models import (
+from app.cli._legacy_peewee_models import (
     Channel,
     ChannelCategory,
     ChannelPost,

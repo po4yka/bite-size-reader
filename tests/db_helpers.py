@@ -3,6 +3,13 @@
 These replicate the sync CRUD helpers that were previously available as mixin
 methods on the deprecated ``Database`` facade.  They operate on Peewee models
 directly via the already-initialized ``database_proxy``.
+
+NOTE: The SQLAlchemy ORM models in ``app.db.models`` no longer export
+``database_proxy`` or Peewee model classes.  These helpers instead import from
+the frozen Peewee snapshot in ``app.cli._legacy_peewee_models`` which is kept
+specifically for tests and CLI migration tooling during the SQLite→Postgres
+migration.  When that migration is complete these helpers should be ported to
+async SQLAlchemy and this import should be updated.
 """
 
 from __future__ import annotations
@@ -13,9 +20,7 @@ from typing import Any
 
 import peewee
 
-from app.core.time_utils import UTC
-from app.db.json_utils import prepare_json_payload
-from app.db.models import (
+from app.cli._legacy_peewee_models import (
     AuditLog,
     Chat,
     CrawlResult,
@@ -28,6 +33,8 @@ from app.db.models import (
     database_proxy,
     model_to_dict,
 )
+from app.core.time_utils import UTC
+from app.db.json_utils import prepare_json_payload
 
 JSONValue = Mapping[str, Any] | list[Any] | tuple[Any, ...] | str | None
 

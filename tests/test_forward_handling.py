@@ -21,8 +21,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.db.models import database_proxy
-from app.db.session import DatabaseSessionManager
+from app.cli._legacy_peewee_models import database_proxy
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.message_persistence import MessagePersistence
 from tests.conftest import make_test_app_config

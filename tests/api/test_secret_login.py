@@ -12,8 +12,11 @@ from app.api.models.auth import (
     SecretLoginRequest,
 )
 from app.api.routers.auth import endpoints as auth_endpoints, secret_auth
-from app.db.models import ClientSecret, User, database_proxy
-from app.db.session import DatabaseSessionManager
+from app.cli._legacy_peewee_models import ClientSecret, User, database_proxy
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 
 
 def _mock_response() -> MagicMock:

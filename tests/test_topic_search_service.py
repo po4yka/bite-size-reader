@@ -9,8 +9,11 @@ from app.application.services.topic_search import LocalTopicSearchService, Topic
 
 if TYPE_CHECKING:
     from app.application.ports.search import TopicSearchResultPort
-from app.db.models import database_proxy
-from app.db.session import DatabaseSessionManager
+from app.cli._legacy_peewee_models import database_proxy
+try:
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
+except ImportError:
+    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
     SqliteTopicSearchRepositoryAdapter,
 )
