@@ -1,116 +1,66 @@
-"""SQLite implementation of embedding repository.
-
-This adapter handles persistence for vector embeddings used in semantic search.
-"""
+"""SQLAlchemy implementation of the embedding repository."""
 
 from __future__ import annotations
 
-import datetime as dt
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import peewee
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 
-from app.core.time_utils import UTC
 from app.db.models import Request, Summary, SummaryEmbedding, model_to_dict
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+from app.db.types import _utcnow
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
-class SqliteEmbeddingRepositoryAdapter(SqliteBaseRepository):
+class SqliteEmbeddingRepositoryAdapter:
     """Adapter for summary embedding operations."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_get_all_embeddings(self) -> list[dict[str, Any]]:
         """Fetch all embeddings with metadata from database."""
-
-        def _query() -> list[dict[str, Any]]:
-            results = []
-            query = (
-                SummaryEmbedding.select(SummaryEmbedding, Summary, Request)
-                .join(Summary)
-                .join(Request)
+        async with self._database.session() as session:
+            rows = await session.execute(
+                select(SummaryEmbedding, Summary, Request)
+                .join(Summary, SummaryEmbedding.summary_id == Summary.id)
+                .join(Request, Summary.request_id == Request.id)
+                .order_by(SummaryEmbedding.id)
             )
-
-            for row in query:
-                results.append(
-                    {
-                        "request_id": row.summary.request.id,
-                        "summary_id": row.summary.id,
-                        "embedding_blob": row.embedding_blob,
-                        "json_payload": row.summary.json_payload,
-                        "normalized_url": row.summary.request.normalized_url,
-                        "input_url": row.summary.request.input_url,
-                    }
-                )
-            return results
-
-        return await self._execute(_query, operation_name="get_all_embeddings", read_only=True)
+            return [_embedding_row(row[0], row[1], row[2]) for row in rows]
 
     async def async_get_embeddings_by_request_ids(
         self,
         request_ids: list[int],
     ) -> list[dict[str, Any]]:
         """Fetch embeddings scoped to specific request IDs."""
-
-        def _query() -> list[dict[str, Any]]:
-            if not request_ids:
-                return []
-
-            rows = (
-                SummaryEmbedding.select(SummaryEmbedding, Summary, Request)
-                .join(Summary)
-                .join(Request)
+        if not request_ids:
+            return []
+        async with self._database.session() as session:
+            rows = await session.execute(
+                select(SummaryEmbedding, Summary, Request)
+                .join(Summary, SummaryEmbedding.summary_id == Summary.id)
+                .join(Request, Summary.request_id == Request.id)
                 .where(Request.id.in_(request_ids))
+                .order_by(SummaryEmbedding.id)
             )
-
-            results: list[dict[str, Any]] = []
-            for row in rows:
-                results.append(
-                    {
-                        "request_id": row.summary.request.id,
-                        "summary_id": row.summary.id,
-                        "embedding_blob": row.embedding_blob,
-                        "json_payload": row.summary.json_payload,
-                        "normalized_url": row.summary.request.normalized_url,
-                        "input_url": row.summary.request.input_url,
-                    }
-                )
-            return results
-
-        return await self._execute(
-            _query,
-            operation_name="get_embeddings_by_request_ids",
-            read_only=True,
-        )
+            return [_embedding_row(row[0], row[1], row[2]) for row in rows]
 
     async def async_get_recent_embeddings(self, *, limit: int) -> list[dict[str, Any]]:
         """Fetch the most recent embeddings bounded by a hard limit."""
-
-        def _query() -> list[dict[str, Any]]:
-            if limit <= 0:
-                return []
-
-            rows = (
-                SummaryEmbedding.select(SummaryEmbedding, Summary, Request)
-                .join(Summary)
-                .join(Request)
+        if limit <= 0:
+            return []
+        async with self._database.session() as session:
+            rows = await session.execute(
+                select(SummaryEmbedding, Summary, Request)
+                .join(Summary, SummaryEmbedding.summary_id == Summary.id)
+                .join(Request, Summary.request_id == Request.id)
                 .order_by(Request.created_at.desc())
                 .limit(limit)
             )
-
-            results: list[dict[str, Any]] = []
-            for row in rows:
-                results.append(
-                    {
-                        "request_id": row.summary.request.id,
-                        "summary_id": row.summary.id,
-                        "embedding_blob": row.embedding_blob,
-                        "json_payload": row.summary.json_payload,
-                        "normalized_url": row.summary.request.normalized_url,
-                        "input_url": row.summary.request.input_url,
-                    }
-                )
-            return results
-
-        return await self._execute(_query, operation_name="get_recent_embeddings", read_only=True)
+            return [_embedding_row(row[0], row[1], row[2]) for row in rows]
 
     async def async_create_or_update_summary_embedding(
         self,
@@ -122,38 +72,50 @@ class SqliteEmbeddingRepositoryAdapter(SqliteBaseRepository):
         language: str | None = None,
     ) -> None:
         """Store or update embedding for a summary."""
-
-        def _upsert() -> None:
-            try:
-                # Try to create new embedding
-                SummaryEmbedding.create(
-                    summary=summary_id,
+        async with self._database.transaction() as session:
+            stmt = (
+                insert(SummaryEmbedding)
+                .values(
+                    summary_id=summary_id,
                     embedding_blob=embedding_blob,
                     model_name=model_name,
                     model_version=model_version,
                     dimensions=dimensions,
                     language=language,
                 )
-            except peewee.IntegrityError:
-                # Embedding exists, update it
-                SummaryEmbedding.update(
-                    {
-                        SummaryEmbedding.embedding_blob: embedding_blob,
-                        SummaryEmbedding.model_name: model_name,
-                        SummaryEmbedding.model_version: model_version,
-                        SummaryEmbedding.dimensions: dimensions,
-                        SummaryEmbedding.language: language,
-                        SummaryEmbedding.created_at: dt.datetime.now(UTC),
-                    }
-                ).where(SummaryEmbedding.summary == summary_id).execute()
-
-        await self._execute(_upsert, operation_name="create_or_update_summary_embedding")
+                .on_conflict_do_update(
+                    index_elements=[SummaryEmbedding.summary_id],
+                    set_={
+                        "embedding_blob": embedding_blob,
+                        "model_name": model_name,
+                        "model_version": model_version,
+                        "dimensions": dimensions,
+                        "language": language,
+                        "created_at": _utcnow(),
+                    },
+                )
+            )
+            await session.execute(stmt)
 
     async def async_get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
         """Retrieve embedding for a summary."""
-
-        def _get() -> dict[str, Any] | None:
-            embedding = SummaryEmbedding.get_or_none(SummaryEmbedding.summary == summary_id)
+        async with self._database.session() as session:
+            embedding = await session.scalar(
+                select(SummaryEmbedding).where(SummaryEmbedding.summary_id == summary_id)
+            )
             return model_to_dict(embedding)
 
-        return await self._execute(_get, operation_name="get_summary_embedding", read_only=True)
+
+def _embedding_row(
+    embedding: SummaryEmbedding,
+    summary: Summary,
+    request: Request,
+) -> dict[str, Any]:
+    return {
+        "request_id": request.id,
+        "summary_id": summary.id,
+        "embedding_blob": embedding.embedding_blob,
+        "json_payload": summary.json_payload,
+        "normalized_url": request.normalized_url,
+        "input_url": request.input_url,
+    }

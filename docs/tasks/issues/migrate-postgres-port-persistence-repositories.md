@@ -122,6 +122,12 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_backup_import_repositories_postgres.py -q`
   → `2 passed`.
+- Ported `embedding_repository.py` to SQLAlchemy/AsyncSession with PostgreSQL
+  upsert semantics for `summary_embeddings.summary_id` and live coverage for
+  embedding upsert/read/list/recent filtering.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_embedding_repository_postgres.py -q`
+  → `2 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
