@@ -18,7 +18,6 @@ Ratatoskr provides CLI tools for:
 - Search functionality testing (`search.py`, `search_compare.py`)
 - Embedding and vector store management (`backfill_embeddings.py`, `backfill_vector_store.py`, `migrate_vector_store.py`)
 - Signal-scoring eval export and precision checks (`signal_eval.py`)
-- Performance optimization (`add_performance_indexes.py`)
 - MCP server (`mcp_server.py`)
 
 **Common Pattern:** `python -m app.cli.<command> [options]`
@@ -677,84 +676,6 @@ sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summary_embeddings;"
 
 ## Add Performance Indexes
 
-**Command:** `python -m app.cli.add_performance_indexes`
-
-**Purpose:** Add database indexes for query optimization.
-
-### Basic Usage
-
-```bash
-# Add all recommended indexes
-python -m app.cli.add_performance_indexes
-
-# Check which indexes would be added (dry-run)
-python -m app.cli.add_performance_indexes --check
-```
-
-### Options
-
-| Option | Type | Default | Description |
-| -------- | ------ | --------- | ------------- |
-| `--check` | flag | false | Check which indexes are missing without adding them |
-| `--drop-first` | flag | false | Drop existing indexes before recreating (dangerous) |
-
-### Examples
-
-**Check Missing Indexes:**
-
-```bash
-python -m app.cli.add_performance_indexes --check
-
-# Output:
-# Checking database indexes...
-# Missing indexes:
-#   idx_requests_user_id (requests.user_id)
-#   idx_summaries_created_at (summaries.created_at)
-#   idx_llm_calls_request_id (llm_calls.request_id)
-# Existing indexes: 12
-```
-
-**Add Missing Indexes:**
-
-```bash
-python -m app.cli.add_performance_indexes
-
-# Output:
-# Adding missing indexes...
-# Creating idx_requests_user_id... OK (0.2s)
-# Creating idx_summaries_created_at... OK (1.5s)
-# Creating idx_llm_calls_request_id... OK (0.8s)
-# Done! Added 3 indexes in 2.5s
-```
-
-### Recommended Indexes
-
-**Requests Table:**
-
-- `idx_requests_user_id` on `user_id`
-- `idx_requests_created_at` on `created_at`
-- `idx_requests_dedupe_hash` on `dedupe_hash`
-
-**Summaries Table:**
-
-- `idx_summaries_request_id` on `request_id`
-- `idx_summaries_created_at` on `created_at`
-- `idx_summaries_url` on `url`
-
-**LLM Calls Table:**
-
-- `idx_llm_calls_request_id` on `request_id`
-- `idx_llm_calls_created_at` on `created_at`
-- `idx_llm_calls_model` on `model`
-
-**Crawl Results Table:**
-
-- `idx_crawl_results_request_id` on `request_id`
-
----
-
-## Initialize Userbot Session
-
 **Command:** `python -m app.cli.init_userbot_session`
 
 **Purpose:** Initialize a Telethon userbot session for the channel digest subsystem.
@@ -921,17 +842,8 @@ time python -m app.cli.search "test query" --mode vector
 ### Database Maintenance
 
 ```bash
-# 1. Backup database
-cp data/ratatoskr.db data/ratatoskr.db.backup.$(date +%Y%m%d)
-
-# 2. Apply migrations
+# Apply PostgreSQL migrations
 python -m app.cli.migrate_db
-
-# 3. Add performance indexes
-python -m app.cli.add_performance_indexes
-
-# 4. Vacuum database
-sqlite3 data/ratatoskr.db "VACUUM;"
 ```
 
 ---

@@ -78,3 +78,6 @@ SQLAlchemy Alembic baseline (M4), so deletion is the right move.
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/db/test_batch_operations_postgres.py`
   → `1 passed`, focused ruff, and focused mypy with skipped imports.
+- Deleted obsolete SQLite-only `app/cli/add_performance_indexes.py` and its
+  SQLite tests; index DDL now lives in the SQLAlchemy Alembic baseline.
+- Removed the deprecated CLI command from `docs/reference/cli-commands.md`.
