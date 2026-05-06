@@ -176,6 +176,12 @@ Conventions for the port:
 - Verified the expanded focused repository suite with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_aggregation_session_repository_postgres.py -q`
   → `36 passed`.
+- Ported `batch_session_repository.py` to SQLAlchemy/AsyncSession while
+  preserving compatibility aliases for batch session/item dictionaries and the
+  joined request/summary read shape.
+- Verified the expanded focused repository suite with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_batch_session_repository_postgres.py -q`
+  → `37 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
