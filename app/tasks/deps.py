@@ -11,13 +11,12 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 from tempfile import gettempdir
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from taskiq import TaskiqDepends
 
-if TYPE_CHECKING:
-    from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+from app.config import AppConfig  # noqa: TC001 — taskiq resolves type hints at runtime
+from app.db.session import DatabaseSessionManager  # noqa: TC001 — taskiq resolves type hints at runtime
 
 
 # ── singleton providers ───────────────────────────────────────────────────────
