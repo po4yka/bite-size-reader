@@ -1,53 +1,37 @@
-"""SQLite implementation of auth repository.
-
-This adapter handles RefreshToken and ClientSecret operations.
-"""
+"""SQLAlchemy implementation of auth repository."""
 
 from __future__ import annotations
 
 import datetime as dt
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import select, update
+
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import ClientSecret, RefreshToken, User, model_to_dict
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
 if TYPE_CHECKING:
+    from app.db.session import Database
     from app.infrastructure.cache.auth_token_cache import AuthTokenCache
 
 logger = get_logger(__name__)
 
 
-def _utcnow_naive() -> dt.datetime:
-    """Get current UTC time without timezone info (for SQLite compat)."""
-    return dt.datetime.now(UTC).replace(tzinfo=None)
+def _utcnow() -> dt.datetime:
+    return dt.datetime.now(UTC)
 
 
-class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
-    """Adapter for authentication-related operations (RefreshToken, ClientSecret).
-
-    Supports optional Redis caching for refresh token lookups. When a token cache
-    is provided, token data is cached for O(1) validation instead of DB queries.
-    """
+class SqliteAuthRepositoryAdapter:
+    """Adapter for authentication-related operations."""
 
     def __init__(
         self,
-        session_manager: Any,
+        session_manager: Database,
         token_cache: AuthTokenCache | None = None,
     ) -> None:
-        """Initialize auth repository.
-
-        Args:
-            session_manager: Database session manager.
-            token_cache: Optional Redis cache for token lookups.
-        """
-        super().__init__(session_manager)
+        self._database = session_manager
         self._token_cache = token_cache
-
-    # -------------------------------------------------------------------------
-    # RefreshToken Operations
-    # -------------------------------------------------------------------------
 
     async def async_create_refresh_token(
         self,
@@ -59,15 +43,10 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
         ip_address: str | None,
         expires_at: dt.datetime,
     ) -> int:
-        """Create a new refresh token record.
-
-        Returns:
-            The ID of the created refresh token record.
-        """
-
-        def _create() -> int:
-            record = RefreshToken.create(
-                user=user_id,
+        """Create a new refresh token record."""
+        async with self._database.transaction() as session:
+            record = RefreshToken(
+                user_id=user_id,
                 token_hash=token_hash,
                 client_id=client_id,
                 device_info=device_info,
@@ -75,11 +54,10 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
                 expires_at=expires_at,
                 is_revoked=False,
             )
-            return record.id
+            session.add(record)
+            await session.flush()
+            token_id = record.id
 
-        token_id = await self._execute(_create, operation_name="create_refresh_token")
-
-        # Cache the new token for fast lookups
         if self._token_cache:
             try:
                 await self._token_cache.set_token(
@@ -91,7 +69,6 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
                     token_id=token_id,
                 )
             except Exception as exc:
-                # Log but don't fail the create operation
                 logger.warning(
                     "auth_token_cache_write_failed",
                     extra={"error": str(exc), "token_hash_prefix": token_hash[:8]},
@@ -100,36 +77,24 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
         return token_id
 
     async def async_get_refresh_token_by_hash(self, token_hash: str) -> dict[str, Any] | None:
-        """Get a refresh token by its hash.
-
-        Checks Redis cache first for O(1) lookup, falls back to SQLite on miss.
-
-        Returns:
-            Dict with token data or None if not found.
-        """
-        # Check cache first
+        """Get a refresh token by hash, using cache when available."""
         if self._token_cache:
             try:
                 cached = await self._token_cache.get_token(token_hash)
                 if cached is not None:
                     return cached
             except Exception as exc:
-                # Log but fall through to DB query
                 logger.warning(
                     "auth_token_cache_read_failed",
                     extra={"error": str(exc), "token_hash_prefix": token_hash[:8]},
                 )
 
-        # Cache miss - query database
-        def _get() -> dict[str, Any] | None:
-            record = RefreshToken.get_or_none(RefreshToken.token_hash == token_hash)
-            return model_to_dict(record)
+        async with self._database.session() as session:
+            record = await session.scalar(
+                select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+            )
+            result = _token_to_dict(record)
 
-        result = await self._execute(
-            _get, operation_name="get_refresh_token_by_hash", read_only=True
-        )
-
-        # Populate cache on DB hit
         if result and self._token_cache:
             try:
                 await self._token_cache.set_token(
@@ -149,25 +114,16 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
         return result
 
     async def async_revoke_refresh_token(self, token_hash: str) -> bool:
-        """Revoke a refresh token by hash.
+        """Revoke a refresh token by hash."""
+        async with self._database.transaction() as session:
+            revoked_id = await session.scalar(
+                update(RefreshToken)
+                .where(RefreshToken.token_hash == token_hash)
+                .values(is_revoked=True)
+                .returning(RefreshToken.id)
+            )
+            revoked = revoked_id is not None
 
-        Also invalidates the cached token entry if present.
-
-        Returns:
-            True if token was found and revoked, False otherwise.
-        """
-
-        def _revoke() -> bool:
-            record = RefreshToken.get_or_none(RefreshToken.token_hash == token_hash)
-            if not record:
-                return False
-            record.is_revoked = True
-            record.save()
-            return True
-
-        revoked = await self._execute(_revoke, operation_name="revoke_refresh_token")
-
-        # Invalidate cache entry
         if revoked and self._token_cache:
             try:
                 await self._token_cache.mark_revoked(token_hash)
@@ -180,36 +136,23 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
         return revoked
 
     async def async_revoke_session_by_id(self, session_id: int, user_id: int) -> bool:
-        """Revoke a specific session by its ID, ensuring it belongs to the given user.
-
-        Returns:
-            True if found, belongs to user, and revoked. False otherwise.
-        """
-
-        def _revoke() -> bool:
-            record = RefreshToken.get_or_none(
-                (RefreshToken.id == session_id) & (RefreshToken.user == user_id)
-            )
-            if not record or record.is_revoked:
-                return False
-            record.is_revoked = True
-            record.save()
-            return True
-
-        revoked = await self._execute(_revoke, operation_name="revoke_session_by_id")
-
-        if revoked and self._token_cache:
-            try:
-                # Best-effort: look up the token_hash to invalidate cache
-                def _get_hash() -> str | None:
-                    rec = RefreshToken.get_or_none(RefreshToken.id == session_id)
-                    return rec.token_hash if rec else None
-
-                token_hash = await self._execute(
-                    _get_hash, operation_name="get_session_hash", read_only=True
+        """Revoke a specific session by ID, ensuring it belongs to a user."""
+        async with self._database.transaction() as session:
+            token_hash = await session.scalar(
+                update(RefreshToken)
+                .where(
+                    RefreshToken.id == session_id,
+                    RefreshToken.user_id == user_id,
+                    RefreshToken.is_revoked.is_(False),
                 )
-                if token_hash:
-                    await self._token_cache.mark_revoked(token_hash)
+                .values(is_revoked=True)
+                .returning(RefreshToken.token_hash)
+            )
+            revoked = token_hash is not None
+
+        if revoked and self._token_cache and token_hash:
+            try:
+                await self._token_cache.mark_revoked(token_hash)
             except Exception as exc:
                 logger.warning(
                     "auth_token_cache_revoke_failed",
@@ -219,29 +162,23 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
         return revoked
 
     async def async_revoke_all_user_tokens(self, user_id: int) -> int:
-        """Revoke all refresh tokens for a user (reuse detection).
-
-        Returns:
-            Number of tokens revoked.
-        """
-
-        def _revoke_all() -> tuple[int, list[str]]:
-            tokens = RefreshToken.select().where(
-                (RefreshToken.user == user_id) & (~RefreshToken.is_revoked)
+        """Revoke all active refresh tokens for a user."""
+        async with self._database.transaction() as session:
+            hashes = list(
+                (
+                    await session.execute(
+                        update(RefreshToken)
+                        .where(
+                            RefreshToken.user_id == user_id,
+                            RefreshToken.is_revoked.is_(False),
+                        )
+                        .values(is_revoked=True)
+                        .returning(RefreshToken.token_hash)
+                    )
+                ).scalars()
             )
-            hashes = []
-            count = 0
-            for record in tokens:
-                record.is_revoked = True
-                record.save()
-                hashes.append(record.token_hash)
-                count += 1
-            return count, hashes
 
-        count, hashes = await self._execute(_revoke_all, operation_name="revoke_all_user_tokens")
-
-        # Best-effort cache invalidation
-        if count and self._token_cache:
+        if hashes and self._token_cache:
             for token_hash in hashes:
                 try:
                     await self._token_cache.mark_revoked(token_hash)
@@ -251,78 +188,55 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
                         extra={"error": str(exc), "token_hash_prefix": token_hash[:8]},
                     )
 
-        return count
+        return len(hashes)
 
     async def async_update_refresh_token_last_used(self, token_id: int) -> None:
-        """Update the last_used_at timestamp for a refresh token."""
-
-        def _update() -> None:
-            RefreshToken.update(last_used_at=dt.datetime.now(UTC)).where(
-                RefreshToken.id == token_id
-            ).execute()
-
-        await self._execute(_update, operation_name="update_refresh_token_last_used")
+        """Update the last-used timestamp for a refresh token."""
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(RefreshToken)
+                .where(RefreshToken.id == token_id)
+                .values(last_used_at=_utcnow())
+            )
 
     async def async_list_active_sessions(
         self, user_id: int, now: dt.datetime
     ) -> list[dict[str, Any]]:
-        """List active (non-revoked, non-expired) sessions for a user.
-
-        Returns:
-            List of session dicts sorted by last_used_at desc.
-        """
-
-        def _list() -> list[dict[str, Any]]:
-            sessions = (
-                RefreshToken.select()
-                .where(
-                    (RefreshToken.user == user_id)
-                    & (~RefreshToken.is_revoked)
-                    & (RefreshToken.expires_at > now)
+        """List active non-revoked, non-expired sessions."""
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(RefreshToken)
+                    .where(
+                        RefreshToken.user_id == user_id,
+                        RefreshToken.is_revoked.is_(False),
+                        RefreshToken.expires_at > now,
+                    )
+                    .order_by(RefreshToken.last_used_at.desc())
                 )
-                .order_by(RefreshToken.last_used_at.desc())
-            )
-            return [model_to_dict(s) or {} for s in sessions]
-
-        return await self._execute(_list, operation_name="list_active_sessions", read_only=True)
-
-    # -------------------------------------------------------------------------
-    # ClientSecret Operations
-    # -------------------------------------------------------------------------
+            ).scalars()
+            return [_token_to_dict(row) or {} for row in rows]
 
     async def async_get_client_secret(self, user_id: int, client_id: str) -> dict[str, Any] | None:
-        """Get the most recent client secret for a user/client pair.
-
-        Returns:
-            Dict with secret data or None if not found.
-        """
-
-        def _get() -> dict[str, Any] | None:
-            user = User.select().where(User.telegram_user_id == user_id).first()
-            if not user:
-                return None
-            record = (
-                ClientSecret.select()
-                .where((ClientSecret.user == user) & (ClientSecret.client_id == client_id))
-                .order_by(ClientSecret.created_at.desc())
-                .first()
+        """Get the most recent client secret for a user/client pair."""
+        async with self._database.session() as session:
+            user_exists = await session.scalar(
+                select(User.telegram_user_id).where(User.telegram_user_id == user_id)
             )
-            return model_to_dict(record)
-
-        return await self._execute(_get, operation_name="get_client_secret", read_only=True)
+            if user_exists is None:
+                return None
+            record = await session.scalar(
+                select(ClientSecret)
+                .where(ClientSecret.user_id == user_id, ClientSecret.client_id == client_id)
+                .order_by(ClientSecret.created_at.desc())
+            )
+            return _secret_to_dict(record)
 
     async def async_get_client_secret_by_id(self, key_id: int) -> dict[str, Any] | None:
-        """Get a client secret by ID.
-
-        Returns:
-            Dict with secret data or None if not found.
-        """
-
-        def _get() -> dict[str, Any] | None:
-            record = ClientSecret.select().where(ClientSecret.id == key_id).first()
-            return model_to_dict(record)
-
-        return await self._execute(_get, operation_name="get_client_secret_by_id", read_only=True)
+        """Get a client secret by ID."""
+        async with self._database.session() as session:
+            record = await session.get(ClientSecret, key_id)
+            return _secret_to_dict(record)
 
     async def async_create_client_secret(
         self,
@@ -336,18 +250,13 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
         description: str | None = None,
         expires_at: dt.datetime | None = None,
     ) -> int:
-        """Create a new client secret.
-
-        Returns:
-            The ID of the created secret record.
-        """
-
-        def _create() -> int:
-            user = User.select().where(User.telegram_user_id == user_id).first()
-            if not user:
-                raise ValueError(f"User {user_id} not found")
-            record = ClientSecret.create(
-                user=user,
+        """Create a new client secret."""
+        async with self._database.transaction() as session:
+            if await session.get(User, user_id) is None:
+                msg = f"User {user_id} not found"
+                raise ValueError(msg)
+            record = ClientSecret(
+                user_id=user_id,
                 client_id=client_id,
                 secret_hash=secret_hash,
                 secret_salt=secret_salt,
@@ -358,9 +267,9 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
                 failed_attempts=0,
                 locked_until=None,
             )
+            session.add(record)
+            await session.flush()
             return record.id
-
-        return await self._execute(_create, operation_name="create_client_secret")
 
     async def async_replace_active_client_secret(
         self,
@@ -375,25 +284,22 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
         expires_at: dt.datetime | None = None,
     ) -> int:
         """Atomically revoke active secrets for a client and create a replacement."""
+        async with self._database.transaction() as session:
+            if await session.get(User, user_id) is None:
+                msg = f"User {user_id} not found"
+                raise ValueError(msg)
 
-        def _replace() -> int:
-            user = User.select().where(User.telegram_user_id == user_id).first()
-            if not user:
-                raise ValueError(f"User {user_id} not found")
-
-            active = ClientSecret.select().where(
-                (ClientSecret.user == user)
-                & (ClientSecret.client_id == client_id)
-                & (ClientSecret.status == "active")
+            await session.execute(
+                update(ClientSecret)
+                .where(
+                    ClientSecret.user_id == user_id,
+                    ClientSecret.client_id == client_id,
+                    ClientSecret.status == "active",
+                )
+                .values(status="revoked", failed_attempts=0, locked_until=None)
             )
-            for record in active:
-                record.status = "revoked"
-                record.failed_attempts = 0
-                record.locked_until = None
-                record.save()
-
-            new_record = ClientSecret.create(
-                user=user,
+            record = ClientSecret(
+                user_id=user_id,
                 client_id=client_id,
                 secret_hash=secret_hash,
                 secret_salt=secret_salt,
@@ -404,12 +310,9 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
                 failed_attempts=0,
                 locked_until=None,
             )
-            return new_record.id
-
-        return await self._execute_transaction(
-            _replace,
-            operation_name="replace_active_client_secret",
-        )
+            session.add(record)
+            await session.flush()
+            return record.id
 
     async def async_update_client_secret(
         self,
@@ -417,17 +320,14 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
         **fields: Any,
     ) -> None:
         """Update a client secret by ID."""
-
-        def _update() -> None:
-            record = ClientSecret.select().where(ClientSecret.id == key_id).first()
-            if not record:
-                return
-            for key, value in fields.items():
-                if hasattr(record, key):
-                    setattr(record, key, value)
-            record.save()
-
-        await self._execute(_update, operation_name="update_client_secret")
+        allowed = set(ClientSecret.__table__.columns.keys()) - {"id", "user_id"}
+        update_fields = {key: value for key, value in fields.items() if key in allowed}
+        if not update_fields:
+            return
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(ClientSecret).where(ClientSecret.id == key_id).values(**update_fields)
+            )
 
     async def async_list_client_secrets(
         self,
@@ -436,55 +336,52 @@ class SqliteAuthRepositoryAdapter(SqliteBaseRepository):
         client_id: str | None = None,
         status: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List client secrets with optional filters.
-
-        Returns:
-            List of secret dicts (without hash/salt).
-        """
-
-        def _list() -> list[dict[str, Any]]:
-            query = ClientSecret.select()
+        """List client secrets with optional filters."""
+        async with self._database.session() as session:
+            stmt = select(ClientSecret)
             if user_id is not None:
-                query = query.join(User).where(User.telegram_user_id == user_id)
+                stmt = stmt.where(ClientSecret.user_id == user_id)
             if client_id:
-                query = query.where(ClientSecret.client_id == client_id)
+                stmt = stmt.where(ClientSecret.client_id == client_id)
             if status:
-                query = query.where(ClientSecret.status == status)
-            return [model_to_dict(rec) or {} for rec in query]
-
-        return await self._execute(_list, operation_name="list_client_secrets", read_only=True)
+                stmt = stmt.where(ClientSecret.status == status)
+            rows = (await session.execute(stmt.order_by(ClientSecret.id))).scalars()
+            return [_secret_to_dict(row) or {} for row in rows]
 
     async def async_increment_failed_attempts(
         self, key_id: int, max_attempts: int, lockout_minutes: int
     ) -> dict[str, Any]:
-        """Increment failed attempts and potentially lock the secret.
-
-        Returns:
-            Updated secret data dict.
-        """
-
-        def _increment() -> dict[str, Any]:
-            record = ClientSecret.select().where(ClientSecret.id == key_id).first()
-            if not record:
+        """Increment failed attempts and potentially lock the secret."""
+        async with self._database.transaction() as session:
+            record = await session.get(ClientSecret, key_id)
+            if record is None:
                 return {}
             record.failed_attempts = (record.failed_attempts or 0) + 1
             if record.failed_attempts >= max_attempts:
                 record.status = "locked"
-                record.locked_until = _utcnow_naive() + dt.timedelta(minutes=lockout_minutes)
-            record.save()
-            return model_to_dict(record) or {}
-
-        return await self._execute(_increment, operation_name="increment_failed_attempts")
+                record.locked_until = _utcnow() + dt.timedelta(minutes=lockout_minutes)
+            await session.flush()
+            return _secret_to_dict(record) or {}
 
     async def async_reset_failed_attempts(self, key_id: int) -> None:
         """Reset failed attempts and unlock a secret."""
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(ClientSecret)
+                .where(ClientSecret.id == key_id)
+                .values(failed_attempts=0, locked_until=None)
+            )
 
-        def _reset() -> None:
-            record = ClientSecret.select().where(ClientSecret.id == key_id).first()
-            if not record:
-                return
-            record.failed_attempts = 0
-            record.locked_until = None
-            record.save()
 
-        await self._execute(_reset, operation_name="reset_failed_attempts")
+def _token_to_dict(record: RefreshToken | None) -> dict[str, Any] | None:
+    data = model_to_dict(record)
+    if data is not None:
+        data["user"] = data.get("user_id")
+    return data
+
+
+def _secret_to_dict(record: ClientSecret | None) -> dict[str, Any] | None:
+    data = model_to_dict(record)
+    if data is not None:
+        data["user"] = data.get("user_id")
+    return data
