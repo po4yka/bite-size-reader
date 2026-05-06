@@ -108,3 +108,10 @@ the most-ported repository are easiest to land first.
   message-persistence call sites with the SQLAlchemy `Database` facade type.
 - Verified this slice with focused ruff, focused mypy with skipped imports, and
   import smoke checks for representative touched modules.
+- Updated digest subscribe/unsubscribe callers to use the new async
+  SQLAlchemy-backed digest subscription helpers in Telegram handlers and removed
+  the digest channel service's Peewee integrity handling.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_digest_subscription_ops_postgres.py`
+  → `2 passed`, focused ruff, focused mypy with skipped imports, and digest
+  import smoke checks.

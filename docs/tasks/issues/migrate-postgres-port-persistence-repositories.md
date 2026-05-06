@@ -247,6 +247,12 @@ Conventions for the port:
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/test_trending_topics.py -q`
   → `4 passed`; the expanded focused live suite including recent support
   adapters and handlers passed with `10 passed`.
+- Ported `digest_subscription_ops.py` to SQLAlchemy/AsyncSession for channel
+  subscribe/unsubscribe lifecycle operations, retaining synchronous wrappers
+  for current digest API facade compatibility.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_digest_subscription_ops_postgres.py`
+  → `2 passed`, focused ruff, and focused mypy with skipped imports.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import peewee
-
 from app.api.exceptions import ValidationError
 from app.api.models.digest import (
     ChannelPostResponse,
@@ -74,10 +72,7 @@ class DigestChannelService:
         if error:
             raise ValidationError(error)
 
-        try:
-            status = self._subscribe_atomic(user_id, username)
-        except peewee.IntegrityError:
-            status = "already_subscribed"
+        status = self._subscribe_atomic(user_id, username)
         return {"status": status, "username": username}
 
     def unsubscribe_channel(self, user_id: int, raw_username: str) -> dict[str, str]:

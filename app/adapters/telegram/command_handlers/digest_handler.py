@@ -5,15 +5,13 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
-import peewee
-
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.core.channel_utils import parse_channel_input
 from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
 from app.infrastructure.persistence.sqlite.digest_subscription_ops import (
-    subscribe_channel_atomic,
-    unsubscribe_channel_atomic,
+    async_subscribe_channel_atomic,
+    async_unsubscribe_channel_atomic,
 )
 
 if TYPE_CHECKING:
@@ -199,7 +197,7 @@ class DigestHandler(HandlerDependenciesMixin):
 
         await self._formatter.safe_reply(ctx.message, "\n".join(lines))
 
-    _subscribe_atomic = staticmethod(subscribe_channel_atomic)
+    _subscribe_atomic = staticmethod(async_subscribe_channel_atomic)
 
     async def handle_subscribe(self, ctx: CommandExecutionContext) -> None:
         """Handle /subscribe @channel_name command."""
@@ -220,15 +218,7 @@ class DigestHandler(HandlerDependenciesMixin):
             await self._formatter.safe_reply(ctx.message, error)
             return
 
-        try:
-            status = await self._db._safe_db_transaction(
-                self._subscribe_atomic,
-                ctx.uid,
-                username,
-                operation_name="subscribe_channel",
-            )
-        except peewee.IntegrityError:
-            status = "already_subscribed"
+        status = await self._subscribe_atomic(ctx.uid, username, db=self._db)
 
         if status == "already_subscribed":
             await self._formatter.safe_reply(ctx.message, f"Already subscribed to @{username}.")
@@ -247,7 +237,7 @@ class DigestHandler(HandlerDependenciesMixin):
                 extra={"uid": ctx.uid, "channel": username, "cid": ctx.correlation_id},
             )
 
-    _unsubscribe_atomic = staticmethod(unsubscribe_channel_atomic)
+    _unsubscribe_atomic = staticmethod(async_unsubscribe_channel_atomic)
 
     async def handle_unsubscribe(self, ctx: CommandExecutionContext) -> None:
         """Handle /unsubscribe @channel_name command."""
@@ -268,12 +258,7 @@ class DigestHandler(HandlerDependenciesMixin):
             await self._formatter.safe_reply(ctx.message, error)
             return
 
-        status = await self._db._safe_db_transaction(
-            self._unsubscribe_atomic,
-            ctx.uid,
-            username,
-            operation_name="unsubscribe_channel",
-        )
+        status = await self._unsubscribe_atomic(ctx.uid, username, db=self._db)
 
         if status == "not_found":
             await self._formatter.safe_reply(ctx.message, f"Channel @{username} not found.")
