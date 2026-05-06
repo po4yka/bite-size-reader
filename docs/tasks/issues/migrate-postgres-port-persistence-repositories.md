@@ -148,7 +148,8 @@ Conventions for the port:
   → `2 passed`.
 - Ported `tag_repository.py` to SQLAlchemy/AsyncSession with PostgreSQL
   conflict handling for summary-tag attachments and live coverage for tag CRUD,
-  attach/detach/restore, summary counts, tagged summaries, and tag merge.
+  attach/detach/restore, summary counts, tagged summaries, popular-tag listing,
+  and tag merge.
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_tag_repository_postgres.py -q`
   → `2 passed`.
@@ -253,6 +254,15 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_digest_subscription_ops_postgres.py`
   → `2 passed`, focused ruff, and focused mypy with skipped imports.
+- Ported `digest_store.py` off Peewee model calls to SQLAlchemy/AsyncSession
+  while preserving synchronous compatibility methods for existing API and bot
+  call sites.
+- Added live Postgres coverage for digest categories, subscriptions,
+  preferences, deliveries, channel posts, cached analyses, and signal-source
+  mirroring.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_digest_store_postgres.py tests/infrastructure/test_digest_subscription_ops_postgres.py`
+  → `4 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

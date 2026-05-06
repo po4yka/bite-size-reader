@@ -121,3 +121,13 @@ the most-ported repository are easiest to land first.
 - Replaced the digest category service's Peewee integrity exception handling
   with SQLAlchemy `IntegrityError`; verified with focused ruff, focused mypy,
   and an import smoke check.
+- Moved async digest runtime call sites onto the SQLAlchemy-backed
+  `SqliteDigestStore.async_*` methods: channel reader post persistence and
+  signal mirroring, analyzer cache/write paths, delivery record creation,
+  Telegram `/cdigest` and `/channels`, API channel resolve/trigger execution,
+  and scheduled digest user enumeration.
+- Replaced the Taskiq dependency provider's removed `DatabaseSessionManager`
+  import with the SQLAlchemy `Database` facade.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_digest_store_postgres.py tests/infrastructure/test_digest_subscription_ops_postgres.py tests/tasks/test_digest_task.py`
+  → `6 passed`, focused ruff, and focused mypy with skipped imports.

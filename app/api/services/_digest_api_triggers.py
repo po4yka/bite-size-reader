@@ -183,7 +183,7 @@ class DigestTriggerService:
                         lang="ru",
                     )
 
-                channel = self._store.get_or_create_channel(
+                channel = await self._store.async_get_or_create_channel(
                     channel_username, title=channel_username
                 )
                 return await service.generate_channel_digest(

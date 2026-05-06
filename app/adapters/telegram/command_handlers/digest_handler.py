@@ -130,7 +130,7 @@ class DigestHandler(HandlerDependenciesMixin):
             return
 
         # Get or create channel record (no subscription required)
-        channel = self._store.get_or_create_channel(username, title=username)
+        channel = await self._store.async_get_or_create_channel(username, title=username)
 
         await self._formatter.safe_reply(ctx.message, f"Generating digest for @{username}...")
 
@@ -166,7 +166,7 @@ class DigestHandler(HandlerDependenciesMixin):
             )
             return
 
-        subs = self._store.list_active_subscriptions(ctx.uid)
+        subs = await self._store.async_list_active_subscriptions(ctx.uid)
 
         if not subs:
             await self._formatter.safe_reply(

@@ -84,9 +84,9 @@ class DigestAnalyzer:
         )
         return analyzed
 
-    def _cached_analysis(self, post: dict[str, Any]) -> dict[str, Any] | None:
+    async def _cached_analysis(self, post: dict[str, Any]) -> dict[str, Any] | None:
         """Return existing analysis from DB if the post was already analyzed."""
-        return self._store.find_cached_analysis(post)
+        return await self._store.async_find_cached_analysis(post)
 
     @staticmethod
     def _parse_and_validate_llm_response(
@@ -132,9 +132,9 @@ class DigestAnalyzer:
             "is_ad": is_ad,
         }
 
-    def _persist_analysis(self, post: dict[str, Any], fields: dict[str, Any]) -> None:
+    async def _persist_analysis(self, post: dict[str, Any], fields: dict[str, Any]) -> None:
         """Persist LLM analysis results to the DB for the given post."""
-        self._store.persist_analysis(post, fields)
+        await self._store.async_persist_analysis(post, fields)
 
     async def _analyze_single(
         self,
@@ -144,7 +144,7 @@ class DigestAnalyzer:
     ) -> dict[str, Any] | None:
         """Analyze a single post under the concurrency semaphore."""
         # Check cache before acquiring semaphore / calling LLM
-        cached = self._cached_analysis(post)
+        cached = await self._cached_analysis(post)
         if cached is not None:
             logger.debug(
                 "digest_analysis_cache_hit",
@@ -181,7 +181,7 @@ class DigestAnalyzer:
             if fields is None:
                 return None
 
-            self._persist_analysis(post, fields)
+            await self._persist_analysis(post, fields)
 
             return {**post, **fields}
 

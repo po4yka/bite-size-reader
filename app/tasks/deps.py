@@ -16,7 +16,7 @@ from typing import Any, cast
 from taskiq import TaskiqDepends
 
 from app.config import AppConfig  # noqa: TC001 — taskiq resolves type hints at runtime
-from app.db.session import DatabaseSessionManager  # noqa: TC001 — taskiq resolves type hints at runtime
+from app.db.session import Database  # noqa: TC001 — taskiq resolves type hints at runtime
 
 
 # ── singleton providers ───────────────────────────────────────────────────────
@@ -34,16 +34,16 @@ async def get_app_config() -> AppConfig:
     return _cached_config()
 
 
-_db_instance: DatabaseSessionManager | None = None
+_db_instance: Database | None = None
 
 
-async def get_db(cfg: AppConfig = TaskiqDepends(get_app_config)) -> DatabaseSessionManager:
-    """Return a cached DatabaseSessionManager for this worker process."""
+async def get_db(cfg: AppConfig = TaskiqDepends(get_app_config)) -> Database:
+    """Return a cached Database facade for this worker process."""
     global _db_instance
     if _db_instance is None:
-        from app.db.session import DatabaseSessionManager
+        from app.db.session import Database
 
-        _db_instance = DatabaseSessionManager(path=cfg.runtime.db_path)
+        _db_instance = Database(config=cfg.database)
     return _db_instance
 
 
@@ -117,7 +117,7 @@ def create_rss_bot_client(cfg: AppConfig) -> Any:
     )
 
 
-def create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
+def create_rss_delivery_service(cfg: AppConfig, db: Database) -> Any:
     from app.adapters.content.pure_summary_service import PureSummaryService
     from app.adapters.content.scraper.factory import ContentScraperFactory
     from app.adapters.content.summarization_runtime import SummarizationRuntime
@@ -181,7 +181,7 @@ def create_rss_delivery_service(cfg: AppConfig, db: DatabaseSessionManager) -> A
     )
 
 
-def create_signal_ingestion_worker(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
+def create_signal_ingestion_worker(cfg: AppConfig, db: Database) -> Any:
     from app.application.services.signal_ingestion_worker import SignalIngestionWorker
     from app.application.services.signal_scoring import SignalScoringService
     from app.core.embedding_space import resolve_embedding_space_identifier
@@ -214,7 +214,7 @@ def create_signal_ingestion_worker(cfg: AppConfig, db: DatabaseSessionManager) -
     )
 
 
-def create_source_ingestion_runner(cfg: AppConfig, db: DatabaseSessionManager) -> Any:
+def create_source_ingestion_runner(cfg: AppConfig, db: Database) -> Any:
     from app.adapters.ingestors.hn import HackerNewsIngester
     from app.adapters.ingestors.reddit import RedditIngester, RequestRateBudget
     from app.adapters.ingestors.runner import SourceIngestionRunner

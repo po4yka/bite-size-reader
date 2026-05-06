@@ -87,7 +87,7 @@ async def test_digest_body_starts_and_stops_userbot(monkeypatch):
             return None
 
     class FakeDigestService:
-        def get_users_with_subscriptions(self):
+        async def async_get_users_with_subscriptions(self):
             return [1001]
 
         async def generate_digest(self, **kwargs):
@@ -142,7 +142,7 @@ async def test_digest_body_stops_userbot_on_per_user_failure(monkeypatch):
             return None
 
     class BrokenDigestService:
-        def get_users_with_subscriptions(self):
+        async def async_get_users_with_subscriptions(self):
             return [42]
 
         async def generate_digest(self, **kwargs):

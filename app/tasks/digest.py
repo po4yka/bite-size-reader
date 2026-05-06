@@ -104,7 +104,7 @@ async def _channel_digest_body(cfg: AppConfig) -> None:
                     send_message=send_message,
                 )
 
-                user_ids = service.get_users_with_subscriptions()
+                user_ids = await service.async_get_users_with_subscriptions()
                 logger.info(
                     "scheduled_digest_users",
                     extra={"cid": correlation_id, "count": len(user_ids)},

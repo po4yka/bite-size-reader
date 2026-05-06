@@ -40,7 +40,9 @@ class ChannelReader:
         """
         max_total = max_posts or self._cfg.digest.max_posts_per_digest
 
-        subscriptions = self._store.list_active_feed_subscriptions_with_channels(user_id)
+        subscriptions = await self._store.async_list_active_feed_subscriptions_with_channels(
+            user_id
+        )
 
         if not subscriptions:
             logger.info("digest_no_subscriptions", extra={"uid": user_id})
@@ -59,13 +61,13 @@ class ChannelReader:
                 for p in posts:
                     p["_channel_id"] = channel.channel_id or channel.id
                     p["_channel_username"] = channel.username
-                self._store.persist_posts(channel, posts)
-                self._store.mirror_posts_to_signal_sources(
+                await self._store.async_persist_posts(channel, posts)
+                await self._store.async_mirror_posts_to_signal_sources(
                     user_id=user_id,
                     channel=channel,
                     posts=posts,
                 )
-                self._store.update_channel_fetch_success(channel)
+                await self._store.async_update_channel_fetch_success(channel)
                 channel_posts[channel.id] = posts
             except Exception:
                 logger.exception(
@@ -73,7 +75,7 @@ class ChannelReader:
                     extra={"channel": channel.username, "uid": user_id},
                 )
                 max_errors = self._cfg.digest.max_fetch_errors
-                disable = self._store.record_channel_fetch_error(
+                disable = await self._store.async_record_channel_fetch_error(
                     channel,
                     "fetch_failed",
                     max_errors=max_errors,
@@ -93,7 +95,7 @@ class ChannelReader:
             return []
 
         # Filter out already-delivered posts
-        delivered_ids = self._store.list_delivered_message_ids(user_id)
+        delivered_ids = await self._store.async_list_delivered_message_ids(user_id)
         if delivered_ids:
             channel_posts = {
                 ch_id: [p for p in posts if p["message_id"] not in delivered_ids]
@@ -145,16 +147,16 @@ class ChannelReader:
         for p in posts:
             p["_channel_id"] = channel.channel_id or channel.id
             p["_channel_username"] = channel.username
-        self._store.persist_posts(channel, posts)
-        self._store.mirror_posts_to_signal_sources(
+        await self._store.async_persist_posts(channel, posts)
+        await self._store.async_mirror_posts_to_signal_sources(
             user_id=user_id,
             channel=channel,
             posts=posts,
         )
-        self._store.update_channel_fetch_success(channel)
+        await self._store.async_update_channel_fetch_success(channel)
 
         # Filter out already-delivered posts
-        delivered_ids = self._store.list_delivered_message_ids(user_id)
+        delivered_ids = await self._store.async_list_delivered_message_ids(user_id)
         unread = [p for p in posts if p["message_id"] not in delivered_ids]
 
         # Sort by date desc, cap

@@ -259,7 +259,7 @@ class DigestService:
         # 5. Persist delivery record
         post_ids = [p.get("message_id") for p in analyzed]
         try:
-            self._store.create_delivery(
+            await self._store.async_create_delivery(
                 user_id=user_id,
                 post_count=result.post_count,
                 channel_count=result.channel_count,
@@ -309,6 +309,11 @@ class DigestService:
                 exc_info=True,
             )
             result.errors.append(f"Send failed: {e}")
+
+    @classmethod
+    async def async_get_users_with_subscriptions(cls) -> list[int]:
+        """Return user IDs that have at least one active subscription."""
+        return await SqliteDigestStore().async_get_users_with_subscriptions()
 
     @classmethod
     def get_users_with_subscriptions(cls) -> list[int]:

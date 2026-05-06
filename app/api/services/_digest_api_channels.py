@@ -107,9 +107,13 @@ class DigestChannelService:
         finally:
             await userbot.stop()
 
-        channel = self._store.get_or_create_channel(username, title=metadata.get("title"))
-        self._store.update_channel_metadata(channel, metadata)
-        is_subscribed = self._store.is_user_subscribed(user_id=user_id, channel=channel)
+        channel = await self._store.async_get_or_create_channel(
+            username, title=metadata.get("title")
+        )
+        await self._store.async_update_channel_metadata(channel, metadata)
+        is_subscribed = await self._store.async_is_user_subscribed(
+            user_id=user_id, channel=channel
+        )
 
         return ResolveChannelResponse(
             username=metadata.get("username", username),
