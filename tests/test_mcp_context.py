@@ -5,43 +5,60 @@ from typing import Any, cast
 
 import pytest
 
-from app.db.models import database_proxy
-from app.db.session import DatabaseSessionManager
 from app.mcp.context import McpServerContext
 from app.mcp.http_auth import McpRequestIdentity
 
 
-def test_init_runtime_opens_sqlite_read_only(tmp_path: Any) -> None:
-    import peewee
+def _fake_runtime(database_dsn: str | None, user_id: int | None = None) -> SimpleNamespace:
+    return SimpleNamespace(
+        cfg=None,
+        database_dsn=database_dsn or "postgresql+asyncpg://u:p@localhost:5432/ratatoskr",
+        database=SimpleNamespace(),
+        scope=SimpleNamespace(user_id=user_id),
+        vector_state=SimpleNamespace(
+            service=None, last_failed_at=None, init_lock=None, resources=()
+        ),
+        local_vector_state=SimpleNamespace(
+            service=None,
+            last_failed_at=None,
+            init_lock=None,
+            resources=(),
+        ),
+    )
 
-    old_proxy_obj = database_proxy.obj
-    db_path = tmp_path / "mcp-read-only.db"
 
-    seed_db = peewee.SqliteDatabase(str(db_path))
-    seed_db.connect()
-    seed_db.execute_sql("CREATE TABLE sample(id INTEGER PRIMARY KEY, value TEXT)")
-    seed_db.execute_sql("INSERT INTO sample(value) VALUES ('seed')")
-    seed_db.close()
+def test_init_runtime_uses_postgres_dsn(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.di.mcp as mcp_di
 
-    db_path.chmod(0o444)
-    try:
-        context = McpServerContext(db_path=str(db_path))
-        context.init_runtime()
-        assert database_proxy.obj.execute_sql("SELECT value FROM sample").fetchone() == ("seed",)
-        with pytest.raises(peewee.OperationalError):
-            database_proxy.obj.execute_sql("INSERT INTO sample(value) VALUES ('write')")
-    finally:
-        try:
-            database_proxy.obj.close()
-        except Exception:
-            pass
-        database_proxy.initialize(old_proxy_obj)
-        db_path.chmod(0o644)
+    captured: dict[str, Any] = {}
+
+    def fake_build_mcp_runtime(
+        *,
+        database_dsn: str | None = None,
+        user_id: int | None = None,
+    ) -> Any:
+        captured["database_dsn"] = database_dsn
+        captured["user_id"] = user_id
+        return _fake_runtime(database_dsn, user_id)
+
+    monkeypatch.setattr(mcp_di, "build_mcp_runtime", fake_build_mcp_runtime)
+
+    context = McpServerContext(
+        database_dsn="postgresql+asyncpg://u:p@localhost:5432/mcp",
+        user_id=42,
+    )
+    runtime = context.init_runtime()
+
+    assert captured == {
+        "database_dsn": "postgresql+asyncpg://u:p@localhost:5432/mcp",
+        "user_id": 42,
+    }
+    assert runtime.database_dsn == "postgresql+asyncpg://u:p@localhost:5432/mcp"
+    assert context.database_dsn == runtime.database_dsn
 
 
 @pytest.mark.asyncio
 async def test_get_vector_service_retries_after_backoff(
-    tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import app.di.mcp as mcp_di
@@ -58,13 +75,13 @@ async def test_get_vector_service_retries_after_backoff(
 
     monkeypatch.setattr(mcp_di.time, "monotonic", fake_monotonic)
     monkeypatch.setattr(mcp_di, "load_config", failing_load_config)
+    monkeypatch.setattr(
+        mcp_di,
+        "build_mcp_runtime",
+        lambda *, database_dsn=None, user_id=None: _fake_runtime(database_dsn, user_id),
+    )
 
-    db_path = tmp_path / "mcp-backoff.db"
-    database = DatabaseSessionManager(str(db_path))
-    database.migrate()
-    database._database.close()
-
-    context = McpServerContext(db_path=str(db_path), vector_retry_interval_sec=60.0)
+    context = McpServerContext(vector_retry_interval_sec=60.0)
 
     assert await context.init_vector_service() is None
     assert attempts["count"] == 1
@@ -80,7 +97,6 @@ async def test_get_vector_service_retries_after_backoff(
 
 @pytest.mark.asyncio
 async def test_get_vector_service_forwards_required_and_timeout(
-    tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import app.di.mcp as mcp_di
@@ -118,13 +134,13 @@ async def test_get_vector_service_forwards_required_and_timeout(
     monkeypatch.setattr(mcp_di, "resolve_embedding_space_identifier", lambda _cfg: None)
     monkeypatch.setattr(qdrant_store_module, "QdrantVectorStore", FakeStore)
     monkeypatch.setattr(vector_service_module, "StoreVectorSearchService", FakeService)
+    monkeypatch.setattr(
+        mcp_di,
+        "build_mcp_runtime",
+        lambda *, database_dsn=None, user_id=None: _fake_runtime(database_dsn, user_id),
+    )
 
-    db_path = tmp_path / "mcp-context.db"
-    database = DatabaseSessionManager(str(db_path))
-    database.migrate()
-    database._database.close()
-
-    context = McpServerContext(db_path=str(db_path))
+    context = McpServerContext()
     await context.init_vector_service()
 
     assert captured["store_kwargs"] == {
@@ -160,22 +176,27 @@ def test_init_runtime_uses_startup_scope_even_with_request_override(
 
     captured: dict[str, Any] = {}
 
-    def fake_build_mcp_runtime(*, db_path: str | None = None, user_id: int | None = None) -> Any:
-        captured["db_path"] = db_path
+    def fake_build_mcp_runtime(
+        *,
+        database_dsn: str | None = None,
+        user_id: int | None = None,
+    ) -> Any:
+        captured["database_dsn"] = database_dsn
         captured["user_id"] = user_id
-        return SimpleNamespace(
-            db_path=db_path,
-            scope=SimpleNamespace(user_id=user_id),
-            vector_state=SimpleNamespace(last_failed_at=None),
-            local_vector_state=SimpleNamespace(last_failed_at=None),
-        )
+        return _fake_runtime(database_dsn, user_id)
 
     monkeypatch.setattr(mcp_di, "build_mcp_runtime", fake_build_mcp_runtime)
 
-    context = McpServerContext(db_path="/tmp/request-scope.db", user_id=111)
+    context = McpServerContext(
+        database_dsn="postgresql+asyncpg://u:p@localhost:5432/request_scope",
+        user_id=111,
+    )
     with context.request_user_scope(222):
         context.init_runtime()
-        assert captured == {"db_path": "/tmp/request-scope.db", "user_id": 111}
+        assert captured == {
+            "database_dsn": "postgresql+asyncpg://u:p@localhost:5432/request_scope",
+            "user_id": 111,
+        }
         assert context.user_id == 222
 
     assert context.runtime.scope.user_id == 111

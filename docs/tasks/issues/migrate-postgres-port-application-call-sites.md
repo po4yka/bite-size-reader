@@ -169,3 +169,6 @@ the most-ported repository are easiest to land first.
   SQLAlchemy `Database` facade and moved `app.cli.mcp_server` to `--dsn`.
 - Verified this MCP wiring slice with focused ruff, focused mypy, import smoke
   checks, and `pytest tests/test_mcp_server.py -q` → `7 passed`.
+- Updated MCP context tests away from Peewee/SQLite bootstrap fixtures to
+  Postgres DSN runtime fakes; verified with
+  `pytest tests/test_mcp_context.py -q` → `10 passed`.
