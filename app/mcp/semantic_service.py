@@ -437,7 +437,7 @@ class SemanticSearchService:
             }
 
         if allow_keyword_fallback:
-            keyword_payload = self.article_service.search_articles(query=query, limit=limit)
+            keyword_payload = await self.article_service.search_articles(query=query, limit=limit)
             if "error" in keyword_payload:
                 keyword_payload = {}
             keyword_results = keyword_payload.get("results")
@@ -514,7 +514,7 @@ class SemanticSearchService:
             if not isinstance(semantic_results, list):
                 semantic_results = []
 
-            keyword_payload = self.article_service.search_articles(
+            keyword_payload = await self.article_service.search_articles(
                 query=query, limit=max(limit * 2, 12)
             )
             keyword_results = keyword_payload.get("results", [])

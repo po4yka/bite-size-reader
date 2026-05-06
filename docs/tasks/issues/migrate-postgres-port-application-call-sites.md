@@ -186,3 +186,11 @@ the most-ported repository are easiest to land first.
   checks, and
   `pytest tests/test_mcp_catalog_service.py tests/test_mcp_context.py tests/test_mcp_server.py tests/test_mcp_signal_service.py -q`
   → `21 passed`.
+- Ported `app/mcp/article_service.py` article search/list/detail/content/stats
+  reads from Peewee queries to async SQLAlchemy sessions, and updated article
+  MCP tool/resource adapters plus semantic keyword fallback callers to await the
+  async service.
+- Replaced stale MCP article tests with async runtime-session fakes; verified
+  with focused ruff, focused mypy, import smoke checks, and
+  `pytest tests/test_mcp_article_service.py tests/test_mcp_catalog_service.py tests/test_mcp_context.py tests/test_mcp_server.py tests/test_mcp_signal_service.py -q`
+  → `24 passed`.

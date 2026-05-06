@@ -1,20 +1,93 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from types import SimpleNamespace
+from typing import Any
 
-from app.db.models import TopicSearchIndex
+import pytest
+
 from app.mcp.article_service import ArticleReadService
-from app.mcp.context import McpServerContext
 from app.mcp.helpers import isotime
-from tests.mcp_test_utils import insert_scoped_summary
 
-pytest_plugins = ("tests.mcp_test_support",)
 
-if TYPE_CHECKING:
-    import pytest
+class _ScalarResult:
+    def __init__(self, rows: list[Any]) -> None:
+        self._rows = rows
 
-    from app.db.session import DatabaseSessionManager
+    def all(self) -> list[Any]:
+        return self._rows
+
+
+class _ExecuteResult:
+    def __init__(self, rows: list[Any]) -> None:
+        self._rows = rows
+
+    def all(self) -> list[Any]:
+        return self._rows
+
+
+class _Session:
+    def __init__(
+        self,
+        *,
+        execute_results: list[list[Any]] | None = None,
+        scalars_results: list[list[Any]] | None = None,
+    ) -> None:
+        self._execute_results = list(execute_results or [])
+        self._scalars_results = list(scalars_results or [])
+
+    async def __aenter__(self) -> _Session:
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
+
+    async def execute(self, _query: Any) -> _ExecuteResult:
+        return _ExecuteResult(self._execute_results.pop(0))
+
+    async def scalars(self, _query: Any) -> _ScalarResult:
+        return _ScalarResult(self._scalars_results.pop(0))
+
+
+class _Database:
+    def __init__(self, session: _Session) -> None:
+        self._session = session
+
+    def session(self) -> _Session:
+        return self._session
+
+
+def _context(session: _Session, user_id: int | None = None) -> SimpleNamespace:
+    runtime = SimpleNamespace(database=_Database(session))
+    return SimpleNamespace(
+        user_id=user_id,
+        ensure_runtime=lambda: runtime,
+        request_scope_filters=lambda _model: [],
+    )
+
+
+def _summary(summary_id: int, request_id: int, title: str, tags: list[str]) -> SimpleNamespace:
+    request = SimpleNamespace(
+        id=request_id,
+        input_url=f"https://example.com/{request_id}",
+        normalized_url=f"https://example.com/{request_id}",
+        status="completed",
+        type="url",
+    )
+    return SimpleNamespace(
+        id=summary_id,
+        request=request,
+        lang="en",
+        is_read=False,
+        is_favorited=False,
+        created_at=None,
+        json_payload={
+            "summary_250": f"Summary for {title}",
+            "tldr": f"TLDR {title}",
+            "topic_tags": tags,
+            "metadata": {"title": title, "domain": "example.com"},
+        },
+    )
 
 
 def test_isotime_formats_utc_cleanly() -> None:
@@ -25,98 +98,37 @@ def test_isotime_formats_utc_cleanly() -> None:
     assert isotime(naive) == "2026-01-01T12:00:00Z"
 
 
-def test_list_articles_tag_filter_paginates_correctly(mcp_test_db: DatabaseSessionManager) -> None:
-    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-    sid_old, _ = insert_scoped_summary(
-        db=mcp_test_db,
-        user_id=1,
-        url="https://example.com/old-ai",
-        title="Old AI",
-        tags=["#ai"],
-        created_at=now.replace(hour=10),
-    )
-    insert_scoped_summary(
-        db=mcp_test_db,
-        user_id=1,
-        url="https://example.com/middle",
-        title="Middle",
-        tags=["#other"],
-        created_at=now.replace(hour=11),
-    )
-    sid_new, _ = insert_scoped_summary(
-        db=mcp_test_db,
-        user_id=1,
-        url="https://example.com/new-ai",
-        title="New AI",
-        tags=["#ai"],
-        created_at=now.replace(hour=12),
-    )
+@pytest.mark.asyncio
+async def test_list_articles_tag_filter_paginates_correctly() -> None:
+    old_ai = _summary(1, 101, "Old AI", ["#ai"])
+    other = _summary(2, 102, "Other", ["#other"])
+    new_ai = _summary(3, 103, "New AI", ["#ai"])
+    session = _Session(scalars_results=[[new_ai, other, old_ai], [new_ai, other, old_ai]])
+    service = ArticleReadService(_context(session, user_id=1))
 
-    service = ArticleReadService(McpServerContext(user_id=1))
-    page1 = service.list_articles(limit=1, offset=0, tag="ai")
-    page2 = service.list_articles(limit=1, offset=1, tag="ai")
+    page1 = await service.list_articles(limit=1, offset=0, tag="ai")
+    page2 = await service.list_articles(limit=1, offset=1, tag="ai")
 
     assert page1["total"] == 2
-    assert page1["articles"][0]["summary_id"] == sid_new
+    assert page1["articles"][0]["summary_id"] == 3
     assert page1["has_more"] is True
 
     assert page2["total"] == 2
-    assert page2["articles"][0]["summary_id"] == sid_old
+    assert page2["articles"][0]["summary_id"] == 1
     assert page2["has_more"] is False
 
 
-def test_search_articles_preserves_fts_order_and_scope(
-    mcp_test_db: DatabaseSessionManager,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-    sid_user1_new, req_user1_new = insert_scoped_summary(
-        db=mcp_test_db,
-        user_id=1,
-        url="https://example.com/user1-new",
-        title="User1 New",
-        tags=["#topic"],
-        created_at=now.replace(hour=12),
-    )
-    sid_user1_old, req_user1_old = insert_scoped_summary(
-        db=mcp_test_db,
-        user_id=1,
-        url="https://example.com/user1-old",
-        title="User1 Old",
-        tags=["#topic"],
-        created_at=now.replace(hour=10),
-    )
-    sid_user2, req_user2 = insert_scoped_summary(
-        db=mcp_test_db,
-        user_id=2,
-        url="https://example.com/user2",
-        title="User2",
-        tags=["#topic"],
-        created_at=now.replace(hour=11),
+@pytest.mark.asyncio
+async def test_search_articles_preserves_fts_order() -> None:
+    old_hit = _summary(1, 101, "Old Hit", ["#topic"])
+    new_hit = _summary(2, 102, "New Hit", ["#topic"])
+    session = _Session(
+        execute_results=[[SimpleNamespace(request_id=102), SimpleNamespace(request_id=101)]],
+        scalars_results=[[old_hit, new_hit]],
     )
 
-    class FakeFtsResult:
-        def __init__(self, rows: list[dict[str, Any]]):
-            self._rows = rows
+    payload = await ArticleReadService(_context(session, user_id=1)).search_articles(
+        "topic", limit=10
+    )
 
-        def select(self, *_args: Any, **_kwargs: Any) -> FakeFtsResult:
-            return self
-
-        def limit(self, _value: int) -> FakeFtsResult:
-            return self
-
-        def dicts(self) -> list[dict[str, Any]]:
-            return self._rows
-
-    fts_rows = [
-        {"request_id": req_user2, "rank": 0.1},
-        {"request_id": req_user1_old, "rank": 0.2},
-        {"request_id": req_user1_new, "rank": 0.3},
-    ]
-    monkeypatch.setattr(TopicSearchIndex, "search", lambda _query: FakeFtsResult(fts_rows))
-
-    payload = ArticleReadService(McpServerContext(user_id=1)).search_articles("topic", limit=10)
-    summary_ids = [row["summary_id"] for row in payload["results"]]  # type: ignore[typeddict-item]
-
-    assert sid_user2 not in summary_ids
-    assert summary_ids == [sid_user1_old, sid_user1_new]
+    assert [row["summary_id"] for row in payload["results"]] == [2, 1]

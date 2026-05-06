@@ -45,39 +45,39 @@ def register_resources(
         return to_json(await aggregation_service.get_aggregation_bundle(resolved_session_id))
 
     @mcp.resource("ratatoskr://articles/recent")
-    def recent_articles_resource() -> str:
+    async def recent_articles_resource() -> str:
         """A snapshot of the 10 most recent article summaries."""
-        return to_json(article_service.list_articles(limit=10, offset=0))
+        return to_json(await article_service.list_articles(limit=10, offset=0))
 
     @mcp.resource("ratatoskr://articles/favorites")
-    def favorites_resource() -> str:
+    async def favorites_resource() -> str:
         """All favorited article summaries."""
-        return to_json(article_service.list_articles(limit=50, offset=0, is_favorited=True))
+        return to_json(await article_service.list_articles(limit=50, offset=0, is_favorited=True))
 
     @mcp.resource("ratatoskr://articles/unread")
-    def unread_resource() -> str:
+    async def unread_resource() -> str:
         """Unread article summaries (up to 20)."""
-        return to_json(article_service.unread_articles(limit=20))
+        return to_json(await article_service.unread_articles(limit=20))
 
     @mcp.resource("ratatoskr://stats")
-    def stats_resource() -> str:
+    async def stats_resource() -> str:
         """Current database statistics for Ratatoskr."""
-        return to_json(article_service.get_stats())
+        return to_json(await article_service.get_stats())
 
     @mcp.resource("ratatoskr://tags")
-    def tags_resource() -> str:
+    async def tags_resource() -> str:
         """All topic tags with article counts, sorted by frequency."""
-        return to_json(article_service.tag_counts())
+        return to_json(await article_service.tag_counts())
 
     @mcp.resource("ratatoskr://entities")
-    def entities_resource() -> str:
+    async def entities_resource() -> str:
         """Aggregated entities (people, organizations, locations) across all articles."""
-        return to_json(article_service.entity_counts())
+        return to_json(await article_service.entity_counts())
 
     @mcp.resource("ratatoskr://domains")
-    def domains_resource() -> str:
+    async def domains_resource() -> str:
         """Source domains with article counts, sorted by frequency."""
-        return to_json(article_service.domain_counts())
+        return to_json(await article_service.domain_counts())
 
     @mcp.resource("ratatoskr://collections")
     async def collections_resource() -> str:

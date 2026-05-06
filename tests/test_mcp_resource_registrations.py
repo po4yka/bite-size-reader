@@ -62,12 +62,12 @@ async def test_aggregation_detail_resource_returns_session_payload() -> None:
         get_aggregation_bundle=AsyncMock(return_value={"session": {"id": 42}}),
     )
     article_service = SimpleNamespace(
-        list_articles=MagicMock(return_value={"items": []}),
-        unread_articles=MagicMock(return_value={"items": []}),
-        get_stats=MagicMock(return_value={"total": 1}),
-        tag_counts=MagicMock(return_value={"items": []}),
-        entity_counts=MagicMock(return_value={"items": []}),
-        domain_counts=MagicMock(return_value={"items": []}),
+        list_articles=AsyncMock(return_value={"items": []}),
+        unread_articles=AsyncMock(return_value={"items": []}),
+        get_stats=AsyncMock(return_value={"total": 1}),
+        tag_counts=AsyncMock(return_value={"items": []}),
+        entity_counts=AsyncMock(return_value={"items": []}),
+        domain_counts=AsyncMock(return_value={"items": []}),
     )
     catalog_service = SimpleNamespace(
         list_collections=AsyncMock(return_value={"items": []}),
@@ -122,12 +122,12 @@ def test_hosted_mcp_resource_uses_request_scoped_identity(mcp_test_db, monkeypat
     mcp = RecordingMCP()
 
     article_service = SimpleNamespace(
-        list_articles=MagicMock(return_value={"items": []}),
-        unread_articles=MagicMock(return_value={"items": []}),
-        get_stats=MagicMock(return_value={"total": 1}),
-        tag_counts=MagicMock(return_value={"items": []}),
-        entity_counts=MagicMock(return_value={"items": []}),
-        domain_counts=MagicMock(return_value={"items": []}),
+        list_articles=AsyncMock(return_value={"items": []}),
+        unread_articles=AsyncMock(return_value={"items": []}),
+        get_stats=AsyncMock(return_value={"total": 1}),
+        tag_counts=AsyncMock(return_value={"items": []}),
+        entity_counts=AsyncMock(return_value={"items": []}),
+        domain_counts=AsyncMock(return_value={"items": []}),
     )
     catalog_service = SimpleNamespace(
         list_collections=AsyncMock(return_value={"items": []}),

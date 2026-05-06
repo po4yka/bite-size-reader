@@ -148,17 +148,16 @@ async def test_semantic_search_keyword_fallback_when_semantic_unavailable(
     async def no_local(*_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
         return []
 
-    monkeypatch.setattr(context, "init_vector_service", no_vector)
-    monkeypatch.setattr(service, "_search_local_vectors", no_local)
-    monkeypatch.setattr(
-        article_service,
-        "search_articles",
-        lambda query, limit=10: {
+    async def keyword_search(query: str, limit: int = 10) -> dict[str, Any]:
+        return {
             "results": [{"summary_id": 101, "title": "keyword result"}],
             "total": 1,
             "query": query,
-        },
-    )
+        }
+
+    monkeypatch.setattr(context, "init_vector_service", no_vector)
+    monkeypatch.setattr(service, "_search_local_vectors", no_local)
+    monkeypatch.setattr(article_service, "search_articles", keyword_search)
 
     payload = await service.semantic_search("topic", limit=5)
     assert payload["search_type"] == "keyword_fallback"

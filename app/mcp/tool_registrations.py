@@ -121,17 +121,19 @@ def register_tools(
         )
 
     @mcp.tool()
-    def search_articles(query: str, limit: int = 10) -> str:
+    async def search_articles(query: str, limit: int = 10) -> str:
         """Search stored article summaries by keyword, topic, or entity."""
-        return to_json(_call_sync("search_articles", article_service.search_articles, query, limit))
+        return to_json(
+            await _call_async("search_articles", article_service.search_articles, query, limit)
+        )
 
     @mcp.tool()
-    def get_article(summary_id: int) -> str:
+    async def get_article(summary_id: int) -> str:
         """Get full details of an article summary by its ID."""
-        return to_json(_call_sync("get_article", article_service.get_article, summary_id))
+        return to_json(await _call_async("get_article", article_service.get_article, summary_id))
 
     @mcp.tool()
-    def list_articles(
+    async def list_articles(
         limit: int = 20,
         offset: int = 0,
         is_favorited: bool | None = None,
@@ -140,7 +142,7 @@ def register_tools(
     ) -> str:
         """List stored article summaries with optional filters."""
         return to_json(
-            _call_sync(
+            await _call_async(
                 "list_articles",
                 article_service.list_articles,
                 limit,
@@ -152,22 +154,26 @@ def register_tools(
         )
 
     @mcp.tool()
-    def get_article_content(summary_id: int) -> str:
+    async def get_article_content(summary_id: int) -> str:
         """Get the full extracted content (markdown/text) of an article."""
         return to_json(
-            _call_sync("get_article_content", article_service.get_article_content, summary_id)
+            await _call_async(
+                "get_article_content", article_service.get_article_content, summary_id
+            )
         )
 
     @mcp.tool()
-    def get_stats() -> str:
+    async def get_stats() -> str:
         """Get statistics about the Ratatoskr article database."""
-        return to_json(_call_sync("get_stats", article_service.get_stats))
+        return to_json(await _call_async("get_stats", article_service.get_stats))
 
     @mcp.tool()
-    def find_by_entity(entity_name: str, entity_type: str | None = None, limit: int = 10) -> str:
+    async def find_by_entity(
+        entity_name: str, entity_type: str | None = None, limit: int = 10
+    ) -> str:
         """Find articles that mention a specific entity."""
         return to_json(
-            _call_sync(
+            await _call_async(
                 "find_by_entity", article_service.find_by_entity, entity_name, entity_type, limit
             )
         )
@@ -211,9 +217,9 @@ def register_tools(
         )
 
     @mcp.tool()
-    def check_url(url: str) -> str:
+    async def check_url(url: str) -> str:
         """Check if a URL has already been processed and summarised."""
-        return to_json(_call_sync("check_url", article_service.check_url, url))
+        return to_json(await _call_async("check_url", article_service.check_url, url))
 
     @mcp.tool()
     async def semantic_search(

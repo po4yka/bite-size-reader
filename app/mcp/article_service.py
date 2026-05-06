@@ -3,6 +3,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
+
 from app.mcp.helpers import (
     McpErrorResult,
     ensure_mapping,
@@ -15,6 +18,10 @@ from app.mcp.helpers import (
 logger = logging.getLogger("ratatoskr.mcp")
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from sqlalchemy.sql.elements import ColumnElement
+
     from app.mcp.context import McpServerContext
 
 
@@ -22,61 +29,47 @@ class ArticleReadService:
     def __init__(self, context: McpServerContext) -> None:
         self.context = context
 
-    def search_articles(self, query: str, limit: int = 10) -> dict[str, Any] | McpErrorResult:
+    async def search_articles(self, query: str, limit: int = 10) -> dict[str, Any] | McpErrorResult:
         """Search stored article summaries by keyword, topic, or entity."""
-        from app.infrastructure.persistence.sqlite.orm_exports import (
-            Request,
-            Summary,
-            TopicSearchIndex,
-        )
+        from app.db.models import Request, Summary, TopicSearchIndex
 
         limit = max(1, min(25, limit))
+        query_text = query.strip()
+        if not query_text:
+            return {"results": [], "total": 0, "query": query}
 
         try:
-            fts_results = (
-                TopicSearchIndex.search(query)
-                .select(TopicSearchIndex.request_id, TopicSearchIndex.rank())
-                .limit(limit)
-                .dicts()
-            )
-            fts_list = list(fts_results)
-
-            if not fts_list:
-                return self._fallback_search(query, limit)
-
-            ranked_request_ids: list[int] = []
-            seen_request_ids: set[int] = set()
-            for row in fts_list:
-                raw_request_id = row.get("request_id")
-                if raw_request_id in (None, ""):
-                    continue
-                try:
-                    request_id = int(raw_request_id)
-                except (TypeError, ValueError) as exc:
-                    logger.debug(
-                        "mcp_fts_invalid_request_id",
-                        extra={"request_id": str(raw_request_id), "error": str(exc)},
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                ts_query = func.websearch_to_tsquery("simple", query_text)
+                rank = func.ts_rank_cd(TopicSearchIndex.body_tsv, ts_query)
+                rows = (
+                    await session.execute(
+                        select(TopicSearchIndex.request_id, rank.label("rank"))
+                        .join(Request, TopicSearchIndex.request_id == Request.id)
+                        .where(
+                            TopicSearchIndex.body_tsv.op("@@")(ts_query),
+                            *self.context.request_scope_filters(Request),
+                        )
+                        .order_by(rank.desc(), TopicSearchIndex.request_id.desc())
+                        .limit(limit)
                     )
-                    continue
-                if request_id in seen_request_ids:
-                    continue
-                seen_request_ids.add(request_id)
-                ranked_request_ids.append(request_id)
+                ).all()
 
-            if not ranked_request_ids:
-                return {"results": [], "total": 0, "query": query}
+                ranked_request_ids = [int(row.request_id) for row in rows]
+                if not ranked_request_ids:
+                    return await self._fallback_search(query_text, limit)
 
-            rank_position = {request_id: idx for idx, request_id in enumerate(ranked_request_ids)}
-
-            summaries = (
-                Summary.select(Summary, Request)
-                .join(Request)
-                .where(
-                    Request.id.in_(ranked_request_ids),
-                    Summary.is_deleted == False,  # noqa: E712
-                    *self.context.request_scope_filters(Request),
-                )
-            )
+                rank_position = {
+                    request_id: idx for idx, request_id in enumerate(ranked_request_ids)
+                }
+                summaries = (
+                    await session.scalars(
+                        self._summary_stmt(Request, Summary).where(
+                            Request.id.in_(ranked_request_ids)
+                        )
+                    )
+                ).all()
 
             by_request_id: dict[int, dict[str, Any]] = {}
             for summary in summaries:
@@ -95,22 +88,22 @@ class ArticleReadService:
             logger.exception("search_articles failed")
             return {"error": str(exc), "query": query}
 
-    def _fallback_search(self, query: str, limit: int) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
+    async def _fallback_search(self, query: str, limit: int) -> dict[str, Any]:
+        from app.db.models import Request, Summary
 
-        query_lower = query.lower()
-        terms = query_lower.split()
+        terms = query.lower().split()
+        if not terms:
+            return {"results": [], "total": 0, "query": query}
 
-        all_summaries = (
-            Summary.select(Summary, Request)
-            .join(Request)
-            .where(
-                Summary.is_deleted == False,  # noqa: E712
-                *self.context.request_scope_filters(Request),
-            )
-            .order_by(Summary.created_at.desc())
-            .limit(200)
-        )
+        runtime = self.context.ensure_runtime()
+        async with runtime.database.session() as session:
+            all_summaries = (
+                await session.scalars(
+                    self._summary_stmt(Request, Summary)
+                    .order_by(Summary.created_at.desc())
+                    .limit(200)
+                )
+            ).all()
 
         results = []
         for summary in all_summaries:
@@ -131,28 +124,23 @@ class ArticleReadService:
 
         return {"results": results, "total": len(results), "query": query}
 
-    def get_article(self, summary_id: int) -> dict[str, Any] | McpErrorResult:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
+    async def get_article(self, summary_id: int) -> dict[str, Any] | McpErrorResult:
+        from app.db.models import Request, Summary
 
         try:
-            summary = (
-                Summary.select(Summary, Request)
-                .join(Request)
-                .where(
-                    Summary.id == summary_id,
-                    Summary.is_deleted == False,  # noqa: E712
-                    *self.context.request_scope_filters(Request),
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                summary = await session.scalar(
+                    self._summary_stmt(Request, Summary).where(Summary.id == summary_id)
                 )
-                .get()
-            )
+            if summary is None:
+                return {"error": f"Summary {summary_id} not found"}
             return format_summary_detail(summary, summary.request)
-        except Summary.DoesNotExist:
-            return {"error": f"Summary {summary_id} not found"}
         except Exception as exc:
             logger.exception("get_article failed")
             return {"error": str(exc)}
 
-    def list_articles(
+    async def list_articles(
         self,
         limit: int = 20,
         offset: int = 0,
@@ -160,45 +148,59 @@ class ArticleReadService:
         lang: str | None = None,
         tag: str | None = None,
     ) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
+        from app.db.models import Request, Summary
 
         limit = max(1, min(100, limit))
         offset = max(0, offset)
 
         try:
-            query = (
-                Summary.select(Summary, Request)
-                .join(Request)
-                .where(
-                    Summary.is_deleted == False,  # noqa: E712
-                    *self.context.request_scope_filters(Request),
-                )
-            )
-
+            filters: list[ColumnElement[bool]] = []
             if is_favorited is not None:
-                query = query.where(Summary.is_favorited == is_favorited)
+                filters.append(Summary.is_favorited == is_favorited)
             if lang:
-                query = query.where(Summary.lang == lang)
+                filters.append(Summary.lang == lang)
 
-            ordered_query = query.order_by(Summary.created_at.desc())
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                base_stmt = self._summary_stmt(Request, Summary).where(*filters)
 
-            if tag:
-                tag_normalized = tag if tag.startswith("#") else f"#{tag}"
-                tag_lower = tag_normalized.lower()
-                matched_articles: list[dict[str, Any]] = []
-                for summary in ordered_query:
-                    compact = format_summary_compact(summary, summary.request)
-                    tags = compact.get("topic_tags", [])
-                    if tag_lower in [str(item).lower() for item in tags]:
-                        matched_articles.append(compact)
+                if tag:
+                    summaries = (
+                        await session.scalars(base_stmt.order_by(Summary.created_at.desc()))
+                    ).all()
+                    tag_lower = (tag if tag.startswith("#") else f"#{tag}").lower()
+                    matched_articles: list[dict[str, Any]] = []
+                    for summary in summaries:
+                        compact = format_summary_compact(summary, summary.request)
+                        tags = compact.get("topic_tags", [])
+                        if tag_lower in [str(item).lower() for item in tags]:
+                            matched_articles.append(compact)
 
-                total = len(matched_articles)
-                results = matched_articles[offset : offset + limit]
-            else:
-                total = query.count()
-                articles = ordered_query.offset(offset).limit(limit)
-                results = [format_summary_compact(summary, summary.request) for summary in articles]
+                    total = len(matched_articles)
+                    results = matched_articles[offset : offset + limit]
+                else:
+                    total = await session.scalar(
+                        select(func.count())
+                        .select_from(Summary)
+                        .join(Request, Summary.request_id == Request.id)
+                        .where(
+                            Summary.is_deleted.is_(False),
+                            *self.context.request_scope_filters(Request),
+                            *filters,
+                        )
+                    )
+                    articles = (
+                        await session.scalars(
+                            base_stmt.order_by(Summary.created_at.desc())
+                            .offset(offset)
+                            .limit(limit)
+                        )
+                    ).all()
+                    results = [
+                        format_summary_compact(summary, summary.request) for summary in articles
+                    ]
 
+            total = total or 0
             payload = paginated_payload(results=results, total=total, limit=limit, offset=offset)
             payload["has_more"] = (offset + len(results)) < total
             payload["articles"] = results
@@ -207,99 +209,89 @@ class ArticleReadService:
             logger.exception("list_articles failed")
             return {"error": str(exc)}
 
-    def get_article_content(self, summary_id: int) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import CrawlResult, Request, Summary
+    async def get_article_content(self, summary_id: int) -> dict[str, Any]:
+        from app.db.models import CrawlResult, Request, Summary
 
         try:
-            summary = (
-                Summary.select(Summary, Request)
-                .join(Request)
-                .where(
-                    Summary.id == summary_id,
-                    Summary.is_deleted == False,  # noqa: E712
-                    *self.context.request_scope_filters(Request),
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                summary = await session.scalar(
+                    self._summary_stmt(Request, Summary).where(Summary.id == summary_id)
                 )
-                .get()
-            )
+                if summary is None:
+                    return {"error": f"Summary {summary_id} not found"}
 
-            request = summary.request
-            crawl = (
-                CrawlResult.select()
-                .where(
-                    CrawlResult.request == request.id,
-                    CrawlResult.is_deleted == False,  # noqa: E712
+                request = summary.request
+                crawl = await session.scalar(
+                    select(CrawlResult).where(
+                        CrawlResult.request_id == request.id,
+                        CrawlResult.is_deleted.is_(False),
+                    )
                 )
-                .first()
-            )
-            if not crawl:
-                return {"error": f"No crawl content found for summary {summary_id}"}
+                if not crawl:
+                    return {"error": f"No crawl content found for summary {summary_id}"}
 
-            content = crawl.content_markdown or crawl.content_html or request.content_text or ""
-            metadata = ensure_mapping(crawl.metadata_json)
-            return {
-                "summary_id": summary_id,
-                "url": getattr(request, "input_url", ""),
-                "title": metadata.get("title", "Untitled"),
-                "content_format": "markdown" if crawl.content_markdown else "text",
-                "content": content[:50000],
-                "content_length": len(content),
-                "truncated": len(content) > 50000,
-            }
-        except Summary.DoesNotExist:
-            return {"error": f"Summary {summary_id} not found"}
+                content = crawl.content_markdown or crawl.content_html or request.content_text or ""
+                metadata = ensure_mapping(crawl.metadata_json)
+                return {
+                    "summary_id": summary_id,
+                    "url": getattr(request, "input_url", ""),
+                    "title": metadata.get("title", "Untitled"),
+                    "content_format": "markdown" if crawl.content_markdown else "text",
+                    "content": content[:50000],
+                    "content_length": len(content),
+                    "truncated": len(content) > 50000,
+                }
         except Exception as exc:
             logger.exception("get_article_content failed")
             return {"error": str(exc)}
 
-    def get_stats(self) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
+    async def get_stats(self) -> dict[str, Any]:
+        from app.db.models import Request, Summary
 
         try:
-            scoped_summaries = (
-                Summary.select(Summary, Request)
-                .join(Request)
-                .where(
-                    Summary.is_deleted == False,  # noqa: E712
-                    *self.context.request_scope_filters(Request),
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                total = await self._summary_count(session, Request, Summary)
+                unread = await self._summary_count(
+                    session, Request, Summary, [Summary.is_read.is_(False)]
                 )
-            )
+                favorited = await self._summary_count(
+                    session, Request, Summary, [Summary.is_favorited.is_(True)]
+                )
 
-            total = scoped_summaries.count()
-            unread = scoped_summaries.where(Summary.is_read == False).count()  # noqa: E712
-            favorited = scoped_summaries.where(Summary.is_favorited == True).count()  # noqa: E712
-
-            lang_counts: dict[str, int] = {}
-            for row in scoped_summaries.select(Summary.lang).dicts():
-                lang = row.get("lang") or "unknown"
-                lang_counts[lang] = lang_counts.get(lang, 0) + 1
+                lang_rows = await session.execute(
+                    select(Summary.lang, func.count().label("count"))
+                    .join(Request, Summary.request_id == Request.id)
+                    .where(
+                        Summary.is_deleted.is_(False),
+                        *self.context.request_scope_filters(Request),
+                    )
+                    .group_by(Summary.lang)
+                )
+                recent = (
+                    await session.scalars(
+                        self._summary_stmt(Request, Summary)
+                        .order_by(Summary.created_at.desc())
+                        .limit(200)
+                    )
+                ).all()
+                url_count = await self._request_count(session, Request, "url")
+                forward_count = await self._request_count(session, Request, "forward")
 
             tag_counts: dict[str, int] = {}
-            recent = (
-                scoped_summaries.select(Summary.json_payload)
-                .order_by(Summary.created_at.desc())
-                .limit(200)
-            )
-            for row in recent:
-                payload = ensure_mapping(getattr(row, "json_payload", None))
+            for summary in recent:
+                payload = ensure_mapping(getattr(summary, "json_payload", None))
                 for tag in payload.get("topic_tags", []):
                     tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
             top_tags = sorted(tag_counts.items(), key=lambda item: item[1], reverse=True)[:20]
-            url_count = (
-                Request.select()
-                .where(*self.context.request_scope_filters(Request), Request.type == "url")
-                .count()
-            )
-            forward_count = (
-                Request.select()
-                .where(*self.context.request_scope_filters(Request), Request.type == "forward")
-                .count()
-            )
+            languages = {(lang or "unknown"): int(count) for lang, count in lang_rows}
             return {
                 "total_articles": total,
                 "unread": unread,
                 "favorited": favorited,
-                "languages": lang_counts,
+                "languages": languages,
                 "top_tags": [{"tag": tag, "count": count} for tag, count in top_tags],
                 "request_types": {"url": url_count, "forward": forward_count},
             }
@@ -307,28 +299,27 @@ class ArticleReadService:
             logger.exception("get_stats failed")
             return {"error": str(exc)}
 
-    def find_by_entity(
+    async def find_by_entity(
         self,
         entity_name: str,
         entity_type: str | None = None,
         limit: int = 10,
     ) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
+        from app.db.models import Request, Summary
 
         limit = max(1, min(25, limit))
         name_lower = entity_name.lower()
 
         try:
-            all_summaries = (
-                Summary.select(Summary, Request)
-                .join(Request)
-                .where(
-                    Summary.is_deleted == False,  # noqa: E712
-                    *self.context.request_scope_filters(Request),
-                )
-                .order_by(Summary.created_at.desc())
-                .limit(500)
-            )
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                all_summaries = (
+                    await session.scalars(
+                        self._summary_stmt(Request, Summary)
+                        .order_by(Summary.created_at.desc())
+                        .limit(500)
+                    )
+                ).all()
 
             results = []
             for summary in all_summaries:
@@ -364,33 +355,35 @@ class ArticleReadService:
             logger.exception("find_by_entity failed")
             return {"error": str(exc)}
 
-    def check_url(self, url: str) -> dict[str, Any]:
+    async def check_url(self, url: str) -> dict[str, Any]:
         from app.core.url_utils import compute_dedupe_hash, normalize_url
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
+        from app.db.models import Request, Summary
 
         try:
             normalized = normalize_url(url)
             dedupe_hash = compute_dedupe_hash(url)
-            request = Request.get_or_none(
-                Request.dedupe_hash == dedupe_hash,
-                *self.context.request_scope_filters(Request),
-            )
-            if not request:
-                return {
-                    "exists": False,
-                    "normalized_url": normalized,
-                    "dedupe_hash": dedupe_hash,
-                    "message": "URL has not been processed yet",
-                }
-
-            summary = (
-                Summary.select()
-                .where(
-                    Summary.request == request.id,
-                    Summary.is_deleted == False,  # noqa: E712
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                request = await session.scalar(
+                    select(Request).where(
+                        Request.dedupe_hash == dedupe_hash,
+                        *self.context.request_scope_filters(Request),
+                    )
                 )
-                .first()
-            )
+                if not request:
+                    return {
+                        "exists": False,
+                        "normalized_url": normalized,
+                        "dedupe_hash": dedupe_hash,
+                        "message": "URL has not been processed yet",
+                    }
+
+                summary = await session.scalar(
+                    select(Summary).where(
+                        Summary.request_id == request.id,
+                        Summary.is_deleted.is_(False),
+                    )
+                )
 
             result: dict[str, Any] = {
                 "exists": True,
@@ -413,46 +406,29 @@ class ArticleReadService:
             logger.exception("check_url failed")
             return {"error": str(exc), "url": url}
 
-    def unread_articles(self, limit: int = 20) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
+    async def unread_articles(self, limit: int = 20) -> dict[str, Any]:
+        from app.db.models import Request, Summary
 
         try:
-            summaries = (
-                Summary.select(Summary, Request)
-                .join(Request)
-                .where(
-                    Summary.is_deleted == False,  # noqa: E712
-                    Summary.is_read == False,  # noqa: E712
-                    *self.context.request_scope_filters(Request),
-                )
-                .order_by(Summary.created_at.desc())
-                .limit(limit)
-            )
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                summaries = (
+                    await session.scalars(
+                        self._summary_stmt(Request, Summary)
+                        .where(Summary.is_read.is_(False))
+                        .order_by(Summary.created_at.desc())
+                        .limit(limit)
+                    )
+                ).all()
             results = [format_summary_compact(summary, summary.request) for summary in summaries]
             return {"articles": results, "total": len(results)}
         except Exception as exc:
             logger.exception("unread_resource failed")
             return {"error": str(exc)}
 
-    def tag_counts(self) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
-
+    async def tag_counts(self) -> dict[str, Any]:
         try:
-            counts: dict[str, int] = {}
-            all_summaries = (
-                Summary.select(Summary.json_payload, Request)
-                .join(Request)
-                .where(
-                    Summary.is_deleted == False,  # noqa: E712
-                    *self.context.request_scope_filters(Request),
-                )
-                .order_by(Summary.created_at.desc())
-            )
-            for row in all_summaries:
-                payload = ensure_mapping(getattr(row, "json_payload", None))
-                for tag in payload.get("topic_tags", []):
-                    counts[tag] = counts.get(tag, 0) + 1
-
+            counts = await self._aggregate_payload_values("topic_tags")
             sorted_tags = sorted(counts.items(), key=lambda item: item[1], reverse=True)
             return {
                 "tags": [{"tag": tag, "count": count} for tag, count in sorted_tags],
@@ -462,25 +438,13 @@ class ArticleReadService:
             logger.exception("tags_resource failed")
             return {"error": str(exc)}
 
-    def entity_counts(self) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
-
+    async def entity_counts(self) -> dict[str, Any]:
         try:
             people: dict[str, int] = {}
             organizations: dict[str, int] = {}
             locations: dict[str, int] = {}
 
-            all_summaries = (
-                Summary.select(Summary.json_payload, Request)
-                .join(Request)
-                .where(
-                    Summary.is_deleted == False,  # noqa: E712
-                    *self.context.request_scope_filters(Request),
-                )
-                .order_by(Summary.created_at.desc())
-            )
-            for row in all_summaries:
-                payload = ensure_mapping(getattr(row, "json_payload", None))
+            for payload in await self._summary_payloads():
                 entities = ensure_mapping(payload.get("entities"))
                 for item in entities.get("people", []):
                     people[item] = people.get(item, 0) + 1
@@ -506,21 +470,10 @@ class ArticleReadService:
             logger.exception("entities_resource failed")
             return {"error": str(exc)}
 
-    def domain_counts(self) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
-
+    async def domain_counts(self) -> dict[str, Any]:
         try:
             counts: dict[str, int] = {}
-            all_summaries = (
-                Summary.select(Summary.json_payload, Request)
-                .join(Request)
-                .where(
-                    Summary.is_deleted == False,  # noqa: E712
-                    *self.context.request_scope_filters(Request),
-                )
-            )
-            for row in all_summaries:
-                payload = ensure_mapping(getattr(row, "json_payload", None))
+            for payload in await self._summary_payloads():
                 metadata = ensure_mapping(payload.get("metadata"))
                 domain = metadata.get("domain", "")
                 if domain:
@@ -534,3 +487,71 @@ class ArticleReadService:
         except Exception as exc:
             logger.exception("domains_resource failed")
             return {"error": str(exc)}
+
+    def _summary_stmt(self, request_model: Any, summary_model: Any) -> Any:
+        return (
+            select(summary_model)
+            .join(request_model, summary_model.request_id == request_model.id)
+            .options(selectinload(summary_model.request))
+            .where(
+                summary_model.is_deleted.is_(False),
+                *self.context.request_scope_filters(request_model),
+            )
+        )
+
+    async def _summary_count(
+        self,
+        session: Any,
+        request_model: Any,
+        summary_model: Any,
+        extra_filters: Iterable[ColumnElement[bool]] = (),
+    ) -> int:
+        return int(
+            await session.scalar(
+                select(func.count())
+                .select_from(summary_model)
+                .join(request_model, summary_model.request_id == request_model.id)
+                .where(
+                    summary_model.is_deleted.is_(False),
+                    *self.context.request_scope_filters(request_model),
+                    *extra_filters,
+                )
+            )
+            or 0
+        )
+
+    async def _request_count(self, session: Any, request_model: Any, request_type: str) -> int:
+        return int(
+            await session.scalar(
+                select(func.count())
+                .select_from(request_model)
+                .where(
+                    *self.context.request_scope_filters(request_model),
+                    request_model.type == request_type,
+                )
+            )
+            or 0
+        )
+
+    async def _summary_payloads(self) -> list[dict[str, Any]]:
+        from app.db.models import Request, Summary
+
+        runtime = self.context.ensure_runtime()
+        async with runtime.database.session() as session:
+            rows = await session.execute(
+                select(Summary.json_payload)
+                .join(Request, Summary.request_id == Request.id)
+                .where(
+                    Summary.is_deleted.is_(False),
+                    *self.context.request_scope_filters(Request),
+                )
+                .order_by(Summary.created_at.desc())
+            )
+            return [ensure_mapping(row[0]) for row in rows]
+
+    async def _aggregate_payload_values(self, key: str) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for payload in await self._summary_payloads():
+            for item in payload.get(key, []):
+                counts[item] = counts.get(item, 0) + 1
+        return counts

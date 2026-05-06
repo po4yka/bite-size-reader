@@ -67,13 +67,13 @@ async def test_mcp_tool_registration_records_success_metrics() -> None:
         check_source_supported=MagicMock(return_value={"supported": True}),
     )
     article_service = SimpleNamespace(
-        search_articles=MagicMock(return_value={"items": []}),
-        get_article=MagicMock(return_value={"id": 1}),
-        list_articles=MagicMock(return_value={"items": []}),
-        get_article_content=MagicMock(return_value={"content": "body"}),
-        get_stats=MagicMock(return_value={"total": 1}),
-        find_by_entity=MagicMock(return_value={"items": []}),
-        check_url=MagicMock(return_value={"duplicate": False}),
+        search_articles=AsyncMock(return_value={"items": []}),
+        get_article=AsyncMock(return_value={"id": 1}),
+        list_articles=AsyncMock(return_value={"items": []}),
+        get_article_content=AsyncMock(return_value={"content": "body"}),
+        get_stats=AsyncMock(return_value={"total": 1}),
+        find_by_entity=AsyncMock(return_value={"items": []}),
+        check_url=AsyncMock(return_value={"duplicate": False}),
     )
     catalog_service = SimpleNamespace(
         list_collections=AsyncMock(return_value={"items": []}),
@@ -137,13 +137,13 @@ async def test_mcp_tool_registration_records_error_metrics_for_service_errors() 
         check_source_supported=MagicMock(return_value={"supported": True}),
     )
     article_service = SimpleNamespace(
-        search_articles=MagicMock(side_effect=RuntimeError("boom")),
-        get_article=MagicMock(return_value={"id": 1}),
-        list_articles=MagicMock(return_value={"items": []}),
-        get_article_content=MagicMock(return_value={"content": "body"}),
-        get_stats=MagicMock(return_value={"total": 1}),
-        find_by_entity=MagicMock(return_value={"items": []}),
-        check_url=MagicMock(return_value={"duplicate": False}),
+        search_articles=AsyncMock(side_effect=RuntimeError("boom")),
+        get_article=AsyncMock(return_value={"id": 1}),
+        list_articles=AsyncMock(return_value={"items": []}),
+        get_article_content=AsyncMock(return_value={"content": "body"}),
+        get_stats=AsyncMock(return_value={"total": 1}),
+        find_by_entity=AsyncMock(return_value={"items": []}),
+        check_url=AsyncMock(return_value={"duplicate": False}),
     )
     catalog_service = SimpleNamespace(
         list_collections=AsyncMock(return_value={"items": []}),
@@ -249,13 +249,13 @@ def test_hosted_mcp_tool_uses_request_scoped_identity_and_client_id(
     mcp = RecordingMCP()
 
     article_service = SimpleNamespace(
-        search_articles=MagicMock(return_value={"items": []}),
-        get_article=MagicMock(return_value={"id": 1}),
-        list_articles=MagicMock(return_value={"items": []}),
-        get_article_content=MagicMock(return_value={"content": "body"}),
-        get_stats=MagicMock(return_value={"total": 1}),
-        find_by_entity=MagicMock(return_value={"items": []}),
-        check_url=MagicMock(return_value={"duplicate": False}),
+        search_articles=AsyncMock(return_value={"items": []}),
+        get_article=AsyncMock(return_value={"id": 1}),
+        list_articles=AsyncMock(return_value={"items": []}),
+        get_article_content=AsyncMock(return_value={"content": "body"}),
+        get_stats=AsyncMock(return_value={"total": 1}),
+        find_by_entity=AsyncMock(return_value={"items": []}),
+        check_url=AsyncMock(return_value={"duplicate": False}),
     )
     catalog_service = SimpleNamespace(
         list_collections=AsyncMock(return_value={"items": []}),
