@@ -146,6 +146,12 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_rule_repository_postgres.py -q`
   → `2 passed`.
+- Ported `tag_repository.py` to SQLAlchemy/AsyncSession with PostgreSQL
+  conflict handling for summary-tag attachments and live coverage for tag CRUD,
+  attach/detach/restore, summary counts, tagged summaries, and tag merge.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_tag_repository_postgres.py -q`
+  → `2 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
