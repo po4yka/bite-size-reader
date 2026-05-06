@@ -11,11 +11,11 @@ class DatabaseExecutorPort(Protocol):
 
     @property
     def database(self) -> Any:
-        """Underlying Peewee database handle."""
+        """Underlying SQLAlchemy session factory."""
         ...
 
     def connection_context(self) -> Any:
-        """Return a connection context manager."""
+        """Legacy connection context; unavailable after the SQLAlchemy cutover."""
         ...
 
     async def async_execute(
@@ -27,7 +27,7 @@ class DatabaseExecutorPort(Protocol):
         read_only: bool = False,
         **kwargs: Any,
     ) -> Any:
-        """Execute a database operation with timeout and connection protection."""
+        """Execute a database operation with timeout and retry protection."""
         ...
 
     async def async_execute_transaction(

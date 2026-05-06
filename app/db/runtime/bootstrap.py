@@ -3,57 +3,34 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from app.db.models import ALL_MODELS, database_proxy
-
-if TYPE_CHECKING:
-    import peewee
-from app.db.schema_migrator import SchemaMigrator
-from app.db.topic_search_index import TopicSearchIndexManager
+from alembic import command
+from alembic.config import Config
 
 
 class DatabaseBootstrapService:
-    """Own database initialization, migrations, and startup index work."""
+    """Run schema bootstrap for the SQLAlchemy/Postgres runtime."""
 
-    def __init__(
-        self,
-        *,
-        path: str,
-        database: peewee.SqliteDatabase,
-        logger: Any,
-    ) -> None:
-        self._path = path
-        self._database = database
+    def __init__(self, *, dsn: str, logger: Any) -> None:
+        self._dsn = dsn
         self._logger = logger
-        self._topic_search = TopicSearchIndexManager(self._database, self._logger)
 
     def initialize_database_proxy(self) -> None:
-        if self._path != ":memory:":
-            Path(self._path).parent.mkdir(parents=True, exist_ok=True)
-        database_proxy.initialize(self._database)
+        """Compatibility no-op; SQLAlchemy does not use Peewee's proxy."""
+        self._logger.debug("db_proxy_initialization_skipped")
 
     def migrate(self) -> None:
-        with self._database.connection_context(), self._database.bind_ctx(ALL_MODELS):
-            self._database.create_tables(ALL_MODELS, safe=True)
-
-            from app.db.alembic_runner import upgrade_to_head
-
-            upgrade_to_head(self._path)
-            SchemaMigrator(self._database, self._logger).ensure_schema_compatibility()
-            self._topic_search.ensure_index()
-
-        self._logger.info("db_migrated", extra={"path": self._mask_path(self._path)})
+        ini_path = Path(__file__).resolve().parents[3] / "alembic.ini"
+        cfg = Config(str(ini_path))
+        cfg.set_main_option("sqlalchemy.url", self._dsn)
+        command.upgrade(cfg, "head")
+        self._logger.info("db_migrated", extra={"database": self._mask_dsn(self._dsn)})
 
     @staticmethod
-    def _mask_path(path: str) -> str:
-        try:
-            p = Path(path)
-            if not p.name:
-                return str(p)
-            parent = p.parent.name
-            if parent:
-                return f".../{parent}/{p.name}"
-            return p.name
-        except (OSError, ValueError, AttributeError):
-            return "..."
+    def _mask_dsn(dsn: str) -> str:
+        if "@" not in dsn:
+            return dsn
+        prefix, suffix = dsn.rsplit("@", 1)
+        scheme = prefix.split("://", 1)[0]
+        return f"{scheme}://...@{suffix}"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
@@ -17,9 +17,15 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.logging_utils import get_logger
+from app.db.runtime.backup import DatabaseBackupService
+from app.db.runtime.bootstrap import DatabaseBootstrapService
+from app.db.runtime.inspection import DatabaseInspectionService
+from app.db.runtime.maintenance import DatabaseMaintenanceService
+from app.db.runtime.operation_executor import DatabaseOperationExecutor
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable, Callable
+    from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+    from pathlib import Path
 
     from app.config.database import DatabaseConfig
 
@@ -38,6 +44,11 @@ class Database:
     config: DatabaseConfig
     _engine: AsyncEngine = field(init=False, repr=False)
     _session_maker: async_sessionmaker[AsyncSession] = field(init=False, repr=False)
+    _bootstrap: DatabaseBootstrapService = field(init=False, repr=False)
+    _executor: DatabaseOperationExecutor = field(init=False, repr=False)
+    _maintenance: DatabaseMaintenanceService = field(init=False, repr=False)
+    _inspection: DatabaseInspectionService = field(init=False, repr=False)
+    _backup: DatabaseBackupService = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._engine = create_async_engine(
@@ -53,6 +64,23 @@ class Database:
             expire_on_commit=False,
             autoflush=False,
         )
+        self._bootstrap = DatabaseBootstrapService(dsn=self.config.dsn, logger=logger)
+        self._executor = DatabaseOperationExecutor(
+            session_maker=self._session_maker,
+            operation_timeout=self.config.operation_timeout,
+            max_retries=self.config.max_retries,
+            logger=logger,
+        )
+        self._maintenance = DatabaseMaintenanceService(
+            engine=self._engine,
+            session_maker=self._session_maker,
+            logger=logger,
+        )
+        self._inspection = DatabaseInspectionService(
+            session_maker=self._session_maker,
+            logger=logger,
+        )
+        self._backup = DatabaseBackupService(dsn=self.config.dsn, logger=logger)
 
     @property
     def engine(self) -> AsyncEngine:
@@ -61,6 +89,31 @@ class Database:
     @property
     def session_maker(self) -> async_sessionmaker[AsyncSession]:
         return self._session_maker
+
+    @property
+    def database(self) -> async_sessionmaker[AsyncSession]:
+        """Compatibility property for callers moving off Peewee."""
+        return self._session_maker
+
+    @property
+    def executor(self) -> DatabaseOperationExecutor:
+        return self._executor
+
+    @property
+    def bootstrap(self) -> DatabaseBootstrapService:
+        return self._bootstrap
+
+    @property
+    def maintenance(self) -> DatabaseMaintenanceService:
+        return self._maintenance
+
+    @property
+    def inspection(self) -> DatabaseInspectionService:
+        return self._inspection
+
+    @property
+    def backups(self) -> DatabaseBackupService:
+        return self._backup
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:
@@ -79,15 +132,39 @@ class Database:
             await session.execute(text("SELECT 1"))
 
     async def migrate(self) -> None:
-        """Run Alembic migrations for the configured database.
-
-        Alembic's command API is synchronous; it is isolated in a worker thread until
-        the migration environment is converted to SQLAlchemy async in O5.
-        """
-        await asyncio.to_thread(_run_alembic_upgrade, self.config.dsn)
+        """Run Alembic migrations for the configured database."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._bootstrap.migrate)
+        self._maintenance.run_startup_maintenance()
 
     async def dispose(self) -> None:
         await self._engine.dispose()
+
+    async def async_execute(self, operation: Any, *args: Any, **kwargs: Any) -> Any:
+        return await self._executor.async_execute(operation, *args, **kwargs)
+
+    async def async_execute_transaction(self, operation: Any, *args: Any, **kwargs: Any) -> Any:
+        return await self._executor.async_execute_transaction(operation, *args, **kwargs)
+
+    def create_backup_copy(self, dest_path: str) -> Path:
+        return self._backup.create_backup_copy(dest_path)
+
+    def check_integrity(self) -> tuple[bool, str]:
+        return self._inspection.check_integrity()
+
+    def get_database_overview(self) -> dict[str, object]:
+        return self._inspection.get_database_overview()
+
+    def verify_processing_integrity(
+        self,
+        *,
+        required_fields: Iterable[str] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, object]:
+        return self._inspection.verify_processing_integrity(
+            required_fields=required_fields,
+            limit=limit,
+        )
 
 
 @asynccontextmanager
@@ -114,18 +191,6 @@ def _sqlstate(exc: OperationalError) -> str | None:
 
 def _is_retryable_serialization_error(exc: OperationalError) -> bool:
     return _sqlstate(exc) in _RETRYABLE_SQLSTATES
-
-
-def _run_alembic_upgrade(dsn: str) -> None:
-    from pathlib import Path
-
-    from alembic import command
-    from alembic.config import Config
-
-    ini_path = Path(__file__).resolve().parents[2] / "alembic.ini"
-    cfg = Config(str(ini_path))
-    cfg.set_main_option("sqlalchemy.url", dsn)
-    command.upgrade(cfg, "head")
 
 
 def with_serialization_retry(

@@ -1,6 +1,6 @@
 ---
 title: Port runtime services to AsyncSession
-status: backlog
+status: review
 area: db
 priority: high
 owner: Nikita Pochaev
@@ -14,7 +14,7 @@ created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Port runtime services to AsyncSession #repo/ratatoskr #area/db #status/backlog ⏫
+- [ ] #task Port runtime services to AsyncSession #repo/ratatoskr #area/db #status/review ⏫
 
 ## Objective
 
@@ -48,19 +48,19 @@ In-scope files and their target shapes:
 
 ## Acceptance criteria
 
-- [ ] `app/db/runtime/{bootstrap,backup,inspection,maintenance}.py` rewritten
+- [x] `app/db/runtime/{bootstrap,backup,inspection,maintenance}.py` rewritten
       against SQLAlchemy. Public method names preserved so callers in `app/api/
       services/system_maintenance_service.py` and similar do not change.
-- [ ] `app/db/runtime/operation_executor.py` reduced to retry helper only.
-- [ ] `app/db/rw_lock.py` deleted; no remaining imports anywhere.
-- [ ] `bootstrap.migrate()` runs `command.upgrade(cfg, "head")` and nothing else.
-- [ ] `backup.create_backup_copy()` produces a `.dump` file that round-trips via
+- [x] `app/db/runtime/operation_executor.py` reduced to retry helper only.
+- [x] `app/db/rw_lock.py` deleted; no remaining imports anywhere.
+- [x] `bootstrap.migrate()` runs `command.upgrade(cfg, "head")` and nothing else.
+- [x] `backup.create_backup_copy()` produces a `.dump` file that round-trips via
       `pg_restore` into a fresh DB; row counts match.
-- [ ] `inspection.check_integrity()` returns `(True, "ok")` on a healthy DB and
+- [x] `inspection.check_integrity()` returns `(True, "ok")` on a healthy DB and
       reports a real reason on a fault (covered by a unit test that points it at
       a deliberately-bad DSN).
-- [ ] No `asyncio.to_thread(...)` remains under `app/db/`.
-- [ ] `tests/db/test_runtime_services_postgres.py` exercises every service
+- [x] No `asyncio.to_thread(...)` remains under `app/db/`.
+- [x] `tests/db/test_runtime_services_postgres.py` exercises every service
       against an ephemeral Postgres in CI.
 
 ## Notes
@@ -75,3 +75,20 @@ In-scope files and their target shapes:
 - The `xact_rollback` heuristic for `check_integrity` is approximate; a
   follow-up could read `pg_stat_database_conflicts` for replicas. Out of scope
   for this migration.
+
+## Review evidence
+
+- Rewrote runtime services around `AsyncEngine` / `async_sessionmaker`; `Database`
+  now exposes `executor`, `bootstrap`, `maintenance`, `inspection`, and `backups`
+  backed by those services.
+- Backup decision: prefer host `pg_dump` when installed, otherwise stream
+  `pg_dump --format=custom` from the dedicated `ratatoskr-postgres` container.
+- Removed obsolete `AsyncRWLock` tests/imports and verified
+  `rg -n "app\\.db\\.rw_lock|AsyncRWLock|rw_lock" app tests` returns no matches.
+- Verified `rg -n "asyncio\\.to_thread" app/db` returns no matches.
+- Verified live Postgres runtime service tests:
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/db/test_runtime_services_postgres.py -q`
+  → `3 passed`.
+- Verified focused live DB suite:
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/db/test_sqlalchemy_session_factory.py tests/db/test_models_core.py tests/db/test_models_features.py tests/db/test_topic_search_manager.py tests/db/test_runtime_services_postgres.py -q`
+  → `11 passed`.

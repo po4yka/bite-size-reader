@@ -2,36 +2,107 @@
 
 from __future__ import annotations
 
-from typing import Any
+import asyncio
+from typing import TYPE_CHECKING, Any
 
-from app.db.database_maintenance import DatabaseMaintenance
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 
 class DatabaseMaintenanceService:
-    """Run periodic and startup database maintenance operations."""
+    """Run PostgreSQL maintenance operations."""
 
-    def __init__(self, *, database: Any, path: str, logger: Any) -> None:
-        self._maintenance = DatabaseMaintenance(database, path, logger)
+    def __init__(
+        self,
+        *,
+        engine: AsyncEngine,
+        session_maker: async_sessionmaker[AsyncSession],
+        logger: Any,
+    ) -> None:
+        self._engine = engine
+        self._session_maker = session_maker
+        self._logger = logger
 
     def run_startup_maintenance(self) -> None:
-        """Run the low-cost startup maintenance path used by the runtime."""
-        if self._maintenance._path == ":memory:":
-            self._maintenance._logger.debug("db_maintenance_skipped_in_memory")
-            return
-        self._maintenance.run_analyze()
-        self._maintenance.run_wal_checkpoint(mode="TRUNCATE")
+        """Postgres does not need startup PRAGMA/WAL maintenance."""
+        self._logger.info("db_startup_maintenance_skipped")
 
     def run_maintenance(self) -> dict[str, Any]:
-        return self._maintenance.run_maintenance()
+        analyze_ok = self.run_analyze()
+        return {
+            "status": "success" if analyze_ok else "partial",
+            "operations": {"analyze": "success" if analyze_ok else "failed"},
+        }
 
     def run_analyze(self) -> bool:
-        return self._maintenance.run_analyze()
+        return _run_sync(self.async_run_analyze())
+
+    async def async_run_analyze(self) -> bool:
+        try:
+            async with self._engine.connect() as connection:
+                await connection.execute(text("ANALYZE"))
+                await connection.commit()
+            self._logger.debug("db_analyze_completed")
+            return True
+        except SQLAlchemyError as exc:
+            self._logger.warning("db_analyze_failed", extra={"error": str(exc)})
+            return False
 
     def run_vacuum(self) -> bool:
-        return self._maintenance.run_vacuum()
+        return _run_sync(self.async_run_vacuum())
+
+    async def async_run_vacuum(self) -> bool:
+        try:
+            async with self._engine.connect() as connection:
+                autocommit = await connection.execution_options(isolation_level="AUTOCOMMIT")
+                await autocommit.execute(text("VACUUM"))
+            self._logger.debug("db_vacuum_completed")
+            return True
+        except SQLAlchemyError as exc:
+            self._logger.warning("db_vacuum_failed", extra={"error": str(exc)})
+            return False
 
     def run_wal_checkpoint(self, mode: str = "TRUNCATE") -> bool:
-        return self._maintenance.run_wal_checkpoint(mode=mode)
+        del mode
+        self._logger.info("db_wal_checkpoint_skipped_postgres")
+        return True
 
     def get_database_stats(self) -> dict[str, Any]:
-        return self._maintenance.get_database_stats()
+        return _run_sync(self.async_get_database_stats())
+
+    async def async_get_database_stats(self) -> dict[str, Any]:
+        async with self._session_maker() as session:
+            row = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT pg_database_size(current_database()) AS size_bytes, "
+                            "xact_commit, xact_rollback "
+                            "FROM pg_stat_database "
+                            "WHERE datname = current_database()"
+                        )
+                    )
+                )
+                .mappings()
+                .one()
+            )
+        size_bytes = int(row["size_bytes"] or 0)
+        return {
+            "type": "postgres",
+            "size_bytes": size_bytes,
+            "size_mb": round(size_bytes / (1024 * 1024), 2),
+            "xact_commit": int(row["xact_commit"] or 0),
+            "xact_rollback": int(row["xact_rollback"] or 0),
+        }
+
+
+def _run_sync(awaitable: Any) -> Any:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(awaitable)
+    msg = "Synchronous database maintenance methods cannot run inside an active event loop"
+    raise RuntimeError(msg)
