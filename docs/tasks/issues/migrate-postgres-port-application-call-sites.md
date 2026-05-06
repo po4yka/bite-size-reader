@@ -172,3 +172,9 @@ the most-ported repository are easiest to land first.
 - Updated MCP context tests away from Peewee/SQLite bootstrap fixtures to
   Postgres DSN runtime fakes; verified with
   `pytest tests/test_mcp_context.py -q` → `10 passed`.
+- Ported `app/mcp/signal_service.py` list reads from Peewee `select()` calls to
+  async SQLAlchemy sessions and updated signal MCP tool/resource adapters to
+  await those reads.
+- Verified this signal MCP slice with focused ruff, focused mypy, import smoke
+  checks, `pytest tests/test_mcp_signal_service.py -q` → `2 passed`, and
+  `pytest tests/test_mcp_server.py tests/test_mcp_context.py -q` → `17 passed`.

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
 if TYPE_CHECKING:
     from app.mcp.context import McpServerContext
 
@@ -12,29 +15,38 @@ class SignalMcpService:
     def __init__(self, context: McpServerContext) -> None:
         self.context = context
 
-    def list_sources(self, limit: int = 50) -> dict[str, Any]:
+    async def list_sources(self, limit: int = 50) -> dict[str, Any]:
         from app.db.models import Source
 
-        rows = Source.select().order_by(Source.created_at.desc()).limit(max(1, min(limit, 100)))
+        runtime = self.context.ensure_runtime()
+        async with runtime.database.session() as session:
+            rows = (
+                await session.scalars(
+                    select(Source).order_by(Source.created_at.desc()).limit(max(1, min(limit, 100)))
+                )
+            ).all()
         return {"sources": [self._source(row) for row in rows]}
 
-    def list_signals(self, limit: int = 20, status: str | None = None) -> dict[str, Any]:
-        from app.db.models import FeedItem, Source, Topic, UserSignal
+    async def list_signals(self, limit: int = 20, status: str | None = None) -> dict[str, Any]:
+        from app.db.models import FeedItem, UserSignal
 
-        query = (
-            UserSignal.select(UserSignal, FeedItem, Source, Topic)
-            .join(FeedItem)
-            .join(Source)
-            .switch(UserSignal)
-            .join(Topic, join_type="LEFT OUTER")
-            .order_by(UserSignal.final_score.desc(nulls="LAST"), UserSignal.created_at.desc())
-            .limit(max(1, min(limit, 100)))
+        query = select(UserSignal).options(
+            selectinload(UserSignal.feed_item).selectinload(FeedItem.source),
+            selectinload(UserSignal.topic),
         )
         if self.context.user_id is not None:
-            query = query.where(UserSignal.user == self.context.user_id)
+            query = query.where(UserSignal.user_id == self.context.user_id)
         if status:
             query = query.where(UserSignal.status == status)
-        return {"signals": [self._signal(row) for row in query]}
+        query = query.order_by(
+            UserSignal.final_score.desc().nulls_last(),
+            UserSignal.created_at.desc(),
+        ).limit(max(1, min(limit, 100)))
+
+        runtime = self.context.ensure_runtime()
+        async with runtime.database.session() as session:
+            rows = (await session.scalars(query)).all()
+        return {"signals": [self._signal(row) for row in rows]}
 
     async def update_signal_feedback(self, signal_id: int, action: str) -> dict[str, Any]:
         from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (

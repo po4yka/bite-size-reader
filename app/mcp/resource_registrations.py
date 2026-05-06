@@ -110,19 +110,19 @@ def register_resources(
         return to_json(await semantic_service.vector_sync_gap())
 
     @mcp.resource("ratatoskr://signals/recent")
-    def recent_signals_resource() -> str:
+    async def recent_signals_resource() -> str:
         """Recent signal candidates for the scoped MCP user."""
-        return to_json(signal_runtime.list_signals(limit=20))
+        return to_json(await signal_runtime.list_signals(limit=20))
 
     @mcp.resource("ratatoskr://sources")
-    def signal_sources_resource() -> str:
+    async def signal_sources_resource() -> str:
         """Signal source catalog."""
-        return to_json(signal_runtime.list_sources(limit=100))
+        return to_json(await signal_runtime.list_sources(limit=100))
 
 
 class _NullSignalService:
-    def list_sources(self, limit: int = 50) -> dict[str, Any]:
+    async def list_sources(self, limit: int = 50) -> dict[str, Any]:
         return {"sources": []}
 
-    def list_signals(self, limit: int = 20, status: str | None = None) -> dict[str, Any]:
+    async def list_signals(self, limit: int = 20, status: str | None = None) -> dict[str, Any]:
         return {"signals": []}

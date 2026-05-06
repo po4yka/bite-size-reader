@@ -277,14 +277,16 @@ def register_tools(
         )
 
     @mcp.tool()
-    def list_signal_sources(limit: int = 50) -> str:
+    async def list_signal_sources(limit: int = 50) -> str:
         """List signal sources for the scoped MCP user."""
-        return to_json(_call_sync("list_signal_sources", signal_runtime.list_sources, limit))
+        return to_json(await _call_async("list_signal_sources", signal_runtime.list_sources, limit))
 
     @mcp.tool()
-    def list_user_signals(limit: int = 20, status: str | None = None) -> str:
+    async def list_user_signals(limit: int = 20, status: str | None = None) -> str:
         """List scored signal candidates for the scoped MCP user."""
-        return to_json(_call_sync("list_user_signals", signal_runtime.list_signals, limit, status))
+        return to_json(
+            await _call_async("list_user_signals", signal_runtime.list_signals, limit, status)
+        )
 
     @mcp.tool()
     async def update_signal_feedback(signal_id: int, action: str) -> str:
@@ -336,10 +338,10 @@ def register_tools(
 
 
 class _NullSignalService:
-    def list_sources(self, limit: int = 50) -> dict[str, Any]:
+    async def list_sources(self, limit: int = 50) -> dict[str, Any]:
         return {"sources": []}
 
-    def list_signals(self, limit: int = 20, status: str | None = None) -> dict[str, Any]:
+    async def list_signals(self, limit: int = 20, status: str | None = None) -> dict[str, Any]:
         return {"signals": []}
 
     async def update_signal_feedback(self, signal_id: int, action: str) -> dict[str, Any]:

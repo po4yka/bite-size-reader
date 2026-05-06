@@ -90,8 +90,8 @@ async def test_mcp_tool_registration_records_success_metrics() -> None:
         vector_sync_gap=AsyncMock(return_value={"gap": 0}),
     )
     signal_service = SimpleNamespace(
-        list_sources=MagicMock(return_value={"sources": []}),
-        list_signals=MagicMock(return_value={"signals": []}),
+        list_sources=AsyncMock(return_value={"sources": []}),
+        list_signals=AsyncMock(return_value={"signals": []}),
         update_signal_feedback=AsyncMock(return_value={"updated": True}),
         set_source_active=AsyncMock(return_value={"updated": True}),
     )
