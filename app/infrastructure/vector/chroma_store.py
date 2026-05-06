@@ -1,8 +1,8 @@
 """Stub: retained only so historical migration modules can be imported by Alembic.
 
 The active vector backend is QdrantVectorStore (app/infrastructure/vector/qdrant_store.py).
-This file must not be deleted while app/cli/migrations/004_migrate_summary_embeddings_to_chroma.py
-and app/db/alembic/versions/0005_004_migrate_summary_embeddings_to_chroma.py exist.
+This file must not be deleted while the legacy SQLite Alembic revisions under
+app/db/alembic/versions/_legacy_sqlite/ exist.
 """
 
 from __future__ import annotations

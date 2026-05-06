@@ -45,7 +45,7 @@ From the F1 audit, callers include:
 
 ## Acceptance criteria
 
-- [ ] `app/cli/migrations/0*.py` removed. (Verify with the F1 audit list that
+- [x] `app/cli/migrations/0*.py` removed. (Verify with the F1 audit list that
       nothing imports them.)
 - [ ] All non-Telethon raw SQL/PRAGMA callers either:
   - replaced with `await connection.execute(text(...))` or `inspector.*` calls,
@@ -81,3 +81,5 @@ SQLAlchemy Alembic baseline (M4), so deletion is the right move.
 - Deleted obsolete SQLite-only `app/cli/add_performance_indexes.py` and its
   SQLite tests; index DDL now lives in the SQLAlchemy Alembic baseline.
 - Removed the deprecated CLI command from `docs/reference/cli-commands.md`.
+- Deleted deprecated `app/cli/migrations/` scripts and their SQLite-only
+  migration tests; the PostgreSQL Alembic baseline now owns live schema DDL.

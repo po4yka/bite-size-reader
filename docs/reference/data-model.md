@@ -1,21 +1,25 @@
 # Data Model Reference
 
-Complete reference for Ratatoskr's SQLite database schema.
+Complete reference for Ratatoskr's PostgreSQL database schema.
 
 **Audience:** Developers, Database Administrators
 **Type:** Reference
-**Related:** [SPEC.md § Data Model](../SPEC.md#data-model-sqlite), [How to Backup and Restore](../guides/backup-and-restore.md)
+**Related:** [SPEC.md § Data Model](../SPEC.md#data-model), [How to Backup and Restore](../guides/backup-and-restore.md)
 
 ---
 
 ## Overview
 
-Ratatoskr uses **SQLite** as its persistence layer with 53 model classes managed by Peewee ORM. This page documents the core tables that drive the URL pipeline, mobile API, signal scoring, and audit surface; the full registered set lives in `ALL_MODELS` in `app/db/models.py` and includes additional channel-digest, RSS, webhook, automation, and user-preference tables not detailed here.
+Ratatoskr uses **PostgreSQL 16** as its relational persistence layer with SQLAlchemy
+2.0 models. This page documents the core tables that drive the URL pipeline,
+mobile API, signal scoring, and audit surface; the full registered set lives in
+`ALL_MODELS` in `app/db/models/__init__.py` and includes additional channel-digest,
+RSS, webhook, automation, and user-preference tables not detailed here.
 
-**Database Location:** `DB_PATH` environment variable (default: `/data/ratatoskr.db`)
+**Database DSN:** `DATABASE_URL` or `POSTGRES_PASSWORD`-derived Compose DSN
 
-**ORM:** Peewee
-**Migrations:** Manual SQL files in `app/cli/migrations/`
+**ORM:** SQLAlchemy 2.0 async ORM
+**Migrations:** Alembic revisions in `app/db/alembic/versions/`
 
 ---
 
@@ -450,9 +454,12 @@ CREATE TABLE user_signals (
 
 **Migration and rollback notes:**
 
-- `app/cli/migrations/015_add_signal_sources.py` creates these five tables and backfills from `rss_feeds`, `rss_feed_subscriptions`, `rss_feed_items`, `channels`, `channel_subscriptions`, and `channel_posts`.
-- Legacy RSS/channel tables are preserved and remain the runtime source for existing API and bot paths until worker/API integration is complete.
-- Downgrade drops only `user_signals`, `topics`, `feed_items`, `subscriptions`, and `sources`; it does not mutate or drop legacy tables. Take a normal SQLite backup before applying the migration on a live host.
+- The SQLAlchemy Alembic baseline creates these five tables alongside the rest
+  of the PostgreSQL schema.
+- Legacy RSS/channel tables are preserved and remain the runtime source for
+  existing API and bot paths until worker/API integration is complete.
+- Downgrade behavior is controlled by Alembic revision history; take a normal
+  PostgreSQL backup before applying migrations on a live host.
 
 ---
 
@@ -1303,20 +1310,19 @@ LIMIT 10;
 ### Vacuum (Reclaim Space)
 
 ```bash
-sqlite3 data/ratatoskr.db "VACUUM;"
+psql "$DATABASE_URL" -c "VACUUM;"
 ```
 
 ### Analyze (Update Query Planner Statistics)
 
 ```bash
-sqlite3 data/ratatoskr.db "ANALYZE;"
+psql "$DATABASE_URL" -c "ANALYZE;"
 ```
 
 ### Integrity Check
 
 ```bash
-sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
-# Expected output: ok
+python -m app.cli.healthcheck
 ```
 
 ---
@@ -1352,9 +1358,10 @@ alembic upgrade head
 python -m app.cli.migrate_db
 ```
 
-Alembic revision files live in `app/db/alembic/versions/`. Each revision is auto-generated and tracks the full DDL history of the database schema.
-
-The legacy hand-written scripts in `app/cli/migrations/` (15 scripts + `migration_runner.py`) are **deprecated**. They must not be run against any database and are retained for historical reference only. See `app/cli/migrations/_DEPRECATED.md` for details.
+Alembic revision files live in `app/db/alembic/versions/`. The PostgreSQL
+baseline is the authoritative DDL source for live databases. Legacy SQLite
+revision snapshots are retained under `app/db/alembic/versions/_legacy_sqlite/`
+only for migration archaeology and must not be applied to PostgreSQL.
 
 Startup schema changes are not performed by application code; run Alembic before starting services.
 

@@ -9,7 +9,7 @@ def _read(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
-def test_cli_migrations_are_the_only_versioned_migration_modules() -> None:
+def test_db_migrations_package_has_no_versioned_modules() -> None:
     db_migrations_dir = ROOT / "app/db/migrations"
     if not db_migrations_dir.exists():
         return
@@ -23,11 +23,12 @@ def test_cli_migrations_are_the_only_versioned_migration_modules() -> None:
     assert unexpected_modules == []
 
 
-def test_runtime_migration_entrypoint_uses_cli_migration_runner() -> None:
+def test_runtime_migration_entrypoint_uses_alembic_runner() -> None:
     bootstrap = _read("app/db/runtime/bootstrap.py")
     migrate_db = _read("app/cli/migrate_db.py")
 
-    assert "app.db.alembic_runner" in bootstrap
+    assert "from alembic import command" in bootstrap
+    assert 'command.upgrade(cfg, "head")' in bootstrap
     assert "upgrade_to_head" in migrate_db
     assert "app.db.migrations.migration_runner" not in bootstrap
 

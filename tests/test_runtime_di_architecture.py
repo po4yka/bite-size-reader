@@ -13,7 +13,6 @@ APP_ROOT = PROJECT_ROOT / "app"
 EXCLUDED_GLOBS = [
     "!app/di/**",
     "!app/cli/**",
-    "!app/cli/migrations/**",
     "!app/bootstrap/**",
     "!app/db/migrations/**",
 ]

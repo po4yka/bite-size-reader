@@ -192,7 +192,7 @@ redis-cli --scan --pattern 'bsr:*' | xargs -L 100 redis-cli del
   `po4yka/ratatoskr` is best-effort GitHub behaviour — pin the new path
   in CI to avoid auth-flow breakage.
 - **Karakeep integration** is removed in the same release. The canonical
-  runtime migration path is now `app/cli/migrations/`; if an older local
+  runtime migration path is now Alembic via `python -m app.cli.migrate_db`; if an older local
   database still contains a `karakeep_sync` table, drop it manually after
   confirming you no longer need that data. Re-running the rename does not
   re-create the table.

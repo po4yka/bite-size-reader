@@ -36,13 +36,9 @@ from app.application.ports.requests import (
 )
 from app.application.ports.summaries import SummaryRepositoryPort as SummaryRepositoryPortDirect
 from app.application.ports.users import UserRepositoryPort as UserRepositoryPortDirect
-from tests.integration.helpers import temp_db
-
-
 @pytest.fixture
 def db():
-    with temp_db() as session:
-        yield session
+    return object()
 
 
 def test_summary_repository_factory_returns_port_instance(db) -> None:

@@ -1,9 +1,9 @@
 """Structured logging utilities.
 
 Convention: use get_logger() / log_exception() for all persistent observability output.
-print() is acceptable only in CLI tools (app/cli/, app/cli/migrations/migration_runner.py),
-interactive gRPC clients, and docstring examples. All bot and API code must use structured
-logging to ensure correlation IDs and log levels are preserved.
+print() is acceptable only in CLI tools (app/cli/), interactive gRPC clients, and
+docstring examples. All bot and API code must use structured logging to ensure
+correlation IDs and log levels are preserved.
 """
 
 from __future__ import annotations

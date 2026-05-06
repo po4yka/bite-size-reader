@@ -218,30 +218,27 @@ python -m app.cli.summary --url https://example.com --output-format minimal
 # Apply all pending migrations
 python -m app.cli.migrate_db
 
-# Check migration status (dry-run)
-python -m app.cli.migrate_db --check
+# Show migration status
+python -m app.cli.migrate_db --status
 ```
 
 ### Options
 
 | Option | Type | Default | Description |
 | -------- | ------ | --------- | ------------- |
-| `--check` | flag | false | Check migration status without applying |
-| `--target-version` | int | latest | Migrate to specific version |
-| `--rollback` | flag | false | Rollback last migration (use with caution) |
+| `--status` | flag | false | Show current Alembic revision and history |
+| `dsn` | string | env | Optional PostgreSQL SQLAlchemy DSN |
 
 ### Examples
 
 **Check Status:**
 
 ```bash
-python -m app.cli.migrate_db --check
+python -m app.cli.migrate_db --status
 
 # Output:
-# Current version: 5
-# Pending migrations:
-#   006_add_quality_scores.sql
-#   007_add_vector_search.sql
+# Current revision:
+# 0001 (head)
 ```
 
 **Apply All Pending:**
@@ -250,42 +247,16 @@ python -m app.cli.migrate_db --check
 python -m app.cli.migrate_db
 
 # Output:
-# Applying migration 006_add_quality_scores.sql... OK
-# Applying migration 007_add_vector_search.sql... OK
-# Database migrated to version 7
-```
-
-**Migrate to Specific Version:**
-
-```bash
-python -m app.cli.migrate_db --target-version 6
-```
-
-**Rollback (Dangerous):**
-
-```bash
-# Backup first!
-cp data/ratatoskr.db data/ratatoskr.db.backup
-
-python -m app.cli.migrate_db --rollback
+# Running database migrations...
+# Database migrations complete.
 ```
 
 ### Migration Files
 
-**Location:** `app/cli/migrations/`
+**Location:** `app/db/alembic/versions/`
 
-**Format:** `001_description.sql`, `002_description.sql`, etc.
-
-**Example Migration:**
-
-```sql
--- 006_add_quality_scores.sql
-ALTER TABLE summaries ADD COLUMN quality_score_accuracy REAL;
-ALTER TABLE summaries ADD COLUMN quality_score_coherence REAL;
-ALTER TABLE summaries ADD COLUMN quality_score_completeness REAL;
-
-CREATE INDEX idx_summaries_quality ON summaries(quality_score_accuracy);
-```
+Alembic owns schema DDL. The old hand-written SQLite migration package has been
+removed.
 
 ---
 
