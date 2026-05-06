@@ -54,7 +54,7 @@ async def test_main_rejects_invalid_mode(
 
 
 @pytest.mark.asyncio
-async def test_main_reports_missing_database(
+async def test_main_rejects_legacy_db_option(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     capsys: pytest.CaptureFixture[str],
@@ -67,4 +67,4 @@ async def test_main_reports_missing_database(
     out = capsys.readouterr().out
 
     assert rc == 1
-    assert "Database file not found" in out
+    assert "--db is no longer supported" in out

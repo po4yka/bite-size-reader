@@ -139,3 +139,9 @@ the most-ported repository are easiest to land first.
 - Replaced the stale `DatabaseSessionManager` annotation in
   `app/db/user_interactions.py` with the SQLAlchemy `Database` facade; verified
   with focused ruff, focused mypy, and an import smoke check.
+- Ported `app/cli/search.py` and `app/cli/search_compare.py` from SQLite
+  `--db` paths and `DatabaseSessionManager` construction to the SQLAlchemy
+  `Database` facade built from `DATABASE_URL` or `--dsn`.
+- Verified this CLI slice with focused ruff, focused mypy, and
+  `pytest tests/cli/test_search_cli_module.py tests/cli/test_search_compare_cli_module.py`
+  → `7 passed`.

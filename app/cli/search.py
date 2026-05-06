@@ -5,9 +5,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
+from app.config import DatabaseConfig
 from app.core.logging_utils import get_logger
+from app.db.session import Database
+
+if TYPE_CHECKING:
+    from app.infrastructure.search.search_filters import SearchFilters
 
 logging.basicConfig(
     level=logging.WARNING,  # Suppress info logs for cleaner output
@@ -16,7 +21,7 @@ logging.basicConfig(
 logger = get_logger(__name__)
 
 
-def print_results(results: list, mode: str, query: str) -> None:
+def print_results(results: list[Any], mode: str, query: str) -> None:
     """Pretty print search results."""
     print(f"\n{'=' * 80}")
     print(f"Search Mode: {mode.upper()}")
@@ -55,15 +60,13 @@ def print_results(results: list, mode: str, query: str) -> None:
         print()
 
 
-async def search_fts(db_path: str, query: str, max_results: int = 10) -> list:
+async def search_fts(db: Database, query: str, max_results: int = 10) -> list[Any]:
     """Perform full-text search."""
     from app.application.services.topic_search import LocalTopicSearchService
-    from app.db.session import DatabaseSessionManager
     from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
         SqliteTopicSearchRepositoryAdapter,
     )
 
-    db = DatabaseSessionManager(path=db_path)
     service = LocalTopicSearchService(
         repository=SqliteTopicSearchRepositoryAdapter(db), max_results=max_results
     )
@@ -71,10 +74,14 @@ async def search_fts(db_path: str, query: str, max_results: int = 10) -> list:
     return await service.find_articles(query)
 
 
-async def search_vector(db_path: str, query: str, max_results: int = 10, filters=None) -> list:
+async def search_vector(
+    db: Database,
+    query: str,
+    max_results: int = 10,
+    filters: SearchFilters | None = None,
+) -> list[Any]:
     """Perform vector similarity search."""
     from app.application.services.topic_search import TopicArticle
-    from app.db.session import DatabaseSessionManager
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
     from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
         SqliteEmbeddingRepositoryAdapter,
@@ -84,7 +91,6 @@ async def search_vector(db_path: str, query: str, max_results: int = 10, filters
     )
     from app.infrastructure.search.vector_search_service import VectorSearchService
 
-    db = DatabaseSessionManager(path=db_path)
     embedding_service = create_embedding_service()
     service = VectorSearchService(
         embedding_repository=SqliteEmbeddingRepositoryAdapter(db),
@@ -110,16 +116,15 @@ async def search_vector(db_path: str, query: str, max_results: int = 10, filters
 
 
 async def search_hybrid(
-    db_path: str,
+    db: Database,
     query: str,
     max_results: int = 10,
-    filters=None,
+    filters: SearchFilters | None = None,
     use_expansion: bool = True,
     use_reranking: bool = False,
-) -> list:
+) -> list[Any]:
     """Perform hybrid search (FTS + vector)."""
     from app.application.services.topic_search import LocalTopicSearchService
-    from app.db.session import DatabaseSessionManager
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
     from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
         SqliteEmbeddingRepositoryAdapter,
@@ -131,8 +136,6 @@ async def search_hybrid(
     from app.infrastructure.search.query_expansion_service import QueryExpansionService
     from app.infrastructure.search.reranking_service import RerankingService
     from app.infrastructure.search.vector_search_service import VectorSearchService
-
-    db = DatabaseSessionManager(path=db_path)
 
     # Initialize FTS service
     fts_service = LocalTopicSearchService(
@@ -169,6 +172,11 @@ async def search_hybrid(
     return await hybrid_service.search(query, filters=filters)
 
 
+def _build_database(dsn: str | None) -> Database:
+    config = DatabaseConfig(dsn=dsn) if dsn else DatabaseConfig()
+    return Database(config=config)
+
+
 async def main() -> int:
     """Main CLI entry point."""
     # Parse arguments
@@ -182,7 +190,7 @@ async def main() -> int:
         print()
         print("Options:")
         print("  --mode=MODE           Search mode: fts, vector, or hybrid (default: hybrid)")
-        print("  --db=PATH             Database path (default: /data/ratatoskr.db)")
+        print("  --dsn=DSN             PostgreSQL DSN (default: DATABASE_URL)")
         print("  --limit=N             Maximum results to return (default: 10)")
         print("  --no-expansion        Disable query expansion for FTS (enabled by default)")
         print("  --with-reranking      Enable cross-encoder re-ranking (disabled by default)")
@@ -210,7 +218,7 @@ async def main() -> int:
     from app.infrastructure.search.search_filters import SearchFilters
 
     query_parts = []
-    db_path = "/data/ratatoskr.db"
+    database_dsn: str | None = None
     mode = "hybrid"
     max_results = 10
     use_expansion = True  # Query expansion enabled by default
@@ -229,8 +237,11 @@ async def main() -> int:
             if mode not in ("fts", "vector", "hybrid"):
                 print(f"Error: Invalid mode '{mode}'. Must be: fts, vector, or hybrid")
                 return 1
+        elif arg.startswith("--dsn="):
+            database_dsn = arg.split("=", 1)[1]
         elif arg.startswith("--db="):
-            db_path = arg.split("=", 1)[1]
+            print("Error: --db is no longer supported; set DATABASE_URL or use --dsn=DSN")
+            return 1
         elif arg.startswith("--limit="):
             try:
                 max_results = int(arg.split("=", 1)[1])
@@ -282,26 +293,23 @@ async def main() -> int:
         languages=languages,
     )
 
-    # Check database exists (unless it's :memory:)
-    if db_path != ":memory:" and not Path(db_path).exists():
-        print(f"Error: Database file not found: {db_path}")
-        return 1
-
     # Perform search
+    db: Database | None = None
     try:
         filter_msg = f" with filters: {filters}" if filters.has_filters() else ""
         print(f"Searching for: '{query}' using {mode} search{filter_msg}...")
+        db = _build_database(database_dsn)
 
         if mode == "fts":
-            results = await search_fts(db_path, query, max_results)
+            results = await search_fts(db, query, max_results)
             # Apply filters manually for FTS
             if filters.has_filters():
                 results = [r for r in results if filters.matches(r)]
         elif mode == "vector":
-            results = await search_vector(db_path, query, max_results, filters)
+            results = await search_vector(db, query, max_results, filters)
         else:  # hybrid
             results = await search_hybrid(
-                db_path, query, max_results, filters, use_expansion, use_reranking
+                db, query, max_results, filters, use_expansion, use_reranking
             )
 
         # Display results
@@ -315,6 +323,9 @@ async def main() -> int:
         logger.exception("Search failed")
         print(f"\nError: Search failed - {e}")
         return 1
+    finally:
+        if db is not None:
+            await db.dispose()
 
 
 if __name__ == "__main__":

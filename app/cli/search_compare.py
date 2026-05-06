@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from pathlib import Path
 from typing import cast
 
-from app.config import load_config
+from app.config import DatabaseConfig, load_config
 from app.core.embedding_space import resolve_embedding_space_identifier
 from app.core.logging_utils import get_logger
+from app.db.session import Database
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -19,9 +19,8 @@ logging.basicConfig(
 logger = get_logger(__name__)
 
 
-async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> dict:
+async def run_all_searches(db: Database, query: str, max_results: int = 10) -> dict:
     from app.application.services.topic_search import LocalTopicSearchService, TopicArticle
-    from app.db.session import DatabaseSessionManager
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
     from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
         SqliteTopicSearchRepositoryAdapter,
@@ -31,7 +30,6 @@ async def run_all_searches(db_path: str, query: str, max_results: int = 10) -> d
     from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 
     cfg = load_config(allow_stub_telegram=True)
-    db = DatabaseSessionManager(path=db_path)
 
     # Initialize services
     embedding_service = create_embedding_service(cfg.embedding)
@@ -165,6 +163,11 @@ def print_mode_results(results: list) -> None:
         print()
 
 
+def _build_database(dsn: str | None) -> Database:
+    config = DatabaseConfig(dsn=dsn) if dsn else DatabaseConfig()
+    return Database(config=config)
+
+
 async def main() -> int:
     """Main CLI entry point."""
     if len(sys.argv) < 2 or "--help" in sys.argv or "-h" in sys.argv:
@@ -176,24 +179,27 @@ async def main() -> int:
         print("  query         Search query (required)")
         print()
         print("Options:")
-        print("  --db=PATH     Database path (default: /data/ratatoskr.db)")
+        print("  --dsn=DSN     PostgreSQL DSN (default: DATABASE_URL)")
         print("  --limit=N     Maximum results per mode (default: 10)")
         print("  --help, -h    Show this help message")
         print()
         print("Examples:")
         print('  python -m app.cli.search_compare "machine learning"')
         print('  python -m app.cli.search_compare "AI ethics" --limit=5')
-        print('  python -m app.cli.search_compare "neural networks" --db=/path/to/app.db')
+        print('  python -m app.cli.search_compare "neural networks" --dsn=postgresql+asyncpg://...')
         return 0
 
     # Parse arguments
     query_parts = []
-    db_path = "/data/ratatoskr.db"
+    database_dsn: str | None = None
     max_results = 10
 
     for arg in sys.argv[1:]:
-        if arg.startswith("--db="):
-            db_path = arg.split("=", 1)[1]
+        if arg.startswith("--dsn="):
+            database_dsn = arg.split("=", 1)[1]
+        elif arg.startswith("--db="):
+            print("Error: --db is no longer supported; set DATABASE_URL or use --dsn=DSN")
+            return 1
         elif arg.startswith("--limit="):
             try:
                 max_results = int(arg.split("=", 1)[1])
@@ -212,14 +218,11 @@ async def main() -> int:
 
     query = " ".join(query_parts)
 
-    # Check database exists
-    if db_path != ":memory:" and not Path(db_path).exists():
-        print(f"Error: Database file not found: {db_path}")
-        return 1
-
     # Run comparisons
+    db: Database | None = None
     try:
-        results = await run_all_searches(db_path, query, max_results)
+        db = _build_database(database_dsn)
+        results = await run_all_searches(db, query, max_results)
         print_comparison(results, query)
         return 0
 
@@ -230,6 +233,9 @@ async def main() -> int:
         logger.exception("Comparison failed")
         print(f"\nError: Comparison failed - {e}")
         return 1
+    finally:
+        if db is not None:
+            await db.dispose()
 
 
 if __name__ == "__main__":
