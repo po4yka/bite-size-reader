@@ -1,48 +1,41 @@
-"""SQLite implementation of user repository.
-
-This adapter translates between domain User/Chat models and database records.
-"""
+"""SQLAlchemy implementation of user, chat, and interaction repositories."""
 
 from __future__ import annotations
 
-import datetime as dt
 from typing import TYPE_CHECKING, Any
 
-import peewee
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 
-from app.core.time_utils import UTC
 from app.db.models import Chat, User, UserInteraction, model_to_dict
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+from app.db.types import _utcnow
 
 if TYPE_CHECKING:
+    import datetime as dt
     from collections.abc import Mapping
 
+    from app.db.session import Database
 
-class SqliteUserRepositoryAdapter(SqliteBaseRepository):
-    """Adapter for user and interaction operations."""
+
+class SqliteUserRepositoryAdapter:
+    """Adapter for user and interaction operations using SQLAlchemy."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_get_max_server_version(self, user_id: int) -> int | None:
-        """Return the maximum server_version for the user identified by *user_id* (telegram_user_id)."""
-
-        def _query() -> int | None:
-            return (
-                User.select(peewee.fn.MAX(User.server_version))
-                .where(User.telegram_user_id == user_id)
-                .scalar()
+        """Return the maximum server_version for the user identified by *user_id*."""
+        async with self._database.session() as session:
+            value = await session.scalar(
+                select(func.max(User.server_version)).where(User.telegram_user_id == user_id)
             )
-
-        return await self._execute(
-            _query, operation_name="get_max_server_version_user", read_only=True
-        )
+            return int(value) if value is not None else None
 
     async def async_get_user_by_telegram_id(self, telegram_user_id: int) -> dict[str, Any] | None:
         """Get a user by Telegram user ID."""
-
-        def _get() -> dict[str, Any] | None:
-            user = User.get_or_none(User.telegram_user_id == telegram_user_id)
+        async with self._database.session() as session:
+            user = await session.get(User, telegram_user_id)
             return model_to_dict(user)
-
-        return await self._execute(_get, operation_name="get_user_by_telegram_id", read_only=True)
 
     async def async_get_or_create_user(
         self,
@@ -51,20 +44,23 @@ class SqliteUserRepositoryAdapter(SqliteBaseRepository):
         username: str | None = None,
         is_owner: bool = False,
     ) -> tuple[dict[str, Any], bool]:
-        """Get or create a user by Telegram ID.
-
-        Returns:
-            Tuple of (user_data dict, created bool).
-        """
-
-        def _get_or_create() -> tuple[dict[str, Any], bool]:
-            user, created = User.get_or_create(
-                telegram_user_id=telegram_user_id,
-                defaults={"username": username, "is_owner": is_owner},
+        """Get or create a user by Telegram ID."""
+        async with self._database.transaction() as session:
+            stmt = (
+                insert(User)
+                .values(
+                    telegram_user_id=telegram_user_id,
+                    username=username,
+                    is_owner=is_owner,
+                )
+                .on_conflict_do_nothing(index_elements=[User.telegram_user_id])
+                .returning(User)
             )
-            return model_to_dict(user) or {}, created
-
-        return await self._execute(_get_or_create, operation_name="get_or_create_user")
+            inserted = await session.scalar(stmt)
+            if inserted is not None:
+                return model_to_dict(inserted) or {}, True
+            user = await session.get(User, telegram_user_id)
+            return model_to_dict(user) or {}, False
 
     async def async_set_link_nonce(
         self,
@@ -74,25 +70,19 @@ class SqliteUserRepositoryAdapter(SqliteBaseRepository):
         expires_at: dt.datetime,
     ) -> None:
         """Set link nonce fields for a user."""
-
-        def _set() -> None:
-            User.update(
-                link_nonce=nonce,
-                link_nonce_expires_at=expires_at,
-            ).where(User.telegram_user_id == telegram_user_id).execute()
-
-        await self._execute(_set, operation_name="set_link_nonce")
+        await self._update_user(
+            telegram_user_id,
+            link_nonce=nonce,
+            link_nonce_expires_at=expires_at,
+        )
 
     async def async_clear_link_nonce(self, *, telegram_user_id: int) -> None:
         """Clear link nonce fields for a user."""
-
-        def _clear() -> None:
-            User.update(
-                link_nonce=None,
-                link_nonce_expires_at=None,
-            ).where(User.telegram_user_id == telegram_user_id).execute()
-
-        await self._execute(_clear, operation_name="clear_link_nonce")
+        await self._update_user(
+            telegram_user_id,
+            link_nonce=None,
+            link_nonce_expires_at=None,
+        )
 
     async def async_complete_telegram_link(
         self,
@@ -106,76 +96,61 @@ class SqliteUserRepositoryAdapter(SqliteBaseRepository):
         linked_at: dt.datetime,
     ) -> None:
         """Complete Telegram account linking for a user."""
-
-        def _update() -> None:
-            User.update(
-                linked_telegram_user_id=linked_telegram_user_id,
-                linked_telegram_username=username,
-                linked_telegram_photo_url=photo_url,
-                linked_telegram_first_name=first_name,
-                linked_telegram_last_name=last_name,
-                linked_at=linked_at,
-                link_nonce=None,
-                link_nonce_expires_at=None,
-            ).where(User.telegram_user_id == telegram_user_id).execute()
-
-        await self._execute(_update, operation_name="complete_telegram_link")
+        await self._update_user(
+            telegram_user_id,
+            linked_telegram_user_id=linked_telegram_user_id,
+            linked_telegram_username=username,
+            linked_telegram_photo_url=photo_url,
+            linked_telegram_first_name=first_name,
+            linked_telegram_last_name=last_name,
+            linked_at=linked_at,
+            link_nonce=None,
+            link_nonce_expires_at=None,
+        )
 
     async def async_unlink_telegram(self, *, telegram_user_id: int) -> None:
         """Remove Telegram link information from a user."""
-
-        def _unlink() -> None:
-            User.update(
-                linked_telegram_user_id=None,
-                linked_telegram_username=None,
-                linked_telegram_photo_url=None,
-                linked_telegram_first_name=None,
-                linked_telegram_last_name=None,
-                linked_at=None,
-                link_nonce=None,
-                link_nonce_expires_at=None,
-            ).where(User.telegram_user_id == telegram_user_id).execute()
-
-        await self._execute(_unlink, operation_name="unlink_telegram")
+        await self._update_user(
+            telegram_user_id,
+            linked_telegram_user_id=None,
+            linked_telegram_username=None,
+            linked_telegram_photo_url=None,
+            linked_telegram_first_name=None,
+            linked_telegram_last_name=None,
+            linked_at=None,
+            link_nonce=None,
+            link_nonce_expires_at=None,
+        )
 
     async def async_delete_user(self, *, telegram_user_id: int) -> None:
         """Delete a user and related data."""
-
-        def _delete() -> None:
-            user = User.get_or_none(User.telegram_user_id == telegram_user_id)
-            if user:
-                user.delete_instance(recursive=True)
-
-        await self._execute(_delete, operation_name="delete_user")
+        async with self._database.transaction() as session:
+            await session.execute(delete(User).where(User.telegram_user_id == telegram_user_id))
 
     async def async_update_user_preferences(
         self, telegram_user_id: int, preferences: dict[str, Any]
     ) -> None:
         """Update user preferences."""
-
-        def _update() -> None:
-            User.update(preferences_json=preferences).where(
-                User.telegram_user_id == telegram_user_id
-            ).execute()
-
-        await self._execute(_update, operation_name="update_user_preferences")
+        await self._update_user(telegram_user_id, preferences_json=preferences)
 
     async def async_upsert_user(
         self, *, telegram_user_id: int, username: str | None = None, is_owner: bool = False
     ) -> None:
         """Upsert a user record."""
-
-        def _upsert() -> None:
-            User.insert(
-                telegram_user_id=telegram_user_id,
-                username=username,
-                is_owner=is_owner,
-            ).on_conflict(
-                conflict_target=[User.telegram_user_id],
-                update={"username": username, "is_owner": is_owner},
-            ).execute()
-
-        await self._execute(_upsert, operation_name="upsert_user")
+        async with self._database.transaction() as session:
+            stmt = (
+                insert(User)
+                .values(
+                    telegram_user_id=telegram_user_id,
+                    username=username,
+                    is_owner=is_owner,
+                )
+                .on_conflict_do_update(
+                    index_elements=[User.telegram_user_id],
+                    set_={"username": username, "is_owner": is_owner, "updated_at": _utcnow()},
+                )
+            )
+            await session.execute(stmt)
 
     async def async_upsert_chat(
         self,
@@ -186,23 +161,26 @@ class SqliteUserRepositoryAdapter(SqliteBaseRepository):
         username: str | None = None,
     ) -> None:
         """Upsert a chat record."""
-
-        def _upsert() -> None:
-            Chat.insert(
-                chat_id=chat_id,
-                type=type_,
-                title=title,
-                username=username,
-            ).on_conflict(
-                conflict_target=[Chat.chat_id],
-                update={
-                    "type": type_,
-                    "title": title,
-                    "username": username,
-                },
-            ).execute()
-
-        await self._execute(_upsert, operation_name="upsert_chat")
+        async with self._database.transaction() as session:
+            stmt = (
+                insert(Chat)
+                .values(
+                    chat_id=chat_id,
+                    type=type_,
+                    title=title,
+                    username=username,
+                )
+                .on_conflict_do_update(
+                    index_elements=[Chat.chat_id],
+                    set_={
+                        "type": type_,
+                        "title": title,
+                        "username": username,
+                        "updated_at": _utcnow(),
+                    },
+                )
+            )
+            await session.execute(stmt)
 
     async def async_insert_user_interaction(
         self,
@@ -223,9 +201,8 @@ class SqliteUserRepositoryAdapter(SqliteBaseRepository):
         structured_output_enabled: bool = False,
     ) -> int:
         """Insert a user interaction record."""
-
-        def _insert() -> int:
-            created = UserInteraction.create(
+        async with self._database.transaction() as session:
+            interaction = UserInteraction(
                 user_id=user_id,
                 chat_id=chat_id,
                 message_id=message_id,
@@ -241,9 +218,9 @@ class SqliteUserRepositoryAdapter(SqliteBaseRepository):
                 correlation_id=correlation_id,
                 structured_output_enabled=structured_output_enabled,
             )
-            return created.id
-
-        return await self._execute(_insert, operation_name="insert_user_interaction")
+            session.add(interaction)
+            await session.flush()
+            return interaction.id
 
     async def async_update_user_interaction(
         self,
@@ -253,35 +230,23 @@ class SqliteUserRepositoryAdapter(SqliteBaseRepository):
         **fields: Any,
     ) -> None:
         """Update a user interaction record."""
+        all_updates = dict(updates) if updates else {}
+        all_updates.update(fields)
+        if not all_updates:
+            return
 
-        def _update() -> None:
-            update_values: dict[Any, Any] = {}
+        column_names = set(UserInteraction.__mapper__.columns.keys())
+        update_values = {key: value for key, value in all_updates.items() if key in column_names}
+        if not update_values:
+            return
+        update_values["updated_at"] = _utcnow()
 
-            # Merge updates dict and kwargs
-            all_updates = dict(updates) if updates else {}
-            all_updates.update(fields)
-
-            if not all_updates:
-                return
-
-            # Map string keys to Peewee fields
-            for key, value in all_updates.items():
-                if hasattr(UserInteraction, key):
-                    field_obj = getattr(UserInteraction, key)
-                    if isinstance(field_obj, peewee.Field):
-                        update_values[field_obj] = value
-
-            if not update_values:
-                return
-
-            if hasattr(UserInteraction, "updated_at"):
-                update_values[UserInteraction.updated_at] = dt.datetime.now(UTC)
-
-            UserInteraction.update(update_values).where(
-                UserInteraction.id == interaction_id
-            ).execute()
-
-        await self._execute(_update, operation_name="update_user_interaction")
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(UserInteraction)
+                .where(UserInteraction.id == interaction_id)
+                .values(**update_values)
+            )
 
     async def async_get_user_interactions(
         self,
@@ -290,14 +255,20 @@ class SqliteUserRepositoryAdapter(SqliteBaseRepository):
         limit: int = 10,
     ) -> list[dict[str, Any]]:
         """Get recent user interactions."""
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(UserInteraction)
+                    .where(UserInteraction.user_id == uid)
+                    .order_by(UserInteraction.created_at.desc())
+                    .limit(limit)
+                )
+            ).scalars()
+            return [model_to_dict(row) or {} for row in rows]
 
-        def _get() -> list[dict[str, Any]]:
-            interactions = (
-                UserInteraction.select()
-                .where(UserInteraction.user_id == uid)
-                .order_by(UserInteraction.created_at.desc())
-                .limit(limit)
+    async def _update_user(self, telegram_user_id: int, **values: Any) -> None:
+        values["updated_at"] = _utcnow()
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(User).where(User.telegram_user_id == telegram_user_id).values(**values)
             )
-            return [model_to_dict(i) or {} for i in interactions]
-
-        return await self._execute(_get, operation_name="get_user_interactions", read_only=True)
