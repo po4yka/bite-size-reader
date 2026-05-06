@@ -54,7 +54,7 @@ async def test_collection_service_creates_lists_builds_tree_and_reorders(
     assert authorized["id"] == root["id"]
 
     with patch(
-        "app.infrastructure.persistence.sqlite.repositories.collection_repository.SqliteCollectionRepositoryAdapter.async_reorder_collections",
+        "app.infrastructure.persistence.repositories.collection_repository.SqliteCollectionRepositoryAdapter.async_reorder_collections",
         new=AsyncMock(),
     ) as reorder:
         await CollectionService.reorder_collections(
@@ -171,7 +171,7 @@ async def test_collection_service_item_operations_cover_add_list_reorder_move_an
     assert len(items) == 2
 
     with patch(
-        "app.infrastructure.persistence.sqlite.repositories.collection_repository.SqliteCollectionRepositoryAdapter.async_reorder_items",
+        "app.infrastructure.persistence.repositories.collection_repository.SqliteCollectionRepositoryAdapter.async_reorder_items",
         new=AsyncMock(),
     ) as reorder:
         await CollectionService.reorder_items(

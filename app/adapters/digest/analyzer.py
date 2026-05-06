@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field
 
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import SqliteDigestStore
 
 if TYPE_CHECKING:
     from app.adapters.llm.protocol import LLMClientProtocol

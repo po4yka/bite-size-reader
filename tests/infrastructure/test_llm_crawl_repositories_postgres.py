@@ -9,10 +9,10 @@ from sqlalchemy import delete
 from app.config.database import DatabaseConfig
 from app.db.models import CrawlResult, LLMCall, Request
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+from app.infrastructure.persistence.repositories.crawl_result_repository import (
     SqliteCrawlResultRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.llm_repository import (
+from app.infrastructure.persistence.repositories.llm_repository import (
     SqliteLLMRepositoryAdapter,
 )
 

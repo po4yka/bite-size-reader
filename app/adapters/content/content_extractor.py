@@ -146,7 +146,7 @@ class ContentExtractor(
 
     def _build_youtube_platform_extractor(self) -> Any:
         from app.adapters.youtube.platform_extractor import YouTubePlatformExtractor
-        from app.infrastructure.persistence.sqlite.repositories.video_download_repository import (
+        from app.infrastructure.persistence.repositories.video_download_repository import (
             SqliteVideoDownloadRepositoryAdapter,
         )
 

@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+from app.infrastructure.persistence.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+from app.infrastructure.persistence.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
 

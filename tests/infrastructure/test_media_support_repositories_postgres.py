@@ -13,13 +13,13 @@ from app.config.database import DatabaseConfig
 from app.core.time_utils import UTC
 from app.db.models import AttachmentProcessing, AuditLog, Request, VideoDownload
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.attachment_processing_repository import (
+from app.infrastructure.persistence.repositories.attachment_processing_repository import (
     SqliteAttachmentProcessingRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.audit_log_repository import (
+from app.infrastructure.persistence.repositories.audit_log_repository import (
     SqliteAuditLogRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.video_download_repository import (
+from app.infrastructure.persistence.repositories.video_download_repository import (
     SqliteVideoDownloadRepositoryAdapter,
 )
 

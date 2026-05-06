@@ -50,10 +50,10 @@ from app.di.types import (
 )
 from app.infrastructure.audio.elevenlabs_provider import ElevenLabsTTSProviderAdapter
 from app.infrastructure.audio.filesystem_storage import FileSystemAudioStorageAdapter
-from app.infrastructure.persistence.sqlite.repositories.audio_generation_repository import (
+from app.infrastructure.persistence.repositories.audio_generation_repository import (
     SqliteAudioGenerationRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.latency_stats_repository import (
+from app.infrastructure.persistence.repositories.latency_stats_repository import (
     SqliteLatencyStatsRepositoryAdapter,
 )
 from app.infrastructure.search.vector_search_port_adapter import VectorSearchPortAdapter

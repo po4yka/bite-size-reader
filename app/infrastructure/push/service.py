@@ -12,7 +12,7 @@ from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.config.push import PushNotificationConfig
-    from app.infrastructure.persistence.sqlite.repositories.device_repository import (
+    from app.infrastructure.persistence.repositories.device_repository import (
         SqliteDeviceRepositoryAdapter,
     )
 

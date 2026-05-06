@@ -9,7 +9,7 @@ from sqlalchemy import delete
 from app.config.database import DatabaseConfig
 from app.db.models import BatchSession, BatchSessionItem, Request, Summary, User
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.batch_session_repository import (
+from app.infrastructure.persistence.repositories.batch_session_repository import (
     SqliteBatchSessionRepositoryAdapter,
 )
 

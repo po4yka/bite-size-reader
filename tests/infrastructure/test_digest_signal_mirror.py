@@ -23,7 +23,7 @@ from app.cli._legacy_peewee_models import (
     UserSignal,
     database_proxy,
 )
-from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import SqliteDigestStore
 
 
 @pytest.fixture

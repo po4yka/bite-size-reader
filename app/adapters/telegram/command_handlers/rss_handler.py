@@ -12,7 +12,7 @@ from app.adapters.telegram.command_handlers.base_handler import HandlerDependenc
 from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
 from app.domain.services.import_export.opml_exporter import OPMLExporter
-from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
+from app.infrastructure.persistence.repositories.rss_feed_repository import (
     SqliteRSSFeedRepositoryAdapter,
 )
 

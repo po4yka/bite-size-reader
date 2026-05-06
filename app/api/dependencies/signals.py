@@ -8,7 +8,7 @@ from fastapi import Request  # noqa: TC002 - FastAPI requires the concrete type 
 
 from app.api.dependencies.database import get_session_manager
 from app.di.api import resolve_api_runtime
-from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
+from app.infrastructure.persistence.repositories.signal_source_repository import (
     SqliteSignalSourceRepositoryAdapter,
 )
 

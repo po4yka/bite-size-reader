@@ -15,13 +15,13 @@ from app.core.logging_utils import get_logger
 from app.db.models import Request, Summary, model_to_dict
 from app.db.session import Database
 from app.infrastructure.embedding.embedding_factory import create_embedding_service
-from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
+from app.infrastructure.persistence.repositories.embedding_repository import (
     SqliteEmbeddingRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+from app.infrastructure.persistence.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+from app.infrastructure.persistence.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
 from app.infrastructure.vector.metadata_builder import MetadataBuilder

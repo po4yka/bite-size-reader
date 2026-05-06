@@ -8,7 +8,7 @@ from app.api.dependencies.database import get_session_manager
 from app.api.exceptions import ResourceNotFoundError
 from app.api.models.responses import HighlightResponse
 from app.api.search_helpers import isotime
-from app.infrastructure.persistence.sqlite.repositories.user_content_repository import (
+from app.infrastructure.persistence.repositories.user_content_repository import (
     SqliteUserContentRepositoryAdapter,
 )
 

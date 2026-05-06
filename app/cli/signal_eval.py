@@ -10,7 +10,7 @@ from typing import Any
 
 from app.config import DatabaseConfig
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
+from app.infrastructure.persistence.repositories.signal_source_repository import (
     SqliteSignalSourceRepositoryAdapter,
 )
 

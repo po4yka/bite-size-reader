@@ -37,7 +37,7 @@ from app.di.shared import (
     close_runtime_resources,
 )
 from app.di.types import ApiRuntime, DatabaseRuntimeServices, SyncDeps
-from app.infrastructure.persistence.sqlite.sync_aux_read_adapter import SqliteSyncAuxReadAdapter
+from app.infrastructure.persistence.sync_aux_read_adapter import SqliteSyncAuxReadAdapter
 from app.infrastructure.redis import get_redis
 
 if TYPE_CHECKING:

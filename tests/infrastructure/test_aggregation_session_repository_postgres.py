@@ -17,7 +17,7 @@ from app.domain.models.source import (
     SourceItem,
     SourceKind,
 )
-from app.infrastructure.persistence.sqlite.repositories.aggregation_session_repository import (
+from app.infrastructure.persistence.repositories.aggregation_session_repository import (
     SqliteAggregationSessionRepositoryAdapter,
 )
 

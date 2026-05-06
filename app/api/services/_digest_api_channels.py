@@ -13,8 +13,8 @@ from app.api.models.digest import (
 )
 from app.api.services._digest_api_shared import require_enabled
 from app.core.channel_utils import parse_channel_input
-from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
-from app.infrastructure.persistence.sqlite.digest_subscription_ops import (
+from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_subscription_ops import (
     subscribe_channel_atomic,
     unsubscribe_channel_atomic,
 )

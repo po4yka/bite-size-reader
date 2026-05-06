@@ -8,10 +8,10 @@ from app.adapters.rss.feed_fetcher import fetch_feed
 from app.adapters.rss.signal_ingester import RssSignalIngester
 from app.adapters.rss.substack import is_substack_url
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
+from app.infrastructure.persistence.repositories.rss_feed_repository import (
     SqliteRSSFeedRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
+from app.infrastructure.persistence.repositories.signal_source_repository import (
     SqliteSignalSourceRepositoryAdapter,
 )
 

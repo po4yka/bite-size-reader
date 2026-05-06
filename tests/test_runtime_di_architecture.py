@@ -158,7 +158,7 @@ def test_url_processor_keeps_repository_assembly_in_di_layer() -> None:
         "MessagePersistence(",
         "SqliteSummaryRepositoryAdapter(",
         "from app.infrastructure.persistence.message_persistence import",
-        "from app.infrastructure.persistence.sqlite.repositories.summary_repository import",
+        "from app.infrastructure.persistence.repositories.summary_repository import",
     )
     offenders = [fragment for fragment in forbidden_fragments if fragment in text]
     assert offenders == [], f"found forbidden repository assembly in {path}:\n" + "\n".join(

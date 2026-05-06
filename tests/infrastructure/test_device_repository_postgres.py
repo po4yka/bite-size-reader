@@ -11,7 +11,7 @@ from sqlalchemy import delete
 from app.config.database import DatabaseConfig
 from app.db.models import User, UserDevice
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.device_repository import (
+from app.infrastructure.persistence.repositories.device_repository import (
     SqliteDeviceRepositoryAdapter,
 )
 

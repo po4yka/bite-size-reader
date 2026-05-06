@@ -7,7 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger, log_exception
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+from app.infrastructure.persistence.repositories.user_repository import (
     SqliteUserRepositoryAdapter,
 )
 

@@ -9,7 +9,7 @@ from sqlalchemy import delete
 from app.config.database import DatabaseConfig
 from app.db.models import Request, Summary, SummaryHighlight, SummaryTag, Tag, User
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.sync_aux_read_adapter import SqliteSyncAuxReadAdapter
+from app.infrastructure.persistence.sync_aux_read_adapter import SqliteSyncAuxReadAdapter
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator

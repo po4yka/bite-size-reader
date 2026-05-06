@@ -13,7 +13,7 @@ from app.config.database import DatabaseConfig
 from app.core.time_utils import UTC
 from app.db.models import FeedItem, Source, Subscription, Topic, User, UserSignal
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
+from app.infrastructure.persistence.repositories.signal_source_repository import (
     SqliteSignalSourceRepositoryAdapter,
 )
 

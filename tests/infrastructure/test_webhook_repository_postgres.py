@@ -11,7 +11,7 @@ from sqlalchemy import delete
 from app.config.database import DatabaseConfig
 from app.db.models import User, WebhookDelivery, WebhookSubscription
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.webhook_repository import (
+from app.infrastructure.persistence.repositories.webhook_repository import (
     SqliteWebhookRepositoryAdapter,
 )
 

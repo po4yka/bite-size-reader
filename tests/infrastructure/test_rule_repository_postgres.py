@@ -11,7 +11,7 @@ from sqlalchemy import delete
 from app.config.database import DatabaseConfig
 from app.db.models import AutomationRule, RuleExecutionLog, User
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.rule_repository import (
+from app.infrastructure.persistence.repositories.rule_repository import (
     SqliteRuleRepositoryAdapter,
 )
 

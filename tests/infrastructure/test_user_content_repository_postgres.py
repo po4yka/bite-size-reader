@@ -23,7 +23,7 @@ from app.db.models import (
     UserGoal,
 )
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.user_content_repository import (
+from app.infrastructure.persistence.repositories.user_content_repository import (
     SqliteUserContentRepositoryAdapter,
 )
 

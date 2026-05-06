@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import SqliteDigestStore
 
 if TYPE_CHECKING:
     from app.config import AppConfig

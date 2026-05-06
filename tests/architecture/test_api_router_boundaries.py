@@ -12,7 +12,7 @@ def test_api_router_layer_avoids_direct_persistence_imports() -> None:
         router_root,
         forbidden_prefixes=(
             "app.db.models",
-            "app.infrastructure.persistence.sqlite.repositories",
+            "app.infrastructure.persistence.repositories",
         ),
     )
 

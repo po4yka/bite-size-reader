@@ -7,11 +7,11 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+from app.infrastructure.persistence.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
 

@@ -12,7 +12,7 @@ from app.core.time_utils import UTC
 from app.db.models import Collection, CollectionItem, Request, Summary, SummaryTag, Tag, User
 from app.db.session import Database
 from app.domain.services.import_parsers.base import ImportedBookmark
-from app.infrastructure.persistence.sqlite.repositories.bookmark_import_repository import (
+from app.infrastructure.persistence.repositories.bookmark_import_repository import (
     SqliteBookmarkImportAdapter,
 )
 

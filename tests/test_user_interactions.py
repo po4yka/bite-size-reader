@@ -19,10 +19,10 @@ from app.db.user_interactions import (
     safe_update_user_interaction,
 )
 from app.domain.models.request import RequestStatus
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+from app.infrastructure.persistence.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+from app.infrastructure.persistence.repositories.user_repository import (
     SqliteUserRepositoryAdapter,
 )
 from tests.conftest import make_test_app_config

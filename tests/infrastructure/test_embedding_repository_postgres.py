@@ -11,7 +11,7 @@ from sqlalchemy import delete
 from app.config.database import DatabaseConfig
 from app.db.models import Request, Summary, SummaryEmbedding
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
+from app.infrastructure.persistence.repositories.embedding_repository import (
     SqliteEmbeddingRepositoryAdapter,
 )
 

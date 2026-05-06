@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from app.adapters.attachment._attachment_shared import coerce_int
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.domain.models.request import RequestStatus
-from app.infrastructure.persistence.sqlite.repositories.attachment_processing_repository import (
+from app.infrastructure.persistence.repositories.attachment_processing_repository import (
     SqliteAttachmentProcessingRepositoryAdapter,
 )
 

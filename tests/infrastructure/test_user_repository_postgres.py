@@ -13,7 +13,7 @@ from app.config.database import DatabaseConfig
 from app.core.time_utils import UTC
 from app.db.models import Chat, User, UserInteraction
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+from app.infrastructure.persistence.repositories.user_repository import (
     SqliteUserRepositoryAdapter,
 )
 

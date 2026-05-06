@@ -10,7 +10,7 @@ from app.application.services.topic_search_utils import TopicSearchDocument
 from app.config.database import DatabaseConfig
 from app.db.models import Request, Summary, SummaryTag, Tag, TopicSearchIndex, User
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+from app.infrastructure.persistence.repositories.topic_search_repository import (
     SqliteTopicSearchRepositoryAdapter,
 )
 

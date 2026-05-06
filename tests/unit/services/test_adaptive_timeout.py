@@ -12,7 +12,7 @@ from app.application.services.adaptive_timeout import (
     TimeoutEstimate,
 )
 from app.config.adaptive_timeout import AdaptiveTimeoutConfig
-from app.infrastructure.persistence.sqlite.repositories.latency_stats_repository import (
+from app.infrastructure.persistence.repositories.latency_stats_repository import (
     LatencyStats,
     _compute_percentile,
     _extract_domain,

@@ -12,13 +12,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+from app.infrastructure.persistence.repositories.crawl_result_repository import (
     SqliteCrawlResultRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+from app.infrastructure.persistence.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.user_repository import (
+from app.infrastructure.persistence.repositories.user_repository import (
     SqliteUserRepositoryAdapter,
 )
 

@@ -10,7 +10,7 @@ from app.api.exceptions import ValidationError
 from app.api.models.digest import TriggerDigestResponse
 from app.api.services._digest_api_shared import logger, require_enabled
 from app.core.channel_utils import parse_channel_input
-from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import SqliteDigestStore
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

@@ -15,7 +15,7 @@ from app.core.time_utils import UTC
 from app.db.models import CrawlResult, Request, Summary, SummaryFeedback, TopicSearchIndex, User
 from app.db.session import Database
 from app.domain.models.request import RequestStatus
-from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+from app.infrastructure.persistence.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
 

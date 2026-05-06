@@ -19,7 +19,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.collection_repository import (
+from app.infrastructure.persistence.repositories.collection_repository import (
     SqliteCollectionRepositoryAdapter,
 )
 

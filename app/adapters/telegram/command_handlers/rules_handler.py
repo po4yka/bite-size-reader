@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.repositories.rule_repository import (
+from app.infrastructure.persistence.repositories.rule_repository import (
     SqliteRuleRepositoryAdapter,
 )
 

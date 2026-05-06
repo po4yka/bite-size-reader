@@ -439,7 +439,7 @@ class TestIdempotence:
     def test_list_delivered_ids_returns_persisted_post_ids(self, populated_db):
         """Immediately after create_delivery, those IDs appear in list_delivered_message_ids."""
         _db, _user, _channel, _sub = populated_db
-        from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
+        from app.infrastructure.persistence.digest_store import SqliteDigestStore
 
         store = SqliteDigestStore()
         assert store.list_delivered_message_ids(_TEST_UID) == set()
@@ -463,7 +463,7 @@ class TestIdempotence:
         window does not create a second DigestDelivery row.
         """
         _db, _user, _channel, _sub = populated_db
-        from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
+        from app.infrastructure.persistence.digest_store import SqliteDigestStore
 
         store = SqliteDigestStore()
 
@@ -490,7 +490,7 @@ class TestIdempotence:
     def test_new_posts_are_delivered_on_second_run(self, populated_db):
         """Posts with IDs not in the delivery history ARE delivered on the next run."""
         _db, _user, _channel, _sub = populated_db
-        from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
+        from app.infrastructure.persistence.digest_store import SqliteDigestStore
 
         store = SqliteDigestStore()
 

@@ -63,7 +63,7 @@ def print_results(results: list[Any], mode: str, query: str) -> None:
 async def search_fts(db: Database, query: str, max_results: int = 10) -> list[Any]:
     """Perform full-text search."""
     from app.application.services.topic_search import LocalTopicSearchService
-    from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    from app.infrastructure.persistence.repositories.topic_search_repository import (
         SqliteTopicSearchRepositoryAdapter,
     )
 
@@ -83,10 +83,10 @@ async def search_vector(
     """Perform vector similarity search."""
     from app.application.services.topic_search import TopicArticle
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
-    from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
+    from app.infrastructure.persistence.repositories.embedding_repository import (
         SqliteEmbeddingRepositoryAdapter,
     )
-    from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    from app.infrastructure.persistence.repositories.topic_search_repository import (
         SqliteTopicSearchRepositoryAdapter,
     )
     from app.infrastructure.search.vector_search_service import VectorSearchService
@@ -126,10 +126,10 @@ async def search_hybrid(
     """Perform hybrid search (FTS + vector)."""
     from app.application.services.topic_search import LocalTopicSearchService
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
-    from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
+    from app.infrastructure.persistence.repositories.embedding_repository import (
         SqliteEmbeddingRepositoryAdapter,
     )
-    from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    from app.infrastructure.persistence.repositories.topic_search_repository import (
         SqliteTopicSearchRepositoryAdapter,
     )
     from app.infrastructure.search.hybrid_search_service import HybridSearchService

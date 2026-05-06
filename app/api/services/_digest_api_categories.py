@@ -10,8 +10,8 @@ from app.api.exceptions import ValidationError
 from app.api.models.digest import CategoryResponse
 from app.api.services._digest_api_shared import require_enabled
 from app.core.channel_utils import parse_channel_input
-from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
-from app.infrastructure.persistence.sqlite.digest_subscription_ops import unsubscribe_channel_atomic
+from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_subscription_ops import unsubscribe_channel_atomic
 
 if TYPE_CHECKING:
     from app.config.digest import ChannelDigestConfig

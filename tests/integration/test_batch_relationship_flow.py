@@ -308,7 +308,7 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
 
     async def test_batch_session_repository_operations(self):
         """Test BatchSessionRepository CRUD operations."""
-        from app.infrastructure.persistence.sqlite.repositories.batch_session_repository import (
+        from app.infrastructure.persistence.repositories.batch_session_repository import (
             SqliteBatchSessionRepositoryAdapter,
         )
 

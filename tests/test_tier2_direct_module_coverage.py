@@ -11,8 +11,8 @@ from app.application import ports as repository_ports
 from app.core import async_utils, logging_utils, ui_strings
 from app.core.summary_contract_impl import contract as summary_contract
 from app.infrastructure.cache import batch_progress_cache
-from app.infrastructure.persistence.sqlite import base as sqlite_base
-from app.infrastructure.persistence.sqlite.repositories import summary_repository
+from app.infrastructure.persistence import base as sqlite_base
+from app.infrastructure.persistence.repositories import summary_repository
 from tests.conftest import make_test_app_config
 
 DIRECT_MODULES = [

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from app.api.exceptions import ValidationError
 from app.api.models.digest import DigestDeliveryResponse, DigestPreferenceResponse
 from app.api.services._digest_api_shared import require_enabled
-from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import SqliteDigestStore
 
 if TYPE_CHECKING:
     from app.config.digest import ChannelDigestConfig

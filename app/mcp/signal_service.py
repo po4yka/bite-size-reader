@@ -49,7 +49,7 @@ class SignalMcpService:
         return {"signals": [self._signal(row) for row in rows]}
 
     async def update_signal_feedback(self, signal_id: int, action: str) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
+        from app.infrastructure.persistence.repositories.signal_source_repository import (
             SqliteSignalSourceRepositoryAdapter,
         )
 
@@ -79,7 +79,7 @@ class SignalMcpService:
         return {"updated": bool(updated)}
 
     async def set_source_active(self, source_id: int, is_active: bool) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
+        from app.infrastructure.persistence.repositories.signal_source_repository import (
             SqliteSignalSourceRepositoryAdapter,
         )
 

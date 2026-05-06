@@ -18,7 +18,7 @@ from app.api.models.responses import BackupResponse, success_response
 from app.api.routers.auth import get_current_user
 from app.api.search_helpers import isotime
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.sqlite.backup_archive_service import (
+from app.infrastructure.persistence.backup_archive_service import (
     async_create_backup_archive,
     async_restore_from_archive,
 )

@@ -9,7 +9,7 @@ from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.domain.events.summary_events import SummaryCreated
-    from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
+    from app.infrastructure.persistence.repositories.summary_repository import (
         SqliteSummaryRepositoryAdapter,
     )
 

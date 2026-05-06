@@ -9,7 +9,7 @@ from sqlalchemy import delete, select
 from app.config.database import DatabaseConfig
 from app.db.models import Channel, ChannelSubscription, User
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.digest_subscription_ops import (
+from app.infrastructure.persistence.digest_subscription_ops import (
     async_subscribe_channel_atomic,
     async_unsubscribe_channel_atomic,
 )

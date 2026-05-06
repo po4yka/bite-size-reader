@@ -22,7 +22,7 @@ from app.db.models import (
     UserDigestPreference,
 )
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import SqliteDigestStore
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator

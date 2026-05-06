@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 
 from app.core.logging_utils import get_logger
 from app.core.ui_strings import t
-from app.infrastructure.persistence.sqlite.repositories.crawl_result_repository import (
+from app.infrastructure.persistence.repositories.crawl_result_repository import (
     SqliteCrawlResultRepositoryAdapter,
 )
 

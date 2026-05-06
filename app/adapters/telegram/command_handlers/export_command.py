@@ -16,7 +16,7 @@ from app.domain.services.import_export.export_serializers import (
     JsonExporter,
     NetscapeHtmlExporter,
 )
-from app.infrastructure.persistence.sqlite.repositories.user_content_repository import (
+from app.infrastructure.persistence.repositories.user_content_repository import (
     SqliteUserContentRepositoryAdapter,
 )
 

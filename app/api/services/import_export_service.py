@@ -14,7 +14,7 @@ from app.api.models.responses import ImportJobResponse
 from app.api.search_helpers import isotime
 from app.application.dto.import_bookmarks import ImportBookmarksCommand
 from app.application.use_cases.import_pipeline import ImportBookmarksUseCase
-from app.infrastructure.persistence.sqlite.repositories.user_content_repository import (
+from app.infrastructure.persistence.repositories.user_content_repository import (
     SqliteUserContentRepositoryAdapter,
 )
 

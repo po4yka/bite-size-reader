@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from app.adapters.content.pure_summary_service import PureSummaryService
     from app.adapters.content.scraper.chain import ContentScraperChain
     from app.config.rss import RSSConfig
-    from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
+    from app.infrastructure.persistence.repositories.rss_feed_repository import (
         SqliteRSSFeedRepositoryAdapter,
     )
 

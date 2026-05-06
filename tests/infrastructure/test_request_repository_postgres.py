@@ -12,7 +12,7 @@ from app.core.time_utils import UTC
 from app.db.models import CrawlResult, Request, Summary, TelegramMessage
 from app.db.session import Database
 from app.domain.models.request import RequestStatus
-from app.infrastructure.persistence.sqlite.repositories.request_repository import (
+from app.infrastructure.persistence.repositories.request_repository import (
     SqliteRequestRepositoryAdapter,
 )
 

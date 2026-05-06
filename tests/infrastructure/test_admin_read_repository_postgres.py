@@ -21,7 +21,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.admin_read_repository import (
+from app.infrastructure.persistence.repositories.admin_read_repository import (
     SqliteAdminReadRepositoryAdapter,
 )
 

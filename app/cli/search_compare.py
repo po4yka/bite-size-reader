@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 async def run_all_searches(db: Database, query: str, max_results: int = 10) -> dict:
     from app.application.services.topic_search import LocalTopicSearchService, TopicArticle
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
-    from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+    from app.infrastructure.persistence.repositories.topic_search_repository import (
         SqliteTopicSearchRepositoryAdapter,
     )
     from app.infrastructure.search.hybrid_search_service import HybridSearchService

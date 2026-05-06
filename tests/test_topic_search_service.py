@@ -14,7 +14,7 @@ try:
     from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
 except ImportError:
     DatabaseSessionManager = None  # type: ignore[assignment,misc]
-from app.infrastructure.persistence.sqlite.repositories.topic_search_repository import (
+from app.infrastructure.persistence.repositories.topic_search_repository import (
     SqliteTopicSearchRepositoryAdapter,
 )
 from tests.db_helpers import create_request, insert_summary

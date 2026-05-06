@@ -11,7 +11,7 @@ from sqlalchemy import delete
 from app.config.database import DatabaseConfig
 from app.db.models import AudioGeneration, Request, Summary
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.audio_generation_repository import (
+from app.infrastructure.persistence.repositories.audio_generation_repository import (
     SqliteAudioGenerationRepositoryAdapter,
 )
 

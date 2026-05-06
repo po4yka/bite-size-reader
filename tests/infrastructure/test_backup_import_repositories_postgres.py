@@ -11,10 +11,10 @@ from sqlalchemy import delete
 from app.config.database import DatabaseConfig
 from app.db.models import ImportJob, User, UserBackup
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.repositories.backup_repository import (
+from app.infrastructure.persistence.repositories.backup_repository import (
     SqliteBackupRepositoryAdapter,
 )
-from app.infrastructure.persistence.sqlite.repositories.import_job_repository import (
+from app.infrastructure.persistence.repositories.import_job_repository import (
     SqliteImportJobRepositoryAdapter,
 )
 

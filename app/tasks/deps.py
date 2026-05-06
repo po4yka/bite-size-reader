@@ -134,7 +134,7 @@ def create_rss_delivery_service(cfg: AppConfig, db: Database) -> Any:
         build_user_repository,
     )
     from app.di.shared import LazySemaphoreFactory
-    from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
+    from app.infrastructure.persistence.repositories.rss_feed_repository import (
         SqliteRSSFeedRepositoryAdapter,
     )
     from app.prompts.manager import get_prompt_manager
@@ -186,7 +186,7 @@ def create_signal_ingestion_worker(cfg: AppConfig, db: Database) -> Any:
     from app.application.services.signal_scoring import SignalScoringService
     from app.core.embedding_space import resolve_embedding_space_identifier
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
-    from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
+    from app.infrastructure.persistence.repositories.signal_source_repository import (
         SqliteSignalSourceRepositoryAdapter,
     )
     from app.infrastructure.search.vector_topic_similarity import VectorTopicSimilarityAdapter
@@ -219,7 +219,7 @@ def create_source_ingestion_runner(cfg: AppConfig, db: Database) -> Any:
     from app.adapters.ingestors.reddit import RedditIngester, RequestRateBudget
     from app.adapters.ingestors.runner import SourceIngestionRunner
     from app.adapters.ingestors.twitter import TwitterIngester, TwitterIngestionConfig
-    from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
+    from app.infrastructure.persistence.repositories.signal_source_repository import (
         SqliteSignalSourceRepositoryAdapter,
     )
 

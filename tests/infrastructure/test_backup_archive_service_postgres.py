@@ -10,7 +10,7 @@ from sqlalchemy import delete, select
 from app.config.database import DatabaseConfig
 from app.db.models import Request, Summary, User, UserBackup
 from app.db.session import Database
-from app.infrastructure.persistence.sqlite.backup_archive_service import (
+from app.infrastructure.persistence.backup_archive_service import (
     async_create_backup_archive,
 )
 
