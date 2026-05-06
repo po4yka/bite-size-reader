@@ -19,13 +19,13 @@ from app.infrastructure.persistence.sqlite.repositories.user_content_repository 
 )
 
 if TYPE_CHECKING:
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 
 class ImportExportService:
     """Owns import job tracking and export dataset assembly."""
 
-    def __init__(self, session_manager: DatabaseSessionManager | None = None) -> None:
+    def __init__(self, session_manager: Database | None = None) -> None:
         self._db = session_manager or get_session_manager()
         self._import_job_repo = get_import_job_repository(self._db)
         self._bookmark_import_repo = get_bookmark_import_repository(self._db)

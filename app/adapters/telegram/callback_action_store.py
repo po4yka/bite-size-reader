@@ -18,7 +18,7 @@ from app.infrastructure.persistence.sqlite.repositories.summary_repository impor
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -29,7 +29,7 @@ class CallbackActionStore:
     def __init__(
         self,
         *,
-        db: DatabaseSessionManager,
+        db: Database,
         asyncio_module: Any = asyncio,
         time_module: Any = time,
         summary_cache_ttl: float = 30.0,

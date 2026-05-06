@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -51,17 +51,17 @@ class BackgroundProcessor:
         self,
         *,
         cfg: AppConfig,
-        db: DatabaseSessionManager,
+        db: Database,
         url_processor: Any,
         redis: Any | None,
         semaphore: asyncio.Semaphore,
         audit_func: Callable[[str, str, dict], None],
-        url_processor_factory: Callable[[DatabaseSessionManager], Any] | None = None,
-        database_builder: Callable[[AppConfig], DatabaseSessionManager] | None = None,
+        url_processor_factory: Callable[[Database], Any] | None = None,
+        database_builder: Callable[[AppConfig], Database] | None = None,
         request_repo: Any | None = None,
         summary_repo: Any | None = None,
-        request_repo_factory: Callable[[DatabaseSessionManager], Any] | None = None,
-        summary_repo_factory: Callable[[DatabaseSessionManager], Any] | None = None,
+        request_repo_factory: Callable[[Database], Any] | None = None,
+        summary_repo_factory: Callable[[Database], Any] | None = None,
         deps: Any | None = None,
     ) -> None:
         self.cfg = cfg
@@ -150,17 +150,17 @@ class BackgroundProcessor:
             db_path=db_path,
         )
 
-    def _get_request_repo_for_db(self, db: DatabaseSessionManager) -> Any:
+    def _get_request_repo_for_db(self, db: Database) -> Any:
         if db == self.db or self._request_repo_factory is None:
             return self.request_repo
         return self._request_repo_factory(db)
 
-    def _get_summary_repo_for_db(self, db: DatabaseSessionManager) -> Any:
+    def _get_summary_repo_for_db(self, db: Database) -> Any:
         if db == self.db or self._summary_repo_factory is None:
             return self.summary_repo
         return self._summary_repo_factory(db)
 
-    def _maybe_override_db(self, db_path: str | None) -> tuple[DatabaseSessionManager, Any]:
+    def _maybe_override_db(self, db_path: str | None) -> tuple[Database, Any]:
         return self._db_override_factory.resolve(db_path)
 
     async def _release_lock(self, handle: Any) -> None:
@@ -185,7 +185,7 @@ class BackgroundProcessor:
     ) -> Any:
         return await self._retry_runner.run_with_backoff(func, stage, correlation_id)
 
-    async def _has_existing_summary(self, db: DatabaseSessionManager, request_id: int) -> bool:
+    async def _has_existing_summary(self, db: Database, request_id: int) -> bool:
         repo = self._get_summary_repo_for_db(db)
         try:
             return bool(await repo.async_get_summary_by_request(request_id))
@@ -201,7 +201,7 @@ class BackgroundProcessor:
             return False
 
     async def _mark_status(
-        self, db: DatabaseSessionManager, request_id: int, status: str, correlation_id: str | None
+        self, db: Database, request_id: int, status: str, correlation_id: str | None
     ) -> None:
         repo = self._get_request_repo_for_db(db)
         try:

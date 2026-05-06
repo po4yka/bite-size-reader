@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.url_handler import URLHandler
     from app.application.ports.users import UserRepositoryPort
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
     from app.security.rate_limiter import RedisUserRateLimiter, UserRateLimiter
 
 logger = logging.getLogger("app.adapters.telegram.message_router")
@@ -67,7 +67,7 @@ class MessageRouter:
         user_repo: UserRepositoryPort | None = None,
         callback_handler: CallbackHandler | None = None,
         lang: str = "en",
-        db: DatabaseSessionManager | None = None,
+        db: Database | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db

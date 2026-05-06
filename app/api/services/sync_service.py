@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.ports.users import UserRepositoryPort
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 else:
 
@@ -82,7 +82,7 @@ class SyncService:
     def __init__(
         self,
         cfg: AppConfig,
-        session_manager: DatabaseSessionManager,
+        session_manager: Database,
         *,
         user_repository: UserRepositoryPort | None = None,
         request_repository: RequestRepositoryPort | None = None,

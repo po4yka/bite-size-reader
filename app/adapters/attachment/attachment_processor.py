@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.ports.users import UserRepositoryPort
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
     from app.db.write_queue import DbWriteQueue
 
 logger = get_logger(__name__)
@@ -40,7 +40,7 @@ class AttachmentProcessor:
     def __init__(
         self,
         cfg: AppConfig,
-        db: DatabaseSessionManager,
+        db: Database,
         openrouter: LLMClientProtocol,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],

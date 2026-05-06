@@ -23,7 +23,7 @@ from app.infrastructure.persistence.sqlite.repositories.user_repository import (
 )
 
 if TYPE_CHECKING:
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 class MessagePersistence:
     """Handles message snapshots and database operations."""
 
-    def __init__(self, db: DatabaseSessionManager | Any) -> None:
+    def __init__(self, db: Database | Any) -> None:
         self.db = db  # Keep reference for legacy access if needed
         self.request_repo = SqliteRequestRepositoryAdapter(db)
         self.user_repo = SqliteUserRepositoryAdapter(db)

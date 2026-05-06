@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     )
     from app.application.ports.users import UserRepositoryPort
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -32,7 +32,7 @@ class AccessController:
     def __init__(
         self,
         cfg: AppConfig,
-        db: DatabaseSessionManager | None,
+        db: Database | None,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
         user_repo: UserRepositoryPort | None = None,

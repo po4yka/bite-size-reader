@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.url_handler import URLHandler
     from app.application.ports.audit import AuditLogRepositoryPort
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -32,7 +32,7 @@ class MessageHandler:
     def __init__(
         self,
         cfg: AppConfig,
-        db: DatabaseSessionManager | None,
+        db: Database | None,
         *,
         audit_repo: AuditLogRepositoryPort | None,
         task_manager: UserTaskManager | None,

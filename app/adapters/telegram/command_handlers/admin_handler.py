@@ -24,7 +24,7 @@ if TYPE_CHECKING:
         CommandExecutionContext,
     )
     from app.adapters.telegram.url_handler import URLHandler
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -38,7 +38,7 @@ class AdminHandler:
 
     def __init__(
         self,
-        db: DatabaseSessionManager,
+        db: Database,
         response_formatter: ResponseFormatter,
         url_processor: URLProcessor,
         url_handler: URLHandler | None = None,

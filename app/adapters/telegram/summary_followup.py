@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from app.adapters.external.formatting.protocols import (
         ResponseFormatterFacade as ResponseFormatter,
     )
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 
 class _FollowupSession(TypedDict):
@@ -47,7 +47,7 @@ class SummaryFollowupManager:
     def __init__(
         self,
         *,
-        db: DatabaseSessionManager,
+        db: Database,
         response_formatter: ResponseFormatter,
         url_handler: Any | None,
         lang: str,

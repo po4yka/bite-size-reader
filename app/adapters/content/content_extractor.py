@@ -28,7 +28,7 @@ from app.core.lang import detect_language
 from app.core.logging_utils import get_logger
 from app.core.url_utils import normalize_url, url_hash_sha256
 from app.core.validation import safe_message_id, safe_telegram_chat_id, safe_telegram_user_id
-from app.db.session import DatabaseSessionManager
+from app.db.session import Database
 from app.domain.models.source import SourceItem, SourceKind
 from app.infrastructure.cache.redis_cache import RedisCache
 from app.infrastructure.persistence.message_persistence import MessagePersistence
@@ -81,7 +81,7 @@ class ContentExtractor(
     def __init__(
         self,
         cfg: AppConfig,
-        db: DatabaseSessionManager,
+        db: Database,
         firecrawl: ContentScraperProtocol,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from app.application.ports.requests import LLMRepositoryPort, RequestRepositoryPort
     from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.ports.users import UserRepositoryPort
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
     from app.db.write_queue import DbWriteQueue
 
 logger = get_logger(__name__)
@@ -132,7 +132,7 @@ class LLMResponseWorkflow(
         self,
         *,
         cfg: Any,
-        db: DatabaseSessionManager,
+        db: Database,
         openrouter: Any,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict[str, Any]], None],

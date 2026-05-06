@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from app.application.services.related_reads_service import RelatedReadsService
     from app.application.services.topic_search import TopicSearchService
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
     from app.db.write_queue import DbWriteQueue
 
 logger = get_logger(__name__)
@@ -64,7 +64,7 @@ class URLProcessor:
     def __init__(
         self,
         cfg: AppConfig,
-        db: DatabaseSessionManager,
+        db: Database,
         firecrawl: ContentScraperProtocol,
         openrouter: LLMClientProtocol,
         response_formatter: ResponseFormatter,

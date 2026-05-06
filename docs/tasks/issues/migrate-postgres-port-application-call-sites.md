@@ -103,3 +103,8 @@ the most-ported repository are easiest to land first.
   PostgreSQL `.dump` files through `Database.create_backup_copy()`.
 - Verified this slice with focused ruff, focused mypy with skipped imports, and
   imports for `app.api.main` and `TelegramBot`.
+- Replaced stale type-only `DatabaseSessionManager` references across API,
+  Telegram, RSS, attachment, content, export, sync, background processing, and
+  message-persistence call sites with the SQLAlchemy `Database` facade type.
+- Verified this slice with focused ruff, focused mypy with skipped imports, and
+  import smoke checks for representative touched modules.

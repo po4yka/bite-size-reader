@@ -14,13 +14,13 @@ from app.infrastructure.persistence.sqlite.repositories.user_content_repository 
 
 if TYPE_CHECKING:
     from app.api.models.requests import CreateHighlightRequest, UpdateHighlightRequest
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 
 class SummaryHighlightService:
     """Owns highlight persistence and summary ownership checks."""
 
-    def __init__(self, session_manager: DatabaseSessionManager | None = None) -> None:
+    def __init__(self, session_manager: Database | None = None) -> None:
         self._db = session_manager or get_session_manager()
         self._user_content_repo = SqliteUserContentRepositoryAdapter(self._db)
 

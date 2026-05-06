@@ -16,7 +16,7 @@ from app.infrastructure.persistence.sqlite.repositories.signal_source_repository
 )
 
 if TYPE_CHECKING:
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -24,7 +24,7 @@ MAX_FETCH_ERRORS = 10
 SIGNAL_SOURCE_BASE_BACKOFF_SECONDS = 300
 
 
-async def poll_all_feeds(db: DatabaseSessionManager) -> dict:
+async def poll_all_feeds(db: Database) -> dict:
     """Poll all active RSS feeds for new items."""
     repo = SqliteRSSFeedRepositoryAdapter(db)
     signal_repo = SqliteSignalSourceRepositoryAdapter(db)

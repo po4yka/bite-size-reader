@@ -19,7 +19,7 @@ if TYPE_CHECKING:
         ResponseFormatterFacade as ResponseFormatter,
     )
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -42,7 +42,7 @@ class ForwardContentProcessor:
     def __init__(
         self,
         cfg: AppConfig,
-        db: DatabaseSessionManager,
+        db: Database,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
     ) -> None:

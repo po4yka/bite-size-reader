@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from app.application.ports.users import UserRepositoryPort
     from app.application.services.adaptive_timeout import AdaptiveTimeoutService
     from app.core.verbosity import VerbosityResolver
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -62,7 +62,7 @@ class URLHandler:
 
     def __init__(
         self,
-        db: DatabaseSessionManager | None,
+        db: Database | None,
         response_formatter: ResponseFormatter,
         url_processor: URLProcessor,
         adaptive_timeout_service: AdaptiveTimeoutService | None = None,

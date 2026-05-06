@@ -16,7 +16,7 @@ from app.infrastructure.persistence.sqlite.repositories.user_content_repository 
 
 if TYPE_CHECKING:
     from app.api.models.requests import CreateGoalRequest
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 
 def _safe_isoformat(dt_value: Any) -> str | None:
@@ -36,7 +36,7 @@ def _safe_isoformat(dt_value: Any) -> str | None:
 class UserGoalService:
     """Owns goal persistence, scope validation, and progress calculations."""
 
-    def __init__(self, session_manager: DatabaseSessionManager | None = None) -> None:
+    def __init__(self, session_manager: Database | None = None) -> None:
         self._db = session_manager or get_session_manager()
         self._user_content_repo = SqliteUserContentRepositoryAdapter(self._db)
         self._summary_repo = get_summary_repository(self._db)

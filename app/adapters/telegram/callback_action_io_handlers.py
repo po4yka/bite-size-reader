@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.callback_action_presenters import CallbackActionPresenters
     from app.adapters.telegram.callback_action_store import CallbackActionStore
     from app.adapters.telegram.url_handler import URLHandler
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -26,7 +26,7 @@ class CallbackActionIOHandlers:
     def __init__(
         self,
         *,
-        db: DatabaseSessionManager,
+        db: Database,
         response_formatter: ResponseFormatter,
         store: CallbackActionStore,
         presenters: CallbackActionPresenters,

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from app.application.ports.requests import RequestRepositoryPort
     from app.application.ports.users import UserRepositoryPort
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 _PROMPT_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
 _MAX_PDF_TEXT_CHARS = 45_000
@@ -47,7 +47,7 @@ class AttachmentProcessorContext:
     """Shared runtime state for the attachment processor helpers."""
 
     cfg: AppConfig
-    db: DatabaseSessionManager
+    db: Database
     openrouter: LLMClientProtocol
     response_formatter: ResponseFormatter
     audit_func: Callable[[str, str, dict[str, Any]], None]

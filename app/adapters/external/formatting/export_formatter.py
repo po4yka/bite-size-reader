@@ -19,7 +19,7 @@ from app.infrastructure.persistence.sqlite.repositories.summary_repository impor
 )
 
 if TYPE_CHECKING:
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 class ExportFormatter:
     """Generates export files (PDF, Markdown, HTML) for summaries."""
 
-    def __init__(self, db: DatabaseSessionManager) -> None:
+    def __init__(self, db: Database) -> None:
         self.db = db
         self._request_repo = SqliteRequestRepositoryAdapter(db)
         self._summary_repo = SqliteSummaryRepositoryAdapter(db)

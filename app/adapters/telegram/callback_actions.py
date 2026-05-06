@@ -18,7 +18,7 @@ if TYPE_CHECKING:
         ResponseFormatterFacade as ResponseFormatter,
     )
     from app.adapters.telegram.url_handler import URLHandler
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
     from app.infrastructure.search.hybrid_search_service import HybridSearchService
 
 # Timeout constants for expensive callback operations (seconds).
@@ -38,7 +38,7 @@ class CallbackActionService:
 
     def __init__(
         self,
-        db: DatabaseSessionManager,
+        db: Database,
         response_formatter: ResponseFormatter,
         url_handler: URLHandler | None = None,
         hybrid_search: HybridSearchService | None = None,
