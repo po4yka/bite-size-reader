@@ -115,3 +115,6 @@ the most-ported repository are easiest to land first.
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_digest_subscription_ops_postgres.py`
   → `2 passed`, focused ruff, focused mypy with skipped imports, and digest
   import smoke checks.
+- Removed SQLite-specific OpenTelemetry instrumentation from runtime tracing
+  configuration and regenerated `uv.lock`/`requirements-all.txt` without
+  `opentelemetry-instrumentation-sqlite3`.

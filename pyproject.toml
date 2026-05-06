@@ -253,7 +253,6 @@ otel = [
   "opentelemetry-instrumentation-fastapi>=0.62b0",
   "opentelemetry-instrumentation-httpx>=0.62b0",
   "opentelemetry-instrumentation-redis>=0.62b0",
-  "opentelemetry-instrumentation-sqlite3>=0.62b0",
   "opentelemetry-instrumentation-logging>=0.62b0",
 ]
 

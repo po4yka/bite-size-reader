@@ -14,7 +14,6 @@ class OtelConfig(BaseSettings):
         default="http://tempo:4317",
         validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT",
     )
-    sqlite3_enabled: bool = Field(default=False, validation_alias="OTEL_SQLITE3_ENABLED")
     db_session_spans_enabled: bool = Field(
         default=False, validation_alias="OTEL_DB_SESSION_SPANS_ENABLED"
     )

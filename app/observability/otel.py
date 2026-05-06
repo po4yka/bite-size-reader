@@ -36,7 +36,7 @@ def _is_enabled(cfg: AppConfig | None) -> bool:
 def init_tracing(cfg: AppConfig | None = None) -> None:
     """Initialise the OTel SDK.  No-op when [otel] extra is absent or OTEL_ENABLED=false.
 
-    Call once per process, before any httpx/sqlite/redis client is constructed.
+    Call once per process, before any httpx/redis client is constructed.
     Subsequent calls are silently ignored (idempotent).
     """
     global _initialized
@@ -55,12 +55,6 @@ def init_tracing(cfg: AppConfig | None = None) -> None:
         if cfg is not None
         else os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://tempo:4317")
     )
-    sqlite3_on = (
-        cfg.otel.sqlite3_enabled
-        if cfg is not None
-        else (os.getenv("OTEL_SQLITE3_ENABLED", "").lower() in ("1", "true"))
-    )
-
     process_role = os.getenv("RATATOSKR_PROCESS_ROLE", "unknown")
     service_version = os.getenv("RATATOSKR_VERSION", "0.1.0")
     deploy_env = os.getenv("RATATOSKR_ENV", "production")
@@ -88,11 +82,6 @@ def init_tracing(cfg: AppConfig | None = None) -> None:
     HTTPXClientInstrumentor().instrument()
     RedisInstrumentor().instrument()
     LoggingInstrumentor().instrument(set_logging_format=False)
-
-    if sqlite3_on:
-        from opentelemetry.instrumentation.sqlite3 import SQLite3Instrumentor
-
-        SQLite3Instrumentor().instrument()
 
     _initialized = True
 
