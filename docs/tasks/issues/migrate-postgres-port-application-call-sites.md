@@ -85,3 +85,9 @@ the most-ported repository are easiest to land first.
   → `6 passed`), runtime Postgres smoke tests
   (`TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/db/test_runtime_services_postgres.py`
   → `3 passed`), focused ruff, and focused mypy with skipped imports.
+- Ported API health database checks from SQLite `execute_sql` and
+  `asyncio.to_thread` to native async PostgreSQL `Database.healthcheck()` and
+  inspection calls, with cached detailed diagnostics still preserved.
+- Verified this slice with
+  `pytest tests/test_health_router_postgres.py` → `1 passed`, focused ruff,
+  focused mypy with skipped imports, and `python -c 'import app.api.main'`.

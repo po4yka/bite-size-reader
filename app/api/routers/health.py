@@ -40,19 +40,15 @@ def clear_health_check_cache() -> None:
     _database_details_cached_at = 0.0
 
 
-def _compute_database_details(db: Any) -> dict[str, Any]:
-    """Compute heavier database diagnostics using the shared session manager."""
-    db_conn = db.database
-
-    cursor = db_conn.execute_sql(
-        "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()"
-    )
-    size_bytes = cursor.fetchone()[0] if cursor else 0
-    integrity_ok, integrity_result = db.check_integrity()
+async def _compute_database_details(db: Any) -> dict[str, Any]:
+    """Compute heavier PostgreSQL database diagnostics using the shared runtime."""
+    size_mb = await db.inspection.async_database_size_mb()
+    size_bytes = int(size_mb * 1024 * 1024)
+    integrity_ok, integrity_result = await db.inspection.async_check_integrity()
 
     result: dict[str, Any] = {
         "size_bytes": size_bytes,
-        "size_mb": round(size_bytes / (1024 * 1024), 2) if size_bytes else 0,
+        "size_mb": size_mb,
         "integrity_ok": integrity_ok,
     }
     if not integrity_ok:
@@ -84,7 +80,7 @@ async def _get_cached_database_details(request: Request | None = None) -> dict[s
             _db = resolve_api_runtime(request).db
         if _db is None:
             _db = get_session_manager()
-        details = await asyncio.to_thread(_compute_database_details, _db)
+        details = await _compute_database_details(_db)
         _database_details_cache = details
         _database_details_cached_at = now
         return dict(details)
@@ -103,9 +99,7 @@ async def _check_database(
             db = resolve_api_runtime(request).db
         if db is None:
             db = get_session_manager()
-        db_conn = db.database
-        cursor = db_conn.execute_sql("SELECT 1")
-        cursor.fetchone()
+        await db.healthcheck()
         latency_ms = (time.perf_counter() - start) * 1000
 
         result: dict[str, Any] = {
