@@ -21,7 +21,7 @@ services:
       - /tmp
     environment:
       - TEXTACY_ENABLED=1
-      - DB_PATH=/data/ratatoskr.db
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://ratatoskr_app:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/ratatoskr}
       - QDRANT_URL=http://qdrant:6333
       - REDIS_ENABLED=1
       - REDIS_HOST=redis
@@ -55,12 +55,14 @@ services:
           memory: 512M
           cpus: "0.50"
     healthcheck:
-      test: ["CMD", "python", "-c", "import sqlite3, os; conn = sqlite3.connect(os.getenv('DB_PATH', '/data/ratatoskr.db'), timeout=5); conn.execute('SELECT 1').fetchone(); conn.close()"]
+      test: ["CMD", "python", "-m", "app.cli.healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 60s
     depends_on:
+      postgres:
+        condition: service_healthy
       qdrant:
         condition: service_healthy
       redis:
@@ -97,7 +99,7 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - API_WORKERS=${API_WORKERS:-1}
-      - DB_PATH=/data/ratatoskr.db
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://ratatoskr_app:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/ratatoskr}
       - QDRANT_URL=http://qdrant:6333
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
@@ -125,6 +127,8 @@ services:
     ports:
       - "127.0.0.1:18000:8000"
     depends_on:
+      postgres:
+        condition: service_healthy
       qdrant:
         condition: service_healthy
       redis:
@@ -138,7 +142,7 @@ services:
         required: false
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      test: ["CMD", "python", "-m", "app.cli.healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -691,6 +695,39 @@ services:
       - no-new-privileges:true
     stop_grace_period: 30s
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: ratatoskr-postgres
+    environment:
+      - POSTGRES_DB=ratatoskr
+      - POSTGRES_USER=ratatoskr_app
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - ratatoskr_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "0.50"
+        reservations:
+          memory: 256M
+          cpus: "0.10"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+
   redis:
     image: redis:7-alpine
     container_name: ratatoskr-redis
@@ -723,6 +760,7 @@ services:
       - no-new-privileges:true
     stop_grace_period: 30s
 volumes:
+  ratatoskr_postgres_data:
   qdrant_data:
   redis_data:
   firecrawl_redis_data:

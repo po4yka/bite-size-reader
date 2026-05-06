@@ -5,6 +5,8 @@
 # built from source and runs as a native systemd service on port 6333.
 # This overlay redirects all services to the host-native Qdrant and marks
 # the qdrant compose service as optional so the bot starts without it.
+# Postgres uses the dedicated ratatoskr-postgres container from the base
+# compose file; no Pi-specific shared database override is needed.
 #
 # Usage (Pi only):
 #   docker compose \
@@ -57,3 +59,6 @@ services:
     # required: false so dependents start even when this service is absent.
     profiles:
       - disabled-on-pi
+
+  postgres:
+    platform: linux/arm64

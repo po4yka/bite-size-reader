@@ -1,19 +1,17 @@
 ---
 title: Add Postgres service to docker-compose
-status: backlog
+status: review
 area: ops
 priority: high
 owner: Nikita Pochaev
 blocks:
   - migrate-postgres-build-data-migrator
   - migrate-postgres-write-pi-runbook
-blocked_by:
-  - migrate-postgres-decide-deployment-topology
 created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Add Postgres service to docker-compose #repo/ratatoskr #area/ops #status/backlog ⏫
+- [ ] #task Add Postgres service to docker-compose #repo/ratatoskr #area/ops #status/review ⏫
 
 ## Objective
 
@@ -44,18 +42,21 @@ D1 confirmed: dedicated `ratatoskr-postgres` container. Required additions to
 
 ## Acceptance criteria
 
-- [ ] `docker compose -f ops/docker/docker-compose.yml up -d postgres` boots a
+- [x] `docker compose -f ops/docker/docker-compose.yml up -d postgres` boots a
       healthy Postgres on the developer laptop.
 - [ ] With `DATABASE_URL` set in `.env`, `ratatoskr` and `mobile-api` services start
       and pass their healthchecks (which become DSN-aware in O3).
-- [ ] No `DB_PATH` volume mount remains for Postgres deployments (the `/data` mount
+- [x] No `DB_PATH` volume mount remains for Postgres deployments (the `/data` mount
       stays for video downloads and other artefacts; only the SQLite file is gone).
-- [ ] `.env.example` documents `DATABASE_URL` and `POSTGRES_PASSWORD` with empty
+- [x] `.env.example` documents `DATABASE_URL` and `POSTGRES_PASSWORD` with empty
       defaults and a comment explaining the required format.
-- [ ] Pi overlay file is updated per D1 decision; both code paths render valid YAML
+- [x] Pi overlay file is updated per D1 decision; both code paths render valid YAML
       (`docker compose config` exits 0).
 
 ## Notes
 
 `postgres:16-alpine` ships aarch64. Do not use `postgres:16` (Debian-based, ~2× the
 image size with no relevant features for this workload).
+
+Runtime start/healthcheck verification for `ratatoskr` and `mobile-api` remains
+pending the DSN-aware `app.cli.healthcheck` implementation tracked by O2/O3.
