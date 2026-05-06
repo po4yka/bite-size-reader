@@ -1352,11 +1352,11 @@ alembic upgrade head
 python -m app.cli.migrate_db
 ```
 
-Alembic revision files live in `app/db/alembic/versions/`. Each revision is auto-generated and tracks the full DDL history of the SQLite schema.
+Alembic revision files live in `app/db/alembic/versions/`. Each revision is auto-generated and tracks the full DDL history of the database schema.
 
 The legacy hand-written scripts in `app/cli/migrations/` (15 scripts + `migration_runner.py`) are **deprecated**. They must not be run against any database and are retained for historical reference only. See `app/cli/migrations/_DEPRECATED.md` for details.
 
-`app/db/schema_migrator.py` is not a migration system — it performs only idempotent startup JSON coercion on existing rows (fixing malformed data) and runs automatically on every bot start via `DatabaseSessionManager`.
+Startup schema changes are not performed by application code; run Alembic before starting services.
 
 ---
 

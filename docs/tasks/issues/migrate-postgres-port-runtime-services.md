@@ -97,3 +97,8 @@ In-scope files and their target shapes:
   `app/db/runtime/inspection.py` and `app/api/routers/health.py`.
 - Verified this removal with focused ruff, focused mypy with skipped imports,
   and `pytest tests/test_health_router_postgres.py` → `1 passed`.
+- Deleted obsolete SQLite maintenance and startup schema-coercion helpers
+  (`app/db/database_maintenance.py`, `app/db/schema_migrator.py`); maintenance
+  now lives in `app/db/runtime/maintenance.py` and Alembic owns schema changes.
+- Verified this removal with focused ruff and focused mypy over the async DB
+  runtime/session modules.
