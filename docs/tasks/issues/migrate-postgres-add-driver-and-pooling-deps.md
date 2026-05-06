@@ -1,6 +1,6 @@
 ---
 title: Add SQLAlchemy 2.0 and asyncpg dependencies
-status: backlog
+status: review
 area: db
 priority: high
 owner: Nikita Pochaev
@@ -12,7 +12,7 @@ created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Add SQLAlchemy 2.0 and asyncpg dependencies #repo/ratatoskr #area/db #status/backlog ⏫
+- [ ] #task Add SQLAlchemy 2.0 and asyncpg dependencies #repo/ratatoskr #area/db #status/review ⏫
 
 ## Objective
 
@@ -36,15 +36,15 @@ The Pi runs aarch64; `asyncpg` ships aarch64 wheels.
 
 ## Acceptance criteria
 
-- [ ] `pyproject.toml` adds `sqlalchemy[asyncio]>=2.0.30,<3.0`, `asyncpg>=0.29`,
+- [x] `pyproject.toml` adds `sqlalchemy[asyncio]>=2.0.30,<3.0`, `asyncpg>=0.29`,
       `greenlet>=3.0` to project dependencies. Existing `peewee` and `alembic` lines
       remain.
-- [ ] `uv.lock` regenerated via `uv lock` and committed.
-- [ ] `make lint` and `make type` still pass; mypy on the new SQLAlchemy plugin
+- [x] `uv.lock` regenerated via `uv lock` and committed.
+- [x] `make lint` and `make type` still pass; mypy on the new SQLAlchemy plugin
       surface is configured (`[tool.mypy]` adds the `sqlalchemy.ext.mypy.plugin`).
-- [ ] Docker build succeeds locally and on aarch64 (`docker buildx build --platform
+- [x] Docker build succeeds locally and on aarch64 (`docker buildx build --platform
       linux/arm64 …`) — verifies the binary wheels resolve.
-- [ ] No runtime code yet imports SQLAlchemy beyond a smoke import in a test fixture
+- [x] No runtime code yet imports SQLAlchemy beyond a smoke import in a test fixture
       that asserts `from sqlalchemy import select` works.
 
 ## Notes
