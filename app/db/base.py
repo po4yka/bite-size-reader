@@ -25,5 +25,3 @@ def _update_timestamps_and_server_version(_mapper: Any, _connection: Any, target
         if next_version <= current:
             next_version = current + 1
         target.server_version = next_version
-        if hasattr(target, "version"):
-            target.version = next_version

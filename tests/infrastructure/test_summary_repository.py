@@ -1,122 +1,236 @@
-"""Behavioral tests for SqliteSummaryRepositoryAdapter using in-memory SQLite."""
+"""Postgres-backed behavioral tests for the summary repository."""
 
 from __future__ import annotations
 
-import asyncio
+import datetime as dt
+import os
+from typing import TYPE_CHECKING
 
-import peewee
 import pytest
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert
 
-from app.db.models import Request, Summary, database_proxy
+from app.config.database import DatabaseConfig
+from app.core.time_utils import UTC
+from app.db.models import CrawlResult, Request, Summary, SummaryFeedback, TopicSearchIndex, User
+from app.db.session import Database
+from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.sqlite.repositories.summary_repository import (
     SqliteSummaryRepositoryAdapter,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
-class _SyncSession:
-    """Minimal session adapter that runs sync DB operations in the calling thread."""
 
-    def __init__(self, db: peewee.Database) -> None:
-        self.database = db
-
-    async def async_execute(self, operation, *args, **kwargs):
-        return await asyncio.to_thread(operation, *args)
-
-    async def async_execute_transaction(self, operation, *args, **kwargs):
-        return await asyncio.to_thread(operation, *args)
+def _test_dsn() -> str:
+    return os.getenv("TEST_DATABASE_URL", "")
 
 
 @pytest.fixture
-def in_memory_db(tmp_path):
-    old_db = database_proxy.obj
-    db = peewee.SqliteDatabase(
-        str(tmp_path / "test_summary_repo.db"), pragmas={"journal_mode": "wal"}
+async def database() -> AsyncGenerator[Database]:
+    dsn = _test_dsn()
+    if not dsn:
+        pytest.skip("TEST_DATABASE_URL is required for Postgres repository tests")
+
+    db = Database(DatabaseConfig(dsn=dsn, pool_size=1, max_overflow=1))
+    await db.migrate()
+    await _clear(db)
+    try:
+        yield db
+    finally:
+        await _clear(db)
+        await db.dispose()
+
+
+async def _clear(database: Database) -> None:
+    async with database.transaction() as session:
+        await session.execute(delete(SummaryFeedback))
+        await session.execute(delete(TopicSearchIndex))
+        await session.execute(delete(CrawlResult))
+        await session.execute(delete(Summary))
+        await session.execute(delete(Request))
+        await session.execute(delete(User))
+
+
+async def _create_request(
+    database: Database,
+    *,
+    user_id: int = 101,
+    chat_id: int = 202,
+    url: str = "https://example.com/summary",
+    status: str = "pending",
+) -> int:
+    async with database.transaction() as session:
+        await session.execute(
+            insert(User)
+            .values(telegram_user_id=user_id, username=f"user-{user_id}")
+            .on_conflict_do_nothing(index_elements=[User.telegram_user_id])
+        )
+        request = Request(
+            type="url",
+            status=status,
+            correlation_id=f"summary-{user_id}-{url}",
+            user_id=user_id,
+            chat_id=chat_id,
+            input_url=url,
+            normalized_url=url,
+            dedupe_hash=f"summary-{user_id}-{url}",
+            content_text="postgres sqlalchemy topic",
+        )
+        session.add(request)
+        await session.flush()
+        return request.id
+
+
+@pytest.mark.asyncio
+async def test_summary_repository_upserts_reads_and_finalizes(database: Database) -> None:
+    repo = SqliteSummaryRepositoryAdapter(database)
+    request_id = await _create_request(database)
+
+    v1 = await repo.async_upsert_summary(
+        request_id,
+        "en",
+        {"summary_250": "first", "topic_tags": ["postgres"]},
+        {"score": 1},
     )
-    database_proxy.initialize(db)
-    db.bind([Request, Summary], bind_refs=False, bind_backrefs=False)
-    db.create_tables([Request, Summary])
-    yield db
-    db.drop_tables([Summary, Request])
-    db.close()
-    database_proxy.initialize(old_db)
-    for model in (Request, Summary):
-        model._meta.database = database_proxy
-
-
-@pytest.fixture
-def repo(in_memory_db):
-    return SqliteSummaryRepositoryAdapter(_SyncSession(in_memory_db))
-
-
-def _create_request(user_id: int = 1, url: str = "https://example.com") -> Request:
-    return Request.create(
-        type="url",
-        status="pending",
-        correlation_id=f"cid-{url}",
-        user_id=user_id,
-        input_url=url,
-        normalized_url=url,
-        dedupe_hash=f"hash-{url}",
+    v2 = await repo.async_finalize_request_summary(
+        request_id,
+        "en",
+        {"summary_250": "second", "topic_tags": ["postgres", "sqlalchemy"]},
+        {"score": 2},
+        request_status=RequestStatus.COMPLETED,
     )
 
+    assert v2 == v1 + 1
+    summary = await repo.async_get_summary_by_request(request_id)
+    assert summary is not None
+    assert summary["json_payload"]["summary_250"] == "second"
+    assert await repo.async_get_summary_id_by_request(request_id) == summary["id"]
 
-@pytest.mark.asyncio
-async def test_upsert_and_get_summary(in_memory_db, repo):
-    req = _create_request()
-    payload = {"summary_250": "short", "summary_1000": "long"}
+    by_id = await repo.async_get_summary_by_id(summary["id"])
+    assert by_id is not None
+    assert by_id["user_id"] == 101
 
-    summary_id = await repo.async_upsert_summary(req.id, "en", payload)
-
-    assert isinstance(summary_id, int)
-    assert summary_id > 0
-
-    result = await repo.async_get_summary_by_request(req.id)
-    assert result is not None
-    # model_to_dict returns the FK as a bare int (the request id)
-    assert result["request"] == req.id
-    assert result["lang"] == "en"
-
-
-@pytest.mark.asyncio
-async def test_upsert_summary_second_call_updates_payload(in_memory_db, repo):
-    req = _create_request(url="https://idempotent.com")
-
-    v1 = await repo.async_upsert_summary(req.id, "en", {"summary_250": "v1"})
-    v2 = await repo.async_upsert_summary(req.id, "en", {"summary_250": "v2"})
-
-    # Both return a version (monotonic int), second must be >= first
-    assert isinstance(v1, int)
-    assert isinstance(v2, int)
-    assert v2 >= v1
-    result = await repo.async_get_summary_by_request(req.id)
-    assert result["json_payload"]["summary_250"] == "v2"
+    async with database.session() as session:
+        request_status = await session.scalar(
+            select(Request.status).where(Request.id == request_id)
+        )
+    assert request_status == RequestStatus.COMPLETED.value
 
 
 @pytest.mark.asyncio
-async def test_mark_as_read_and_unread(in_memory_db, repo):
-    req = _create_request(url="https://read-test.com")
-    await repo.async_upsert_summary(req.id, "en", {"summary_250": "text"})
-    summary = await repo.async_get_summary_by_request(req.id)
+async def test_summary_repository_context_state_sync_and_feedback(database: Database) -> None:
+    repo = SqliteSummaryRepositoryAdapter(database)
+    request_id = await _create_request(database, user_id=303, chat_id=404)
+    summary_version = await repo.async_upsert_summary(
+        request_id,
+        "en",
+        {"summary_250": "body", "key_ideas": ["one"]},
+    )
+    summary = await repo.async_get_summary_by_request(request_id)
+    assert summary is not None
     summary_id = summary["id"]
 
-    assert summary["is_read"] is False
+    async with database.transaction() as session:
+        session.add(
+            CrawlResult(
+                request_id=request_id,
+                firecrawl_success=True,
+                content_markdown="body",
+                metadata_json={"source": "test"},
+            )
+        )
+
+    context = await repo.async_get_summary_context_by_id(summary_id)
+    assert context is not None
+    assert context["summary"]["id"] == summary_id
+    assert context["request"]["id"] == request_id
+    assert context["crawl_result"]["request_id"] == request_id
 
     await repo.async_mark_summary_as_read(summary_id)
-    updated = await repo.async_get_summary_by_request(req.id)
-    assert updated["is_read"] is True
-
+    assert await repo.async_get_read_status(request_id) is True
+    assert await repo.async_get_unread_summary_by_request_id(request_id) is None
     await repo.async_mark_summary_as_unread(summary_id)
-    reverted = await repo.async_get_summary_by_request(req.id)
-    assert reverted["is_read"] is False
+    assert await repo.async_get_read_status(request_id) is False
+    assert (await repo.async_get_unread_summary_by_request_id(request_id))["id"] == summary_id
+
+    await repo.async_update_reading_progress(summary_id, 0.5, 123)
+    assert await repo.async_toggle_favorite(summary_id) is True
+    await repo.async_set_favorite(summary_id, False)
+    assert await repo.async_apply_sync_change(summary_id, is_read=True) >= summary_version
+    assert (await repo.async_get_summary_for_sync_apply(summary_id, 303))["id"] == summary_id
+
+    feedback = await repo.async_upsert_feedback(303, summary_id, 5, ["clear"], "good")
+    updated_feedback = await repo.async_upsert_feedback(303, summary_id, None, None, "still good")
+    assert feedback["id"] == updated_feedback["id"]
+    assert updated_feedback["rating"] == 5
+    assert updated_feedback["issues"] == ["clear"]
+    assert updated_feedback["comment"] == "still good"
 
 
 @pytest.mark.asyncio
-async def test_get_summary_by_id_returns_none_for_missing(repo):
-    result = await repo.async_get_summary_by_id(9999)
-    assert result is None
+async def test_summary_repository_user_lists_and_topic_filter(database: Database) -> None:
+    repo = SqliteSummaryRepositoryAdapter(database)
+    first_request_id = await _create_request(
+        database, user_id=505, url="https://example.com/postgres"
+    )
+    second_request_id = await _create_request(
+        database, user_id=505, url="https://example.com/other"
+    )
+    first_version = await repo.async_upsert_summary(
+        first_request_id,
+        "en",
+        {"summary_250": "Postgres storage migration", "topic_tags": ["postgres"]},
+    )
+    await repo.async_upsert_summary(
+        second_request_id,
+        "en",
+        {"summary_250": "Unrelated mobile update", "topic_tags": ["mobile"]},
+        is_read=True,
+    )
+    first_summary = await repo.async_get_summary_by_request(first_request_id)
+    assert first_summary is not None
 
+    async with database.transaction() as session:
+        session.add(
+            TopicSearchIndex(
+                request_id=first_request_id,
+                url="https://example.com/postgres",
+                title="Postgres migration",
+                snippet="Postgres storage",
+                body="Postgres storage migration",
+                tags="postgres",
+            )
+        )
 
-@pytest.mark.asyncio
-async def test_get_summary_by_request_returns_none_for_missing(repo):
-    result = await repo.async_get_summary_by_request(9999)
-    assert result is None
+    summaries, total, unread = await repo.async_get_user_summaries(505, limit=10)
+    assert total == 2
+    assert unread == 1
+    assert [row["request"]["id"] for row in summaries] == [second_request_id, first_request_id]
+
+    unread_topic_ids = [
+        row["id"] for row in await repo.async_get_unread_summaries(505, None, topic="postgres")
+    ]
+    assert unread_topic_ids == [first_summary["id"]]
+    assert (await repo.async_get_summaries_by_request_ids([first_request_id]))[first_request_id][
+        "id"
+    ] == first_summary["id"]
+    assert [row["id"] for row in await repo.async_get_all_for_user(505)] == [
+        first_summary["id"],
+        (await repo.async_get_summary_by_request(second_request_id))["id"],
+    ]
+    assert await repo.async_get_max_server_version(505) is not None
+    assert (
+        await repo.async_get_user_summaries_for_insights(
+            505, dt.datetime.now(UTC) - dt.timedelta(days=1), 5
+        )
+    )[0]["version"] == first_version
+    assert (
+        len(
+            await repo.async_get_user_summary_activity_dates(
+                505, dt.datetime.now(UTC) - dt.timedelta(days=1)
+            )
+        )
+        == 2
+    )

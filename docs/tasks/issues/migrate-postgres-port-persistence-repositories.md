@@ -81,6 +81,14 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_request_repository_postgres.py tests/infrastructure/test_llm_crawl_repositories_postgres.py -q`
   → `4 passed`.
+- Ported the summary repository to SQLAlchemy/AsyncSession, removed the
+  summary-specific Peewee mixins, and replaced the old in-memory SQLite summary
+  test with a live Postgres repository test.
+- Fixed the SQLAlchemy base update hook so `server_version` updates do not
+  overwrite `Summary.version`.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_summary_repository.py -q`
+  → `3 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
