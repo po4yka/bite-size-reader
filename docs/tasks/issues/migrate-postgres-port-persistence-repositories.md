@@ -158,6 +158,12 @@ Conventions for the port:
 - Verified the expanded focused repository suite with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_latency_stats_repository_postgres.py -q`
   → `31 passed`.
+- Ported `admin_read_repository.py` to SQLAlchemy/AsyncSession with live
+  Postgres coverage for admin user counts, job status, content health, system
+  metrics, and filtered audit-log reads.
+- Verified the expanded focused repository suite with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_admin_read_repository_postgres.py -q`
+  → `33 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

@@ -1,12 +1,14 @@
-"""SQLite read adapter for admin dashboards and audit log views."""
+"""SQLAlchemy read adapter for admin dashboards and audit log views."""
 
 from __future__ import annotations
 
-from typing import Any
+import datetime as dt
+from typing import TYPE_CHECKING, Any
 
-from peewee import fn
+from sqlalchemy import case, desc, func, select
 
 from app.api.search_helpers import isotime
+from app.core.time_utils import UTC
 from app.db.models import (
     AuditLog,
     Collection,
@@ -18,104 +20,120 @@ from app.db.models import (
     Tag,
     User,
 )
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
-class SqliteAdminReadRepositoryAdapter(SqliteBaseRepository):
+class SqliteAdminReadRepositoryAdapter:
     """Read-side adapter for admin reporting queries."""
 
+    def __init__(self, database: Database) -> None:
+        self._database = database
+
     async def async_list_users(self) -> dict[str, Any]:
-        def _query() -> dict[str, Any]:
+        async with self._database.session() as session:
             users_list: list[dict[str, Any]] = []
-            for user in User.select():
+            users = (await session.execute(select(User).order_by(User.created_at.asc()))).scalars()
+            for user in users:
                 uid = user.telegram_user_id
-                summary_count = (
-                    Summary.select()
-                    .join(Request, on=(Summary.request == Request.id))
+                summary_count = await session.scalar(
+                    select(func.count(Summary.id))
+                    .join(Request, Summary.request_id == Request.id)
                     .where(Request.user_id == uid)
-                    .count()
                 )
-                request_count = Request.select().where(Request.user_id == uid).count()
-                tag_count = Tag.select().where(Tag.user == uid).count()
-                collection_count = Collection.select().where(Collection.user == uid).count()
+                request_count = await session.scalar(
+                    select(func.count(Request.id)).where(Request.user_id == uid)
+                )
+                tag_count = await session.scalar(
+                    select(func.count(Tag.id)).where(Tag.user_id == uid)
+                )
+                collection_count = await session.scalar(
+                    select(func.count(Collection.id)).where(Collection.user_id == uid)
+                )
                 users_list.append(
                     {
                         "user_id": uid,
                         "username": user.username,
                         "is_owner": user.is_owner,
-                        "summary_count": summary_count,
-                        "request_count": request_count,
-                        "tag_count": tag_count,
-                        "collection_count": collection_count,
+                        "summary_count": int(summary_count or 0),
+                        "request_count": int(request_count or 0),
+                        "tag_count": int(tag_count or 0),
+                        "collection_count": int(collection_count or 0),
                         "created_at": isotime(user.created_at),
                     }
                 )
             return {"users": users_list, "total_users": len(users_list)}
 
-        return await self._execute(_query, operation_name="admin_list_users", read_only=True)
-
     async def async_job_status(self, *, today: Any) -> dict[str, Any]:
-        def _query() -> dict[str, Any]:
-            pending = Request.select().where(Request.status == "pending").count()
-            processing = (
-                Request.select()
-                .where(Request.status.in_(["crawling", "summarizing", "processing"]))
-                .count()
+        async with self._database.session() as session:
+            pending = await session.scalar(
+                select(func.count(Request.id)).where(Request.status == "pending")
             )
-            completed_today = (
-                Request.select()
-                .where((Request.status == "completed") & (Request.updated_at >= today))
-                .count()
+            processing = await session.scalar(
+                select(func.count(Request.id)).where(
+                    Request.status.in_(["crawling", "summarizing", "processing"])
+                )
             )
-            failed_today = (
-                Request.select()
-                .where((Request.status == "error") & (Request.updated_at >= today))
-                .count()
+            completed_today = await session.scalar(
+                select(func.count(Request.id)).where(
+                    Request.status == "completed", Request.updated_at >= today
+                )
             )
-            imports_active = ImportJob.select().where(ImportJob.status == "processing").count()
-            imports_completed_today = (
-                ImportJob.select()
-                .where((ImportJob.status == "completed") & (ImportJob.updated_at >= today))
-                .count()
+            failed_today = await session.scalar(
+                select(func.count(Request.id)).where(
+                    Request.status == "error", Request.updated_at >= today
+                )
+            )
+            imports_active = await session.scalar(
+                select(func.count(ImportJob.id)).where(ImportJob.status == "processing")
+            )
+            imports_completed_today = await session.scalar(
+                select(func.count(ImportJob.id)).where(
+                    ImportJob.status == "completed", ImportJob.updated_at >= today
+                )
             )
             return {
                 "pipeline": {
-                    "pending": pending,
-                    "processing": processing,
-                    "completed_today": completed_today,
-                    "failed_today": failed_today,
+                    "pending": int(pending or 0),
+                    "processing": int(processing or 0),
+                    "completed_today": int(completed_today or 0),
+                    "failed_today": int(failed_today or 0),
                 },
                 "imports": {
-                    "active": imports_active,
-                    "completed_today": imports_completed_today,
+                    "active": int(imports_active or 0),
+                    "completed_today": int(imports_completed_today or 0),
                 },
             }
 
-        return await self._execute(_query, operation_name="admin_job_status", read_only=True)
-
     async def async_content_health(self) -> dict[str, Any]:
-        def _query() -> dict[str, Any]:
-            total_summaries = Summary.select().count()
-            total_requests = Request.select().count()
-            failed_requests = Request.select().where(Request.status == "error").count()
+        async with self._database.session() as session:
+            total_summaries = await session.scalar(select(func.count(Summary.id)))
+            total_requests = await session.scalar(select(func.count(Request.id)))
+            failed_requests = await session.scalar(
+                select(func.count(Request.id)).where(Request.status == "error")
+            )
 
             failed_by_error_type: dict[str, int] = {}
-            error_groups = (
-                Request.select(Request.error_type, fn.COUNT(Request.id).alias("cnt"))
+            error_groups = await session.execute(
+                select(Request.error_type, func.count(Request.id))
                 .where(Request.status == "error")
                 .group_by(Request.error_type)
             )
-            for row in error_groups:
-                key = row.error_type or "unknown"
-                failed_by_error_type[key] = row.cnt
+            for error_type, count in error_groups:
+                key = error_type or "unknown"
+                failed_by_error_type[key] = int(count or 0)
 
             recent_failures: list[dict[str, Any]] = []
-            for request in (
-                Request.select()
-                .where(Request.status == "error")
-                .order_by(Request.created_at.desc())
-                .limit(20)
-            ):
+            failures = (
+                await session.execute(
+                    select(Request)
+                    .where(Request.status == "error")
+                    .order_by(Request.created_at.desc())
+                    .limit(20)
+                )
+            ).scalars()
+            for request in failures:
                 recent_failures.append(
                     {
                         "id": request.id,
@@ -127,69 +145,67 @@ class SqliteAdminReadRepositoryAdapter(SqliteBaseRepository):
                 )
 
             return {
-                "total_summaries": total_summaries,
-                "total_requests": total_requests,
-                "failed_requests": failed_requests,
+                "total_summaries": int(total_summaries or 0),
+                "total_requests": int(total_requests or 0),
+                "failed_requests": int(failed_requests or 0),
                 "failed_by_error_type": failed_by_error_type,
                 "recent_failures": recent_failures,
             }
 
-        return await self._execute(_query, operation_name="admin_content_health", read_only=True)
-
     async def async_system_metrics(self, *, since: Any) -> dict[str, Any]:
-        def _query() -> dict[str, Any]:
-            llm_total = LLMCall.select().where(LLMCall.created_at >= since).count()
-            llm_agg = (
-                LLMCall.select(
-                    fn.AVG(LLMCall.latency_ms).alias("avg_latency"),
-                    fn.SUM(LLMCall.tokens_prompt).alias("total_prompt_tokens"),
-                    fn.SUM(LLMCall.tokens_completion).alias("total_completion_tokens"),
-                    fn.SUM(LLMCall.cost_usd).alias("total_cost"),
-                )
-                .where(LLMCall.created_at >= since)
-                .dicts()
-                .first()
-            ) or {}
-            llm_errors = (
-                LLMCall.select()
-                .where((LLMCall.created_at >= since) & (LLMCall.status == "error"))
-                .count()
+        async with self._database.session() as session:
+            llm_total = await session.scalar(
+                select(func.count(LLMCall.id)).where(LLMCall.created_at >= since)
             )
+            llm_agg = (
+                await session.execute(
+                    select(
+                        func.avg(LLMCall.latency_ms),
+                        func.sum(LLMCall.tokens_prompt),
+                        func.sum(LLMCall.tokens_completion),
+                        func.sum(LLMCall.cost_usd),
+                    ).where(LLMCall.created_at >= since)
+                )
+            ).one()
+            llm_errors = await session.scalar(
+                select(func.count(LLMCall.id)).where(
+                    LLMCall.created_at >= since, LLMCall.status == "error"
+                )
+            )
+            llm_total_int = int(llm_total or 0)
+            llm_errors_int = int(llm_errors or 0)
+            avg_latency, total_prompt_tokens, total_completion_tokens, total_cost = llm_agg
             llm_stats = {
-                "total_calls": llm_total,
-                "avg_latency_ms": round(llm_agg.get("avg_latency") or 0, 1),
-                "total_prompt_tokens": int(llm_agg.get("total_prompt_tokens") or 0),
-                "total_completion_tokens": int(llm_agg.get("total_completion_tokens") or 0),
-                "total_cost_usd": round(float(llm_agg.get("total_cost") or 0), 4),
-                "error_rate": round(llm_errors / llm_total, 4) if llm_total else 0.0,
+                "total_calls": llm_total_int,
+                "avg_latency_ms": round(float(avg_latency or 0), 1),
+                "total_prompt_tokens": int(total_prompt_tokens or 0),
+                "total_completion_tokens": int(total_completion_tokens or 0),
+                "total_cost_usd": round(float(total_cost or 0), 4),
+                "error_rate": round(llm_errors_int / llm_total_int, 4) if llm_total_int else 0.0,
             }
 
-            scraper_rows = (
-                CrawlResult.select(
+            scraper_rows = await session.execute(
+                select(
                     CrawlResult.endpoint,
-                    fn.COUNT(CrawlResult.id).alias("total"),
-                    fn.SUM(
-                        fn.CASE(None, [(CrawlResult.firecrawl_success == True, 1)], 0)  # noqa: E712
-                    ).alias("success"),
+                    func.count(CrawlResult.id),
+                    func.sum(case((CrawlResult.firecrawl_success.is_(True), 1), else_=0)),
                 )
-                .join(Request, on=(CrawlResult.request == Request.id))
+                .join(Request, CrawlResult.request_id == Request.id)
                 .where(Request.created_at >= since)
                 .group_by(CrawlResult.endpoint)
             )
             scraper_stats: dict[str, Any] = {}
-            for row in scraper_rows:
-                provider = row.endpoint or "unknown"
-                total = row.total or 0
-                success = row.success or 0
+            for endpoint, total, success in scraper_rows:
+                provider = endpoint or "unknown"
+                total_int = int(total or 0)
+                success_int = int(success or 0)
                 scraper_stats[provider] = {
-                    "total": total,
-                    "success": success,
-                    "success_rate": round(success / total, 4) if total else 0.0,
+                    "total": total_int,
+                    "success": success_int,
+                    "success_rate": round(success_int / total_int, 4) if total_int else 0.0,
                 }
 
             return {"llm_7d": llm_stats, "scraper_7d": scraper_stats}
-
-        return await self._execute(_query, operation_name="admin_system_metrics", read_only=True)
 
     async def async_audit_log(
         self,
@@ -200,16 +216,26 @@ class SqliteAdminReadRepositoryAdapter(SqliteBaseRepository):
         limit: int,
         offset: int,
     ) -> dict[str, Any]:
-        def _query() -> dict[str, Any]:
-            query = AuditLog.select()
+        since_dt = _parse_since(since)
+        async with self._database.session() as session:
+            conditions = []
             if action:
-                query = query.where(AuditLog.event == action)
-            if since:
-                query = query.where(AuditLog.ts >= since)
+                conditions.append(AuditLog.event == action)
+            if since_dt is not None:
+                conditions.append(AuditLog.ts >= since_dt)
 
-            total = query.count()
+            query = select(AuditLog)
+            count_query = select(func.count(AuditLog.id))
+            if conditions:
+                query = query.where(*conditions)
+                count_query = count_query.where(*conditions)
+
+            total = int(await session.scalar(count_query) or 0)
             logs: list[dict[str, Any]] = []
-            for entry in query.order_by(AuditLog.ts.desc()).offset(offset).limit(limit):
+            entries = (
+                await session.execute(query.order_by(desc(AuditLog.ts)).offset(offset).limit(limit))
+            ).scalars()
+            for entry in entries:
                 details = entry.details_json
                 if user_id_filter is not None:
                     if not isinstance(details, dict) or details.get("user_id") != user_id_filter:
@@ -227,4 +253,15 @@ class SqliteAdminReadRepositoryAdapter(SqliteBaseRepository):
 
             return {"logs": logs, "total": total, "limit": limit, "offset": offset}
 
-        return await self._execute(_query, operation_name="admin_audit_log", read_only=True)
+
+def _parse_since(since: str | None) -> dt.datetime | None:
+    if not since:
+        return None
+    normalized = since.removesuffix("Z")
+    try:
+        parsed = dt.datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
