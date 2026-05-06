@@ -21,7 +21,7 @@ class OpenRouterConfig(BaseModel):
     model: str = Field(default="deepseek/deepseek-v3.2", validation_alias="OPENROUTER_MODEL")
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: (
-            "qwen/qwen3.5-plus-02-15",
+            "qwen/qwen3.6-plus-04-02",
             "moonshotai/kimi-k2-0905",
             "minimax/minimax-m2",
         ),
@@ -41,10 +41,10 @@ class OpenRouterConfig(BaseModel):
         validation_alias="OPENROUTER_LONG_CONTEXT_MODEL",
     )
     flash_model: str = Field(
-        default="qwen/qwen3.5-flash-02-23", validation_alias="OPENROUTER_FLASH_MODEL"
+        default="qwen/qwen3.6-flash", validation_alias="OPENROUTER_FLASH_MODEL"
     )
     flash_fallback_models: tuple[str, ...] = Field(
-        default_factory=lambda: ("qwen/qwen3.5-plus-02-15",),
+        default_factory=lambda: ("qwen/qwen3.6-plus-04-02",),
         validation_alias="OPENROUTER_FLASH_FALLBACK_MODELS",
     )
     summary_temperature_relaxed: float | None = Field(
@@ -292,13 +292,13 @@ class ModelRoutingConfig(BaseModel):
         validation_alias="MODEL_ROUTING_SOCIOPOLITICAL",
     )
     long_context_model: str = Field(
-        default="qwen/qwen3.5-plus-02-15",
+        default="qwen/qwen3.6-plus-04-02",
         validation_alias="MODEL_ROUTING_LONG_CONTEXT",
     )
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: (
             "deepseek/deepseek-v3.2",
-            "qwen/qwen3.5-plus-02-15",
+            "qwen/qwen3.6-plus-04-02",
             "minimax/minimax-m2",
         ),
         validation_alias="MODEL_ROUTING_FALLBACK_MODELS",
