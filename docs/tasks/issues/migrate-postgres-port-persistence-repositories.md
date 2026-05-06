@@ -140,6 +140,12 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_webhook_repository_postgres.py -q`
   → `2 passed`.
+- Ported `rule_repository.py` to SQLAlchemy/AsyncSession with live Postgres
+  coverage for rule CRUD/filtering, soft delete, run-count updates, and
+  execution logs.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_rule_repository_postgres.py -q`
+  → `2 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
