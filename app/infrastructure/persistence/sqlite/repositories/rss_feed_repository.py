@@ -1,17 +1,12 @@
-"""SQLite implementation of RSS feed repository.
-
-This adapter handles persistence for RSS feeds, subscriptions, and feed items.
-"""
+"""SQLAlchemy implementation of the RSS feed repository."""
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import peewee
+from sqlalchemy import exists, select, update
+from sqlalchemy.dialects.postgresql import insert
 
-from app.core.logging_utils import get_logger
-from app.core.time_utils import UTC
 from app.db.models import (
     ChannelCategory,
     RSSFeed,
@@ -20,71 +15,64 @@ from app.db.models import (
     RSSItemDelivery,
     model_to_dict,
 )
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+from app.db.types import _utcnow
 
-logger = get_logger(__name__)
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from app.db.session import Database
 
 
-class SqliteRSSFeedRepositoryAdapter(SqliteBaseRepository):
+class SqliteRSSFeedRepositoryAdapter:
     """Adapter for RSS feed, subscription, and feed item operations."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     # --- Feed CRUD ---
 
     async def async_get_or_create_feed(self, url: str) -> dict[str, Any]:
         """Find a feed by URL or create a new one."""
-
-        def _query() -> dict[str, Any]:
-            feed, _created = RSSFeed.get_or_create(url=url)
-            d = model_to_dict(feed)
-            assert d is not None
-            return d
-
-        return await self._execute(_query, operation_name="get_or_create_feed")
+        async with self._database.transaction() as session:
+            stmt = (
+                insert(RSSFeed)
+                .values(url=url)
+                .on_conflict_do_nothing(index_elements=[RSSFeed.url])
+                .returning(RSSFeed)
+            )
+            feed = await session.scalar(stmt)
+            if feed is None:
+                feed = await session.scalar(select(RSSFeed).where(RSSFeed.url == url))
+            return model_to_dict(feed) or {}
 
     async def async_get_feed(self, feed_id: int) -> dict[str, Any] | None:
         """Return a feed by ID."""
-
-        def _query() -> dict[str, Any] | None:
-            try:
-                feed = RSSFeed.get_by_id(feed_id)
-            except RSSFeed.DoesNotExist:
-                return None
+        async with self._database.session() as session:
+            feed = await session.get(RSSFeed, feed_id)
             return model_to_dict(feed)
-
-        return await self._execute(_query, operation_name="get_feed", read_only=True)
 
     async def async_update_feed(self, feed_id: int, **fields: Any) -> None:
         """Update feed fields by ID."""
-
-        def _update() -> None:
-            update_data = {getattr(RSSFeed, k): v for k, v in fields.items() if hasattr(RSSFeed, k)}
-            if update_data:
-                update_data[RSSFeed.updated_at] = datetime.now(UTC)
-                RSSFeed.update(update_data).where(RSSFeed.id == feed_id).execute()
-
-        await self._execute(_update, operation_name="update_feed")
+        allowed_fields = set(RSSFeed.__mapper__.columns.keys()) - {"id", "created_at"}
+        update_data = {key: value for key, value in fields.items() if key in allowed_fields}
+        if not update_data:
+            return
+        update_data["updated_at"] = _utcnow()
+        async with self._database.transaction() as session:
+            await session.execute(update(RSSFeed).where(RSSFeed.id == feed_id).values(**update_data))
 
     async def async_list_active_feeds(self) -> list[dict[str, Any]]:
         """Return feeds that have at least one active subscription."""
-
-        def _query() -> list[dict[str, Any]]:
+        async with self._database.session() as session:
             rows = (
-                RSSFeed.select()
-                .join(RSSFeedSubscription)
-                .where(
-                    (RSSFeed.is_active == True)  # noqa: E712
-                    & (RSSFeedSubscription.is_active == True)  # noqa: E712
+                await session.execute(
+                    select(RSSFeed)
+                    .join(RSSFeedSubscription, RSSFeedSubscription.feed_id == RSSFeed.id)
+                    .where(RSSFeed.is_active.is_(True), RSSFeedSubscription.is_active.is_(True))
+                    .distinct()
                 )
-                .distinct()
-            )
-            result: list[dict[str, Any]] = []
-            for row in rows:
-                d = model_to_dict(row)
-                if d is not None:
-                    result.append(d)
-            return result
-
-        return await self._execute(_query, operation_name="list_active_feeds", read_only=True)
+            ).scalars()
+            return [model_to_dict(row) or {} for row in rows]
 
     # --- Subscription CRUD ---
 
@@ -95,68 +83,54 @@ class SqliteRSSFeedRepositoryAdapter(SqliteBaseRepository):
         category_id: int | None = None,
     ) -> dict[str, Any]:
         """Create a subscription for a user to a feed."""
-
-        def _insert() -> dict[str, Any]:
-            try:
-                sub = RSSFeedSubscription.create(
-                    user=user_id,
-                    feed=feed_id,
-                    category=category_id,
+        async with self._database.transaction() as session:
+            stmt = (
+                insert(RSSFeedSubscription)
+                .values(user_id=user_id, feed_id=feed_id, category_id=category_id)
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        RSSFeedSubscription.user_id,
+                        RSSFeedSubscription.feed_id,
+                    ]
                 )
-            except peewee.IntegrityError:
-                # Already subscribed -- return existing
-                sub = RSSFeedSubscription.get(
-                    (RSSFeedSubscription.user == user_id) & (RSSFeedSubscription.feed == feed_id)
+                .returning(RSSFeedSubscription)
+            )
+            subscription = await session.scalar(stmt)
+            if subscription is None:
+                subscription = await session.scalar(
+                    select(RSSFeedSubscription).where(
+                        RSSFeedSubscription.user_id == user_id,
+                        RSSFeedSubscription.feed_id == feed_id,
+                    )
                 )
-            d = model_to_dict(sub)
-            assert d is not None
-            return d
-
-        return await self._execute(_insert, operation_name="create_subscription")
+            return self._subscription_dict(subscription)
 
     async def async_delete_subscription(self, subscription_id: int) -> None:
         """Delete a subscription by ID."""
-
-        def _delete() -> None:
-            RSSFeedSubscription.delete().where(RSSFeedSubscription.id == subscription_id).execute()
-
-        await self._execute(_delete, operation_name="delete_subscription")
+        async with self._database.transaction() as session:
+            subscription = await session.get(RSSFeedSubscription, subscription_id)
+            if subscription is not None:
+                await session.delete(subscription)
 
     async def async_list_user_subscriptions(self, user_id: int) -> list[dict[str, Any]]:
         """Return all subscriptions for a user, joined with feed details."""
-
-        def _query() -> list[dict[str, Any]]:
-            rows = (
-                RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed, ChannelCategory)
-                .join(RSSFeed, on=(RSSFeedSubscription.feed == RSSFeed.id))
-                .switch(RSSFeedSubscription)
-                .join(
-                    ChannelCategory,
-                    peewee.JOIN.LEFT_OUTER,
-                    on=(RSSFeedSubscription.category == ChannelCategory.id),
-                )
-                .where(RSSFeedSubscription.user == user_id)
+        async with self._database.session() as session:
+            rows = await session.execute(
+                select(RSSFeedSubscription, RSSFeed, ChannelCategory)
+                .join(RSSFeed, RSSFeedSubscription.feed_id == RSSFeed.id)
+                .outerjoin(ChannelCategory, RSSFeedSubscription.category_id == ChannelCategory.id)
+                .where(RSSFeedSubscription.user_id == user_id)
                 .order_by(RSSFeedSubscription.created_at.desc())
             )
-            result: list[dict[str, Any]] = []
-            for row in rows:
-                d = model_to_dict(row)
-                if d is not None:
-                    feed = model_to_dict(row.feed)
-                    if feed is not None:
-                        d["feed_title"] = feed.get("title")
-                        d["feed_url"] = feed.get("url")
-                        d["site_url"] = feed.get("site_url")
-                        d["feed_description"] = feed.get("description")
-                    cat = row.category
-                    if cat and cat.id:
-                        d["category_name"] = cat.name
-                    else:
-                        d["category_name"] = None
-                    result.append(d)
-            return result
-
-        return await self._execute(_query, operation_name="list_user_subscriptions", read_only=True)
+            return [
+                self._subscription_dict(
+                    subscription,
+                    feed=feed,
+                    category=category,
+                    include_flat_feed=True,
+                )
+                for subscription, feed, category in rows
+            ]
 
     async def async_list_user_active_subscriptions(
         self,
@@ -165,106 +139,84 @@ class SqliteRSSFeedRepositoryAdapter(SqliteBaseRepository):
         substack_only: bool = False,
     ) -> list[dict[str, Any]]:
         """Return active subscriptions for a user, optionally filtered to Substack."""
-
-        def _query() -> list[dict[str, Any]]:
-            query = (
-                RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed, ChannelCategory)
-                .join(RSSFeed)
-                .switch(RSSFeedSubscription)
-                .join(
-                    ChannelCategory,
-                    peewee.JOIN.LEFT_OUTER,
-                    on=(RSSFeedSubscription.category == ChannelCategory.id),
-                )
+        async with self._database.session() as session:
+            stmt = (
+                select(RSSFeedSubscription, RSSFeed, ChannelCategory)
+                .join(RSSFeed, RSSFeedSubscription.feed_id == RSSFeed.id)
+                .outerjoin(ChannelCategory, RSSFeedSubscription.category_id == ChannelCategory.id)
                 .where(
-                    (RSSFeedSubscription.user == user_id) & (RSSFeedSubscription.is_active == True)  # noqa: E712
+                    RSSFeedSubscription.user_id == user_id,
+                    RSSFeedSubscription.is_active.is_(True),
                 )
                 .order_by(RSSFeedSubscription.created_at.desc())
             )
             if substack_only:
-                query = query.where(RSSFeed.url.contains("substack.com"))
-
-            result: list[dict[str, Any]] = []
-            for row in query:
-                item = model_to_dict(row) or {}
-                feed = model_to_dict(row.feed) or {}
-                item["feed"] = feed
-                item["category_name"] = (
-                    row.category.name if getattr(row, "category", None) else None
+                stmt = stmt.where(RSSFeed.url.contains("substack.com"))
+            rows = await session.execute(stmt)
+            return [
+                self._subscription_dict(
+                    subscription,
+                    feed=feed,
+                    category=category,
+                    include_feed=True,
                 )
-                result.append(item)
-            return result
-
-        return await self._execute(
-            _query,
-            operation_name="list_user_active_rss_subscriptions",
-            read_only=True,
-        )
+                for subscription, feed, category in rows
+            ]
 
     async def async_get_subscription_by_feed(
         self, *, user_id: int, feed_id: int
     ) -> dict[str, Any] | None:
         """Return a user's subscription for a feed."""
-
-        def _query() -> dict[str, Any] | None:
+        async with self._database.session() as session:
             row = (
-                RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed)
-                .join(RSSFeed)
-                .where(
-                    (RSSFeedSubscription.user == user_id) & (RSSFeedSubscription.feed == feed_id)
+                await session.execute(
+                    select(RSSFeedSubscription, RSSFeed)
+                    .join(RSSFeed, RSSFeedSubscription.feed_id == RSSFeed.id)
+                    .where(
+                        RSSFeedSubscription.user_id == user_id,
+                        RSSFeedSubscription.feed_id == feed_id,
+                    )
                 )
-                .first()
-            )
+            ).first()
             if row is None:
                 return None
-            item = model_to_dict(row) or {}
-            item["feed"] = model_to_dict(row.feed) or {}
-            return item
-
-        return await self._execute(
-            _query, operation_name="get_rss_subscription_by_feed", read_only=True
-        )
+            subscription, feed = row
+            return self._subscription_dict(subscription, feed=feed, include_feed=True)
 
     async def async_get_subscription(
         self, *, user_id: int, subscription_id: int
     ) -> dict[str, Any] | None:
         """Return a user's subscription by subscription ID."""
-
-        def _query() -> dict[str, Any] | None:
+        async with self._database.session() as session:
             row = (
-                RSSFeedSubscription.select(RSSFeedSubscription, RSSFeed, ChannelCategory)
-                .join(RSSFeed)
-                .switch(RSSFeedSubscription)
-                .join(
-                    ChannelCategory,
-                    peewee.JOIN.LEFT_OUTER,
-                    on=(RSSFeedSubscription.category == ChannelCategory.id),
+                await session.execute(
+                    select(RSSFeedSubscription, RSSFeed, ChannelCategory)
+                    .join(RSSFeed, RSSFeedSubscription.feed_id == RSSFeed.id)
+                    .outerjoin(ChannelCategory, RSSFeedSubscription.category_id == ChannelCategory.id)
+                    .where(
+                        RSSFeedSubscription.id == subscription_id,
+                        RSSFeedSubscription.user_id == user_id,
+                    )
                 )
-                .where(
-                    (RSSFeedSubscription.id == subscription_id)
-                    & (RSSFeedSubscription.user == user_id)
-                )
-                .first()
-            )
+            ).first()
             if row is None:
                 return None
-            item = model_to_dict(row) or {}
-            item["feed"] = model_to_dict(row.feed) or {}
-            item["category_name"] = row.category.name if getattr(row, "category", None) else None
-            return item
-
-        return await self._execute(_query, operation_name="get_rss_subscription", read_only=True)
+            subscription, feed, category = row
+            return self._subscription_dict(
+                subscription,
+                feed=feed,
+                category=category,
+                include_feed=True,
+            )
 
     async def async_set_subscription_active(self, subscription_id: int, *, is_active: bool) -> None:
         """Update subscription active state."""
-
-        def _update() -> None:
-            RSSFeedSubscription.update(
-                is_active=is_active,
-                updated_at=datetime.now(UTC),
-            ).where(RSSFeedSubscription.id == subscription_id).execute()
-
-        await self._execute(_update, operation_name="set_rss_subscription_active")
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(RSSFeedSubscription)
+                .where(RSSFeedSubscription.id == subscription_id)
+                .values(is_active=is_active, updated_at=_utcnow())
+            )
 
     # --- Feed items ---
 
@@ -278,12 +230,12 @@ class SqliteRSSFeedRepositoryAdapter(SqliteBaseRepository):
         author: str | None,
         published_at: datetime | None,
     ) -> dict[str, Any] | None:
-        """Insert a feed item, ignoring duplicates (by feed+guid)."""
-
-        def _insert() -> dict[str, Any] | None:
-            try:
-                item = RSSFeedItem.create(
-                    feed=feed_id,
+        """Insert a feed item, ignoring duplicates by feed and GUID."""
+        async with self._database.transaction() as session:
+            stmt = (
+                insert(RSSFeedItem)
+                .values(
+                    feed_id=feed_id,
                     guid=guid,
                     title=title,
                     url=url,
@@ -291,11 +243,16 @@ class SqliteRSSFeedRepositoryAdapter(SqliteBaseRepository):
                     author=author,
                     published_at=published_at,
                 )
-                return model_to_dict(item)
-            except peewee.IntegrityError:
-                return None
-
-        return await self._execute(_insert, operation_name="create_feed_item")
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        RSSFeedItem.feed_id,
+                        RSSFeedItem.guid,
+                    ]
+                )
+                .returning(RSSFeedItem)
+            )
+            item = await session.scalar(stmt)
+            return self._feed_item_dict(item) if item is not None else None
 
     async def async_list_feed_items(
         self,
@@ -304,72 +261,69 @@ class SqliteRSSFeedRepositoryAdapter(SqliteBaseRepository):
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Return paginated feed items for a feed."""
-
-        def _query() -> list[dict[str, Any]]:
+        async with self._database.session() as session:
             rows = (
-                RSSFeedItem.select()
-                .where(RSSFeedItem.feed == feed_id)
-                .order_by(RSSFeedItem.published_at.desc())
-                .limit(limit)
-                .offset(offset)
-            )
-            result: list[dict[str, Any]] = []
-            for row in rows:
-                d = model_to_dict(row)
-                if d is not None:
-                    result.append(d)
-            return result
-
-        return await self._execute(_query, operation_name="list_feed_items", read_only=True)
+                await session.execute(
+                    select(RSSFeedItem)
+                    .where(RSSFeedItem.feed_id == feed_id)
+                    .order_by(RSSFeedItem.published_at.desc())
+                    .limit(limit)
+                    .offset(offset)
+                )
+            ).scalars()
+            return [self._feed_item_dict(row) for row in rows]
 
     async def async_list_delivery_targets(
         self,
         new_item_ids: list[int] | None,
     ) -> list[dict[str, Any]]:
         """Return undelivered item rows with subscriber IDs."""
-
-        def _query() -> list[dict[str, Any]]:
-            query = RSSFeedItem.select()
+        async with self._database.session() as session:
+            item_stmt = select(RSSFeedItem)
             if new_item_ids:
-                query = query.where(RSSFeedItem.id.in_(new_item_ids))
+                item_stmt = item_stmt.where(RSSFeedItem.id.in_(new_item_ids))
+            items = (
+                await session.execute(item_stmt.order_by(RSSFeedItem.published_at.desc()))
+            ).scalars()
 
             result: list[dict[str, Any]] = []
-            for item in query.order_by(RSSFeedItem.published_at.desc()):
-                subs = RSSFeedSubscription.select(RSSFeedSubscription.user).where(
-                    (RSSFeedSubscription.feed == item.feed_id)
-                    & (RSSFeedSubscription.is_active == True)  # noqa: E712
-                )
-                subscriber_ids: list[int] = []
-                for sub in subs:
-                    already = (
-                        RSSItemDelivery.select()
-                        .where(
-                            (RSSItemDelivery.user == sub.user_id)
-                            & (RSSItemDelivery.item == item.id)
-                        )
-                        .exists()
+            for item in items:
+                delivered_exists = exists(
+                    select(RSSItemDelivery.id).where(
+                        RSSItemDelivery.user_id == RSSFeedSubscription.user_id,
+                        RSSItemDelivery.item_id == item.id,
                     )
-                    if not already:
-                        subscriber_ids.append(sub.user_id)
-
-                if not subscriber_ids:
-                    continue
-                item_dict = model_to_dict(item) or {}
-                item_dict["subscriber_ids"] = subscriber_ids
-                result.append(item_dict)
+                )
+                subscriber_ids = list(
+                    await session.scalars(
+                        select(RSSFeedSubscription.user_id)
+                        .where(
+                            RSSFeedSubscription.feed_id == item.feed_id,
+                            RSSFeedSubscription.is_active.is_(True),
+                            ~delivered_exists,
+                        )
+                        .order_by(RSSFeedSubscription.created_at.asc())
+                    )
+                )
+                if subscriber_ids:
+                    item_dict = self._feed_item_dict(item)
+                    item_dict["subscriber_ids"] = subscriber_ids
+                    result.append(item_dict)
             return result
-
-        return await self._execute(
-            _query, operation_name="list_rss_delivery_targets", read_only=True
-        )
 
     async def async_mark_item_delivered(self, *, user_id: int, item_id: int) -> None:
         """Create an RSS delivery record for a user and item."""
-
-        def _insert() -> None:
-            RSSItemDelivery.create(user=user_id, item=item_id)
-
-        await self._execute(_insert, operation_name="mark_rss_item_delivered")
+        async with self._database.transaction() as session:
+            await session.execute(
+                insert(RSSItemDelivery)
+                .values(user_id=user_id, item_id=item_id)
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        RSSItemDelivery.user_id,
+                        RSSItemDelivery.item_id,
+                    ]
+                )
+            )
 
     async def async_update_feed_fetch_success(
         self,
@@ -382,22 +336,24 @@ class SqliteRSSFeedRepositoryAdapter(SqliteBaseRepository):
         last_modified: str | None,
     ) -> None:
         """Update feed metadata after a successful poll."""
-
-        def _update() -> None:
-            now = datetime.now(UTC)
-            RSSFeed.update(
-                title=title,
-                description=description,
-                site_url=site_url,
-                last_fetched_at=now,
-                last_successful_at=now,
-                etag=etag,
-                last_modified=last_modified,
-                fetch_error_count=0,
-                last_error=None,
-            ).where(RSSFeed.id == feed_id).execute()
-
-        await self._execute(_update, operation_name="update_rss_feed_fetch_success")
+        now = _utcnow()
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(RSSFeed)
+                .where(RSSFeed.id == feed_id)
+                .values(
+                    title=title,
+                    description=description,
+                    site_url=site_url,
+                    last_fetched_at=now,
+                    last_successful_at=now,
+                    etag=etag,
+                    last_modified=last_modified,
+                    fetch_error_count=0,
+                    last_error=None,
+                    updated_at=now,
+                )
+            )
 
     async def async_record_feed_fetch_error(
         self,
@@ -407,16 +363,49 @@ class SqliteRSSFeedRepositoryAdapter(SqliteBaseRepository):
         max_fetch_errors: int,
     ) -> None:
         """Increment RSS feed error counters and disable on threshold."""
-
-        def _update() -> None:
-            feed = RSSFeed.get_by_id(feed_id)
-            error_count = feed.fetch_error_count + 1
-            update_fields = {
-                RSSFeed.fetch_error_count: error_count,
-                RSSFeed.last_error: error[:500],
+        async with self._database.transaction() as session:
+            error_count = int(
+                await session.scalar(
+                    select(RSSFeed.fetch_error_count).where(RSSFeed.id == feed_id)
+                )
+                or 0
+            )
+            error_count += 1
+            update_values: dict[str, Any] = {
+                "fetch_error_count": error_count,
+                "last_error": error[:500],
+                "updated_at": _utcnow(),
             }
             if error_count >= max_fetch_errors:
-                update_fields[RSSFeed.is_active] = False
-            RSSFeed.update(update_fields).where(RSSFeed.id == feed_id).execute()
+                update_values["is_active"] = False
+            await session.execute(
+                update(RSSFeed).where(RSSFeed.id == feed_id).values(**update_values)
+            )
 
-        await self._execute(_update, operation_name="record_rss_feed_fetch_error")
+    def _subscription_dict(
+        self,
+        subscription: RSSFeedSubscription | None,
+        *,
+        feed: RSSFeed | None = None,
+        category: ChannelCategory | None = None,
+        include_feed: bool = False,
+        include_flat_feed: bool = False,
+    ) -> dict[str, Any]:
+        data = model_to_dict(subscription) or {}
+        if not data:
+            return data
+        data["user"] = data.get("user_id")
+        data["feed"] = model_to_dict(feed) if include_feed and feed is not None else data.get("feed_id")
+        data["category"] = data.get("category_id")
+        data["category_name"] = category.name if category is not None else None
+        if include_flat_feed and feed is not None:
+            data["feed_title"] = feed.title
+            data["feed_url"] = feed.url
+            data["site_url"] = feed.site_url
+            data["feed_description"] = feed.description
+        return data
+
+    def _feed_item_dict(self, item: RSSFeedItem) -> dict[str, Any]:
+        data = model_to_dict(item) or {}
+        data["feed"] = data.get("feed_id")
+        return data

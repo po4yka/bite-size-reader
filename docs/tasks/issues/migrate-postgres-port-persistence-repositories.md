@@ -200,6 +200,12 @@ Conventions for the port:
 - Verified the expanded focused repository suite with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_collection_repository.py -q`
   → `47 passed`.
+- Ported `rss_feed_repository.py` to SQLAlchemy/AsyncSession with PostgreSQL
+  conflict handling for feeds, subscriptions, items, and delivery records while
+  preserving RSS subscription/feed compatibility dictionary shapes.
+- Verified the expanded focused repository suite with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_rss_feed_repository_postgres.py -q`
+  → `48 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
