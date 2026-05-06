@@ -98,3 +98,8 @@ the most-ported repository are easiest to land first.
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/db/test_runtime_services_postgres.py`
   → `3 passed`, focused ruff, and focused mypy with skipped imports.
+- Removed two remaining runtime `.path` assumptions from the API lifespan and
+  Telegram bot database backup loop; Telegram scheduled backups now create
+  PostgreSQL `.dump` files through `Database.create_backup_copy()`.
+- Verified this slice with focused ruff, focused mypy with skipped imports, and
+  imports for `app.api.main` and `TelegramBot`.

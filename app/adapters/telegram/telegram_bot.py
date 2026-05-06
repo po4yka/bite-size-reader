@@ -19,7 +19,7 @@ from app.core.time_utils import UTC, format_iso_z
 
 if TYPE_CHECKING:
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
     from app.db.write_queue import DbWriteQueue
 
 logger = get_logger(__name__)
@@ -31,7 +31,7 @@ class TelegramBot:
     """Refactored Telegram bot using modular components."""
 
     cfg: AppConfig
-    db: DatabaseSessionManager
+    db: Database
     db_write_queue: DbWriteQueue | None = None
 
     # Dynamically assigned by component_wiring.bind_runtime_components()
@@ -364,15 +364,10 @@ class TelegramBot:
 
     async def _create_database_backup(self, backup_directory: Path, retention: int) -> None:
         """Create a single backup and prune according to retention settings."""
-        db_path = getattr(self.db, "path", "")
-        if db_path == ":memory:":
-            logger.debug("db_backup_skipped_in_memory")
-            return
-
-        base_path = Path(db_path)
-        suffix = base_path.suffix or ".db"
+        base_name = "ratatoskr-postgres"
+        suffix = ".dump"
         timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-        backup_file = backup_directory / f"{base_path.stem}-{timestamp}{suffix}"
+        backup_file = backup_directory / f"{base_name}-{timestamp}{suffix}"
 
         try:
             created_path = await asyncio.to_thread(self.db.create_backup_copy, str(backup_file))
@@ -388,7 +383,7 @@ class TelegramBot:
 
         cleanup_failed = False
         try:
-            self._cleanup_old_backups(backup_directory, base_path.stem, suffix, retention)
+            self._cleanup_old_backups(backup_directory, base_name, suffix, retention)
         except Exception as exc:
             cleanup_failed = True
             logger.warning("db_backup_cleanup_failed", extra={"error": str(exc)})
@@ -403,12 +398,7 @@ class TelegramBot:
 
     def _resolve_backup_dir(self, override: str | None) -> Path:
         """Determine the directory to store backups in."""
-        if override:
-            path = Path(override).expanduser()
-        else:
-            base = Path(self.db.path)
-            parent = base.parent if base.parent != Path() else Path()
-            path = parent / "backups"
+        path = Path(override).expanduser() if override else Path("/data/backups")
         path.mkdir(parents=True, exist_ok=True)
         return path
 

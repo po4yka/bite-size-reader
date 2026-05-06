@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI):
 
         CollectionService.configure(get_collection_repository)
 
-        logger.info("database_initialized", extra={"db_path": runtime.db.path})
+        logger.info("database_initialized", extra={"database": "postgresql"})
 
         # Connect the taskiq broker in producer mode so API endpoints can
         # enqueue tasks via .kiq() in future features.
