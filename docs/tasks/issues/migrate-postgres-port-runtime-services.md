@@ -65,6 +65,9 @@ In-scope files and their target shapes:
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  the DB runtime/service entries under Raw SQL, Pragmas, Healthchecks, and
+  `asyncio.to_thread`.
 - `pg_dump` requires the binary. If we choose host-side execution, no Dockerfile
   changes are needed; if container-side, add `postgresql-client` to a dedicated
   utility stage (do **not** bloat the bot image — use a separate

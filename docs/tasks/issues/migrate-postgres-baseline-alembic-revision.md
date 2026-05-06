@@ -61,6 +61,9 @@ Steps for this task:
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  the Alembic section entries for the legacy SQLite revision chain and the Model
+  Fields section for schema coverage.
 - Generated `body_tsv` columns sometimes confuse autogenerate; if it tries to
   drop and recreate, fix by hand and document the workaround inline.
 - After this task, `app/db/alembic_runner.py`'s elaborate stamp-or-upgrade logic

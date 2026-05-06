@@ -65,6 +65,8 @@ package.
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  the Model Fields section entries for all feature `_models_*.py` files.
 - Watch for circular imports between `core.py` and the feature modules — declare
   relationships with string targets (`relationship("Summary", …)`) and resolve
   via SQLAlchemy's lazy registry.

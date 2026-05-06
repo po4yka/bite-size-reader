@@ -62,6 +62,9 @@ the most-ported repository are easiest to land first.
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  the DI/API, Telegram/messaging/rules, CLI/MCP, cache, and application-service
+  entries under Peewee Imports and `asyncio.to_thread`.
 - This task is large; split implementation into PRs by directory
   (`app/api/`, `app/adapters/`, etc.) for reviewability. The acceptance
   criteria are checked at the end of the last PR.

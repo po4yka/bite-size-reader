@@ -83,6 +83,8 @@ Conventions:
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  the Model Fields section entries for `_models_base.py` and `_models_core.py`.
 - The monotonic `server_version` logic must be unit-tested explicitly — it's the
   one piece of business logic in the old `BaseModel`, not just metadata.
 - For `User.preferences_json` (and similar JSONB columns) declare

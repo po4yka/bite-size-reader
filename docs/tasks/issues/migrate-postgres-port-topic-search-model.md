@@ -99,6 +99,8 @@ Manager (`app/db/topic_search_manager.py`, replacing `topic_search_index.py`):
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  the FTS5 section and topic-search raw SQL entries.
 - Generated columns require Postgres ≥ 12. Pinning to 16 (T1) is more than safe.
 - For per-row language switching (`'english'`/`'russian'`), file a follow-up; the
   `'simple'` tokenizer is correct for the migration.

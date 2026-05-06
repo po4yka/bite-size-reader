@@ -60,6 +60,9 @@ Conventions for the port:
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  the Persistence repositories entries under Peewee Imports, Raw SQL, FTS5, and
+  `asyncio.to_thread`.
 - Some Peewee idioms have no direct SQLAlchemy equivalent. For
   `Model.update(...).where(...).execute()` (bulk update), use
   `await session.execute(update(Model).where(...).values(...))`.

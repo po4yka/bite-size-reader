@@ -98,6 +98,8 @@ the old SQLite-busy-retry loop. Lives next to `Database` as `with_serialization_
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  the Database/session, Pragmas, Healthchecks, and `asyncio.to_thread` sections.
 - `expire_on_commit=False` is essential — in async, expired-after-commit attribute
   loads silently trigger lazy I/O outside the session and explode.
 - `autoflush=False` because we prefer explicit `await session.flush()` for

@@ -70,6 +70,9 @@ Approach:
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  the Tests section and the count metrics used to verify Peewee/SQLite removal
+  from `tests/`.
 - For local dev parity, add `make test-postgres` that boots the compose
   postgres service and runs `pytest -q` against it, so contributors don't
   need to wait for CI.

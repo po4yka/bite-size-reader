@@ -59,6 +59,9 @@ From the F1 audit, callers include:
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  the Raw SQL, Pragmas, Alembic, Healthchecks, and Telethon Session Caveat
+  sections.
 Do not invent a SQLite-to-Postgres SQL translator for the deprecated
 `app/cli/migrations/` files — those revisions have already been baked into the
 SQLAlchemy Alembic baseline (M4), so deletion is the right move.

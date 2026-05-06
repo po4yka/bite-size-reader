@@ -94,6 +94,9 @@ Pipeline:
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  Model Fields, Alembic, and the Telethon Session Caveat. The temporary legacy
+  Peewee snapshot is allowed only for this CLI and cleanup phase L1.
 - FK ordering: `peewee.sort_models()` over `LEGACY_ALL_MODELS` gives
   topological order. If conflicts persist, run the load inside
   `await connection.execute(text("SET session_replication_role = 'replica'"))`

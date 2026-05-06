@@ -1,6 +1,6 @@
 ---
 title: Audit Peewee and SQLite code surface
-status: backlog
+status: review
 area: db
 priority: high
 owner: Nikita Pochaev
@@ -16,7 +16,7 @@ created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Audit Peewee and SQLite code surface #repo/ratatoskr #area/db #status/backlog ⏫
+- [ ] #task Audit Peewee and SQLite code surface #repo/ratatoskr #area/db #status/review ⏫
 
 ## Objective
 
@@ -50,16 +50,16 @@ caller. R2 and R3 use this list as their port worklist.
 
 ## Acceptance criteria
 
-- [ ] Inventory committed as `docs/explanation/peewee-sqlite-surface-audit.md`
+- [x] Inventory committed as `docs/explanation/peewee-sqlite-surface-audit.md`
       with sections: model fields, raw SQL, pragmas, FTS5, alembic, healthchecks,
       Peewee imports, `asyncio.to_thread` callers, tests.
-- [ ] Each entry cites `file:line` and classifies as: keep-as-is (no migration
+- [x] Each entry cites `file:line` and classifies as: keep-as-is (no migration
       action), replace (M-phase or R-phase target), or delete (legacy/unused).
-- [ ] Deprecated `app/cli/migrations/` files are flagged delete (already not run
+- [x] Deprecated `app/cli/migrations/` files are flagged delete (already not run
       per `app/db/schema_migrator.py:6` docstring).
-- [ ] Telethon SQLite session DB caveat is recorded explicitly.
-- [ ] Audit doc is referenced from each downstream port task as the input list.
-- [ ] Counts at the bottom: total Peewee imports, total `asyncio.to_thread`
+- [x] Telethon SQLite session DB caveat is recorded explicitly.
+- [x] Audit doc is referenced from each downstream port task as the input list.
+- [x] Counts at the bottom: total Peewee imports, total `asyncio.to_thread`
       callers, total `database.execute_sql` callers — used as a reduction
       progress metric during R-phase implementation.
 

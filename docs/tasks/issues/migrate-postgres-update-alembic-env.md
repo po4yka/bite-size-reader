@@ -91,6 +91,9 @@ def upgrade_to_head(dsn: str) -> None:
 
 ## Notes
 
+- Input worklist: `docs/explanation/peewee-sqlite-surface-audit.md`, especially
+  the Alembic section entries for `app/db/alembic/env.py` and
+  `app/db/alembic_runner.py`.
 - The async-engine pattern uses Alembic's `connection.run_sync` bridge — that's
   the canonical async-Alembic approach in SQLAlchemy 2.0.
 - Verify on aarch64 in CI; asyncpg's binary protocol behaviour can differ from
