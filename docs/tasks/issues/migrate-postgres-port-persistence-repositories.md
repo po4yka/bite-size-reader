@@ -1,0 +1,68 @@
+---
+title: Port persistence repositories to AsyncSession
+status: backlog
+area: db
+priority: critical
+owner: Nikita Pochaev
+blocks:
+  - migrate-postgres-port-application-call-sites
+blocked_by:
+  - migrate-postgres-port-models-features
+  - migrate-postgres-port-runtime-services
+created: 2026-05-06
+updated: 2026-05-06
+---
+
+- [ ] #task Port persistence repositories to AsyncSession #repo/ratatoskr #area/db #status/backlog 🔺
+
+## Objective
+
+Rewrite every repository under `app/infrastructure/persistence/` from Peewee model
+calls (`Model.select().where(...).execute()`) to SQLAlchemy 2.0 `AsyncSession`
+calls (`await session.execute(select(Model).where(...))`).
+
+## Context
+
+`app/infrastructure/persistence/` houses the bulk of the data-access layer
+(initial scan during planning showed `sqlite/` and `digest_store.py` and many
+sibling modules). The exact set is enumerated by the F1 audit — that list is the
+worklist here.
+
+Conventions for the port:
+
+- Constructor takes a `database: Database` (the F3 façade), not an `AsyncSession`.
+  Each method opens its own session (or transaction) via `async with
+  database.session():` / `database.transaction():`. This keeps the lifetime
+  contract local and avoids leaking sessions through layers.
+- For multi-call atomicity (e.g. "create request + telegram message together"),
+  the use case in `app/application/use_cases/` opens the transaction and passes
+  the `AsyncSession` to the repository methods that participate.
+- Method signatures may add `*, session: AsyncSession | None = None` for that
+  case. When `None`, repository opens its own.
+- Read paths use `await session.scalar(select(...))` for single-row,
+  `(await session.execute(select(...))).scalars().all()` for lists.
+- Writes use `await session.execute(insert(...) / update(...).returning(...))`,
+  with `on_conflict_do_update` / `on_conflict_do_nothing` from
+  `sqlalchemy.dialects.postgresql.insert` where Peewee used `peewee.ON CONFLICT`.
+- Per-row pagination retains its existing semantics (offset/limit or cursor as
+  used today — see audit notes).
+
+## Acceptance criteria
+
+- [ ] Every file under `app/infrastructure/persistence/` (per F1 audit) is
+      rewritten; no remaining `from peewee` or `playhouse` imports there.
+- [ ] Repository tests pass against ephemeral Postgres (extends T3 fixtures).
+- [ ] Coverage of touched files matches or exceeds pre-migration coverage.
+- [ ] All methods are typed (`async def get_request(self, request_id: int) ->
+      Request | None`) — no `Any`-leak from Peewee's loose typing.
+- [ ] `git grep -nE "asyncio.to_thread" app/infrastructure/` returns zero hits
+      after this task.
+
+## Notes
+
+- Some Peewee idioms have no direct SQLAlchemy equivalent. For
+  `Model.update(...).where(...).execute()` (bulk update), use
+  `await session.execute(update(Model).where(...).values(...))`.
+- Beware `AsyncSession.merge` if you need upsert semantics on a single row;
+  prefer `insert(...).on_conflict_do_update(...)` from
+  `sqlalchemy.dialects.postgresql` instead — clearer, no extra round-trip.
