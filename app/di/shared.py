@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from app.application.services.related_reads_service import RelatedReadsService
     from app.application.services.topic_search import TopicSearchService
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
     from app.db.write_queue import DbWriteQueue
 
 logger = get_logger(__name__)
@@ -45,7 +45,7 @@ class LazySemaphoreFactory:
 
 
 def build_async_audit_sink(
-    db: DatabaseSessionManager,
+    db: Database,
     *,
     task_registry: set[asyncio.Task[Any]] | None = None,
 ) -> Callable[[str, str, dict[str, Any]], None]:
@@ -88,7 +88,7 @@ def resolve_ui_lang(cfg: AppConfig) -> str:
 
 def build_core_dependencies(
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
     *,
     audit_sink: Callable[[str, str, dict[str, Any]], None] | None = None,
     semaphore_factory: Callable[[], asyncio.Semaphore] | None = None,
@@ -124,7 +124,7 @@ def build_core_dependencies(
 def build_url_processor(
     *,
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
     firecrawl: Any,
     openrouter: Any,
     response_formatter: Any,

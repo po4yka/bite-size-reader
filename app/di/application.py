@@ -24,11 +24,11 @@ from app.infrastructure.rules.http_webhook_dispatcher import HttpWebhookDispatch
 from app.infrastructure.rules.in_memory_rate_limiter import InMemoryRuleRateLimiter
 
 if TYPE_CHECKING:
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 
 def build_application_services(
-    db: DatabaseSessionManager,
+    db: Database,
     *,
     topic_search_service: Any | None = None,
     analytics_service: Any | None = None,

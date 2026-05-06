@@ -131,3 +131,8 @@ the most-ported repository are easiest to land first.
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_digest_store_postgres.py tests/infrastructure/test_digest_subscription_ops_postgres.py tests/tasks/test_digest_task.py`
   → `6 passed`, focused ruff, and focused mypy with skipped imports.
+- Replaced remaining `DatabaseSessionManager` type annotations in DI modules
+  and the RSS Taskiq task with the SQLAlchemy `Database` facade.
+- Verified this slice with focused ruff, focused mypy with skipped imports, and
+  DI import smoke checks; direct `app.tasks.rss` import still requires the
+  optional `taskiq` dependency in this environment.

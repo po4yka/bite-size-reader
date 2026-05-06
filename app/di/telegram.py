@@ -62,7 +62,7 @@ from app.security.file_validation import SecureFileValidator
 
 if TYPE_CHECKING:
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
     from app.db.write_queue import DbWriteQueue
 
 logger = get_logger(__name__)
@@ -89,7 +89,7 @@ class _TelegramInterfaceStack:
 
 def build_telegram_runtime(
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
     *,
     safe_reply_func: Any,
     reply_json_func: Any,
@@ -170,7 +170,7 @@ def build_telegram_runtime(
 
 def build_summary_cli_runtime(
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
 ) -> SummaryCliRuntime:
     """Build the CLI summary runtime using the same shared resources as Telegram."""
     repositories = _build_telegram_repositories(db)
@@ -255,7 +255,7 @@ def build_summary_cli_runtime(
     )
 
 
-def _build_telegram_repositories(db: DatabaseSessionManager) -> TelegramRepositories:
+def _build_telegram_repositories(db: Database) -> TelegramRepositories:
     return TelegramRepositories(
         user_repository=build_user_repository(db),
         summary_repository=build_summary_repository(db),
@@ -271,7 +271,7 @@ def _build_telegram_repositories(db: DatabaseSessionManager) -> TelegramReposito
 def _build_search_stack(
     *,
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
     llm_client: Any,
     audit_func: Any,
     firecrawl_client: Any,
@@ -290,7 +290,7 @@ def _build_search_stack(
 def _build_processing_stack(
     *,
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
     core: Any,
     search: Any,
     repositories: TelegramRepositories,
@@ -352,7 +352,7 @@ def _build_processing_stack(
 def _build_telegram_interface_stack(
     *,
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
     core: Any,
     search: Any,
     repositories: TelegramRepositories,
@@ -477,7 +477,7 @@ def _build_telegram_interface_stack(
 def _build_tts_service_factory(
     *,
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
     summary_repo: Any,
 ) -> Any:
     return lambda: TTSService(
@@ -534,7 +534,7 @@ def _configure_forum_topics(
 def _create_adaptive_timeout_service(
     *,
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
 ) -> AdaptiveTimeoutService | None:
     if cfg.adaptive_timeout is None:
         return None
@@ -565,7 +565,7 @@ def _create_adaptive_timeout_service(
 def _build_related_reads_service(
     *,
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
     search: Any,
 ) -> RelatedReadsService | None:
     if not cfg.runtime.related_reads_enabled:

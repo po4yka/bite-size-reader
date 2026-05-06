@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from fastapi import Request
 
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -55,7 +55,7 @@ _runtime_lock = asyncio.Lock()
 async def build_api_runtime(
     cfg: AppConfig | None = None,
     *,
-    db: DatabaseSessionManager | None = None,
+    db: Database | None = None,
     redis_client: Any | None = None,
 ) -> ApiRuntime:
     """Build the shared API runtime graph."""
@@ -217,7 +217,7 @@ async def build_api_runtime(
 async def build_background_processor(
     cfg: AppConfig | None = None,
     *,
-    db: DatabaseSessionManager | None = None,
+    db: Database | None = None,
     redis_client: Any | None = None,
 ) -> BackgroundProcessor:
     """Compatibility helper for tests that need only the background processor."""

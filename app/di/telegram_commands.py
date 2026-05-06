@@ -34,13 +34,13 @@ if TYPE_CHECKING:
     from app.adapters.telegram.task_manager import UserTaskManager
     from app.adapters.telegram.url_handler import URLHandler
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 
 def build_command_dispatcher_deps(
     *,
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
     response_formatter: Any,
     audit_func: Any,
     url_processor: URLProcessor,

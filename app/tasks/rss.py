@@ -9,7 +9,7 @@ from taskiq import TaskiqDepends
 from app.config import AppConfig  # noqa: TC001 — taskiq resolves type hints at runtime
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.db.session import DatabaseSessionManager  # noqa: TC001 — taskiq resolves type hints at runtime
+from app.db.session import Database  # noqa: TC001 — taskiq resolves type hints at runtime
 from app.tasks.broker import broker
 from app.tasks.deps import (
     create_rss_bot_client,
@@ -26,13 +26,13 @@ logger = get_logger(__name__)
 @broker.task(task_name="ratatoskr.rss.poll")
 async def run_rss_poll(
     cfg: AppConfig = TaskiqDepends(get_app_config),
-    db: DatabaseSessionManager = TaskiqDepends(get_db),
+    db: Database = TaskiqDepends(get_db),
 ) -> None:
     """Poll RSS feeds and deliver new items to subscribers."""
     await _rss_poll_body(cfg, db)
 
 
-async def _rss_poll_body(cfg: AppConfig, db: DatabaseSessionManager) -> None:
+async def _rss_poll_body(cfg: AppConfig, db: Database) -> None:
     """Core RSS poll logic — separated for direct testability."""
     from app.adapters.rss.feed_poller import poll_all_feeds
 
@@ -83,7 +83,7 @@ async def _rss_poll_body(cfg: AppConfig, db: DatabaseSessionManager) -> None:
 
 
 async def _run_signal_ingestion(
-    cfg: AppConfig, db: DatabaseSessionManager, correlation_id: str
+    cfg: AppConfig, db: Database, correlation_id: str
 ) -> None:
     signal_sources_enabled = bool(getattr(cfg.signal_ingestion, "any_enabled", False))
     if not signal_sources_enabled:
@@ -102,7 +102,7 @@ async def _run_signal_ingestion(
 
 
 async def _run_optional_source_ingestors(
-    cfg: AppConfig, db: DatabaseSessionManager, correlation_id: str
+    cfg: AppConfig, db: Database, correlation_id: str
 ) -> None:
     if not cfg.signal_ingestion.any_enabled:
         logger.info("source_ingestion_skipped", extra={"cid": correlation_id})

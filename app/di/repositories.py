@@ -67,76 +67,76 @@ if TYPE_CHECKING:
     from app.application.ports.search import EmbeddingRepositoryPort, TopicSearchRepositoryPort
     from app.application.ports.summaries import SummaryRepositoryPort, TagRepositoryPort
     from app.application.ports.users import UserRepositoryPort
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 
-def build_request_repository(db: DatabaseSessionManager) -> RequestRepositoryPort:
+def build_request_repository(db: Database) -> RequestRepositoryPort:
     return SqliteRequestRepositoryAdapter(db)
 
 
 def build_aggregation_session_repository(
-    db: DatabaseSessionManager,
+    db: Database,
 ) -> AggregationSessionRepositoryPort:
     return SqliteAggregationSessionRepositoryAdapter(db)
 
 
-def build_summary_repository(db: DatabaseSessionManager) -> SummaryRepositoryPort:
+def build_summary_repository(db: Database) -> SummaryRepositoryPort:
     return SqliteSummaryRepositoryAdapter(db)
 
 
-def build_user_repository(db: DatabaseSessionManager) -> UserRepositoryPort:
+def build_user_repository(db: Database) -> UserRepositoryPort:
     return SqliteUserRepositoryAdapter(db)
 
 
-def build_llm_repository(db: DatabaseSessionManager) -> LLMRepositoryPort:
+def build_llm_repository(db: Database) -> LLMRepositoryPort:
     return SqliteLLMRepositoryAdapter(db)
 
 
-def build_crawl_result_repository(db: DatabaseSessionManager) -> CrawlResultRepositoryPort:
+def build_crawl_result_repository(db: Database) -> CrawlResultRepositoryPort:
     return SqliteCrawlResultRepositoryAdapter(db)
 
 
-def build_video_download_repository(db: DatabaseSessionManager) -> VideoDownloadRepositoryPort:
+def build_video_download_repository(db: Database) -> VideoDownloadRepositoryPort:
     return SqliteVideoDownloadRepositoryAdapter(db)
 
 
-def build_audit_log_repository(db: DatabaseSessionManager) -> AuditLogRepositoryPort:
+def build_audit_log_repository(db: Database) -> AuditLogRepositoryPort:
     return SqliteAuditLogRepositoryAdapter(db)
 
 
-def build_batch_session_repository(db: DatabaseSessionManager) -> BatchSessionRepositoryPort:
+def build_batch_session_repository(db: Database) -> BatchSessionRepositoryPort:
     return SqliteBatchSessionRepositoryAdapter(db)
 
 
-def build_topic_search_repository(db: DatabaseSessionManager) -> TopicSearchRepositoryPort:
+def build_topic_search_repository(db: Database) -> TopicSearchRepositoryPort:
     return SqliteTopicSearchRepositoryAdapter(db)
 
 
-def build_embedding_repository(db: DatabaseSessionManager) -> EmbeddingRepositoryPort:
+def build_embedding_repository(db: Database) -> EmbeddingRepositoryPort:
     return SqliteEmbeddingRepositoryAdapter(db)
 
 
-def build_tag_repository(db: DatabaseSessionManager) -> TagRepositoryPort:
+def build_tag_repository(db: Database) -> TagRepositoryPort:
     return SqliteTagRepositoryAdapter(db)
 
 
-def build_import_job_repository(db: DatabaseSessionManager) -> ImportJobRepositoryPort:
+def build_import_job_repository(db: Database) -> ImportJobRepositoryPort:
     return SqliteImportJobRepositoryAdapter(db)
 
 
-def build_rule_repository(db: DatabaseSessionManager) -> RuleRepositoryPort:
+def build_rule_repository(db: Database) -> RuleRepositoryPort:
     return SqliteRuleRepositoryAdapter(db)
 
 
-def build_webhook_repository(db: DatabaseSessionManager) -> WebhookRepositoryPort:
+def build_webhook_repository(db: Database) -> WebhookRepositoryPort:
     return SqliteWebhookRepositoryAdapter(db)
 
 
-def build_backup_repository(db: DatabaseSessionManager) -> BackupRepositoryPort:
+def build_backup_repository(db: Database) -> BackupRepositoryPort:
     return SqliteBackupRepositoryAdapter(db)
 
 
-def build_rss_feed_repository(db: DatabaseSessionManager) -> Any:
+def build_rss_feed_repository(db: Database) -> Any:
     from app.infrastructure.persistence.sqlite.repositories.rss_feed_repository import (
         SqliteRSSFeedRepositoryAdapter,
     )

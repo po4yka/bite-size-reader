@@ -7,13 +7,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 
 @dataclass(frozen=True, slots=True)
 class CoreDependencies:
     cfg: AppConfig
-    db: DatabaseSessionManager
+    db: Database
     audit_sink: Callable[[str, str, dict[str, Any]], None]
     semaphore_factory: Callable[[], Any]
     llm_client: Any
@@ -103,7 +103,7 @@ class SummaryCliRuntime:
 @dataclass(frozen=True, slots=True)
 class ApiRuntime:
     cfg: AppConfig
-    db: DatabaseSessionManager
+    db: Database
     database_services: Any | None
     redis_client: Any | None
     core: CoreDependencies

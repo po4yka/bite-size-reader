@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -50,7 +50,7 @@ def get_topic_search_limit(cfg: AppConfig) -> int:
 
 def build_search_dependencies(
     cfg: AppConfig,
-    db: DatabaseSessionManager,
+    db: Database,
     *,
     llm_client: Any,
     audit_func: Callable[[str, str, dict[str, Any]], None],
