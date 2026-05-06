@@ -275,5 +275,5 @@ async def close_api_runtime(runtime: ApiRuntime) -> None:
         runtime.core.firecrawl_client,
         runtime.core.llm_client,
     )
-    runtime.db.database.close()
+    await runtime.db.dispose()
     logger.info("api_runtime_closed")
