@@ -91,3 +91,10 @@ the most-ported repository are easiest to land first.
 - Verified this slice with
   `pytest tests/test_health_router_postgres.py` → `1 passed`, focused ruff,
   focused mypy with skipped imports, and `python -c 'import app.api.main'`.
+- Ported Telegram admin DB diagnostics from sync inspection wrappers to async
+  PostgreSQL inspection methods, and added
+  `DatabaseInspectionService.async_verify_processing_integrity()` for async
+  command handlers.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/db/test_runtime_services_postgres.py`
+  → `3 passed`, focused ruff, and focused mypy with skipped imports.

@@ -190,7 +190,7 @@ class AdminHandler:
             ctx: The command execution context.
         """
         try:
-            overview = self._db.get_database_overview()
+            overview = await self._db.inspection.async_get_database_overview()
         except Exception as exc:
             logger.exception("command_dbinfo_failed", extra={"cid": ctx.correlation_id})
             await ctx.response_formatter.safe_reply(
@@ -239,7 +239,7 @@ class AdminHandler:
         try:
             # Limit verification to the last 1000 records to prevent memory exhaustion
             # and ensure the command remains responsive.
-            verification = self._db.verify_processing_integrity(limit=1000)
+            verification = await self._db.inspection.async_verify_processing_integrity(limit=1000)
         except Exception as exc:
             logger.exception("command_dbverify_failed", extra={"cid": ctx.correlation_id})
             await ctx.response_formatter.safe_reply(

@@ -112,9 +112,19 @@ class DatabaseInspectionService:
         required_fields: Iterable[str] | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
+        return _run_sync(
+            self.async_verify_processing_integrity(required_fields=required_fields, limit=limit)
+        )
+
+    async def async_verify_processing_integrity(
+        self,
+        *,
+        required_fields: Iterable[str] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
         del required_fields, limit
         return {
-            "overview": self.get_database_overview(),
+            "overview": await self.async_get_database_overview(),
             "posts": {
                 "checked": 0,
                 "with_summary": 0,

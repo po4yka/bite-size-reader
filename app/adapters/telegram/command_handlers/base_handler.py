@@ -9,7 +9,7 @@ if TYPE_CHECKING:
         ResponseFormatterFacade as ResponseFormatter,
     )
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 
 class HandlerDependenciesMixin:
@@ -18,7 +18,7 @@ class HandlerDependenciesMixin:
     def __init__(
         self,
         cfg: AppConfig,
-        db: DatabaseSessionManager,
+        db: Database,
         response_formatter: ResponseFormatter,
     ) -> None:
         self._cfg = cfg
