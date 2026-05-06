@@ -1,20 +1,17 @@
-"""SQLite implementation of LLM repository.
-
-This adapter handles logging and retrieval of LLM call data.
-"""
+"""SQLAlchemy implementation of the LLM-call repository."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import peewee
+from sqlalchemy import desc, func, or_, select
 
 if TYPE_CHECKING:
     from app.application.ports.requests import LLMCallRecord
+    from app.db.session import Database
 
 from app.db.json_utils import prepare_json_payload
-from app.db.models import LLMCall, model_to_dict
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+from app.db.models import LLMCall, Request, model_to_dict
 
 
 def _build_llm_call_payload(call_data: dict[str, Any] | Any) -> dict[str, Any]:
@@ -28,7 +25,7 @@ def _build_llm_call_payload(call_data: dict[str, Any] | Any) -> dict[str, Any]:
     error_context_payload = prepare_json_payload(call_data.get("error_context_json"))
 
     payload = {
-        "request": call_data.get("request_id"),
+        "request_id": call_data.get("request_id"),
         "provider": provider,
         "model": call_data.get("model"),
         "endpoint": call_data.get("endpoint"),
@@ -57,17 +54,19 @@ def _build_llm_call_payload(call_data: dict[str, Any] | Any) -> dict[str, Any]:
     return payload
 
 
-class SqliteLLMRepositoryAdapter(SqliteBaseRepository):
+class SqliteLLMRepositoryAdapter:
     """Adapter for LLM call logging operations."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_insert_llm_call(self, record: LLMCallRecord) -> int:
         """Insert an LLM call log record."""
-
-        def _insert() -> int:
-            call = LLMCall.create(**_build_llm_call_payload(record))
+        async with self._database.transaction() as session:
+            call = LLMCall(**_build_llm_call_payload(record))
+            session.add(call)
+            await session.flush()
             return call.id
-
-        return await self._execute(_insert, operation_name="insert_llm_call")
 
     async def async_insert_llm_calls_batch(
         self,
@@ -77,123 +76,81 @@ class SqliteLLMRepositoryAdapter(SqliteBaseRepository):
         if not calls:
             return []
 
-        def _insert() -> list[int]:
-            call_ids: list[int] = []
-            for call_data in calls:
-                call = LLMCall.create(**_build_llm_call_payload(call_data))
-                call_ids.append(call.id)
-            return call_ids
-
-        return await self._execute_transaction(
-            _insert,
-            operation_name="insert_llm_calls_batch",
-        )
+        async with self._database.transaction() as session:
+            rows = [LLMCall(**_build_llm_call_payload(call_data)) for call_data in calls]
+            session.add_all(rows)
+            await session.flush()
+            return [row.id for row in rows]
 
     async def async_get_latest_llm_model_by_request_id(self, request_id: int) -> str | None:
         """Get the latest LLM model used for a request."""
-
-        def _get() -> str | None:
-            call = (
-                LLMCall.select(LLMCall.model)
-                .where(LLMCall.request == request_id, LLMCall.model.is_null(False))
+        async with self._database.session() as session:
+            return await session.scalar(
+                select(LLMCall.model)
+                .where(LLMCall.request_id == request_id, LLMCall.model.is_not(None))
                 .order_by(LLMCall.id.desc())
-                .first()
+                .limit(1)
             )
-            return call.model if call else None
-
-        return await self._execute(
-            _get, operation_name="get_latest_llm_model_by_request_id", read_only=True
-        )
 
     async def async_get_llm_calls_by_request(self, request_id: int) -> list[dict[str, Any]]:
         """Get all LLM calls for a request."""
-
-        def _get() -> list[dict[str, Any]]:
-            calls = LLMCall.select().where(LLMCall.request == request_id)
-            return [model_to_dict(call) or {} for call in calls]
-
-        return await self._execute(_get, operation_name="get_llm_calls_by_request", read_only=True)
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(LLMCall).where(LLMCall.request_id == request_id).order_by(LLMCall.id)
+                )
+            ).scalars()
+            return [model_to_dict(row) or {} for row in rows]
 
     async def async_count_llm_calls_by_request(self, request_id: int) -> int:
         """Count LLM calls for a request."""
-
-        def _count() -> int:
-            return LLMCall.select().where(LLMCall.request == request_id).count()
-
-        return await self._execute(
-            _count,
-            operation_name="count_llm_calls_by_request",
-            read_only=True,
-        )
+        async with self._database.session() as session:
+            return int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(LLMCall)
+                    .where(LLMCall.request_id == request_id)
+                )
+                or 0
+            )
 
     async def async_get_latest_error_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Return the newest error-like LLM call for the request."""
-
-        def _get() -> dict[str, Any] | None:
-            row = (
-                LLMCall.select()
+        async with self._database.session() as session:
+            row = await session.scalar(
+                select(LLMCall)
                 .where(
-                    (LLMCall.request == request_id)
-                    & (
-                        (LLMCall.status == "error")
-                        | LLMCall.error_text.is_null(False)
-                        | LLMCall.error_context_json.is_null(False)
-                    )
+                    LLMCall.request_id == request_id,
+                    or_(
+                        LLMCall.status == "error",
+                        LLMCall.error_text.is_not(None),
+                        LLMCall.error_context_json.is_not(None),
+                    ),
                 )
-                .order_by(LLMCall.updated_at.desc(), LLMCall.id.desc())
-                .first()
+                .order_by(desc(LLMCall.updated_at), desc(LLMCall.id))
+                .limit(1)
             )
             return model_to_dict(row)
 
-        return await self._execute(
-            _get,
-            operation_name="get_latest_llm_error_by_request",
-            read_only=True,
-        )
-
     async def async_get_max_server_version(self, user_id: int) -> int | None:
         """Return the maximum server_version across LLM calls owned by *user_id*."""
-        from peewee import JOIN
-
-        from app.db.models import Request
-
-        def _query() -> int | None:
-            return (
-                LLMCall.select(peewee.fn.MAX(LLMCall.server_version))
-                .join(Request, JOIN.INNER)
+        async with self._database.session() as session:
+            value = await session.scalar(
+                select(func.max(LLMCall.server_version))
+                .join(Request, LLMCall.request_id == Request.id)
                 .where(Request.user_id == user_id)
-                .scalar()
             )
-
-        return await self._execute(
-            _query, operation_name="get_max_server_version_llm_call", read_only=True
-        )
+            return int(value) if value is not None else None
 
     async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
-        """Get all LLM calls for a user (for sync operations).
-
-        Returns:
-            List of LLM call dicts with request_id flattened.
-        """
-        from peewee import JOIN
-
-        from app.db.models import Request
-
-        def _get() -> list[dict[str, Any]]:
-            llm_calls = (
-                LLMCall.select(LLMCall, Request)
-                .join(Request, JOIN.INNER)
-                .where(Request.user_id == user_id)
-            )
-            result = []
-            for call in llm_calls:
-                l_dict = model_to_dict(call) or {}
-                # Flatten request to just the ID for sync
-                if "request" in l_dict and isinstance(l_dict["request"], dict):
-                    l_dict["request"] = l_dict["request"]["id"]
-                result.append(l_dict)
-            return result
-
-        return await self._execute(
-            _get, operation_name="get_all_llm_calls_for_user", read_only=True
-        )
+        """Get all LLM calls for a user, with request_id flattened."""
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(LLMCall)
+                    .join(Request, LLMCall.request_id == Request.id)
+                    .where(Request.user_id == user_id)
+                    .order_by(LLMCall.id)
+                )
+            ).scalars()
+            return [model_to_dict(row) or {} for row in rows]

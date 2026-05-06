@@ -1,24 +1,24 @@
-"""SQLite implementation of crawl result repository.
-
-This adapter translates between crawl result data and database records.
-"""
+"""SQLAlchemy implementation of the crawl-result repository."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import peewee
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 from app.db.json_utils import prepare_json_payload
-from app.db.models import CrawlResult, model_to_dict
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+from app.db.models import CrawlResult, Request, model_to_dict
 
 
-class SqliteCrawlResultRepositoryAdapter(SqliteBaseRepository):
-    """Adapter that implements CrawlResultRepository using Peewee models directly.
+class SqliteCrawlResultRepositoryAdapter:
+    """Adapter that implements crawl-result persistence via SQLAlchemy."""
 
-    This replaces the legacy delegation to the monolithic Database class.
-    """
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_insert_crawl_result(
         self,
@@ -37,89 +37,67 @@ class SqliteCrawlResultRepositoryAdapter(SqliteBaseRepository):
         correlation_id: str | None = None,
         options_json: dict[str, Any] | None = None,
     ) -> int:
-        """Insert a crawl result."""
-
-        def _insert() -> int:
-            try:
-                result = CrawlResult.create(
-                    request=request_id,
-                    firecrawl_success=success,
-                    content_markdown=markdown,
-                    content_html=html,
-                    error_text=error,
-                    metadata_json=prepare_json_payload(metadata_json, default={}),
-                    source_url=source_url,
-                    http_status=http_status,
-                    status=status,
-                    endpoint=endpoint,
-                    latency_ms=latency_ms,
-                    correlation_id=correlation_id,
-                    options_json=prepare_json_payload(options_json, default=None),
-                )
-                return result.id
-            except peewee.IntegrityError:
-                # Idempotency: return existing result ID if conflict on request_id (unique)
-                existing = CrawlResult.get_or_none(CrawlResult.request == request_id)
-                if existing:
-                    return existing.id
-                raise
-
-        return await self._execute(_insert, operation_name="insert_crawl_result")
+        """Insert a crawl result and return an existing row on request-id conflict."""
+        payload = {
+            "request_id": request_id,
+            "firecrawl_success": success,
+            "content_markdown": markdown,
+            "content_html": html,
+            "error_text": error,
+            "metadata_json": prepare_json_payload(metadata_json, default={}),
+            "source_url": source_url,
+            "http_status": http_status,
+            "status": status,
+            "endpoint": endpoint,
+            "latency_ms": latency_ms,
+            "correlation_id": correlation_id,
+            "options_json": prepare_json_payload(options_json, default=None),
+        }
+        async with self._database.transaction() as session:
+            stmt = (
+                insert(CrawlResult)
+                .values(**payload)
+                .on_conflict_do_nothing(index_elements=[CrawlResult.request_id])
+                .returning(CrawlResult.id)
+            )
+            inserted_id = await session.scalar(stmt)
+            if inserted_id is not None:
+                return int(inserted_id)
+            existing_id = await session.scalar(
+                select(CrawlResult.id).where(CrawlResult.request_id == request_id)
+            )
+            if existing_id is None:
+                msg = f"crawl result conflict for request_id={request_id} but no row exists"
+                raise RuntimeError(msg)
+            return int(existing_id)
 
     async def async_get_crawl_result_by_request(self, request_id: int) -> dict[str, Any] | None:
         """Get a crawl result by request ID."""
-
-        def _get() -> dict[str, Any] | None:
-            result = CrawlResult.get_or_none(CrawlResult.request == request_id)
+        async with self._database.session() as session:
+            result = await session.scalar(
+                select(CrawlResult).where(CrawlResult.request_id == request_id)
+            )
             return model_to_dict(result)
-
-        return await self._execute(
-            _get, operation_name="get_crawl_result_by_request", read_only=True
-        )
 
     async def async_get_max_server_version(self, user_id: int) -> int | None:
         """Return the maximum server_version across crawl results owned by *user_id*."""
-        from peewee import JOIN
-
-        from app.db.models import Request
-
-        def _query() -> int | None:
-            return (
-                CrawlResult.select(peewee.fn.MAX(CrawlResult.server_version))
-                .join(Request, JOIN.INNER)
+        async with self._database.session() as session:
+            value = await session.scalar(
+                select(func.max(CrawlResult.server_version))
+                .join(Request, CrawlResult.request_id == Request.id)
                 .where(Request.user_id == user_id)
-                .scalar()
             )
-
-        return await self._execute(
-            _query, operation_name="get_max_server_version_crawl_result", read_only=True
-        )
+            return int(value) if value is not None else None
 
     async def async_get_all_for_user(self, user_id: int) -> list[dict[str, Any]]:
-        """Get all crawl results for a user (for sync operations).
-
-        Returns:
-            List of crawl result dicts with request_id flattened.
-        """
-        from peewee import JOIN
-
-        from app.db.models import Request
-
-        def _get() -> list[dict[str, Any]]:
-            crawl_results = (
-                CrawlResult.select(CrawlResult, Request)
-                .join(Request, JOIN.INNER)
-                .where(Request.user_id == user_id)
-            )
-            result = []
-            for cr in crawl_results:
-                c_dict = model_to_dict(cr) or {}
-                # Flatten request to just the ID for sync
-                if "request" in c_dict and isinstance(c_dict["request"], dict):
-                    c_dict["request"] = c_dict["request"]["id"]
-                result.append(c_dict)
-            return result
-
-        return await self._execute(
-            _get, operation_name="get_all_crawl_results_for_user", read_only=True
-        )
+        """Get all crawl results for a user, with request_id flattened."""
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(CrawlResult)
+                    .join(Request, CrawlResult.request_id == Request.id)
+                    .where(Request.user_id == user_id)
+                    .order_by(CrawlResult.id)
+                )
+            ).scalars()
+            return [model_to_dict(row) or {} for row in rows]

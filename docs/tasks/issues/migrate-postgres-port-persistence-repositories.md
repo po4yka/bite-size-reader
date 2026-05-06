@@ -1,6 +1,6 @@
 ---
 title: Port persistence repositories to AsyncSession
-status: backlog
+status: doing
 area: db
 priority: critical
 owner: Nikita Pochaev
@@ -13,7 +13,7 @@ created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Port persistence repositories to AsyncSession #repo/ratatoskr #area/db #status/backlog 🔺
+- [ ] #task Port persistence repositories to AsyncSession #repo/ratatoskr #area/db #status/doing 🔺
 
 ## Objective
 
@@ -69,3 +69,19 @@ Conventions for the port:
 - Beware `AsyncSession.merge` if you need upsert semantics on a single row;
   prefer `insert(...).on_conflict_do_update(...)` from
   `sqlalchemy.dialects.postgresql` instead — clearer, no extra round-trip.
+
+## Progress
+
+- Ported first core repository slice to SQLAlchemy/AsyncSession while preserving
+  existing adapter class names for call-site compatibility:
+  `request_repository.py`, `llm_repository.py`, and `crawl_result_repository.py`.
+- Added live Postgres tests:
+  `tests/infrastructure/test_request_repository_postgres.py` and
+  `tests/infrastructure/test_llm_crawl_repositories_postgres.py`.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_request_repository_postgres.py tests/infrastructure/test_llm_crawl_repositories_postgres.py -q`
+  → `4 passed`.
+
+Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
+SQLite package/import surface, and replace the skipped SQLite repository tests
+with Postgres equivalents.
