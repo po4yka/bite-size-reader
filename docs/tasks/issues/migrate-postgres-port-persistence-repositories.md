@@ -101,6 +101,8 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_telegram_message_repository.py -q`
   → `2 passed`.
+- Removed dead request repository Peewee mixins now that
+  `request_repository.py` owns its SQLAlchemy implementation directly.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
