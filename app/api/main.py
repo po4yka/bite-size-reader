@@ -11,12 +11,12 @@ from datetime import datetime
 from pathlib import Path as _Path
 from typing import Any
 
-import peewee
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError as PydanticValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.error_handlers import (
     api_exception_handler,
@@ -301,8 +301,7 @@ app.add_exception_handler(
     PydanticValidationError,
     validation_exception_handler,
 )
-app.add_exception_handler(peewee.DatabaseError, database_exception_handler)
-app.add_exception_handler(peewee.OperationalError, database_exception_handler)
+app.add_exception_handler(SQLAlchemyError, database_exception_handler)
 app.add_exception_handler(Exception, global_error_handler)
 
 

@@ -53,6 +53,7 @@ async def test_runtime_services_against_postgres(tmp_path: Path) -> None:
         overview = await database.inspection.async_get_database_overview()
         assert overview["tables"]["requests"] >= 1
         assert overview["total_requests"] >= 1
+        assert await database.inspection.async_database_size_mb() > 0
 
         database.maintenance.run_startup_maintenance()
         assert await database.maintenance.async_run_analyze() is True

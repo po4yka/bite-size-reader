@@ -71,3 +71,17 @@ the most-ported repository are easiest to land first.
 - Watch for code that grabs `model.dict()`-style outputs via the old
   `model_to_dict` helper — its replacement should iterate
   `Mapped` columns from the model's `__table__.columns`.
+
+## Progress
+
+- Removed FastAPI app-level Peewee exception registration in favor of
+  `SQLAlchemyError`, and ported `SystemMaintenanceService` from SQLite file
+  inspection/backup to PostgreSQL runtime inspection and `pg_dump` backup
+  creation.
+- Updated `/v1/system/db-info` and admin system metrics to await the async
+  PostgreSQL DB info path.
+- Verified this slice with focused service tests
+  (`pytest --confcutdir=tests/api/services tests/api/services/test_system_maintenance_service.py`
+  → `6 passed`), runtime Postgres smoke tests
+  (`TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/db/test_runtime_services_postgres.py`
+  → `3 passed`), focused ruff, and focused mypy with skipped imports.

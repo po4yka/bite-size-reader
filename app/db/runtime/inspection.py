@@ -90,6 +90,12 @@ class DatabaseInspectionService:
             overview.pop("errors")
         return overview
 
+    async def async_database_size_mb(self) -> float:
+        """Return the current PostgreSQL database size in MiB."""
+        async with self._session_maker() as session:
+            size_bytes = await session.scalar(text("SELECT pg_database_size(current_database())"))
+        return round(float(size_bytes or 0) / (1024 * 1024), 1)
+
     async def _requests_by_status(self, session: AsyncSession) -> dict[str, int]:
         rows = await session.execute(
             select(Request.status, func.count(Request.id)).group_by(Request.status)

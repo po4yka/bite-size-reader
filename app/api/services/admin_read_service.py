@@ -13,13 +13,13 @@ from app.infrastructure.persistence.sqlite.repositories.admin_read_repository im
 if TYPE_CHECKING:
     import datetime as _dt
 
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 
 class AdminReadService:
     """Owns admin dashboards and audit log read models."""
 
-    def __init__(self, session_manager: DatabaseSessionManager | None = None) -> None:
+    def __init__(self, session_manager: Database | None = None) -> None:
         self._db = session_manager or get_session_manager()
         self._admin_repo = SqliteAdminReadRepositoryAdapter(self._db)
 
@@ -34,7 +34,7 @@ class AdminReadService:
 
     async def system_metrics(self, *, since: _dt.datetime) -> dict[str, Any]:
         metrics = await self._admin_repo.async_system_metrics(since=since)
-        metrics["database"] = SystemMaintenanceService().get_db_info()
+        metrics["database"] = await SystemMaintenanceService(database=self._db).get_db_info()
         return metrics
 
     async def audit_log(

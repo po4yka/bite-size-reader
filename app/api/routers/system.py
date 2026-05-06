@@ -48,7 +48,7 @@ async def download_database(
     service: SystemMaintenanceService = Depends(get_system_maintenance_service),
 ):
     """
-    Download a consistent snapshot of the SQLite database.
+    Download a consistent PostgreSQL backup dump.
 
     Requires owner permissions.
     """
@@ -106,7 +106,7 @@ async def get_db_info(
     user_id = _extract_user_id(user)
     audit = build_async_audit_sink(_resolve_db(request))
     audit("INFO", "admin.db_info", {"user_id": user_id})
-    return success_response(service.get_db_info())
+    return success_response(await service.get_db_info())
 
 
 @router.post("/clear-cache")

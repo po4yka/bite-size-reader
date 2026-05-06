@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -11,20 +10,27 @@ import pytest
 
 from app.api.exceptions import ProcessingError, ResourceNotFoundError
 from app.api.services.system_maintenance_service import SystemMaintenanceService
-from app.db.models import User
 
 
-def test_build_db_dump_file_creates_backup_and_reuses_for_range_requests(db, tmp_path) -> None:
-    User.create(telegram_user_id=7001, username="system-user")
+def test_build_db_dump_file_creates_backup_and_reuses_for_range_requests(tmp_path) -> None:
+    database = MagicMock()
+
+    def create_backup(dest: str) -> Path:
+        path = Path(dest)
+        path.write_bytes(b"dump")
+        return path
+
+    database.create_backup_copy.side_effect = create_backup
     service = SystemMaintenanceService(
-        db_path=str(db._database.database),
+        database=database,
         backup_dir=str(tmp_path),
-        backup_filename="service-backup.sqlite",
+        backup_filename="service-backup.dump",
     )
 
     dump_file = service.build_db_dump_file(request_headers={}, user_id=1)
     assert Path(dump_file.path).exists()
     assert dump_file.filename.startswith("ratatoskr_backup_")
+    assert dump_file.filename.endswith(".dump")
 
     with patch.object(service, "_create_backup") as create_backup:
         reused = service.build_db_dump_file(request_headers={"Range": "bytes=0-9"}, user_id=1)
@@ -34,38 +40,44 @@ def test_build_db_dump_file_creates_backup_and_reuses_for_range_requests(db, tmp
 
 
 def test_build_db_dump_file_raises_when_database_missing(tmp_path) -> None:
+    database = MagicMock()
     service = SystemMaintenanceService(
-        db_path=str(tmp_path / "missing.sqlite"),
+        database=database,
         backup_dir=str(tmp_path),
     )
 
     with pytest.raises(ResourceNotFoundError):
-        service.build_db_dump_file(request_headers={}, user_id=1)
+        service.build_db_dump_file(request_headers={"Range": "bytes=0-9"}, user_id=1)
 
 
-def test_get_db_info_returns_allowlisted_counts(db) -> None:
-    User.create(telegram_user_id=7002, username="db-info-user")
-    db._database.execute_sql("CREATE TABLE unexpected_table (id INTEGER PRIMARY KEY)")
-    db._database.execute_sql("INSERT INTO unexpected_table (id) VALUES (1)")
-    service = SystemMaintenanceService(db_path=str(db._database.database))
+@pytest.mark.asyncio
+async def test_get_db_info_returns_allowlisted_counts() -> None:
+    inspection = SimpleNamespace(
+        async_get_database_overview=AsyncMock(
+            return_value={"tables": {"users": 1, "unexpected_table": 1}}
+        ),
+        async_database_size_mb=AsyncMock(return_value=12.3),
+    )
+    service = SystemMaintenanceService(database=SimpleNamespace(inspection=inspection))
 
-    info = service.get_db_info()
+    info = await service.get_db_info()
     file_size_mb = cast("float", info["file_size_mb"])
     table_counts = cast("dict[str, int]", info["table_counts"])
 
-    assert file_size_mb >= 0
-    assert "users" in table_counts
+    assert file_size_mb == 12.3
+    assert table_counts["users"] == 1
     assert "unexpected_table" not in table_counts
 
 
-def test_get_db_info_handles_sqlite_failures(tmp_path) -> None:
-    service = SystemMaintenanceService(db_path=str(tmp_path / "broken.sqlite"))
+@pytest.mark.asyncio
+async def test_get_db_info_handles_database_failures() -> None:
+    inspection = SimpleNamespace(
+        async_get_database_overview=AsyncMock(side_effect=RuntimeError("boom")),
+        async_database_size_mb=AsyncMock(return_value=0.0),
+    )
+    service = SystemMaintenanceService(database=SimpleNamespace(inspection=inspection))
 
-    with patch(
-        "app.api.services.system_maintenance_service.sqlite3.connect",
-        side_effect=sqlite3.Error("boom"),
-    ):
-        info = service.get_db_info()
+    info = await service.get_db_info()
 
     table_counts = cast("dict[str, int]", info["table_counts"])
     assert table_counts["__error__"] == -1
@@ -73,7 +85,7 @@ def test_get_db_info_handles_sqlite_failures(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_clear_url_cache_success_and_failure() -> None:
-    service = SystemMaintenanceService(db_path="/tmp/unused.sqlite")
+    service = SystemMaintenanceService(database=MagicMock())
     fake_cfg = SimpleNamespace(redis=SimpleNamespace(prefix="test"))
     cache = MagicMock()
     cache.clear_prefix = AsyncMock(return_value=5)
@@ -101,20 +113,16 @@ async def test_clear_url_cache_success_and_failure() -> None:
 
 
 def test_create_backup_raises_processing_error_when_backup_and_cleanup_fail(tmp_path) -> None:
-    db_path = tmp_path / "app.sqlite"
-    db_path.write_text("placeholder")
+    database = MagicMock()
+    database.create_backup_copy.side_effect = RuntimeError("backup failed")
     service = SystemMaintenanceService(
-        db_path=str(db_path),
+        database=database,
         backup_dir=str(tmp_path),
-        backup_filename="broken.sqlite",
+        backup_filename="broken.dump",
     )
-    backup_path = os.path.join(str(tmp_path), "broken.sqlite")
+    backup_path = os.path.join(str(tmp_path), "broken.dump")
 
     with (
-        patch(
-            "app.api.services.system_maintenance_service.sqlite3.connect",
-            side_effect=sqlite3.Error("backup failed"),
-        ),
         patch(
             "app.api.services.system_maintenance_service.os.path.exists",
             side_effect=[False, True],
