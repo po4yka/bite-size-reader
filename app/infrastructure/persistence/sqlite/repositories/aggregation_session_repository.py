@@ -1,18 +1,20 @@
-"""SQLite implementation of aggregation session repository."""
+"""SQLAlchemy implementation of aggregation session repository."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import func, select, update
+
 from app.core.time_utils import UTC
 from app.db.json_utils import prepare_json_payload
 from app.db.models import AggregationSession, AggregationSessionItem, model_to_dict
 from app.domain.models.source import AggregationItemStatus, AggregationSessionStatus, SourceItem
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
 
 if TYPE_CHECKING:
     from app.application.dto.aggregation import AggregationFailure, NormalizedSourceDocument
+    from app.db.session import Database
 
 
 def _status_value(status: AggregationItemStatus | AggregationSessionStatus | str) -> str:
@@ -40,8 +42,11 @@ def _progress_percent(
     return min(100, int((processed_items * 100) / total_items))
 
 
-class SqliteAggregationSessionRepositoryAdapter(SqliteBaseRepository):
+class SqliteAggregationSessionRepositoryAdapter:
     """Adapter for aggregation bundle persistence operations."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_create_aggregation_session(
         self,
@@ -52,10 +57,10 @@ class SqliteAggregationSessionRepositoryAdapter(SqliteBaseRepository):
         allow_partial_success: bool = True,
         bundle_metadata: dict[str, Any] | None = None,
     ) -> int:
-        def _create() -> int:
-            now = datetime.now(UTC)
-            session = AggregationSession.create(
-                user=user_id,
+        now = datetime.now(UTC)
+        async with self._database.transaction() as db_session:
+            session = AggregationSession(
+                user_id=user_id,
                 correlation_id=correlation_id,
                 total_items=total_items,
                 allow_partial_success=allow_partial_success,
@@ -65,35 +70,25 @@ class SqliteAggregationSessionRepositoryAdapter(SqliteBaseRepository):
                 queued_at=now,
                 last_progress_at=now,
             )
+            db_session.add(session)
+            await db_session.flush()
             return session.id
 
-        return await self._execute(_create, operation_name="create_aggregation_session")
-
     async def async_get_aggregation_session(self, session_id: int) -> dict[str, Any] | None:
-        def _get() -> dict[str, Any] | None:
-            session = AggregationSession.get_or_none(AggregationSession.id == session_id)
-            return model_to_dict(session)
-
-        return await self._execute(
-            _get,
-            operation_name="get_aggregation_session",
-            read_only=True,
-        )
+        async with self._database.session() as db_session:
+            session = await db_session.get(AggregationSession, session_id)
+            return _session_to_dict(session)
 
     async def async_get_aggregation_session_by_correlation_id(
         self, correlation_id: str
     ) -> dict[str, Any] | None:
-        def _get() -> dict[str, Any] | None:
-            session = AggregationSession.get_or_none(
-                AggregationSession.correlation_id == correlation_id
+        async with self._database.session() as db_session:
+            session = await db_session.scalar(
+                select(AggregationSession).where(
+                    AggregationSession.correlation_id == correlation_id
+                )
             )
-            return model_to_dict(session)
-
-        return await self._execute(
-            _get,
-            operation_name="get_aggregation_session_by_correlation_id",
-            read_only=True,
-        )
+            return _session_to_dict(session)
 
     async def async_get_user_aggregation_sessions(
         self,
@@ -103,22 +98,16 @@ class SqliteAggregationSessionRepositoryAdapter(SqliteBaseRepository):
         offset: int = 0,
         status: str | None = None,
     ) -> list[dict[str, Any]]:
-        def _get() -> list[dict[str, Any]]:
-            query = (
-                AggregationSession.select()
-                .where(AggregationSession.user == user_id)
+        async with self._database.session() as db_session:
+            stmt = (
+                select(AggregationSession)
+                .where(AggregationSession.user_id == user_id)
                 .order_by(AggregationSession.created_at.desc())
             )
             if status:
-                query = query.where(AggregationSession.status == status)
-            sessions = query.limit(limit).offset(offset)
-            return [model_to_dict(session) or {} for session in sessions]
-
-        return await self._execute(
-            _get,
-            operation_name="get_user_aggregation_sessions",
-            read_only=True,
-        )
+                stmt = stmt.where(AggregationSession.status == status)
+            sessions = (await db_session.execute(stmt.limit(limit).offset(offset))).scalars()
+            return [_session_to_dict(session) or {} for session in sessions]
 
     async def async_count_user_aggregation_sessions(
         self,
@@ -126,17 +115,13 @@ class SqliteAggregationSessionRepositoryAdapter(SqliteBaseRepository):
         *,
         status: str | None = None,
     ) -> int:
-        def _count() -> int:
-            query = AggregationSession.select().where(AggregationSession.user == user_id)
+        async with self._database.session() as db_session:
+            stmt = select(func.count(AggregationSession.id)).where(
+                AggregationSession.user_id == user_id
+            )
             if status:
-                query = query.where(AggregationSession.status == status)
-            return query.count()
-
-        return await self._execute(
-            _count,
-            operation_name="count_user_aggregation_sessions",
-            read_only=True,
-        )
+                stmt = stmt.where(AggregationSession.status == status)
+            return int(await db_session.scalar(stmt) or 0)
 
     async def async_add_aggregation_session_item(
         self,
@@ -146,20 +131,19 @@ class SqliteAggregationSessionRepositoryAdapter(SqliteBaseRepository):
         *,
         request_id: int | None = None,
     ) -> int:
-        def _create() -> int:
-            first_match = (
-                AggregationSessionItem.select(AggregationSessionItem.id)
+        async with self._database.transaction() as db_session:
+            first_match_id = await db_session.scalar(
+                select(AggregationSessionItem.id)
                 .where(
-                    (AggregationSessionItem.aggregation_session == session_id)
-                    & (AggregationSessionItem.source_item_id == source_item.stable_id)
-                    & AggregationSessionItem.duplicate_of_item_id.is_null(True)
+                    AggregationSessionItem.aggregation_session_id == session_id,
+                    AggregationSessionItem.source_item_id == source_item.stable_id,
+                    AggregationSessionItem.duplicate_of_item_id.is_(None),
                 )
                 .order_by(AggregationSessionItem.position)
-                .first()
             )
-            item = AggregationSessionItem.create(
-                aggregation_session=session_id,
-                request=request_id,
+            item = AggregationSessionItem(
+                aggregation_session_id=session_id,
+                request_id=request_id,
                 position=position,
                 source_kind=source_item.kind.value,
                 source_item_id=source_item.stable_id,
@@ -174,29 +158,25 @@ class SqliteAggregationSessionRepositoryAdapter(SqliteBaseRepository):
                 source_metadata_json=prepare_json_payload(source_item.metadata),
                 status=(
                     AggregationItemStatus.DUPLICATE.value
-                    if first_match is not None
+                    if first_match_id is not None
                     else AggregationItemStatus.PENDING.value
                 ),
-                duplicate_of_item_id=first_match.id if first_match is not None else None,
+                duplicate_of_item_id=first_match_id,
             )
+            db_session.add(item)
+            await db_session.flush()
             return item.id
 
-        return await self._execute(_create, operation_name="add_aggregation_session_item")
-
     async def async_get_aggregation_session_items(self, session_id: int) -> list[dict[str, Any]]:
-        def _get() -> list[dict[str, Any]]:
+        async with self._database.session() as db_session:
             items = (
-                AggregationSessionItem.select()
-                .where(AggregationSessionItem.aggregation_session == session_id)
-                .order_by(AggregationSessionItem.position)
-            )
-            return [model_to_dict(item) or {} for item in items]
-
-        return await self._execute(
-            _get,
-            operation_name="get_aggregation_session_items",
-            read_only=True,
-        )
+                await db_session.execute(
+                    select(AggregationSessionItem)
+                    .where(AggregationSessionItem.aggregation_session_id == session_id)
+                    .order_by(AggregationSessionItem.position)
+                )
+            ).scalars()
+            return [_item_to_dict(item) or {} for item in items]
 
     async def async_update_aggregation_session_item_result(
         self,
@@ -208,37 +188,33 @@ class SqliteAggregationSessionRepositoryAdapter(SqliteBaseRepository):
         extraction_metadata: dict[str, Any] | None = None,
         failure: AggregationFailure | None = None,
     ) -> None:
-        def _update() -> None:
-            update_fields: dict[Any, Any] = {
-                AggregationSessionItem.status: _status_value(status),
-                AggregationSessionItem.updated_at: datetime.now(UTC),
-            }
-            if request_id is not None:
-                update_fields[AggregationSessionItem.request] = request_id
-            if normalized_document is not None:
-                update_fields[AggregationSessionItem.normalized_document_json] = (
-                    prepare_json_payload(normalized_document.model_dump(mode="json"))
-                )
-            if extraction_metadata is not None:
-                update_fields[AggregationSessionItem.extraction_metadata_json] = (
-                    prepare_json_payload(extraction_metadata)
-                )
-            if failure is not None:
-                update_fields[AggregationSessionItem.failure_code] = failure.code
-                update_fields[AggregationSessionItem.failure_message] = failure.message
-                update_fields[AggregationSessionItem.failure_details_json] = prepare_json_payload(
-                    failure.details
-                )
-            elif _status_value(status) != AggregationItemStatus.FAILED.value:
-                update_fields[AggregationSessionItem.failure_code] = None
-                update_fields[AggregationSessionItem.failure_message] = None
-                update_fields[AggregationSessionItem.failure_details_json] = None
+        update_fields: dict[str, Any] = {
+            "status": _status_value(status),
+            "updated_at": datetime.now(UTC),
+        }
+        if request_id is not None:
+            update_fields["request_id"] = request_id
+        if normalized_document is not None:
+            update_fields["normalized_document_json"] = prepare_json_payload(
+                normalized_document.model_dump(mode="json")
+            )
+        if extraction_metadata is not None:
+            update_fields["extraction_metadata_json"] = prepare_json_payload(extraction_metadata)
+        if failure is not None:
+            update_fields["failure_code"] = failure.code
+            update_fields["failure_message"] = failure.message
+            update_fields["failure_details_json"] = prepare_json_payload(failure.details)
+        elif _status_value(status) != AggregationItemStatus.FAILED.value:
+            update_fields["failure_code"] = None
+            update_fields["failure_message"] = None
+            update_fields["failure_details_json"] = None
 
-            AggregationSessionItem.update(update_fields).where(
-                AggregationSessionItem.id == item_id
-            ).execute()
-
-        await self._execute(_update, operation_name="update_aggregation_session_item_result")
+        async with self._database.transaction() as db_session:
+            await db_session.execute(
+                update(AggregationSessionItem)
+                .where(AggregationSessionItem.id == item_id)
+                .values(**update_fields)
+            )
 
     async def async_update_aggregation_session_counts(
         self,
@@ -248,45 +224,45 @@ class SqliteAggregationSessionRepositoryAdapter(SqliteBaseRepository):
         failed_count: int,
         duplicate_count: int,
     ) -> None:
-        def _update() -> None:
-            now = datetime.now(UTC)
-            session = AggregationSession.get_by_id(session_id)
-            AggregationSession.update(
-                {
-                    AggregationSession.successful_count: successful_count,
-                    AggregationSession.failed_count: failed_count,
-                    AggregationSession.duplicate_count: duplicate_count,
-                    AggregationSession.progress_percent: _progress_percent(
-                        total_items=int(session.total_items or 0),
+        now = datetime.now(UTC)
+        async with self._database.transaction() as db_session:
+            total_items = await db_session.scalar(
+                select(AggregationSession.total_items).where(AggregationSession.id == session_id)
+            )
+            await db_session.execute(
+                update(AggregationSession)
+                .where(AggregationSession.id == session_id)
+                .values(
+                    successful_count=successful_count,
+                    failed_count=failed_count,
+                    duplicate_count=duplicate_count,
+                    progress_percent=_progress_percent(
+                        total_items=int(total_items or 0),
                         successful_count=successful_count,
                         failed_count=failed_count,
                         duplicate_count=duplicate_count,
                     ),
-                    AggregationSession.last_progress_at: now,
-                    AggregationSession.updated_at: now,
-                }
-            ).where(AggregationSession.id == session_id).execute()
-
-        await self._execute(_update, operation_name="update_aggregation_session_counts")
+                    last_progress_at=now,
+                    updated_at=now,
+                )
+            )
 
     async def async_update_aggregation_session_output(
         self,
         session_id: int,
         aggregation_output: dict[str, Any],
     ) -> None:
-        def _update() -> None:
-            now = datetime.now(UTC)
-            AggregationSession.update(
-                {
-                    AggregationSession.aggregation_output_json: prepare_json_payload(
-                        aggregation_output
-                    ),
-                    AggregationSession.last_progress_at: now,
-                    AggregationSession.updated_at: now,
-                }
-            ).where(AggregationSession.id == session_id).execute()
-
-        await self._execute(_update, operation_name="update_aggregation_session_output")
+        now = datetime.now(UTC)
+        async with self._database.transaction() as db_session:
+            await db_session.execute(
+                update(AggregationSession)
+                .where(AggregationSession.id == session_id)
+                .values(
+                    aggregation_output_json=prepare_json_payload(aggregation_output),
+                    last_progress_at=now,
+                    updated_at=now,
+                )
+            )
 
     async def async_update_aggregation_session_status(
         self,
@@ -296,33 +272,46 @@ class SqliteAggregationSessionRepositoryAdapter(SqliteBaseRepository):
         processing_time_ms: int | None = None,
         failure: AggregationFailure | None = None,
     ) -> None:
-        def _update() -> None:
-            now = datetime.now(UTC)
-            status_value = _status_value(status)
-            update_fields: dict[Any, Any] = {
-                AggregationSession.status: status_value,
-                AggregationSession.last_progress_at: now,
-                AggregationSession.updated_at: now,
-            }
-            if status_value != AggregationSessionStatus.PENDING.value:
-                update_fields[AggregationSession.started_at] = now
-            if processing_time_ms is not None:
-                update_fields[AggregationSession.processing_time_ms] = processing_time_ms
-            if failure is not None:
-                update_fields[AggregationSession.failure_code] = failure.code
-                update_fields[AggregationSession.failure_message] = failure.message
-                update_fields[AggregationSession.failure_details_json] = prepare_json_payload(
-                    failure.details
-                )
-            elif status_value != AggregationSessionStatus.FAILED.value:
-                update_fields[AggregationSession.failure_code] = None
-                update_fields[AggregationSession.failure_message] = None
-                update_fields[AggregationSession.failure_details_json] = None
-            if status_value in _TERMINAL_SESSION_STATUSES:
-                update_fields[AggregationSession.completed_at] = now
+        now = datetime.now(UTC)
+        status_value = _status_value(status)
+        update_fields: dict[str, Any] = {
+            "status": status_value,
+            "last_progress_at": now,
+            "updated_at": now,
+        }
+        if status_value != AggregationSessionStatus.PENDING.value:
+            update_fields["started_at"] = now
+        if processing_time_ms is not None:
+            update_fields["processing_time_ms"] = processing_time_ms
+        if failure is not None:
+            update_fields["failure_code"] = failure.code
+            update_fields["failure_message"] = failure.message
+            update_fields["failure_details_json"] = prepare_json_payload(failure.details)
+        elif status_value != AggregationSessionStatus.FAILED.value:
+            update_fields["failure_code"] = None
+            update_fields["failure_message"] = None
+            update_fields["failure_details_json"] = None
+        if status_value in _TERMINAL_SESSION_STATUSES:
+            update_fields["completed_at"] = now
 
-            AggregationSession.update(update_fields).where(
-                AggregationSession.id == session_id
-            ).execute()
+        async with self._database.transaction() as db_session:
+            await db_session.execute(
+                update(AggregationSession)
+                .where(AggregationSession.id == session_id)
+                .values(**update_fields)
+            )
 
-        await self._execute(_update, operation_name="update_aggregation_session_status")
+
+def _session_to_dict(session: AggregationSession | None) -> dict[str, Any] | None:
+    data = model_to_dict(session)
+    if data is not None:
+        data["user"] = data.get("user_id")
+    return data
+
+
+def _item_to_dict(item: AggregationSessionItem | None) -> dict[str, Any] | None:
+    data = model_to_dict(item)
+    if data is not None:
+        data["aggregation_session"] = data.get("aggregation_session_id")
+        data["request"] = data.get("request_id")
+    return data
