@@ -116,6 +116,12 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_device_repository_postgres.py -q`
   → `3 passed`.
+- Ported `backup_repository.py` and `import_job_repository.py` to
+  SQLAlchemy/AsyncSession with live Postgres coverage for backup CRUD/counts and
+  import-job progress/status/deletion.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_backup_import_repositories_postgres.py -q`
+  → `2 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

@@ -1,21 +1,25 @@
-"""SQLite implementation of backup repository.
-
-This adapter handles persistence for user backup archives.
-"""
+"""SQLAlchemy implementation of the backup repository."""
 
 from __future__ import annotations
 
-from typing import Any
+import datetime as dt
+from typing import TYPE_CHECKING, Any
 
-from app.core.logging_utils import get_logger
+from sqlalchemy import delete, func, select, update
+
+from app.core.time_utils import UTC
 from app.db.models import UserBackup, model_to_dict
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+from app.db.types import _utcnow
 
-logger = get_logger(__name__)
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
-class SqliteBackupRepositoryAdapter(SqliteBaseRepository):
+class SqliteBackupRepositoryAdapter:
     """Adapter for user backup CRUD operations."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_create_backup(
         self,
@@ -23,67 +27,48 @@ class SqliteBackupRepositoryAdapter(SqliteBaseRepository):
         type: str = "manual",
     ) -> dict[str, Any]:
         """Create a new backup record and return it as a dict."""
-
-        def _insert() -> dict[str, Any]:
-            backup = UserBackup.create(
-                user=user_id,
-                type=type,
-                status="pending",
-            )
-            d = model_to_dict(backup)
-            assert d is not None
-            return d
-
-        return await self._execute(_insert, operation_name="create_backup")
+        async with self._database.transaction() as session:
+            backup = UserBackup(user_id=user_id, type=type, status="pending")
+            session.add(backup)
+            await session.flush()
+            return model_to_dict(backup) or {}
 
     async def async_get_backup(self, backup_id: int) -> dict[str, Any] | None:
         """Return a single backup by ID."""
-
-        def _query() -> dict[str, Any] | None:
-            try:
-                backup = UserBackup.get_by_id(backup_id)
-            except UserBackup.DoesNotExist:
-                return None
+        async with self._database.session() as session:
+            backup = await session.get(UserBackup, backup_id)
             return model_to_dict(backup)
-
-        return await self._execute(_query, operation_name="get_backup", read_only=True)
 
     async def async_list_backups(self, user_id: int) -> list[dict[str, Any]]:
         """List all backups for a user, ordered by created_at DESC."""
-
-        def _query() -> list[dict[str, Any]]:
+        async with self._database.session() as session:
             rows = (
-                UserBackup.select()
-                .where(UserBackup.user == user_id)
-                .order_by(UserBackup.created_at.desc())
-            )
-            result: list[dict[str, Any]] = []
-            for row in rows:
-                d = model_to_dict(row)
-                if d is not None:
-                    result.append(d)
-            return result
-
-        return await self._execute(_query, operation_name="list_backups", read_only=True)
+                await session.execute(
+                    select(UserBackup)
+                    .where(UserBackup.user_id == user_id)
+                    .order_by(UserBackup.created_at.desc())
+                )
+            ).scalars()
+            return [model_to_dict(row) or {} for row in rows]
 
     async def async_update_backup(self, backup_id: int, **fields: Any) -> None:
         """Update provided fields on a backup record."""
-
-        def _update() -> None:
-            backup = UserBackup.get_by_id(backup_id)
-            for key, value in fields.items():
-                setattr(backup, key, value)
-            backup.save()
-
-        await self._execute(_update, operation_name="update_backup")
+        if not fields:
+            return
+        allowed_fields = set(UserBackup.__mapper__.columns.keys()) - {"id"}
+        update_values = {key: value for key, value in fields.items() if key in allowed_fields}
+        if not update_values:
+            return
+        update_values["updated_at"] = _utcnow()
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(UserBackup).where(UserBackup.id == backup_id).values(**update_values)
+            )
 
     async def async_delete_backup(self, backup_id: int) -> None:
         """Hard-delete a backup record."""
-
-        def _delete() -> None:
-            UserBackup.delete().where(UserBackup.id == backup_id).execute()
-
-        await self._execute(_delete, operation_name="delete_backup")
+        async with self._database.transaction() as session:
+            await session.execute(delete(UserBackup).where(UserBackup.id == backup_id))
 
     async def async_count_recent_backups(
         self,
@@ -91,17 +76,13 @@ class SqliteBackupRepositoryAdapter(SqliteBaseRepository):
         since_hours: int = 1,
     ) -> int:
         """Count backups created by user within the last N hours."""
-        import datetime as _dt
-
-        from app.core.time_utils import UTC
-
-        since = _dt.datetime.now(UTC) - _dt.timedelta(hours=since_hours)
-
-        def _count() -> int:
-            return (
-                UserBackup.select()
-                .where((UserBackup.user == user_id) & (UserBackup.created_at >= since))
-                .count()
+        since = dt.datetime.now(UTC) - dt.timedelta(hours=since_hours)
+        async with self._database.session() as session:
+            return int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(UserBackup)
+                    .where(UserBackup.user_id == user_id, UserBackup.created_at >= since)
+                )
+                or 0
             )
-
-        return await self._execute(_count, operation_name="count_recent_backups", read_only=True)
