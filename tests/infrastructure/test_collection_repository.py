@@ -1,48 +1,98 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
+from typing import TYPE_CHECKING
 
 import pytest
+from sqlalchemy import delete, func, select
 
+from app.config.database import DatabaseConfig
 from app.core.time_utils import UTC
-from app.db.models import CollectionCollaborator, CollectionItem, Request, Summary, User
+from app.db.models import (
+    Collection,
+    CollectionCollaborator,
+    CollectionInvite,
+    CollectionItem,
+    Request,
+    Summary,
+    User,
+)
+from app.db.session import Database
 from app.infrastructure.persistence.sqlite.repositories.collection_repository import (
     SqliteCollectionRepositoryAdapter,
 )
-from tests.integration.helpers import temp_db
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
+
+def _test_dsn() -> str:
+    return os.getenv("TEST_DATABASE_URL", "")
 
 
 @pytest.fixture
-def db_and_repo():
-    with temp_db() as db:
-        yield db, SqliteCollectionRepositoryAdapter(db)
+async def database() -> AsyncGenerator[Database]:
+    dsn = _test_dsn()
+    if not dsn:
+        pytest.skip("TEST_DATABASE_URL is required for Postgres repository tests")
+
+    db = Database(DatabaseConfig(dsn=dsn, pool_size=1, max_overflow=1))
+    await db.migrate()
+    await _clear(db)
+    try:
+        yield db
+    finally:
+        await _clear(db)
+        await db.dispose()
 
 
-def _create_user(*, telegram_user_id: int, username: str) -> User:
-    return User.create(telegram_user_id=telegram_user_id, username=username)
+async def _clear(database: Database) -> None:
+    async with database.transaction() as session:
+        await session.execute(delete(CollectionInvite))
+        await session.execute(delete(CollectionCollaborator))
+        await session.execute(delete(CollectionItem))
+        await session.execute(delete(Collection))
+        await session.execute(delete(Summary))
+        await session.execute(delete(Request))
+        await session.execute(delete(User))
 
 
-def _create_summary(*, user: User, suffix: str) -> Summary:
+async def _create_user(database: Database, *, telegram_user_id: int, username: str) -> User:
+    async with database.transaction() as session:
+        user = User(telegram_user_id=telegram_user_id, username=username)
+        session.add(user)
+        await session.flush()
+        return user
+
+
+async def _create_summary(database: Database, *, user: User, suffix: str) -> Summary:
     url = f"https://example.com/{suffix}"
-    request = Request.create(
-        user_id=user.telegram_user_id,
-        input_url=url,
-        normalized_url=url,
-        dedupe_hash=f"hash-{suffix}",
-        status="completed",
-        type="url",
-    )
-    return Summary.create(
-        request=request.id,
-        lang="en",
-        json_payload={"summary_250": f"summary-{suffix}"},
-    )
+    async with database.transaction() as session:
+        request = Request(
+            user_id=user.telegram_user_id,
+            input_url=url,
+            normalized_url=url,
+            dedupe_hash=f"hash-{suffix}",
+            status="completed",
+            type="url",
+        )
+        session.add(request)
+        await session.flush()
+        summary = Summary(
+            request_id=request.id,
+            lang="en",
+            json_payload={"summary_250": f"summary-{suffix}"},
+        )
+        session.add(summary)
+        await session.flush()
+        return summary
 
 
 @pytest.mark.asyncio
-async def test_collection_repository_crud_tree_and_move_operations(db_and_repo) -> None:
-    _db, repo = db_and_repo
-    owner = _create_user(telegram_user_id=7001, username="owner-collections")
+async def test_collection_repository_crud_tree_and_move_operations(database: Database) -> None:
+    repo = SqliteCollectionRepositoryAdapter(database)
+    owner = await _create_user(database, telegram_user_id=7001, username="owner-collections")
 
     root_id = await repo.async_create_collection(
         user_id=owner.telegram_user_id,
@@ -68,6 +118,7 @@ async def test_collection_repository_crud_tree_and_move_operations(db_and_repo) 
 
     listed = await repo.async_list_collections(owner.telegram_user_id, None, limit=10, offset=0)
     assert [item["name"] for item in listed] == ["Root", "Second Root"]
+    assert await repo.async_get_next_position(None) == 3
 
     tree = await repo.async_get_collection_tree(owner.telegram_user_id)
     ids = {item["id"] for item in tree}
@@ -100,9 +151,11 @@ async def test_collection_repository_crud_tree_and_move_operations(db_and_repo) 
 
 
 @pytest.mark.asyncio
-async def test_collection_repository_item_and_smart_collection_operations(db_and_repo) -> None:
-    _db, repo = db_and_repo
-    owner = _create_user(telegram_user_id=7002, username="owner-items")
+async def test_collection_repository_item_and_smart_collection_operations(
+    database: Database,
+) -> None:
+    repo = SqliteCollectionRepositoryAdapter(database)
+    owner = await _create_user(database, telegram_user_id=7002, username="owner-items")
     source_id = await repo.async_create_collection(
         user_id=owner.telegram_user_id,
         name="Source",
@@ -127,12 +180,14 @@ async def test_collection_repository_item_and_smart_collection_operations(db_and
         query_conditions_json=[{"field": "topic", "op": "contains", "value": "ai"}],
         query_match_mode="all",
     )
-    summary_a = _create_summary(user=owner, suffix="a")
-    summary_b = _create_summary(user=owner, suffix="b")
+    summary_a = await _create_summary(database, user=owner, suffix="a")
+    summary_b = await _create_summary(database, user=owner, suffix="b")
 
     assert await repo.async_add_item(source_id, summary_a.id, 1) is True
+    assert await repo.async_add_item(source_id, summary_a.id, 1) is False
     assert await repo.async_add_item(source_id, summary_b.id, 2) is True
     assert await repo.async_get_item_count(source_id) == 2
+    assert await repo.async_get_next_item_position(source_id) == 3
 
     await repo.async_reorder_items(
         source_id,
@@ -147,8 +202,10 @@ async def test_collection_repository_item_and_smart_collection_operations(db_and
     inserted = await repo.async_bulk_set_items(target_id, [summary_b.id, summary_a.id])
     assert inserted == 2
 
+    await repo.async_shift_item_positions(target_id, 1)
     target_items = await repo.async_list_items(target_id, limit=10, offset=0)
     assert len(target_items) == 2
+    assert all(item["position"] >= 2 for item in target_items)
 
     await repo.async_remove_item(target_id, summary_b.id)
     assert await repo.async_get_item_count(target_id) == 1
@@ -163,11 +220,11 @@ async def test_collection_repository_item_and_smart_collection_operations(db_and
 
 
 @pytest.mark.asyncio
-async def test_collection_repository_acl_and_invite_flow(db_and_repo) -> None:
-    _db, repo = db_and_repo
-    owner = _create_user(telegram_user_id=7003, username="owner-acl")
-    collaborator = _create_user(telegram_user_id=7004, username="collaborator-acl")
-    invitee = _create_user(telegram_user_id=7005, username="invitee-acl")
+async def test_collection_repository_acl_and_invite_flow(database: Database) -> None:
+    repo = SqliteCollectionRepositoryAdapter(database)
+    owner = await _create_user(database, telegram_user_id=7003, username="owner-acl")
+    collaborator = await _create_user(database, telegram_user_id=7004, username="collaborator-acl")
+    invitee = await _create_user(database, telegram_user_id=7005, username="invitee-acl")
     collection_id = await repo.async_create_collection(
         user_id=owner.telegram_user_id,
         name="Shared",
@@ -189,14 +246,14 @@ async def test_collection_repository_acl_and_invite_flow(db_and_repo) -> None:
 
     collaborators = await repo.async_list_collaborators(collection_id)
     assert any(entry["user"] == collaborator.telegram_user_id for entry in collaborators)
-    assert (
-        CollectionCollaborator.select()
-        .where(
-            (CollectionCollaborator.collection_id == collection_id)
-            & (CollectionCollaborator.user_id == collaborator.telegram_user_id)
+    async with database.session() as session:
+        exists = await session.scalar(
+            select(CollectionCollaborator.id).where(
+                CollectionCollaborator.collection_id == collection_id,
+                CollectionCollaborator.user_id == collaborator.telegram_user_id,
+            )
         )
-        .exists()
-    )
+    assert exists is not None
 
     owner_info = await repo.async_get_owner_info(collection_id)
     assert owner_info is not None
@@ -221,4 +278,11 @@ async def test_collection_repository_acl_and_invite_flow(db_and_repo) -> None:
         "status": "accepted",
     }
     assert await repo.async_get_role(collection_id, invitee.telegram_user_id) == "editor"
-    assert CollectionItem.select().where(CollectionItem.collection_id == collection_id).count() == 0
+    assert await repo.async_accept_invite(invite["token"], collaborator.telegram_user_id) is None
+    async with database.session() as session:
+        item_count = await session.scalar(
+            select(func.count(CollectionItem.id)).where(
+                CollectionItem.collection_id == collection_id
+            )
+        )
+    assert item_count == 0

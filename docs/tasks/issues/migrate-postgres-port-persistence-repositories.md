@@ -194,6 +194,12 @@ Conventions for the port:
 - Verified the expanded focused repository suite with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_user_content_repository_postgres.py -q`
   → `44 passed`.
+- Ported `collection_repository.py` to SQLAlchemy/AsyncSession, collapsed the
+  old Peewee collection mixins, and preserved compatibility aliases for
+  collection, collaborator, invite, and item dictionaries.
+- Verified the expanded focused repository suite with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_collection_repository.py -q`
+  → `47 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

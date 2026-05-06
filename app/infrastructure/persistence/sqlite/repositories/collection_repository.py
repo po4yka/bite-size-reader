@@ -1,22 +1,740 @@
-"""Thin compatibility shell for the SQLite collection repository adapter."""
+"""SQLAlchemy implementation of the collection repository adapter."""
 
 from __future__ import annotations
 
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+import datetime as dt
+import uuid
+from typing import TYPE_CHECKING, Any
 
-from ._collection_repo_access import CollectionRepositoryAccessMixin
-from ._collection_repo_invites import CollectionRepositoryInviteMixin
-from ._collection_repo_items import CollectionRepositoryItemsMixin
-from ._collection_repo_smart import CollectionRepositorySmartMixin
-from ._collection_repo_structure import CollectionRepositoryStructureMixin
+from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert
+
+from app.core.time_utils import UTC, coerce_datetime
+from app.db.models import (
+    Collection,
+    CollectionCollaborator,
+    CollectionInvite,
+    CollectionItem,
+    Request,
+    Summary,
+    User,
+    model_to_dict,
+)
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
-class SqliteCollectionRepositoryAdapter(
-    CollectionRepositoryStructureMixin,
-    CollectionRepositoryItemsMixin,
-    CollectionRepositoryAccessMixin,
-    CollectionRepositoryInviteMixin,
-    CollectionRepositorySmartMixin,
-    SqliteBaseRepository,
-):
-    """Compatibility assembly for the public collection repository adapter."""
+def _now() -> dt.datetime:
+    return dt.datetime.now(UTC)
+
+
+class SqliteCollectionRepositoryAdapter:
+    """Public collection repository adapter."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
+
+    async def async_get_collection(
+        self, collection_id: int, *, include_deleted: bool = False
+    ) -> dict[str, Any] | None:
+        async with self._database.session() as session:
+            stmt = select(Collection).where(Collection.id == collection_id)
+            if not include_deleted:
+                stmt = stmt.where(Collection.is_deleted.is_(False))
+            collection = await session.scalar(stmt)
+            return await _serialize_collection(session, collection)
+
+    async def async_list_collections(
+        self,
+        user_id: int,
+        parent_id: int | None,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, Any]]:
+        async with self._database.session() as session:
+            stmt = (
+                select(Collection)
+                .where(Collection.is_deleted.is_(False), Collection.user_id == user_id)
+                .order_by(Collection.position.asc(), Collection.created_at.asc())
+                .limit(limit)
+                .offset(offset)
+            )
+            if parent_id is None:
+                stmt = stmt.where(Collection.parent_id.is_(None))
+            else:
+                stmt = stmt.where(Collection.parent_id == parent_id)
+            rows = (await session.execute(stmt)).scalars()
+            return [await _serialize_collection(session, collection) or {} for collection in rows]
+
+    async def async_create_collection(
+        self,
+        *,
+        user_id: int,
+        name: str,
+        description: str | None,
+        parent_id: int | None,
+        position: int,
+        collection_type: str = "manual",
+        query_conditions_json: list[dict] | None = None,
+        query_match_mode: str = "all",
+    ) -> int:
+        async with self._database.transaction() as session:
+            if parent_id is not None and await _active_collection(session, parent_id) is None:
+                msg = f"parent collection {parent_id} not found"
+                raise ValueError(msg)
+            collection = Collection(
+                user_id=user_id,
+                name=name,
+                description=description,
+                parent_id=parent_id,
+                position=position,
+                collection_type=collection_type,
+                query_conditions_json=query_conditions_json,
+                query_match_mode=query_match_mode,
+                created_at=_now(),
+                updated_at=_now(),
+            )
+            session.add(collection)
+            await session.flush()
+            return collection.id
+
+    async def async_update_collection(
+        self,
+        collection_id: int,
+        **fields: Any,
+    ) -> None:
+        allowed = set(Collection.__table__.columns.keys()) - {"id", "user_id", "created_at"}
+        update_fields = {key: value for key, value in fields.items() if key in allowed}
+        if not update_fields:
+            return
+        update_fields["updated_at"] = _now()
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(Collection)
+                .where(Collection.id == collection_id, Collection.is_deleted.is_(False))
+                .values(**update_fields)
+            )
+
+    async def async_soft_delete_collection(self, collection_id: int) -> None:
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(Collection)
+                .where(Collection.id == collection_id, Collection.is_deleted.is_(False))
+                .values(is_deleted=True, deleted_at=_now(), updated_at=_now())
+            )
+
+    async def async_get_next_position(self, parent_id: int | None) -> int:
+        async with self._database.session() as session:
+            stmt = select(func.max(Collection.position)).where(Collection.is_deleted.is_(False))
+            if parent_id is None:
+                stmt = stmt.where(Collection.parent_id.is_(None))
+            else:
+                stmt = stmt.where(Collection.parent_id == parent_id)
+            max_pos = await session.scalar(stmt)
+            return int(max_pos or 0) + 1
+
+    async def async_shift_positions(self, parent_id: int | None, start: int) -> None:
+        async with self._database.transaction() as session:
+            stmt = (
+                update(Collection)
+                .where(Collection.position.is_not(None), Collection.position >= start)
+                .values(position=Collection.position + 1)
+            )
+            if parent_id is None:
+                stmt = stmt.where(Collection.parent_id.is_(None))
+            else:
+                stmt = stmt.where(Collection.parent_id == parent_id)
+            await session.execute(stmt)
+
+    async def async_get_collection_tree(self, user_id: int) -> list[dict[str, Any]]:
+        async with self._database.session() as session:
+            collab_ids = select(CollectionCollaborator.collection_id).where(
+                CollectionCollaborator.user_id == user_id,
+                CollectionCollaborator.status == "active",
+            )
+            rows = (
+                await session.execute(
+                    select(Collection)
+                    .where(
+                        Collection.is_deleted.is_(False),
+                        or_(Collection.user_id == user_id, Collection.id.in_(collab_ids)),
+                    )
+                    .order_by(
+                        Collection.parent_id.asc().nulls_first(),
+                        Collection.position.asc(),
+                        Collection.created_at.asc(),
+                    )
+                )
+            ).scalars()
+            return [await _serialize_collection(session, collection) or {} for collection in rows]
+
+    async def async_reorder_collections(
+        self,
+        parent_id: int | None,
+        item_positions: list[dict[str, int]],
+    ) -> None:
+        collection_ids = [item["collection_id"] for item in item_positions]
+        async with self._database.transaction() as session:
+            stmt = select(Collection.id).where(
+                Collection.id.in_(collection_ids),
+                Collection.is_deleted.is_(False),
+            )
+            if parent_id is None:
+                stmt = stmt.where(Collection.parent_id.is_(None))
+            else:
+                stmt = stmt.where(Collection.parent_id == parent_id)
+            existing = set((await session.execute(stmt)).scalars())
+            for item in item_positions:
+                if item["collection_id"] in existing:
+                    await session.execute(
+                        update(Collection)
+                        .where(Collection.id == item["collection_id"])
+                        .values(position=item["position"], updated_at=_now())
+                    )
+
+    async def async_move_collection(
+        self,
+        collection_id: int,
+        parent_id: int | None,
+        position: int,
+    ) -> dict[str, Any] | None:
+        async with self._database.transaction() as session:
+            collection = await _active_collection(session, collection_id)
+            if collection is None:
+                return None
+            if parent_id is not None:
+                new_parent = await _active_collection(session, parent_id)
+                if new_parent is None:
+                    return None
+                ancestor = new_parent
+                while ancestor is not None:
+                    if ancestor.id == collection.id:
+                        return None
+                    ancestor = (
+                        await _active_collection(session, ancestor.parent_id)
+                        if ancestor.parent_id is not None
+                        else None
+                    )
+
+            shift = (
+                update(Collection)
+                .where(Collection.position.is_not(None), Collection.position >= position)
+                .values(position=Collection.position + 1)
+            )
+            if parent_id is None:
+                shift = shift.where(Collection.parent_id.is_(None))
+            else:
+                shift = shift.where(Collection.parent_id == parent_id)
+            await session.execute(shift)
+            collection.parent_id = parent_id
+            collection.position = position
+            collection.updated_at = _now()
+            await session.flush()
+            return _collection_dict(collection)
+
+    async def async_get_item_count(self, collection_id: int) -> int:
+        async with self._database.session() as session:
+            return await _item_count(session, collection_id)
+
+    async def async_add_item(
+        self,
+        collection_id: int,
+        summary_id: int,
+        position: int,
+    ) -> bool:
+        async with self._database.transaction() as session:
+            if await _active_collection(session, collection_id) is None:
+                return False
+            if await session.get(Summary, summary_id) is None:
+                return False
+            inserted_id = await session.scalar(
+                insert(CollectionItem)
+                .values(
+                    collection_id=collection_id,
+                    summary_id=summary_id,
+                    position=position,
+                    created_at=_now(),
+                )
+                .on_conflict_do_nothing(
+                    index_elements=[CollectionItem.collection_id, CollectionItem.summary_id]
+                )
+                .returning(CollectionItem.id)
+            )
+            if inserted_id is None:
+                return False
+            await _touch_collection(session, collection_id)
+            return True
+
+    async def async_remove_item(self, collection_id: int, summary_id: int) -> None:
+        async with self._database.transaction() as session:
+            if await _active_collection(session, collection_id) is None:
+                return
+            await session.execute(
+                delete(CollectionItem).where(
+                    CollectionItem.collection_id == collection_id,
+                    CollectionItem.summary_id == summary_id,
+                )
+            )
+            await _touch_collection(session, collection_id)
+
+    async def async_list_items(
+        self,
+        collection_id: int,
+        limit: int,
+        offset: int,
+    ) -> list[dict[str, Any]]:
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(CollectionItem)
+                    .where(CollectionItem.collection_id == collection_id)
+                    .order_by(CollectionItem.position.asc(), CollectionItem.created_at.asc())
+                    .limit(limit)
+                    .offset(offset)
+                )
+            ).scalars()
+            return [_item_dict(item) for item in rows]
+
+    async def async_get_next_item_position(self, collection_id: int) -> int:
+        async with self._database.session() as session:
+            max_pos = await session.scalar(
+                select(func.max(CollectionItem.position)).where(
+                    CollectionItem.collection_id == collection_id
+                )
+            )
+            return int(max_pos or 0) + 1
+
+    async def async_shift_item_positions(self, collection_id: int, start: int) -> None:
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(CollectionItem)
+                .where(
+                    CollectionItem.collection_id == collection_id,
+                    CollectionItem.position.is_not(None),
+                    CollectionItem.position >= start,
+                )
+                .values(position=CollectionItem.position + 1)
+            )
+
+    async def async_reorder_items(
+        self, collection_id: int, item_positions: list[dict[str, int]]
+    ) -> None:
+        summary_ids = [item["summary_id"] for item in item_positions]
+        async with self._database.transaction() as session:
+            if await _active_collection(session, collection_id) is None:
+                return
+            existing = set(
+                (
+                    await session.execute(
+                        select(CollectionItem.summary_id).where(
+                            CollectionItem.collection_id == collection_id,
+                            CollectionItem.summary_id.in_(summary_ids),
+                        )
+                    )
+                ).scalars()
+            )
+            for item in item_positions:
+                if item["summary_id"] in existing:
+                    await session.execute(
+                        update(CollectionItem)
+                        .where(
+                            CollectionItem.collection_id == collection_id,
+                            CollectionItem.summary_id == item["summary_id"],
+                        )
+                        .values(position=item["position"])
+                    )
+            await _touch_collection(session, collection_id)
+
+    async def async_bulk_set_items(self, collection_id: int, summary_ids: list[int]) -> int:
+        async with self._database.transaction() as session:
+            if await _active_collection(session, collection_id) is None:
+                return 0
+            await session.execute(
+                delete(CollectionItem).where(CollectionItem.collection_id == collection_id)
+            )
+            existing_summary_ids = set(
+                (
+                    await session.execute(select(Summary.id).where(Summary.id.in_(summary_ids)))
+                ).scalars()
+            )
+            inserted = 0
+            for position, summary_id in enumerate(summary_ids, start=1):
+                if summary_id not in existing_summary_ids:
+                    continue
+                inserted_id = await session.scalar(
+                    insert(CollectionItem)
+                    .values(
+                        collection_id=collection_id,
+                        summary_id=summary_id,
+                        position=position,
+                        created_at=_now(),
+                    )
+                    .on_conflict_do_nothing(
+                        index_elements=[CollectionItem.collection_id, CollectionItem.summary_id]
+                    )
+                    .returning(CollectionItem.id)
+                )
+                if inserted_id is not None:
+                    inserted += 1
+            await _touch_collection(session, collection_id)
+            return inserted
+
+    async def async_move_items(
+        self,
+        source_collection_id: int,
+        target_collection_id: int,
+        summary_ids: list[int],
+        position: int | None,
+    ) -> list[int]:
+        async with self._database.transaction() as session:
+            if await _active_collection(session, source_collection_id) is None:
+                return []
+            if await _active_collection(session, target_collection_id) is None:
+                return []
+            insert_pos = position
+            if insert_pos is None:
+                max_pos = await session.scalar(
+                    select(func.max(CollectionItem.position)).where(
+                        CollectionItem.collection_id == target_collection_id
+                    )
+                )
+                insert_pos = int(max_pos or 0) + 1
+
+            moved: list[int] = []
+            for summary_id in summary_ids:
+                await session.execute(
+                    delete(CollectionItem).where(
+                        CollectionItem.collection_id == source_collection_id,
+                        CollectionItem.summary_id == summary_id,
+                    )
+                )
+                if position is not None:
+                    await session.execute(
+                        update(CollectionItem)
+                        .where(
+                            CollectionItem.collection_id == target_collection_id,
+                            CollectionItem.position.is_not(None),
+                            CollectionItem.position >= insert_pos,
+                        )
+                        .values(position=CollectionItem.position + 1)
+                    )
+                inserted_id = await session.scalar(
+                    insert(CollectionItem)
+                    .values(
+                        collection_id=target_collection_id,
+                        summary_id=summary_id,
+                        position=insert_pos,
+                        created_at=_now(),
+                    )
+                    .on_conflict_do_nothing(
+                        index_elements=[CollectionItem.collection_id, CollectionItem.summary_id]
+                    )
+                    .returning(CollectionItem.id)
+                )
+                if inserted_id is not None:
+                    moved.append(summary_id)
+                    insert_pos += 1
+            await _touch_collection(session, source_collection_id)
+            await _touch_collection(session, target_collection_id)
+            return moved
+
+    async def async_get_role(self, collection_id: int, user_id: int) -> str | None:
+        async with self._database.session() as session:
+            collection = await _active_collection(session, collection_id)
+            if collection is None:
+                return None
+            if collection.user_id == user_id:
+                return "owner"
+            return await session.scalar(
+                select(CollectionCollaborator.role).where(
+                    CollectionCollaborator.collection_id == collection_id,
+                    CollectionCollaborator.user_id == user_id,
+                    CollectionCollaborator.status == "active",
+                )
+            )
+
+    async def async_add_collaborator(
+        self,
+        collection_id: int,
+        target_user_id: int,
+        role: str,
+        invited_by: int | None,
+    ) -> None:
+        async with self._database.transaction() as session:
+            collection = await _active_collection(session, collection_id)
+            if collection is None or target_user_id == collection.user_id:
+                return
+            await session.execute(
+                insert(CollectionCollaborator)
+                .values(
+                    collection_id=collection_id,
+                    user_id=target_user_id,
+                    role=role,
+                    status="active",
+                    invited_by_id=invited_by,
+                    created_at=_now(),
+                    updated_at=_now(),
+                )
+                .on_conflict_do_update(
+                    index_elements=[
+                        CollectionCollaborator.collection_id,
+                        CollectionCollaborator.user_id,
+                    ],
+                    set_={
+                        "role": role,
+                        "status": "active",
+                        "invited_by_id": invited_by,
+                        "updated_at": _now(),
+                    },
+                )
+            )
+            await _recompute_share_state(session, collection_id)
+
+    async def async_remove_collaborator(self, collection_id: int, target_user_id: int) -> None:
+        async with self._database.transaction() as session:
+            collection = await _active_collection(session, collection_id)
+            if collection is None or target_user_id == collection.user_id:
+                return
+            await session.execute(
+                delete(CollectionCollaborator).where(
+                    CollectionCollaborator.collection_id == collection_id,
+                    CollectionCollaborator.user_id == target_user_id,
+                )
+            )
+            await _recompute_share_state(session, collection_id)
+
+    async def async_list_collaborators(self, collection_id: int) -> list[dict[str, Any]]:
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(CollectionCollaborator)
+                    .where(CollectionCollaborator.collection_id == collection_id)
+                    .order_by(CollectionCollaborator.created_at.asc())
+                )
+            ).scalars()
+            return [_collaborator_dict(row) for row in rows]
+
+    async def async_get_owner_info(self, collection_id: int) -> dict[str, Any] | None:
+        async with self._database.session() as session:
+            collection = await _active_collection(session, collection_id)
+            if collection is None:
+                return None
+            owner = await session.get(User, collection.user_id)
+            return {
+                "collection_id": collection.id,
+                "user_id": collection.user_id,
+                "owner_user": model_to_dict(owner) if owner else None,
+                "role": "owner",
+                "status": "active",
+            }
+
+    async def async_create_invite(
+        self,
+        collection_id: int,
+        role: str,
+        expires_at: dt.datetime | None,
+    ) -> dict[str, Any]:
+        async with self._database.transaction() as session:
+            if await _active_collection(session, collection_id) is None:
+                return {}
+            invite = CollectionInvite(
+                collection_id=collection_id,
+                token=uuid.uuid4().hex,
+                role=role,
+                expires_at=expires_at,
+                status="active",
+                created_at=_now(),
+                updated_at=_now(),
+            )
+            session.add(invite)
+            await session.flush()
+            return _invite_dict(invite)
+
+    async def async_get_invite_by_token(self, token: str) -> dict[str, Any] | None:
+        async with self._database.session() as session:
+            invite = await session.scalar(
+                select(CollectionInvite).where(CollectionInvite.token == token)
+            )
+            return _invite_dict(invite) if invite else None
+
+    async def async_update_invite(self, invite_id: int, **fields: Any) -> None:
+        allowed = set(CollectionInvite.__table__.columns.keys()) - {
+            "id",
+            "collection_id",
+            "created_at",
+        }
+        update_fields = {key: value for key, value in fields.items() if key in allowed}
+        if not update_fields:
+            return
+        update_fields["updated_at"] = _now()
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(CollectionInvite)
+                .where(CollectionInvite.id == invite_id)
+                .values(**update_fields)
+            )
+
+    async def async_accept_invite(
+        self,
+        token: str,
+        user_id: int,
+    ) -> dict[str, Any] | None:
+        async with self._database.transaction() as session:
+            invite = await session.scalar(
+                select(CollectionInvite).where(CollectionInvite.token == token)
+            )
+            if invite is None or invite.status in {"used", "revoked"}:
+                return None
+            expires_at = coerce_datetime(invite.expires_at) if invite.expires_at else None
+            if expires_at and expires_at < _now():
+                invite.status = "expired"
+                invite.updated_at = _now()
+                return None
+            collection = await _active_collection(session, invite.collection_id)
+            if collection is None:
+                return None
+            if user_id != collection.user_id:
+                await session.execute(
+                    insert(CollectionCollaborator)
+                    .values(
+                        collection_id=collection.id,
+                        user_id=user_id,
+                        role=invite.role,
+                        status="active",
+                        invited_by_id=collection.user_id,
+                        created_at=_now(),
+                        updated_at=_now(),
+                    )
+                    .on_conflict_do_update(
+                        index_elements=[
+                            CollectionCollaborator.collection_id,
+                            CollectionCollaborator.user_id,
+                        ],
+                        set_={
+                            "role": invite.role,
+                            "status": "active",
+                            "invited_by_id": collection.user_id,
+                            "updated_at": _now(),
+                        },
+                    )
+                )
+                await _recompute_share_state(session, collection.id)
+            invite.used_at = _now()
+            invite.status = "used"
+            invite.updated_at = _now()
+            return {"collection_id": collection.id, "role": invite.role, "status": "accepted"}
+
+    async def async_list_smart_collections_for_user(self, user_id: int) -> list[dict]:
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(Collection)
+                    .where(
+                        Collection.user_id == user_id,
+                        Collection.collection_type == "smart",
+                        Collection.is_deleted.is_(False),
+                    )
+                    .order_by(Collection.created_at.asc())
+                )
+            ).scalars()
+            return [model_to_dict(collection) or {} for collection in rows]
+
+    async def async_list_user_summaries_with_request(
+        self, user_id: int, limit: int = 10000
+    ) -> list[dict]:
+        async with self._database.session() as session:
+            rows = await session.execute(
+                select(Summary, Request)
+                .join(Request, Summary.request_id == Request.id)
+                .where(Request.user_id == user_id, Summary.is_deleted.is_(False))
+                .order_by(Summary.created_at.desc())
+                .limit(limit)
+            )
+            return [
+                {
+                    "summary": model_to_dict(summary) or {},
+                    "request": model_to_dict(request) or {},
+                }
+                for summary, request in rows
+            ]
+
+
+async def _active_collection(session: Any, collection_id: int | None) -> Collection | None:
+    if collection_id is None:
+        return None
+    return await session.scalar(
+        select(Collection).where(Collection.id == collection_id, Collection.is_deleted.is_(False))
+    )
+
+
+async def _item_count(session: Any, collection_id: int) -> int:
+    return int(
+        await session.scalar(
+            select(func.count(CollectionItem.id)).where(
+                CollectionItem.collection_id == collection_id
+            )
+        )
+        or 0
+    )
+
+
+async def _serialize_collection(
+    session: Any, collection: Collection | None
+) -> dict[str, Any] | None:
+    if collection is None:
+        return None
+    data = _collection_dict(collection)
+    data["item_count"] = await _item_count(session, collection.id)
+    return data
+
+
+def _collection_dict(collection: Collection) -> dict[str, Any]:
+    data = model_to_dict(collection) or {}
+    data["parent"] = data.get("parent_id")
+    data["user"] = data.get("user_id")
+    return data
+
+
+def _item_dict(item: CollectionItem) -> dict[str, Any]:
+    data = model_to_dict(item) or {}
+    data["collection"] = data.get("collection_id")
+    data["summary"] = data.get("summary_id")
+    return data
+
+
+def _collaborator_dict(collaborator: CollectionCollaborator) -> dict[str, Any]:
+    data = model_to_dict(collaborator) or {}
+    data["collection"] = data.get("collection_id")
+    data["user"] = data.get("user_id")
+    data["invited_by"] = data.get("invited_by_id")
+    return data
+
+
+def _invite_dict(invite: CollectionInvite) -> dict[str, Any]:
+    data = model_to_dict(invite) or {}
+    data["collection"] = data.get("collection_id")
+    return data
+
+
+async def _touch_collection(session: Any, collection_id: int) -> None:
+    await session.execute(
+        update(Collection).where(Collection.id == collection_id).values(updated_at=_now())
+    )
+
+
+async def _recompute_share_state(session: Any, collection_id: int) -> None:
+    share_count = int(
+        await session.scalar(
+            select(func.count(CollectionCollaborator.id)).where(
+                CollectionCollaborator.collection_id == collection_id,
+                CollectionCollaborator.status == "active",
+            )
+        )
+        or 0
+    )
+    await session.execute(
+        update(Collection)
+        .where(Collection.id == collection_id)
+        .values(share_count=share_count, is_shared=share_count > 0, updated_at=_now())
+    )
