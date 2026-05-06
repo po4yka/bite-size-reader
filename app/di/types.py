@@ -133,8 +133,8 @@ class McpServiceState:
 @dataclass(slots=True)
 class McpRuntime:
     cfg: AppConfig | None
-    db_path: str
-    database: Any
+    database_dsn: str
+    database: Database
     scope: McpScope
     vector_state: McpServiceState = field(default_factory=McpServiceState)
     local_vector_state: McpServiceState = field(default_factory=McpServiceState)

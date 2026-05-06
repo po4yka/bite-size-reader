@@ -13,8 +13,8 @@ Usage:
     # Hosted/public SSE mode with JWT auth
     python -m app.cli.mcp_server --transport sse --auth-mode jwt --allow-remote-sse
 
-    # Custom database path
-    python -m app.cli.mcp_server --db-path /path/to/app.db
+    # Custom PostgreSQL DSN
+    python -m app.cli.mcp_server --dsn postgresql+asyncpg://user:pass@host:5432/db
 """
 
 from __future__ import annotations
@@ -47,9 +47,14 @@ def main() -> None:
         help="Port for SSE transport (defaults to MCP_PORT or 8200)",
     )
     parser.add_argument(
+        "--dsn",
+        default=None,
+        help="Override PostgreSQL DSN (defaults to DATABASE_URL)",
+    )
+    parser.add_argument(
         "--db-path",
         default=None,
-        help="Override path to SQLite database file",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--log-level",
@@ -81,6 +86,8 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+    if args.db_path is not None:
+        parser.error("--db-path is no longer supported; set DATABASE_URL or use --dsn DSN")
 
     import logging
 
@@ -107,7 +114,7 @@ def main() -> None:
         transport=transport,
         host=host,
         port=port,
-        db_path=args.db_path,
+        database_dsn=args.dsn,
         user_id=user_id,
         auth_mode=auth_mode,
         forwarded_access_token_header=cfg.forwarded_access_token_header,

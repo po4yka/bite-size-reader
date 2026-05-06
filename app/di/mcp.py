@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from typing import TYPE_CHECKING, Any
 
-from app.config import load_config
+from app.config import DatabaseConfig, load_config
 from app.core.embedding_space import resolve_embedding_space_identifier
 from app.core.logging_utils import get_logger
-from app.di.database import init_read_only_database_proxy
 from app.di.types import McpRuntime, McpScope, McpServiceState
+from app.db.session import Database
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
@@ -24,16 +23,18 @@ logger = get_logger(__name__)
 
 def build_mcp_runtime(
     *,
-    db_path: str | None = None,
+    database_dsn: str | None = None,
     user_id: int | None = None,
     cfg: AppConfig | None = None,
 ) -> McpRuntime:
-    """Build the MCP runtime with read-only SQLite binding and lazy service state."""
-    path = db_path or os.getenv("DB_PATH", "/data/ratatoskr.db")
-    database = init_read_only_database_proxy(path)
+    """Build the MCP runtime with a PostgreSQL database facade and lazy service state."""
+    if cfg is None:
+        cfg = load_config(allow_stub_telegram=True)
+    database_config = DatabaseConfig(dsn=database_dsn) if database_dsn is not None else cfg.database
+    database = Database(config=database_config)
     return McpRuntime(
         cfg=cfg,
-        db_path=path,
+        database_dsn=database_config.dsn,
         database=database,
         scope=McpScope(user_id=user_id),
     )
@@ -159,6 +160,6 @@ async def close_mcp_runtime(runtime: McpRuntime) -> None:
                 except Exception:
                     logger.warning("mcp_resource_close_failed", exc_info=True)
     try:
-        runtime.database.close()
+        await runtime.database.dispose()
     except Exception:
         logger.warning("mcp_database_close_failed", exc_info=True)

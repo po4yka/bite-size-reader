@@ -4,7 +4,6 @@ import asyncio
 import contextlib
 import contextvars
 import logging
-import os
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, cast
 
@@ -23,14 +22,14 @@ class McpServerContext:
     def __init__(
         self,
         *,
-        db_path: str | None = None,
+        database_dsn: str | None = None,
         user_id: int | None = None,
         logger: logging.Logger | None = None,
         vector_retry_interval_sec: float | None = None,
         local_vector_retry_interval_sec: float | None = None,
     ) -> None:
         self.logger = logger or logging.getLogger("ratatoskr.mcp")
-        self.db_path = db_path or os.getenv("DB_PATH", "/data/ratatoskr.db")
+        self.database_dsn = database_dsn
         self._runtime: Any = None
         self._api_runtime: Any = None
         self._user_id = user_id
@@ -111,20 +110,32 @@ class McpServerContext:
             return None
         return self._runtime.local_vector_state.last_failed_at
 
-    def init_runtime(self, db_path: str | None = None) -> Any:
-        """Initialize the read-only MCP runtime immediately."""
-        if db_path:
-            self.db_path = db_path
+    def init_runtime(
+        self,
+        database_dsn: str | None = None,
+    ) -> Any:
+        """Initialize the MCP runtime immediately."""
+        if database_dsn is not None:
+            self.database_dsn = database_dsn
         mcp_di.VECTOR_RETRY_INTERVAL_SEC = self._vector_retry_interval_sec
         mcp_di.LOCAL_VECTOR_RETRY_INTERVAL_SEC = self._local_vector_retry_interval_sec
         # Request-scoped overrides are transient and must not leak into the shared runtime.
-        self._runtime = mcp_di.build_mcp_runtime(db_path=self.db_path, user_id=self._user_id)
-        self.logger.info("Database connected (read-only): %s", self._runtime.db_path)
+        self._runtime = mcp_di.build_mcp_runtime(
+            database_dsn=self.database_dsn,
+            user_id=self._user_id,
+        )
+        self.database_dsn = self._runtime.database_dsn
+        self.logger.info("MCP database connected: %s", self._runtime.database_dsn)
         return self._runtime
 
-    def ensure_runtime(self, db_path: str | None = None) -> Any:
-        if self._runtime is None or (db_path is not None and db_path != self.db_path):
-            return self.init_runtime(db_path)
+    def ensure_runtime(
+        self,
+        database_dsn: str | None = None,
+    ) -> Any:
+        if self._runtime is None or (
+            database_dsn is not None and database_dsn != self.database_dsn
+        ):
+            return self.init_runtime(database_dsn=database_dsn)
         return self._runtime
 
     def set_user_scope(self, user_id: int | None) -> None:
@@ -179,32 +190,46 @@ class McpServerContext:
         finally:
             self.reset_request_user_scope(token)
 
-    async def init_api_runtime(self, db_path: str | None = None) -> Any:
+    async def init_api_runtime(
+        self,
+        database_dsn: str | None = None,
+    ) -> Any:
         """Initialize a write-capable API runtime for trusted MCP aggregation tools."""
         from app.config import load_config
         from app.di.api import build_api_runtime
 
-        if db_path:
-            self.db_path = db_path
+        if database_dsn is not None:
+            self.database_dsn = database_dsn
         cfg = load_config(allow_stub_telegram=True)
-        if cfg.runtime.db_path != self.db_path:
+        if self.database_dsn is not None and cfg.database.dsn != self.database_dsn:
             cfg = replace(
                 cfg,
-                runtime=cfg.runtime.model_copy(update={"db_path": self.db_path}),
+                database=cfg.database.model_copy(update={"dsn": self.database_dsn}),
             )
         self._api_runtime = await build_api_runtime(cfg)
-        self.logger.info("API runtime connected for MCP aggregation tools: %s", self.db_path)
+        self.database_dsn = self._api_runtime.db.config.dsn
+        self.logger.info(
+            "API runtime connected for MCP aggregation tools: %s",
+            self.database_dsn,
+        )
         return self._api_runtime
 
-    async def ensure_api_runtime(self, db_path: str | None = None) -> Any:
-        if self._api_runtime is not None and (db_path is None or db_path == self.db_path):
+    async def ensure_api_runtime(
+        self,
+        database_dsn: str | None = None,
+    ) -> Any:
+        if self._api_runtime is not None and (
+            database_dsn is None or database_dsn == self.database_dsn
+        ):
             return self._api_runtime
         if self._api_runtime_lock is None:
             self._api_runtime_lock = asyncio.Lock()
         async with self._api_runtime_lock:
-            if self._api_runtime is not None and (db_path is None or db_path == self.db_path):
+            if self._api_runtime is not None and (
+                database_dsn is None or database_dsn == self.database_dsn
+            ):
                 return self._api_runtime
-            return await self.init_api_runtime(db_path)
+            return await self.init_api_runtime(database_dsn=database_dsn)
 
     def request_scope_filters(self, request_model: Any) -> list[Any]:
         filters: list[Any] = [request_model.is_deleted == False]  # noqa: E712

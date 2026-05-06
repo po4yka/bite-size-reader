@@ -165,3 +165,7 @@ the most-ported repository are easiest to land first.
   `--dsn`/`DATABASE_URL` option contract.
 - Verified this CLI slice with focused ruff, focused mypy, and
   `pytest tests/cli/test_migrate_vector_store.py` → `2 passed`.
+- Replaced MCP runtime construction's removed read-only SQLite proxy with the
+  SQLAlchemy `Database` facade and moved `app.cli.mcp_server` to `--dsn`.
+- Verified this MCP wiring slice with focused ruff, focused mypy, import smoke
+  checks, and `pytest tests/test_mcp_server.py -q` → `7 passed`.

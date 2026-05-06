@@ -111,6 +111,37 @@ def test_cli_uses_mcp_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured["port"] == 9333
     assert captured["user_id"] == 4242
     assert captured["auth_mode"] == "jwt"
+    assert captured["database_dsn"] is None
+
+
+def test_cli_accepts_postgres_dsn(monkeypatch: pytest.MonkeyPatch) -> None:
+    server = load_server_module(monkeypatch)
+    import app.cli.mcp_server as mcp_cli
+
+    captured: dict[str, Any] = {}
+
+    monkeypatch.setattr(server, "run_server", lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["ratatoskr-mcp-server", "--dsn", "postgresql+asyncpg://u:p@localhost:5432/db"],
+    )
+
+    mcp_cli.main()
+
+    assert captured["database_dsn"] == "postgresql+asyncpg://u:p@localhost:5432/db"
+
+
+def test_cli_rejects_legacy_db_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    load_server_module(monkeypatch)
+    import app.cli.mcp_server as mcp_cli
+
+    monkeypatch.setattr(sys, "argv", ["ratatoskr-mcp-server", "--db-path", "/tmp/app.db"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        mcp_cli.main()
+
+    assert exc_info.value.code == 2
 
 
 def test_run_server_allows_hosted_auth_without_startup_user(

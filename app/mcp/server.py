@@ -90,7 +90,7 @@ def run_server(
     transport: str = "stdio",
     host: str = "127.0.0.1",
     port: int = 8200,
-    db_path: str | None = None,
+    database_dsn: str | None = None,
     user_id: int | None = None,
     auth_mode: str = "disabled",
     forwarded_access_token_header: str = "X-Ratatoskr-Forwarded-Access-Token",
@@ -110,7 +110,10 @@ def run_server(
     except Exception:
         pass
     _DEFAULT_CONTEXT.set_user_scope(user_id)
-    _DEFAULT_CONTEXT.init_runtime(db_path)
+    if database_dsn is not None:
+        _DEFAULT_CONTEXT.init_runtime(database_dsn=database_dsn)
+    else:
+        _DEFAULT_CONTEXT.init_runtime()
     logger.info(
         "Starting Ratatoskr MCP server (transport=%s, startup_user_scope=%s)",
         transport,
