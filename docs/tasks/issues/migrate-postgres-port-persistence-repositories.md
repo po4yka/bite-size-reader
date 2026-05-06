@@ -212,6 +212,12 @@ Conventions for the port:
 - Verified the expanded focused repository suite with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_topic_search_repository_postgres.py -q`
   → `51 passed`.
+- Ported `signal_source_repository.py` to SQLAlchemy/AsyncSession with
+  PostgreSQL upserts for sources, subscriptions, feed items, topics, and user
+  signals, plus source health, candidate, and feedback workflows.
+- Verified the expanded focused repository suite with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_signal_source_repository.py -q`
+  → `57 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
