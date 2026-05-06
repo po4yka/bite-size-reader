@@ -271,6 +271,9 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_backup_archive_service_postgres.py tests/test_backup_service.py`
   → `11 passed`, focused ruff, and focused mypy with skipped imports.
+- Deleted unused Peewee-era `app/db/video_downloads.py`; video download
+  persistence now goes through the SQLAlchemy repository covered by
+  `tests/infrastructure/test_media_support_repositories_postgres.py`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
