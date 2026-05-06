@@ -7,6 +7,9 @@ import re
 import time
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import or_, select
+from sqlalchemy.orm import selectinload
+
 from app.mcp.helpers import (
     McpErrorResult,
     clamp_limit,
@@ -98,26 +101,33 @@ class SemanticSearchService:
                 pieces.append(str(tag))
         return " ".join(pieces).strip()
 
-    def _fetch_summaries_by_ids(self, summary_ids: list[int]) -> dict[int, tuple[Any, Any]]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
+    async def _fetch_summaries_by_ids(
+        self, summary_ids: list[int]
+    ) -> dict[int, tuple[Any, Any]]:
+        from app.db.models import Request, Summary
 
         if not summary_ids:
             return {}
 
-        rows = (
-            Summary.select(Summary, Request)
-            .join(Request)
-            .where(
-                Summary.id.in_(summary_ids),
-                Summary.is_deleted == False,  # noqa: E712
-                *self.context.request_scope_filters(Request),
-            )
-        )
+        runtime = self.context.ensure_runtime()
+        async with runtime.database.session() as session:
+            rows = (
+                await session.scalars(
+                    select(Summary)
+                    .join(Request, Summary.request_id == Request.id)
+                    .options(selectinload(Summary.request))
+                    .where(
+                        Summary.id.in_(summary_ids),
+                        Summary.is_deleted.is_(False),
+                        *self.context.request_scope_filters(Request),
+                    )
+                )
+            ).all()
 
-        result: dict[int, tuple[Any, Any]] = {}
-        for summary in rows:
-            result[int(summary.id)] = (summary, summary.request)
-        return result
+        return {
+            int(summary.id): (summary, summary.request)
+            for summary in rows
+        }
 
     @staticmethod
     def _semantic_match_from_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -138,7 +148,7 @@ class SemanticSearchService:
             "preview": preview_text,
         }
 
-    def _build_semantic_results(
+    async def _build_semantic_results(
         self,
         *,
         query: str,
@@ -191,7 +201,7 @@ class SemanticSearchService:
         if not grouped:
             return []
 
-        summary_map = self._fetch_summaries_by_ids(list(grouped.keys()))
+        summary_map = await self._fetch_summaries_by_ids(list(grouped.keys()))
         results: list[dict[str, Any]] = []
 
         for summary_id, group in grouped.items():
@@ -252,7 +262,7 @@ class SemanticSearchService:
         limit: int,
         min_similarity: float,
     ) -> list[dict[str, Any]]:
-        from app.infrastructure.persistence.sqlite.orm_exports import (
+        from app.db.models import (
             Request,
             Summary,
             SummaryEmbedding,
@@ -281,19 +291,23 @@ class SemanticSearchService:
             return []
 
         scan_limit = max(limit * 80, 600)
-        query_rows = (
-            SummaryEmbedding.select(SummaryEmbedding, Summary, Request)
-            .join(Summary)
-            .join(Request)
-            .where(
-                Summary.is_deleted == False,  # noqa: E712
-                *self.context.request_scope_filters(Request),
+        runtime = self.context.ensure_runtime()
+        async with runtime.database.session() as session:
+            stmt = (
+                select(SummaryEmbedding)
+                .join(Summary, SummaryEmbedding.summary_id == Summary.id)
+                .join(Request, Summary.request_id == Request.id)
+                .options(selectinload(SummaryEmbedding.summary).selectinload(Summary.request))
+                .where(
+                    Summary.is_deleted.is_(False),
+                    *self.context.request_scope_filters(Request),
+                )
+                .order_by(SummaryEmbedding.created_at.desc())
+                .limit(scan_limit)
             )
-            .order_by(SummaryEmbedding.created_at.desc())
-            .limit(scan_limit)
-        )
-        if language:
-            query_rows = query_rows.where((Summary.lang == language) | (Summary.lang.is_null(True)))
+            if language:
+                stmt = stmt.where(or_(Summary.lang == language, Summary.lang.is_(None)))
+            query_rows = (await session.scalars(stmt)).all()
 
         rows_data = []
         for row in query_rows:
@@ -396,7 +410,7 @@ class SemanticSearchService:
                         }
                     )
 
-                enriched = self._build_semantic_results(
+                enriched = await self._build_semantic_results(
                     query=query,
                     rows=vector_rows,
                     backend="vector",
@@ -420,7 +434,7 @@ class SemanticSearchService:
             limit=fetch_limit,
             min_similarity=min_similarity,
         )
-        enriched_local = self._build_semantic_results(
+        enriched_local = await self._build_semantic_results(
             query=query,
             rows=local_rows,
             backend="local_vector",
@@ -582,23 +596,25 @@ class SemanticSearchService:
         rerank: bool = False,
         include_chunks: bool = True,
     ) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
+        from app.db.models import Request, Summary
 
         limit = clamp_limit(limit)
 
         try:
-            source_summary = (
-                Summary.select(Summary, Request)
-                .join(Request)
-                .where(
-                    Summary.id == summary_id,
-                    Summary.is_deleted == False,  # noqa: E712
-                    *self.context.request_scope_filters(Request),
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                source_summary = await session.scalar(
+                    select(Summary)
+                    .join(Request, Summary.request_id == Request.id)
+                    .options(selectinload(Summary.request))
+                    .where(
+                        Summary.id == summary_id,
+                        Summary.is_deleted.is_(False),
+                        *self.context.request_scope_filters(Request),
+                    )
                 )
-                .get()
-            )
-        except Summary.DoesNotExist:
-            return {"error": f"Summary {summary_id} not found"}
+            if source_summary is None:
+                return {"error": f"Summary {summary_id} not found"}
         except Exception as exc:
             logger.exception("find_similar_articles source lookup failed")
             return {"error": str(exc), "summary_id": summary_id}
@@ -678,7 +694,7 @@ class SemanticSearchService:
             return {"error": str(exc)}
 
     async def vector_index_stats(self, scan_limit: int = 5000) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
+        from app.db.models import Request, Summary
 
         scan_limit = max(100, min(50000, int(scan_limit)))
 
@@ -695,37 +711,41 @@ class SemanticSearchService:
                 user_id=self.context.user_id, limit=scan_limit
             )
             overlap_count = 0
-            sqlite_count = 0
+            database_count = 0
             offset = 0
             batch_size = 500
 
-            while True:
-                sqlite_query = (
-                    Summary.select(Summary.id, Request)
-                    .join(Request)
-                    .where(
-                        Summary.is_deleted == False,  # noqa: E712
-                        *self.context.request_scope_filters(Request),
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                while True:
+                    rows = await session.execute(
+                        select(Summary.id)
+                        .join(Request, Summary.request_id == Request.id)
+                        .where(
+                            Summary.is_deleted.is_(False),
+                            *self.context.request_scope_filters(Request),
+                        )
+                        .order_by(Summary.created_at.desc())
+                        .limit(batch_size)
+                        .offset(offset)
                     )
-                    .order_by(Summary.created_at.desc())
-                    .limit(batch_size)
-                    .offset(offset)
-                )
-                batch_ids = {int(row.id) for row in sqlite_query}
-                if not batch_ids:
-                    break
-                sqlite_count += len(batch_ids)
-                overlap_count += len(batch_ids.intersection(vector_ids))
-                offset += batch_size
-                if sqlite_count >= scan_limit:
-                    break
+                    batch_ids = {int(row[0]) for row in rows}
+                    if not batch_ids:
+                        break
+                    database_count += len(batch_ids)
+                    overlap_count += len(batch_ids.intersection(vector_ids))
+                    offset += batch_size
+                    if database_count >= scan_limit:
+                        break
 
-            coverage_pct = round((overlap_count / sqlite_count * 100), 2) if sqlite_count else 0.0
+            coverage_pct = (
+                round((overlap_count / database_count * 100), 2) if database_count else 0.0
+            )
             return {
                 "vector_available": True,
                 "user_scope_id": self.context.user_id,
                 "scan_limit": scan_limit,
-                "sqlite_summary_count": sqlite_count,
+                "database_summary_count": database_count,
                 "vector_indexed_count": len(vector_ids),
                 "overlap_count": overlap_count,
                 "coverage_percent": coverage_pct,
@@ -735,7 +755,7 @@ class SemanticSearchService:
             return {"error": str(exc)}
 
     async def vector_sync_gap(self, max_scan: int = 5000, sample_size: int = 20) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
+        from app.db.models import Request, Summary
 
         max_scan = max(100, min(50000, int(max_scan)))
         sample_size = max(1, min(100, int(sample_size)))
@@ -753,45 +773,47 @@ class SemanticSearchService:
                 user_id=self.context.user_id, limit=max_scan
             )
             missing_in_vector = set()
-            missing_in_sqlite = set(vector_ids)
-            sqlite_count = 0
+            missing_in_database = set(vector_ids)
+            database_count = 0
             offset = 0
             batch_size = 500
 
-            while True:
-                sqlite_query = (
-                    Summary.select(Summary.id, Request)
-                    .join(Request)
-                    .where(
-                        Summary.is_deleted == False,  # noqa: E712
-                        *self.context.request_scope_filters(Request),
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                while True:
+                    rows = await session.execute(
+                        select(Summary.id)
+                        .join(Request, Summary.request_id == Request.id)
+                        .where(
+                            Summary.is_deleted.is_(False),
+                            *self.context.request_scope_filters(Request),
+                        )
+                        .order_by(Summary.created_at.desc())
+                        .limit(batch_size)
+                        .offset(offset)
                     )
-                    .order_by(Summary.created_at.desc())
-                    .limit(batch_size)
-                    .offset(offset)
-                )
-                batch_ids = {int(row.id) for row in sqlite_query}
-                if not batch_ids:
-                    break
-                sqlite_count += len(batch_ids)
-                missing_in_vector.update(batch_ids - vector_ids)
-                missing_in_sqlite.difference_update(batch_ids)
-                offset += batch_size
-                if sqlite_count >= max_scan:
-                    break
+                    batch_ids = {int(row[0]) for row in rows}
+                    if not batch_ids:
+                        break
+                    database_count += len(batch_ids)
+                    missing_in_vector.update(batch_ids - vector_ids)
+                    missing_in_database.difference_update(batch_ids)
+                    offset += batch_size
+                    if database_count >= max_scan:
+                        break
 
             sorted_missing_vector = sorted(missing_in_vector)
-            sorted_missing_sqlite = sorted(missing_in_sqlite)
+            sorted_missing_database = sorted(missing_in_database)
             return {
                 "vector_available": True,
                 "user_scope_id": self.context.user_id,
                 "max_scan": max_scan,
-                "sqlite_summary_count": sqlite_count,
+                "database_summary_count": database_count,
                 "vector_indexed_count": len(vector_ids),
                 "missing_in_vector_count": len(sorted_missing_vector),
-                "missing_in_sqlite_count": len(sorted_missing_sqlite),
+                "missing_in_database_count": len(sorted_missing_database),
                 "missing_in_vector_sample": sorted_missing_vector[:sample_size],
-                "missing_in_sqlite_sample": sorted_missing_sqlite[:sample_size],
+                "missing_in_database_sample": sorted_missing_database[:sample_size],
             }
         except Exception as exc:
             logger.exception("vector_sync_gap failed")

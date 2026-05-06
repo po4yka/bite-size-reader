@@ -335,5 +335,5 @@ async def test_vector_sync_gap_reports_missing_and_extra(
     payload = await service.vector_sync_gap(max_scan=1000, sample_size=10)
     assert payload["missing_in_vector_count"] == 1
     assert sid1 in payload["missing_in_vector_sample"]
-    assert payload["missing_in_sqlite_count"] == 1
-    assert 99999 in payload["missing_in_sqlite_sample"]
+    assert payload["missing_in_database_count"] == 1
+    assert 99999 in payload["missing_in_database_sample"]

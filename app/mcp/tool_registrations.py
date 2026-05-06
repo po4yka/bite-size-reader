@@ -329,14 +329,14 @@ def register_tools(
 
     @mcp.tool()
     async def vector_index_stats(scan_limit: int = 5000) -> str:
-        """Return index coverage stats between SQLite summaries and the vector store."""
+        """Return index coverage stats between database summaries and the vector store."""
         return to_json(
             await _call_async("vector_index_stats", semantic_service.vector_index_stats, scan_limit)
         )
 
     @mcp.tool()
     async def vector_sync_gap(max_scan: int = 5000, sample_size: int = 20) -> str:
-        """Report sync gaps between SQLite summaries and the vector store index."""
+        """Report sync gaps between database summaries and the vector store index."""
         return to_json(
             await _call_async(
                 "vector_sync_gap",
