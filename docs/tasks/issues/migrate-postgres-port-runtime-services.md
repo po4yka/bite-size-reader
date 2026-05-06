@@ -92,3 +92,8 @@ In-scope files and their target shapes:
 - Verified focused live DB suite:
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/db/test_sqlalchemy_session_factory.py tests/db/test_models_core.py tests/db/test_models_features.py tests/db/test_topic_search_manager.py tests/db/test_runtime_services_postgres.py -q`
   → `11 passed`.
+- Deleted obsolete Peewee-only `app/db/health_check.py` and
+  `app/db/database_diagnostics.py`; runtime health/diagnostics now go through
+  `app/db/runtime/inspection.py` and `app/api/routers/health.py`.
+- Verified this removal with focused ruff, focused mypy with skipped imports,
+  and `pytest tests/test_health_router_postgres.py` → `1 passed`.
