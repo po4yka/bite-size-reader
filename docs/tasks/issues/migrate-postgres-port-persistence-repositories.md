@@ -229,6 +229,12 @@ Conventions for the port:
 - Verified the expanded focused repository suite with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_rule_support_adapters_postgres.py -q`
   → `60 passed`.
+- Ported `smart_collection_handler.py` to SQLAlchemy/AsyncSession and wired it
+  with the application `Database` so SummaryCreated smart collection
+  auto-population no longer uses Peewee.
+- Verified the expanded focused repository suite with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_smart_collection_handler_postgres.py -q`
+  → `61 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

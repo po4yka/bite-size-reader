@@ -66,6 +66,7 @@ def build_application_services(
         vector_store=vector_store,
         push_notification_service=push_notification_service,
         webhook_repository=build_webhook_repository(db),
+        database=db,
     )
     return ApplicationServices(
         unread_summaries=GetUnreadSummariesUseCase(summary_repository=summary_repository),

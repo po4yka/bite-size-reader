@@ -49,6 +49,7 @@ def wire_event_handlers(
     vector_store: Any | None = None,
     push_notification_service: Any | None = None,
     webhook_repository: Any | None = None,
+    database: Any | None = None,
 ) -> None:
     search_index_handler = SearchIndexEventHandler(search_index_repository)
     analytics_handler = AnalyticsEventHandler(analytics_service)
@@ -114,8 +115,9 @@ def wire_event_handlers(
     event_bus.subscribe(TagDetached, rule_handler.on_tag_detached)
 
     # Smart collection auto-population on new summaries
-    smart_collection_handler = SmartCollectionHandler()
-    event_bus.subscribe(SummaryCreated, smart_collection_handler.on_summary_created)
+    if database is not None:
+        smart_collection_handler = SmartCollectionHandler(database)
+        event_bus.subscribe(SummaryCreated, smart_collection_handler.on_summary_created)
 
     # Per-user webhook dispatcher (additive alongside system-wide WebhookEventHandler)
     webhook_dispatcher: WebhookDispatcher | None = None
@@ -144,7 +146,7 @@ def wire_event_handlers(
                 "embeddings": embedding_generator is not None,
                 "push_notifications": push_handler is not None,
                 "rule_engine": True,
-                "smart_collections": True,
+                "smart_collections": database is not None,
                 "webhook_dispatcher": webhook_dispatcher is not None,
             },
         },
