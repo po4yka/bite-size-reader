@@ -1,10 +1,12 @@
-"""SQLite repository for user-owned goals, digests, highlights, and exports."""
+"""SQLAlchemy repository for user-owned goals, digests, highlights, and exports."""
 
 from __future__ import annotations
 
 import json
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from sqlalchemy import delete, select, update
 
 from app.db.models import (
     Collection,
@@ -18,18 +20,23 @@ from app.db.models import (
     UserGoal,
     model_to_dict,
 )
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
-class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
-    """Owns SQLite access for user-content features outside the core summary flow."""
+class SqliteUserContentRepositoryAdapter:
+    """Owns database access for user-content features outside the core summary flow."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_list_goals(self, user_id: int) -> list[dict[str, Any]]:
-        def _query() -> list[dict[str, Any]]:
-            rows = UserGoal.select().where(UserGoal.user == user_id)
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(select(UserGoal).where(UserGoal.user_id == user_id))
+            ).scalars()
             return [model_to_dict(row) or {} for row in rows]
-
-        return await self._execute(_query, operation_name="list_user_goals", read_only=True)
 
     async def async_upsert_goal(
         self,
@@ -40,44 +47,55 @@ class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
         scope_id: int | None,
         target_count: int,
     ) -> dict[str, Any]:
-        def _upsert() -> dict[str, Any]:
-            goal, created = UserGoal.get_or_create(
-                user=user_id,
-                goal_type=goal_type,
-                scope_type=scope_type,
-                scope_id=scope_id,
-                defaults={"id": uuid.uuid4(), "target_count": target_count},
+        async with self._database.transaction() as session:
+            goal = await session.scalar(
+                select(UserGoal).where(
+                    UserGoal.user_id == user_id,
+                    UserGoal.goal_type == goal_type,
+                    UserGoal.scope_type == scope_type,
+                    UserGoal.scope_id == scope_id,
+                )
             )
-            if not created:
+            if goal is None:
+                goal = UserGoal(
+                    id=uuid.uuid4(),
+                    user_id=user_id,
+                    goal_type=goal_type,
+                    scope_type=scope_type,
+                    scope_id=scope_id,
+                    target_count=target_count,
+                )
+                session.add(goal)
+            else:
                 goal.target_count = target_count
-                goal.save()
+            await session.flush()
             return model_to_dict(goal) or {}
 
-        return await self._execute(_upsert, operation_name="upsert_user_goal")
-
     async def async_delete_global_goal(self, *, user_id: int, goal_type: str) -> int:
-        def _delete() -> int:
-            return (
-                UserGoal.delete()
-                .where(
-                    (UserGoal.user == user_id)
-                    & (UserGoal.goal_type == goal_type)
-                    & (UserGoal.scope_type == "global")
+        async with self._database.transaction() as session:
+            deleted_ids = (
+                await session.execute(
+                    delete(UserGoal)
+                    .where(
+                        UserGoal.user_id == user_id,
+                        UserGoal.goal_type == goal_type,
+                        UserGoal.scope_type == "global",
+                    )
+                    .returning(UserGoal.id)
                 )
-                .execute()
-            )
-
-        return await self._execute(_delete, operation_name="delete_global_user_goal")
+            ).scalars()
+            return len(list(deleted_ids))
 
     async def async_delete_goal_by_id(self, *, user_id: int, goal_id: str) -> int:
-        def _delete() -> int:
-            return (
-                UserGoal.delete()
-                .where((UserGoal.user == user_id) & (UserGoal.id == goal_id))
-                .execute()
-            )
-
-        return await self._execute(_delete, operation_name="delete_user_goal_by_id")
+        async with self._database.transaction() as session:
+            deleted_ids = (
+                await session.execute(
+                    delete(UserGoal)
+                    .where(UserGoal.user_id == user_id, UserGoal.id == _uuid(goal_id))
+                    .returning(UserGoal.id)
+                )
+            ).scalars()
+            return len(list(deleted_ids))
 
     async def async_get_scope_name(
         self,
@@ -86,22 +104,24 @@ class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
         scope_type: str,
         scope_id: int | None,
     ) -> str | None:
-        def _query() -> str | None:
+        async with self._database.session() as session:
             if scope_type == "tag" and scope_id is not None:
-                tag = Tag.get_or_none(
-                    (Tag.id == scope_id) & (Tag.user == user_id) & (~Tag.is_deleted)
+                return await session.scalar(
+                    select(Tag.name).where(
+                        Tag.id == scope_id,
+                        Tag.user_id == user_id,
+                        Tag.is_deleted.is_(False),
+                    )
                 )
-                return tag.name if tag else None
             if scope_type == "collection" and scope_id is not None:
-                collection = Collection.get_or_none(
-                    (Collection.id == scope_id)
-                    & (Collection.user == user_id)
-                    & (~Collection.is_deleted)
+                return await session.scalar(
+                    select(Collection.name).where(
+                        Collection.id == scope_id,
+                        Collection.user_id == user_id,
+                        Collection.is_deleted.is_(False),
+                    )
                 )
-                return collection.name if collection else None
             return None
-
-        return await self._execute(_query, operation_name="get_goal_scope_name", read_only=True)
 
     async def async_count_scoped_summaries_in_period(
         self,
@@ -112,32 +132,26 @@ class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
         scope_type: str,
         scope_id: int | None,
     ) -> int:
-        def _query() -> int:
-            query = (
-                Summary.select()
-                .join(Request, on=(Summary.request == Request.id))
+        async with self._database.session() as session:
+            stmt = (
+                select(Summary.id)
+                .join(Request, Summary.request_id == Request.id)
                 .where(
-                    (Request.user_id == user_id)
-                    & (Summary.created_at >= start)
-                    & (Summary.created_at < end)
-                    & (~Summary.is_deleted)
+                    Request.user_id == user_id,
+                    Summary.created_at >= start,
+                    Summary.created_at < end,
+                    Summary.is_deleted.is_(False),
                 )
             )
             if scope_type == "tag" and scope_id is not None:
-                query = query.switch(Summary).join(SummaryTag).where(SummaryTag.tag == scope_id)
-            elif scope_type == "collection" and scope_id is not None:
-                query = (
-                    query.switch(Summary)
-                    .join(CollectionItem)
-                    .where(CollectionItem.collection == scope_id)
+                stmt = stmt.join(SummaryTag, SummaryTag.summary_id == Summary.id).where(
+                    SummaryTag.tag_id == scope_id
                 )
-            return query.count()
-
-        return await self._execute(
-            _query,
-            operation_name="count_scoped_summaries_in_period",
-            read_only=True,
-        )
+            elif scope_type == "collection" and scope_id is not None:
+                stmt = stmt.join(CollectionItem, CollectionItem.summary_id == Summary.id).where(
+                    CollectionItem.collection_id == scope_id
+                )
+            return len(list((await session.execute(stmt)).scalars()))
 
     async def async_get_owned_summaries(
         self,
@@ -145,26 +159,19 @@ class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
         user_id: int,
         summary_ids: list[int],
     ) -> list[dict[str, Any]]:
-        def _query() -> list[dict[str, Any]]:
-            if not summary_ids:
-                return []
-            rows = (
-                Summary.select(Summary, Request)
-                .join(Request)
+        if not summary_ids:
+            return []
+        async with self._database.session() as session:
+            rows = await session.execute(
+                select(Summary, Request)
+                .join(Request, Summary.request_id == Request.id)
                 .where(
                     Summary.id.in_(summary_ids),
                     Request.user_id == user_id,
-                    Summary.is_deleted == False,  # noqa: E712
+                    Summary.is_deleted.is_(False),
                 )
             )
-            results: list[dict[str, Any]] = []
-            for row in rows:
-                item = model_to_dict(row) or {}
-                item["request"] = model_to_dict(row.request) or {}
-                results.append(item)
-            return results
-
-        return await self._execute(_query, operation_name="get_owned_summaries", read_only=True)
+            return [_summary_with_request(summary, request) for summary, request in rows]
 
     async def async_create_custom_digest(
         self,
@@ -175,40 +182,35 @@ class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
         format: str,
         content: str,
     ) -> dict[str, Any]:
-        def _insert() -> dict[str, Any]:
-            digest = CustomDigest.create(
+        async with self._database.transaction() as session:
+            digest = CustomDigest(
                 id=uuid.uuid4(),
-                user=user_id,
+                user_id=user_id,
                 title=title,
                 summary_ids=json.dumps([str(item) for item in summary_ids]),
                 format=format,
                 content=content,
                 status="ready",
             )
+            session.add(digest)
+            await session.flush()
             return model_to_dict(digest) or {}
 
-        return await self._execute(_insert, operation_name="create_custom_digest")
-
     async def async_list_custom_digests(self, user_id: int) -> list[dict[str, Any]]:
-        def _query() -> list[dict[str, Any]]:
+        async with self._database.session() as session:
             rows = (
-                CustomDigest.select()
-                .where(CustomDigest.user == user_id)
-                .order_by(CustomDigest.created_at.desc())
-            )
+                await session.execute(
+                    select(CustomDigest)
+                    .where(CustomDigest.user_id == user_id)
+                    .order_by(CustomDigest.created_at.desc())
+                )
+            ).scalars()
             return [model_to_dict(row) or {} for row in rows]
 
-        return await self._execute(_query, operation_name="list_custom_digests", read_only=True)
-
     async def async_get_custom_digest(self, digest_id: str) -> dict[str, Any] | None:
-        def _query() -> dict[str, Any] | None:
-            try:
-                digest = CustomDigest.get_by_id(digest_id)
-            except CustomDigest.DoesNotExist:
-                return None
+        async with self._database.session() as session:
+            digest = await session.get(CustomDigest, _uuid(digest_id))
             return model_to_dict(digest)
-
-        return await self._execute(_query, operation_name="get_custom_digest", read_only=True)
 
     async def async_get_owned_summary(
         self,
@@ -216,20 +218,18 @@ class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
         user_id: int,
         summary_id: int,
     ) -> dict[str, Any] | None:
-        def _query() -> dict[str, Any] | None:
+        async with self._database.session() as session:
             row = (
-                Summary.select(Summary, Request)
-                .join(Request)
-                .where((Summary.id == summary_id) & (Request.user_id == user_id))
-                .first()
-            )
+                await session.execute(
+                    select(Summary, Request)
+                    .join(Request, Summary.request_id == Request.id)
+                    .where(Summary.id == summary_id, Request.user_id == user_id)
+                )
+            ).first()
             if row is None:
                 return None
-            item = model_to_dict(row) or {}
-            item["request"] = model_to_dict(row.request) or {}
-            return item
-
-        return await self._execute(_query, operation_name="get_owned_summary", read_only=True)
+            summary, request = row
+            return _summary_with_request(summary, request)
 
     async def async_list_highlights(
         self,
@@ -237,17 +237,18 @@ class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
         user_id: int,
         summary_id: int,
     ) -> list[dict[str, Any]]:
-        def _query() -> list[dict[str, Any]]:
+        async with self._database.session() as session:
             rows = (
-                SummaryHighlight.select()
-                .where(
-                    (SummaryHighlight.user == user_id) & (SummaryHighlight.summary == summary_id)
+                await session.execute(
+                    select(SummaryHighlight)
+                    .where(
+                        SummaryHighlight.user_id == user_id,
+                        SummaryHighlight.summary_id == summary_id,
+                    )
+                    .order_by(SummaryHighlight.created_at.asc())
                 )
-                .order_by(SummaryHighlight.created_at.asc())
-            )
+            ).scalars()
             return [model_to_dict(row) or {} for row in rows]
-
-        return await self._execute(_query, operation_name="list_summary_highlights", read_only=True)
 
     async def async_create_highlight(
         self,
@@ -260,20 +261,20 @@ class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
         color: str | None,
         note: str | None,
     ) -> dict[str, Any]:
-        def _insert() -> dict[str, Any]:
-            highlight = SummaryHighlight.create(
+        async with self._database.transaction() as session:
+            highlight = SummaryHighlight(
                 id=uuid.uuid4(),
-                user=user_id,
-                summary=summary_id,
+                user_id=user_id,
+                summary_id=summary_id,
                 text=text,
                 start_offset=start_offset,
                 end_offset=end_offset,
                 color=color,
                 note=note,
             )
+            session.add(highlight)
+            await session.flush()
             return model_to_dict(highlight) or {}
-
-        return await self._execute(_insert, operation_name="create_summary_highlight")
 
     async def async_get_highlight(
         self,
@@ -282,15 +283,15 @@ class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
         summary_id: int,
         highlight_id: str,
     ) -> dict[str, Any] | None:
-        def _query() -> dict[str, Any] | None:
-            highlight = SummaryHighlight.get_or_none(
-                (SummaryHighlight.id == highlight_id)
-                & (SummaryHighlight.user == user_id)
-                & (SummaryHighlight.summary == summary_id)
+        async with self._database.session() as session:
+            highlight = await session.scalar(
+                select(SummaryHighlight).where(
+                    SummaryHighlight.id == _uuid(highlight_id),
+                    SummaryHighlight.user_id == user_id,
+                    SummaryHighlight.summary_id == summary_id,
+                )
             )
             return model_to_dict(highlight)
-
-        return await self._execute(_query, operation_name="get_summary_highlight", read_only=True)
 
     async def async_update_highlight(
         self,
@@ -299,22 +300,27 @@ class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
         color: str | None,
         note: str | None,
     ) -> dict[str, Any]:
-        def _update() -> dict[str, Any]:
-            highlight = SummaryHighlight.get_by_id(highlight_id)
-            if color is not None:
-                highlight.color = color
-            if note is not None:
-                highlight.note = note
-            highlight.save()
+        update_fields: dict[str, Any] = {}
+        if color is not None:
+            update_fields["color"] = color
+        if note is not None:
+            update_fields["note"] = note
+
+        async with self._database.transaction() as session:
+            if update_fields:
+                await session.execute(
+                    update(SummaryHighlight)
+                    .where(SummaryHighlight.id == _uuid(highlight_id))
+                    .values(**update_fields)
+                )
+            highlight = await session.get(SummaryHighlight, _uuid(highlight_id))
             return model_to_dict(highlight) or {}
 
-        return await self._execute(_update, operation_name="update_summary_highlight")
-
     async def async_delete_highlight(self, highlight_id: str) -> None:
-        def _delete() -> None:
-            SummaryHighlight.delete().where(SummaryHighlight.id == highlight_id).execute()
-
-        await self._execute(_delete, operation_name="delete_summary_highlight")
+        async with self._database.transaction() as session:
+            await session.execute(
+                delete(SummaryHighlight).where(SummaryHighlight.id == _uuid(highlight_id))
+            )
 
     async def async_export_summaries(
         self,
@@ -323,73 +329,72 @@ class SqliteUserContentRepositoryAdapter(SqliteBaseRepository):
         tag: str | None,
         collection_id: int | None,
     ) -> list[dict[str, Any]]:
-        def _query() -> list[dict[str, Any]]:
-            query = (
-                Summary.select(Summary, Request)
-                .join(Request, on=(Summary.request == Request.id))
-                .where((Request.user == user_id) & (Summary.is_deleted == False))  # noqa: E712
+        async with self._database.session() as session:
+            stmt = (
+                select(Summary, Request)
+                .join(Request, Summary.request_id == Request.id)
+                .where(Request.user_id == user_id, Summary.is_deleted.is_(False))
             )
-
             if tag:
-                tag_obj = (
-                    Tag.select()
-                    .where(
-                        (Tag.user == user_id) & (Tag.name == tag) & (Tag.is_deleted == False)  # noqa: E712
+                tag_id = await session.scalar(
+                    select(Tag.id).where(
+                        Tag.user_id == user_id,
+                        Tag.name == tag,
+                        Tag.is_deleted.is_(False),
                     )
-                    .first()
                 )
-                if tag_obj:
-                    tagged_summary_ids = [
-                        summary_tag.summary_id
-                        for summary_tag in SummaryTag.select(SummaryTag.summary).where(
-                            SummaryTag.tag == tag_obj.id
-                        )
-                    ]
-                    query = query.where(Summary.id.in_(tagged_summary_ids))
-                else:
+                if tag_id is None:
                     return []
-
+                stmt = stmt.join(SummaryTag, SummaryTag.summary_id == Summary.id).where(
+                    SummaryTag.tag_id == tag_id
+                )
             if collection_id is not None:
-                collection_summary_ids = [
-                    item.summary_id
-                    for item in CollectionItem.select(CollectionItem.summary).where(
-                        CollectionItem.collection == collection_id
-                    )
-                ]
-                query = query.where(Summary.id.in_(collection_summary_ids))
+                stmt = stmt.join(CollectionItem, CollectionItem.summary_id == Summary.id).where(
+                    CollectionItem.collection_id == collection_id
+                )
 
+            rows = await session.execute(stmt)
             summaries: list[dict[str, Any]] = []
-            for row in query:
-                summary_dict = model_to_dict(row)
+            for summary, request in rows:
+                summary_dict = model_to_dict(summary)
                 if summary_dict is None:
                     continue
-
-                request = row.request
                 summary_dict["url"] = request.input_url or request.normalized_url or ""
                 summary_dict["title"] = ""
                 json_payload = summary_dict.get("json_payload")
                 if isinstance(json_payload, dict):
                     summary_dict["title"] = json_payload.get("title", "")
-
-                tag_rows = (
-                    Tag.select(Tag.name)
-                    .join(SummaryTag, on=(SummaryTag.tag == Tag.id))
-                    .where((SummaryTag.summary == row.id) & (Tag.is_deleted == False))  # noqa: E712
-                )
-                summary_dict["tags"] = [{"name": tag_row.name} for tag_row in tag_rows]
-
-                collection_rows = (
-                    Collection.select(Collection.name)
-                    .join(CollectionItem, on=(CollectionItem.collection == Collection.id))
-                    .where(
-                        (CollectionItem.summary == row.id) & (Collection.is_deleted == False)  # noqa: E712
-                    )
-                )
-                summary_dict["collections"] = [
-                    {"name": collection.name} for collection in collection_rows
-                ]
+                summary_dict["tags"] = await _summary_tags(session, summary.id)
+                summary_dict["collections"] = await _summary_collections(session, summary.id)
                 summaries.append(summary_dict)
-
             return summaries
 
-        return await self._execute(_query, operation_name="export_query", read_only=True)
+
+def _uuid(value: str | uuid.UUID) -> uuid.UUID:
+    return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+
+
+def _summary_with_request(summary: Summary, request: Request) -> dict[str, Any]:
+    item = model_to_dict(summary) or {}
+    item["request"] = model_to_dict(request) or {}
+    return item
+
+
+async def _summary_tags(session: Any, summary_id: int) -> list[dict[str, str]]:
+    rows = await session.execute(
+        select(Tag.name)
+        .join(SummaryTag, SummaryTag.tag_id == Tag.id)
+        .where(SummaryTag.summary_id == summary_id, Tag.is_deleted.is_(False))
+        .order_by(Tag.name.asc())
+    )
+    return [{"name": name} for name in rows.scalars()]
+
+
+async def _summary_collections(session: Any, summary_id: int) -> list[dict[str, str]]:
+    rows = await session.execute(
+        select(Collection.name)
+        .join(CollectionItem, CollectionItem.collection_id == Collection.id)
+        .where(CollectionItem.summary_id == summary_id, Collection.is_deleted.is_(False))
+        .order_by(Collection.name.asc())
+    )
+    return [{"name": name} for name in rows.scalars()]
