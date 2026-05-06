@@ -14,7 +14,7 @@ from app.infrastructure.persistence.sqlite.repositories.user_repository import (
 if TYPE_CHECKING:
     import logging
 
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import Database
 
 logger = get_logger(__name__)
 
@@ -23,7 +23,7 @@ _update_tasks: set[asyncio.Task] = set()
 
 
 def safe_update_user_interaction(
-    db: DatabaseSessionManager | Any,
+    db: Database | Any,
     *,
     interaction_id: int | None,
     logger_: logging.Logger | None = None,

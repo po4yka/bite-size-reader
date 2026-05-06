@@ -136,3 +136,6 @@ the most-ported repository are easiest to land first.
 - Verified this slice with focused ruff, focused mypy with skipped imports, and
   DI import smoke checks; direct `app.tasks.rss` import still requires the
   optional `taskiq` dependency in this environment.
+- Replaced the stale `DatabaseSessionManager` annotation in
+  `app/db/user_interactions.py` with the SQLAlchemy `Database` facade; verified
+  with focused ruff, focused mypy, and an import smoke check.
