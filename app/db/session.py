@@ -1,272 +1,159 @@
-"""Database session management and runtime façade."""
+"""SQLAlchemy async database session management."""
 
 from __future__ import annotations
 
-import contextlib
-import os
-import sqlite3
+import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
-from peewee import SqliteDatabase as _BaseSqliteDatabase
-
-if TYPE_CHECKING:
-    import logging
-    from collections.abc import Iterable, Iterator
-    from pathlib import Path
-
-    import peewee
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.core.logging_utils import get_logger
-from app.db.runtime.backup import DatabaseBackupService
-from app.db.runtime.bootstrap import DatabaseBootstrapService
-from app.db.runtime.inspection import DatabaseInspectionService
-from app.db.runtime.maintenance import DatabaseMaintenanceService
-from app.db.runtime.operation_executor import DatabaseOperationExecutor
-from app.db.rw_lock import AsyncRWLock
 
-JSONValue = dict[str, Any] | list[Any] | str | None
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
+    from app.config.database import DatabaseConfig
 
-def _migrate_legacy_db_filename(path: str, logger: logging.Logger) -> None:
-    """Rename pre-rename `app.db` to `ratatoskr.db` if applicable.
+logger = get_logger(__name__)
 
-    Only fires when the configured path ends in `ratatoskr.db`, the new path
-    does not exist, and a sibling `app.db` is present in the same directory.
-    Avoids touching paths that users have customised to anything else.
-    """
-    if not path.endswith("ratatoskr.db"):
-        return
-    if os.path.exists(path):
-        return
-    directory = os.path.dirname(path) or "."
-    legacy = os.path.join(directory, "app.db")
-    if not os.path.isfile(legacy):
-        return
-    try:
-        os.rename(legacy, path)
-        logger.info(
-            "db_legacy_rename_applied",
-            extra={"from": legacy, "to": path},
-        )
-    except OSError as exc:
-        logger.warning(
-            "db_legacy_rename_failed",
-            extra={"from": legacy, "to": path, "error": str(exc)},
-        )
+P = ParamSpec("P")
+T = TypeVar("T")
+
+_RETRYABLE_SQLSTATES = {"40001", "40P01"}
 
 
-DB_OPERATION_TIMEOUT = 30.0
-DB_MAX_RETRIES = 3
-DB_JSON_MAX_SIZE = 10_000_000
-DB_JSON_MAX_DEPTH = 20
-DB_JSON_MAX_ARRAY_LENGTH = 10_000
-DB_JSON_MAX_DICT_KEYS = 1_000
+@dataclass(slots=True)
+class Database:
+    """Async SQLAlchemy database facade for bot, CLI, and FastAPI callers."""
 
-
-class TopicSearchIndexRebuiltError(RuntimeError):
-    """Raised to signal that the topic search index was rebuilt mid-operation."""
-
-
-class RowSqliteDatabase(_BaseSqliteDatabase):
-    """SQLite database subclass that configures the row factory for dict-like access."""
-
-    def _connect(self) -> sqlite3.Connection:
-        conn = super()._connect()
-        conn.row_factory = sqlite3.Row
-        return conn
-
-
-@dataclass
-class DatabaseSessionManager:
-    """Compatibility façade over dedicated database runtime services."""
-
-    path: str
-    _logger: logging.Logger = field(default_factory=lambda: get_logger(__name__))
-    _database: peewee.SqliteDatabase = field(init=False)
-    _rw_lock: AsyncRWLock = field(init=False)
-
-    operation_timeout: float = field(default=DB_OPERATION_TIMEOUT)
-    max_retries: int = field(default=DB_MAX_RETRIES)
-    json_max_size: int = field(default=DB_JSON_MAX_SIZE)
-    json_max_depth: int = field(default=DB_JSON_MAX_DEPTH)
-    json_max_array_length: int = field(default=DB_JSON_MAX_ARRAY_LENGTH)
-    json_max_dict_keys: int = field(default=DB_JSON_MAX_DICT_KEYS)
+    config: DatabaseConfig
+    _engine: AsyncEngine = field(init=False, repr=False)
+    _session_maker: async_sessionmaker[AsyncSession] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        _migrate_legacy_db_filename(self.path, self._logger)
-        self._database = RowSqliteDatabase(
-            self.path,
-            pragmas={
-                "journal_mode": "wal",
-                "synchronous": "normal",
-                "foreign_keys": 1,
-            },
-            check_same_thread=False,
+        self._engine = create_async_engine(
+            self.config.dsn,
+            pool_size=self.config.pool_size,
+            max_overflow=self.config.max_overflow,
+            pool_pre_ping=True,
+            pool_recycle=self.config.pool_recycle_seconds,
         )
-        self._rw_lock = AsyncRWLock()
-
-        self._bootstrap = DatabaseBootstrapService(
-            path=self.path,
-            database=self._database,
-            logger=self._logger,
-        )
-        self._bootstrap.initialize_database_proxy()
-        self._executor = DatabaseOperationExecutor(
-            database=self._database,
-            rw_lock=self._rw_lock,
-            operation_timeout=self.operation_timeout,
-            max_retries=self.max_retries,
-            logger=self._logger,
-        )
-        self._maintenance = DatabaseMaintenanceService(
-            database=self._database,
-            path=self.path,
-            logger=self._logger,
-        )
-        self._inspection = DatabaseInspectionService(
-            database=self._database,
-            path=self.path,
-            logger=self._logger,
-        )
-        self._backup = DatabaseBackupService(
-            path=self.path,
-            connect=self.connect,
-            logger=self._logger,
+        self._session_maker = async_sessionmaker(
+            bind=self._engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autoflush=False,
         )
 
     @property
-    def database(self) -> peewee.SqliteDatabase:
-        return self._database
+    def engine(self) -> AsyncEngine:
+        return self._engine
 
     @property
-    def executor(self) -> DatabaseOperationExecutor:
-        return self._executor
+    def session_maker(self) -> async_sessionmaker[AsyncSession]:
+        return self._session_maker
 
-    @property
-    def bootstrap(self) -> DatabaseBootstrapService:
-        return self._bootstrap
+    @asynccontextmanager
+    async def session(self) -> AsyncIterator[AsyncSession]:
+        """Yield a session without starting an implicit transaction block."""
+        async with self._session_maker() as session:
+            yield session
 
-    @property
-    def maintenance(self) -> DatabaseMaintenanceService:
-        return self._maintenance
+    @asynccontextmanager
+    async def transaction(self) -> AsyncIterator[AsyncSession]:
+        """Yield a session inside a transaction, committing only on success."""
+        async with self._session_maker() as session, session.begin():
+            yield session
 
-    @property
-    def inspection(self) -> DatabaseInspectionService:
-        return self._inspection
+    async def healthcheck(self) -> None:
+        async with self.session() as session:
+            await session.execute(text("SELECT 1"))
 
-    @property
-    def backups(self) -> DatabaseBackupService:
-        return self._backup
+    async def migrate(self) -> None:
+        """Run Alembic migrations for the configured database.
 
-    def connection_context(self) -> Any:
-        return self._executor.connection_context()
+        Alembic's command API is synchronous; it is isolated in a worker thread until
+        the migration environment is converted to SQLAlchemy async in O5.
+        """
+        await asyncio.to_thread(_run_alembic_upgrade, self.config.dsn)
 
-    @contextlib.contextmanager
-    def connect(self) -> Iterator[sqlite3.Connection]:
-        with self._database.connection_context():
-            yield self._database.connection()
+    async def dispose(self) -> None:
+        await self._engine.dispose()
 
-    def migrate(self) -> None:
-        self._bootstrap.migrate()
-        self._maintenance.run_startup_maintenance()
 
-    async def _safe_db_operation(
-        self,
-        operation: Any,
-        *args: Any,
-        timeout: float | None = None,
-        operation_name: str = "database_operation",
-        read_only: bool = False,
-        **kwargs: Any,
-    ) -> Any:
-        return await self._executor.async_execute(
-            operation,
-            *args,
-            timeout=timeout,
-            operation_name=operation_name,
-            read_only=read_only,
-            **kwargs,
-        )
+@asynccontextmanager
+async def get_session(database: Database) -> AsyncIterator[AsyncSession]:
+    """Open a short-lived bot/CLI session."""
+    async with database.session() as session:
+        yield session
 
-    async def _safe_db_transaction(
-        self,
-        operation: Any,
-        *args: Any,
-        timeout: float | None = None,
-        operation_name: str = "database_transaction",
-        **kwargs: Any,
-    ) -> Any:
-        return await self._executor.async_execute_transaction(
-            operation,
-            *args,
-            timeout=timeout,
-            operation_name=operation_name,
-            **kwargs,
-        )
 
-    async def async_execute(
-        self,
-        operation: Any,
-        *args: Any,
-        timeout: float | None = None,
-        operation_name: str = "repository_operation",
-        read_only: bool = False,
-        **kwargs: Any,
-    ) -> Any:
-        return await self._executor.async_execute(
-            operation,
-            *args,
-            timeout=timeout,
-            operation_name=operation_name,
-            read_only=read_only,
-            **kwargs,
-        )
+async def get_session_for_request(database: Database) -> AsyncIterator[AsyncSession]:
+    """FastAPI dependency that wraps each request in one transaction."""
+    async with database.transaction() as session:
+        yield session
 
-    async def async_execute_transaction(
-        self,
-        operation: Any,
-        *args: Any,
-        timeout: float | None = None,
-        operation_name: str = "repository_transaction",
-        **kwargs: Any,
-    ) -> Any:
-        return await self._executor.async_execute_transaction(
-            operation,
-            *args,
-            timeout=timeout,
-            operation_name=operation_name,
-            **kwargs,
-        )
 
-    def execute(self, sql: str, params: Iterable | None = None) -> None:
-        params = tuple(params or ())
-        with self._database.connection_context():
-            self._database.execute_sql(sql, params)
-        self._logger.debug("db_execute", extra={"sql": sql, "params": list(params)[:10]})
+def _sqlstate(exc: OperationalError) -> str | None:
+    original = exc.orig
+    for attr_name in ("sqlstate", "pgcode"):
+        value = getattr(original, attr_name, None)
+        if value:
+            return str(value)
+    return None
 
-    def fetchone(self, sql: str, params: Iterable | None = None) -> sqlite3.Row | None:
-        params = tuple(params or ())
-        with self._database.connection_context():
-            cursor = self._database.execute_sql(sql, params)
-            return cursor.fetchone()
 
-    def create_backup_copy(self, dest_path: str) -> Path:
-        return self._backup.create_backup_copy(dest_path)
+def _is_retryable_serialization_error(exc: OperationalError) -> bool:
+    return _sqlstate(exc) in _RETRYABLE_SQLSTATES
 
-    def check_integrity(self) -> tuple[bool, str]:
-        return self._inspection.check_integrity()
 
-    def get_database_overview(self) -> dict[str, Any]:
-        return self._inspection.get_database_overview()
+def _run_alembic_upgrade(dsn: str) -> None:
+    from pathlib import Path
 
-    def verify_processing_integrity(
-        self,
-        *,
-        required_fields: Iterable[str] | None = None,
-        limit: int | None = None,
-    ) -> dict[str, Any]:
-        return self._inspection.verify_processing_integrity(
-            required_fields=required_fields,
-            limit=limit,
-        )
+    from alembic import command
+    from alembic.config import Config
+
+    ini_path = Path(__file__).resolve().parents[2] / "alembic.ini"
+    cfg = Config(str(ini_path))
+    cfg.set_main_option("sqlalchemy.url", dsn)
+    command.upgrade(cfg, "head")
+
+
+def with_serialization_retry(
+    func: Callable[P, Awaitable[T]],
+    *,
+    attempts: int = 3,
+    base_delay_seconds: float = 0.05,
+) -> Callable[P, Awaitable[T]]:
+    """Retry an async operation on Postgres serialization/deadlock failures."""
+
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        last_error: OperationalError | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return await func(*args, **kwargs)
+            except OperationalError as exc:
+                if not _is_retryable_serialization_error(exc) or attempt >= attempts:
+                    raise
+                last_error = exc
+                delay = base_delay_seconds * (2 ** (attempt - 1))
+                logger.warning(
+                    "db_serialization_retry",
+                    extra={"attempt": attempt, "sqlstate": _sqlstate(exc), "delay": delay},
+                )
+                await asyncio.sleep(delay)
+        if last_error is not None:  # pragma: no cover - loop exits by raise/return.
+            raise last_error
+        msg = "with_serialization_retry requires at least one attempt"
+        raise ValueError(msg)
+
+    return wrapper

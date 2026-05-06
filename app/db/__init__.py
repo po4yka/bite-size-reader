@@ -1,1 +1,1 @@
-"""Database layer built on top of Peewee ORM."""
+"""Database layer built on SQLAlchemy 2.0 async sessions."""

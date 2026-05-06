@@ -135,8 +135,18 @@ def _effective_config_summary(config: AppConfig) -> dict[str, Any]:
         "twitter_enabled": config.twitter.enabled,
         "mcp_enabled": config.mcp.enabled,
         "jwt_auth_configured": bool(config.runtime.jwt_secret_key),
-        "db_path": config.runtime.db_path,
+        "database_dsn": _redact_database_dsn(config.database.dsn),
     }
+
+
+def _redact_database_dsn(dsn: str) -> str:
+    if "@" not in dsn:
+        return dsn
+    prefix, suffix = dsn.rsplit("@", 1)
+    if ":" not in prefix:
+        return f"...@{suffix}"
+    scheme_user, _password = prefix.rsplit(":", 1)
+    return f"{scheme_user}:***@{suffix}"
 
 
 @dataclass(frozen=True)

@@ -98,7 +98,11 @@ def manage_api_session_manager(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def manage_database_proxy():
     """Save and restore database proxy after each test."""
-    from app.db.models import database_proxy
+    try:
+        from app.db.models import database_proxy
+    except ImportError:
+        yield
+        return
 
     old_obj = database_proxy.obj
     yield

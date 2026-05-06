@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+import os
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from app.config.validation_helpers import parse_positive_int
 
@@ -12,6 +14,26 @@ class DatabaseConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
+    dsn: str = Field(
+        default="",
+        validation_alias="DATABASE_URL",
+        description="SQLAlchemy asyncpg PostgreSQL DSN",
+    )
+    pool_size: int = Field(
+        default=8,
+        validation_alias="DATABASE_POOL_SIZE",
+        description="SQLAlchemy async connection pool size",
+    )
+    max_overflow: int = Field(
+        default=4,
+        validation_alias="DATABASE_MAX_OVERFLOW",
+        description="SQLAlchemy async connection pool overflow",
+    )
+    pool_recycle_seconds: int = Field(
+        default=900,
+        validation_alias="DATABASE_POOL_RECYCLE_SECONDS",
+        description="Seconds before SQLAlchemy recycles pooled connections",
+    )
     operation_timeout: float = Field(
         default=30.0,
         validation_alias="DB_OPERATION_TIMEOUT",
@@ -43,6 +65,22 @@ class DatabaseConfig(BaseModel):
         description="Maximum JSON dictionary keys",
     )
 
+    @model_validator(mode="after")
+    def _derive_and_validate_dsn(self) -> DatabaseConfig:
+        dsn = self.dsn.strip()
+        if not dsn:
+            password = os.getenv("POSTGRES_PASSWORD", "").strip()
+            if password:
+                dsn = (
+                    "postgresql+asyncpg://ratatoskr_app:"
+                    f"{password}@postgres:5432/ratatoskr"
+                )
+                object.__setattr__(self, "dsn", dsn)
+        if not self.dsn.startswith("postgresql+asyncpg://"):
+            msg = "DATABASE_URL must use postgresql+asyncpg://..."
+            raise ValueError(msg)
+        return self
+
     @field_validator("operation_timeout", mode="before")
     @classmethod
     def _validate_timeout(cls, value: Any) -> float:
@@ -62,6 +100,9 @@ class DatabaseConfig(BaseModel):
         return parsed
 
     @field_validator(
+        "pool_size",
+        "max_overflow",
+        "pool_recycle_seconds",
         "max_retries",
         "json_max_size",
         "json_max_depth",

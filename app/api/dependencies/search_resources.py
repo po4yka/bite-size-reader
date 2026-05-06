@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.logging_utils import get_logger
-from app.di.api import ensure_api_runtime, get_current_api_runtime, resolve_api_runtime
 
 logger = get_logger(__name__)
 
@@ -14,6 +13,8 @@ async def get_vector_search_service(
     request: Any = None,
 ) -> Any:
     """FastAPI dependency for the shared vector search service."""
+    from app.di.api import ensure_api_runtime, resolve_api_runtime
+
     runtime = None
     try:
         runtime = resolve_api_runtime(request)
@@ -30,6 +31,8 @@ async def get_vector_search_service(
 
 async def shutdown_vector_search_resources() -> None:
     """Release only API search resources without tearing down the whole runtime."""
+    from app.di.api import get_current_api_runtime
+
     try:
         runtime = get_current_api_runtime()
     except RuntimeError:
