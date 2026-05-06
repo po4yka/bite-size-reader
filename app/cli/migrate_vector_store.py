@@ -8,7 +8,7 @@ Strategies
 auto   (default) - probe Chroma; use export if the source collection has data,
                    otherwise fall back to reembed.
 export            - dump vectors from Chroma HTTP API and upsert into Qdrant.
-reembed           - read summaries from SQLite, regenerate embeddings, upsert into Qdrant.
+reembed           - read summaries from PostgreSQL, regenerate embeddings, upsert into Qdrant.
 
 Usage
 -----
@@ -27,9 +27,13 @@ import sys
 import uuid
 from typing import Any
 
-from app.config import QdrantConfig, load_config
+from sqlalchemy import select
+
+from app.config import DatabaseConfig, QdrantConfig, load_config
 from app.core.embedding_space import resolve_embedding_space_identifier
 from app.core.logging_utils import get_logger
+from app.db.models import Request, Summary
+from app.db.session import Database
 from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 
 logger = get_logger(__name__)
@@ -187,22 +191,21 @@ async def _export_from_chroma(
 
 
 # ---------------------------------------------------------------------------
-# Reembed path: SQLite → Qdrant
+# Reembed path: PostgreSQL → Qdrant
 # ---------------------------------------------------------------------------
 
 
-async def _reembed_from_sqlite(
-    db_path: str,
+async def _reembed_from_postgres(
+    database_dsn: str | None,
     vector_store: QdrantVectorStore,
     qdrant_cfg: QdrantConfig,
-    app_cfg: Any,
     batch_size: int,
     dry_run: bool,
 ) -> int:
     from app.cli.backfill_vector_store import backfill_vector_store
 
     await backfill_vector_store(
-        db_path,
+        database_dsn,
         qdrant_cfg,
         batch_size=batch_size,
         dry_run=dry_run,
@@ -216,53 +219,52 @@ async def _reembed_from_sqlite(
 
 
 async def _verify_migration(
-    db_path: str,
+    database_dsn: str | None,
     vector_store: QdrantVectorStore,
     app_cfg: Any,
     sample: int = 3,
 ) -> bool:
-    from app.db.session import DatabaseSessionManager
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
-    from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary
 
-    db = DatabaseSessionManager(path=db_path)
+    db = Database(config=DatabaseConfig(dsn=database_dsn) if database_dsn else DatabaseConfig())
     embedding_service = create_embedding_service(app_cfg.embedding)
 
-    def _sample_ids() -> list[tuple[int, int, str]]:
-        with db.database.connection_context():
-            rows = (
-                Summary.select(Summary.id, Summary.json_payload, Request.id)
-                .join(Request)
-                .where(Summary.is_deleted == False)  # noqa: E712
+    try:
+        async with db.session() as session:
+            rows = await session.execute(
+                select(Summary.id, Request.id, Summary.json_payload)
+                .join(Request, Summary.request_id == Request.id)
+                .where(Summary.is_deleted.is_(False))
                 .limit(sample)
             )
-            return [
-                (row.id, row.request.id, str(row.json_payload.get("summary_250", "test")))
-                for row in rows
-                if row.json_payload
+            samples = [
+                (summary_id, request_id, str(payload.get("summary_250", "test")))
+                for summary_id, request_id, payload in rows
+                if isinstance(payload, dict) and payload
             ]
 
-    samples = _sample_ids()
-    if not samples:
-        logger.warning("vector_migration_verification_no_samples")
-        return True
+        if not samples:
+            logger.warning("vector_migration_verification_no_samples")
+            return True
 
-    ok_count = 0
-    for _summary_id, request_id, text in samples:
-        emb = await embedding_service.generate_embedding(text, language="en", task_type="query")
-        vector = emb.tolist() if hasattr(emb, "tolist") else list(emb)
+        ok_count = 0
+        for _summary_id, request_id, text in samples:
+            emb = await embedding_service.generate_embedding(text, language="en", task_type="query")
+            vector = emb.tolist() if hasattr(emb, "tolist") else list(emb)
 
-        result = vector_store.query(vector, None, 10)
-        found_ids = {int(h.metadata.get("request_id", -1)) for h in result.hits}
-        if request_id in found_ids:
-            ok_count += 1
+            result = vector_store.query(vector, None, 10)
+            found_ids = {int(h.metadata.get("request_id", -1)) for h in result.hits}
+            if request_id in found_ids:
+                ok_count += 1
 
-    passed = ok_count == len(samples)
-    logger.info(
-        "vector_migration_verification",
-        extra={"ok": passed, "checked": len(samples), "matched": ok_count},
-    )
-    return passed
+        passed = ok_count == len(samples)
+        logger.info(
+            "vector_migration_verification",
+            extra={"ok": passed, "checked": len(samples), "matched": ok_count},
+        )
+        return passed
+    finally:
+        await db.dispose()
 
 
 # ---------------------------------------------------------------------------
@@ -277,7 +279,7 @@ async def migrate(
     qdrant_url: str,
     qdrant_api_key: str | None,
     strategy: str,
-    db_path: str,
+    database_dsn: str | None,
     batch_size: int,
     dry_run: bool,
 ) -> int:
@@ -329,49 +331,53 @@ async def migrate(
         },
     )
 
-    effective_strategy = strategy
-    if strategy == "auto":
-        try:
-            collections = await _chroma_list_collections(chroma_host, chroma_auth)
-            collection_names = [c.get("name", "") for c in collections]
-            if collection_name in collection_names:
-                collection_info = await _chroma_get_collection(
-                    chroma_host, collection_name, chroma_auth
-                )
-                chroma_count = (
-                    collection_info.get("metadata", {}).get("count", 0) if collection_info else 0
-                )
-                effective_strategy = "export" if chroma_count > 0 else "reembed"
-            else:
+    try:
+        effective_strategy = strategy
+        if strategy == "auto":
+            try:
+                collections = await _chroma_list_collections(chroma_host, chroma_auth)
+                collection_names = [c.get("name", "") for c in collections]
+                if collection_name in collection_names:
+                    collection_info = await _chroma_get_collection(
+                        chroma_host, collection_name, chroma_auth
+                    )
+                    chroma_count = (
+                        collection_info.get("metadata", {}).get("count", 0)
+                        if collection_info
+                        else 0
+                    )
+                    effective_strategy = "export" if chroma_count > 0 else "reembed"
+                else:
+                    effective_strategy = "reembed"
+            except Exception:
+                logger.warning("vector_migration_chroma_probe_failed", exc_info=True)
                 effective_strategy = "reembed"
-        except Exception:
-            logger.warning("vector_migration_chroma_probe_failed", exc_info=True)
-            effective_strategy = "reembed"
-        logger.info(
-            "vector_migration_strategy_resolved",
-            extra={"strategy": effective_strategy},
-        )
+            logger.info(
+                "vector_migration_strategy_resolved",
+                extra={"strategy": effective_strategy},
+            )
 
-    if effective_strategy == "export":
-        count = await _export_from_chroma(
-            chroma_host, chroma_auth, vector_store, collection_name, batch_size, dry_run
-        )
-        logger.info("vector_migration_export_done", extra={"points_migrated": count})
-    else:
-        count = await _reembed_from_sqlite(
-            db_path, vector_store, resolved_qdrant_cfg, app_cfg, batch_size, dry_run
-        )
-        logger.info("vector_migration_reembed_done", extra={"points_written": count})
+        if effective_strategy == "export":
+            count = await _export_from_chroma(
+                chroma_host, chroma_auth, vector_store, collection_name, batch_size, dry_run
+            )
+            logger.info("vector_migration_export_done", extra={"points_migrated": count})
+        else:
+            count = await _reembed_from_postgres(
+                database_dsn, vector_store, resolved_qdrant_cfg, batch_size, dry_run
+            )
+            logger.info("vector_migration_reembed_done", extra={"points_written": count})
 
-    if not dry_run:
-        ok = await _verify_migration(db_path, vector_store, app_cfg)
-        if not ok:
-            logger.error("vector_migration_verification_failed")
-            return 1
-        logger.info("vector_migration_verification_passed")
+        if not dry_run:
+            ok = await _verify_migration(database_dsn, vector_store, app_cfg)
+            if not ok:
+                logger.error("vector_migration_verification_failed")
+                return 1
+            logger.info("vector_migration_verification_passed")
 
-    vector_store.close()
-    return 0
+        return 0
+    finally:
+        vector_store.close()
 
 
 def main() -> int:
@@ -380,7 +386,7 @@ def main() -> int:
     qdrant_url = _QDRANT_DEFAULT
     qdrant_api_key = None
     strategy = "auto"
-    db_path = "/data/ratatoskr.db"
+    database_dsn = None
     batch_size = 50
     dry_run = False
 
@@ -399,8 +405,11 @@ def main() -> int:
             if strategy not in ("auto", "export", "reembed"):
                 print(f"Invalid strategy: {strategy!r}. Must be auto, export, or reembed.")
                 return 1
+        elif arg.startswith("--dsn="):
+            database_dsn = arg.split("=", 1)[1]
         elif arg.startswith("--db="):
-            db_path = arg.split("=", 1)[1]
+            logger.error("--db is no longer supported; set DATABASE_URL or use --dsn=DSN")
+            return 1
         elif arg.startswith("--batch-size="):
             try:
                 batch_size = int(arg.split("=", 1)[1])
@@ -418,7 +427,7 @@ def main() -> int:
             print(f"  --qdrant-url=URL     Qdrant base URL (default: {_QDRANT_DEFAULT})")
             print("  --qdrant-api-key=KEY Qdrant API key (optional)")
             print("  --strategy=STRATEGY  Migration strategy: auto|export|reembed (default: auto)")
-            print("  --db=PATH            SQLite database path (default: /data/ratatoskr.db)")
+            print("  --dsn=DSN            PostgreSQL DSN (default: DATABASE_URL)")
             print("  --batch-size=N       Points per batch (default: 50)")
             print("  --dry-run            Simulate without writing to Qdrant")
             print("  --help, -h           Show this help message")
@@ -432,7 +441,7 @@ def main() -> int:
                 qdrant_url=qdrant_url,
                 qdrant_api_key=qdrant_api_key,
                 strategy=strategy,
-                db_path=db_path,
+                database_dsn=database_dsn,
                 batch_size=batch_size,
                 dry_run=dry_run,
             )

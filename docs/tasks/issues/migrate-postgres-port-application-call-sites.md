@@ -160,3 +160,8 @@ the most-ported repository are easiest to land first.
   `DATABASE_URL` or `--dsn`.
 - Verified this CLI slice with focused ruff, focused mypy, and
   `pytest tests/cli/test_signal_eval.py` → `5 passed`.
+- Ported `app/cli/migrate_vector_store.py` reembed and verification paths from
+  SQLite/Peewee reads to PostgreSQL `Database` sessions and the shared
+  `--dsn`/`DATABASE_URL` option contract.
+- Verified this CLI slice with focused ruff, focused mypy, and
+  `pytest tests/cli/test_migrate_vector_store.py` → `2 passed`.
