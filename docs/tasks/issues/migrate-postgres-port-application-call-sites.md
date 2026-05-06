@@ -145,3 +145,8 @@ the most-ported repository are easiest to land first.
 - Verified this CLI slice with focused ruff, focused mypy, and
   `pytest tests/cli/test_search_cli_module.py tests/cli/test_search_compare_cli_module.py`
   → `7 passed`.
+- Ported `app/cli/backfill_vector_store.py` from Peewee summary scans and
+  SQLite `--db` paths to async SQLAlchemy summary reads through `Database`
+  built from `DATABASE_URL` or `--dsn`.
+- Verified this CLI slice with focused ruff, focused mypy, and
+  `pytest tests/cli/test_backfill_vector_store.py` → `2 passed`.

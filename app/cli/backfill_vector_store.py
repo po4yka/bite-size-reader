@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from pathlib import Path
 from typing import Any
 
+from sqlalchemy import select
+
 from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
-from app.config import QdrantConfig, load_config
+from app.config import DatabaseConfig, QdrantConfig, load_config
 from app.core.embedding_space import resolve_embedding_space_identifier
 from app.core.logging_utils import get_logger
-from app.db.session import DatabaseSessionManager
+from app.db.models import Request, Summary, model_to_dict
+from app.db.session import Database
 from app.infrastructure.embedding.embedding_factory import create_embedding_service
-from app.infrastructure.persistence.sqlite.orm_exports import Request, Summary, model_to_dict
 from app.infrastructure.persistence.sqlite.repositories.embedding_repository import (
     SqliteEmbeddingRepositoryAdapter,
 )
@@ -29,27 +30,29 @@ from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 logger = get_logger(__name__)
 
 
-def _fetch_summaries(db: DatabaseSessionManager, limit: int | None) -> list[dict[str, Any]]:
-    def _query() -> list[dict[str, Any]]:
-        query = Summary.select(Summary, Request).join(Request).order_by(Summary.created_at.desc())
+async def _fetch_summaries(db: Database, limit: int | None) -> list[dict[str, Any]]:
+    async with db.session() as session:
+        query = (
+            select(Summary, Request)
+            .join(Request, Summary.request_id == Request.id)
+            .order_by(Summary.created_at.desc())
+        )
         if limit:
             query = query.limit(limit)
 
         results = []
-        for row in query:
-            item = model_to_dict(row)
+        rows = await session.execute(query)
+        for summary, request in rows:
+            item = model_to_dict(summary)
             if item:
-                item["request_id"] = row.request.id
-                item["request"] = model_to_dict(row.request)
+                item["request_id"] = request.id
+                item["request"] = model_to_dict(request)
                 results.append(item)
         return results
 
-    with db.database.connection_context():
-        return _query()
-
 
 async def backfill_vector_store(
-    db_path: str,
+    database_dsn: str | None,
     qdrant_cfg: QdrantConfig,
     *,
     limit: int | None = None,
@@ -59,136 +62,76 @@ async def backfill_vector_store(
 ) -> None:
     logger.info(
         "vector_backfill_start",
-        extra={"db_path": db_path, "limit": limit, "dry_run": dry_run},
+        extra={"explicit_dsn": database_dsn is not None, "limit": limit, "dry_run": dry_run},
     )
 
     app_cfg = load_config(allow_stub_telegram=True)
-    db = DatabaseSessionManager(path=db_path)
-    embedding_repo = SqliteEmbeddingRepositoryAdapter(db)
-    embedding_service = create_embedding_service(app_cfg.embedding)
-    generator = SummaryEmbeddingGenerator(
-        embedding_repository=embedding_repo,
-        request_repository=SqliteRequestRepositoryAdapter(db),
-        summary_repository=SqliteSummaryRepositoryAdapter(db),
-        embedding_service=embedding_service,
-        max_token_length=app_cfg.embedding.max_token_length,
-    )
-
-    summaries = _fetch_summaries(db, limit)
-    logger.info("vector_backfill_summaries_found", extra={"count": len(summaries)})
-
-    vector_store = QdrantVectorStore(
-        url=qdrant_cfg.url,
-        api_key=qdrant_cfg.api_key,
-        environment=qdrant_cfg.environment,
-        user_scope=qdrant_cfg.user_scope,
-        collection_version=qdrant_cfg.collection_version,
-        embedding_space=resolve_embedding_space_identifier(app_cfg.embedding),
-        embedding_dim=app_cfg.embedding.embedding_dim,
-        required=qdrant_cfg.required,
-        connection_timeout=qdrant_cfg.connection_timeout,
-    )
-
-    processed = 0
-    deleted = 0
-    skipped = 0
-    pending_requests: list[tuple[int, list[list[float]], list[dict[str, Any]]]] = []
-    pending_vector_count = 0
-
-    def flush_pending() -> None:
-        nonlocal pending_vector_count
-        if dry_run:
-            logger.info(
-                "vector_backfill_dry_run_flush",
-                extra={"pending_requests": len(pending_requests)},
-            )
-            pending_requests.clear()
-            pending_vector_count = 0
-            return
-        for pending_request_id, request_vectors, request_metadata in pending_requests:
-            vector_store.replace_request_notes(
-                pending_request_id,
-                request_vectors,
-                request_metadata,
-            )
-        pending_requests.clear()
-        pending_vector_count = 0
-
-    for summary in summaries:
-        summary_id = summary.get("id")
-        request_id = summary.get("request_id")
-        request_row = summary.get("request") if isinstance(summary.get("request"), dict) else {}
-        user_id = request_row.get("user_id") if isinstance(request_row, dict) else None
-        payload = summary.get("json_payload")
-        language = summary.get("lang")
-
-        if not summary_id or not request_id:
-            continue
-
-        if not payload:
-            logger.info(
-                "vector_backfill_delete_empty_payload",
-                extra={"request_id": request_id, "summary_id": summary_id},
-            )
-            if not dry_run:
-                vector_store.delete_by_request_id(request_id)
-            deleted += 1
-            continue
-
-        existing = await embedding_repo.async_get_summary_embedding(summary_id)
-        if not existing or force:
-            await generator.generate_embedding_for_summary(
-                summary_id=summary_id,
-                payload=payload,
-                language=language,
-                force=force,
-            )
-            existing = await embedding_repo.async_get_summary_embedding(summary_id)
-
-        if not existing:
-            logger.warning(
-                "vector_backfill_no_embedding",
-                extra={"summary_id": summary_id},
-            )
-            skipped += 1
-            continue
-
-        chunk_windows = MetadataBuilder.prepare_chunk_windows_for_upsert(
-            request_id=request_id,
-            summary_id=summary_id,
-            payload=payload,
-            language=language,
-            user_scope=qdrant_cfg.user_scope,
-            environment=qdrant_cfg.environment,
-            user_id=user_id,
+    db = Database(config=DatabaseConfig(dsn=database_dsn) if database_dsn else DatabaseConfig())
+    try:
+        embedding_repo = SqliteEmbeddingRepositoryAdapter(db)
+        embedding_service = create_embedding_service(app_cfg.embedding)
+        generator = SummaryEmbeddingGenerator(
+            embedding_repository=embedding_repo,
+            request_repository=SqliteRequestRepositoryAdapter(db),
+            summary_repository=SqliteSummaryRepositoryAdapter(db),
+            embedding_service=embedding_service,
+            max_token_length=app_cfg.embedding.max_token_length,
         )
 
-        request_vectors: list[list[float]] = []
-        request_metadata: list[dict[str, Any]] = []
+        summaries = await _fetch_summaries(db, limit)
+        logger.info("vector_backfill_summaries_found", extra={"count": len(summaries)})
 
-        if chunk_windows:
-            for text, metadata in chunk_windows:
-                embedding = await embedding_service.generate_embedding(
-                    text, language=metadata.get("language"), task_type="document"
-                )
-                vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
-                request_vectors.append(vector)
-                request_metadata.append(metadata)
-        else:
-            text, metadata = MetadataBuilder.prepare_for_upsert(
-                request_id=request_id,
-                summary_id=summary_id,
-                payload=payload,
-                language=language,
-                user_scope=qdrant_cfg.user_scope,
-                environment=qdrant_cfg.environment,
-                user_id=user_id,
-                summary_row=summary,
-            )
+        vector_store = QdrantVectorStore(
+            url=qdrant_cfg.url,
+            api_key=qdrant_cfg.api_key,
+            environment=qdrant_cfg.environment,
+            user_scope=qdrant_cfg.user_scope,
+            collection_version=qdrant_cfg.collection_version,
+            embedding_space=resolve_embedding_space_identifier(app_cfg.embedding),
+            embedding_dim=app_cfg.embedding.embedding_dim,
+            required=qdrant_cfg.required,
+            connection_timeout=qdrant_cfg.connection_timeout,
+        )
 
-            if not text:
+        processed = 0
+        deleted = 0
+        skipped = 0
+        pending_requests: list[tuple[int, list[list[float]], list[dict[str, Any]]]] = []
+        pending_vector_count = 0
+
+        def flush_pending() -> None:
+            nonlocal pending_vector_count
+            if dry_run:
                 logger.info(
-                    "vector_backfill_delete_empty_text",
+                    "vector_backfill_dry_run_flush",
+                    extra={"pending_requests": len(pending_requests)},
+                )
+                pending_requests.clear()
+                pending_vector_count = 0
+                return
+            for pending_request_id, request_vectors, request_metadata in pending_requests:
+                vector_store.replace_request_notes(
+                    pending_request_id,
+                    request_vectors,
+                    request_metadata,
+                )
+            pending_requests.clear()
+            pending_vector_count = 0
+
+        for summary in summaries:
+            summary_id = summary.get("id")
+            request_id = summary.get("request_id")
+            request_row = summary.get("request") if isinstance(summary.get("request"), dict) else {}
+            user_id = request_row.get("user_id") if isinstance(request_row, dict) else None
+            payload = summary.get("json_payload")
+            language = summary.get("lang")
+
+            if not summary_id or not request_id:
+                continue
+
+            if not payload:
+                logger.info(
+                    "vector_backfill_delete_empty_payload",
                     extra={"request_id": request_id, "summary_id": summary_id},
                 )
                 if not dry_run:
@@ -196,36 +139,99 @@ async def backfill_vector_store(
                 deleted += 1
                 continue
 
-            embedding = embedding_service.deserialize_embedding(existing["embedding_blob"])
-            vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+            existing = await embedding_repo.async_get_summary_embedding(summary_id)
+            if not existing or force:
+                await generator.generate_embedding_for_summary(
+                    summary_id=summary_id,
+                    payload=payload,
+                    language=language,
+                    force=force,
+                )
+                existing = await embedding_repo.async_get_summary_embedding(summary_id)
 
-            request_vectors.append(vector)
-            request_metadata.append(metadata)
+            if not existing:
+                logger.warning(
+                    "vector_backfill_no_embedding",
+                    extra={"summary_id": summary_id},
+                )
+                skipped += 1
+                continue
 
-        if not request_vectors:
-            logger.info(
-                "vector_backfill_delete_empty_vectors",
-                extra={"request_id": request_id, "summary_id": summary_id},
+            chunk_windows = MetadataBuilder.prepare_chunk_windows_for_upsert(
+                request_id=request_id,
+                summary_id=summary_id,
+                payload=payload,
+                language=language,
+                user_scope=qdrant_cfg.user_scope,
+                environment=qdrant_cfg.environment,
+                user_id=user_id,
             )
-            if not dry_run:
-                vector_store.delete_by_request_id(request_id)
-            deleted += 1
-            continue
 
-        pending_requests.append((request_id, request_vectors, request_metadata))
-        pending_vector_count += len(request_vectors)
-        processed += len(request_vectors)
+            request_vectors: list[list[float]] = []
+            request_metadata: list[dict[str, Any]] = []
 
-        if pending_vector_count >= batch_size:
+            if chunk_windows:
+                for text, metadata in chunk_windows:
+                    embedding = await embedding_service.generate_embedding(
+                        text, language=metadata.get("language"), task_type="document"
+                    )
+                    vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+                    request_vectors.append(vector)
+                    request_metadata.append(metadata)
+            else:
+                text, metadata = MetadataBuilder.prepare_for_upsert(
+                    request_id=request_id,
+                    summary_id=summary_id,
+                    payload=payload,
+                    language=language,
+                    user_scope=qdrant_cfg.user_scope,
+                    environment=qdrant_cfg.environment,
+                    user_id=user_id,
+                    summary_row=summary,
+                )
+
+                if not text:
+                    logger.info(
+                        "vector_backfill_delete_empty_text",
+                        extra={"request_id": request_id, "summary_id": summary_id},
+                    )
+                    if not dry_run:
+                        vector_store.delete_by_request_id(request_id)
+                    deleted += 1
+                    continue
+
+                embedding = embedding_service.deserialize_embedding(existing["embedding_blob"])
+                vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+
+                request_vectors.append(vector)
+                request_metadata.append(metadata)
+
+            if not request_vectors:
+                logger.info(
+                    "vector_backfill_delete_empty_vectors",
+                    extra={"request_id": request_id, "summary_id": summary_id},
+                )
+                if not dry_run:
+                    vector_store.delete_by_request_id(request_id)
+                deleted += 1
+                continue
+
+            pending_requests.append((request_id, request_vectors, request_metadata))
+            pending_vector_count += len(request_vectors)
+            processed += len(request_vectors)
+
+            if pending_vector_count >= batch_size:
+                flush_pending()
+
+        if pending_requests:
             flush_pending()
 
-    if pending_requests:
-        flush_pending()
-
-    logger.info(
-        "vector_backfill_complete",
-        extra={"processed": processed, "deleted": deleted, "skipped": skipped},
-    )
+        logger.info(
+            "vector_backfill_complete",
+            extra={"processed": processed, "deleted": deleted, "skipped": skipped},
+        )
+    finally:
+        await db.dispose()
 
 
 def _load_qdrant_config(
@@ -249,7 +255,7 @@ def _load_qdrant_config(
 
 
 def main() -> int:
-    db_path = "/data/ratatoskr.db"
+    database_dsn = None
     qdrant_url = None
     qdrant_api_key = None
     qdrant_env = None
@@ -262,8 +268,11 @@ def main() -> int:
 
     args = sys.argv[1:]
     for arg in args:
-        if arg.startswith("--db="):
-            db_path = arg.split("=", 1)[1]
+        if arg.startswith("--dsn="):
+            database_dsn = arg.split("=", 1)[1]
+        elif arg.startswith("--db="):
+            logger.error("--db is no longer supported; set DATABASE_URL or use --dsn=DSN")
+            return 1
         elif arg.startswith("--qdrant-url="):
             qdrant_url = arg.split("=", 1)[1]
         elif arg.startswith("--qdrant-api-key="):
@@ -294,7 +303,7 @@ def main() -> int:
             print("Usage: python -m app.cli.backfill_vector_store [OPTIONS]")
             print()
             print("Options:")
-            print("  --db=PATH               Database path (default: /data/ratatoskr.db)")
+            print("  --dsn=DSN               PostgreSQL DSN (default: DATABASE_URL)")
             print("  --qdrant-url=URL        Qdrant URL (default from config)")
             print("  --qdrant-api-key=KEY    Qdrant API key (default from config)")
             print("  --qdrant-env=NAME       Environment namespace for the collection")
@@ -306,10 +315,6 @@ def main() -> int:
             print("  --batch-size=N          Number of vectors per upsert batch (default: 50)")
             print("  --help, -h              Show this help message")
             return 0
-
-    if db_path != ":memory:" and not Path(db_path).exists():
-        logger.error("Database file not found: %s", db_path)
-        return 1
 
     try:
         qdrant_cfg = _load_qdrant_config(
@@ -326,7 +331,7 @@ def main() -> int:
     try:
         asyncio.run(
             backfill_vector_store(
-                db_path=db_path,
+                database_dsn=database_dsn,
                 qdrant_cfg=qdrant_cfg,
                 limit=limit,
                 force=force,
