@@ -98,3 +98,15 @@ def upgrade_to_head(dsn: str) -> None:
   the canonical async-Alembic approach in SQLAlchemy 2.0.
 - Verify on aarch64 in CI; asyncpg's binary protocol behaviour can differ from
   psycopg's.
+
+## Progress
+
+- Reduced `app/db/alembic_runner.py` to a PostgreSQL-only Alembic wrapper with
+  `_build_alembic_config`, `upgrade_to_head`, and `print_status`; removed
+  SQLite stamping, `sqlite_master`, and `migration_history` cohabitation.
+- Updated `app/cli/migrate_db.py` to resolve `DATABASE_URL` / positional
+  PostgreSQL DSNs instead of `DB_PATH` / SQLite file paths.
+- Verified this slice with focused ruff, focused mypy, an Alembic config smoke
+  check, and live Postgres CLI commands:
+  `DATABASE_URL=postgresql+asyncpg://... python -m app.cli.migrate_db` then
+  `python -m app.cli.migrate_db --status` → current revision `0001 (head)`.

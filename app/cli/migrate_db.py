@@ -1,18 +1,16 @@
 """Database migration CLI tool.
 
-Runs Alembic migrations to bring the schema up to date.  Existing databases
-that still have the legacy migration_history table are automatically stamped
-to the Alembic head revision so historical migrations are not re-applied.
+Runs Alembic migrations to bring the PostgreSQL schema up to date.
 
 Usage:
     # Run all pending migrations
     python -m app.cli.migrate_db
 
-    # Specify database path
-    python -m app.cli.migrate_db /path/to/db.sqlite
+    # Specify database URL
+    python -m app.cli.migrate_db postgresql+asyncpg://user:pass@host:5432/db
 
     # Show current revision and pending migrations
-    python -m app.cli.migrate_db --status [/path/to/db.sqlite]
+    python -m app.cli.migrate_db --status [DATABASE_URL]
 
     # Use the Alembic CLI directly for full control:
     alembic upgrade head
@@ -33,16 +31,16 @@ from app.db.alembic_runner import print_status, upgrade_to_head
 logger = logging.getLogger(__name__)
 
 
-def _resolve_db_path(args: list[str]) -> str:
+def _resolve_dsn(args: list[str]) -> str:
     positional = [arg for arg in args if not arg.startswith("-")]
-    return positional[0] if positional else os.getenv("DB_PATH", "/data/ratatoskr.db")
+    return positional[0] if positional else os.getenv("DATABASE_URL", "")
 
 
 def main() -> int:
     """Main entry point."""
     args = sys.argv[1:]
     show_status = "--status" in args
-    db_path = _resolve_db_path(args)
+    dsn = _resolve_dsn(args)
 
     logging.basicConfig(
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -51,11 +49,11 @@ def main() -> int:
 
     try:
         if show_status:
-            print_status(db_path)
+            print_status(dsn or None)
             return 0
 
         logger.info("Running database migrations via Alembic...")
-        upgrade_to_head(db_path)
+        upgrade_to_head(dsn or None)
         logger.info("Database migration completed successfully")
         return 0
 
