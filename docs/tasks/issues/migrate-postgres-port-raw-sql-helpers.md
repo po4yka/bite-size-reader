@@ -50,7 +50,7 @@ From the F1 audit, callers include:
 - [ ] All non-Telethon raw SQL/PRAGMA callers either:
   - replaced with `await connection.execute(text(...))` or `inspector.*` calls,
   - or deleted because the surrounding module is gone.
-- [ ] Compose healthchecks use `python -m app.cli.healthcheck` against the
+- [x] Compose healthchecks use `python -m app.cli.healthcheck` against the
       configured `DATABASE_URL`. The script exits non-zero on any error.
 - [ ] Telethon SQLite carve-out documented in `docs/SPEC.md` and the F1 audit.
 - [ ] `git grep -nE "execute_sql|sqlite_master|PRAGMA " app/` returns only
@@ -83,3 +83,5 @@ SQLAlchemy Alembic baseline (M4), so deletion is the right move.
 - Removed the deprecated CLI command from `docs/reference/cli-commands.md`.
 - Deleted deprecated `app/cli/migrations/` scripts and their SQLite-only
   migration tests; the PostgreSQL Alembic baseline now owns live schema DDL.
+- Added `app.cli.healthcheck`, which opens the configured SQLAlchemy
+  PostgreSQL database and exits non-zero when `Database.healthcheck()` fails.
