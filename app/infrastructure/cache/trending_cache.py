@@ -11,12 +11,15 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import select
+
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.db.models import Request as RequestModel, Summary
 
 if TYPE_CHECKING:
     from app.config import AppConfig
+    from app.db.session import Database
     from app.infrastructure.cache.redis_cache import RedisCache
 
 logger = get_logger(__name__)
@@ -117,7 +120,14 @@ class _TrendingCacheManager:
             )
             return False
 
-    async def get_payload(self, user_id: int, *, limit: int, days: int) -> dict[str, Any]:
+    async def get_payload(
+        self,
+        user_id: int,
+        *,
+        limit: int,
+        days: int,
+        database: Database | None = None,
+    ) -> dict[str, Any]:
         """Return trending topics with per-user/param caching."""
         now = datetime.now(UTC)
 
@@ -135,11 +145,11 @@ class _TrendingCacheManager:
         previous_period_start = now - timedelta(days=days * 2)
         max_scan = min(TRENDING_MAX_SCAN, max(limit * 40, 400))
 
-        records = await asyncio.to_thread(
-            _fetch_trending_records,
+        records = await _fetch_trending_records(
             user_id,
             previous_period_start=previous_period_start,
             max_scan=max_scan,
+            database=database,
         )
 
         payload = _build_trending_payload(records, now=now, days=days, limit=limit)
@@ -191,28 +201,36 @@ def _normalize_tag(tag: Any) -> str | None:
     return text.lower()
 
 
-def _fetch_trending_records(
+async def _fetch_trending_records(
     user_id: int,
     *,
     previous_period_start: datetime,
     max_scan: int,
+    database: Database | None = None,
 ) -> list[tuple[datetime, list[str]]]:
     """Fetch recent summaries with tags for trending computation."""
+    if database is None:
+        from app.di.database import get_or_create_runtime_database_from_env
+
+        database = get_or_create_runtime_database_from_env(migrate=True)
+
     records: list[tuple[datetime, list[str]]] = []
+    async with database.session() as session:
+        rows = (
+            await session.execute(
+                select(Summary.json_payload, RequestModel.created_at)
+                .join(RequestModel, Summary.request_id == RequestModel.id)
+                .where(
+                    RequestModel.user_id == user_id,
+                    RequestModel.created_at >= previous_period_start,
+                )
+                .order_by(RequestModel.created_at.desc())
+                .limit(max_scan)
+            )
+        ).all()
 
-    query = (
-        Summary.select(Summary.json_payload, RequestModel.created_at)
-        .join(RequestModel)
-        .where(
-            (RequestModel.user_id == user_id) & (RequestModel.created_at >= previous_period_start)
-        )
-        .order_by(RequestModel.created_at.desc())
-        .limit(max_scan)
-    )
-
-    for row in query:
-        created_at = getattr(row.request, "created_at", None) or getattr(row, "created_at", None)
-        payload = row.json_payload or {}
+    for payload, created_at in rows:
+        payload = payload or {}
         topic_tags = payload.get("topic_tags") or []
         tag_list = topic_tags if isinstance(topic_tags, list) else []
         if created_at:
@@ -282,12 +300,18 @@ def _build_trending_payload(
     }
 
 
-async def get_trending_payload(user_id: int, *, limit: int, days: int) -> dict[str, Any]:
+async def get_trending_payload(
+    user_id: int,
+    *,
+    limit: int,
+    days: int,
+    database: Database | None = None,
+) -> dict[str, Any]:
     """Return trending topics with per-user/param caching.
 
     Uses Redis cache if available, falls back to in-memory cache otherwise.
     """
-    return await _cache_manager.get_payload(user_id, limit=limit, days=days)
+    return await _cache_manager.get_payload(user_id, limit=limit, days=days, database=database)
 
 
 def clear_trending_cache() -> None:

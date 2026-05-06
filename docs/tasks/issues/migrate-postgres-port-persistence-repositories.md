@@ -240,6 +240,13 @@ Conventions for the port:
 - Verified this slice with
   `pytest tests/infrastructure/test_push_notification_handler.py -q`
   → `2 passed`.
+- Ported `trending_cache.py` away from `asyncio.to_thread` + Peewee summary
+  scans by querying summaries through the async SQLAlchemy `Database` session
+  and wiring the API trending endpoint to the runtime session manager.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/test_trending_topics.py -q`
+  → `4 passed`; the expanded focused live suite including recent support
+  adapters and handlers passed with `10 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

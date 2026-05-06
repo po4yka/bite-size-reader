@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from app.api.dependencies.database import get_search_read_model_use_case
+from app.api.dependencies.database import get_search_read_model_use_case, get_session_manager
 from app.api.exceptions import ProcessingError
 from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
@@ -125,7 +125,12 @@ async def get_trending_topics(
     user: dict[str, Any] = Depends(get_current_user),
 ):
     """Get trending topic tags across recent summaries."""
-    payload = await get_trending_payload(user["user_id"], limit=limit, days=days)
+    payload = await get_trending_payload(
+        user["user_id"],
+        limit=limit,
+        days=days,
+        database=get_session_manager(),
+    )
     pagination = {
         "total": payload.get("total", limit),
         "limit": limit,
