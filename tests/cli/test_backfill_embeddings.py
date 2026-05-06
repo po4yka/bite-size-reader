@@ -25,7 +25,10 @@ async def test_backfill_embeddings_force_fetches_existing_embeddings(monkeypatch
             embedding=SimpleNamespace(provider="gemini", max_token_length=1024)
         ),
     )
-    monkeypatch.setattr(backfill_embeddings, "DatabaseSessionManager", lambda path: MagicMock())
+    fake_db = MagicMock()
+    fake_db.dispose = AsyncMock()
+    monkeypatch.setattr(backfill_embeddings, "DatabaseConfig", lambda dsn=None: MagicMock())
+    monkeypatch.setattr(backfill_embeddings, "Database", lambda config: fake_db)
     monkeypatch.setattr(backfill_embeddings, "create_embedding_service", lambda cfg: MagicMock())
     monkeypatch.setattr(
         backfill_embeddings,
@@ -33,7 +36,8 @@ async def test_backfill_embeddings_force_fetches_existing_embeddings(monkeypatch
         lambda **_kwargs: fake_generator,
     )
 
-    def fake_fetch(db, *, limit=None, force=False):
+    async def fake_fetch(db, *, limit=None, force=False):
+        assert db is fake_db
         fetch_calls.append({"limit": limit, "force": force})
         return [
             {
@@ -46,12 +50,30 @@ async def test_backfill_embeddings_force_fetches_existing_embeddings(monkeypatch
 
     monkeypatch.setattr(backfill_embeddings, "get_summaries_for_embedding_backfill", fake_fetch)
 
-    await backfill_embeddings.backfill_embeddings("/tmp/app.db", limit=5, force=True)
+    await backfill_embeddings.backfill_embeddings("postgresql+asyncpg://test", limit=5, force=True)
 
     assert fetch_calls == [{"limit": 5, "force": True}]
+    fake_db.dispose.assert_awaited_once()
     fake_generator.generate_embedding_for_summary.assert_awaited_once_with(
         summary_id=11,
         payload={"summary_250": "Summary text"},
         language="en",
         force=True,
     )
+
+
+def test_main_returns_zero_for_help(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(backfill_embeddings.sys, "argv", ["backfill_embeddings.py", "--help"])
+
+    assert backfill_embeddings.main() == 0
+    assert "--dsn=DSN" in capsys.readouterr().out
+
+
+def test_main_rejects_legacy_db_option(monkeypatch) -> None:
+    monkeypatch.setattr(
+        backfill_embeddings.sys,
+        "argv",
+        ["backfill_embeddings.py", "--db=/tmp/ratatoskr.db"],
+    )
+
+    assert backfill_embeddings.main() == 1

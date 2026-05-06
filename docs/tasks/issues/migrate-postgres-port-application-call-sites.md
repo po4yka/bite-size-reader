@@ -150,3 +150,8 @@ the most-ported repository are easiest to land first.
   built from `DATABASE_URL` or `--dsn`.
 - Verified this CLI slice with focused ruff, focused mypy, and
   `pytest tests/cli/test_backfill_vector_store.py` → `2 passed`.
+- Ported `app/cli/backfill_embeddings.py` from Peewee left-join scans and
+  SQLite `--db` paths to async SQLAlchemy summary/embedding reads through
+  `Database` built from `DATABASE_URL` or `--dsn`.
+- Verified this CLI slice with focused ruff, focused mypy, and
+  `pytest tests/cli/test_backfill_embeddings.py` → `3 passed`.
