@@ -223,6 +223,12 @@ Conventions for the port:
 - Verified the expanded focused repository suite with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_sync_aux_read_adapter_postgres.py -q`
   → `58 passed`.
+- Ported rule support adapters `app/infrastructure/rules/context.py` and
+  `app/infrastructure/rules/collection_membership.py` to SQLAlchemy/AsyncSession
+  and removed the now-unused `sqlite/base.py` helper.
+- Verified the expanded focused repository suite with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_rule_support_adapters_postgres.py -q`
+  → `60 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
-import peewee
+from typing import TYPE_CHECKING
+
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert
 
 from app.db.models import Collection, CollectionItem
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
-class SqliteCollectionMembershipAdapter(SqliteBaseRepository):
+class SqliteCollectionMembershipAdapter:
     """Add and remove summaries from collections with ownership checks."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_add_summary(
         self,
@@ -18,21 +26,27 @@ class SqliteCollectionMembershipAdapter(SqliteBaseRepository):
         collection_id: int,
         summary_id: int,
     ) -> str:
-        def _add() -> str:
-            collection = Collection.get_or_none(
-                (Collection.id == collection_id)
-                & (Collection.user == user_id)
-                & (~Collection.is_deleted)
+        async with self._database.transaction() as session:
+            collection = await session.scalar(
+                select(Collection.id).where(
+                    Collection.id == collection_id,
+                    Collection.user_id == user_id,
+                    Collection.is_deleted.is_(False),
+                )
             )
             if collection is None:
                 return f"collection {collection_id} not found or not owned by user"
-            try:
-                CollectionItem.create(collection=collection_id, summary=summary_id)
-                return f"added to collection {collection_id}"
-            except peewee.IntegrityError:
+            inserted_id = await session.scalar(
+                insert(CollectionItem)
+                .values(collection_id=collection_id, summary_id=summary_id)
+                .on_conflict_do_nothing(
+                    index_elements=[CollectionItem.collection_id, CollectionItem.summary_id]
+                )
+                .returning(CollectionItem.id)
+            )
+            if inserted_id is None:
                 return f"already in collection {collection_id}"
-
-        return await self._execute(_add, operation_name="rule_add_collection_item")
+            return f"added to collection {collection_id}"
 
     async def async_remove_summary(
         self,
@@ -41,24 +55,24 @@ class SqliteCollectionMembershipAdapter(SqliteBaseRepository):
         collection_id: int,
         summary_id: int,
     ) -> str:
-        def _remove() -> str:
-            collection = Collection.get_or_none(
-                (Collection.id == collection_id)
-                & (Collection.user == user_id)
-                & (~Collection.is_deleted)
+        async with self._database.transaction() as session:
+            collection = await session.scalar(
+                select(Collection.id).where(
+                    Collection.id == collection_id,
+                    Collection.user_id == user_id,
+                    Collection.is_deleted.is_(False),
+                )
             )
             if collection is None:
                 return f"collection {collection_id} not found or not owned by user"
-            deleted = (
-                CollectionItem.delete()
+            deleted_id = await session.scalar(
+                delete(CollectionItem)
                 .where(
-                    (CollectionItem.collection == collection_id)
-                    & (CollectionItem.summary == summary_id)
+                    CollectionItem.collection_id == collection_id,
+                    CollectionItem.summary_id == summary_id,
                 )
-                .execute()
+                .returning(CollectionItem.id)
             )
-            if deleted:
+            if deleted_id is not None:
                 return f"removed from collection {collection_id}"
             return "not in collection"
-
-        return await self._execute(_remove, operation_name="rule_remove_collection_item")
