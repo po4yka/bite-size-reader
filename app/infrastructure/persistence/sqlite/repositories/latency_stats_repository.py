@@ -1,4 +1,4 @@
-"""SQLite repository for latency statistics.
+"""SQLAlchemy repository for latency statistics.
 
 This repository queries CrawlResult and LLMCall tables to compute
 P50/P95 latency statistics for adaptive timeout estimation.
@@ -9,13 +9,18 @@ from __future__ import annotations
 import datetime as _dt
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from sqlalchemy import func, select
 
 from app.core.call_status import CallStatus
 from app.core.time_utils import UTC
 from app.core.url_utils import extract_domain
 from app.db.models import CrawlResult, LLMCall, Request
 from app.domain.models.request import RequestStatus
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
 @dataclass(frozen=True)
@@ -67,8 +72,11 @@ def _compute_percentile(values: list[int], percentile: float) -> float | None:
 _extract_domain = extract_domain
 
 
-class SqliteLatencyStatsRepositoryAdapter(SqliteBaseRepository):
+class SqliteLatencyStatsRepositoryAdapter:
     """Repository for querying latency statistics from crawl results and LLM calls."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_get_domain_latency_stats(self, domain: str, days: int = 7) -> LatencyStats:
         """Get latency statistics for a specific domain.
@@ -84,51 +92,29 @@ class SqliteLatencyStatsRepositoryAdapter(SqliteBaseRepository):
             LatencyStats with P50/P95 and sample count
         """
 
-        def _get() -> LatencyStats:
-            cutoff = _dt.datetime.now(UTC) - _dt.timedelta(days=days)
-
-            # Query crawl results with latency data for matching domain
-            # Join with Request to filter by domain from normalized_url
-            query = (
-                CrawlResult.select(
-                    CrawlResult.latency_ms, CrawlResult.updated_at, Request.normalized_url
-                )
-                .join(Request)
+        cutoff = _dt.datetime.now(UTC) - _dt.timedelta(days=days)
+        async with self._database.session() as session:
+            rows = await session.execute(
+                select(CrawlResult.latency_ms, CrawlResult.updated_at, Request.normalized_url)
+                .join(Request, CrawlResult.request_id == Request.id)
                 .where(
-                    CrawlResult.latency_ms.is_null(False),
-                    CrawlResult.firecrawl_success == True,  # noqa: E712
+                    CrawlResult.latency_ms.is_not(None),
+                    CrawlResult.firecrawl_success.is_(True),
                     CrawlResult.updated_at >= cutoff,
                 )
             )
-
-            # Filter by domain in Python since SQLite lacks efficient domain extraction
             latencies: list[int] = []
             timestamps: list[_dt.datetime] = []
+            expected_domain = domain.lower()
 
-            for result in query:
-                url = result.request.normalized_url if hasattr(result, "request") else None
-                extracted = _extract_domain(url)
-                if extracted == domain.lower():
-                    latencies.append(result.latency_ms)
-                    if result.updated_at:
-                        timestamps.append(result.updated_at)
+            for latency_ms, updated_at, normalized_url in rows:
+                if _extract_domain(normalized_url) != expected_domain:
+                    continue
+                latencies.append(int(latency_ms))
+                if updated_at:
+                    timestamps.append(updated_at)
 
-            if not latencies:
-                return LatencyStats(
-                    p50_ms=None,
-                    p95_ms=None,
-                    sample_count=0,
-                )
-
-            return LatencyStats(
-                p50_ms=_compute_percentile(latencies, 0.5),
-                p95_ms=_compute_percentile(latencies, 0.95),
-                sample_count=len(latencies),
-                oldest_sample_ts=min(timestamps) if timestamps else None,
-                newest_sample_ts=max(timestamps) if timestamps else None,
-            )
-
-        return await self._execute(_get, operation_name="get_domain_latency_stats", read_only=True)
+        return _stats_from_samples(latencies, timestamps)
 
     async def async_get_model_latency_stats(self, model: str, days: int = 7) -> LatencyStats:
         """Get latency statistics for a specific LLM model.
@@ -144,40 +130,25 @@ class SqliteLatencyStatsRepositoryAdapter(SqliteBaseRepository):
             LatencyStats with P50/P95 and sample count
         """
 
-        def _get() -> LatencyStats:
-            cutoff = _dt.datetime.now(UTC) - _dt.timedelta(days=days)
-
-            query = LLMCall.select(LLMCall.latency_ms, LLMCall.created_at).where(
-                LLMCall.model == model,
-                LLMCall.latency_ms.is_null(False),
-                LLMCall.status == CallStatus.OK,
-                LLMCall.created_at >= cutoff,
+        cutoff = _dt.datetime.now(UTC) - _dt.timedelta(days=days)
+        async with self._database.session() as session:
+            rows = await session.execute(
+                select(LLMCall.latency_ms, LLMCall.created_at).where(
+                    LLMCall.model == model,
+                    LLMCall.latency_ms.is_not(None),
+                    LLMCall.status == CallStatus.OK.value,
+                    LLMCall.created_at >= cutoff,
+                )
             )
-
             latencies: list[int] = []
             timestamps: list[_dt.datetime] = []
 
-            for call in query:
-                latencies.append(call.latency_ms)
-                if call.created_at:
-                    timestamps.append(call.created_at)
+            for latency_ms, created_at in rows:
+                latencies.append(int(latency_ms))
+                if created_at:
+                    timestamps.append(created_at)
 
-            if not latencies:
-                return LatencyStats(
-                    p50_ms=None,
-                    p95_ms=None,
-                    sample_count=0,
-                )
-
-            return LatencyStats(
-                p50_ms=_compute_percentile(latencies, 0.5),
-                p95_ms=_compute_percentile(latencies, 0.95),
-                sample_count=len(latencies),
-                oldest_sample_ts=min(timestamps) if timestamps else None,
-                newest_sample_ts=max(timestamps) if timestamps else None,
-            )
-
-        return await self._execute(_get, operation_name="get_model_latency_stats", read_only=True)
+        return _stats_from_samples(latencies, timestamps)
 
     async def async_get_global_latency_stats(self, days: int = 7) -> LatencyStats:
         """Get global latency statistics across all domains and models.
@@ -192,52 +163,35 @@ class SqliteLatencyStatsRepositoryAdapter(SqliteBaseRepository):
             LatencyStats with P50/P95 and sample count
         """
 
-        def _get() -> LatencyStats:
-            cutoff = _dt.datetime.now(UTC) - _dt.timedelta(days=days)
-
-            # Collect latencies from successful crawl results
-            crawl_query = CrawlResult.select(CrawlResult.latency_ms, CrawlResult.updated_at).where(
-                CrawlResult.latency_ms.is_null(False),
-                CrawlResult.firecrawl_success == True,  # noqa: E712
-                CrawlResult.updated_at >= cutoff,
-            )
-
-            latencies: list[int] = []
-            timestamps: list[_dt.datetime] = []
-
-            for result in crawl_query:
-                latencies.append(result.latency_ms)
-                if result.updated_at:
-                    timestamps.append(result.updated_at)
-
-            # Also include LLM call latencies for comprehensive view
-            llm_query = LLMCall.select(LLMCall.latency_ms, LLMCall.created_at).where(
-                LLMCall.latency_ms.is_null(False),
-                LLMCall.status == CallStatus.OK,
-                LLMCall.created_at >= cutoff,
-            )
-
-            for call in llm_query:
-                latencies.append(call.latency_ms)
-                if call.created_at:
-                    timestamps.append(call.created_at)
-
-            if not latencies:
-                return LatencyStats(
-                    p50_ms=None,
-                    p95_ms=None,
-                    sample_count=0,
+        cutoff = _dt.datetime.now(UTC) - _dt.timedelta(days=days)
+        latencies: list[int] = []
+        timestamps: list[_dt.datetime] = []
+        async with self._database.session() as session:
+            crawl_rows = await session.execute(
+                select(CrawlResult.latency_ms, CrawlResult.updated_at).where(
+                    CrawlResult.latency_ms.is_not(None),
+                    CrawlResult.firecrawl_success.is_(True),
+                    CrawlResult.updated_at >= cutoff,
                 )
-
-            return LatencyStats(
-                p50_ms=_compute_percentile(latencies, 0.5),
-                p95_ms=_compute_percentile(latencies, 0.95),
-                sample_count=len(latencies),
-                oldest_sample_ts=min(timestamps) if timestamps else None,
-                newest_sample_ts=max(timestamps) if timestamps else None,
             )
+            for latency_ms, updated_at in crawl_rows:
+                latencies.append(int(latency_ms))
+                if updated_at:
+                    timestamps.append(updated_at)
 
-        return await self._execute(_get, operation_name="get_global_latency_stats", read_only=True)
+            llm_rows = await session.execute(
+                select(LLMCall.latency_ms, LLMCall.created_at).where(
+                    LLMCall.latency_ms.is_not(None),
+                    LLMCall.status == CallStatus.OK.value,
+                    LLMCall.created_at >= cutoff,
+                )
+            )
+            for latency_ms, created_at in llm_rows:
+                latencies.append(int(latency_ms))
+                if created_at:
+                    timestamps.append(created_at)
+
+        return _stats_from_samples(latencies, timestamps)
 
     async def async_get_combined_url_processing_stats(
         self, domain: str, days: int = 7
@@ -255,63 +209,47 @@ class SqliteLatencyStatsRepositoryAdapter(SqliteBaseRepository):
             LatencyStats for total URL processing time
         """
 
-        def _get() -> LatencyStats:
-            cutoff = _dt.datetime.now(UTC) - _dt.timedelta(days=days)
+        cutoff = _dt.datetime.now(UTC) - _dt.timedelta(days=days)
+        combined_latencies: list[int] = []
+        timestamps: list[_dt.datetime] = []
+        expected_domain = domain.lower()
 
-            # Query requests with both crawl and LLM data
-            requests_query = Request.select(
-                Request.id, Request.normalized_url, Request.updated_at
-            ).where(
-                Request.updated_at >= cutoff,
-                Request.status == RequestStatus.COMPLETED,
+        async with self._database.session() as session:
+            rows = await session.execute(
+                select(
+                    Request.id,
+                    Request.normalized_url,
+                    Request.updated_at,
+                    func.coalesce(func.max(CrawlResult.latency_ms), 0).label("crawl_ms"),
+                    func.coalesce(func.sum(LLMCall.latency_ms), 0).label("llm_ms"),
+                )
+                .outerjoin(
+                    CrawlResult,
+                    (CrawlResult.request_id == Request.id) & (CrawlResult.latency_ms.is_not(None)),
+                )
+                .outerjoin(
+                    LLMCall,
+                    (LLMCall.request_id == Request.id)
+                    & (LLMCall.latency_ms.is_not(None))
+                    & (LLMCall.status == CallStatus.OK.value),
+                )
+                .where(
+                    Request.updated_at >= cutoff,
+                    Request.status == RequestStatus.COMPLETED.value,
+                )
+                .group_by(Request.id, Request.normalized_url, Request.updated_at)
             )
-
-            combined_latencies: list[int] = []
-            timestamps: list[_dt.datetime] = []
-
-            for req in requests_query:
-                extracted = _extract_domain(req.normalized_url)
-                if extracted != domain.lower():
+            for _request_id, normalized_url, updated_at, crawl_ms, llm_ms in rows:
+                if _extract_domain(normalized_url) != expected_domain:
                     continue
+                total_ms = int(crawl_ms or 0) + int(llm_ms or 0)
+                if total_ms <= 0:
+                    continue
+                combined_latencies.append(total_ms)
+                if updated_at:
+                    timestamps.append(updated_at)
 
-                # Get crawl latency for this request
-                crawl = CrawlResult.get_or_none(
-                    CrawlResult.request == req.id,
-                    CrawlResult.latency_ms.is_null(False),
-                )
-                crawl_ms = crawl.latency_ms if crawl else 0
-
-                # Get total LLM latency for this request (may have multiple calls)
-                llm_calls = LLMCall.select(LLMCall.latency_ms).where(
-                    LLMCall.request == req.id,
-                    LLMCall.latency_ms.is_null(False),
-                    LLMCall.status == CallStatus.OK,
-                )
-                llm_ms = sum(call.latency_ms for call in llm_calls)
-
-                if crawl_ms > 0 or llm_ms > 0:
-                    combined_latencies.append(crawl_ms + llm_ms)
-                    if req.updated_at:
-                        timestamps.append(req.updated_at)
-
-            if not combined_latencies:
-                return LatencyStats(
-                    p50_ms=None,
-                    p95_ms=None,
-                    sample_count=0,
-                )
-
-            return LatencyStats(
-                p50_ms=_compute_percentile(combined_latencies, 0.5),
-                p95_ms=_compute_percentile(combined_latencies, 0.95),
-                sample_count=len(combined_latencies),
-                oldest_sample_ts=min(timestamps) if timestamps else None,
-                newest_sample_ts=max(timestamps) if timestamps else None,
-            )
-
-        return await self._execute(
-            _get, operation_name="get_combined_url_processing_stats", read_only=True
-        )
+        return _stats_from_samples(combined_latencies, timestamps)
 
     async def async_get_top_domains_by_latency(
         self, days: int = 7, limit: int = 20
@@ -329,44 +267,52 @@ class SqliteLatencyStatsRepositoryAdapter(SqliteBaseRepository):
             List of (domain, stats) tuples sorted by P95 descending
         """
 
-        def _get() -> list[tuple[str, LatencyStats]]:
-            cutoff = _dt.datetime.now(UTC) - _dt.timedelta(days=days)
-
-            # Collect latencies grouped by domain
-            query = (
-                CrawlResult.select(CrawlResult.latency_ms, Request.normalized_url)
-                .join(Request)
+        cutoff = _dt.datetime.now(UTC) - _dt.timedelta(days=days)
+        async with self._database.session() as session:
+            rows = await session.execute(
+                select(CrawlResult.latency_ms, Request.normalized_url)
+                .join(Request, CrawlResult.request_id == Request.id)
                 .where(
-                    CrawlResult.latency_ms.is_null(False),
-                    CrawlResult.firecrawl_success == True,  # noqa: E712
+                    CrawlResult.latency_ms.is_not(None),
+                    CrawlResult.firecrawl_success.is_(True),
                     CrawlResult.updated_at >= cutoff,
                 )
             )
-
             domain_latencies: dict[str, list[int]] = {}
-            for result in query:
-                url = result.request.normalized_url if hasattr(result, "request") else None
-                domain = _extract_domain(url)
+            for latency_ms, normalized_url in rows:
+                domain = _extract_domain(normalized_url)
                 if domain:
-                    if domain not in domain_latencies:
-                        domain_latencies[domain] = []
-                    domain_latencies[domain].append(result.latency_ms)
+                    domain_latencies.setdefault(domain, []).append(int(latency_ms))
 
-            # Compute stats for each domain
-            domain_stats: list[tuple[str, LatencyStats]] = []
-            for domain, latencies in domain_latencies.items():
-                if len(latencies) >= 3:  # Need at least 3 samples
-                    stats = LatencyStats(
-                        p50_ms=_compute_percentile(latencies, 0.5),
-                        p95_ms=_compute_percentile(latencies, 0.95),
-                        sample_count=len(latencies),
-                    )
-                    domain_stats.append((domain, stats))
+        domain_stats: list[tuple[str, LatencyStats]] = []
+        for domain, latencies in domain_latencies.items():
+            if len(latencies) >= 3:
+                stats = LatencyStats(
+                    p50_ms=_compute_percentile(latencies, 0.5),
+                    p95_ms=_compute_percentile(latencies, 0.95),
+                    sample_count=len(latencies),
+                )
+                domain_stats.append((domain, stats))
 
-            # Sort by P95 descending and take top N
-            domain_stats.sort(key=lambda x: x[1].p95_ms or 0, reverse=True)
-            return domain_stats[:limit]
+        domain_stats.sort(key=lambda x: x[1].p95_ms or 0, reverse=True)
+        return domain_stats[:limit]
 
-        return await self._execute(
-            _get, operation_name="get_top_domains_by_latency", read_only=True
+
+def _stats_from_samples(
+    latencies: list[int],
+    timestamps: list[_dt.datetime],
+) -> LatencyStats:
+    if not latencies:
+        return LatencyStats(
+            p50_ms=None,
+            p95_ms=None,
+            sample_count=0,
         )
+
+    return LatencyStats(
+        p50_ms=_compute_percentile(latencies, 0.5),
+        p95_ms=_compute_percentile(latencies, 0.95),
+        sample_count=len(latencies),
+        oldest_sample_ts=min(timestamps) if timestamps else None,
+        newest_sample_ts=max(timestamps) if timestamps else None,
+    )
