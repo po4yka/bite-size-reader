@@ -56,6 +56,7 @@ from app.db.models.rules import (
     WebhookSubscription,
 )
 from app.db.models.signal import SIGNAL_MODELS, FeedItem, Source, Subscription, Topic, UserSignal
+from app.db.models.topic_search import TOPIC_SEARCH_MODELS, TopicSearchIndex
 from app.db.models.user_content import (
     USER_CONTENT_MODELS,
     CustomDigest,
@@ -76,6 +77,7 @@ ALL_MODELS: tuple[type[Base], ...] = (
     *RSS_MODELS,
     *RULE_MODELS,
     *SIGNAL_MODELS,
+    *TOPIC_SEARCH_MODELS,
     *USER_CONTENT_MODELS,
 )
 
@@ -89,6 +91,7 @@ __all__ = [
     "RSS_MODELS",
     "RULE_MODELS",
     "SIGNAL_MODELS",
+    "TOPIC_SEARCH_MODELS",
     "USER_CONTENT_MODELS",
     "AggregationSession",
     "AggregationSessionItem",
@@ -133,6 +136,7 @@ __all__ = [
     "Tag",
     "TelegramMessage",
     "Topic",
+    "TopicSearchIndex",
     "User",
     "UserBackup",
     "UserDevice",

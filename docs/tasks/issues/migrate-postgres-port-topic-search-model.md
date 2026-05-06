@@ -1,19 +1,17 @@
 ---
 title: Port TopicSearchIndex to SQLAlchemy with TSVECTOR
-status: backlog
+status: review
 area: db
 priority: critical
 owner: Nikita Pochaev
 blocks:
   - migrate-postgres-baseline-alembic-revision
   - migrate-postgres-build-data-migrator
-blocked_by:
-  - migrate-postgres-port-models-core
 created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Port TopicSearchIndex to SQLAlchemy with TSVECTOR #repo/ratatoskr #area/db #status/backlog 🔺
+- [ ] #task Port TopicSearchIndex to SQLAlchemy with TSVECTOR #repo/ratatoskr #area/db #status/review 🔺
 
 ## Objective
 
@@ -79,20 +77,20 @@ Manager (`app/db/topic_search_manager.py`, replacing `topic_search_index.py`):
 
 ## Acceptance criteria
 
-- [ ] `app/db/models/topic_search.py` defines `TopicSearchIndex` per the structure
+- [x] `app/db/models/topic_search.py` defines `TopicSearchIndex` per the structure
       above; included in `ALL_MODELS`.
-- [ ] `app/db/topic_search_manager.py` exposes the same public API as today's
+- [x] `app/db/topic_search_manager.py` exposes the same public API as today's
       `TopicSearchIndexManager` (`ensure_index`, `refresh_index`,
       `find_request_ids`); callers in `app/application/services/topic_search_*` do
       not change.
-- [ ] `websearch_to_tsquery('simple', …)` is used (matches the FTS5
+- [x] `websearch_to_tsquery('simple', …)` is used (matches the FTS5
       `unicode61 remove_diacritics 2` semantics most closely; safe handling of
       user input).
 - [ ] Curated 10-query regression set in `tests/fixtures/topic_search_queries.json`
       (created in T3) returns ≥ 50% overlap with the SQLite result set on the
       same fixture data.
-- [ ] No `MATCH` or `bm25` strings remain anywhere in the new code.
-- [ ] Old `app/db/topic_search_index.py` is moved to
+- [x] No `MATCH` or `bm25` strings remain anywhere in the new code.
+- [x] Old `app/db/topic_search_index.py` is moved to
       `app/cli/_legacy_peewee_models/topic_search_index.py` (used by T2 read
       side), and its `TopicSearchIndexManager` class is renamed
       `LegacyTopicSearchIndexManager` to make confusion impossible.
@@ -104,3 +102,11 @@ Manager (`app/db/topic_search_manager.py`, replacing `topic_search_index.py`):
 - Generated columns require Postgres ≥ 12. Pinning to 16 (T1) is more than safe.
 - For per-row language switching (`'english'`/`'russian'`), file a follow-up; the
   `'simple'` tokenizer is correct for the migration.
+
+Progress:
+
+- Added the `TSVECTOR` generated-column model and async Postgres manager.
+- `tests/db/test_topic_search_manager.py` passed against a throwaway Postgres 16
+  container on 2026-05-06.
+- The curated SQLite/Postgres overlap fixture is still owned by T3; this task
+  includes the manager smoke coverage needed before M4.

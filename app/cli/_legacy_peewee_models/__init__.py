@@ -69,6 +69,7 @@ from app.cli._legacy_peewee_models._user_content import (
     Tag,
     UserGoal,
 )
+from app.cli._legacy_peewee_models.topic_search_index import LegacyTopicSearchIndexManager
 
 ALL_MODELS = (
     User,
@@ -155,6 +156,7 @@ __all__ = [
     "FeedItem",
     "ImportJob",
     "LLMCall",
+    "LegacyTopicSearchIndexManager",
     "RSSFeed",
     "RSSFeedItem",
     "RSSFeedSubscription",

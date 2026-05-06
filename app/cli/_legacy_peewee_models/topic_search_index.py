@@ -15,7 +15,7 @@ from app.application.services.topic_search_utils import (
     ensure_mapping,
     tokenize,
 )
-from app.db.models import Request, Summary, TopicSearchIndex
+from app.cli._legacy_peewee_models import Request, Summary, TopicSearchIndex
 
 if TYPE_CHECKING:
     import logging
@@ -25,7 +25,7 @@ class TopicSearchIndexRebuiltError(RuntimeError):
     """Raised to signal that the topic search index was rebuilt mid-operation."""
 
 
-class TopicSearchIndexManager:
+class LegacyTopicSearchIndexManager:
     """Manage the FTS topic search index lifecycle."""
 
     def __init__(self, database: peewee.SqliteDatabase, logger: logging.Logger) -> None:
