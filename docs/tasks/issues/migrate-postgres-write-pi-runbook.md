@@ -1,6 +1,6 @@
 ---
 title: Write Pi Postgres cutover runbook
-status: backlog
+status: doing
 area: ops
 priority: high
 owner: Nikita Pochaev
@@ -15,7 +15,7 @@ created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Write Pi Postgres cutover runbook #repo/ratatoskr #area/ops #status/backlog ⏫
+- [ ] #task Write Pi Postgres cutover runbook #repo/ratatoskr #area/ops #status/doing ⏫
 
 ## Objective
 
@@ -94,3 +94,21 @@ The image-revert path is the new wrinkle vs. a driver-only swap: rolling back
 the Peewee→SQLAlchemy port purely via env is impossible because the model code
 itself changed. Confirm during dry-run that `docker tag` + `docker compose up
 -d` on the Pi reverts cleanly with a stale image already present.
+
+## Progress
+
+- 2026-05-06: drafted `docs/runbooks/pi-postgres-cutover.md` covering all
+  11 sections from the spec (pre-flight → post-cutover + rollback) with
+  concrete commands, expected outputs, and "if this fails" branches.
+  Linked from `docs/SPEC.md` "Deployment and Operations" section.
+  Status flipped to `doing` because three operational acceptance items
+  remain open and require Pi/laptop time:
+  1. Two end-to-end laptop dry-runs (sections 1–10) against a Pi-DB
+     snapshot, with timings recorded in Appendix A.
+  2. One laptop rollback dry-run (section 11) with recovery time
+     recorded in Appendix A.
+  3. Maintenance-window estimate in the runbook front matter refined
+     from those dry-run timings (currently placeholder
+     "60 min nominal · 90 min with one-σ buffer").
+  These open gates are also enumerated in Appendix B of the runbook
+  itself so an operator picking it up later sees the same checklist.
