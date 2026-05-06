@@ -2,7 +2,7 @@
 
 > This page is a navigation index. All substantive content lives in the linked canonical pages.
 
-Async Telegram bot: accepts web article URLs, YouTube videos, and forwarded channel posts; summarizes via a multi-provider scraper chain and OpenRouter LLM; persists all artifacts in SQLite. Also exposes a FastAPI mobile API, a React web frontend, and an MCP server for external AI agents.
+Async Telegram bot: accepts web article URLs, YouTube videos, and forwarded channel posts; summarizes via a multi-provider scraper chain and OpenRouter LLM; persists relational artifacts in PostgreSQL. Also exposes a FastAPI mobile API, a React web frontend, and an MCP server for external AI agents.
 
 ---
 
@@ -16,9 +16,14 @@ Component diagram, request lifecycle, layered (hexagonal) view, goals, non-goals
 
 ## Data Model
 
-Complete SQLite schema reference: all core tables (users, requests, crawl_results, llm_calls, summaries, aggregation sessions, signal-scoring tables), indexes, relationships, ER diagram, common queries, database maintenance, migrations, mixed-source aggregation model, and URL normalization/deduplication rules.
+Complete PostgreSQL schema reference: all core tables (users, requests, crawl_results, llm_calls, summaries, aggregation sessions, signal-scoring tables), indexes, relationships, ER diagram, common queries, database maintenance, migrations, mixed-source aggregation model, and URL normalization/deduplication rules.
 
 → [Data Model Reference](reference/data-model.md)
+
+Telethon session files are the only intentional SQLite carve-out. They are
+client session stores owned by Telethon, validated by
+`app/adapters/digest/session_validator.py`, and are not part of Ratatoskr's
+relational store or PostgreSQL migration.
 
 ---
 

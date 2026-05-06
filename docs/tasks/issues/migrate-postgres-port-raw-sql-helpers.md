@@ -52,7 +52,7 @@ From the F1 audit, callers include:
   - or deleted because the surrounding module is gone.
 - [x] Compose healthchecks use `python -m app.cli.healthcheck` against the
       configured `DATABASE_URL`. The script exits non-zero on any error.
-- [ ] Telethon SQLite carve-out documented in `docs/SPEC.md` and the F1 audit.
+- [x] Telethon SQLite carve-out documented in `docs/SPEC.md` and the F1 audit.
 - [ ] `git grep -nE "execute_sql|sqlite_master|PRAGMA " app/` returns only
       Telethon-related hits and `app/cli/_legacy_peewee_models/`.
 - [ ] `make lint` / `make type` pass.
@@ -85,3 +85,5 @@ SQLAlchemy Alembic baseline (M4), so deletion is the right move.
   migration tests; the PostgreSQL Alembic baseline now owns live schema DDL.
 - Added `app.cli.healthcheck`, which opens the configured SQLAlchemy
   PostgreSQL database and exits non-zero when `Database.healthcheck()` fails.
+- Documented the Telethon `.session` SQLite carve-out in `docs/SPEC.md`; those
+  files are owned by Telethon and are outside Ratatoskr relational storage.
