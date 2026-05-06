@@ -161,7 +161,9 @@ async def test_feature_models_round_trip_against_postgres() -> None:
                 user_id=user.telegram_user_id,
                 role="owner",
             )
-            invite = CollectionInvite(collection_id=collection.id, token="invite-token", role="viewer")
+            invite = CollectionInvite(
+                collection_id=collection.id, token="invite-token", role="viewer"
+            )
             feedback = SummaryFeedback(
                 user_id=user.telegram_user_id,
                 summary_id=summary.id,
@@ -245,7 +247,9 @@ async def test_feature_models_round_trip_against_postgres() -> None:
                 external_id="feed-item-1",
                 legacy_rss_item_id=rss_item.id,
             )
-            session.add_all([channel_analysis, batch_item, aggregation_item, subscription, feed_item])
+            session.add_all(
+                [channel_analysis, batch_item, aggregation_item, subscription, feed_item]
+            )
             await session.flush()
 
             signal = UserSignal(
@@ -258,7 +262,9 @@ async def test_feature_models_round_trip_against_postgres() -> None:
             session.add_all([signal, item_delivery])
 
         async with database.session() as session:
-            stored_source = await session.scalar(select(Source).where(Source.external_id == "feed-1"))
+            stored_source = await session.scalar(
+                select(Source).where(Source.external_id == "feed-1")
+            )
             stored_webhook = await session.scalar(select(WebhookSubscription))
             stored_tag = await session.scalar(select(Tag).where(Tag.normalized_name == "ai"))
 
@@ -268,7 +274,7 @@ async def test_feature_models_round_trip_against_postgres() -> None:
         assert stored_webhook.events_json == ["summary.created"]
         assert stored_tag is not None
         assert stored_tag.name == "AI"
-        assert len(ALL_MODELS) == 52
+        assert len(ALL_MODELS) == 53
     finally:
         async with database.engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=list(reversed(_all_tables())))

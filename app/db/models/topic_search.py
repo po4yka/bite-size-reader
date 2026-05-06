@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Computed, Index, Text
+from sqlalchemy import Computed, ForeignKey, Index, Text
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,7 +15,11 @@ class TopicSearchIndex(Base):
     __tablename__ = "topic_search_index"
     __table_args__ = (Index("ix_topic_search_body_tsv", "body_tsv", postgresql_using="gin"),)
 
-    request_id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[int] = mapped_column(
+        ForeignKey("requests.id", ondelete="CASCADE"),
+        primary_key=True,
+        autoincrement=False,
+    )
     url: Mapped[str | None] = mapped_column(Text, nullable=True)
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     snippet: Mapped[str | None] = mapped_column(Text, nullable=True)

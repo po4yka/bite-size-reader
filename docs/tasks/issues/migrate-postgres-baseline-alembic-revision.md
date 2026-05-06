@@ -1,6 +1,6 @@
 ---
 title: Generate SQLAlchemy Alembic baseline revision
-status: backlog
+status: review
 area: db
 priority: high
 owner: Nikita Pochaev
@@ -15,7 +15,7 @@ created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Generate SQLAlchemy Alembic baseline revision #repo/ratatoskr #area/db #status/backlog ⏫
+- [ ] #task Generate SQLAlchemy Alembic baseline revision #repo/ratatoskr #area/db #status/review ⏫
 
 ## Objective
 
@@ -47,16 +47,16 @@ Steps for this task:
 
 ## Acceptance criteria
 
-- [ ] `app/db/alembic/versions/0001_baseline_sqlalchemy.py` exists, hand-reviewed
+- [x] `app/db/alembic/versions/0001_baseline_sqlalchemy.py` exists, hand-reviewed
       and committed.
-- [ ] Running `alembic upgrade head` against an empty Postgres creates the full
+- [x] Running `alembic upgrade head` against an empty Postgres creates the full
       schema (49+ tables) cleanly.
-- [ ] `app/db/alembic/versions/_legacy_sqlite/` exists and is excluded from
+- [x] `app/db/alembic/versions/_legacy_sqlite/` exists and is excluded from
       Alembic's `script_location` (set `version_locations` in `alembic.ini` to
       point only to the new location).
-- [ ] `Base.metadata.create_all()` is **not** used at runtime any more — Alembic
+- [x] `Base.metadata.create_all()` is **not** used at runtime any more — Alembic
       is the only schema authority on Postgres.
-- [ ] Test: drop the local Postgres DB, recreate empty, run `alembic upgrade
+- [x] Test: drop the local Postgres DB, recreate empty, run `alembic upgrade
       head`, run M1+M2+M3 fixture tests — all green.
 
 ## Notes
@@ -69,3 +69,17 @@ Steps for this task:
 - After this task, `app/db/alembic_runner.py`'s elaborate stamp-or-upgrade logic
   (designed to coexist with the legacy `migration_history` table) collapses to
   `command.upgrade(cfg, "head")` — that simplification lives in O5.
+
+## Review evidence
+
+- Generated baseline from `Base.metadata` with
+  `DATABASE_URL=postgresql+asyncpg://... alembic revision --autogenerate -m baseline_sqlalchemy --rev-id 0001`.
+- Hand-reviewed and adjusted `topic_search_index.request_id` to be a
+  non-autoincrement `requests.id` FK with `ON DELETE CASCADE`.
+- Verified `alembic history --verbose` exposes only revision `0001 (head)`;
+  legacy SQLite revisions live under `_legacy_sqlite/`.
+- Verified empty Postgres upgrade via T1 compose service:
+  drop `ratatoskr`, recreate it, run `alembic upgrade head`.
+- Verified M1/M2/M3 fixture tests after upgrade:
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/db/test_models_core.py tests/db/test_models_features.py tests/db/test_topic_search_manager.py -q`
+  → `4 passed`.
