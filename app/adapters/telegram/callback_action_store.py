@@ -7,12 +7,12 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import DigestStore
 from app.infrastructure.persistence.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
+    RequestRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
+    SummaryRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -35,9 +35,9 @@ class CallbackActionStore:
         summary_cache_ttl: float = 30.0,
         summary_cache_max: int = 50,
     ) -> None:
-        self._request_repo = SqliteRequestRepositoryAdapter(db)
-        self._summary_repo = SqliteSummaryRepositoryAdapter(db)
-        self._digest_store = SqliteDigestStore()
+        self._request_repo = RequestRepositoryAdapter(db)
+        self._summary_repo = SummaryRepositoryAdapter(db)
+        self._digest_store = DigestStore()
         self._asyncio = asyncio_module
         self._time = time_module
         self._summary_cache_ttl = summary_cache_ttl

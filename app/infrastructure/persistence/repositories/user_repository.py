@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteUserRepositoryAdapter:
+class UserRepositoryAdapter:
     """Adapter for user and interaction operations using SQLAlchemy."""
 
     def __init__(self, database: Database) -> None:

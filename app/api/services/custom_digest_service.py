@@ -9,7 +9,7 @@ from app.api.exceptions import ResourceNotFoundError, ValidationError
 from app.api.models.responses import CustomDigestResponse
 from app.api.search_helpers import isotime
 from app.infrastructure.persistence.repositories.user_content_repository import (
-    SqliteUserContentRepositoryAdapter,
+    UserContentRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -22,7 +22,7 @@ class CustomDigestService:
 
     def __init__(self, session_manager: Database | None = None) -> None:
         self._db = session_manager or get_session_manager()
-        self._user_content_repo = SqliteUserContentRepositoryAdapter(self._db)
+        self._user_content_repo = UserContentRepositoryAdapter(self._db)
 
     async def create_digest(
         self,

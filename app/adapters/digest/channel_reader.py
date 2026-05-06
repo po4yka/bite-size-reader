@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import DigestStore
 
 if TYPE_CHECKING:
     from app.config import AppConfig
@@ -21,7 +21,7 @@ class ChannelReader:
     def __init__(self, cfg: AppConfig, userbot: UserbotClient) -> None:
         self._cfg = cfg
         self._userbot = userbot
-        self._store = SqliteDigestStore()
+        self._store = DigestStore()
 
     async def fetch_posts_for_user(
         self, user_id: int, max_posts: int | None = None

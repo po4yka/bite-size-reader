@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteAdminReadRepositoryAdapter:
+class AdminReadRepositoryAdapter:
     """Read-side adapter for admin reporting queries."""
 
     def __init__(self, database: Database) -> None:

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteRuleContextAdapter:
+class RuleContextAdapter:
     """Build a rule evaluation context from event payloads and persisted records."""
 
     def __init__(self, database: Database) -> None:

@@ -14,7 +14,7 @@ from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.infrastructure.persistence.backup_archive_service import async_create_backup_archive
 from app.infrastructure.persistence.repositories.backup_repository import (
-    SqliteBackupRepositoryAdapter,
+    BackupRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -32,8 +32,8 @@ class BackupHandler(HandlerDependenciesMixin):
     """Handle /backup and /backups commands."""
 
     @property
-    def _backup_repo(self) -> SqliteBackupRepositoryAdapter:
-        return SqliteBackupRepositoryAdapter(self._db)
+    def _backup_repo(self) -> BackupRepositoryAdapter:
+        return BackupRepositoryAdapter(self._db)
 
     @combined_handler("command_backup", "backup")
     async def handle_backup(self, ctx: CommandExecutionContext) -> None:

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteBatchSessionRepositoryAdapter:
+class BatchSessionRepositoryAdapter:
     """Adapter for batch session persistence operations."""
 
     def __init__(self, database: Database) -> None:

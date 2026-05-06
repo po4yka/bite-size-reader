@@ -11,7 +11,7 @@ from app.config.database import DatabaseConfig
 from app.db.models import Request, Summary, SummaryTag, Tag, TopicSearchIndex, User
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.topic_search_repository import (
-    SqliteTopicSearchRepositoryAdapter,
+    TopicSearchRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -98,7 +98,7 @@ async def _create_summary(
 async def test_topic_search_repository_indexes_searches_and_paginates(
     database: Database,
 ) -> None:
-    repo = SqliteTopicSearchRepositoryAdapter(database)
+    repo = TopicSearchRepositoryAdapter(database)
     owner_request, _ = await _create_summary(
         database,
         user_id=8301,
@@ -143,7 +143,7 @@ async def test_topic_search_repository_indexes_searches_and_paginates(
 async def test_topic_search_repository_writes_refreshes_and_merges_tags(
     database: Database,
 ) -> None:
-    repo = SqliteTopicSearchRepositoryAdapter(database)
+    repo = TopicSearchRepositoryAdapter(database)
     request, summary = await _create_summary(
         database,
         user_id=8401,
@@ -189,7 +189,7 @@ async def test_topic_search_repository_writes_refreshes_and_merges_tags(
 
 @pytest.mark.asyncio
 async def test_topic_search_repository_scan_fallback(database: Database) -> None:
-    repo = SqliteTopicSearchRepositoryAdapter(database)
+    repo = TopicSearchRepositoryAdapter(database)
     request, _ = await _create_summary(
         database,
         user_id=8501,

@@ -10,7 +10,7 @@ from app.config.database import DatabaseConfig
 from app.db.models import BatchSession, BatchSessionItem, Request, Summary, User
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.batch_session_repository import (
-    SqliteBatchSessionRepositoryAdapter,
+    BatchSessionRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -79,7 +79,7 @@ async def test_batch_session_repository_crud_relationships_and_joined_read(
     database: Database,
 ) -> None:
     user_id, request_ids = await _seed_user_requests_and_summaries(database)
-    repo = SqliteBatchSessionRepositoryAdapter(database)
+    repo = BatchSessionRepositoryAdapter(database)
 
     session_id = await repo.async_create_batch_session(
         user_id=user_id,

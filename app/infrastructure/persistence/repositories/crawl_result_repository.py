@@ -14,7 +14,7 @@ from app.db.json_utils import prepare_json_payload
 from app.db.models import CrawlResult, Request, model_to_dict
 
 
-class SqliteCrawlResultRepositoryAdapter:
+class CrawlResultRepositoryAdapter:
     """Adapter that implements crawl-result persistence via SQLAlchemy."""
 
     def __init__(self, database: Database) -> None:

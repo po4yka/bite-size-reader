@@ -20,10 +20,10 @@ from app.db.user_interactions import (
 )
 from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
+    RequestRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
+    UserRepositoryAdapter,
 )
 from tests.conftest import make_test_app_config
 
@@ -59,7 +59,7 @@ def db(tmp_path) -> Generator[DatabaseSessionManager]:
 def test_message_router_logs_interaction(db: DatabaseSessionManager) -> None:
     cfg = _make_config()
     recorder = MessageInteractionRecorder(
-        user_repo=SqliteUserRepositoryAdapter(db),
+        user_repo=UserRepositoryAdapter(db),
         structured_output_enabled=cfg.openrouter.enable_structured_outputs,
     )
 
@@ -98,8 +98,8 @@ def test_message_router_logs_interaction(db: DatabaseSessionManager) -> None:
 
 
 def test_safe_update_user_interaction_updates_interaction(db: DatabaseSessionManager) -> None:
-    user_repo = SqliteUserRepositoryAdapter(db)
-    request_repo = SqliteRequestRepositoryAdapter(db)
+    user_repo = UserRepositoryAdapter(db)
+    request_repo = RequestRepositoryAdapter(db)
 
     # Create a request first (required for foreign key constraint)
     request_id = asyncio.run(
@@ -158,8 +158,8 @@ def test_safe_update_user_interaction_updates_interaction(db: DatabaseSessionMan
 
 
 def test_async_safe_update_user_interaction_updates_interaction(db: DatabaseSessionManager) -> None:
-    user_repo = SqliteUserRepositoryAdapter(db)
-    request_repo = SqliteRequestRepositoryAdapter(db)
+    user_repo = UserRepositoryAdapter(db)
+    request_repo = RequestRepositoryAdapter(db)
 
     # Create a request first (required for foreign key constraint)
     request_id = asyncio.run(

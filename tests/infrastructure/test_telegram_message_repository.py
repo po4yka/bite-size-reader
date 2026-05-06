@@ -12,7 +12,7 @@ from app.config.database import DatabaseConfig
 from app.db.models import Request, TelegramMessage
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.telegram_message_repository import (
-    SqliteTelegramMessageRepositoryAdapter,
+    TelegramMessageRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -65,7 +65,7 @@ async def _request(database: Database, *, user_id: int = 7007) -> Request:
 async def test_telegram_message_repository_is_idempotent_and_reads_forward_info(
     database: Database,
 ) -> None:
-    repo = SqliteTelegramMessageRepositoryAdapter(database)
+    repo = TelegramMessageRepositoryAdapter(database)
     request = await _request(database)
 
     first_id = await repo.async_insert_telegram_message(
@@ -117,7 +117,7 @@ async def test_telegram_message_repository_is_idempotent_and_reads_forward_info(
 
 @pytest.mark.asyncio
 async def test_telegram_message_repository_lists_for_user(database: Database) -> None:
-    repo = SqliteTelegramMessageRepositoryAdapter(database)
+    repo = TelegramMessageRepositoryAdapter(database)
     request_a = await _request(database, user_id=8008)
     request_b = await _request(database, user_id=8009)
     inserted_a = await repo.async_insert_telegram_message(

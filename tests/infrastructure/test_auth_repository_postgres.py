@@ -12,7 +12,7 @@ from app.core.time_utils import UTC
 from app.db.models import ClientSecret, RefreshToken, User
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.auth_repository import (
-    SqliteAuthRepositoryAdapter,
+    AuthRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -89,7 +89,7 @@ async def _create_user(database: Database, user_id: int = 9401) -> int:
 async def test_auth_repository_refresh_token_sessions_and_cache(database: Database) -> None:
     user_id = await _create_user(database)
     cache = FakeTokenCache()
-    repo = SqliteAuthRepositoryAdapter(database, token_cache=cast("Any", cache))
+    repo = AuthRepositoryAdapter(database, token_cache=cast("Any", cache))
     expires_at = dt.datetime.now(UTC) + dt.timedelta(days=7)
 
     first_id = await repo.async_create_refresh_token(
@@ -133,7 +133,7 @@ async def test_auth_repository_revokes_all_user_tokens(database: Database) -> No
     user_id = await _create_user(database)
     other_user_id = await _create_user(database, user_id=9402)
     cache = FakeTokenCache()
-    repo = SqliteAuthRepositoryAdapter(database, token_cache=cast("Any", cache))
+    repo = AuthRepositoryAdapter(database, token_cache=cast("Any", cache))
     expires_at = dt.datetime.now(UTC) + dt.timedelta(days=7)
 
     for token_hash, owner in [
@@ -159,7 +159,7 @@ async def test_auth_repository_revokes_all_user_tokens(database: Database) -> No
 @pytest.mark.asyncio
 async def test_auth_repository_client_secret_lifecycle(database: Database) -> None:
     user_id = await _create_user(database)
-    repo = SqliteAuthRepositoryAdapter(database)
+    repo = AuthRepositoryAdapter(database)
 
     first_id = await repo.async_create_client_secret(
         user_id=user_id,
@@ -216,7 +216,7 @@ async def test_auth_repository_client_secret_lifecycle(database: Database) -> No
 
 @pytest.mark.asyncio
 async def test_auth_repository_rejects_missing_user_for_client_secret(database: Database) -> None:
-    repo = SqliteAuthRepositoryAdapter(database)
+    repo = AuthRepositoryAdapter(database)
 
     with pytest.raises(ValueError, match="User 999 not found"):
         await repo.async_create_client_secret(

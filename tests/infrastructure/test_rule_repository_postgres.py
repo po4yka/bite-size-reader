@@ -12,7 +12,7 @@ from app.config.database import DatabaseConfig
 from app.db.models import AutomationRule, RuleExecutionLog, User
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.rule_repository import (
-    SqliteRuleRepositoryAdapter,
+    RuleRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -50,7 +50,7 @@ async def _clear(database: Database) -> None:
 
 @pytest.mark.asyncio
 async def test_rule_repository_crud_filters_and_soft_delete(database: Database) -> None:
-    repo = SqliteRuleRepositoryAdapter(database)
+    repo = RuleRepositoryAdapter(database)
 
     low = await repo.async_create_rule(
         15001,
@@ -95,7 +95,7 @@ async def test_rule_repository_crud_filters_and_soft_delete(database: Database) 
 
 @pytest.mark.asyncio
 async def test_rule_repository_run_count_and_execution_logs(database: Database) -> None:
-    repo = SqliteRuleRepositoryAdapter(database)
+    repo = RuleRepositoryAdapter(database)
     rule = await repo.async_create_rule(
         15001,
         name="rule",

@@ -13,7 +13,7 @@ from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
 from app.domain.services.import_export.opml_exporter import OPMLExporter
 from app.infrastructure.persistence.repositories.rss_feed_repository import (
-    SqliteRSSFeedRepositoryAdapter,
+    RSSFeedRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -30,8 +30,8 @@ class RSSHandler(HandlerDependenciesMixin):
     """Handle /rss commands for RSS feed management."""
 
     @property
-    def _rss_repo(self) -> SqliteRSSFeedRepositoryAdapter:
-        return SqliteRSSFeedRepositoryAdapter(self._db)
+    def _rss_repo(self) -> RSSFeedRepositoryAdapter:
+        return RSSFeedRepositoryAdapter(self._db)
 
     @combined_handler("command_substack", "substack")
     async def handle_substack(self, ctx: CommandExecutionContext) -> None:

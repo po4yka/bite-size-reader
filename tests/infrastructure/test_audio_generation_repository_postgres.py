@@ -12,7 +12,7 @@ from app.config.database import DatabaseConfig
 from app.db.models import AudioGeneration, Request, Summary
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.audio_generation_repository import (
-    SqliteAudioGenerationRepositoryAdapter,
+    AudioGenerationRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -69,7 +69,7 @@ async def _summary(database: Database, *, suffix: str) -> Summary:
 async def test_audio_generation_repository_start_complete_and_read(
     database: Database,
 ) -> None:
-    repo = SqliteAudioGenerationRepositoryAdapter(database)
+    repo = AudioGenerationRepositoryAdapter(database)
     summary = await _summary(database, suffix="completed")
 
     await repo.async_mark_generation_started(
@@ -102,7 +102,7 @@ async def test_audio_generation_repository_start_complete_and_read(
 
 @pytest.mark.asyncio
 async def test_audio_generation_repository_failed_upserts(database: Database) -> None:
-    repo = SqliteAudioGenerationRepositoryAdapter(database)
+    repo = AudioGenerationRepositoryAdapter(database)
     summary = await _summary(database, suffix="failed")
 
     await repo.async_mark_generation_failed(

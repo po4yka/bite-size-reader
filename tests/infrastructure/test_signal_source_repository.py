@@ -14,7 +14,7 @@ from app.core.time_utils import UTC
 from app.db.models import FeedItem, Source, Subscription, Topic, User, UserSignal
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.signal_source_repository import (
-    SqliteSignalSourceRepositoryAdapter,
+    SignalSourceRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -42,8 +42,8 @@ async def database() -> AsyncGenerator[Database]:
 
 
 @pytest.fixture
-def repo(database: Database) -> SqliteSignalSourceRepositoryAdapter:
-    return SqliteSignalSourceRepositoryAdapter(database)
+def repo(database: Database) -> SignalSourceRepositoryAdapter:
+    return SignalSourceRepositoryAdapter(database)
 
 
 async def _clear(database: Database) -> None:
@@ -67,7 +67,7 @@ async def _user(database: Database, user_id: int, username: str) -> User:
 @pytest.mark.asyncio
 async def test_source_subscription_item_and_signal_round_trip(
     database: Database,
-    repo: SqliteSignalSourceRepositoryAdapter,
+    repo: SignalSourceRepositoryAdapter,
 ) -> None:
     await _user(database, 1001, "owner")
 
@@ -129,7 +129,7 @@ async def test_source_subscription_item_and_signal_round_trip(
 @pytest.mark.asyncio
 async def test_signal_repository_scopes_reads_and_activation_to_user(
     database: Database,
-    repo: SqliteSignalSourceRepositoryAdapter,
+    repo: SignalSourceRepositoryAdapter,
 ) -> None:
     await _user(database, 1001, "owner")
     await _user(database, 2002, "other")
@@ -175,7 +175,7 @@ async def test_signal_repository_scopes_reads_and_activation_to_user(
 @pytest.mark.asyncio
 async def test_signal_repository_lists_unscored_candidates_once(
     database: Database,
-    repo: SqliteSignalSourceRepositoryAdapter,
+    repo: SignalSourceRepositoryAdapter,
 ) -> None:
     await _user(database, 1001, "owner")
     source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
@@ -218,7 +218,7 @@ async def test_signal_repository_lists_unscored_candidates_once(
 
 @pytest.mark.asyncio
 async def test_signal_repository_records_source_backoff_and_circuit_breaker(
-    repo: SqliteSignalSourceRepositoryAdapter,
+    repo: SignalSourceRepositoryAdapter,
 ) -> None:
     source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
 
@@ -257,7 +257,7 @@ async def test_signal_repository_records_source_backoff_and_circuit_breaker(
 @pytest.mark.asyncio
 async def test_signal_repository_updates_feedback_and_hides_source(
     database: Database,
-    repo: SqliteSignalSourceRepositoryAdapter,
+    repo: SignalSourceRepositoryAdapter,
 ) -> None:
     await _user(database, 1001, "owner")
     source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
@@ -286,7 +286,7 @@ async def test_signal_repository_updates_feedback_and_hides_source(
 @pytest.mark.asyncio
 async def test_signal_repository_detail_boost_and_source_health(
     database: Database,
-    repo: SqliteSignalSourceRepositoryAdapter,
+    repo: SignalSourceRepositoryAdapter,
 ) -> None:
     await _user(database, 1001, "owner")
     source = await repo.async_upsert_source(

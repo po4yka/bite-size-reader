@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteAudioGenerationRepositoryAdapter:
+class AudioGenerationRepositoryAdapter:
     """Persist and query generated summary audio."""
 
     def __init__(self, database: Database) -> None:

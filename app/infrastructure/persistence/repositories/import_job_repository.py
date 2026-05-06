@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteImportJobRepositoryAdapter:
+class ImportJobRepositoryAdapter:
     """Adapter for import job CRUD operations."""
 
     def __init__(self, database: Database) -> None:

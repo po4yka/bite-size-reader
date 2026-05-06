@@ -10,7 +10,7 @@ from app.api.exceptions import ValidationError
 from app.api.models.digest import TriggerDigestResponse
 from app.api.services._digest_api_shared import logger, require_enabled
 from app.core.channel_utils import parse_channel_input
-from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import DigestStore
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -23,7 +23,7 @@ class DigestTriggerService:
 
     def __init__(self, cfg: ChannelDigestConfig) -> None:
         self._cfg = cfg
-        self._store = SqliteDigestStore()
+        self._store = DigestStore()
 
     def trigger_digest(self, user_id: int) -> TriggerDigestResponse:
         require_enabled(self._cfg)

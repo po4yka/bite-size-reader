@@ -135,7 +135,7 @@ def create_rss_delivery_service(cfg: AppConfig, db: Database) -> Any:
     )
     from app.di.shared import LazySemaphoreFactory
     from app.infrastructure.persistence.repositories.rss_feed_repository import (
-        SqliteRSSFeedRepositoryAdapter,
+        RSSFeedRepositoryAdapter,
     )
     from app.prompts.manager import get_prompt_manager
 
@@ -176,7 +176,7 @@ def create_rss_delivery_service(cfg: AppConfig, db: Database) -> Any:
         system_prompt_loader=lambda lang: prompt_mgr.get_system_prompt(
             lang, include_examples=True, num_examples=2
         ),
-        rss_repository=SqliteRSSFeedRepositoryAdapter(db),
+        rss_repository=RSSFeedRepositoryAdapter(db),
         scraper_chain=scraper_chain,
     )
 
@@ -187,7 +187,7 @@ def create_signal_ingestion_worker(cfg: AppConfig, db: Database) -> Any:
     from app.core.embedding_space import resolve_embedding_space_identifier
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
     from app.infrastructure.persistence.repositories.signal_source_repository import (
-        SqliteSignalSourceRepositoryAdapter,
+        SignalSourceRepositoryAdapter,
     )
     from app.infrastructure.search.vector_topic_similarity import VectorTopicSimilarityAdapter
     from app.infrastructure.vector.qdrant_store import QdrantVectorStore
@@ -204,7 +204,7 @@ def create_signal_ingestion_worker(cfg: AppConfig, db: Database) -> Any:
         connection_timeout=cfg.vector_store.connection_timeout,
     )
     return SignalIngestionWorker(
-        repository=SqliteSignalSourceRepositoryAdapter(db),
+        repository=SignalSourceRepositoryAdapter(db),
         scorer=SignalScoringService(
             topic_similarity=VectorTopicSimilarityAdapter(
                 vector_store=vector_store,
@@ -220,7 +220,7 @@ def create_source_ingestion_runner(cfg: AppConfig, db: Database) -> Any:
     from app.adapters.ingestors.runner import SourceIngestionRunner
     from app.adapters.ingestors.twitter import TwitterIngester, TwitterIngestionConfig
     from app.infrastructure.persistence.repositories.signal_source_repository import (
-        SqliteSignalSourceRepositoryAdapter,
+        SignalSourceRepositoryAdapter,
     )
 
     ingestion_cfg = cfg.signal_ingestion
@@ -257,7 +257,7 @@ def create_source_ingestion_runner(cfg: AppConfig, db: Database) -> Any:
         )
     )
     return SourceIngestionRunner(
-        repository=SqliteSignalSourceRepositoryAdapter(db),
+        repository=SignalSourceRepositoryAdapter(db),
         ingesters=ingesters,
         subscriber_user_ids=cfg.telegram.allowed_user_ids,
     )

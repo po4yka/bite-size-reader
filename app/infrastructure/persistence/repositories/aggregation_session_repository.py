@@ -42,7 +42,7 @@ def _progress_percent(
     return min(100, int((processed_items * 100) / total_items))
 
 
-class SqliteAggregationSessionRepositoryAdapter:
+class AggregationSessionRepositoryAdapter:
     """Adapter for aggregation bundle persistence operations."""
 
     def __init__(self, database: Database) -> None:

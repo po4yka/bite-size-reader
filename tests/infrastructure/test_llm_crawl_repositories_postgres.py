@@ -10,10 +10,10 @@ from app.config.database import DatabaseConfig
 from app.db.models import CrawlResult, LLMCall, Request
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.crawl_result_repository import (
-    SqliteCrawlResultRepositoryAdapter,
+    CrawlResultRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.llm_repository import (
-    SqliteLLMRepositoryAdapter,
+    LLMRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -65,7 +65,7 @@ async def _request(database: Database, *, user_id: int = 1001) -> Request:
 @pytest.mark.asyncio
 async def test_llm_repository_persists_and_reads_batch(database: Database) -> None:
     request = await _request(database)
-    repo = SqliteLLMRepositoryAdapter(database)
+    repo = LLMRepositoryAdapter(database)
 
     inserted_ids = await repo.async_insert_llm_calls_batch(
         [
@@ -102,7 +102,7 @@ async def test_llm_repository_persists_and_reads_batch(database: Database) -> No
 @pytest.mark.asyncio
 async def test_crawl_result_repository_is_idempotent(database: Database) -> None:
     request = await _request(database, user_id=1002)
-    repo = SqliteCrawlResultRepositoryAdapter(database)
+    repo = CrawlResultRepositoryAdapter(database)
 
     first_id = await repo.async_insert_crawl_result(
         request.id,

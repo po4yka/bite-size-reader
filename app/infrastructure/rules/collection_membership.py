@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteCollectionMembershipAdapter:
+class CollectionMembershipAdapter:
     """Add and remove summaries from collections with ownership checks."""
 
     def __init__(self, database: Database) -> None:

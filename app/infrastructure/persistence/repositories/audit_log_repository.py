@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteAuditLogRepositoryAdapter:
+class AuditLogRepositoryAdapter:
     """Adapter for audit logging operations."""
 
     def __init__(self, database: Database) -> None:

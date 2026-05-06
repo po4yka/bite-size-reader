@@ -14,7 +14,7 @@ from app.core.time_utils import UTC
 from app.db.models import Chat, User, UserInteraction
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
+    UserRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -52,7 +52,7 @@ async def _clear(database: Database) -> None:
 async def test_user_repository_upserts_links_preferences_and_deletes(
     database: Database,
 ) -> None:
-    repo = SqliteUserRepositoryAdapter(database)
+    repo = UserRepositoryAdapter(database)
 
     created_user, created = await repo.async_get_or_create_user(
         1001, username="first", is_owner=True
@@ -99,7 +99,7 @@ async def test_user_repository_upserts_links_preferences_and_deletes(
 
 @pytest.mark.asyncio
 async def test_user_repository_chats_and_interactions(database: Database) -> None:
-    repo = SqliteUserRepositoryAdapter(database)
+    repo = UserRepositoryAdapter(database)
     await repo.async_upsert_user(telegram_user_id=3003, username="interaction")
     await repo.async_upsert_chat(chat_id=4004, type_="private", title="Old", username="old")
     await repo.async_upsert_chat(chat_id=4004, type_="group", title="New", username="new")

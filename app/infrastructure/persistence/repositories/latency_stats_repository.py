@@ -72,7 +72,7 @@ def _compute_percentile(values: list[int], percentile: float) -> float | None:
 _extract_domain = extract_domain
 
 
-class SqliteLatencyStatsRepositoryAdapter:
+class LatencyStatsRepositoryAdapter:
     """Repository for querying latency statistics from crawl results and LLM calls."""
 
     def __init__(self, database: Database) -> None:

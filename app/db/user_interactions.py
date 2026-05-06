@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger, log_exception
 from app.infrastructure.persistence.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
+    UserRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -63,7 +63,7 @@ def safe_update_user_interaction(
                 **payload,
             )
         else:
-            user_repo = SqliteUserRepositoryAdapter(db)
+            user_repo = UserRepositoryAdapter(db)
             coro = user_repo.async_update_user_interaction(
                 interaction_id=interaction_id,
                 updates=update_mapping,
@@ -103,7 +103,7 @@ def safe_update_user_interaction(
 
 
 async def async_safe_update_user_interaction(
-    user_repo: SqliteUserRepositoryAdapter | Any,
+    user_repo: UserRepositoryAdapter | Any,
     *,
     interaction_id: int | None,
     logger_: logging.Logger | None = None,

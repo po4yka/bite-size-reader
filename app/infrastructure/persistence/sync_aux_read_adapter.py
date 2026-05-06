@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteSyncAuxReadAdapter:
+class SyncAuxReadAdapter:
     def __init__(self, database: Database) -> None:
         self._database = database
 

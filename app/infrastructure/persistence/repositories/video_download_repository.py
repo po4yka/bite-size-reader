@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteVideoDownloadRepositoryAdapter:
+class VideoDownloadRepositoryAdapter:
     """Adapter for video download operations."""
 
     def __init__(self, database: Database) -> None:

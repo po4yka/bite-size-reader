@@ -33,7 +33,7 @@ class TopicSearchIndexRebuiltError(RuntimeError):
     """Retained for compatibility with legacy callers."""
 
 
-class SqliteTopicSearchRepositoryAdapter:
+class TopicSearchRepositoryAdapter:
     """Adapter for topic search index operations."""
 
     def __init__(self, database: Database) -> None:

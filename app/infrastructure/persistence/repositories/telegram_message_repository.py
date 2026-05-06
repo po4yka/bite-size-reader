@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 JSONValue = Mapping[str, Any] | Sequence[Any] | str | None
 
 
-class SqliteTelegramMessageRepositoryAdapter:
+class TelegramMessageRepositoryAdapter:
     """Adapter for Telegram message persistence operations using SQLAlchemy."""
 
     def __init__(self, database: Database) -> None:

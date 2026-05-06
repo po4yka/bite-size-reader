@@ -8,7 +8,7 @@ from app.adapters.attachment._attachment_shared import coerce_int
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.repositories.attachment_processing_repository import (
-    SqliteAttachmentProcessingRepositoryAdapter,
+    AttachmentProcessingRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ class AttachmentPersistenceService:
 
     def __init__(self, context: AttachmentProcessorContext) -> None:
         self._context = context
-        self._attachment_repo = SqliteAttachmentProcessingRepositoryAdapter(context.db)
+        self._attachment_repo = AttachmentProcessingRepositoryAdapter(context.db)
 
     async def create_request(
         self,

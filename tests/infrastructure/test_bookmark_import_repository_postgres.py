@@ -13,7 +13,7 @@ from app.db.models import Collection, CollectionItem, Request, Summary, SummaryT
 from app.db.session import Database
 from app.domain.services.import_parsers.base import ImportedBookmark
 from app.infrastructure.persistence.repositories.bookmark_import_repository import (
-    SqliteBookmarkImportAdapter,
+    BookmarkImportAdapter,
 )
 
 if TYPE_CHECKING:
@@ -65,7 +65,7 @@ async def test_bookmark_import_repository_creates_summary_tags_and_collection_it
     database: Database,
 ) -> None:
     collection_id = await _create_user_and_collection(database)
-    repo = SqliteBookmarkImportAdapter(database)
+    repo = BookmarkImportAdapter(database)
     bookmark = ImportedBookmark(
         url="https://example.com/bookmark?utm_source=test",
         title="Bookmark",
@@ -106,7 +106,7 @@ async def test_bookmark_import_repository_rejects_unowned_target_collection(
     database: Database,
 ) -> None:
     collection_id = await _create_user_and_collection(database)
-    repo = SqliteBookmarkImportAdapter(database)
+    repo = BookmarkImportAdapter(database)
 
     with pytest.raises(ValueError, match="not found or not owned"):
         await repo.async_import_bookmark(

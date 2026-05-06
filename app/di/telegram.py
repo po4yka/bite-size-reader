@@ -51,10 +51,10 @@ from app.di.types import (
 from app.infrastructure.audio.elevenlabs_provider import ElevenLabsTTSProviderAdapter
 from app.infrastructure.audio.filesystem_storage import FileSystemAudioStorageAdapter
 from app.infrastructure.persistence.repositories.audio_generation_repository import (
-    SqliteAudioGenerationRepositoryAdapter,
+    AudioGenerationRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.latency_stats_repository import (
-    SqliteLatencyStatsRepositoryAdapter,
+    LatencyStatsRepositoryAdapter,
 )
 from app.infrastructure.search.vector_search_port_adapter import VectorSearchPortAdapter
 from app.infrastructure.search.vector_search_service import VectorSearchService
@@ -482,7 +482,7 @@ def _build_tts_service_factory(
 ) -> Any:
     return lambda: TTSService(
         summary_repository=summary_repo,
-        audio_generation_repository=SqliteAudioGenerationRepositoryAdapter(db),
+        audio_generation_repository=AudioGenerationRepositoryAdapter(db),
         tts_provider=ElevenLabsTTSProviderAdapter(cfg.tts),
         audio_storage=FileSystemAudioStorageAdapter(cfg.tts.audio_storage_path),
         voice_id=cfg.tts.voice_id,
@@ -541,7 +541,7 @@ def _create_adaptive_timeout_service(
     try:
         service = AdaptiveTimeoutService(
             config=cfg.adaptive_timeout,
-            repository=SqliteLatencyStatsRepositoryAdapter(db),
+            repository=LatencyStatsRepositoryAdapter(db),
         )
         logger.info(
             "adaptive_timeout_service_initialized",

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field
 
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import DigestStore
 
 if TYPE_CHECKING:
     from app.adapters.llm.protocol import LLMClientProtocol
@@ -38,7 +38,7 @@ class DigestAnalyzer:
         self._cfg = cfg
         self._llm = llm_client
         self._semaphore = asyncio.Semaphore(cfg.digest.concurrency)
-        self._store = SqliteDigestStore()
+        self._store = DigestStore()
 
     async def analyze_posts(
         self,

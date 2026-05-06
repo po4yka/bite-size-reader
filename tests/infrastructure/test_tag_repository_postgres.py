@@ -12,7 +12,7 @@ from app.config.database import DatabaseConfig
 from app.db.models import Request, Summary, SummaryTag, Tag, User
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.tag_repository import (
-    SqliteTagRepositoryAdapter,
+    TagRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -71,7 +71,7 @@ async def _summary(database: Database, *, suffix: str) -> Summary:
 
 @pytest.mark.asyncio
 async def test_tag_repository_crud_attach_detach_restore(database: Database) -> None:
-    repo = SqliteTagRepositoryAdapter(database)
+    repo = TagRepositoryAdapter(database)
     summary = await _summary(database, suffix="one")
 
     tag = await repo.async_create_tag(16001, "Machine Learning", "machine-learning", "#fff")
@@ -102,7 +102,7 @@ async def test_tag_repository_crud_attach_detach_restore(database: Database) -> 
 
 @pytest.mark.asyncio
 async def test_tag_repository_tagged_summaries_and_merge(database: Database) -> None:
-    repo = SqliteTagRepositoryAdapter(database)
+    repo = TagRepositoryAdapter(database)
     first_summary = await _summary(database, suffix="first")
     second_summary = await _summary(database, suffix="second")
     target = await repo.async_create_tag(16001, "Target", "target", None)

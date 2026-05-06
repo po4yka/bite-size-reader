@@ -9,8 +9,8 @@ from sqlalchemy import delete
 from app.config.database import DatabaseConfig
 from app.db.models import Collection, CollectionItem, Request, Summary, SummaryTag, Tag, User
 from app.db.session import Database
-from app.infrastructure.rules.collection_membership import SqliteCollectionMembershipAdapter
-from app.infrastructure.rules.context import SqliteRuleContextAdapter
+from app.infrastructure.rules.collection_membership import CollectionMembershipAdapter
+from app.infrastructure.rules.context import RuleContextAdapter
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -86,7 +86,7 @@ async def _seed_summary(database: Database) -> tuple[int, int, int]:
 @pytest.mark.asyncio
 async def test_rule_context_adapter_builds_context_from_postgres(database: Database) -> None:
     _user_id, summary_id, _collection_id = await _seed_summary(database)
-    adapter = SqliteRuleContextAdapter(database)
+    adapter = RuleContextAdapter(database)
 
     context = await adapter.async_build_context({"summary_id": summary_id})
 
@@ -101,7 +101,7 @@ async def test_collection_membership_adapter_adds_and_removes_items(
     database: Database,
 ) -> None:
     user_id, summary_id, collection_id = await _seed_summary(database)
-    adapter = SqliteCollectionMembershipAdapter(database)
+    adapter = CollectionMembershipAdapter(database)
 
     assert (
         await adapter.async_add_summary(

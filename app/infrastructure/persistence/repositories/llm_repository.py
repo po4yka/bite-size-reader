@@ -54,7 +54,7 @@ def _build_llm_call_payload(call_data: dict[str, Any] | Any) -> dict[str, Any]:
     return payload
 
 
-class SqliteLLMRepositoryAdapter:
+class LLMRepositoryAdapter:
     """Adapter for LLM call logging operations."""
 
     def __init__(self, database: Database) -> None:

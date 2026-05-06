@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteRuleRepositoryAdapter:
+class RuleRepositoryAdapter:
     """Adapter for automation rule CRUD and execution log operations."""
 
     def __init__(self, database: Database) -> None:

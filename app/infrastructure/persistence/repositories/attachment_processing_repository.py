@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteAttachmentProcessingRepositoryAdapter:
+class AttachmentProcessingRepositoryAdapter:
     """Owns persistence for attachment extraction state."""
 
     def __init__(self, database: Database) -> None:

@@ -13,13 +13,13 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.repositories.crawl_result_repository import (
-    SqliteCrawlResultRepositoryAdapter,
+    CrawlResultRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
+    RequestRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
+    UserRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -33,9 +33,9 @@ class MessagePersistence:
 
     def __init__(self, db: Database | Any) -> None:
         self.db = db  # Keep reference for legacy access if needed
-        self.request_repo = SqliteRequestRepositoryAdapter(db)
-        self.user_repo = SqliteUserRepositoryAdapter(db)
-        self.crawl_repo = SqliteCrawlResultRepositoryAdapter(db)
+        self.request_repo = RequestRepositoryAdapter(db)
+        self.user_repo = UserRepositoryAdapter(db)
+        self.crawl_repo = CrawlResultRepositoryAdapter(db)
 
     async def persist_message_snapshot(self, request_id: int, message: Any) -> None:
         """Persist message snapshot to database."""

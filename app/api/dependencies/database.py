@@ -79,10 +79,10 @@ def get_request_repository(
 ) -> RequestRepositoryPort:
     """Build a request repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.request_repository import (
-        SqliteRequestRepositoryAdapter,
+        RequestRepositoryAdapter,
     )
 
-    return SqliteRequestRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return RequestRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_summary_repository(
@@ -91,10 +91,10 @@ def get_summary_repository(
 ) -> SummaryRepositoryPort:
     """Build a summary repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.summary_repository import (
-        SqliteSummaryRepositoryAdapter,
+        SummaryRepositoryAdapter,
     )
 
-    return SqliteSummaryRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return SummaryRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_crawl_result_repository(
@@ -103,10 +103,10 @@ def get_crawl_result_repository(
 ) -> CrawlResultRepositoryPort:
     """Build a crawl-result repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.crawl_result_repository import (
-        SqliteCrawlResultRepositoryAdapter,
+        CrawlResultRepositoryAdapter,
     )
 
-    return SqliteCrawlResultRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return CrawlResultRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_llm_repository(
@@ -115,10 +115,10 @@ def get_llm_repository(
 ) -> LLMRepositoryPort:
     """Build an LLM repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.llm_repository import (
-        SqliteLLMRepositoryAdapter,
+        LLMRepositoryAdapter,
     )
 
-    return SqliteLLMRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return LLMRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_user_repository(
@@ -127,10 +127,10 @@ def get_user_repository(
 ) -> UserRepositoryPort:
     """Build a user repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.user_repository import (
-        SqliteUserRepositoryAdapter,
+        UserRepositoryAdapter,
     )
 
-    return SqliteUserRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return UserRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_auth_repository(
@@ -140,10 +140,10 @@ def get_auth_repository(
 ) -> Any:
     """Build an auth repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.auth_repository import (
-        SqliteAuthRepositoryAdapter,
+        AuthRepositoryAdapter,
     )
 
-    return SqliteAuthRepositoryAdapter(
+    return AuthRepositoryAdapter(
         resolve_repository_session(session_manager, request),
         token_cache=token_cache,
     )
@@ -155,10 +155,10 @@ def get_collection_repository(
 ) -> Any:
     """Build a collection repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.collection_repository import (
-        SqliteCollectionRepositoryAdapter,
+        CollectionRepositoryAdapter,
     )
 
-    return SqliteCollectionRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return CollectionRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_device_repository(
@@ -167,10 +167,10 @@ def get_device_repository(
 ) -> Any:
     """Build a device repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.device_repository import (
-        SqliteDeviceRepositoryAdapter,
+        DeviceRepositoryAdapter,
     )
 
-    return SqliteDeviceRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return DeviceRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_backup_repository(
@@ -179,10 +179,10 @@ def get_backup_repository(
 ) -> Any:
     """Build a backup repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.backup_repository import (
-        SqliteBackupRepositoryAdapter,
+        BackupRepositoryAdapter,
     )
 
-    return SqliteBackupRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return BackupRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_rule_repository(
@@ -191,10 +191,10 @@ def get_rule_repository(
 ) -> Any:
     """Build a rule repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.rule_repository import (
-        SqliteRuleRepositoryAdapter,
+        RuleRepositoryAdapter,
     )
 
-    return SqliteRuleRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return RuleRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_webhook_repository(
@@ -203,10 +203,10 @@ def get_webhook_repository(
 ) -> Any:
     """Build a webhook repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.webhook_repository import (
-        SqliteWebhookRepositoryAdapter,
+        WebhookRepositoryAdapter,
     )
 
-    return SqliteWebhookRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return WebhookRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_import_job_repository(
@@ -215,10 +215,10 @@ def get_import_job_repository(
 ) -> Any:
     """Build an import-job repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.import_job_repository import (
-        SqliteImportJobRepositoryAdapter,
+        ImportJobRepositoryAdapter,
     )
 
-    return SqliteImportJobRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return ImportJobRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_bookmark_import_repository(
@@ -227,10 +227,10 @@ def get_bookmark_import_repository(
 ) -> Any:
     """Build a bookmark-import repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.bookmark_import_repository import (
-        SqliteBookmarkImportAdapter,
+        BookmarkImportAdapter,
     )
 
-    return SqliteBookmarkImportAdapter(resolve_repository_session(session_manager, request))
+    return BookmarkImportAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_audio_generation_repository(
@@ -239,10 +239,10 @@ def get_audio_generation_repository(
 ) -> Any:
     """Build an audio-generation repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.audio_generation_repository import (
-        SqliteAudioGenerationRepositoryAdapter,
+        AudioGenerationRepositoryAdapter,
     )
 
-    return SqliteAudioGenerationRepositoryAdapter(
+    return AudioGenerationRepositoryAdapter(
         resolve_repository_session(session_manager, request)
     )
 
@@ -253,10 +253,10 @@ def get_topic_search_repository(
 ) -> TopicSearchRepositoryPort:
     """Build a topic-search repository bound to the shared session manager."""
     from app.infrastructure.persistence.repositories.topic_search_repository import (
-        SqliteTopicSearchRepositoryAdapter,
+        TopicSearchRepositoryAdapter,
     )
 
-    return SqliteTopicSearchRepositoryAdapter(resolve_repository_session(session_manager, request))
+    return TopicSearchRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_summary_read_model_use_case(

@@ -18,8 +18,8 @@ from app.di.repositories import (
 from app.di.types import ApplicationServices
 from app.infrastructure.messaging.event_bus import EventBus
 from app.infrastructure.messaging.handlers.wiring import wire_event_handlers
-from app.infrastructure.rules.collection_membership import SqliteCollectionMembershipAdapter
-from app.infrastructure.rules.context import SqliteRuleContextAdapter
+from app.infrastructure.rules.collection_membership import CollectionMembershipAdapter
+from app.infrastructure.rules.context import RuleContextAdapter
 from app.infrastructure.rules.http_webhook_dispatcher import HttpWebhookDispatchAdapter
 from app.infrastructure.rules.in_memory_rate_limiter import InMemoryRuleRateLimiter
 
@@ -52,8 +52,8 @@ def build_application_services(
         summary_repository=summary_repository,
         rule_repository=build_rule_repository(db),
         tag_repository=build_tag_repository(db),
-        collection_membership=SqliteCollectionMembershipAdapter(db),
-        rule_context=SqliteRuleContextAdapter(db),
+        collection_membership=CollectionMembershipAdapter(db),
+        rule_context=RuleContextAdapter(db),
         webhook_dispatch_port=HttpWebhookDispatchAdapter(),
         rule_rate_limiter=InMemoryRuleRateLimiter(),
         analytics_service=analytics_service,

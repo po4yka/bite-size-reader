@@ -10,7 +10,7 @@ from app.api.exceptions import ValidationError
 from app.api.models.digest import CategoryResponse
 from app.api.services._digest_api_shared import require_enabled
 from app.core.channel_utils import parse_channel_input
-from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import DigestStore
 from app.infrastructure.persistence.digest_subscription_ops import unsubscribe_channel_atomic
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ class DigestCategoryService:
     """Category CRUD and bulk operations for digest API callers."""
 
     _unsubscribe_atomic = staticmethod(unsubscribe_channel_atomic)
-    _store = SqliteDigestStore()
+    _store = DigestStore()
 
     def __init__(self, cfg: ChannelDigestConfig) -> None:
         self._cfg = cfg

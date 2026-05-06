@@ -22,7 +22,7 @@ from app.db.models import (
 )
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.rss_feed_repository import (
-    SqliteRSSFeedRepositoryAdapter,
+    RSSFeedRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -74,7 +74,7 @@ async def _create_user(database: Database, *, telegram_user_id: int, username: s
 async def test_rss_feed_repository_subscriptions_preserve_join_shapes(
     database: Database,
 ) -> None:
-    repo = SqliteRSSFeedRepositoryAdapter(database)
+    repo = RSSFeedRepositoryAdapter(database)
     owner = await _create_user(database, telegram_user_id=8101, username="rss-owner")
 
     async with database.transaction() as session:
@@ -143,7 +143,7 @@ async def test_rss_feed_repository_subscriptions_preserve_join_shapes(
 
 @pytest.mark.asyncio
 async def test_rss_feed_repository_items_and_delivery_targets(database: Database) -> None:
-    repo = SqliteRSSFeedRepositoryAdapter(database)
+    repo = RSSFeedRepositoryAdapter(database)
     owner = await _create_user(database, telegram_user_id=8201, username="rss-owner")
     other = await _create_user(database, telegram_user_id=8202, username="rss-other")
     inactive = await _create_user(database, telegram_user_id=8203, username="rss-inactive")
@@ -206,7 +206,7 @@ async def test_rss_feed_repository_items_and_delivery_targets(database: Database
 
 @pytest.mark.asyncio
 async def test_rss_feed_repository_fetch_status_updates(database: Database) -> None:
-    repo = SqliteRSSFeedRepositoryAdapter(database)
+    repo = RSSFeedRepositoryAdapter(database)
     feed = await repo.async_get_or_create_feed("https://example.com/status.xml")
 
     await repo.async_record_feed_fetch_error(

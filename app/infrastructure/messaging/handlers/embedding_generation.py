@@ -10,7 +10,7 @@ from app.core.logging_utils import get_logger
 if TYPE_CHECKING:
     from app.domain.events.summary_events import SummaryCreated
     from app.infrastructure.persistence.repositories.summary_repository import (
-        SqliteSummaryRepositoryAdapter,
+        SummaryRepositoryAdapter,
     )
 
 logger = get_logger(__name__)
@@ -22,7 +22,7 @@ class EmbeddingGenerationEventHandler:
     def __init__(
         self,
         embedding_generator: Any,
-        summary_repository: SqliteSummaryRepositoryAdapter,
+        summary_repository: SummaryRepositoryAdapter,
         vector_store: Any | None = None,
     ) -> None:
         self._generator = embedding_generator

@@ -22,7 +22,7 @@ from app.db.models import (
 )
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.admin_read_repository import (
-    SqliteAdminReadRepositoryAdapter,
+    AdminReadRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -184,7 +184,7 @@ async def _seed_admin_data(database: Database) -> dt.datetime:
 @pytest.mark.asyncio
 async def test_admin_read_repository_reports_users_jobs_and_health(database: Database) -> None:
     today = await _seed_admin_data(database)
-    repo = SqliteAdminReadRepositoryAdapter(database)
+    repo = AdminReadRepositoryAdapter(database)
 
     users = await repo.async_list_users()
     owner = users["users"][0]
@@ -215,7 +215,7 @@ async def test_admin_read_repository_reports_users_jobs_and_health(database: Dat
 @pytest.mark.asyncio
 async def test_admin_read_repository_reports_metrics_and_audit_log(database: Database) -> None:
     today = await _seed_admin_data(database)
-    repo = SqliteAdminReadRepositoryAdapter(database)
+    repo = AdminReadRepositoryAdapter(database)
 
     metrics = await repo.async_system_metrics(since=today)
     assert metrics["llm_7d"] == {

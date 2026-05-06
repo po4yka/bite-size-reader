@@ -12,7 +12,7 @@ from app.config.database import DatabaseConfig
 from app.db.models import User, UserDevice
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.device_repository import (
-    SqliteDeviceRepositoryAdapter,
+    DeviceRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -50,7 +50,7 @@ async def _clear(database: Database) -> None:
 
 @pytest.mark.asyncio
 async def test_device_repository_registers_updates_and_lists(database: Database) -> None:
-    repo = SqliteDeviceRepositoryAdapter(database)
+    repo = DeviceRepositoryAdapter(database)
 
     device_id = await repo.async_register_device(
         user_id=10001,
@@ -83,7 +83,7 @@ async def test_device_repository_registers_updates_and_lists(database: Database)
 
 @pytest.mark.asyncio
 async def test_device_repository_upserts_and_updates_last_seen(database: Database) -> None:
-    repo = SqliteDeviceRepositoryAdapter(database)
+    repo = DeviceRepositoryAdapter(database)
 
     first_id = await repo.async_upsert_device(
         user_id=10001,
@@ -108,7 +108,7 @@ async def test_device_repository_upserts_and_updates_last_seen(database: Databas
 
 @pytest.mark.asyncio
 async def test_device_repository_requires_existing_user(database: Database) -> None:
-    repo = SqliteDeviceRepositoryAdapter(database)
+    repo = DeviceRepositoryAdapter(database)
 
     with pytest.raises(ValueError, match="User 999999 not found"):
         await repo.async_register_device(user_id=999999, token="missing", platform="ios")

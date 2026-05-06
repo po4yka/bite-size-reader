@@ -20,7 +20,7 @@ from app.db.models import (
 )
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.collection_repository import (
-    SqliteCollectionRepositoryAdapter,
+    CollectionRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -91,7 +91,7 @@ async def _create_summary(database: Database, *, user: User, suffix: str) -> Sum
 
 @pytest.mark.asyncio
 async def test_collection_repository_crud_tree_and_move_operations(database: Database) -> None:
-    repo = SqliteCollectionRepositoryAdapter(database)
+    repo = CollectionRepositoryAdapter(database)
     owner = await _create_user(database, telegram_user_id=7001, username="owner-collections")
 
     root_id = await repo.async_create_collection(
@@ -154,7 +154,7 @@ async def test_collection_repository_crud_tree_and_move_operations(database: Dat
 async def test_collection_repository_item_and_smart_collection_operations(
     database: Database,
 ) -> None:
-    repo = SqliteCollectionRepositoryAdapter(database)
+    repo = CollectionRepositoryAdapter(database)
     owner = await _create_user(database, telegram_user_id=7002, username="owner-items")
     source_id = await repo.async_create_collection(
         user_id=owner.telegram_user_id,
@@ -221,7 +221,7 @@ async def test_collection_repository_item_and_smart_collection_operations(
 
 @pytest.mark.asyncio
 async def test_collection_repository_acl_and_invite_flow(database: Database) -> None:
-    repo = SqliteCollectionRepositoryAdapter(database)
+    repo = CollectionRepositoryAdapter(database)
     owner = await _create_user(database, telegram_user_id=7003, username="owner-acl")
     collaborator = await _create_user(database, telegram_user_id=7004, username="collaborator-acl")
     invitee = await _create_user(database, telegram_user_id=7005, username="invitee-acl")

@@ -13,7 +13,7 @@ from app.core.logging_utils import get_logger
 if TYPE_CHECKING:
     from app.config.push import PushNotificationConfig
     from app.infrastructure.persistence.repositories.device_repository import (
-        SqliteDeviceRepositoryAdapter,
+        DeviceRepositoryAdapter,
     )
 
 logger = get_logger(__name__)
@@ -41,7 +41,7 @@ class PushNotificationService:
     def __init__(
         self,
         config: PushNotificationConfig,
-        device_repository: SqliteDeviceRepositoryAdapter,
+        device_repository: DeviceRepositoryAdapter,
     ) -> None:
         self._config = config
         self._device_repo = device_repository
@@ -250,7 +250,7 @@ class PushNotificationService:
 
 def create_push_notification_service(
     config: PushNotificationConfig,
-    device_repository: SqliteDeviceRepositoryAdapter,
+    device_repository: DeviceRepositoryAdapter,
 ) -> PushNotificationService:
     """Factory: create and initialize a ``PushNotificationService``."""
     service = PushNotificationService(config, device_repository)

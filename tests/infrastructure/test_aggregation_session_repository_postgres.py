@@ -18,7 +18,7 @@ from app.domain.models.source import (
     SourceKind,
 )
 from app.infrastructure.persistence.repositories.aggregation_session_repository import (
-    SqliteAggregationSessionRepositoryAdapter,
+    AggregationSessionRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -75,7 +75,7 @@ async def test_aggregation_session_repository_persists_items_and_lifecycle(
     database: Database,
 ) -> None:
     user_id, request_id = await _seed_user_and_request(database)
-    repo = SqliteAggregationSessionRepositoryAdapter(database)
+    repo = AggregationSessionRepositoryAdapter(database)
 
     session_id = await repo.async_create_aggregation_session(
         user_id=user_id,

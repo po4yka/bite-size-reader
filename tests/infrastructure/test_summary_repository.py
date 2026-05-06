@@ -16,7 +16,7 @@ from app.db.models import CrawlResult, Request, Summary, SummaryFeedback, TopicS
 from app.db.session import Database
 from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
+    SummaryRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -85,7 +85,7 @@ async def _create_request(
 
 @pytest.mark.asyncio
 async def test_summary_repository_upserts_reads_and_finalizes(database: Database) -> None:
-    repo = SqliteSummaryRepositoryAdapter(database)
+    repo = SummaryRepositoryAdapter(database)
     request_id = await _create_request(database)
 
     v1 = await repo.async_upsert_summary(
@@ -121,7 +121,7 @@ async def test_summary_repository_upserts_reads_and_finalizes(database: Database
 
 @pytest.mark.asyncio
 async def test_summary_repository_context_state_sync_and_feedback(database: Database) -> None:
-    repo = SqliteSummaryRepositoryAdapter(database)
+    repo = SummaryRepositoryAdapter(database)
     request_id = await _create_request(database, user_id=303, chat_id=404)
     summary_version = await repo.async_upsert_summary(
         request_id,
@@ -171,7 +171,7 @@ async def test_summary_repository_context_state_sync_and_feedback(database: Data
 
 @pytest.mark.asyncio
 async def test_summary_repository_user_lists_and_topic_filter(database: Database) -> None:
-    repo = SqliteSummaryRepositoryAdapter(database)
+    repo = SummaryRepositoryAdapter(database)
     first_request_id = await _create_request(
         database, user_id=505, url="https://example.com/postgres"
     )

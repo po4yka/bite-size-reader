@@ -7,7 +7,7 @@ from difflib import SequenceMatcher
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import DigestStore
 
 if TYPE_CHECKING:
     from app.adapters.digest.analyzer import DigestAnalyzer
@@ -47,7 +47,7 @@ class DigestService:
         self._analyzer = analyzer
         self._formatter = formatter
         self._send = send_message_func
-        self._store = SqliteDigestStore()
+        self._store = DigestStore()
 
     async def generate_digest(
         self,
@@ -313,12 +313,12 @@ class DigestService:
     @classmethod
     async def async_get_users_with_subscriptions(cls) -> list[int]:
         """Return user IDs that have at least one active subscription."""
-        return await SqliteDigestStore().async_get_users_with_subscriptions()
+        return await DigestStore().async_get_users_with_subscriptions()
 
     @classmethod
     def get_users_with_subscriptions(cls) -> list[int]:
         """Return user IDs that have at least one active subscription."""
-        return SqliteDigestStore().get_users_with_subscriptions()
+        return DigestStore().get_users_with_subscriptions()
 
 
 def _deduplicate_posts(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:

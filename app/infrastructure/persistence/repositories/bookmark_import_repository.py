@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from app.domain.services.import_parsers.base import ImportedBookmark
 
 
-class SqliteBookmarkImportAdapter:
+class BookmarkImportAdapter:
     """Import one bookmark and all derived records in a single transaction."""
 
     def __init__(self, database: Database) -> None:

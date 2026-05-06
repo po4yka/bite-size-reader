@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteSignalSourceRepositoryAdapter:
+class SignalSourceRepositoryAdapter:
     """Persistence adapter for sources, subscriptions, topics, and signals."""
 
     def __init__(self, database: Database) -> None:

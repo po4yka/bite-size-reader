@@ -24,7 +24,7 @@ from app.db.models import (
 )
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.user_content_repository import (
-    SqliteUserContentRepositoryAdapter,
+    UserContentRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -126,7 +126,7 @@ async def _seed_content(database: Database) -> dict[str, int]:
 @pytest.mark.asyncio
 async def test_user_content_repository_goals_and_scope_counts(database: Database) -> None:
     ids = await _seed_content(database)
-    repo = SqliteUserContentRepositoryAdapter(database)
+    repo = UserContentRepositoryAdapter(database)
     start = dt.datetime.now(UTC) - dt.timedelta(days=1)
     end = dt.datetime.now(UTC) + dt.timedelta(days=1)
 
@@ -192,7 +192,7 @@ async def test_user_content_repository_digests_highlights_and_owned_summaries(
     database: Database,
 ) -> None:
     ids = await _seed_content(database)
-    repo = SqliteUserContentRepositoryAdapter(database)
+    repo = UserContentRepositoryAdapter(database)
 
     owned = await repo.async_get_owned_summaries(
         user_id=ids["user_id"],
@@ -256,7 +256,7 @@ async def test_user_content_repository_digests_highlights_and_owned_summaries(
 @pytest.mark.asyncio
 async def test_user_content_repository_exports_filtered_summaries(database: Database) -> None:
     ids = await _seed_content(database)
-    repo = SqliteUserContentRepositoryAdapter(database)
+    repo = UserContentRepositoryAdapter(database)
 
     tagged = await repo.async_export_summaries(
         user_id=ids["user_id"],

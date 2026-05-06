@@ -81,8 +81,8 @@ class _FakeSignalRepo:
 async def test_rss_poll_mirrors_new_items_into_signal_sources(monkeypatch):
     from app.adapters.rss import feed_poller
 
-    monkeypatch.setattr(feed_poller, "SqliteRSSFeedRepositoryAdapter", _FakeRSSRepo)
-    monkeypatch.setattr(feed_poller, "SqliteSignalSourceRepositoryAdapter", _FakeSignalRepo)
+    monkeypatch.setattr(feed_poller, "RSSFeedRepositoryAdapter", _FakeRSSRepo)
+    monkeypatch.setattr(feed_poller, "SignalSourceRepositoryAdapter", _FakeSignalRepo)
     monkeypatch.setattr(
         feed_poller,
         "fetch_feed",
@@ -117,8 +117,8 @@ async def test_rss_poll_mirrors_new_items_into_signal_sources(monkeypatch):
 async def test_rss_poll_records_signal_source_error_for_broken_feed(monkeypatch):
     from app.adapters.rss import feed_poller
 
-    monkeypatch.setattr(feed_poller, "SqliteRSSFeedRepositoryAdapter", _FakeRSSRepo)
-    monkeypatch.setattr(feed_poller, "SqliteSignalSourceRepositoryAdapter", _FakeSignalRepo)
+    monkeypatch.setattr(feed_poller, "RSSFeedRepositoryAdapter", _FakeRSSRepo)
+    monkeypatch.setattr(feed_poller, "SignalSourceRepositoryAdapter", _FakeSignalRepo)
 
     def _broken_fetch(*_args, **_kwargs):
         raise RuntimeError("feed is broken")

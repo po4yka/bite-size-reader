@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteRSSFeedRepositoryAdapter:
+class RSSFeedRepositoryAdapter:
     """Adapter for RSS feed, subscription, and feed item operations."""
 
     def __init__(self, database: Database) -> None:

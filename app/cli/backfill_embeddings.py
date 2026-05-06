@@ -12,13 +12,13 @@ from app.db.models import Request, Summary, SummaryEmbedding, model_to_dict
 from app.db.session import Database
 from app.infrastructure.embedding.embedding_factory import create_embedding_service
 from app.infrastructure.persistence.repositories.embedding_repository import (
-    SqliteEmbeddingRepositoryAdapter,
+    EmbeddingRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
+    RequestRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
+    SummaryRepositoryAdapter,
 )
 
 logger = get_logger(__name__)
@@ -71,9 +71,9 @@ async def backfill_embeddings(
     try:
         embedding_service = create_embedding_service(cfg.embedding)
         generator = SummaryEmbeddingGenerator(
-            embedding_repository=SqliteEmbeddingRepositoryAdapter(db),
-            request_repository=SqliteRequestRepositoryAdapter(db),
-            summary_repository=SqliteSummaryRepositoryAdapter(db),
+            embedding_repository=EmbeddingRepositoryAdapter(db),
+            request_repository=RequestRepositoryAdapter(db),
+            summary_repository=SummaryRepositoryAdapter(db),
             embedding_service=embedding_service,
             max_token_length=cfg.embedding.max_token_length,
         )

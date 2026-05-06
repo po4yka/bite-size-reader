@@ -22,7 +22,7 @@ from app.db.models import (
     UserDigestPreference,
 )
 from app.db.session import Database
-from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import DigestStore
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -68,7 +68,7 @@ async def test_digest_store_category_preference_and_delivery_reads(
     database: Database,
 ) -> None:
     user_id = 77801
-    store = SqliteDigestStore(database)
+    store = DigestStore(database)
     async with database.transaction() as session:
         session.add(User(telegram_user_id=user_id, username="digest-store"))
         channel = Channel(username="storechan", title="Store Channel")
@@ -124,7 +124,7 @@ async def test_digest_store_category_preference_and_delivery_reads(
 @pytest.mark.asyncio
 async def test_digest_store_posts_analysis_and_signal_mirror(database: Database) -> None:
     user_id = 77802
-    store = SqliteDigestStore(database)
+    store = DigestStore(database)
     async with database.transaction() as session:
         session.add(User(telegram_user_id=user_id, username="digest-posts"))
 

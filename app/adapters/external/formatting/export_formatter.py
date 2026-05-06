@@ -12,10 +12,10 @@ from typing import TYPE_CHECKING, Any
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
 from app.infrastructure.persistence.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
+    RequestRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
+    SummaryRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -29,8 +29,8 @@ class ExportFormatter:
 
     def __init__(self, db: Database) -> None:
         self.db = db
-        self._request_repo = SqliteRequestRepositoryAdapter(db)
-        self._summary_repo = SqliteSummaryRepositoryAdapter(db)
+        self._request_repo = RequestRepositoryAdapter(db)
+        self._summary_repo = SummaryRepositoryAdapter(db)
 
     def export_summary(
         self,

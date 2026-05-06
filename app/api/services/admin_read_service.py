@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from app.api.dependencies.database import get_session_manager
 from app.api.services.system_maintenance_service import SystemMaintenanceService
 from app.infrastructure.persistence.repositories.admin_read_repository import (
-    SqliteAdminReadRepositoryAdapter,
+    AdminReadRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ class AdminReadService:
 
     def __init__(self, session_manager: Database | None = None) -> None:
         self._db = session_manager or get_session_manager()
-        self._admin_repo = SqliteAdminReadRepositoryAdapter(self._db)
+        self._admin_repo = AdminReadRepositoryAdapter(self._db)
 
     async def list_users(self) -> dict[str, Any]:
         return await self._admin_repo.async_list_users()

@@ -15,7 +15,7 @@ try:
 except ImportError:
     DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from app.infrastructure.persistence.repositories.topic_search_repository import (
-    SqliteTopicSearchRepositoryAdapter,
+    TopicSearchRepositoryAdapter,
 )
 from tests.db_helpers import create_request, insert_summary
 
@@ -163,7 +163,7 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
         },
     )
 
-    service = LocalTopicSearchService(SqliteTopicSearchRepositoryAdapter(database), max_results=2)
+    service = LocalTopicSearchService(TopicSearchRepositoryAdapter(database), max_results=2)
 
     results = await service.find_articles("Android System Design")
 
@@ -180,7 +180,7 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
 async def test_local_search_handles_empty_results(test_database) -> None:
     database = test_database
 
-    service = LocalTopicSearchService(SqliteTopicSearchRepositoryAdapter(database), max_results=3)
+    service = LocalTopicSearchService(TopicSearchRepositoryAdapter(database), max_results=3)
     results = await service.find_articles("Nonexistent Topic")
     assert results == []
 
@@ -188,7 +188,7 @@ async def test_local_search_handles_empty_results(test_database) -> None:
 @pytest.mark.asyncio
 async def test_local_search_rejects_blank_queries(test_database) -> None:
     database = test_database
-    service = LocalTopicSearchService(SqliteTopicSearchRepositoryAdapter(database), max_results=2)
+    service = LocalTopicSearchService(TopicSearchRepositoryAdapter(database), max_results=2)
 
     with pytest.raises(ValueError):
         await service.find_articles("   ")
@@ -247,7 +247,7 @@ async def test_local_search_index_finds_older_match(test_database) -> None:
     )
 
     service = LocalTopicSearchService(
-        SqliteTopicSearchRepositoryAdapter(database), max_results=1, max_scan=1
+        TopicSearchRepositoryAdapter(database), max_results=1, max_scan=1
     )
 
     results = await service.find_articles("Android modular design")

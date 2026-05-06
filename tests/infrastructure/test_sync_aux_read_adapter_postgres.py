@@ -9,7 +9,7 @@ from sqlalchemy import delete
 from app.config.database import DatabaseConfig
 from app.db.models import Request, Summary, SummaryHighlight, SummaryTag, Tag, User
 from app.db.session import Database
-from app.infrastructure.persistence.sync_aux_read_adapter import SqliteSyncAuxReadAdapter
+from app.infrastructure.persistence.sync_aux_read_adapter import SyncAuxReadAdapter
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -103,7 +103,7 @@ async def test_sync_aux_read_adapter_reads_user_scoped_records(database: Databas
             SummaryTag(summary_id=other_summary.id, tag_id=other_tag.id, source="manual")
         )
 
-    adapter = SqliteSyncAuxReadAdapter(database)
+    adapter = SyncAuxReadAdapter(database)
 
     highlights = await adapter.get_highlights_for_user(user.telegram_user_id)
     tags = await adapter.get_tags_for_user(user.telegram_user_id)

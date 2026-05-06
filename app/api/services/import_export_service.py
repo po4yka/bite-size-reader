@@ -15,7 +15,7 @@ from app.api.search_helpers import isotime
 from app.application.dto.import_bookmarks import ImportBookmarksCommand
 from app.application.use_cases.import_pipeline import ImportBookmarksUseCase
 from app.infrastructure.persistence.repositories.user_content_repository import (
-    SqliteUserContentRepositoryAdapter,
+    UserContentRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ class ImportExportService:
         self._db = session_manager or get_session_manager()
         self._import_job_repo = get_import_job_repository(self._db)
         self._bookmark_import_repo = get_bookmark_import_repository(self._db)
-        self._user_content_repo = SqliteUserContentRepositoryAdapter(self._db)
+        self._user_content_repo = UserContentRepositoryAdapter(self._db)
 
     async def create_import_job(
         self,

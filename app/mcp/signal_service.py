@@ -50,11 +50,11 @@ class SignalMcpService:
 
     async def update_signal_feedback(self, signal_id: int, action: str) -> dict[str, Any]:
         from app.infrastructure.persistence.repositories.signal_source_repository import (
-            SqliteSignalSourceRepositoryAdapter,
+            SignalSourceRepositoryAdapter,
         )
 
         runtime = await self.context.ensure_api_runtime()
-        repo = SqliteSignalSourceRepositoryAdapter(runtime.db)
+        repo = SignalSourceRepositoryAdapter(runtime.db)
         user_id = self.context.user_id
         if user_id is None:
             return {"error": "Signal feedback requires a scoped MCP user"}
@@ -80,11 +80,11 @@ class SignalMcpService:
 
     async def set_source_active(self, source_id: int, is_active: bool) -> dict[str, Any]:
         from app.infrastructure.persistence.repositories.signal_source_repository import (
-            SqliteSignalSourceRepositoryAdapter,
+            SignalSourceRepositoryAdapter,
         )
 
         runtime = await self.context.ensure_api_runtime()
-        repo = SqliteSignalSourceRepositoryAdapter(runtime.db)
+        repo = SignalSourceRepositoryAdapter(runtime.db)
         user_id = self.context.user_id
         if user_id is None:
             return {"error": "Source updates require a scoped MCP user"}

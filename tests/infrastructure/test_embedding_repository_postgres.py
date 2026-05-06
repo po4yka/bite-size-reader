@@ -12,7 +12,7 @@ from app.config.database import DatabaseConfig
 from app.db.models import Request, Summary, SummaryEmbedding
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.embedding_repository import (
-    SqliteEmbeddingRepositoryAdapter,
+    EmbeddingRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -71,7 +71,7 @@ async def _summary(database: Database, *, suffix: str) -> tuple[Request, Summary
 
 @pytest.mark.asyncio
 async def test_embedding_repository_upserts_and_reads(database: Database) -> None:
-    repo = SqliteEmbeddingRepositoryAdapter(database)
+    repo = EmbeddingRepositoryAdapter(database)
     request, summary = await _summary(database, suffix="first")
 
     await repo.async_create_or_update_summary_embedding(
@@ -113,7 +113,7 @@ async def test_embedding_repository_upserts_and_reads(database: Database) -> Non
 
 @pytest.mark.asyncio
 async def test_embedding_repository_lists_all_and_recent(database: Database) -> None:
-    repo = SqliteEmbeddingRepositoryAdapter(database)
+    repo = EmbeddingRepositoryAdapter(database)
     first_request, first_summary = await _summary(database, suffix="one")
     second_request, second_summary = await _summary(database, suffix="two")
     await repo.async_create_or_update_summary_embedding(first_summary.id, b"one", "m", "v", 1)

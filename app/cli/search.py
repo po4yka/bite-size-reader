@@ -64,11 +64,11 @@ async def search_fts(db: Database, query: str, max_results: int = 10) -> list[An
     """Perform full-text search."""
     from app.application.services.topic_search import LocalTopicSearchService
     from app.infrastructure.persistence.repositories.topic_search_repository import (
-        SqliteTopicSearchRepositoryAdapter,
+        TopicSearchRepositoryAdapter,
     )
 
     service = LocalTopicSearchService(
-        repository=SqliteTopicSearchRepositoryAdapter(db), max_results=max_results
+        repository=TopicSearchRepositoryAdapter(db), max_results=max_results
     )
 
     return await service.find_articles(query)
@@ -84,17 +84,17 @@ async def search_vector(
     from app.application.services.topic_search import TopicArticle
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
     from app.infrastructure.persistence.repositories.embedding_repository import (
-        SqliteEmbeddingRepositoryAdapter,
+        EmbeddingRepositoryAdapter,
     )
     from app.infrastructure.persistence.repositories.topic_search_repository import (
-        SqliteTopicSearchRepositoryAdapter,
+        TopicSearchRepositoryAdapter,
     )
     from app.infrastructure.search.vector_search_service import VectorSearchService
 
     embedding_service = create_embedding_service()
     service = VectorSearchService(
-        embedding_repository=SqliteEmbeddingRepositoryAdapter(db),
-        topic_search_repository=SqliteTopicSearchRepositoryAdapter(db),
+        embedding_repository=EmbeddingRepositoryAdapter(db),
+        topic_search_repository=TopicSearchRepositoryAdapter(db),
         embedding_service=embedding_service,
         max_results=max_results,
         min_similarity=0.3,
@@ -127,10 +127,10 @@ async def search_hybrid(
     from app.application.services.topic_search import LocalTopicSearchService
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
     from app.infrastructure.persistence.repositories.embedding_repository import (
-        SqliteEmbeddingRepositoryAdapter,
+        EmbeddingRepositoryAdapter,
     )
     from app.infrastructure.persistence.repositories.topic_search_repository import (
-        SqliteTopicSearchRepositoryAdapter,
+        TopicSearchRepositoryAdapter,
     )
     from app.infrastructure.search.hybrid_search_service import HybridSearchService
     from app.infrastructure.search.query_expansion_service import QueryExpansionService
@@ -139,14 +139,14 @@ async def search_hybrid(
 
     # Initialize FTS service
     fts_service = LocalTopicSearchService(
-        repository=SqliteTopicSearchRepositoryAdapter(db), max_results=max_results
+        repository=TopicSearchRepositoryAdapter(db), max_results=max_results
     )
 
     # Initialize vector service
     embedding_service = create_embedding_service()
     vector_service = VectorSearchService(
-        embedding_repository=SqliteEmbeddingRepositoryAdapter(db),
-        topic_search_repository=SqliteTopicSearchRepositoryAdapter(db),
+        embedding_repository=EmbeddingRepositoryAdapter(db),
+        topic_search_repository=TopicSearchRepositoryAdapter(db),
         embedding_service=embedding_service,
         max_results=max_results,
         min_similarity=0.3,

@@ -14,13 +14,13 @@ from app.core.time_utils import UTC
 from app.db.models import AttachmentProcessing, AuditLog, Request, VideoDownload
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.attachment_processing_repository import (
-    SqliteAttachmentProcessingRepositoryAdapter,
+    AttachmentProcessingRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.audit_log_repository import (
-    SqliteAuditLogRepositoryAdapter,
+    AuditLogRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.video_download_repository import (
-    SqliteVideoDownloadRepositoryAdapter,
+    VideoDownloadRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -73,7 +73,7 @@ async def _request(database: Database, *, suffix: str) -> Request:
 
 @pytest.mark.asyncio
 async def test_audit_log_repository_inserts_json(database: Database) -> None:
-    repo = SqliteAuditLogRepositoryAdapter(database)
+    repo = AuditLogRepositoryAdapter(database)
 
     log_id = await repo.async_insert_audit_log("info", "login", {"ok": True})
 
@@ -87,7 +87,7 @@ async def test_audit_log_repository_inserts_json(database: Database) -> None:
 
 @pytest.mark.asyncio
 async def test_attachment_processing_repository_creates_and_updates(database: Database) -> None:
-    repo = SqliteAttachmentProcessingRepositoryAdapter(database)
+    repo = AttachmentProcessingRepositoryAdapter(database)
     request = await _request(database, suffix="attachment")
 
     await repo.async_create_processing(
@@ -117,7 +117,7 @@ async def test_attachment_processing_repository_creates_and_updates(database: Da
 
 @pytest.mark.asyncio
 async def test_video_download_repository_creates_reads_and_updates(database: Database) -> None:
-    repo = SqliteVideoDownloadRepositoryAdapter(database)
+    repo = VideoDownloadRepositoryAdapter(database)
     request = await _request(database, suffix="video")
 
     download_id = await repo.async_create_video_download(request.id, "yt-1")

@@ -63,7 +63,7 @@ async def test_export_eval_set_uses_postgres_database(monkeypatch, tmp_path) -> 
 
     monkeypatch.setattr(signal_eval, "DatabaseConfig", lambda dsn=None: object())
     monkeypatch.setattr(signal_eval, "Database", lambda config: fake_db)
-    monkeypatch.setattr(signal_eval, "SqliteSignalSourceRepositoryAdapter", lambda db: fake_repo)
+    monkeypatch.setattr(signal_eval, "SignalSourceRepositoryAdapter", lambda db: fake_repo)
 
     output_path = tmp_path / "eval.jsonl"
     count = await signal_eval.export_eval_set(

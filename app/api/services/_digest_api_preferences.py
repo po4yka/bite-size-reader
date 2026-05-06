@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from app.api.exceptions import ValidationError
 from app.api.models.digest import DigestDeliveryResponse, DigestPreferenceResponse
 from app.api.services._digest_api_shared import require_enabled
-from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import DigestStore
 
 if TYPE_CHECKING:
     from app.config.digest import ChannelDigestConfig
@@ -18,7 +18,7 @@ class DigestPreferenceService:
 
     def __init__(self, cfg: ChannelDigestConfig) -> None:
         self._cfg = cfg
-        self._store = SqliteDigestStore()
+        self._store = DigestStore()
 
     def get_preferences(self, user_id: int) -> DigestPreferenceResponse:
         require_enabled(self._cfg)

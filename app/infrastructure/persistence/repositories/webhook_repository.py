@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteWebhookRepositoryAdapter:
+class WebhookRepositoryAdapter:
     """Adapter for webhook subscription and delivery operations."""
 
     def __init__(self, database: Database) -> None:

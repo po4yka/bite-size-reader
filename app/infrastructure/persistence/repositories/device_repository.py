@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteDeviceRepositoryAdapter:
+class DeviceRepositoryAdapter:
     """Adapter for user device operations."""
 
     def __init__(self, database: Database) -> None:

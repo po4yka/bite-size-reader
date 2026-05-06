@@ -3,52 +3,52 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.infrastructure.persistence.repositories.aggregation_session_repository import (
-    SqliteAggregationSessionRepositoryAdapter,
+    AggregationSessionRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.audit_log_repository import (
-    SqliteAuditLogRepositoryAdapter,
+    AuditLogRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.backup_repository import (
-    SqliteBackupRepositoryAdapter,
+    BackupRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.batch_session_repository import (
-    SqliteBatchSessionRepositoryAdapter,
+    BatchSessionRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.crawl_result_repository import (
-    SqliteCrawlResultRepositoryAdapter,
+    CrawlResultRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.embedding_repository import (
-    SqliteEmbeddingRepositoryAdapter,
+    EmbeddingRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.import_job_repository import (
-    SqliteImportJobRepositoryAdapter,
+    ImportJobRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.llm_repository import (
-    SqliteLLMRepositoryAdapter,
+    LLMRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
+    RequestRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.rule_repository import (
-    SqliteRuleRepositoryAdapter,
+    RuleRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
+    SummaryRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.tag_repository import (
-    SqliteTagRepositoryAdapter,
+    TagRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.topic_search_repository import (
-    SqliteTopicSearchRepositoryAdapter,
+    TopicSearchRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.user_repository import (
-    SqliteUserRepositoryAdapter,
+    UserRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.video_download_repository import (
-    SqliteVideoDownloadRepositoryAdapter,
+    VideoDownloadRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.webhook_repository import (
-    SqliteWebhookRepositoryAdapter,
+    WebhookRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -71,74 +71,74 @@ if TYPE_CHECKING:
 
 
 def build_request_repository(db: Database) -> RequestRepositoryPort:
-    return SqliteRequestRepositoryAdapter(db)
+    return RequestRepositoryAdapter(db)
 
 
 def build_aggregation_session_repository(
     db: Database,
 ) -> AggregationSessionRepositoryPort:
-    return SqliteAggregationSessionRepositoryAdapter(db)
+    return AggregationSessionRepositoryAdapter(db)
 
 
 def build_summary_repository(db: Database) -> SummaryRepositoryPort:
-    return SqliteSummaryRepositoryAdapter(db)
+    return SummaryRepositoryAdapter(db)
 
 
 def build_user_repository(db: Database) -> UserRepositoryPort:
-    return SqliteUserRepositoryAdapter(db)
+    return UserRepositoryAdapter(db)
 
 
 def build_llm_repository(db: Database) -> LLMRepositoryPort:
-    return SqliteLLMRepositoryAdapter(db)
+    return LLMRepositoryAdapter(db)
 
 
 def build_crawl_result_repository(db: Database) -> CrawlResultRepositoryPort:
-    return SqliteCrawlResultRepositoryAdapter(db)
+    return CrawlResultRepositoryAdapter(db)
 
 
 def build_video_download_repository(db: Database) -> VideoDownloadRepositoryPort:
-    return SqliteVideoDownloadRepositoryAdapter(db)
+    return VideoDownloadRepositoryAdapter(db)
 
 
 def build_audit_log_repository(db: Database) -> AuditLogRepositoryPort:
-    return SqliteAuditLogRepositoryAdapter(db)
+    return AuditLogRepositoryAdapter(db)
 
 
 def build_batch_session_repository(db: Database) -> BatchSessionRepositoryPort:
-    return SqliteBatchSessionRepositoryAdapter(db)
+    return BatchSessionRepositoryAdapter(db)
 
 
 def build_topic_search_repository(db: Database) -> TopicSearchRepositoryPort:
-    return SqliteTopicSearchRepositoryAdapter(db)
+    return TopicSearchRepositoryAdapter(db)
 
 
 def build_embedding_repository(db: Database) -> EmbeddingRepositoryPort:
-    return SqliteEmbeddingRepositoryAdapter(db)
+    return EmbeddingRepositoryAdapter(db)
 
 
 def build_tag_repository(db: Database) -> TagRepositoryPort:
-    return SqliteTagRepositoryAdapter(db)
+    return TagRepositoryAdapter(db)
 
 
 def build_import_job_repository(db: Database) -> ImportJobRepositoryPort:
-    return SqliteImportJobRepositoryAdapter(db)
+    return ImportJobRepositoryAdapter(db)
 
 
 def build_rule_repository(db: Database) -> RuleRepositoryPort:
-    return SqliteRuleRepositoryAdapter(db)
+    return RuleRepositoryAdapter(db)
 
 
 def build_webhook_repository(db: Database) -> WebhookRepositoryPort:
-    return SqliteWebhookRepositoryAdapter(db)
+    return WebhookRepositoryAdapter(db)
 
 
 def build_backup_repository(db: Database) -> BackupRepositoryPort:
-    return SqliteBackupRepositoryAdapter(db)
+    return BackupRepositoryAdapter(db)
 
 
 def build_rss_feed_repository(db: Database) -> Any:
     from app.infrastructure.persistence.repositories.rss_feed_repository import (
-        SqliteRSSFeedRepositoryAdapter,
+        RSSFeedRepositoryAdapter,
     )
 
-    return SqliteRSSFeedRepositoryAdapter(db)
+    return RSSFeedRepositoryAdapter(db)

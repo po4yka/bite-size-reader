@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteTagRepositoryAdapter:
+class TagRepositoryAdapter:
     """Adapter for tag CRUD and summary-tag association operations."""
 
     def __init__(self, database: Database) -> None:

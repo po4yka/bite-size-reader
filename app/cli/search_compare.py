@@ -23,7 +23,7 @@ async def run_all_searches(db: Database, query: str, max_results: int = 10) -> d
     from app.application.services.topic_search import LocalTopicSearchService, TopicArticle
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
     from app.infrastructure.persistence.repositories.topic_search_repository import (
-        SqliteTopicSearchRepositoryAdapter,
+        TopicSearchRepositoryAdapter,
     )
     from app.infrastructure.search.hybrid_search_service import HybridSearchService
     from app.infrastructure.search.vector_search_service import StoreVectorSearchService
@@ -34,7 +34,7 @@ async def run_all_searches(db: Database, query: str, max_results: int = 10) -> d
     # Initialize services
     embedding_service = create_embedding_service(cfg.embedding)
     fts_service = LocalTopicSearchService(
-        repository=SqliteTopicSearchRepositoryAdapter(db), max_results=max_results
+        repository=TopicSearchRepositoryAdapter(db), max_results=max_results
     )
     qdrant_cfg = cfg.vector_store
     vector_store = QdrantVectorStore(

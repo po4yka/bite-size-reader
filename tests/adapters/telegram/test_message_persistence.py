@@ -33,15 +33,15 @@ def _make_persistence() -> tuple[MessagePersistence, MagicMock, MagicMock]:
     request_mock = AsyncMock()
     crawl_mock = MagicMock()
     mp.setattr(
-        "app.infrastructure.persistence.message_persistence.SqliteUserRepositoryAdapter",
+        "app.infrastructure.persistence.message_persistence.UserRepositoryAdapter",
         lambda db: user_mock,
     )
     mp.setattr(
-        "app.infrastructure.persistence.message_persistence.SqliteRequestRepositoryAdapter",
+        "app.infrastructure.persistence.message_persistence.RequestRepositoryAdapter",
         lambda db: request_mock,
     )
     mp.setattr(
-        "app.infrastructure.persistence.message_persistence.SqliteCrawlResultRepositoryAdapter",
+        "app.infrastructure.persistence.message_persistence.CrawlResultRepositoryAdapter",
         lambda db: crawl_mock,
     )
     persistence = MessagePersistence(db)

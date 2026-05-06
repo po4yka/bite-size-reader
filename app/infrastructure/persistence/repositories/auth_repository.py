@@ -22,7 +22,7 @@ def _utcnow() -> dt.datetime:
     return dt.datetime.now(UTC)
 
 
-class SqliteAuthRepositoryAdapter:
+class AuthRepositoryAdapter:
     """Adapter for authentication-related operations."""
 
     def __init__(

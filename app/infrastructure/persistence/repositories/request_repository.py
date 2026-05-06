@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteRequestRepositoryAdapter:
+class RequestRepositoryAdapter:
     """Adapter for request persistence using SQLAlchemy."""
 
     def __init__(self, database: Database) -> None:

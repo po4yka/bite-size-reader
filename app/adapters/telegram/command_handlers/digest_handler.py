@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from app.adapters.telegram.command_handlers.base_handler import HandlerDependenciesMixin
 from app.core.channel_utils import parse_channel_input
 from app.core.logging_utils import get_logger
-from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import DigestStore
 from app.infrastructure.persistence.digest_subscription_ops import (
     async_subscribe_channel_atomic,
     async_unsubscribe_channel_atomic,
@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 class DigestHandler(HandlerDependenciesMixin):
     """Implementation of channel digest commands."""
 
-    _store = SqliteDigestStore()
+    _store = DigestStore()
 
     @asynccontextmanager
     async def _digest_context(self, ctx: CommandExecutionContext) -> AsyncIterator[DigestService]:

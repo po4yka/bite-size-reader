@@ -16,13 +16,13 @@ from app.db.models import Request, Summary, model_to_dict
 from app.db.session import Database
 from app.infrastructure.embedding.embedding_factory import create_embedding_service
 from app.infrastructure.persistence.repositories.embedding_repository import (
-    SqliteEmbeddingRepositoryAdapter,
+    EmbeddingRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
+    RequestRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
+    SummaryRepositoryAdapter,
 )
 from app.infrastructure.vector.metadata_builder import MetadataBuilder
 from app.infrastructure.vector.qdrant_store import QdrantVectorStore
@@ -68,12 +68,12 @@ async def backfill_vector_store(
     app_cfg = load_config(allow_stub_telegram=True)
     db = Database(config=DatabaseConfig(dsn=database_dsn) if database_dsn else DatabaseConfig())
     try:
-        embedding_repo = SqliteEmbeddingRepositoryAdapter(db)
+        embedding_repo = EmbeddingRepositoryAdapter(db)
         embedding_service = create_embedding_service(app_cfg.embedding)
         generator = SummaryEmbeddingGenerator(
             embedding_repository=embedding_repo,
-            request_repository=SqliteRequestRepositoryAdapter(db),
-            summary_repository=SqliteSummaryRepositoryAdapter(db),
+            request_repository=RequestRepositoryAdapter(db),
+            summary_repository=SummaryRepositoryAdapter(db),
             embedding_service=embedding_service,
             max_token_length=app_cfg.embedding.max_token_length,
         )

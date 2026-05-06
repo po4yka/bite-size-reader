@@ -36,7 +36,7 @@ def _run_sync(coro: Coroutine[Any, Any, T]) -> T:
     return asyncio.run(coro)
 
 
-class SqliteDigestStore:
+class DigestStore:
     """Centralized ORM access for digest runtime features."""
 
     def __init__(self, database: Database | None = None) -> None:

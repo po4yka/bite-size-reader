@@ -29,7 +29,7 @@ def _now() -> dt.datetime:
     return dt.datetime.now(UTC)
 
 
-class SqliteCollectionRepositoryAdapter:
+class CollectionRepositoryAdapter:
     """Public collection repository adapter."""
 
     def __init__(self, database: Database) -> None:

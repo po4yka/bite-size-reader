@@ -14,7 +14,7 @@ from app.db.models import CrawlResult, LLMCall, Request
 from app.db.session import Database
 from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.repositories.latency_stats_repository import (
-    SqliteLatencyStatsRepositoryAdapter,
+    LatencyStatsRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -101,7 +101,7 @@ async def _add_request_with_latency(
 async def test_latency_stats_repository_reads_domain_model_and_global_stats(
     database: Database,
 ) -> None:
-    repo = SqliteLatencyStatsRepositoryAdapter(database)
+    repo = LatencyStatsRepositoryAdapter(database)
     now = dt.datetime.now(UTC)
 
     await _add_request_with_latency(
@@ -164,7 +164,7 @@ async def test_latency_stats_repository_reads_domain_model_and_global_stats(
 async def test_latency_stats_repository_reads_combined_and_top_domain_stats(
     database: Database,
 ) -> None:
-    repo = SqliteLatencyStatsRepositoryAdapter(database)
+    repo = LatencyStatsRepositoryAdapter(database)
 
     await _add_request_with_latency(
         database,

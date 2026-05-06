@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteUserContentRepositoryAdapter:
+class UserContentRepositoryAdapter:
     """Owns database access for user-content features outside the core summary flow."""
 
     def __init__(self, database: Database) -> None:

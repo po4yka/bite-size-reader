@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from app.adapters.content.scraper.chain import ContentScraperChain
     from app.config.rss import RSSConfig
     from app.infrastructure.persistence.repositories.rss_feed_repository import (
-        SqliteRSSFeedRepositoryAdapter,
+        RSSFeedRepositoryAdapter,
     )
 
 logger = get_logger(__name__)
@@ -64,7 +64,7 @@ class RSSDeliveryService:
         cfg: RSSConfig,
         pure_summary_service: PureSummaryService,
         system_prompt_loader: Callable[[str], str],
-        rss_repository: SqliteRSSFeedRepositoryAdapter,
+        rss_repository: RSSFeedRepositoryAdapter,
         scraper_chain: ContentScraperChain | None = None,
     ) -> None:
         self._cfg = cfg

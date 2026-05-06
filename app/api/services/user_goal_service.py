@@ -11,7 +11,7 @@ from app.api.exceptions import ResourceNotFoundError
 from app.api.models.responses import GoalProgressResponse, GoalResponse
 from app.core.time_utils import UTC
 from app.infrastructure.persistence.repositories.user_content_repository import (
-    SqliteUserContentRepositoryAdapter,
+    UserContentRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -38,7 +38,7 @@ class UserGoalService:
 
     def __init__(self, session_manager: Database | None = None) -> None:
         self._db = session_manager or get_session_manager()
-        self._user_content_repo = SqliteUserContentRepositoryAdapter(self._db)
+        self._user_content_repo = UserContentRepositoryAdapter(self._db)
         self._summary_repo = get_summary_repository(self._db)
 
     async def list_goals(self, *, user_id: int) -> list[dict[str, Any]]:

@@ -156,7 +156,7 @@ def test_url_processor_keeps_repository_assembly_in_di_layer() -> None:
 
     forbidden_fragments = (
         "MessagePersistence(",
-        "SqliteSummaryRepositoryAdapter(",
+        "SummaryRepositoryAdapter(",
         "from app.infrastructure.persistence.message_persistence import",
         "from app.infrastructure.persistence.repositories.summary_repository import",
     )

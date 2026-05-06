@@ -11,7 +11,7 @@ from typing import Any
 from app.config import DatabaseConfig
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.signal_source_repository import (
-    SqliteSignalSourceRepositoryAdapter,
+    SignalSourceRepositoryAdapter,
 )
 
 RELEVANT_STATUSES = {"liked", "queued"}
@@ -50,7 +50,7 @@ async def export_eval_set(
 ) -> int:
     db = Database(config=DatabaseConfig(dsn=database_dsn) if database_dsn else DatabaseConfig())
     try:
-        repo = SqliteSignalSourceRepositoryAdapter(db)
+        repo = SignalSourceRepositoryAdapter(db)
         rows = await repo.async_list_user_signals(user_id, status=status, limit=limit)
         with output_path.open("w", encoding="utf-8") as handle:
             for idx, row in enumerate(rows, start=1):

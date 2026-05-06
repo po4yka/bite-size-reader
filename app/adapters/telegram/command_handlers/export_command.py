@@ -17,7 +17,7 @@ from app.domain.services.import_export.export_serializers import (
     NetscapeHtmlExporter,
 )
 from app.infrastructure.persistence.repositories.user_content_repository import (
-    SqliteUserContentRepositoryAdapter,
+    UserContentRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -51,7 +51,7 @@ class ExportHandler(HandlerDependenciesMixin):
         """Handle /export [json|csv|html] -- export all summaries as a file."""
         fmt = _parse_format(ctx.text)
 
-        repo = SqliteUserContentRepositoryAdapter(self._db)
+        repo = UserContentRepositoryAdapter(self._db)
         summaries = await repo.async_export_summaries(
             user_id=ctx.uid,
             tag=None,

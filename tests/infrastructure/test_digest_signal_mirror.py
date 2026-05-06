@@ -23,7 +23,7 @@ from app.cli._legacy_peewee_models import (
     UserSignal,
     database_proxy,
 )
-from app.infrastructure.persistence.digest_store import SqliteDigestStore
+from app.infrastructure.persistence.digest_store import DigestStore
 
 
 @pytest.fixture
@@ -72,7 +72,7 @@ def test_digest_store_mirrors_channel_posts_to_signal_tables(digest_signal_db) -
         }
     ]
 
-    store = SqliteDigestStore()
+    store = DigestStore()
     store.persist_posts(channel, posts)
     store.mirror_posts_to_signal_sources(user_id=1001, channel=channel, posts=posts)
 

@@ -13,7 +13,7 @@ from app.db.models import CrawlResult, Request, Summary, TelegramMessage
 from app.db.session import Database
 from app.domain.models.request import RequestStatus
 from app.infrastructure.persistence.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
+    RequestRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -50,7 +50,7 @@ async def database() -> AsyncGenerator[Database]:
 
 @pytest.mark.asyncio
 async def test_request_repository_create_update_and_read(database: Database) -> None:
-    repo = SqliteRequestRepositoryAdapter(database)
+    repo = RequestRepositoryAdapter(database)
 
     request_id = await repo.async_create_request(
         type_="url",
@@ -96,7 +96,7 @@ async def test_request_repository_create_update_and_read(database: Database) -> 
 
 @pytest.mark.asyncio
 async def test_request_repository_context_and_telegram_message(database: Database) -> None:
-    repo = SqliteRequestRepositoryAdapter(database)
+    repo = RequestRepositoryAdapter(database)
     request_id, created = await repo.async_create_minimal_request(
         user_id=43,
         chat_id=101,

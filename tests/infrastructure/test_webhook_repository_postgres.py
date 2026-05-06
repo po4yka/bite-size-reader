@@ -12,7 +12,7 @@ from app.config.database import DatabaseConfig
 from app.db.models import User, WebhookDelivery, WebhookSubscription
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.webhook_repository import (
-    SqliteWebhookRepositoryAdapter,
+    WebhookRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -50,7 +50,7 @@ async def _clear(database: Database) -> None:
 
 @pytest.mark.asyncio
 async def test_webhook_repository_subscription_lifecycle(database: Database) -> None:
-    repo = SqliteWebhookRepositoryAdapter(database)
+    repo = WebhookRepositoryAdapter(database)
 
     sub = await repo.async_create_subscription(
         14001,
@@ -87,7 +87,7 @@ async def test_webhook_repository_subscription_lifecycle(database: Database) -> 
 
 @pytest.mark.asyncio
 async def test_webhook_repository_delivery_and_failure_counters(database: Database) -> None:
-    repo = SqliteWebhookRepositoryAdapter(database)
+    repo = WebhookRepositoryAdapter(database)
     sub = await repo.async_create_subscription(
         14001,
         name="primary",

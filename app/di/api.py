@@ -37,7 +37,7 @@ from app.di.shared import (
     close_runtime_resources,
 )
 from app.di.types import ApiRuntime, DatabaseRuntimeServices, SyncDeps
-from app.infrastructure.persistence.sync_aux_read_adapter import SqliteSyncAuxReadAdapter
+from app.infrastructure.persistence.sync_aux_read_adapter import SyncAuxReadAdapter
 from app.infrastructure.redis import get_redis
 
 if TYPE_CHECKING:
@@ -151,7 +151,7 @@ async def build_api_runtime(
         llm_repository=llm_repository,
     )
     sync_serializer = SyncEnvelopeSerializer()
-    sync_aux_reads = SqliteSyncAuxReadAdapter(database)
+    sync_aux_reads = SyncAuxReadAdapter(database)
     sync_session_store = FallbackSyncSessionStore(
         redis_store=RedisSyncSessionStore(app_cfg),
         fallback_store=InMemorySyncSessionStore(),

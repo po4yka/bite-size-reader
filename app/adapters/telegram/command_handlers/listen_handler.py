@@ -12,10 +12,10 @@ from app.adapters.telegram.command_handlers.base_handler import HandlerDependenc
 from app.core.logging_utils import get_logger
 from app.db.user_interactions import async_safe_update_user_interaction
 from app.infrastructure.persistence.repositories.request_repository import (
-    SqliteRequestRepositoryAdapter,
+    RequestRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.summary_repository import (
-    SqliteSummaryRepositoryAdapter,
+    SummaryRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -41,8 +41,8 @@ class ListenHandler(HandlerDependenciesMixin):
     ) -> None:
         super().__init__(cfg, db, response_formatter)
         self._tts_service_factory = tts_service_factory
-        self._request_repo = SqliteRequestRepositoryAdapter(db)
-        self._summary_repo = SqliteSummaryRepositoryAdapter(db)
+        self._request_repo = RequestRepositoryAdapter(db)
+        self._summary_repo = SummaryRepositoryAdapter(db)
 
     def _create_tts_service(self) -> TTSService:
         if self._tts_service_factory is not None:

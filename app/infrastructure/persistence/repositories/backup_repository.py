@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteBackupRepositoryAdapter:
+class BackupRepositoryAdapter:
     """Adapter for user backup CRUD operations."""
 
     def __init__(self, database: Database) -> None:

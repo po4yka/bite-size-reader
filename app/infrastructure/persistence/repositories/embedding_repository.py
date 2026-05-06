@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 
-class SqliteEmbeddingRepositoryAdapter:
+class EmbeddingRepositoryAdapter:
     """Adapter for summary embedding operations."""
 
     def __init__(self, database: Database) -> None:

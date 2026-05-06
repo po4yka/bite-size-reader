@@ -9,10 +9,10 @@ from app.adapters.rss.signal_ingester import RssSignalIngester
 from app.adapters.rss.substack import is_substack_url
 from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.repositories.rss_feed_repository import (
-    SqliteRSSFeedRepositoryAdapter,
+    RSSFeedRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.signal_source_repository import (
-    SqliteSignalSourceRepositoryAdapter,
+    SignalSourceRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -26,8 +26,8 @@ SIGNAL_SOURCE_BASE_BACKOFF_SECONDS = 300
 
 async def poll_all_feeds(db: Database) -> dict:
     """Poll all active RSS feeds for new items."""
-    repo = SqliteRSSFeedRepositoryAdapter(db)
-    signal_repo = SqliteSignalSourceRepositoryAdapter(db)
+    repo = RSSFeedRepositoryAdapter(db)
+    signal_repo = SignalSourceRepositoryAdapter(db)
     feeds = await repo.async_list_active_feeds()
 
     new_item_ids: list[int] = []

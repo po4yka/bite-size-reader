@@ -13,7 +13,7 @@ from app.adapters.telegram.command_handlers.base_handler import HandlerDependenc
 from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.repositories.rule_repository import (
-    SqliteRuleRepositoryAdapter,
+    RuleRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -28,8 +28,8 @@ class RulesHandler(HandlerDependenciesMixin):
     """Handle /rules command -- list automation rules (read-only)."""
 
     @property
-    def _rule_repo(self) -> SqliteRuleRepositoryAdapter:
-        return SqliteRuleRepositoryAdapter(self._db)
+    def _rule_repo(self) -> RuleRepositoryAdapter:
+        return RuleRepositoryAdapter(self._db)
 
     @combined_handler("command_rules", "rules", include_text=True)
     async def handle_rules(self, ctx: CommandExecutionContext) -> None:

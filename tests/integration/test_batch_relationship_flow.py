@@ -309,11 +309,11 @@ class TestBatchRelationshipFlow(unittest.IsolatedAsyncioTestCase):
     async def test_batch_session_repository_operations(self):
         """Test BatchSessionRepository CRUD operations."""
         from app.infrastructure.persistence.repositories.batch_session_repository import (
-            SqliteBatchSessionRepositoryAdapter,
+            BatchSessionRepositoryAdapter,
         )
 
         # Use the session manager from setup
-        repo = SqliteBatchSessionRepositoryAdapter(self.session_manager)
+        repo = BatchSessionRepositoryAdapter(self.session_manager)
 
         # Test create
         session_id = await repo.async_create_batch_session(

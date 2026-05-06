@@ -12,10 +12,10 @@ from app.config.database import DatabaseConfig
 from app.db.models import ImportJob, User, UserBackup
 from app.db.session import Database
 from app.infrastructure.persistence.repositories.backup_repository import (
-    SqliteBackupRepositoryAdapter,
+    BackupRepositoryAdapter,
 )
 from app.infrastructure.persistence.repositories.import_job_repository import (
-    SqliteImportJobRepositoryAdapter,
+    ImportJobRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
@@ -53,7 +53,7 @@ async def _clear(database: Database) -> None:
 
 @pytest.mark.asyncio
 async def test_backup_repository_crud_and_recent_count(database: Database) -> None:
-    repo = SqliteBackupRepositoryAdapter(database)
+    repo = BackupRepositoryAdapter(database)
 
     first = await repo.async_create_backup(11001, type="manual")
     second = await repo.async_create_backup(11001, type="scheduled")
@@ -82,7 +82,7 @@ async def test_backup_repository_crud_and_recent_count(database: Database) -> No
 
 @pytest.mark.asyncio
 async def test_import_job_repository_crud_progress_and_status(database: Database) -> None:
-    repo = SqliteImportJobRepositoryAdapter(database)
+    repo = ImportJobRepositoryAdapter(database)
 
     job = await repo.async_create_job(
         11001,

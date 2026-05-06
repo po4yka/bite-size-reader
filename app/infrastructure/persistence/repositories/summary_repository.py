@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class SqliteSummaryRepositoryAdapter:
+class SummaryRepositoryAdapter:
     """Adapter for summary persistence using SQLAlchemy."""
 
     def __init__(self, database: Database) -> None:
