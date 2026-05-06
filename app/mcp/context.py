@@ -240,7 +240,7 @@ class McpServerContext:
     def collection_scope_filters(self, collection_model: Any) -> list[Any]:
         filters: list[Any] = [collection_model.is_deleted == False]  # noqa: E712
         if self.user_id is not None:
-            filters.append(collection_model.user == self.user_id)
+            filters.append(collection_model.user_id == self.user_id)
         return filters
 
     async def init_vector_service(self) -> Any:

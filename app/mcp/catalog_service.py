@@ -3,6 +3,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
+
 from app.core.call_status import CallStatus
 from app.mcp.helpers import McpErrorResult, format_summary_compact, isotime, paginated_payload
 
@@ -16,64 +19,74 @@ class CatalogReadService:
     def __init__(self, context: McpServerContext) -> None:
         self.context = context
 
-    def list_collections(self, limit: int = 20, offset: int = 0) -> dict[str, Any] | McpErrorResult:
-        from app.infrastructure.persistence.sqlite.orm_exports import Collection, CollectionItem
+    async def list_collections(
+        self, limit: int = 20, offset: int = 0
+    ) -> dict[str, Any] | McpErrorResult:
+        from app.db.models import Collection, CollectionItem
 
         limit = max(1, min(50, limit))
         offset = max(0, offset)
 
         try:
-            query = Collection.select().where(
-                Collection.parent.is_null(True),
+            filters = [
+                Collection.parent_id.is_(None),
                 *self.context.collection_scope_filters(Collection),
-            )
-            total = query.count()
-            collections = (
-                query.order_by(Collection.position, Collection.created_at.desc())
-                .offset(offset)
-                .limit(limit)
-            )
-
-            results = []
-            for collection in collections:
-                item_count = (
-                    CollectionItem.select()
-                    .where(CollectionItem.collection == collection.id)
-                    .count()
+            ]
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                total = await session.scalar(
+                    select(func.count()).select_from(Collection).where(*filters)
                 )
-                child_count = (
-                    Collection.select()
-                    .where(
-                        Collection.parent == collection.id,
-                        *self.context.collection_scope_filters(Collection),
+                collections = (
+                    await session.scalars(
+                        select(Collection)
+                        .where(*filters)
+                        .order_by(Collection.position, Collection.created_at.desc())
+                        .offset(offset)
+                        .limit(limit)
                     )
-                    .count()
-                )
-                results.append(
-                    {
-                        "collection_id": collection.id,
-                        "name": collection.name,
-                        "description": collection.description,
-                        "item_count": item_count,
-                        "child_collections": child_count,
-                        "is_shared": collection.is_shared,
-                        "created_at": isotime(collection.created_at),
-                        "updated_at": isotime(collection.updated_at),
-                    }
-                )
+                ).all()
 
-            return paginated_payload(results=results, total=total, limit=limit, offset=offset)
+                results = []
+                for collection in collections:
+                    item_count = await session.scalar(
+                        select(func.count())
+                        .select_from(CollectionItem)
+                        .where(CollectionItem.collection_id == collection.id)
+                    )
+                    child_count = await session.scalar(
+                        select(func.count())
+                        .select_from(Collection)
+                        .where(
+                            Collection.parent_id == collection.id,
+                            *self.context.collection_scope_filters(Collection),
+                        )
+                    )
+                    results.append(
+                        {
+                            "collection_id": collection.id,
+                            "name": collection.name,
+                            "description": collection.description,
+                            "item_count": item_count or 0,
+                            "child_collections": child_count or 0,
+                            "is_shared": collection.is_shared,
+                            "created_at": isotime(collection.created_at),
+                            "updated_at": isotime(collection.updated_at),
+                        }
+                    )
+
+            return paginated_payload(results=results, total=total or 0, limit=limit, offset=offset)
         except Exception as exc:
             logger.exception("list_collections failed")
             return {"error": str(exc)}
 
-    def get_collection(
+    async def get_collection(
         self,
         collection_id: int,
         include_items: bool = True,
         limit: int = 50,
     ) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import (
+        from app.db.models import (
             Collection,
             CollectionItem,
             Request,
@@ -83,222 +96,241 @@ class CatalogReadService:
         limit = max(1, min(100, limit))
 
         try:
-            collection = Collection.get_or_none(
-                Collection.id == collection_id,
-                *self.context.collection_scope_filters(Collection),
-            )
-            if not collection:
-                return {"error": f"Collection {collection_id} not found"}
-
-            children = (
-                Collection.select()
-                .where(
-                    Collection.parent == collection.id,
-                    *self.context.collection_scope_filters(Collection),
-                )
-                .order_by(Collection.position, Collection.created_at)
-            )
-            result: dict[str, Any] = {
-                "collection_id": collection.id,
-                "name": collection.name,
-                "description": collection.description,
-                "is_shared": collection.is_shared,
-                "child_collections": [
-                    {
-                        "collection_id": child.id,
-                        "name": child.name,
-                        "description": child.description,
-                    }
-                    for child in children
-                ],
-                "created_at": isotime(collection.created_at),
-                "updated_at": isotime(collection.updated_at),
-            }
-
-            if include_items:
-                items = (
-                    CollectionItem.select(CollectionItem, Summary, Request)
-                    .join(Summary)
-                    .join(Request)
-                    .where(CollectionItem.collection == collection.id)
-                    .where(
-                        Summary.is_deleted == False,  # noqa: E712
-                        *self.context.request_scope_filters(Request),
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                collection = await session.scalar(
+                    select(Collection).where(
+                        Collection.id == collection_id,
+                        *self.context.collection_scope_filters(Collection),
                     )
-                    .order_by(CollectionItem.position, CollectionItem.created_at)
-                    .limit(limit)
                 )
-                articles = [
-                    format_summary_compact(item.summary, item.summary.request) for item in items
-                ]
-                result["articles"] = articles
-                result["article_count"] = len(articles)
+                if not collection:
+                    return {"error": f"Collection {collection_id} not found"}
 
-            return result
+                children = (
+                    await session.scalars(
+                        select(Collection)
+                        .where(
+                            Collection.parent_id == collection.id,
+                            *self.context.collection_scope_filters(Collection),
+                        )
+                        .order_by(Collection.position, Collection.created_at)
+                    )
+                ).all()
+                result: dict[str, Any] = {
+                    "collection_id": collection.id,
+                    "name": collection.name,
+                    "description": collection.description,
+                    "is_shared": collection.is_shared,
+                    "child_collections": [
+                        {
+                            "collection_id": child.id,
+                            "name": child.name,
+                            "description": child.description,
+                        }
+                        for child in children
+                    ],
+                    "created_at": isotime(collection.created_at),
+                    "updated_at": isotime(collection.updated_at),
+                }
+
+                if include_items:
+                    items = (
+                        await session.scalars(
+                            select(CollectionItem)
+                            .join(Summary, CollectionItem.summary_id == Summary.id)
+                            .join(Request, Summary.request_id == Request.id)
+                            .options(
+                                selectinload(CollectionItem.summary).selectinload(Summary.request)
+                            )
+                            .where(
+                                CollectionItem.collection_id == collection.id,
+                                Summary.is_deleted.is_(False),
+                                *self.context.request_scope_filters(Request),
+                            )
+                            .order_by(CollectionItem.position, CollectionItem.created_at)
+                            .limit(limit)
+                        )
+                    ).all()
+                    articles = [
+                        format_summary_compact(item.summary, item.summary.request) for item in items
+                    ]
+                    result["articles"] = articles
+                    result["article_count"] = len(articles)
+
+                return result
         except Exception as exc:
             logger.exception("get_collection failed")
             return {"error": str(exc)}
 
-    def list_videos(
+    async def list_videos(
         self,
         limit: int = 20,
         offset: int = 0,
         status: str | None = None,
     ) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, VideoDownload
+        from app.db.models import Request, VideoDownload
 
         limit = max(1, min(50, limit))
         offset = max(0, offset)
 
         try:
-            query = (
-                VideoDownload.select(VideoDownload, Request)
-                .join(Request)
-                .where(*self.context.request_scope_filters(Request))
-            )
+            filters = [*self.context.request_scope_filters(Request)]
             if status and status in ("pending", "downloading", "completed", "error"):
-                query = query.where(VideoDownload.status == status)
+                filters.append(VideoDownload.status == status)
 
-            total = query.count()
-            videos = query.order_by(VideoDownload.created_at.desc()).offset(offset).limit(limit)
-            results = []
-            for video in videos:
-                request = video.request
-                results.append(
-                    {
-                        "video_id": video.video_id,
-                        "request_id": request.id,
-                        "url": getattr(request, "input_url", ""),
-                        "title": video.title,
-                        "channel": video.channel,
-                        "duration_sec": video.duration_sec,
-                        "duration_display": (
-                            f"{video.duration_sec // 60}:{video.duration_sec % 60:02d}"
-                            if video.duration_sec
-                            else None
-                        ),
-                        "resolution": video.resolution,
-                        "view_count": video.view_count,
-                        "like_count": video.like_count,
-                        "has_transcript": bool(video.transcript_text),
-                        "transcript_source": video.transcript_source,
-                        "status": video.status,
-                        "upload_date": video.upload_date,
-                        "created_at": isotime(video.created_at),
-                    }
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                total = await session.scalar(
+                    select(func.count())
+                    .select_from(VideoDownload)
+                    .join(Request, VideoDownload.request_id == Request.id)
+                    .where(*filters)
                 )
+                videos = (
+                    await session.scalars(
+                        select(VideoDownload)
+                        .join(Request, VideoDownload.request_id == Request.id)
+                        .options(selectinload(VideoDownload.request))
+                        .where(*filters)
+                        .order_by(VideoDownload.created_at.desc())
+                        .offset(offset)
+                        .limit(limit)
+                    )
+                ).all()
 
-            return paginated_payload(results=results, total=total, limit=limit, offset=offset)
+                results = [self._format_video(video) for video in videos]
+
+            return paginated_payload(results=results, total=total or 0, limit=limit, offset=offset)
         except Exception as exc:
             logger.exception("list_videos failed")
             return {"error": str(exc)}
 
-    def get_video_transcript(self, video_id: str) -> dict[str, Any]:
-        from app.infrastructure.persistence.sqlite.orm_exports import Request, VideoDownload
+    async def get_video_transcript(self, video_id: str) -> dict[str, Any]:
+        from app.db.models import Request, VideoDownload
 
         try:
-            video = (
-                VideoDownload.select(VideoDownload, Request)
-                .join(Request)
-                .where(
-                    VideoDownload.video_id == video_id, *self.context.request_scope_filters(Request)
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                video = await session.scalar(
+                    select(VideoDownload)
+                    .join(Request, VideoDownload.request_id == Request.id)
+                    .options(selectinload(VideoDownload.request))
+                    .where(
+                        VideoDownload.video_id == video_id,
+                        *self.context.request_scope_filters(Request),
+                    )
                 )
-                .first()
-            )
-            if not video:
-                return {"error": f"Video {video_id} not found"}
-            if not video.transcript_text:
+                if not video:
+                    return {"error": f"Video {video_id} not found"}
+                if not video.transcript_text:
+                    return {
+                        "video_id": video_id,
+                        "title": video.title,
+                        "error": "No transcript available for this video",
+                    }
+
                 return {
                     "video_id": video_id,
                     "title": video.title,
-                    "error": "No transcript available for this video",
+                    "channel": video.channel,
+                    "duration_sec": video.duration_sec,
+                    "transcript_source": video.transcript_source,
+                    "subtitle_language": video.subtitle_language,
+                    "auto_generated": video.auto_generated,
+                    "transcript": video.transcript_text[:50000],
+                    "transcript_length": len(video.transcript_text),
+                    "truncated": len(video.transcript_text) > 50000,
                 }
-
-            return {
-                "video_id": video_id,
-                "title": video.title,
-                "channel": video.channel,
-                "duration_sec": video.duration_sec,
-                "transcript_source": video.transcript_source,
-                "subtitle_language": video.subtitle_language,
-                "auto_generated": video.auto_generated,
-                "transcript": video.transcript_text[:50000],
-                "transcript_length": len(video.transcript_text),
-                "truncated": len(video.transcript_text) > 50000,
-            }
         except Exception as exc:
             logger.exception("get_video_transcript failed")
             return {"error": str(exc)}
 
-    def processing_stats(self) -> dict[str, Any]:
-        from peewee import fn
-
-        from app.infrastructure.persistence.sqlite.orm_exports import (
-            LLMCall,
-            Request,
-            VideoDownload,
-        )
+    async def processing_stats(self) -> dict[str, Any]:
+        from app.db.models import LLMCall, Request, VideoDownload
 
         try:
-            llm_scope_filters = [
-                not LLMCall.is_deleted,
-                *self.context.request_scope_filters(Request),
+            request_filters = self.context.request_scope_filters(Request)
+            llm_filters = [
+                LLMCall.is_deleted.is_(False),
+                *request_filters,
             ]
-            total_calls = LLMCall.select(LLMCall.id).join(Request).where(*llm_scope_filters).count()
-            success_calls = (
-                LLMCall.select(LLMCall.id)
-                .join(Request)
-                .where(*llm_scope_filters, LLMCall.status == CallStatus.OK)
-                .count()
-            )
-            error_calls = (
-                LLMCall.select(LLMCall.id)
-                .join(Request)
-                .where(*llm_scope_filters, LLMCall.status == "error")
-                .count()
-            )
-
-            token_stats = (
-                LLMCall.select(
-                    fn.SUM(LLMCall.tokens_prompt).alias("total_prompt"),
-                    fn.SUM(LLMCall.tokens_completion).alias("total_completion"),
-                    fn.SUM(LLMCall.cost_usd).alias("total_cost"),
-                    fn.AVG(LLMCall.latency_ms).alias("avg_latency_ms"),
+            runtime = self.context.ensure_runtime()
+            async with runtime.database.session() as session:
+                total_calls = await session.scalar(
+                    select(func.count())
+                    .select_from(LLMCall)
+                    .join(Request, LLMCall.request_id == Request.id)
+                    .where(*llm_filters)
                 )
-                .join(Request)
-                .where(*llm_scope_filters, LLMCall.status == CallStatus.OK)
-                .dicts()
-                .first()
-            ) or {}
-
-            model_counts: dict[str, int] = {}
-            for row in (
-                LLMCall.select(LLMCall.model)
-                .join(Request)
-                .where(
-                    *llm_scope_filters,
-                    LLMCall.status == CallStatus.OK,
-                    LLMCall.model.is_null(False),
+                success_calls = await session.scalar(
+                    select(func.count())
+                    .select_from(LLMCall)
+                    .join(Request, LLMCall.request_id == Request.id)
+                    .where(*llm_filters, LLMCall.status == CallStatus.OK.value)
                 )
-                .dicts()
-            ):
-                model = row.get("model") or "unknown"
-                model_counts[model] = model_counts.get(model, 0) + 1
+                error_calls = await session.scalar(
+                    select(func.count())
+                    .select_from(LLMCall)
+                    .join(Request, LLMCall.request_id == Request.id)
+                    .where(*llm_filters, LLMCall.status == CallStatus.ERROR.value)
+                )
 
-            top_models = sorted(model_counts.items(), key=lambda item: item[1], reverse=True)[:10]
-            video_base = (
-                VideoDownload.select(VideoDownload.id)
-                .join(Request)
-                .where(*self.context.request_scope_filters(Request))
-            )
+                token_stats = (
+                    await session.execute(
+                        select(
+                            func.sum(LLMCall.tokens_prompt).label("total_prompt"),
+                            func.sum(LLMCall.tokens_completion).label("total_completion"),
+                            func.sum(LLMCall.cost_usd).label("total_cost"),
+                            func.avg(LLMCall.latency_ms).label("avg_latency_ms"),
+                        )
+                        .join(Request, LLMCall.request_id == Request.id)
+                        .where(*llm_filters, LLMCall.status == CallStatus.OK.value)
+                    )
+                ).mappings().first() or {}
 
-            total_videos = video_base.count()
-            completed_videos = video_base.where(VideoDownload.status == "completed").count()
-            videos_with_transcript = video_base.where(
-                VideoDownload.status == "completed",
-                VideoDownload.transcript_text.is_null(False),
-            ).count()
+                model_rows = (
+                    await session.execute(
+                        select(LLMCall.model, func.count().label("count"))
+                        .join(Request, LLMCall.request_id == Request.id)
+                        .where(
+                            *llm_filters,
+                            LLMCall.status == CallStatus.OK.value,
+                            LLMCall.model.is_not(None),
+                        )
+                        .group_by(LLMCall.model)
+                        .order_by(func.count().desc())
+                        .limit(10)
+                    )
+                ).all()
 
+                video_base_filters = self.context.request_scope_filters(Request)
+                total_videos = await session.scalar(
+                    select(func.count())
+                    .select_from(VideoDownload)
+                    .join(Request, VideoDownload.request_id == Request.id)
+                    .where(*video_base_filters)
+                )
+                completed_videos = await session.scalar(
+                    select(func.count())
+                    .select_from(VideoDownload)
+                    .join(Request, VideoDownload.request_id == Request.id)
+                    .where(*video_base_filters, VideoDownload.status == "completed")
+                )
+                videos_with_transcript = await session.scalar(
+                    select(func.count())
+                    .select_from(VideoDownload)
+                    .join(Request, VideoDownload.request_id == Request.id)
+                    .where(
+                        *video_base_filters,
+                        VideoDownload.status == "completed",
+                        VideoDownload.transcript_text.is_not(None),
+                    )
+                )
+
+            total_calls = total_calls or 0
+            success_calls = success_calls or 0
+            error_calls = error_calls or 0
             return {
                 "llm_calls": {
                     "total": total_calls,
@@ -322,13 +354,40 @@ class CatalogReadService:
                         else None
                     ),
                 },
-                "top_models": [{"model": model, "calls": count} for model, count in top_models],
+                "top_models": [
+                    {"model": model or "unknown", "calls": count} for model, count in model_rows
+                ],
                 "videos": {
-                    "total": total_videos,
-                    "completed": completed_videos,
-                    "with_transcript": videos_with_transcript,
+                    "total": total_videos or 0,
+                    "completed": completed_videos or 0,
+                    "with_transcript": videos_with_transcript or 0,
                 },
             }
         except Exception as exc:
             logger.exception("processing_stats_resource failed")
             return {"error": str(exc)}
+
+    @staticmethod
+    def _format_video(video: Any) -> dict[str, Any]:
+        request = video.request
+        return {
+            "video_id": video.video_id,
+            "request_id": request.id,
+            "url": getattr(request, "input_url", ""),
+            "title": video.title,
+            "channel": video.channel,
+            "duration_sec": video.duration_sec,
+            "duration_display": (
+                f"{video.duration_sec // 60}:{video.duration_sec % 60:02d}"
+                if video.duration_sec
+                else None
+            ),
+            "resolution": video.resolution,
+            "view_count": video.view_count,
+            "like_count": video.like_count,
+            "has_transcript": bool(video.transcript_text),
+            "transcript_source": video.transcript_source,
+            "status": video.status,
+            "upload_date": video.upload_date,
+            "created_at": isotime(video.created_at),
+        }

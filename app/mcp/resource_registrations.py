@@ -80,19 +80,19 @@ def register_resources(
         return to_json(article_service.domain_counts())
 
     @mcp.resource("ratatoskr://collections")
-    def collections_resource() -> str:
+    async def collections_resource() -> str:
         """All top-level collections with item counts."""
-        return to_json(catalog_service.list_collections(limit=50, offset=0))
+        return to_json(await catalog_service.list_collections(limit=50, offset=0))
 
     @mcp.resource("ratatoskr://videos/recent")
-    def recent_videos_resource() -> str:
+    async def recent_videos_resource() -> str:
         """10 most recent video downloads with metadata."""
-        return to_json(catalog_service.list_videos(limit=10, offset=0, status="completed"))
+        return to_json(await catalog_service.list_videos(limit=10, offset=0, status="completed"))
 
     @mcp.resource("ratatoskr://processing/stats")
-    def processing_stats_resource() -> str:
+    async def processing_stats_resource() -> str:
         """Processing statistics: LLM call counts, token usage, model breakdown."""
-        return to_json(catalog_service.processing_stats())
+        return to_json(await catalog_service.processing_stats())
 
     @mcp.resource("ratatoskr://vector/health")
     async def vector_health_resource() -> str:

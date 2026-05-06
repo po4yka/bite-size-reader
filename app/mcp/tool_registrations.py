@@ -173,17 +173,19 @@ def register_tools(
         )
 
     @mcp.tool()
-    def list_collections(limit: int = 20, offset: int = 0) -> str:
+    async def list_collections(limit: int = 20, offset: int = 0) -> str:
         """List article collections (folders/reading lists)."""
         return to_json(
-            _call_sync("list_collections", catalog_service.list_collections, limit, offset)
+            await _call_async("list_collections", catalog_service.list_collections, limit, offset)
         )
 
     @mcp.tool()
-    def get_collection(collection_id: int, include_items: bool = True, limit: int = 50) -> str:
+    async def get_collection(
+        collection_id: int, include_items: bool = True, limit: int = 50
+    ) -> str:
         """Get details of a specific collection and its article summaries."""
         return to_json(
-            _call_sync(
+            await _call_async(
                 "get_collection",
                 catalog_service.get_collection,
                 collection_id,
@@ -193,17 +195,19 @@ def register_tools(
         )
 
     @mcp.tool()
-    def list_videos(limit: int = 20, offset: int = 0, status: str | None = None) -> str:
+    async def list_videos(limit: int = 20, offset: int = 0, status: str | None = None) -> str:
         """List downloaded YouTube videos with metadata."""
         return to_json(
-            _call_sync("list_videos", catalog_service.list_videos, limit, offset, status)
+            await _call_async("list_videos", catalog_service.list_videos, limit, offset, status)
         )
 
     @mcp.tool()
-    def get_video_transcript(video_id: str) -> str:
+    async def get_video_transcript(video_id: str) -> str:
         """Get the transcript text of a downloaded YouTube video."""
         return to_json(
-            _call_sync("get_video_transcript", catalog_service.get_video_transcript, video_id)
+            await _call_async(
+                "get_video_transcript", catalog_service.get_video_transcript, video_id
+            )
         )
 
     @mcp.tool()

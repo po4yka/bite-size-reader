@@ -240,7 +240,7 @@ def test_scope_filters_use_effective_request_user_scope() -> None:
 
     class _CollectionModel:
         is_deleted = _Field("is_deleted")
-        user = _Field("user")
+        user_id = _Field("user_id")
 
     context = McpServerContext(user_id=7)
 
@@ -251,7 +251,7 @@ def test_scope_filters_use_effective_request_user_scope() -> None:
         ]
         assert context.collection_scope_filters(_CollectionModel) == [
             ("is_deleted", False),
-            ("user", 8),
+            ("user_id", 8),
         ]
 
     with context.request_user_scope(None):

@@ -178,3 +178,11 @@ the most-ported repository are easiest to land first.
 - Verified this signal MCP slice with focused ruff, focused mypy, import smoke
   checks, `pytest tests/test_mcp_signal_service.py -q` → `2 passed`, and
   `pytest tests/test_mcp_server.py tests/test_mcp_context.py -q` → `17 passed`.
+- Ported `app/mcp/catalog_service.py` collection, video, and processing stats
+  reads from Peewee queries to async SQLAlchemy sessions; updated catalog MCP
+  tool/resource adapters to await those calls and corrected MCP collection
+  scoping to use the SQLAlchemy `user_id` column.
+- Verified this catalog MCP slice with focused ruff, focused mypy, import smoke
+  checks, and
+  `pytest tests/test_mcp_catalog_service.py tests/test_mcp_context.py tests/test_mcp_server.py tests/test_mcp_signal_service.py -q`
+  → `21 passed`.

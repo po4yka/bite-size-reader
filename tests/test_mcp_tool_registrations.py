@@ -76,10 +76,10 @@ async def test_mcp_tool_registration_records_success_metrics() -> None:
         check_url=MagicMock(return_value={"duplicate": False}),
     )
     catalog_service = SimpleNamespace(
-        list_collections=MagicMock(return_value={"items": []}),
-        get_collection=MagicMock(return_value={"id": 1}),
-        list_videos=MagicMock(return_value={"items": []}),
-        get_video_transcript=MagicMock(return_value={"video_id": "abc"}),
+        list_collections=AsyncMock(return_value={"items": []}),
+        get_collection=AsyncMock(return_value={"id": 1}),
+        list_videos=AsyncMock(return_value={"items": []}),
+        get_video_transcript=AsyncMock(return_value={"video_id": "abc"}),
     )
     semantic_service = SimpleNamespace(
         semantic_search=AsyncMock(return_value={"items": []}),
@@ -146,10 +146,10 @@ async def test_mcp_tool_registration_records_error_metrics_for_service_errors() 
         check_url=MagicMock(return_value={"duplicate": False}),
     )
     catalog_service = SimpleNamespace(
-        list_collections=MagicMock(return_value={"items": []}),
-        get_collection=MagicMock(return_value={"id": 1}),
-        list_videos=MagicMock(return_value={"items": []}),
-        get_video_transcript=MagicMock(return_value={"video_id": "abc"}),
+        list_collections=AsyncMock(return_value={"items": []}),
+        get_collection=AsyncMock(return_value={"id": 1}),
+        list_videos=AsyncMock(return_value={"items": []}),
+        get_video_transcript=AsyncMock(return_value={"video_id": "abc"}),
     )
     semantic_service = SimpleNamespace(
         semantic_search=AsyncMock(return_value={"items": []}),
@@ -258,10 +258,10 @@ def test_hosted_mcp_tool_uses_request_scoped_identity_and_client_id(
         check_url=MagicMock(return_value={"duplicate": False}),
     )
     catalog_service = SimpleNamespace(
-        list_collections=MagicMock(return_value={"items": []}),
-        get_collection=MagicMock(return_value={"id": 1}),
-        list_videos=MagicMock(return_value={"items": []}),
-        get_video_transcript=MagicMock(return_value={"video_id": "abc"}),
+        list_collections=AsyncMock(return_value={"items": []}),
+        get_collection=AsyncMock(return_value={"id": 1}),
+        list_videos=AsyncMock(return_value={"items": []}),
+        get_video_transcript=AsyncMock(return_value={"video_id": "abc"}),
     )
     semantic_service = SimpleNamespace(
         semantic_search=AsyncMock(return_value={"items": []}),

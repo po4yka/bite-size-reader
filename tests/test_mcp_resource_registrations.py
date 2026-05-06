@@ -70,9 +70,9 @@ async def test_aggregation_detail_resource_returns_session_payload() -> None:
         domain_counts=MagicMock(return_value={"items": []}),
     )
     catalog_service = SimpleNamespace(
-        list_collections=MagicMock(return_value={"items": []}),
-        list_videos=MagicMock(return_value={"items": []}),
-        processing_stats=MagicMock(return_value={"jobs": 0}),
+        list_collections=AsyncMock(return_value={"items": []}),
+        list_videos=AsyncMock(return_value={"items": []}),
+        processing_stats=AsyncMock(return_value={"jobs": 0}),
     )
     semantic_service = SimpleNamespace(
         vector_health=AsyncMock(return_value={"status": "ok"}),
@@ -130,9 +130,9 @@ def test_hosted_mcp_resource_uses_request_scoped_identity(mcp_test_db, monkeypat
         domain_counts=MagicMock(return_value={"items": []}),
     )
     catalog_service = SimpleNamespace(
-        list_collections=MagicMock(return_value={"items": []}),
-        list_videos=MagicMock(return_value={"items": []}),
-        processing_stats=MagicMock(return_value={"jobs": 0}),
+        list_collections=AsyncMock(return_value={"items": []}),
+        list_videos=AsyncMock(return_value={"items": []}),
+        processing_stats=AsyncMock(return_value={"jobs": 0}),
     )
     semantic_service = SimpleNamespace(
         vector_health=AsyncMock(return_value={"status": "ok"}),
