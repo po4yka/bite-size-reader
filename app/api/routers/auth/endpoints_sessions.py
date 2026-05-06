@@ -138,7 +138,7 @@ async def logout(
             record = await auth_repo.async_get_refresh_token_by_hash(token_hash)
             if record is None:
                 raise ResourceNotFoundError("RefreshToken", token_hash[:8])
-            # model_to_dict() returns "user" for ForeignKeyField; cache may return "user_id"
+            # SQLAlchemy model_to_dict emits "user_id"; legacy cache entries may carry "user".
             record_user_id = record.get("user_id") or record.get("user")
             if str(record_user_id) != str(current_user.get("user_id")):
                 raise AuthorizationError("Token does not belong to the authenticated user")

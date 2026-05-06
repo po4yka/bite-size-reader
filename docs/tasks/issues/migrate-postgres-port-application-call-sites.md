@@ -194,3 +194,26 @@ the most-ported repository are easiest to land first.
   with focused ruff, focused mypy, import smoke checks, and
   `pytest tests/test_mcp_article_service.py tests/test_mcp_catalog_service.py tests/test_mcp_context.py tests/test_mcp_server.py tests/test_mcp_signal_service.py -q`
   → `24 passed`.
+
+## Current state (2026-05-06)
+
+Surface-level port is complete:
+
+- `git grep -nE "from peewee|import peewee|playhouse\." app/` returns zero
+  hits outside `app/cli/_legacy_peewee_models/` and the (not-yet-built) data
+  migrator.
+- `git grep -nE "\.select\(\)\.where|\.get_or_none\(|\.update\(.*\)\.where\(.*\)\.execute|peewee\.IntegrityError|peewee\.DoesNotExist" app/`
+  returns zero hits outside legacy.
+- The only remaining `sqlite3.connect` call in `app/` is the Telethon session
+  validator (`app/adapters/digest/session_validator.py`) — out of scope per
+  the migration plan's Telethon carve-out.
+
+Acceptance items still pending (depend on T3 fixtures):
+
+- `make type` clean across the full tree.
+- Full pytest suite green against Postgres (currently 2826 collect / 3
+  pre-existing collection errors; runtime breakage in many test bodies that
+  still use Peewee CRUD against the legacy snapshot via the defensive shim
+  introduced 2026-05-06 — see T3 task).
+- `app/cli/summary.py` end-to-end against local Postgres (T2 + T3
+  prerequisites).

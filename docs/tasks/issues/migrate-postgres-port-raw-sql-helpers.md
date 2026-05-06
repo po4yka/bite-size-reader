@@ -1,6 +1,6 @@
 ---
 title: Port raw SQL call sites to SQLAlchemy text
-status: backlog
+status: review
 area: db
 priority: medium
 owner: Nikita Pochaev
@@ -12,7 +12,7 @@ created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Port raw SQL call sites to SQLAlchemy text #repo/ratatoskr #area/db #status/backlog 🔼
+- [ ] #task Port raw SQL call sites to SQLAlchemy text #repo/ratatoskr #area/db #status/review 🔼
 
 ## Objective
 
@@ -87,3 +87,12 @@ SQLAlchemy Alembic baseline (M4), so deletion is the right move.
   PostgreSQL database and exits non-zero when `Database.healthcheck()` fails.
 - Documented the Telethon `.session` SQLite carve-out in `docs/SPEC.md`; those
   files are owned by Telethon and are outside Ratatoskr relational storage.
+
+Status flipped to review on 2026-05-06.
+`git grep -nE "execute_sql|sqlite_master|PRAGMA " app/` now matches only:
+
+- `app/adapters/digest/session_validator.py:44` (Telethon session DB —
+  documented carve-out).
+- `app/db/alembic/versions/_legacy_sqlite/*` (archived SQLite-flavoured
+  Alembic revisions; M4 keeps these on disk and excludes them from
+  `version_locations`).

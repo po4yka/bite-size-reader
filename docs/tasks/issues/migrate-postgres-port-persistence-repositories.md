@@ -1,6 +1,6 @@
 ---
 title: Port persistence repositories to AsyncSession
-status: doing
+status: review
 area: db
 priority: critical
 owner: Nikita Pochaev
@@ -13,7 +13,7 @@ created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Port persistence repositories to AsyncSession #repo/ratatoskr #area/db #status/doing 🔺
+- [ ] #task Port persistence repositories to AsyncSession #repo/ratatoskr #area/db #status/review 🔺
 
 ## Objective
 
@@ -274,7 +274,20 @@ Conventions for the port:
 - Deleted unused Peewee-era `app/db/video_downloads.py`; video download
   persistence now goes through the SQLAlchemy repository covered by
   `tests/infrastructure/test_media_support_repositories_postgres.py`.
+- Ported `app/mcp/semantic_service.py` reads (find_similar_articles,
+  vector_index_stats, vector_sync_gap, local vector match, summary fetch
+  helper) to async SQLAlchemy with `selectinload(Summary.request)` to keep
+  relationships hot after session close. Renamed `sqlite_*` keys in
+  vector_index_stats / vector_sync_gap output to `database_*`.
+- Flattened the `app/infrastructure/persistence/sqlite/` package up one level:
+  repositories at `app/infrastructure/persistence/repositories/`, sibling
+  modules at `app/infrastructure/persistence/`. Dead `orm_exports.py` removed
+  (zero callers). 117 import sites updated; class names unchanged
+  (`SqliteRequestRepositoryAdapter` etc. retain the misleading prefix — a
+  separate small batch can drop it once a target name is decided).
 
-Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
-SQLite package/import surface, and replace the skipped SQLite repository tests
-with Postgres equivalents.
+Status flipped to review on 2026-05-06: surface-level repository ports are
+complete, no remaining `peewee` / `playhouse` / bare `Model.select()` calls
+in `app/infrastructure/`. Repository tests run against ephemeral Postgres
+(`TEST_DATABASE_URL`); the test-fixture port itself is T3
+(`migrate-postgres-add-test-fixtures-and-ci`).
