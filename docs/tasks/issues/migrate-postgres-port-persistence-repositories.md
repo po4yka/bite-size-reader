@@ -134,6 +134,12 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_audio_generation_repository_postgres.py -q`
   → `2 passed`.
+- Ported `webhook_repository.py` to SQLAlchemy/AsyncSession with live Postgres
+  coverage for subscription lifecycle, delivery logging, failure counters,
+  disabling, deletion, and secret rotation.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_webhook_repository_postgres.py -q`
+  → `2 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

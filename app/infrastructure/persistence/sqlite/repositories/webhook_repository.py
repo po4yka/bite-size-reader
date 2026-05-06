@@ -1,48 +1,46 @@
-"""SQLite implementation of webhook repository.
-
-This adapter handles persistence for webhook subscriptions and delivery logs.
-"""
+"""SQLAlchemy implementation of the webhook repository."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from sqlalchemy import select, update
 
 from app.db.json_utils import prepare_json_payload
-from app.db.models import WebhookDelivery, WebhookSubscription, _utcnow, model_to_dict
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+from app.db.models import WebhookDelivery, WebhookSubscription, model_to_dict
+from app.db.types import _utcnow
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
-class SqliteWebhookRepositoryAdapter(SqliteBaseRepository):
+class SqliteWebhookRepositoryAdapter:
     """Adapter for webhook subscription and delivery operations."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_get_user_subscriptions(
         self, user_id: int, enabled_only: bool = True
     ) -> list[dict[str, Any]]:
         """Return webhook subscriptions for a user."""
-
-        def _get() -> list[dict[str, Any]]:
-            query = WebhookSubscription.select().where(
-                (WebhookSubscription.user == user_id) & (WebhookSubscription.is_deleted == False)  # noqa: E712
+        async with self._database.session() as session:
+            stmt = select(WebhookSubscription).where(
+                WebhookSubscription.user_id == user_id,
+                WebhookSubscription.is_deleted.is_(False),
             )
             if enabled_only:
-                query = query.where(WebhookSubscription.enabled == True)  # noqa: E712
-            return [
-                model_to_dict(sub) for sub in query.order_by(WebhookSubscription.created_at.desc())
-            ]
-
-        return await self._execute(_get, operation_name="get_user_subscriptions", read_only=True)
+                stmt = stmt.where(WebhookSubscription.enabled.is_(True))
+            rows = (
+                await session.execute(stmt.order_by(WebhookSubscription.created_at.desc()))
+            ).scalars()
+            return [model_to_dict(row) or {} for row in rows]
 
     async def async_get_subscription_by_id(self, subscription_id: int) -> dict[str, Any] | None:
         """Return a single subscription by ID."""
-
-        def _get() -> dict[str, Any] | None:
-            try:
-                sub = WebhookSubscription.get_by_id(subscription_id)
-                return model_to_dict(sub)
-            except WebhookSubscription.DoesNotExist:
-                return None
-
-        return await self._execute(_get, operation_name="get_subscription_by_id", read_only=True)
+        async with self._database.session() as session:
+            sub = await session.get(WebhookSubscription, subscription_id)
+            return model_to_dict(sub)
 
     async def async_create_subscription(
         self,
@@ -53,58 +51,53 @@ class SqliteWebhookRepositoryAdapter(SqliteBaseRepository):
         events: list[str],
     ) -> dict[str, Any]:
         """Create a new webhook subscription."""
-
-        def _create() -> dict[str, Any]:
-            sub = WebhookSubscription.create(
-                user=user_id,
+        async with self._database.transaction() as session:
+            sub = WebhookSubscription(
+                user_id=user_id,
                 name=name,
                 url=url,
                 secret=secret,
-                events_json=prepare_json_payload(events),
+                events_json=prepare_json_payload(events, default=[]),
                 enabled=True,
                 status="active",
             )
-            return model_to_dict(sub)
-
-        return await self._execute(_create, operation_name="create_subscription")
+            session.add(sub)
+            await session.flush()
+            return model_to_dict(sub) or {}
 
     async def async_update_subscription(
         self, subscription_id: int, **kwargs: Any
     ) -> dict[str, Any]:
         """Update an existing webhook subscription."""
+        update_data = dict(kwargs)
+        if "events" in update_data:
+            update_data["events_json"] = prepare_json_payload(update_data.pop("events"), default=[])
+        allowed_fields = set(WebhookSubscription.__mapper__.columns.keys()) - {"id"}
+        update_values = {key: value for key, value in update_data.items() if key in allowed_fields}
+        update_values["updated_at"] = _utcnow()
 
-        def _update() -> dict[str, Any]:
-            # Translate 'events' key to 'events_json' for DB column
-            update_data = dict(kwargs)
-            if "events" in update_data:
-                update_data["events_json"] = prepare_json_payload(update_data.pop("events"))
-
-            (
-                WebhookSubscription.update(**update_data)
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(WebhookSubscription)
                 .where(WebhookSubscription.id == subscription_id)
-                .execute()
+                .values(**update_values)
             )
-            sub = WebhookSubscription.get_by_id(subscription_id)
-            return model_to_dict(sub)
-
-        return await self._execute(_update, operation_name="update_subscription")
+            sub = await session.get(WebhookSubscription, subscription_id)
+            return model_to_dict(sub) or {}
 
     async def async_delete_subscription(self, subscription_id: int) -> None:
         """Soft-delete a webhook subscription."""
-
-        def _delete() -> None:
-            now = _utcnow()
-            (
-                WebhookSubscription.update(
-                    is_deleted=True,
-                    deleted_at=now,
-                    enabled=False,
-                )
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(WebhookSubscription)
                 .where(WebhookSubscription.id == subscription_id)
-                .execute()
+                .values(
+                    is_deleted=True,
+                    deleted_at=_utcnow(),
+                    enabled=False,
+                    updated_at=_utcnow(),
+                )
             )
-
-        await self._execute(_delete, operation_name="delete_subscription")
 
     async def async_log_delivery(
         self,
@@ -119,12 +112,11 @@ class SqliteWebhookRepositoryAdapter(SqliteBaseRepository):
         error: str | None,
     ) -> dict[str, Any]:
         """Persist a webhook delivery attempt."""
-
-        def _log() -> dict[str, Any]:
-            delivery = WebhookDelivery.create(
-                subscription=subscription_id,
+        async with self._database.transaction() as session:
+            delivery = WebhookDelivery(
+                subscription_id=subscription_id,
                 event_type=event_type,
-                payload_json=prepare_json_payload(payload),
+                payload_json=prepare_json_payload(payload, default={}),
                 response_status=response_status,
                 response_body=response_body,
                 duration_ms=duration_ms,
@@ -132,80 +124,73 @@ class SqliteWebhookRepositoryAdapter(SqliteBaseRepository):
                 attempt=attempt,
                 error=error,
             )
-            # Update last_delivery_at on the subscription
-            (
-                WebhookSubscription.update(last_delivery_at=_utcnow())
+            session.add(delivery)
+            await session.flush()
+            await session.execute(
+                update(WebhookSubscription)
                 .where(WebhookSubscription.id == subscription_id)
-                .execute()
+                .values(last_delivery_at=_utcnow(), updated_at=_utcnow())
             )
-            return model_to_dict(delivery)
-
-        return await self._execute(_log, operation_name="log_delivery")
+            return model_to_dict(delivery) or {}
 
     async def async_get_deliveries(
         self, subscription_id: int, limit: int = 50, offset: int = 0
     ) -> list[dict[str, Any]]:
         """Return delivery log entries for a subscription."""
-
-        def _get() -> list[dict[str, Any]]:
-            query = (
-                WebhookDelivery.select()
-                .where(WebhookDelivery.subscription == subscription_id)
-                .order_by(WebhookDelivery.created_at.desc())
-                .limit(limit)
-                .offset(offset)
-            )
-            return [model_to_dict(d) for d in query]
-
-        return await self._execute(_get, operation_name="get_deliveries", read_only=True)
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(WebhookDelivery)
+                    .where(WebhookDelivery.subscription_id == subscription_id)
+                    .order_by(WebhookDelivery.created_at.desc())
+                    .limit(limit)
+                    .offset(offset)
+                )
+            ).scalars()
+            return [model_to_dict(row) or {} for row in rows]
 
     async def async_increment_failure_count(self, subscription_id: int) -> int:
         """Increment consecutive failure count. Returns the new count."""
-
-        def _increment() -> int:
-            sub = WebhookSubscription.get_by_id(subscription_id)
-            new_count = (sub.failure_count or 0) + 1
-            (
-                WebhookSubscription.update(failure_count=new_count)
+        async with self._database.transaction() as session:
+            current = int(
+                await session.scalar(
+                    select(WebhookSubscription.failure_count).where(
+                        WebhookSubscription.id == subscription_id
+                    )
+                )
+                or 0
+            )
+            new_count = current + 1
+            await session.execute(
+                update(WebhookSubscription)
                 .where(WebhookSubscription.id == subscription_id)
-                .execute()
+                .values(failure_count=new_count, updated_at=_utcnow())
             )
             return new_count
 
-        return await self._execute(_increment, operation_name="increment_failure_count")
-
     async def async_reset_failure_count(self, subscription_id: int) -> None:
         """Reset consecutive failure count to zero."""
-
-        def _reset() -> None:
-            (
-                WebhookSubscription.update(failure_count=0)
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(WebhookSubscription)
                 .where(WebhookSubscription.id == subscription_id)
-                .execute()
+                .values(failure_count=0, updated_at=_utcnow())
             )
-
-        await self._execute(_reset, operation_name="reset_failure_count")
 
     async def async_disable_subscription(self, subscription_id: int) -> None:
         """Disable a webhook subscription."""
-
-        def _disable() -> None:
-            (
-                WebhookSubscription.update(status="disabled", enabled=False)
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(WebhookSubscription)
                 .where(WebhookSubscription.id == subscription_id)
-                .execute()
+                .values(status="disabled", enabled=False, updated_at=_utcnow())
             )
-
-        await self._execute(_disable, operation_name="disable_subscription")
 
     async def async_rotate_secret(self, subscription_id: int, new_secret: str) -> None:
         """Rotate the HMAC secret for a subscription."""
-
-        def _rotate() -> None:
-            (
-                WebhookSubscription.update(secret=new_secret)
+        async with self._database.transaction() as session:
+            await session.execute(
+                update(WebhookSubscription)
                 .where(WebhookSubscription.id == subscription_id)
-                .execute()
+                .values(secret=new_secret, updated_at=_utcnow())
             )
-
-        await self._execute(_rotate, operation_name="rotate_secret")
