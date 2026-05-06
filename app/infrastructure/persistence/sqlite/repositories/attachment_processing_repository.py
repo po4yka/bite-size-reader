@@ -1,15 +1,22 @@
-"""SQLite repository for attachment processing records."""
+"""SQLAlchemy repository for attachment processing records."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from sqlalchemy import select, update
 
 from app.db.models import AttachmentProcessing
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
-class SqliteAttachmentProcessingRepositoryAdapter(SqliteBaseRepository):
+class SqliteAttachmentProcessingRepositoryAdapter:
     """Owns persistence for attachment extraction state."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_create_processing(
         self,
@@ -26,31 +33,43 @@ class SqliteAttachmentProcessingRepositoryAdapter(SqliteBaseRepository):
         vision_pages_count: int | None = None,
         processing_method: str | None = None,
     ) -> None:
-        def _insert() -> None:
-            AttachmentProcessing.create(
-                request=request_id,
-                file_type=file_type,
-                mime_type=mime_type,
-                file_name=file_name,
-                file_size_bytes=file_size_bytes,
-                status=status,
-                extracted_text_length=extracted_text_length,
-                page_count=page_count,
-                vision_used=vision_used,
-                vision_pages_count=vision_pages_count,
-                processing_method=processing_method,
+        async with self._database.transaction() as session:
+            session.add(
+                AttachmentProcessing(
+                    request_id=request_id,
+                    file_type=file_type,
+                    mime_type=mime_type,
+                    file_name=file_name,
+                    file_size_bytes=file_size_bytes,
+                    status=status,
+                    extracted_text_length=extracted_text_length,
+                    page_count=page_count,
+                    vision_used=vision_used,
+                    vision_pages_count=vision_pages_count,
+                    processing_method=processing_method,
+                )
             )
 
-        await self._execute(_insert, operation_name="create_attachment_processing")
-
     async def async_update_processing(self, request_id: int, **fields: Any) -> bool:
-        def _update() -> bool:
-            record = AttachmentProcessing.get_or_none(AttachmentProcessing.request == request_id)
-            if record is None:
-                return False
-            for key, value in fields.items():
-                setattr(record, key, value)
-            record.save()
-            return True
+        if not fields:
+            async with self._database.session() as session:
+                exists = await session.scalar(
+                    select(AttachmentProcessing.id).where(
+                        AttachmentProcessing.request_id == request_id
+                    )
+                )
+                return exists is not None
 
-        return await self._execute(_update, operation_name="update_attachment_processing")
+        allowed_fields = set(AttachmentProcessing.__mapper__.columns.keys()) - {"id", "request_id"}
+        update_values = {key: value for key, value in fields.items() if key in allowed_fields}
+        if not update_values:
+            return False
+
+        async with self._database.transaction() as session:
+            result = await session.execute(
+                update(AttachmentProcessing)
+                .where(AttachmentProcessing.request_id == request_id)
+                .values(**update_values)
+                .returning(AttachmentProcessing.id)
+            )
+            return result.scalar_one_or_none() is not None

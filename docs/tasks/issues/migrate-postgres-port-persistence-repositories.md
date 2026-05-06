@@ -103,6 +103,13 @@ Conventions for the port:
   → `2 passed`.
 - Removed dead request repository Peewee mixins now that
   `request_repository.py` owns its SQLAlchemy implementation directly.
+- Ported `audit_log_repository.py`, `attachment_processing_repository.py`, and
+  `video_download_repository.py` to SQLAlchemy/AsyncSession with live Postgres
+  coverage for audit JSON insertion, attachment state updates, and video
+  download reads/updates.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_media_support_repositories_postgres.py -q`
+  → `3 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

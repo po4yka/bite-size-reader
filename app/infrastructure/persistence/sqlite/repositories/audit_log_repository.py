@@ -1,19 +1,21 @@
-"""SQLite implementation of audit log repository.
-
-This adapter handles persistence for application audit events and security logs.
-"""
+"""SQLAlchemy implementation of the audit log repository."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.db.json_utils import prepare_json_payload
 from app.db.models import AuditLog
-from app.infrastructure.persistence.sqlite.base import SqliteBaseRepository
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
-class SqliteAuditLogRepositoryAdapter(SqliteBaseRepository):
+class SqliteAuditLogRepositoryAdapter:
     """Adapter for audit logging operations."""
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
     async def async_insert_audit_log(
         self,
@@ -22,13 +24,12 @@ class SqliteAuditLogRepositoryAdapter(SqliteBaseRepository):
         details: dict[str, Any] | None = None,
     ) -> int:
         """Insert a new audit log record."""
-
-        def _insert() -> int:
-            log = AuditLog.create(
+        async with self._database.transaction() as session:
+            log = AuditLog(
                 level=log_level,
                 event=event_type,
                 details_json=prepare_json_payload(details),
             )
+            session.add(log)
+            await session.flush()
             return log.id
-
-        return await self._execute(_insert, operation_name="insert_audit_log")
