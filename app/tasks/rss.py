@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from taskiq import TaskiqDepends
 
+from app.config import AppConfig  # noqa: TC001 — taskiq resolves type hints at runtime
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
+from app.db.session import DatabaseSessionManager  # noqa: TC001 — taskiq resolves type hints at runtime
 from app.tasks.broker import broker
 from app.tasks.deps import (
     create_rss_bot_client,
@@ -18,10 +19,6 @@ from app.tasks.deps import (
     get_app_config,
     get_db,
 )
-
-if TYPE_CHECKING:
-    from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
 
 logger = get_logger(__name__)
 
