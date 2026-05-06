@@ -1,6 +1,6 @@
 ---
 title: Port core models to SQLAlchemy 2.0
-status: backlog
+status: review
 area: db
 priority: critical
 owner: Nikita Pochaev
@@ -10,13 +10,11 @@ blocks:
   - migrate-postgres-port-runtime-services
   - migrate-postgres-baseline-alembic-revision
 blocked_by:
-  - migrate-postgres-introduce-database-factory
-  - migrate-postgres-audit-sqlite-surface
 created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Port core models to SQLAlchemy 2.0 #repo/ratatoskr #area/db #status/backlog 🔺
+- [ ] #task Port core models to SQLAlchemy 2.0 #repo/ratatoskr #area/db #status/review 🔺
 
 ## Objective
 
@@ -64,18 +62,18 @@ Conventions:
 
 ## Acceptance criteria
 
-- [ ] `app/db/base.py`, `app/db/types.py`, `app/db/models/__init__.py`,
+- [x] `app/db/base.py`, `app/db/types.py`, `app/db/models/__init__.py`,
       `app/db/models/core.py` exist with the eleven core classes ported.
-- [ ] Field types, defaults, nullability, indexes, and FKs are 1:1 with
+- [x] Field types, defaults, nullability, indexes, and FKs are 1:1 with
       `_models_core.py` plus the equivalents in `_models_base.py` (timestamp
       defaults, server-version monotonic update via event listener).
-- [ ] `mypy` clean across the new files.
-- [ ] A unit test fixture (`tests/db/test_models_core.py`) instantiates each
+- [x] `mypy` clean across the new files.
+- [x] A unit test fixture (`tests/db/test_models_core.py`) instantiates each
       model, persists via `AsyncSession`, reads back, asserts equality on every
       field. Runs against an ephemeral Postgres in CI.
-- [ ] No reference to `peewee`, `playhouse`, `database_proxy`, or `BaseModel`
+- [x] No reference to `peewee`, `playhouse`, `database_proxy`, or `BaseModel`
       remains in any file under `app/db/models/core.py`.
-- [ ] `ALL_MODELS` tuple in `app/db/models/__init__.py` re-exports the M1
+- [x] `ALL_MODELS` tuple in `app/db/models/__init__.py` re-exports the M1
       classes; M2 will extend it.
 - [ ] The legacy file `app/db/_models_core.py` is **kept** for now (used by the
       legacy migrator snapshot in T2). It is moved verbatim to
@@ -90,3 +88,12 @@ Conventions:
 - For `User.preferences_json` (and similar JSONB columns) declare
   `mapped_column(JSONB, nullable=True)` not just `JSONB` — the implicit nullable
   default differs from Peewee's.
+
+Progress:
+
+- Core SQLAlchemy model package is in place and imports cleanly.
+- `tests/db/test_models_core.py` passed against a throwaway Postgres 16 container
+  on 2026-05-06, including the monotonic `server_version` event.
+- The legacy `_models_core.py` file was already removed by F3's explicit deletion
+  of `app/db/_models_*.py`; T2 must source the frozen Peewee snapshot from git
+  history instead of the worktree.
