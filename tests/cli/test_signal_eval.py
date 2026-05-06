@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import AsyncMock
 
+from app.cli import signal_eval
 from app.cli.signal_eval import compute_precision_at_k, load_eval_rows
 
 
@@ -42,3 +44,57 @@ def test_compute_precision_at_5_from_checked_in_fixture() -> None:
     result = compute_precision_at_k(rows, k=5)
 
     assert result["precision"] == 0.6
+
+
+async def test_export_eval_set_uses_postgres_database(monkeypatch, tmp_path) -> None:
+    fake_db = AsyncMock()
+    fake_repo = AsyncMock()
+    fake_repo.async_list_user_signals.return_value = [
+        {
+            "id": 12,
+            "status": "liked",
+            "final_score": 0.8,
+            "feed_item_title": "Title",
+            "feed_item_url": "https://example.com",
+            "source_title": "Source",
+            "topic_name": "Topic",
+        }
+    ]
+
+    monkeypatch.setattr(signal_eval, "DatabaseConfig", lambda dsn=None: object())
+    monkeypatch.setattr(signal_eval, "Database", lambda config: fake_db)
+    monkeypatch.setattr(signal_eval, "SqliteSignalSourceRepositoryAdapter", lambda db: fake_repo)
+
+    output_path = tmp_path / "eval.jsonl"
+    count = await signal_eval.export_eval_set(
+        database_dsn="postgresql+asyncpg://test",
+        output_path=output_path,
+        user_id=1,
+        limit=10,
+        status="candidate",
+    )
+
+    assert count == 1
+    fake_repo.async_list_user_signals.assert_awaited_once_with(
+        1, status="candidate", limit=10
+    )
+    fake_db.dispose.assert_awaited_once()
+    exported = json.loads(output_path.read_text(encoding="utf-8"))
+    assert exported["signal_id"] == 12
+    assert exported["relevant"] is True
+
+
+def test_export_parser_accepts_dsn_option() -> None:
+    args = signal_eval._parser().parse_args(
+        [
+            "export",
+            "--dsn",
+            "postgresql+asyncpg://test",
+            "--output",
+            "/tmp/eval.jsonl",
+            "--user-id",
+            "1",
+        ]
+    )
+
+    assert args.dsn == "postgresql+asyncpg://test"

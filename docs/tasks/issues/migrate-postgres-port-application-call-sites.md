@@ -155,3 +155,8 @@ the most-ported repository are easiest to land first.
   `Database` built from `DATABASE_URL` or `--dsn`.
 - Verified this CLI slice with focused ruff, focused mypy, and
   `pytest tests/cli/test_backfill_embeddings.py` → `3 passed`.
+- Ported `app/cli/signal_eval.py` from `DatabaseSessionManager` and required
+  SQLite `--db-path` to the SQLAlchemy `Database` facade built from
+  `DATABASE_URL` or `--dsn`.
+- Verified this CLI slice with focused ruff, focused mypy, and
+  `pytest tests/cli/test_signal_eval.py` → `5 passed`.

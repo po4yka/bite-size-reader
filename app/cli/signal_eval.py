@@ -8,7 +8,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from app.db.session import DatabaseSessionManager
+from app.config import DatabaseConfig
+from app.db.session import Database
 from app.infrastructure.persistence.sqlite.repositories.signal_source_repository import (
     SqliteSignalSourceRepositoryAdapter,
 )
@@ -41,14 +42,14 @@ def compute_precision_at_k(rows: list[dict[str, Any]], *, k: int = 5) -> dict[st
 
 async def export_eval_set(
     *,
-    db_path: Path,
+    database_dsn: str | None,
     output_path: Path,
     user_id: int,
     limit: int,
     status: str | None,
 ) -> int:
-    db = DatabaseSessionManager(str(db_path))
-    with db.connect():
+    db = Database(config=DatabaseConfig(dsn=database_dsn) if database_dsn else DatabaseConfig())
+    try:
         repo = SqliteSignalSourceRepositoryAdapter(db)
         rows = await repo.async_list_user_signals(user_id, status=status, limit=limit)
         with output_path.open("w", encoding="utf-8") as handle:
@@ -66,6 +67,8 @@ async def export_eval_set(
                 }
                 handle.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
         return len(rows)
+    finally:
+        await db.dispose()
 
 
 def _is_relevant(row: dict[str, Any]) -> bool:
@@ -79,7 +82,7 @@ def _parser() -> argparse.ArgumentParser:
     subcommands = parser.add_subparsers(dest="command", required=True)
 
     export = subcommands.add_parser("export", help="Export ranked signals as JSONL for labeling")
-    export.add_argument("--db-path", required=True, type=Path)
+    export.add_argument("--dsn", default=None, help="PostgreSQL DSN (default: DATABASE_URL)")
     export.add_argument("--output", required=True, type=Path)
     export.add_argument("--user-id", required=True, type=int)
     export.add_argument("--limit", type=int, default=100)
@@ -96,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "export":
         count = asyncio.run(
             export_eval_set(
-                db_path=args.db_path,
+                database_dsn=args.dsn,
                 output_path=args.output,
                 user_id=args.user_id,
                 limit=args.limit,
