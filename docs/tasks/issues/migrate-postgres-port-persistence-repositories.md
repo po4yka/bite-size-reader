@@ -95,6 +95,12 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_user_repository_postgres.py -q`
   → `2 passed`.
+- Ported `telegram_message_repository.py` to SQLAlchemy/AsyncSession and
+  replaced its structural test with live Postgres coverage for idempotent
+  message insert, forward info, and per-user message listing.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_telegram_message_repository.py -q`
+  → `2 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
