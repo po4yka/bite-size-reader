@@ -235,6 +235,11 @@ Conventions for the port:
 - Verified the expanded focused repository suite with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_smart_collection_handler_postgres.py -q`
   → `61 passed`.
+- Ported `push_notification.py` away from its direct Peewee summary lookup by
+  using the injected summary repository for async summary reads.
+- Verified this slice with
+  `pytest tests/infrastructure/test_push_notification_handler.py -q`
+  → `2 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests

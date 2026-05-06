@@ -47,7 +47,7 @@ class PushNotificationEventHandler:
                 return
 
             # Build notification body from the summary payload
-            body = self._build_body(event, request_data)
+            body = await self._build_body(event, request_data)
 
             data: dict[str, str] = {
                 "summary_id": str(event.summary_id),
@@ -74,7 +74,7 @@ class PushNotificationEventHandler:
 
     # ------------------------------------------------------------------
 
-    def _build_body(self, event: SummaryCreated, request_data: dict[str, Any]) -> str:
+    async def _build_body(self, event: SummaryCreated, request_data: dict[str, Any]) -> str:
         """Derive the notification body text.
 
         Tries, in order:
@@ -84,7 +84,7 @@ class PushNotificationEventHandler:
         """
         # Try to get tldr from summary
         try:
-            summary_data = self._get_summary_sync(event.summary_id)
+            summary_data = await self._summary_repo.async_get_summary_by_id(event.summary_id)
             if summary_data:
                 payload = summary_data.get("json_payload") or {}
                 if isinstance(payload, dict):
@@ -113,18 +113,3 @@ class PushNotificationEventHandler:
                 )
 
         return "Tap to read your new summary"
-
-    def _get_summary_sync(self, summary_id: int) -> dict[str, Any] | None:
-        """Synchronously fetch summary data (called within an async handler).
-
-        Uses the Peewee ORM directly since we are already inside the event bus
-        handler and the underlying DB call is non-blocking on SQLite.
-        """
-        try:
-            from app.db.models import Summary, model_to_dict
-
-            summary = Summary.get_or_none(Summary.id == summary_id)
-            return model_to_dict(summary)
-        except Exception:
-            logger.debug("push_get_summary_failed", exc_info=True, extra={"summary_id": summary_id})
-            return None
