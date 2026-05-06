@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt  # noqa: TC003 - SQLAlchemy resolves string annotations at runtime.
+from typing import Any
 
 from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, LargeBinary
 from sqlalchemy import Text
@@ -52,6 +53,77 @@ class User(Base):
     )
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    aggregation_sessions: Mapped[list[Any]] = relationship(
+        "AggregationSession", back_populates="user", cascade="all, delete-orphan"
+    )
+    batch_sessions: Mapped[list[Any]] = relationship(
+        "BatchSession", back_populates="user", cascade="all, delete-orphan"
+    )
+    collections: Mapped[list[Any]] = relationship(
+        "Collection", back_populates="user", cascade="all, delete-orphan"
+    )
+    collection_collaborations: Mapped[list[Any]] = relationship(
+        "CollectionCollaborator",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="CollectionCollaborator.user_id",
+    )
+    collection_invites_sent: Mapped[list[Any]] = relationship(
+        "CollectionCollaborator",
+        back_populates="invited_by_user",
+        foreign_keys="CollectionCollaborator.invited_by_id",
+    )
+    channel_categories: Mapped[list[Any]] = relationship(
+        "ChannelCategory", back_populates="user", cascade="all, delete-orphan"
+    )
+    channel_subscriptions: Mapped[list[Any]] = relationship(
+        "ChannelSubscription", back_populates="user", cascade="all, delete-orphan"
+    )
+    digest_deliveries: Mapped[list[Any]] = relationship(
+        "DigestDelivery", back_populates="user", cascade="all, delete-orphan"
+    )
+    digest_preferences: Mapped[Any | None] = relationship(
+        "UserDigestPreference", back_populates="user", cascade="all, delete-orphan"
+    )
+    rss_subscriptions: Mapped[list[Any]] = relationship(
+        "RSSFeedSubscription", back_populates="user", cascade="all, delete-orphan"
+    )
+    webhooks: Mapped[list[Any]] = relationship(
+        "WebhookSubscription", back_populates="user", cascade="all, delete-orphan"
+    )
+    rules: Mapped[list[Any]] = relationship(
+        "AutomationRule", back_populates="user", cascade="all, delete-orphan"
+    )
+    import_jobs: Mapped[list[Any]] = relationship(
+        "ImportJob", back_populates="user", cascade="all, delete-orphan"
+    )
+    backups: Mapped[list[Any]] = relationship(
+        "UserBackup", back_populates="user", cascade="all, delete-orphan"
+    )
+    subscriptions: Mapped[list[Any]] = relationship(
+        "Subscription", back_populates="user", cascade="all, delete-orphan"
+    )
+    signal_topics: Mapped[list[Any]] = relationship(
+        "Topic", back_populates="user", cascade="all, delete-orphan"
+    )
+    user_signals: Mapped[list[Any]] = relationship(
+        "UserSignal", back_populates="user", cascade="all, delete-orphan"
+    )
+    summary_feedbacks: Mapped[list[Any]] = relationship(
+        "SummaryFeedback", back_populates="user", cascade="all, delete-orphan"
+    )
+    custom_digests: Mapped[list[Any]] = relationship(
+        "CustomDigest", back_populates="user", cascade="all, delete-orphan"
+    )
+    highlights: Mapped[list[Any]] = relationship(
+        "SummaryHighlight", back_populates="user", cascade="all, delete-orphan"
+    )
+    goals: Mapped[list[Any]] = relationship(
+        "UserGoal", back_populates="user", cascade="all, delete-orphan"
+    )
+    tags: Mapped[list[Any]] = relationship(
+        "Tag", back_populates="user", cascade="all, delete-orphan"
     )
 
 
@@ -172,6 +244,12 @@ class Request(Base):
     attachment: Mapped[AttachmentProcessing | None] = relationship(
         back_populates="request", cascade="all, delete-orphan"
     )
+    aggregation_items: Mapped[list[Any]] = relationship(
+        "AggregationSessionItem", back_populates="request"
+    )
+    batch_item: Mapped[Any | None] = relationship(
+        "BatchSessionItem", back_populates="request", cascade="all, delete-orphan"
+    )
 
 
 class TelegramMessage(Base):
@@ -274,6 +352,7 @@ class LLMCall(Base):
     deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     request: Mapped[Request] = relationship(back_populates="llm_calls")
+    digest_analyses: Mapped[list[Any]] = relationship("ChannelPostAnalysis", back_populates="llm_call")
 
 
 class Summary(Base):
@@ -314,6 +393,21 @@ class Summary(Base):
     )
     audio_generations: Mapped[list[AudioGeneration]] = relationship(
         back_populates="summary", cascade="all, delete-orphan"
+    )
+    collection_items: Mapped[list[Any]] = relationship(
+        "CollectionItem", back_populates="summary", cascade="all, delete-orphan"
+    )
+    feedbacks: Mapped[list[Any]] = relationship(
+        "SummaryFeedback", back_populates="summary", cascade="all, delete-orphan"
+    )
+    highlights: Mapped[list[Any]] = relationship(
+        "SummaryHighlight", back_populates="summary", cascade="all, delete-orphan"
+    )
+    summary_tags: Mapped[list[Any]] = relationship(
+        "SummaryTag", back_populates="summary", cascade="all, delete-orphan"
+    )
+    rule_execution_logs: Mapped[list[Any]] = relationship(
+        "RuleExecutionLog", back_populates="summary"
     )
 
 

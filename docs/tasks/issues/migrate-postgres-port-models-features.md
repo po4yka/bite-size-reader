@@ -1,6 +1,6 @@
 ---
 title: Port feature models to SQLAlchemy 2.0
-status: backlog
+status: review
 area: db
 priority: critical
 owner: Nikita Pochaev
@@ -8,13 +8,11 @@ blocks:
   - migrate-postgres-baseline-alembic-revision
   - migrate-postgres-port-persistence-repositories
   - migrate-postgres-build-data-migrator
-blocked_by:
-  - migrate-postgres-port-models-core
 created: 2026-05-06
 updated: 2026-05-06
 ---
 
-- [ ] #task Port feature models to SQLAlchemy 2.0 #repo/ratatoskr #area/db #status/backlog 🔺
+- [ ] #task Port feature models to SQLAlchemy 2.0 #repo/ratatoskr #area/db #status/review 🔺
 
 ## Objective
 
@@ -45,23 +43,23 @@ package.
 
 ## Acceptance criteria
 
-- [ ] All eight target files exist; every Peewee model class in scope has a
+- [x] All eight target files exist; every Peewee model class in scope has a
       SQLAlchemy 2.0 equivalent.
-- [ ] FK relationships from feature models back into core models
+- [x] FK relationships from feature models back into core models
       (e.g. `ChannelSubscription.user → User`,
       `SummaryFeedback.summary → Summary`) are declared with `relationship(...,
       back_populates=...)` on both sides.
-- [ ] `JSONB` columns with `default=list` / `default=dict` (e.g. `events_json`,
+- [x] `JSONB` columns with `default=list` / `default=dict` (e.g. `events_json`,
       `conditions_json`) preserve those defaults via callable defaults in
       `mapped_column(JSONB, default=list)`.
-- [ ] `ALL_MODELS` tuple in `app/db/models/__init__.py` extends to include every
+- [x] `ALL_MODELS` tuple in `app/db/models/__init__.py` extends to include every
       M2 class; ordering preserves topological FK dependency for the migrator.
-- [ ] `app/db/_models_*.py` files moved into `app/cli/_legacy_peewee_models/`
+- [x] `app/db/_models_*.py` files moved into `app/cli/_legacy_peewee_models/`
       (one file each) and re-exported from a single `__init__.py` so T2 can
       import them as one symbol set. Application code no longer imports them.
-- [ ] Per-model fixture tests pass against an ephemeral Postgres (extends
+- [x] Per-model fixture tests pass against an ephemeral Postgres (extends
       `tests/db/test_models_*.py` started in M1).
-- [ ] `mypy` clean.
+- [x] `mypy` clean.
 
 ## Notes
 
@@ -73,3 +71,12 @@ package.
 - `app/db/_models_signal.py` defines the most recently added models
   (`Source`, `Subscription`, `FeedItem`, `Topic`, `UserSignal`); double-check
   their indexes.
+
+Progress:
+
+- Added all eight feature SQLAlchemy model modules and extended `ALL_MODELS` to
+  52 SQLAlchemy classes.
+- Restored the frozen Peewee snapshot under `app/cli/_legacy_peewee_models/` from
+  git history for the T2 read-side migrator.
+- `tests/db/test_models_core.py tests/db/test_models_features.py` passed against a
+  throwaway Postgres 16 container on 2026-05-06.

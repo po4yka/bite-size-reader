@@ -11,6 +11,7 @@ from app.config.database import DatabaseConfig
 from app.db.base import Base
 from app.db.models import (
     ALL_MODELS,
+    CORE_MODELS,
     AttachmentProcessing,
     AudioGeneration,
     AuditLog,
@@ -166,7 +167,7 @@ async def test_core_models_round_trip_against_postgres() -> None:
         assert stored_request.error_context_json == {"source": "test"}
         assert stored_summary.json_payload == {"summary_250": "short"}
         assert model_to_dict(stored_user)["telegram_user_id"] == 101
-        assert {model.__name__ for model in ALL_MODELS} == {
+        assert {model.__name__ for model in CORE_MODELS} == {
             "AttachmentProcessing",
             "AudioGeneration",
             "AuditLog",

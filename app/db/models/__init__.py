@@ -3,6 +3,19 @@
 from __future__ import annotations
 
 from app.db.base import Base
+from app.db.models.aggregation import (
+    AGGREGATION_MODELS,
+    AggregationSession,
+    AggregationSessionItem,
+)
+from app.db.models.batch import BATCH_MODELS, BatchSession, BatchSessionItem
+from app.db.models.collections import (
+    COLLECTION_MODELS,
+    Collection,
+    CollectionCollaborator,
+    CollectionInvite,
+    CollectionItem,
+)
 from app.db.models.core import (
     CORE_MODELS,
     AttachmentProcessing,
@@ -22,30 +35,114 @@ from app.db.models.core import (
     UserInteraction,
     VideoDownload,
 )
+from app.db.models.digest import (
+    DIGEST_MODELS,
+    Channel,
+    ChannelCategory,
+    ChannelPost,
+    ChannelPostAnalysis,
+    ChannelSubscription,
+    DigestDelivery,
+    UserDigestPreference,
+)
+from app.db.models.rss import RSS_MODELS, RSSFeed, RSSFeedItem, RSSFeedSubscription, RSSItemDelivery
+from app.db.models.rules import (
+    RULE_MODELS,
+    AutomationRule,
+    ImportJob,
+    RuleExecutionLog,
+    UserBackup,
+    WebhookDelivery,
+    WebhookSubscription,
+)
+from app.db.models.signal import SIGNAL_MODELS, FeedItem, Source, Subscription, Topic, UserSignal
+from app.db.models.user_content import (
+    USER_CONTENT_MODELS,
+    CustomDigest,
+    SummaryFeedback,
+    SummaryHighlight,
+    SummaryTag,
+    Tag,
+    UserGoal,
+)
 from app.db.types import _next_server_version, _utcnow, model_to_dict
 
-ALL_MODELS = CORE_MODELS
+ALL_MODELS: tuple[type[Base], ...] = (
+    *CORE_MODELS,
+    *AGGREGATION_MODELS,
+    *BATCH_MODELS,
+    *COLLECTION_MODELS,
+    *DIGEST_MODELS,
+    *RSS_MODELS,
+    *RULE_MODELS,
+    *SIGNAL_MODELS,
+    *USER_CONTENT_MODELS,
+)
 
 __all__ = [
+    "AGGREGATION_MODELS",
     "ALL_MODELS",
+    "BATCH_MODELS",
+    "COLLECTION_MODELS",
     "CORE_MODELS",
+    "DIGEST_MODELS",
+    "RSS_MODELS",
+    "RULE_MODELS",
+    "SIGNAL_MODELS",
+    "USER_CONTENT_MODELS",
+    "AggregationSession",
+    "AggregationSessionItem",
     "AttachmentProcessing",
     "AudioGeneration",
     "AuditLog",
+    "AutomationRule",
     "Base",
+    "BatchSession",
+    "BatchSessionItem",
+    "Channel",
+    "ChannelCategory",
+    "ChannelPost",
+    "ChannelPostAnalysis",
+    "ChannelSubscription",
     "Chat",
     "ClientSecret",
+    "Collection",
+    "CollectionCollaborator",
+    "CollectionInvite",
+    "CollectionItem",
     "CrawlResult",
+    "CustomDigest",
+    "DigestDelivery",
+    "FeedItem",
+    "ImportJob",
     "LLMCall",
+    "RSSFeed",
+    "RSSFeedItem",
+    "RSSFeedSubscription",
+    "RSSItemDelivery",
     "RefreshToken",
     "Request",
+    "RuleExecutionLog",
+    "Source",
+    "Subscription",
     "Summary",
     "SummaryEmbedding",
+    "SummaryFeedback",
+    "SummaryHighlight",
+    "SummaryTag",
+    "Tag",
     "TelegramMessage",
+    "Topic",
     "User",
+    "UserBackup",
     "UserDevice",
+    "UserDigestPreference",
+    "UserGoal",
     "UserInteraction",
+    "UserSignal",
     "VideoDownload",
+    "WebhookDelivery",
+    "WebhookSubscription",
     "_next_server_version",
     "_utcnow",
     "model_to_dict",
