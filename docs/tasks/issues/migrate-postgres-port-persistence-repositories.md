@@ -206,6 +206,12 @@ Conventions for the port:
 - Verified the expanded focused repository suite with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_rss_feed_repository_postgres.py -q`
   → `48 passed`.
+- Ported `topic_search_repository.py` to SQLAlchemy/AsyncSession backed by
+  PostgreSQL `tsvector`, including indexed search, paginated user-scoped FTS,
+  tag refresh, direct document writes, and fallback summary scans.
+- Verified the expanded focused repository suite with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest ... tests/infrastructure/test_topic_search_repository_postgres.py -q`
+  → `51 passed`.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
