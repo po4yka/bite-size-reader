@@ -118,3 +118,6 @@ the most-ported repository are easiest to land first.
 - Removed SQLite-specific OpenTelemetry instrumentation from runtime tracing
   configuration and regenerated `uv.lock`/`requirements-all.txt` without
   `opentelemetry-instrumentation-sqlite3`.
+- Replaced the digest category service's Peewee integrity exception handling
+  with SQLAlchemy `IntegrityError`; verified with focused ruff, focused mypy,
+  and an import smoke check.

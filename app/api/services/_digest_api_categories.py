@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import peewee
+from sqlalchemy.exc import IntegrityError
 
 from app.api.exceptions import ValidationError
 from app.api.models.digest import CategoryResponse
@@ -49,7 +49,7 @@ class DigestCategoryService:
 
         try:
             category = self._store.create_category(user_id=user_id, name=name, position=position)
-        except peewee.IntegrityError as exc:
+        except IntegrityError as exc:
             raise ValidationError(f"Category '{name}' already exists.") from exc
 
         return CategoryResponse(
@@ -75,7 +75,7 @@ class DigestCategoryService:
         if changed:
             try:
                 self._store.save_model(category)
-            except peewee.IntegrityError as exc:
+            except IntegrityError as exc:
                 raise ValidationError(f"Category '{fields.get('name')}' already exists.") from exc
 
         count = self._store.count_active_subscriptions_for_category(category)
