@@ -65,3 +65,16 @@ From the F1 audit, callers include:
 Do not invent a SQLite-to-Postgres SQL translator for the deprecated
 `app/cli/migrations/` files — those revisions have already been baked into the
 SQLAlchemy Alembic baseline (M4), so deletion is the right move.
+
+## Progress
+
+- Ported `app/db/batch_operations.py` from Peewee batch create/update/delete
+  calls to SQLAlchemy async sessions while keeping synchronous compatibility
+  wrappers for legacy callers.
+- Added live Postgres coverage in
+  `tests/db/test_batch_operations_postgres.py` for LLM batch insert, request
+  status updates, request/summary batch reads, summary read updates, and
+  cascading request deletes.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/db/test_batch_operations_postgres.py`
+  → `1 passed`, focused ruff, and focused mypy with skipped imports.
