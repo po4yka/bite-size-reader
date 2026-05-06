@@ -12,7 +12,7 @@ from app.adapters.telegram.command_handlers.base_handler import HandlerDependenc
 from app.adapters.telegram.command_handlers.decorators import combined_handler
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
-from app.infrastructure.persistence.sqlite.backup_archive_service import create_backup_archive
+from app.infrastructure.persistence.sqlite.backup_archive_service import async_create_backup_archive
 from app.infrastructure.persistence.sqlite.repositories.backup_repository import (
     SqliteBackupRepositoryAdapter,
 )
@@ -59,7 +59,7 @@ class BackupHandler(HandlerDependenciesMixin):
         )
 
         try:
-            create_backup_archive(user_id=user_id, backup_id=int(backup["id"]), db=self._db)
+            await async_create_backup_archive(user_id=user_id, backup_id=int(backup["id"]), db=self._db)
 
             # Reload to get updated fields
             backup = await self._backup_repo.async_get_backup(int(backup["id"]))

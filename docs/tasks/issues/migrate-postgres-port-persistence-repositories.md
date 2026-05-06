@@ -263,6 +263,14 @@ Conventions for the port:
 - Verified this slice with
   `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_digest_store_postgres.py tests/infrastructure/test_digest_subscription_ops_postgres.py`
   → `4 passed`.
+- Ported `backup_archive_service.py` from Peewee model calls to SQLAlchemy
+  async sessions, retained synchronous wrappers for archive validation tests,
+  and moved API/Telegram backup call sites to the async archive functions.
+- Added live Postgres coverage for creating a ZIP backup archive and updating
+  the `user_backups` row.
+- Verified this slice with
+  `TEST_DATABASE_URL=postgresql+asyncpg://... pytest tests/infrastructure/test_backup_archive_service_postgres.py tests/test_backup_service.py`
+  → `11 passed`, focused ruff, and focused mypy with skipped imports.
 
 Remaining work: port the rest of `app/infrastructure/persistence/`, remove the
 SQLite package/import surface, and replace the skipped SQLite repository tests
