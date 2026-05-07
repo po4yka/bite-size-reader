@@ -1,6 +1,6 @@
 ---
 title: Build SQLite to Postgres data migrator
-status: backlog
+status: review
 area: db
 priority: critical
 owner: Nikita Pochaev
@@ -16,10 +16,10 @@ blocked_by:
   - migrate-postgres-add-compose-service
   - migrate-postgres-port-application-call-sites
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
-- [ ] #task Build SQLite to Postgres data migrator #repo/ratatoskr #area/db #status/backlog 🔺
+- [ ] #task Build SQLite to Postgres data migrator #repo/ratatoskr #area/db #status/review 🔺
 
 ## Objective
 
@@ -107,3 +107,37 @@ Pipeline:
 - Bytes round-trip: `SummaryEmbedding.embedding_blob` is `bytes` in Peewee,
   must arrive as `bytes` in SQLAlchemy `LargeBinary` / `BYTEA`. Pin with a
   unit test.
+
+## Progress
+
+- 2026-05-07: shipped `app/cli/migrate_sqlite_to_postgres.py` (575
+  lines) implementing the spec pipeline end-to-end — opens the legacy
+  SQLite via `peewee.SqliteDatabase(query_only=1)`, runs Alembic
+  upgrade, iterates `peewee.sort_models(ALL_MODELS)` (skipping
+  `TopicSearchIndex`), maps each row through `_legacy_row_to_dict`
+  (handles FK column-name suffix via `field.column_name`, normalises
+  JSONB columns through `normalize_legacy_json_value`, passes
+  `LargeBinary` columns through unchanged), upserts via
+  `postgresql.insert(...).on_conflict_do_nothing(index_elements=…)`,
+  resets every autoincrement sequence, calls
+  `TopicSearchIndexManager.ensure_index()`, and validates per-table
+  counts and sampled FK cardinalities.
+- All 51 legacy models (52 minus the deliberately-skipped
+  `TopicSearchIndex`) resolve to a SQLAlchemy counterpart by class
+  name — zero unmapped models.
+- Tests: `tests/cli/test_migrate_sqlite_to_postgres.py` ships 11 tests
+  (9 unit pass without Postgres covering JSON coercion, FK ordering
+  spot-checks, dry-run plan generation; 2 skip cleanly when
+  `TEST_DATABASE_URL` is unset for the bytes round-trip and
+  end-to-end runs).
+- Status flipped to `review` on 2026-05-07. Open verification gates:
+  - end-to-end run against the live 498 MB Pi-DB snapshot (currently
+    only synthetic in-memory SQLite has been exercised),
+  - `_sample_fk_cardinalities` uses `func.random()` — fine for smoke
+    validation but NOT a deterministic CI assertion; replace if T3 CI
+    matrix wants determinism here,
+  - possible `memoryview → bytes` guard if the Pi SQLite returns
+    `embedding_blob` as a `memoryview` rather than `bytes`,
+  - stylistic: `DatabaseConfig.model_validate({"DATABASE_URL": dsn})`
+    is more cumbersome than the sibling CLIs' `DatabaseConfig(dsn=…)`
+    form — could be aligned in a follow-up.

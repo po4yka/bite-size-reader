@@ -1,6 +1,6 @@
 ---
 title: Add async Postgres test fixtures and CI
-status: backlog
+status: doing
 area: testing
 priority: medium
 owner: Nikita Pochaev
@@ -10,10 +10,10 @@ blocked_by:
   - migrate-postgres-port-application-call-sites
   - migrate-postgres-port-topic-search-model
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
-- [ ] #task Add async Postgres test fixtures and CI #repo/ratatoskr #area/testing #status/backlog 🔼
+- [ ] #task Add async Postgres test fixtures and CI #repo/ratatoskr #area/testing #status/doing 🔼
 
 ## Objective
 
