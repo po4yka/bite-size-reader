@@ -3,36 +3,21 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 import pytest
+from sqlalchemy import select
 
 from app.adapters.external.firecrawl.models import FirecrawlSearchItem, FirecrawlSearchResult
 from app.application.services.topic_search import LocalTopicSearchService, TopicSearchService
-
-if TYPE_CHECKING:
-    from app.application.ports.search import TopicSearchResultPort
-from app.cli._legacy_peewee_models import database_proxy
-try:
-    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
-except ImportError:
-    DatabaseSessionManager = None  # type: ignore[assignment,misc]
+from app.db.models import TopicSearchIndex
 from app.infrastructure.persistence.repositories.topic_search_repository import (
     TopicSearchRepositoryAdapter,
 )
-from tests.db_helpers import create_request, insert_summary
+from tests.db_helpers_async import create_request, insert_summary
 
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
-@pytest.fixture
-def test_database(tmp_path):
-    """Create an isolated test database with proper database_proxy handling."""
-    old_proxy_obj = database_proxy.obj
-    db_path = tmp_path / "app.db"
-    database = DatabaseSessionManager(str(db_path))
-    database.migrate()
-    # Explicitly ensure database_proxy points to this database
-    database_proxy.initialize(database._database)
-    yield database
-    # Close the database and restore original database_proxy
-    database._database.close()
-    database_proxy.initialize(old_proxy_obj)
+    from app.application.ports.search import TopicSearchResultPort
+    from app.db.session import Database
 
 
 class DummyFirecrawl:
@@ -49,6 +34,11 @@ class DummyFirecrawl:
     ) -> TopicSearchResultPort:
         self.calls.append((query, limit))
         return cast("TopicSearchResultPort", self.result)
+
+
+# ---------------------------------------------------------------------------
+# Pure-Python tests: TopicSearchService over a fake firecrawl backend.
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -111,24 +101,51 @@ async def test_find_articles_raises_on_error_status() -> None:
         await service.find_articles("Android System Design")
 
 
-@pytest.mark.asyncio
-async def test_local_search_returns_recent_matches(test_database) -> None:
-    database = test_database
+# ---------------------------------------------------------------------------
+# DB-backed tests: LocalTopicSearchService against the SQLAlchemy repository.
+# ---------------------------------------------------------------------------
 
-    request_id = create_request(
+
+async def _index_summary(
+    session: AsyncSession,
+    repo: TopicSearchRepositoryAdapter,
+    *,
+    correlation_id: str,
+    input_url: str,
+    content_text: str,
+    summary_payload: dict,
+) -> int:
+    request_id = await create_request(
+        session,
         type_="url",
         status="completed",
-        correlation_id="cid-1",
+        correlation_id=correlation_id,
         chat_id=1,
         user_id=1,
-        input_url="https://example.com/android",
-        normalized_url="https://example.com/android",
-        content_text="Android systems excel at modular design principles.",
+        input_url=input_url,
+        normalized_url=input_url,
+        content_text=content_text,
     )
-    insert_summary(
-        request_id=request_id,
-        lang="en",
-        json_payload={
+    await insert_summary(
+        session, request_id=request_id, lang="en", json_payload=summary_payload
+    )
+    await session.commit()
+    await repo.async_refresh_index(request_id)
+    return request_id
+
+
+async def test_local_search_returns_recent_matches(
+    session: AsyncSession, database: Database
+) -> None:
+    repo = TopicSearchRepositoryAdapter(database)
+
+    await _index_summary(
+        session,
+        repo,
+        correlation_id="cid-1",
+        input_url="https://example.com/android",
+        content_text="Android systems excel at modular design principles.",
+        summary_payload={
             "summary_250": "Android system design focuses on scalable services.",
             "topic_tags": ["Android", "Architecture"],
             "metadata": {
@@ -139,21 +156,13 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
             },
         },
     )
-
-    other_request = create_request(
-        type_="url",
-        status="completed",
+    await _index_summary(
+        session,
+        repo,
         correlation_id="cid-2",
-        chat_id=1,
-        user_id=1,
         input_url="https://example.com/cooking",
-        normalized_url="https://example.com/cooking",
         content_text="All about pasta.",
-    )
-    insert_summary(
-        request_id=other_request,
-        lang="en",
-        json_payload={
+        summary_payload={
             "summary_250": "A deep dive into homemade pasta techniques.",
             "metadata": {
                 "title": "Making Pasta",
@@ -163,7 +172,7 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
         },
     )
 
-    service = LocalTopicSearchService(TopicSearchRepositoryAdapter(database), max_results=2)
+    service = LocalTopicSearchService(repo, max_results=2)
 
     results = await service.find_articles("Android System Design")
 
@@ -176,42 +185,31 @@ async def test_local_search_returns_recent_matches(test_database) -> None:
     assert "android" in article.snippet.lower()
 
 
-@pytest.mark.asyncio
-async def test_local_search_handles_empty_results(test_database) -> None:
-    database = test_database
-
+async def test_local_search_handles_empty_results(database: Database) -> None:
     service = LocalTopicSearchService(TopicSearchRepositoryAdapter(database), max_results=3)
     results = await service.find_articles("Nonexistent Topic")
     assert results == []
 
 
-@pytest.mark.asyncio
-async def test_local_search_rejects_blank_queries(test_database) -> None:
-    database = test_database
+async def test_local_search_rejects_blank_queries(database: Database) -> None:
     service = LocalTopicSearchService(TopicSearchRepositoryAdapter(database), max_results=2)
 
     with pytest.raises(ValueError):
         await service.find_articles("   ")
 
 
-@pytest.mark.asyncio
-async def test_local_search_index_finds_older_match(test_database) -> None:
-    database = test_database
+async def test_local_search_index_finds_older_match(
+    session: AsyncSession, database: Database
+) -> None:
+    repo = TopicSearchRepositoryAdapter(database)
 
-    matching_request = create_request(
-        type_="url",
-        status="completed",
+    await _index_summary(
+        session,
+        repo,
         correlation_id="cid-3",
-        chat_id=1,
-        user_id=1,
         input_url="https://example.com/android-old",
-        normalized_url="https://example.com/android-old",
         content_text="Legacy overview of Android modular design patterns.",
-    )
-    insert_summary(
-        request_id=matching_request,
-        lang="en",
-        json_payload={
+        summary_payload={
             "summary_250": "Android modular design enables reliable scaling.",
             "metadata": {
                 "title": "Designing Android Systems",
@@ -222,21 +220,14 @@ async def test_local_search_index_finds_older_match(test_database) -> None:
         },
     )
 
-    # Insert a newer, non-matching summary so fallback scans would skip the older entry.
-    newer_request = create_request(
-        type_="url",
-        status="completed",
+    # Insert a newer, non-matching summary so a naive recent-first scan would skip the match.
+    await _index_summary(
+        session,
+        repo,
         correlation_id="cid-4",
-        chat_id=1,
-        user_id=1,
         input_url="https://example.com/cooking-souffle",
-        normalized_url="https://example.com/cooking-souffle",
         content_text="All about baking souffles.",
-    )
-    insert_summary(
-        request_id=newer_request,
-        lang="en",
-        json_payload={
+        summary_payload={
             "summary_250": "Souffles require gentle heat and timing.",
             "metadata": {
                 "title": "Baking the Perfect Souffle",
@@ -246,9 +237,7 @@ async def test_local_search_index_finds_older_match(test_database) -> None:
         },
     )
 
-    service = LocalTopicSearchService(
-        TopicSearchRepositoryAdapter(database), max_results=1, max_scan=1
-    )
+    service = LocalTopicSearchService(repo, max_results=1, max_scan=1)
 
     results = await service.find_articles("Android modular design")
 
@@ -256,23 +245,18 @@ async def test_local_search_index_finds_older_match(test_database) -> None:
     assert results[0].url == "https://example.com/android-old"
 
 
-def test_database_populates_topic_search_index(test_database) -> None:
-    database = test_database
+async def test_topic_search_index_is_populated_on_refresh(
+    session: AsyncSession, database: Database
+) -> None:
+    repo = TopicSearchRepositoryAdapter(database)
 
-    request_id = create_request(
-        type_="url",
-        status="completed",
+    request_id = await _index_summary(
+        session,
+        repo,
         correlation_id="cid-5",
-        chat_id=1,
-        user_id=1,
         input_url="https://example.com/ai",
-        normalized_url="https://example.com/ai",
         content_text="Artificial intelligence fundamentals.",
-    )
-    insert_summary(
-        request_id=request_id,
-        lang="en",
-        json_payload={
+        summary_payload={
             "summary_250": "AI systems rely on data and iterative training.",
             "metadata": {
                 "title": "AI Fundamentals",
@@ -281,15 +265,11 @@ def test_database_populates_topic_search_index(test_database) -> None:
             },
         },
     )
-    database._bootstrap._topic_search.refresh_index(request_id)
 
-    with database._database.connection_context():
-        cursor = database._database.execute_sql(
-            "SELECT url, title, body FROM topic_search_index LIMIT 1"
-        )
-        row = cursor.fetchone()
-
-    assert row is not None
-    assert "android" not in row[2]
-    assert row[0] == "https://example.com/ai"
-    assert "AI Fundamentals" in row[1]
+    indexed = await session.scalar(
+        select(TopicSearchIndex).where(TopicSearchIndex.request_id == request_id)
+    )
+    assert indexed is not None
+    assert indexed.url == "https://example.com/ai"
+    assert "AI Fundamentals" in (indexed.title or "")
+    assert "android" not in (indexed.body or "").lower()
