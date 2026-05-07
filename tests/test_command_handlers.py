@@ -1,28 +1,27 @@
 """Smoke tests for command handlers not covered by test_commands.py.
 
-Covers OnboardingHandler (/start).
-AdminHandler (/dbinfo, /dbverify) and URLCommandsHandler (/summarize)
-are exercised in test_commands.py via the bot integration path.
+Covers OnboardingHandler (/start, /help). AdminHandler and
+URLCommandsHandler are exercised via the bot integration paths in
+test_commands.py.
 """
 
-import os
-import tempfile
-import unittest
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.telegram_bot import TelegramBot
-try:
-    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
-except ImportError:
-    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from tests.conftest import make_test_app_config
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
 class FakeMessage:
-    def __init__(self, text: str, uid: int = 1):
+    def __init__(self, text: str, uid: int = 1) -> None:
         class _User:
-            def __init__(self, id):
-                self.id = id
+            def __init__(self, uid: int) -> None:
+                self.id = uid
 
         class _Chat:
             id = 1
@@ -34,14 +33,12 @@ class FakeMessage:
         self.id = 200
         self.message_id = 200
 
-    async def reply_text(self, text: str, **kwargs) -> None:
+    async def reply_text(self, text: str, **_kwargs: object) -> None:
         self._replies.append(text)
 
 
-def make_bot(tmp_path: str) -> TelegramBot:
-    db = DatabaseSessionManager(tmp_path)
-    db.migrate()
-    cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1,))
+def _make_bot(database: Database) -> TelegramBot:
+    cfg = make_test_app_config(db_path="/tmp/cmd-handlers.db", allowed_user_ids=(1,))
     from app.adapters import telegram_bot as tbmod
 
     tbmod.Client = object
@@ -49,41 +46,20 @@ def make_bot(tmp_path: str) -> TelegramBot:
 
     with patch("app.adapters.openrouter.openrouter_client.OpenRouterClient") as mock_or:
         mock_or.return_value = AsyncMock()
-        return TelegramBot(cfg=cfg, db=db)
+        return TelegramBot(cfg=cfg, db=database)
 
 
-class TestOnboardingHandler(unittest.IsolatedAsyncioTestCase):
-    """Smoke tests for OnboardingHandler (/start, /help)."""
-
-    def setUp(self):
-        from app.db.models import database_proxy
-
-        self._old_proxy_obj = database_proxy.obj
-
-    def tearDown(self):
-        from app.db.models import database_proxy
-
-        if database_proxy.obj is not self._old_proxy_obj:
-            database_proxy.initialize(self._old_proxy_obj)
-
-    async def test_start_command_replies(self):
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-            msg = FakeMessage("/start")
-            await bot._on_message(msg)
-            await bot._shutdown()
-            bot.db.database.close()
-            assert msg._replies, "/start should produce at least one reply"
-
-    async def test_help_command_lists_commands(self):
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-            msg = FakeMessage("/help")
-            await bot._on_message(msg)
-            await bot._shutdown()
-            bot.db.database.close()
-            assert any("Commands" in r for r in msg._replies)
+async def test_start_command_replies(database: Database) -> None:
+    bot = _make_bot(database)
+    msg = FakeMessage("/start")
+    await bot._on_message(msg)
+    await bot._shutdown()
+    assert msg._replies, "/start should produce at least one reply"
 
 
-if __name__ == "__main__":
-    unittest.main()
+async def test_help_command_lists_commands(database: Database) -> None:
+    bot = _make_bot(database)
+    msg = FakeMessage("/help")
+    await bot._on_message(msg)
+    await bot._shutdown()
+    assert any("Commands" in r for r in msg._replies)
