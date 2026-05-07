@@ -2,21 +2,20 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import pytest
+from sqlalchemy import select
 
-try:
-    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
-except ImportError:
-    DatabaseSessionManager = None  # type: ignore[assignment,misc]
+from app.db.models import Chat, User
 from app.infrastructure.persistence.message_persistence import MessagePersistence
-from tests.db_helpers import create_request
+from tests.db_helpers_async import create_request
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.session import Database
 
 
 @dataclass
@@ -59,34 +58,13 @@ class _DummyMessage:
 
 
 @pytest.fixture
-def db(tmp_path) -> Generator[DatabaseSessionManager]:
-    from app.db.models import database_proxy
-
-    # Save the original database proxy state
-    old_db = database_proxy.obj
-
-    # Create test database with file-based storage
-    path = tmp_path / "app.db"
-    database = DatabaseSessionManager(str(path))
-    database.migrate()
-
-    # Ensure database_proxy is initialized AFTER migrate
-    database_proxy.initialize(database._database)
-
-    yield database
-
-    # Close the database and restore original proxy
-    database._database.close()
-    database_proxy.initialize(old_db)
+def persistence(database: Database) -> MessagePersistence:
+    return MessagePersistence(db=database)
 
 
-@pytest.fixture
-def persistence(db: DatabaseSessionManager) -> MessagePersistence:
-    return MessagePersistence(db=db)
-
-
-def _create_request(db: DatabaseSessionManager) -> int:
-    return create_request(
+async def _create_request(session: AsyncSession) -> int:
+    return await create_request(
+        session,
         type_="url",
         status="pending",
         correlation_id=None,
@@ -101,51 +79,55 @@ def _create_request(db: DatabaseSessionManager) -> int:
     )
 
 
-def test_persist_message_snapshot_populates_user_and_chat(
-    db: DatabaseSessionManager, persistence: MessagePersistence
+async def test_persist_message_snapshot_populates_user_and_chat(
+    session: AsyncSession, persistence: MessagePersistence
 ) -> None:
-    req_id = _create_request(db)
+    req_id = await _create_request(session)
+    await session.commit()
+
     message = _DummyMessage(
         chat=_DummyChat(id=101, type="private", title="My Chat", username="chatuser"),
         user=_DummyUser(id=202, username="alice"),
     )
 
-    asyncio.run(persistence.persist_message_snapshot(req_id, message))
+    await persistence.persist_message_snapshot(req_id, message)
 
-    user_row = db.fetchone("SELECT username FROM users WHERE telegram_user_id = ?", (202,))
-    assert user_row is not None
-    assert user_row["username"] == "alice"
+    user = await session.scalar(select(User).where(User.telegram_user_id == 202))
+    assert user is not None
+    assert user.username == "alice"
 
-    chat_row = db.fetchone("SELECT type, title, username FROM chats WHERE chat_id = ?", (101,))
-    assert chat_row is not None
-    assert chat_row["type"] == "private"
-    assert chat_row["title"] == "My Chat"
-    assert chat_row["username"] == "chatuser"
+    chat = await session.scalar(select(Chat).where(Chat.chat_id == 101))
+    assert chat is not None
+    assert chat.type == "private"
+    assert chat.title == "My Chat"
+    assert chat.username == "chatuser"
 
 
-def test_persist_message_snapshot_refreshes_user_and_chat(
-    db: DatabaseSessionManager, persistence: MessagePersistence
+async def test_persist_message_snapshot_refreshes_user_and_chat(
+    session: AsyncSession, persistence: MessagePersistence
 ) -> None:
-    first_req = _create_request(db)
+    first_req = await _create_request(session)
+    await session.commit()
     first_message = _DummyMessage(
         chat=_DummyChat(id=303, type="group", title="Old Title", username="old_chat"),
         user=_DummyUser(id=404, username="old_user"),
     )
-    asyncio.run(persistence.persist_message_snapshot(first_req, first_message))
+    await persistence.persist_message_snapshot(first_req, first_message)
 
-    second_req = _create_request(db)
+    second_req = await _create_request(session)
+    await session.commit()
     second_message = _DummyMessage(
         chat=_DummyChat(id=303, type="supergroup", title="New Title", username="new_chat"),
         user=_DummyUser(id=404, username="new_user"),
     )
-    asyncio.run(persistence.persist_message_snapshot(second_req, second_message))
+    await persistence.persist_message_snapshot(second_req, second_message)
 
-    user_row = db.fetchone("SELECT username FROM users WHERE telegram_user_id = ?", (404,))
-    assert user_row is not None
-    assert user_row["username"] == "new_user"
+    user = await session.scalar(select(User).where(User.telegram_user_id == 404))
+    assert user is not None
+    assert user.username == "new_user"
 
-    chat_row = db.fetchone("SELECT type, title, username FROM chats WHERE chat_id = ?", (303,))
-    assert chat_row is not None
-    assert chat_row["type"] == "supergroup"
-    assert chat_row["title"] == "New Title"
-    assert chat_row["username"] == "new_chat"
+    chat = await session.scalar(select(Chat).where(Chat.chat_id == 303))
+    assert chat is not None
+    assert chat.type == "supergroup"
+    assert chat.title == "New Title"
+    assert chat.username == "new_chat"
