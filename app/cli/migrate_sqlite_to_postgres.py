@@ -69,6 +69,24 @@ def _is_bytes_column(col: Any) -> bool:
     return isinstance(col.type, LargeBinary)
 
 
+def _strip_nul_chars(value: Any) -> Any:
+    """Recursively strip U+0000 from strings inside a JSON-like value.
+
+    Postgres `text` / `jsonb` reject `\\u0000` inside string values
+    (`asyncpg.UntranslatableCharacterError`). The legacy SQLite source
+    accepted them silently; production scraper output occasionally
+    embeds them. Strip during migration; the original SQLite file is
+    preserved for rollback so this is non-destructive in effect.
+    """
+    if isinstance(value, str):
+        return value.replace("\x00", "") if "\x00" in value else value
+    if isinstance(value, dict):
+        return {k: _strip_nul_chars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_strip_nul_chars(item) for item in value]
+    return value
+
+
 def _pk_columns(sa_model: type[Any]) -> list[Any]:
     """Return list of primary-key columns for a SQLAlchemy model."""
     return list(sa_model.__table__.primary_key.columns)
@@ -112,15 +130,18 @@ def _legacy_row_to_dict(
     }
 
     result: dict[str, Any] = {}
-    for field_name, field in legacy_model._meta.fields.items():
+    for field in legacy_model._meta.fields.values():
         col_name = field.column_name  # e.g. "user" -> "user_id" for FKs
         if col_name not in sa_col_names:
             continue
 
-        raw_value = getattr(row, field_name)
-        # FK fields return model instances in Peewee; extract the PK integer.
-        if isinstance(raw_value, peewee.Model):
-            raw_value = raw_value.get_id()
+        # Read the raw column value, not the descriptor: for FK fields,
+        # `getattr(row, field_name)` triggers Peewee's eager related-model
+        # lookup which raises `<Parent>DoesNotExist` on dangling source
+        # references. Reading via `col_name` (e.g. "request_id") returns
+        # the stored integer directly — Peewee always exposes both names
+        # for FK fields.
+        raw_value = getattr(row, col_name)
 
         sa_col = sa_col_map[col_name]
 
@@ -135,7 +156,7 @@ def _legacy_row_to_dict(
                         "reason": reason,
                     },
                 )
-            result[col_name] = normalized
+            result[col_name] = _strip_nul_chars(normalized)
         elif _is_bytes_column(sa_col):
             # Pass bytes through unchanged (e.g. SummaryEmbedding.embedding_blob).
             result[col_name] = raw_value
@@ -194,6 +215,13 @@ async def _migrate_model(
             .on_conflict_do_nothing(index_elements=pk_col_names)
         )
         async with database.transaction() as session:
+            # Disable FK enforcement for the duration of this transaction.
+            # Legacy SQLite did not enforce FKs (Peewee `ForeignKeyField`
+            # is metadata-only without `pragmas={"foreign_keys": 1}`), so
+            # the source has orphan rows. Postgres enforces FKs, so the
+            # only way to preserve the source 1:1 is to defer enforcement
+            # during the bulk load. Per the migration plan's risk table.
+            await session.execute(text("SET LOCAL session_replication_role = 'replica'"))
             await session.execute(stmt)
 
         migrated += len(payload)

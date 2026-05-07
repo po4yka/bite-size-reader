@@ -353,10 +353,54 @@ during the rollback dry-run on the laptop.
 Each row records one dry-run pass. Required before this runbook is
 marked ready for production.
 
-| Date | Operator | Snapshot size | ETL real-run wall-clock | Validation result | Notes |
-|---|---|---|---|---|---|
-| `[VERIFY]` | `[VERIFY]` | `[VERIFY]` MB | `[VERIFY]` s | pass / fail | — |
-| `[VERIFY]` | `[VERIFY]` | `[VERIFY]` MB | `[VERIFY]` s | pass / fail | — |
+| Date | Operator | Snapshot size | ETL dry-run wall-clock | ETL real-run wall-clock | Validation result | Notes |
+|---|---|---|---|---|---|---|
+| 2026-05-07 | Nikita Pochaev | 521 MB | 1.7 s (35 850 source rows enumerated) | partial — see findings | — | First pass against the Pi snapshot. Pull via `scp raspi:/tmp/ratatoskr.snapshot.db` took 1 min 30 s. |
+| `[VERIFY]` | `[VERIFY]` | `[VERIFY]` MB | `[VERIFY]` s | `[VERIFY]` s | pass / fail | — |
+
+### Dry-run pass 1 findings (2026-05-07)
+
+The first dry-run against the live Pi snapshot exposed four
+production-data shape issues that the migrator did not handle. Each
+was either fixed in the same session or recorded as remaining work.
+Production source data is not clean; the migrator must defend
+against it.
+
+- **Fixed: FK eager-fetch.** The migrator's `_legacy_row_to_dict`
+  used `getattr(row, field_name)` to read each column. For Peewee FK
+  fields this triggers an eager related-model lookup, which raises
+  `<Parent>DoesNotExist` on dangling FK rows. Switched to
+  `getattr(row, col_name)` (e.g. `request_id`) so the raw integer is
+  read directly. Source observed: `Summary.request_id=1058` with no
+  matching row in `requests`.
+- **Fixed: NUL chars in JSONB.** The Pi `summaries.json_payload`
+  contains string values with embedded ` `. Postgres `text` /
+  `jsonb` rejects them with
+  `asyncpg.UntranslatableCharacterError`. Added a
+  `_strip_nul_chars` recursive helper that removes `\x00` from all
+  string values inside JSON columns during migration. Non-destructive
+  in effect (the original SQLite file is preserved for rollback).
+- **Fixed: FK orphans (Postgres FK enforcement).** Legacy SQLite
+  did not enforce FK constraints (Peewee `ForeignKeyField` is
+  metadata-only without `pragmas={"foreign_keys": 1}`). Postgres
+  enforces them, so the bulk insert hit
+  `ForeignKeyViolationError`. Per the migration plan's risk table,
+  added `SET LOCAL session_replication_role = 'replica'` inside each
+  bulk-insert transaction, which suspends FK enforcement for the
+  duration of the transaction only. Source observed: dangling
+  `request_id=1058` again.
+- **NOT fixed: type-confused values.** `LLMCall.cost_usd` (FLOAT
+  column) holds the string literal `'ok'` for at least one row,
+  rejected by asyncpg with `must be real number, not str`. Likely
+  more cases of legacy code writing strings into typed columns. Fix
+  approach for the next pass: add a small `_coerce_value` helper
+  that attempts type coercion based on the SA column type
+  (`Integer`, `Float`, `Boolean`) and nullifies on failure with a
+  WARNING log. Out of scope for this dry-run pass.
+
+After fixing the first three, re-run on a fresh Postgres still
+fails on the LLMCall row described above. The migration is not yet
+complete end-to-end against this snapshot.
 
 | Date | Operator | Rollback path | Recovery time | Result |
 |---|---|---|---|---|
