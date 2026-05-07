@@ -1,8 +1,8 @@
 ---
 title: Pi SQLite to Postgres cutover runbook
-status: draft (operational dry-runs pending)
-maintenance_window_estimate: 60 min nominal · 90 min with one-σ buffer (refine after dry-run)
-last_updated: 2026-05-06
+status: draft (rollback dry-run pending)
+maintenance_window_estimate: 30 min nominal · 60 min with one-σ buffer (active downtime ~5–10 min; rest is verification + log-watching)
+last_updated: 2026-05-07
 ---
 
 # Pi SQLite to Postgres cutover runbook
@@ -472,7 +472,31 @@ yet satisfied (must be cleared before C2 starts):
       `docker compose up`.
 - [x] Two laptop dry-runs of sections 1–10 against a Pi-DB snapshot. (passes 2 and 3, both green; see Appendix A)
 - [ ] One laptop dry-run of section 11 (rollback) — recovery time
-      recorded.
-- [ ] Maintenance window estimate refined from dry-run timings (replace
-      front-matter placeholder).
+      recorded. **Prerequisite**: building the pre-port image
+      (`docker-ratatoskr:pre-sqlalchemy`) locally on the laptop.
+      The Pi was tagged from the live running image; the laptop has
+      no equivalent. To run the rollback locally, either:
+      (a) checkout `pre-sqlalchemy` (commit `2212689f`), build with
+          `make pi-build-only SERVICE=ratatoskr` (this builds for
+          the Pi and ships, so for a laptop-only dry-run a manual
+          `docker buildx build --platform linux/arm64 -t
+          docker-ratatoskr:pre-sqlalchemy ops/docker/Dockerfile .`
+          is more direct);
+      OR
+      (b) skip the laptop rollback dry-run and exercise the rollback
+          on the Pi during a low-traffic window — the
+          `:pre-sqlalchemy` tag is already pinned on the Pi against
+          the live running hash, so `docker tag
+          docker-ratatoskr:pre-sqlalchemy docker-ratatoskr:latest`
+          + `docker compose up -d` is the entire operator action.
+          Recovery time can be measured from a single live test
+          (start a `time docker compose stop … && docker tag … &&
+          docker compose up -d` block).
+- [x] Maintenance window estimate refined from dry-run timings.
+      Active downtime budget on the Pi (sections 2-9): ~5-10 min
+      (laptop ETL was 11-13 s in passes 2 + 3; Pi is ~3-4x slower,
+      so ETL itself is ~45 s; rest is short docker
+      stop/start/healthcheck cycles). Total window 30 min nominal,
+      60 min with one-σ buffer for surprises. Refined value is in
+      the front matter.
 - [ ] Linked from `docs/SPEC.md` "Deployment and Operations" section.
