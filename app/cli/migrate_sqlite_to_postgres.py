@@ -308,6 +308,8 @@ async def _sample_fk_cardinalities(database: Database) -> list[str]:
     ]
 
     for legacy_child, sa_child, fk_col in legacy_pairs:
+        if not _legacy_table_exists(legacy_child):
+            continue
         for rid in request_ids:
             legacy_count = legacy_child.select().where(
                 getattr(legacy_child, fk_col) == rid

@@ -156,7 +156,11 @@ def test_bytes_column_round_trip() -> None:
     """SummaryEmbedding.embedding_blob survives the migration unchanged."""
     import asyncio
 
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
     from app.cli.migrate_sqlite_to_postgres import run_migration
+    from app.db.base import Base
 
     # Build a minimal SQLite source with a user + request + summary + embedding
     import tempfile
@@ -170,6 +174,35 @@ def test_bytes_column_round_trip() -> None:
     )
 
     blob = b"\x01\x02\x03\xff"
+
+    # Clear target Postgres so validation isn't polluted by leftover rows
+    # from prior tests (T2 tests bypass the conftest `session` fixture).
+    async def _clear_target() -> None:
+        engine = create_async_engine(TEST_DATABASE_URL)
+        try:
+            tables = ", ".join(
+                f'"{t.name}"' for t in reversed(Base.metadata.sorted_tables)
+            )
+            if tables:
+                async with engine.begin() as conn:
+                    # The schema may not exist yet; create it first via the
+                    # migrator's own Alembic step. Skip if tables not present.
+                    has_users = (
+                        await conn.execute(
+                            text(
+                                "SELECT 1 FROM information_schema.tables "
+                                "WHERE table_name='users'"
+                            )
+                        )
+                    ).first()
+                    if has_users:
+                        await conn.execute(
+                            text(f"TRUNCATE TABLE {tables} RESTART IDENTITY CASCADE")
+                        )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(_clear_target())
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         sqlite_path = f.name
@@ -215,7 +248,7 @@ def test_bytes_column_round_trip() -> None:
 
     # Read back from Postgres
     import sqlalchemy as sa
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from app.db.models import SummaryEmbedding as SaEmbedding
 
