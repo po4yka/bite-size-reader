@@ -274,6 +274,13 @@ dev = [
     "pytest-benchmark>=5.0.0",
     "respx>=0.22.0",
     "ruff>=0.14.14",
+    # app.tasks.* (digest scheduler etc.) imports taskiq unconditionally; the
+    # `scheduler` extra is required to import those modules. Pulling the same
+    # pins into dev so unit/integration tests under tests/tasks/, tests/observability/,
+    # and tests/integration/test_channel_digest_scheduler.py collect on a
+    # fresh `uv sync` without needing `--extra scheduler`.
+    "taskiq>=0.12.0,<0.13.0",
+    "taskiq-redis>=1.0.0,<2.0.0",
 ]
 
 [tool.uv]
