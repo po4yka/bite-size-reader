@@ -3,63 +3,40 @@
 from __future__ import annotations
 
 import datetime as dt
+from typing import TYPE_CHECKING
 
-import peewee
-import pytest
+from sqlalchemy import select
 
 from app.core.time_utils import UTC
-from app.cli._legacy_peewee_models import (
+from app.db.models import (
     Channel,
-    ChannelCategory,
-    ChannelPost,
     ChannelSubscription,
     FeedItem,
-    RSSFeed,
-    RSSFeedItem,
-    RSSFeedSubscription,
     Source,
     Subscription,
     User,
-    UserSignal,
-    database_proxy,
 )
 from app.infrastructure.persistence.digest_store import DigestStore
 
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
-@pytest.fixture
-def digest_signal_db(tmp_path):
-    old_db = database_proxy.obj
-    db = peewee.SqliteDatabase(str(tmp_path / "digest_signal.db"), pragmas={"foreign_keys": 1})
-    models = [
-        User,
-        ChannelCategory,
-        Channel,
-        ChannelSubscription,
-        ChannelPost,
-        RSSFeed,
-        RSSFeedSubscription,
-        RSSFeedItem,
-        Source,
-        Subscription,
-        FeedItem,
-        UserSignal,
-    ]
-    database_proxy.initialize(db)
-    db.bind(models, bind_refs=False, bind_backrefs=False)
-    db.connect()
-    db.create_tables(models)
-    yield db
-    db.drop_tables(list(reversed(models)))
-    db.close()
-    database_proxy.initialize(old_db)
-    for model in models:
-        model._meta.database = database_proxy
+    from app.db.session import Database
 
 
-def test_digest_store_mirrors_channel_posts_to_signal_tables(digest_signal_db) -> None:
-    user = User.create(telegram_user_id=1001, username="owner")
-    channel = Channel.create(username="python_daily", title="Python Daily", channel_id=123)
-    ChannelSubscription.create(user=user, channel=channel)
+async def test_digest_store_mirrors_channel_posts_to_signal_tables(
+    database: Database, session: AsyncSession
+) -> None:
+    async with database.transaction() as s:
+        s.add(User(telegram_user_id=1001, username="owner"))
+        await s.flush()
+        channel = Channel(username="python_daily", title="Python Daily", channel_id=123)
+        s.add(channel)
+        await s.flush()
+        s.add(ChannelSubscription(user_id=1001, channel_id=channel.id))
+        await s.flush()
+        channel_id = channel.id
+
     posts = [
         {
             "message_id": 42,
@@ -72,13 +49,34 @@ def test_digest_store_mirrors_channel_posts_to_signal_tables(digest_signal_db) -
         }
     ]
 
-    store = DigestStore()
-    store.persist_posts(channel, posts)
-    store.mirror_posts_to_signal_sources(user_id=1001, channel=channel, posts=posts)
+    async with database.session() as s:
+        channel = await s.get(Channel, channel_id)
 
-    source = Source.get(Source.kind == "telegram_channel", Source.external_id == "python_daily")
-    item = FeedItem.get(FeedItem.source == source, FeedItem.external_id == "42")
-    subscription = Subscription.get(Subscription.source == source, Subscription.user == 1001)
+    store = DigestStore(database=database)
+    await store.async_persist_posts(channel, posts)
+    await store.async_mirror_posts_to_signal_sources(
+        user_id=1001, channel=channel, posts=posts
+    )
+
+    async with database.session() as s:
+        source = await s.scalar(
+            select(Source).where(
+                Source.kind == "telegram_channel", Source.external_id == "python_daily"
+            )
+        )
+        assert source is not None
+        item = await s.scalar(
+            select(FeedItem).where(
+                FeedItem.source_id == source.id, FeedItem.external_id == "42"
+            )
+        )
+        assert item is not None
+        subscription = await s.scalar(
+            select(Subscription).where(
+                Subscription.source_id == source.id, Subscription.user_id == 1001
+            )
+        )
+        assert subscription is not None
 
     assert item.content_text == "Python release notes"
     assert item.views == 100
