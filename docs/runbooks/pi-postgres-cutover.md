@@ -357,7 +357,7 @@ marked ready for production.
 |---|---|---|---|---|---|---|
 | 2026-05-07 | Nikita Pochaev | 521 MB | 1.7 s (35 850 source rows enumerated) | partial — see findings | fail (data-shape bugs) | First pass. Pull via `scp` took 1 min 30 s. |
 | 2026-05-07 | Nikita Pochaev | 521 MB | 1.7 s | **12.7 s** | **PASS — zero mismatches** | Pass 2 after Bugs 4–7 were fixed. End-to-end clean on the live Pi snapshot. |
-| `[VERIFY]` | `[VERIFY]` | `[VERIFY]` MB | `[VERIFY]` s | `[VERIFY]` s | pass / fail | second-operator dry-run still pending |
+| 2026-05-07 | Nikita Pochaev | 521 MB | 2.3 s | **11.2 s** | **PASS — zero mismatches** | Pass 3, fresh `sqlite3 .backup` pull (1 min 24 s). Independent re-run on a clean Postgres volume; reproducibility confirmed. `python -m app.cli.healthcheck` against the migrated DB exits 0. Spot-check counts match source: `requests=1215`, `summaries=1170`, `audit_logs=21068`, `llm_calls=3689`. |
 
 ### Dry-run pass 1 findings (2026-05-07)
 
@@ -444,7 +444,7 @@ yet satisfied (must be cleared before C2 starts):
 - [ ] Both `ratatoskr:pre-sqlalchemy` / `:post-sqlalchemy` images and
       both `mobile-api:pre-sqlalchemy` / `:post-sqlalchemy` images
       built, pushed, and pulled to the Pi.
-- [ ] Two laptop dry-runs of sections 1–10 against a Pi-DB snapshot.
+- [x] Two laptop dry-runs of sections 1–10 against a Pi-DB snapshot. (passes 2 and 3, both green; see Appendix A)
 - [ ] One laptop dry-run of section 11 (rollback) — recovery time
       recorded.
 - [ ] Maintenance window estimate refined from dry-run timings (replace
