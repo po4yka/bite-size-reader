@@ -119,11 +119,7 @@ def create_rss_bot_client(cfg: AppConfig) -> Any:
 
 def create_rss_delivery_service(cfg: AppConfig, db: Database) -> Any:
     from app.adapters.content.pure_summary_service import PureSummaryService
-    from app.adapters.content.scraper.factory import ContentScraperFactory
     from app.adapters.content.summarization_runtime import SummarizationRuntime
-    from app.adapters.external.response_formatter import (
-        ResponseFormatter as TelegramResponseFormatter,
-    )
     from app.adapters.openrouter.openrouter_client import OpenRouterClient
     from app.adapters.rss.rss_delivery_service import RSSDeliveryService
     from app.di.repositories import (
@@ -133,7 +129,11 @@ def create_rss_delivery_service(cfg: AppConfig, db: Database) -> Any:
         build_summary_repository,
         build_user_repository,
     )
-    from app.di.shared import LazySemaphoreFactory
+    from app.di.shared import (
+        LazySemaphoreFactory,
+        build_response_formatter,
+        build_scraper_chain,
+    )
     from app.infrastructure.persistence.repositories.rss_feed_repository import (
         RSSFeedRepositoryAdapter,
     )
@@ -144,13 +144,7 @@ def create_rss_delivery_service(cfg: AppConfig, db: Database) -> Any:
         model=cfg.openrouter.model,
         fallback_models=cfg.openrouter.fallback_models,
     )
-    response_formatter = cast(
-        "Any",
-        TelegramResponseFormatter(
-            telegram_limits=cfg.telegram_limits,
-            telegram_config=cfg.telegram,
-        ),
-    )
+    response_formatter = cast("Any", build_response_formatter(cfg))
     sem_factory = LazySemaphoreFactory(cfg.runtime.max_concurrent_calls)
     runtime = SummarizationRuntime(
         cfg=cfg,
@@ -169,7 +163,7 @@ def create_rss_delivery_service(cfg: AppConfig, db: Database) -> Any:
     prompt_mgr = get_prompt_manager()
     scraper_chain = None
     if cfg.rss.scrape_short_content:
-        scraper_chain = ContentScraperFactory.create_from_config(cfg, audit=lambda *_a, **_kw: None)
+        scraper_chain = build_scraper_chain(cfg, audit=lambda *_a, **_kw: None)
     return RSSDeliveryService(
         cfg=cfg.rss,
         pure_summary_service=pure_service,
@@ -184,25 +178,15 @@ def create_rss_delivery_service(cfg: AppConfig, db: Database) -> Any:
 def create_signal_ingestion_worker(cfg: AppConfig, db: Database) -> Any:
     from app.application.services.signal_ingestion_worker import SignalIngestionWorker
     from app.application.services.signal_scoring import SignalScoringService
-    from app.core.embedding_space import resolve_embedding_space_identifier
+    from app.di.shared import build_qdrant_vector_store
     from app.infrastructure.embedding.embedding_factory import create_embedding_service
     from app.infrastructure.persistence.repositories.signal_source_repository import (
         SignalSourceRepositoryAdapter,
     )
     from app.infrastructure.search.vector_topic_similarity import VectorTopicSimilarityAdapter
-    from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 
     embedding_service = create_embedding_service(cfg.embedding)
-    vector_store = QdrantVectorStore(
-        url=cfg.vector_store.url,
-        api_key=cfg.vector_store.api_key,
-        environment=cfg.vector_store.environment,
-        user_scope=cfg.vector_store.user_scope,
-        collection_version=cfg.vector_store.collection_version,
-        embedding_space=resolve_embedding_space_identifier(cfg.embedding),
-        required=cfg.vector_store.required,
-        connection_timeout=cfg.vector_store.connection_timeout,
-    )
+    vector_store = build_qdrant_vector_store(cfg)
     return SignalIngestionWorker(
         repository=SignalSourceRepositoryAdapter(db),
         scorer=SignalScoringService(

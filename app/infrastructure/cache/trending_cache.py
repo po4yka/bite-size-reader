@@ -206,14 +206,15 @@ async def _fetch_trending_records(
     *,
     previous_period_start: datetime,
     max_scan: int,
-    database: Database | None = None,
+    database: Database,
 ) -> list[tuple[datetime, list[str]]]:
-    """Fetch recent summaries with tags for trending computation."""
-    if database is None:
-        from app.di.database import get_or_create_runtime_database_from_env
+    """Fetch recent summaries with tags for trending computation.
 
-        database = get_or_create_runtime_database_from_env(migrate=True)
-
+    `database` is required: infrastructure modules must not depend on
+    the DI layer. The caller (api/routers/search.py) is responsible
+    for supplying the runtime Database via FastAPI dependency
+    injection.
+    """
     records: list[tuple[datetime, list[str]]] = []
     async with database.session() as session:
         rows = (

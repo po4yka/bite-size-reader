@@ -86,6 +86,61 @@ def resolve_ui_lang(cfg: AppConfig) -> str:
     return "en" if ui_lang == "auto" else ui_lang
 
 
+def build_scraper_chain(
+    cfg: AppConfig,
+    *,
+    audit: Callable[[str, str, dict[str, Any]], None] | None = None,
+) -> Any:
+    """Construct the content scraper chain.
+
+    Centralised here so the architecture lint
+    (test_runtime_resource_construction_is_centralized_in_app_di) holds:
+    only `app/di/**`, `app/cli/**`, and `app/bootstrap/**` are allowed
+    to call ContentScraperFactory.create_from_config directly.
+    """
+    audit_func = audit or _default_audit
+    return ContentScraperFactory.create_from_config(cfg, audit=audit_func)
+
+
+def build_qdrant_vector_store(cfg: AppConfig) -> Any:
+    """Construct a QdrantVectorStore from configuration.
+
+    Centralised so callers outside `app/di/**`, `app/cli/**`, and
+    `app/bootstrap/**` (notably `app/tasks/deps.py`) do not need to
+    instantiate the store directly. The lazy import keeps the
+    `qdrant-client` dependency optional for callers that don't need it.
+    """
+    from app.core.embedding_space import resolve_embedding_space_identifier
+    from app.infrastructure.vector.qdrant_store import QdrantVectorStore
+
+    return QdrantVectorStore(
+        url=cfg.vector_store.url,
+        api_key=cfg.vector_store.api_key,
+        environment=cfg.vector_store.environment,
+        user_scope=cfg.vector_store.user_scope,
+        collection_version=cfg.vector_store.collection_version,
+        embedding_space=resolve_embedding_space_identifier(cfg.embedding),
+        required=cfg.vector_store.required,
+        connection_timeout=cfg.vector_store.connection_timeout,
+    )
+
+
+def build_response_formatter(cfg: AppConfig, **overrides: Any) -> ResponseFormatter:
+    """Construct the Telegram-aware ResponseFormatter.
+
+    Centralised here so callers outside `app/di/**`, `app/cli/**`, and
+    `app/bootstrap/**` do not need to instantiate ResponseFormatter
+    directly (architecture lint enforces that).
+    """
+    kwargs: dict[str, Any] = {
+        "telegram_limits": cfg.telegram_limits,
+        "telegram_config": cfg.telegram,
+        "lang": resolve_ui_lang(cfg),
+    }
+    kwargs.update(overrides)
+    return ResponseFormatter(**kwargs)
+
+
 def build_core_dependencies(
     cfg: AppConfig,
     db: Database,
