@@ -27,15 +27,6 @@ def _format_dt(dt_value: datetime | None) -> str | None:
     return dt_value.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z")
 
 
-def _coerce_naive(dt_value: datetime | None) -> datetime | None:
-    """Convert timezone-aware datetime to naive (UTC assumed)."""
-    if dt_value is None:
-        return None
-    if dt_value.tzinfo:
-        return dt_value.replace(tzinfo=None)
-    return dt_value
-
-
 def _utcnow_naive() -> datetime:
     """Get current UTC time as naive datetime."""
     return datetime.now(UTC).replace(tzinfo=None)
@@ -139,7 +130,7 @@ class AuthService:
         await user_repo.async_set_link_nonce(
             telegram_user_id=user_id,
             nonce=nonce,
-            expires_at=_coerce_naive(expires_at),
+            expires_at=expires_at,
         )
 
     @staticmethod

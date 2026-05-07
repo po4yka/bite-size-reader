@@ -1,9 +1,13 @@
+"""Secret login + secret-key management endpoint tests."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import select
 
-import app.di.database as _di_database
-from app.api.dependencies.database import clear_session_manager
 from app.api.exceptions import AuthenticationError, AuthorizationError
 from app.api.models.auth import (
     SecretKeyCreateRequest,
@@ -12,20 +16,17 @@ from app.api.models.auth import (
     SecretLoginRequest,
 )
 from app.api.routers.auth import endpoints as auth_endpoints, secret_auth
-from app.cli._legacy_peewee_models import ClientSecret, User, database_proxy
-try:
-    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
-except ImportError:
-    DatabaseSessionManager = None  # type: ignore[assignment,misc]
+from app.db.models import ClientSecret, User
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
 def _mock_response() -> MagicMock:
-    """Create a mock starlette Response for cookie-setting endpoints."""
     return MagicMock()
 
 
 def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Enable secret login and reset cached config."""
     monkeypatch.setenv("SECRET_LOGIN_ENABLED", "1")
     monkeypatch.setenv("SECRET_LOGIN_MIN_LENGTH", "12")
     monkeypatch.setenv("SECRET_LOGIN_MAX_LENGTH", "128")
@@ -38,25 +39,21 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BOT_TOKEN", "1000000000:TESTTOKENPLACEHOLDER1234567890ABC")
     monkeypatch.setenv("FIRECRAWL_API_KEY", "dummy-firecrawl-key")
     monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
-    secret_auth._cfg = None
+    secret_auth._cfg = None  # type: ignore[attr-defined]
 
 
-def _init_db(tmp_path) -> DatabaseSessionManager:
-    clear_session_manager()
-    db = DatabaseSessionManager(str(tmp_path / "secret-login.db"))
-    db.migrate()
-    database_proxy.initialize(db._database)
-    _di_database._cached_runtime_db = db
-    return db
+async def _create_owner(db: Database, telegram_user_id: int = 123456789) -> User:
+    async with db.transaction() as session:
+        user = User(telegram_user_id=telegram_user_id, username="owner", is_owner=True)
+        session.add(user)
+        await session.flush()
+        return user
 
 
-@pytest.mark.asyncio
-async def test_secret_login_success(tmp_path, monkeypatch: pytest.MonkeyPatch):
+async def test_secret_login_success(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
-    _db = _init_db(tmp_path)
+    user = await _create_owner(db)
 
-    user = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
-    # build_secret_record is now async and takes user_id (int) not user object
     secret_value, record = await secret_auth.build_secret_record(
         user.telegram_user_id,
         "mobile-client",
@@ -76,24 +73,22 @@ async def test_secret_login_success(tmp_path, monkeypatch: pytest.MonkeyPatch):
         _mock_response(),
     )
 
-    tokens = response["data"]["tokens"]
-    # Response uses camelCase (Pydantic alias)
-    assert tokens["accessToken"]
+    assert response["data"]["tokens"]["accessToken"]
     assert "sessionId" in response["data"]
     assert response["data"]["sessionId"] is not None
-    reloaded = ClientSecret.get_by_id(record["id"])
+
+    async with db.session() as session:
+        reloaded = await session.get(ClientSecret, record["id"])
+    assert reloaded is not None
     assert reloaded.last_used_at is not None
     assert reloaded.failed_attempts == 0
     assert reloaded.status == "active"
 
 
-@pytest.mark.asyncio
-async def test_secret_login_lockout(tmp_path, monkeypatch: pytest.MonkeyPatch):
+async def test_secret_login_lockout(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
-    _db = _init_db(tmp_path)
+    user = await _create_owner(db)
 
-    user = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
-    # build_secret_record is now async and takes user_id (int) not user object
     await secret_auth.build_secret_record(
         user.telegram_user_id,
         "mobile-client",
@@ -104,30 +99,29 @@ async def test_secret_login_lockout(tmp_path, monkeypatch: pytest.MonkeyPatch):
     )
 
     bad_request = SecretLoginRequest(
-        user_id=123456789, client_id="mobile-client", secret="wrong-secret-12", username="owner"
+        user_id=123456789,
+        client_id="mobile-client",
+        secret="wrong-secret-12",
+        username="owner",
     )
 
-    # First failed attempt should raise AuthenticationError
     with pytest.raises(AuthenticationError):
         await auth_endpoints.secret_login(bad_request, _mock_response())
 
-    # Second failed attempt should also raise AuthenticationError
-    # (the lockout happens after enough failures)
     with pytest.raises((AuthenticationError, AuthorizationError)):
         await auth_endpoints.secret_login(bad_request, _mock_response())
 
-    record = ClientSecret.select().first()
+    async with db.session() as session:
+        record = await session.scalar(select(ClientSecret).limit(1))
+    assert record is not None
     assert record.status == "locked"
     assert record.failed_attempts >= 2
     assert record.locked_until is not None
 
 
-@pytest.mark.asyncio
-async def test_secret_key_management(tmp_path, monkeypatch: pytest.MonkeyPatch):
+async def test_secret_key_management(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
-    _db = _init_db(tmp_path)
-
-    owner = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
+    owner = await _create_owner(db)
 
     create_payload = SecretKeyCreateRequest(
         user_id=owner.telegram_user_id,
@@ -139,45 +133,52 @@ async def test_secret_key_management(tmp_path, monkeypatch: pytest.MonkeyPatch):
         username="owner",
     )
 
-    owner_context = {"user_id": owner.telegram_user_id, "client_id": "admin", "username": "owner"}
+    owner_context = {
+        "user_id": owner.telegram_user_id,
+        "client_id": "admin",
+        "username": "owner",
+    }
 
     create_resp = await auth_endpoints.create_secret_key(create_payload, user=owner_context)
     key = create_resp["data"]["key"]
     assert key["client_id"] == "mobile-client"
     assert key["status"] == "active"
 
-    rotate_payload = SecretKeyRotateRequest(secret="rotated-secret-value")
     rotate_resp = await auth_endpoints.rotate_secret_key(
-        key["id"], rotate_payload, user=owner_context
+        key["id"],
+        SecretKeyRotateRequest(secret="rotated-secret-value"),
+        user=owner_context,
     )
-    rotated_secret = rotate_resp["data"]["secret"]
-    assert rotated_secret == "rotated-secret-value"
+    assert rotate_resp["data"]["secret"] == "rotated-secret-value"
 
     revoke_resp = await auth_endpoints.revoke_secret_key(
         key["id"], SecretKeyRevokeRequest(reason="cleanup"), user=owner_context
     )
-    revoked_key = revoke_resp["data"]["key"]
-    assert revoked_key["status"] == "revoked"
+    assert revoke_resp["data"]["key"]["status"] == "revoked"
 
     list_resp = await auth_endpoints.list_secret_keys(user=owner_context)
     assert len(list_resp["data"]["keys"]) == 1
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("client_id", ["cli-client", "mcp-client", "automation-client"])
 async def test_self_service_secret_key_management_round_trip_for_supported_client_types(
-    tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
-    client_id: str,
-):
+    db: Database, monkeypatch: pytest.MonkeyPatch, client_id: str
+) -> None:
     _configure_env(monkeypatch)
-    _db = _init_db(tmp_path)
 
-    user = User.create(telegram_user_id=222222222, username="regular-user", is_owner=False)
-    user_context = {"user_id": user.telegram_user_id, "client_id": client_id, "username": "regular"}
+    async with db.transaction() as session:
+        user = User(telegram_user_id=222222222, username="regular-user", is_owner=False)
+        session.add(user)
+        await session.flush()
+
+    user_context = {
+        "user_id": 222222222,
+        "client_id": client_id,
+        "username": "regular",
+    }
 
     create_payload = SecretKeyCreateRequest(
-        user_id=user.telegram_user_id,
+        user_id=222222222,
         client_id=client_id,
         label="self-service",
         description="secondary key",
@@ -188,7 +189,7 @@ async def test_self_service_secret_key_management_round_trip_for_supported_clien
 
     create_resp = await auth_endpoints.create_secret_key(create_payload, user=user_context)
     created_key = create_resp["data"]["key"]
-    assert created_key["user_id"] == user.telegram_user_id
+    assert created_key["user_id"] == 222222222
     assert created_key["client_id"] == client_id
     assert created_key["status"] == "active"
 
@@ -207,8 +208,7 @@ async def test_self_service_secret_key_management_round_trip_for_supported_clien
         SecretKeyRevokeRequest(reason="cleanup"),
         user=user_context,
     )
-    revoked_key = revoke_resp["data"]["key"]
-    assert revoked_key["status"] == "revoked"
+    assert revoke_resp["data"]["key"]["status"] == "revoked"
 
     with pytest.raises(AuthenticationError, match="Only active secrets can be rotated"):
         await auth_endpoints.rotate_secret_key(
@@ -224,11 +224,12 @@ async def test_self_service_secret_key_management_round_trip_for_supported_clien
     )
     assert second_revoke_resp["data"]["key"]["status"] == "revoked"
 
-    reloaded = ClientSecret.get_by_id(created_key["id"])
+    async with db.session() as session:
+        reloaded = await session.get(ClientSecret, created_key["id"])
+    assert reloaded is not None
     assert reloaded.status == "revoked"
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("payload_user_id", "client_id"),
     [
@@ -237,17 +238,20 @@ async def test_self_service_secret_key_management_round_trip_for_supported_clien
     ],
 )
 async def test_self_service_secret_key_management_rejects_invalid_scope(
-    tmp_path,
+    db: Database,
     monkeypatch: pytest.MonkeyPatch,
     payload_user_id: int,
     client_id: str,
-):
+) -> None:
     _configure_env(monkeypatch)
-    _db = _init_db(tmp_path)
 
-    user = User.create(telegram_user_id=222222222, username="regular-user", is_owner=False)
+    async with db.transaction() as session:
+        session.add(
+            User(telegram_user_id=222222222, username="regular-user", is_owner=False)
+        )
+
     user_context = {
-        "user_id": user.telegram_user_id,
+        "user_id": 222222222,
         "client_id": "cli-client",
         "username": "regular",
     }
@@ -266,17 +270,19 @@ async def test_self_service_secret_key_management_rejects_invalid_scope(
         await auth_endpoints.create_secret_key(create_payload, user=user_context)
 
 
-@pytest.mark.asyncio
 async def test_secret_key_creation_does_not_promote_target_to_owner(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-):
+    db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _configure_env(monkeypatch)
     monkeypatch.setenv("ALLOWED_USER_IDS", "123456789,222222222")
-    secret_auth._cfg = None
-    _db = _init_db(tmp_path)
+    secret_auth._cfg = None  # type: ignore[attr-defined]
 
-    owner = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
-    owner_context = {"user_id": owner.telegram_user_id, "client_id": "admin", "username": "owner"}
+    owner = await _create_owner(db)
+    owner_context = {
+        "user_id": owner.telegram_user_id,
+        "client_id": "admin",
+        "username": "owner",
+    }
 
     create_payload = SecretKeyCreateRequest(
         user_id=222222222,
@@ -291,5 +297,7 @@ async def test_secret_key_creation_does_not_promote_target_to_owner(
     create_resp = await auth_endpoints.create_secret_key(create_payload, user=owner_context)
     assert create_resp["data"]["key"]["client_id"] == "mobile-client"
 
-    target_user = User.get(User.telegram_user_id == 222222222)
+    async with db.session() as session:
+        target_user = await session.scalar(select(User).where(User.telegram_user_id == 222222222))
+    assert target_user is not None
     assert target_user.is_owner is False

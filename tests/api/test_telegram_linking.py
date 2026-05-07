@@ -1,37 +1,29 @@
+"""Telegram link/unlink + invalid-nonce coverage for the auth endpoints."""
+
+from __future__ import annotations
+
 import time
+from typing import TYPE_CHECKING
 
 import pytest
 
-import app.di.database as _di_database
-from app.api.dependencies.database import clear_session_manager
 from app.api.exceptions import ValidationError
 from app.api.models.auth import TelegramLinkCompleteRequest
 from app.api.routers.auth import endpoints as auth_endpoints, secret_auth
-from app.cli._legacy_peewee_models import User, database_proxy
-try:
-    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
-except ImportError:
-    DatabaseSessionManager = None  # type: ignore[assignment,misc]
+from app.db.models import User
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
 def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Set minimal env vars for config and Telegram auth."""
     monkeypatch.setenv("BOT_TOKEN", "1000000000:TESTTOKENPLACEHOLDER1234567890ABC")
     monkeypatch.setenv("ALLOWED_USER_IDS", "123456789")
     monkeypatch.setenv("API_ID", "1")
     monkeypatch.setenv("API_HASH", "test_api_hash_placeholder_value___")
     monkeypatch.setenv("FIRECRAWL_API_KEY", "dummy-firecrawl-key")
     monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
-    secret_auth._cfg = None
-
-
-def _init_db(tmp_path) -> DatabaseSessionManager:
-    clear_session_manager()
-    db = DatabaseSessionManager(str(tmp_path / "linking.db"))
-    db.migrate()
-    database_proxy.initialize(db._database)
-    _di_database._cached_runtime_db = db
-    return db
+    secret_auth._cfg = None  # type: ignore[attr-defined]
 
 
 def _fake_auth_hash(bot_token: str, payload: dict) -> str:
@@ -48,14 +40,21 @@ def _fake_auth_hash(bot_token: str, payload: dict) -> str:
     return hmac.new(secret_key, data_check.encode(), hashlib.sha256).hexdigest()
 
 
-@pytest.mark.asyncio
-async def test_link_happy_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
+async def _create_owner(db: Database) -> User:
+    async with db.transaction() as session:
+        user = User(telegram_user_id=123456789, username="owner", is_owner=True)
+        session.add(user)
+        await session.flush()
+        return user
+
+
+async def test_link_happy_path(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
-    _init_db(tmp_path)
+    user = await _create_owner(db)
 
-    user = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
-
-    begin_resp = await auth_endpoints.begin_telegram_link(user={"user_id": user.telegram_user_id})
+    begin_resp = await auth_endpoints.begin_telegram_link(
+        user={"user_id": user.telegram_user_id}
+    )
     nonce = begin_resp["data"]["nonce"]
 
     payload = {
@@ -64,7 +63,9 @@ async def test_link_happy_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
         "username": "linked_user",
         "client_id": "android-app",
     }
-    auth_hash = _fake_auth_hash("1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload)
+    auth_hash = _fake_auth_hash(
+        "1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload
+    )
 
     complete_req = TelegramLinkCompleteRequest(
         id=payload["id"],  # type: ignore[arg-type]
@@ -85,16 +86,16 @@ async def test_link_happy_path(tmp_path, monkeypatch: pytest.MonkeyPatch):
     )
     assert status_resp["data"]["linked"] is True
 
-    unlink_resp = await auth_endpoints.unlink_telegram(user={"user_id": user.telegram_user_id})
+    unlink_resp = await auth_endpoints.unlink_telegram(
+        user={"user_id": user.telegram_user_id}
+    )
     assert unlink_resp["data"]["linked"] is False
 
 
-@pytest.mark.asyncio
-async def test_link_invalid_nonce(tmp_path, monkeypatch: pytest.MonkeyPatch):
+async def test_link_invalid_nonce(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
-    _init_db(tmp_path)
+    user = await _create_owner(db)
 
-    user = User.create(telegram_user_id=123456789, username="owner", is_owner=True)
     await auth_endpoints.begin_telegram_link(user={"user_id": user.telegram_user_id})
 
     payload = {
@@ -103,7 +104,9 @@ async def test_link_invalid_nonce(tmp_path, monkeypatch: pytest.MonkeyPatch):
         "username": "linked_user",
         "client_id": "android-app",
     }
-    auth_hash = _fake_auth_hash("1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload)
+    auth_hash = _fake_auth_hash(
+        "1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload
+    )
 
     complete_req = TelegramLinkCompleteRequest(
         id=payload["id"],  # type: ignore[arg-type]
@@ -113,6 +116,7 @@ async def test_link_invalid_nonce(tmp_path, monkeypatch: pytest.MonkeyPatch):
         client_id=payload["client_id"],  # type: ignore[arg-type]
         nonce="bad-nonce",
     )
+
     with pytest.raises(ValidationError):
         await auth_endpoints.complete_telegram_link(
             complete_req, user={"user_id": user.telegram_user_id}
