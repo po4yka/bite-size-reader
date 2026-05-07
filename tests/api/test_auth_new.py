@@ -1,62 +1,62 @@
+"""Auth endpoints: delete account + telegram login does-not-grant-owner."""
+
+from __future__ import annotations
+
 import time
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy import select
 
-import app.di.database as _di_database
-from app.api.dependencies.database import clear_session_manager
 from app.api.models.auth import TelegramLoginRequest
 from app.api.routers.auth import (
     endpoints_me as auth_endpoints_me,
     endpoints_telegram as auth_endpoints_telegram,
     secret_auth,
 )
-from app.cli._legacy_peewee_models import User, database_proxy
-try:
-    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
-except ImportError:
-    DatabaseSessionManager = None  # type: ignore[assignment,misc]
+from app.db.models import User
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
 def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-key-32-characters-long-123456")
     monkeypatch.setenv("ALLOWED_USER_IDS", "123456789")
     monkeypatch.setenv("ALLOWED_CLIENT_IDS", "com.example.app")
-    secret_auth._cfg = None
+    secret_auth._cfg = None  # type: ignore[attr-defined]
 
 
-def _init_db(tmp_path) -> DatabaseSessionManager:
-    clear_session_manager()
-    db = DatabaseSessionManager(str(tmp_path / "test-auth-new.db"))
-    db.migrate()
-    database_proxy.initialize(db._database)
-    _di_database._cached_runtime_db = db
-    return db
-
-
-@pytest.mark.asyncio
-async def test_delete_account(tmp_path, monkeypatch: pytest.MonkeyPatch):
+async def test_delete_account(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
-    _init_db(tmp_path)
 
-    # Create user
-    User.create(telegram_user_id=123456789, username="testuser", is_owner=False)
+    async with db.transaction() as session:
+        session.add(User(telegram_user_id=123456789, username="testuser", is_owner=False))
 
-    # Mock user context from current_user dependency
-    user_context = {"user_id": 123456789, "username": "testuser", "client_id": "com.example.app"}
+    user_context = {
+        "user_id": 123456789,
+        "username": "testuser",
+        "client_id": "com.example.app",
+    }
 
     response = await auth_endpoints_me.delete_account(
         user=user_context, x_confirm_delete="DELETE-MY-ACCOUNT"
     )
 
     assert response["data"]["success"] is True
-    assert not User.select().where(User.telegram_user_id == 123456789).exists()
+
+    async with db.session() as session:
+        remaining = await session.scalar(
+            select(User).where(User.telegram_user_id == 123456789)
+        )
+    assert remaining is None
 
 
-@pytest.mark.asyncio
-async def test_telegram_login_does_not_auto_grant_owner(tmp_path, monkeypatch: pytest.MonkeyPatch):
+async def test_telegram_login_does_not_auto_grant_owner(
+    db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _configure_env(monkeypatch)
-    _init_db(tmp_path)
 
     payload = TelegramLoginRequest(
         id=123456789,
@@ -73,5 +73,7 @@ async def test_telegram_login_does_not_auto_grant_owner(tmp_path, monkeypatch: p
     assert tokens["accessToken"]
     assert tokens["refreshToken"]
 
-    user = User.get(User.telegram_user_id == 123456789)
+    async with db.session() as session:
+        user = await session.scalar(select(User).where(User.telegram_user_id == 123456789))
+    assert user is not None
     assert user.is_owner is False
