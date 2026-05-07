@@ -98,6 +98,7 @@ _FIRST_RUN_REQUIRED_ENV = (
     "BOT_TOKEN",
     "ALLOWED_USER_IDS",
     "OPENROUTER_API_KEY",
+    "DATABASE_URL",
 )
 
 
@@ -412,11 +413,12 @@ def _build_config(*, allow_stub_telegram: bool) -> AppConfig:
     try:
         settings = Settings(**overrides)
     except (ValidationError, RuntimeError) as exc:  # pragma: no cover - defensive
-        missing = tuple(
-            name
-            for name in _FIRST_RUN_REQUIRED_ENV
-            if name in str(exc) or name == "ALLOWED_USER_IDS"
-        )
+        # Only flag a variable as missing when its name actually appears in the
+        # underlying error. The previous version unconditionally added
+        # ALLOWED_USER_IDS to the report, which masked unrelated failures
+        # (e.g. a missing DATABASE_URL) behind a misleading message.
+        exc_text = str(exc)
+        missing = tuple(name for name in _FIRST_RUN_REQUIRED_ENV if name in exc_text)
         if missing:
             msg = _format_required_config_error(missing)
         else:
