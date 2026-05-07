@@ -282,9 +282,16 @@ def respx_mock():
 # ---------------------------------------------------------------------------
 
 
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
+@pytest_asyncio.fixture
 async def database():
-    """Session-scoped async `Database` against `TEST_DATABASE_URL`."""
+    """Function-scoped async `Database` against `TEST_DATABASE_URL`.
+
+    Function-scoped (rather than session-scoped) because pytest-asyncio in
+    `auto` mode creates a fresh event loop per test, and an asyncpg pool
+    bound to a different loop fails with "attached to a different loop".
+    Per-test setup is cheap because `migrate()` is idempotent against an
+    already-upgraded schema.
+    """
     dsn = os.environ.get("TEST_DATABASE_URL")
     if not dsn:
         pytest.skip("TEST_DATABASE_URL is required for async Postgres fixtures")
@@ -299,18 +306,22 @@ async def database():
         await db.dispose()
 
 
-@pytest_asyncio.fixture(loop_scope="session")
+@pytest_asyncio.fixture
 async def session(database):
     """Function-scoped `AsyncSession`; truncates every table after the test."""
     from sqlalchemy import text as sql_text
 
     from app.db.base import Base
 
-    async with database.session_maker()() as sess:
-        try:
-            yield sess
-        finally:
-            await sess.rollback()
+    sess = database.session_maker()
+    try:
+        yield sess
+        await sess.commit()
+    except Exception:
+        await sess.rollback()
+        raise
+    finally:
+        await sess.close()
 
     table_names = [t.name for t in reversed(Base.metadata.sorted_tables)]
     if not table_names:
