@@ -1,18 +1,21 @@
-import os
-import tempfile
-import unittest
-from typing import Any
+"""Coverage for /unread and /read commands and the read-status helpers.
+
+Ported off the legacy DatabaseSessionManager + tests.db_helpers shim.
+The argument-parsing tests are pure-Python and unchanged. The helper
+tests use async db_helpers + the session fixture; the command tests
+construct a real TelegramBot wired to async Postgres and invoke
+commands via bot._on_message.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
 from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
 from app.adapters.telegram.telegram_bot import TelegramBot
-from app.cli._legacy_peewee_models import database_proxy
-try:
-    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
-except ImportError:
-    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from tests.conftest import make_test_app_config
-from tests.db_helpers import (
+from tests.db_helpers_async import (
     create_request,
     get_read_status,
     get_summary_by_request,
@@ -22,12 +25,17 @@ from tests.db_helpers import (
     mark_summary_as_read,
 )
 
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.session import Database
+
 
 class FakeMessage:
-    def __init__(self, text: str, uid: int = 1):
+    def __init__(self, text: str, uid: int = 1) -> None:
         class _User:
-            def __init__(self, id):
-                self.id = id
+            def __init__(self, uid: int) -> None:
+                self.id = uid
 
         class _Chat:
             id = 1
@@ -39,77 +47,46 @@ class FakeMessage:
         self.id = 123
         self.message_id = 123
 
-    async def reply_text(self, text: str, **kwargs: object) -> None:
+    async def reply_text(self, text: str, **_kwargs: object) -> None:
         self._replies.append(text)
 
 
 class ReadStatusBot(TelegramBot):
     def __post_init__(self) -> None:
-        # Mock the OpenRouter client to avoid API key validation
-        with patch("app.adapters.openrouter.openrouter_client.OpenRouterClient") as mock_openrouter:
-            mock_openrouter.return_value = AsyncMock()
+        with patch("app.adapters.openrouter.openrouter_client.OpenRouterClient") as mock_or:
+            mock_or.return_value = AsyncMock()
             super().__post_init__()
         self.seen_urls: list[str] = []
 
-        # Patch url_processor.handle_url_flow so the message router's
-        # url_handler routes through our test interceptor.
         if hasattr(self, "url_processor"):
-            self.url_processor.handle_url_flow = self._fake_url_flow
+            self.url_processor.handle_url_flow = self._fake_url_flow  # type: ignore[method-assign]
 
-        # Mock Firecrawl to avoid API key issues
-        if hasattr(self, "_firecrawl"):
-
-            class MockCrawlResult:
-                def __init__(self):
-                    self.status = "success"
-                    self.markdown = "Mock content"
-                    self.html = "Mock HTML"
-                    self.source_url = "https://example.com"
-                    self.language = "en"
-                    self.http_status = 200
-                    self.endpoint = "/v2/scrape"
-                    self.error_text = None
-                    self.options_json = {"formats": ["markdown"]}
-                    self.correlation_id = None
-                    self.content_markdown = "Mock content"
-                    self.content_html = "Mock HTML"
-                    self.structured_json = {}
-                    self.metadata_json = {}  # Add missing attribute
-                    self.links_json = []  # Add missing attribute
-                    self.screenshots_paths_json = None  # Add missing attribute
-                    self.response_success = True
-                    self.response_error_code = None
-                    self.response_error_message = None
-                    self.response_details = None
-                    self.latency_ms = 100  # Add missing attribute
-
-            # Use setattr to mock the method
-            self._firecrawl.scrape_markdown = AsyncMock(return_value=MockCrawlResult())
-
-    async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
+    async def _handle_url_flow(
+        self, message: Any, url_text: str, **_: object
+    ) -> None:
         self.seen_urls.append(url_text)
         await self._safe_reply(message, f"OK {url_text}")
 
     async def _fake_url_flow(self, message: Any, url_text: str, **_: object) -> None:
-        """Interceptor for url_processor.handle_url_flow used by tests."""
         self.seen_urls.append(url_text)
         await self._safe_reply(message, f"OK {url_text}")
 
 
-def make_bot(tmp_path: str) -> ReadStatusBot:
-    db = DatabaseSessionManager(tmp_path)
-    db.migrate()
-    # Ensure the database_proxy is properly initialized
-    database_proxy.initialize(db._database)
-    cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1,))
+def _make_bot(database: Database) -> ReadStatusBot:
+    cfg = make_test_app_config(db_path="/tmp/read-status.db", allowed_user_ids=(1,))
     from app.adapters import telegram_bot as tbmod
 
     tbmod.Client = object
     tbmod.filters = None
-    return ReadStatusBot(cfg=cfg, db=db)
+    return ReadStatusBot(cfg=cfg, db=database)
 
 
-class TestParseUnreadArguments(unittest.TestCase):
+# ---------------------------------------------------------------------------
+# Pure-Python: /unread argument parser
+# ---------------------------------------------------------------------------
+
+
+class TestParseUnreadArguments:
     def test_parse_unread_with_mention_only(self) -> None:
         limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread@bot")
         assert limit == 5
@@ -121,7 +98,9 @@ class TestParseUnreadArguments(unittest.TestCase):
         assert topic is None
 
     def test_parse_unread_with_mention_and_topic(self) -> None:
-        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread@bot gardening")
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments(
+            "/unread@bot gardening"
+        )
         assert limit == 5
         assert topic == "gardening"
 
@@ -131,7 +110,9 @@ class TestParseUnreadArguments(unittest.TestCase):
         assert topic == "2024"
 
     def test_parse_unread_with_numeric_topic_and_limit(self) -> None:
-        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread 2024 limit=3")
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments(
+            "/unread 2024 limit=3"
+        )
         assert limit == 3
         assert topic == "2024"
 
@@ -156,781 +137,667 @@ class TestParseUnreadArguments(unittest.TestCase):
         assert topic is None
 
 
-class TestReadStatusDatabase(unittest.TestCase):
-    def setUp(self):
-        # Save the original database_proxy object to restore later
-        self._old_proxy_obj = database_proxy.obj
-        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self.db_path = os.path.join(self.tmp.name, "app.db")
-        self.db = DatabaseSessionManager(self.db_path)
-        self.db.migrate()
+# ---------------------------------------------------------------------------
+# DB-backed: read-status helpers
+# ---------------------------------------------------------------------------
 
-    def tearDown(self):
-        # Restore the original database_proxy object
-        database_proxy.initialize(self._old_proxy_obj)
-        self.tmp.cleanup()
 
-    def test_summary_read_status_defaults(self):
-        """Test that summaries default to is_read = false."""
-        rid = create_request(
+async def test_summary_read_status_defaults(session: AsyncSession) -> None:
+    rid = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        correlation_id=None,
+        chat_id=None,
+        user_id=None,
+        normalized_url="https://example.com/test-defaults",
+        route_version=1,
+    )
+    await insert_summary(
+        session, request_id=rid, lang="en", json_payload={"title": "Test Article"}
+    )
+    row = await get_summary_by_request(session, rid)
+    assert row is not None
+    assert row["is_read"] == 0  # boolean column rendered as 0/1 by helper
+
+
+async def test_summary_read_status_explicit(session: AsyncSession) -> None:
+    rid1 = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        correlation_id=None,
+        chat_id=None,
+        user_id=None,
+        normalized_url="https://example.com/explicit-1",
+        route_version=1,
+    )
+    rid2 = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        correlation_id=None,
+        chat_id=None,
+        user_id=None,
+        normalized_url="https://example.com/explicit-2",
+        route_version=1,
+    )
+    await insert_summary(
+        session,
+        request_id=rid1,
+        lang="en",
+        json_payload={"title": "Unread Article"},
+        is_read=False,
+    )
+    await insert_summary(
+        session,
+        request_id=rid2,
+        lang="en",
+        json_payload={"title": "Read Article"},
+        is_read=True,
+    )
+    row1 = await get_summary_by_request(session, rid1)
+    row2 = await get_summary_by_request(session, rid2)
+    assert row1 is not None and row1["is_read"] == 0
+    assert row2 is not None and row2["is_read"] == 1
+
+
+async def test_get_unread_summaries(session: AsyncSession) -> None:
+    rid1 = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        input_url="https://example1.com",
+        normalized_url="https://example1.com",
+        correlation_id=None,
+        chat_id=None,
+        user_id=None,
+        route_version=1,
+    )
+    rid2 = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        input_url="https://example2.com",
+        normalized_url="https://example2.com",
+        correlation_id=None,
+        chat_id=None,
+        user_id=None,
+        route_version=1,
+    )
+    rid3 = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        input_url="https://example3.com",
+        normalized_url="https://example3.com",
+        correlation_id=None,
+        chat_id=None,
+        user_id=None,
+        route_version=1,
+    )
+    await insert_summary(
+        session, request_id=rid1, lang="en", json_payload={"title": "Article 1"}, is_read=False
+    )
+    await insert_summary(
+        session, request_id=rid2, lang="en", json_payload={"title": "Article 2"}, is_read=True
+    )
+    await insert_summary(
+        session, request_id=rid3, lang="en", json_payload={"title": "Article 3"}, is_read=False
+    )
+
+    unread = await get_unread_summaries(session, limit=10)
+    assert len(unread) == 2
+    assert unread[0]["input_url"] == "https://example1.com"
+    assert unread[1]["input_url"] == "https://example3.com"
+
+
+async def test_get_unread_summaries_limit(session: AsyncSession) -> None:
+    for i in range(5):
+        rid = await create_request(
+            session,
             type_="url",
             status="pending",
+            input_url=f"https://example{i}.com",
+            normalized_url=f"https://example{i}.com",
             correlation_id=None,
             chat_id=None,
             user_id=None,
-            normalized_url="https://example.com/test-defaults",
             route_version=1,
         )
-
-        # Insert summary without specifying is_read
-        insert_summary(
+        await insert_summary(
+            session,
             request_id=rid,
             lang="en",
-            json_payload={"title": "Test Article"},
-        )
-
-        row = get_summary_by_request(rid)
-        assert row is not None
-        assert row["is_read"] == 0  # Should default to false
-
-    def test_summary_read_status_explicit(self):
-        """Test setting explicit read status."""
-        rid1 = create_request(
-            type_="url",
-            status="pending",
-            correlation_id=None,
-            chat_id=None,
-            user_id=None,
-            normalized_url="https://example.com/explicit-1",
-            route_version=1,
-        )
-        rid2 = create_request(
-            type_="url",
-            status="pending",
-            correlation_id=None,
-            chat_id=None,
-            user_id=None,
-            normalized_url="https://example.com/explicit-2",
-            route_version=1,
-        )
-
-        # Insert summary as unread
-        insert_summary(
-            request_id=rid1,
-            lang="en",
-            json_payload={"title": "Unread Article"},
+            json_payload={"title": f"Article {i}"},
             is_read=False,
         )
 
-        # Insert summary as read
-        insert_summary(
-            request_id=rid2,
-            lang="en",
-            json_payload={"title": "Read Article"},
-            is_read=True,
-        )
+    unread = await get_unread_summaries(session, limit=3)
+    assert [row["input_url"] for row in unread] == [
+        "https://example0.com",
+        "https://example1.com",
+        "https://example2.com",
+    ]
 
-        row1 = get_summary_by_request(rid1)
-        row2 = get_summary_by_request(rid2)
 
-        assert row1["is_read"] == 0  # Unread
-        assert row2["is_read"] == 1  # Read
-
-    def test_get_unread_summaries(self):
-        """Test querying unread summaries."""
-        # Create requests
-        rid1 = create_request(
-            type_="url",
-            status="pending",
-            input_url="https://example1.com",
-            normalized_url="https://example1.com",
-            correlation_id=None,
-            chat_id=None,
-            user_id=None,
-            route_version=1,
-        )
-        rid2 = create_request(
-            type_="url",
-            status="pending",
-            input_url="https://example2.com",
-            normalized_url="https://example2.com",
-            correlation_id=None,
-            chat_id=None,
-            user_id=None,
-            route_version=1,
-        )
-        rid3 = create_request(
-            type_="url",
-            status="pending",
-            input_url="https://example3.com",
-            normalized_url="https://example3.com",
-            correlation_id=None,
-            chat_id=None,
-            user_id=None,
-            route_version=1,
-        )
-
-        # Insert summaries with mixed read status
-        insert_summary(
-            request_id=rid1,
+async def test_get_unread_summaries_filters_by_user_and_chat(
+    session: AsyncSession,
+) -> None:
+    rid_target = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        input_url="https://visible.com",
+        normalized_url="https://visible.com",
+        correlation_id=None,
+        chat_id=111,
+        user_id=555,
+        route_version=1,
+    )
+    rid_other_user = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        input_url="https://other-user.com",
+        normalized_url="https://other-user.com",
+        correlation_id=None,
+        chat_id=111,
+        user_id=777,
+        route_version=1,
+    )
+    rid_other_chat = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        input_url="https://other-chat.com",
+        normalized_url="https://other-chat.com",
+        correlation_id=None,
+        chat_id=222,
+        user_id=555,
+        route_version=1,
+    )
+    for rid in (rid_target, rid_other_user, rid_other_chat):
+        await insert_summary(
+            session,
+            request_id=rid,
             lang="en",
-            json_payload={"title": "Article 1"},
-            is_read=False,
-        )
-        insert_summary(
-            request_id=rid2,
-            lang="en",
-            json_payload={"title": "Article 2"},
-            is_read=True,
-        )
-        insert_summary(
-            request_id=rid3,
-            lang="en",
-            json_payload={"title": "Article 3"},
+            json_payload={"title": "Scoped Article"},
             is_read=False,
         )
 
-        # Get unread summaries
-        unread = get_unread_summaries(limit=10)
-        assert len(unread) == 2
-        assert unread[0]["input_url"] == "https://example1.com"
-        assert unread[1]["input_url"] == "https://example3.com"
+    unread_scoped = await get_unread_summaries(
+        session, user_id=555, chat_id=111, limit=10
+    )
+    assert len(unread_scoped) == 1
+    assert unread_scoped[0]["input_url"] == "https://visible.com"
 
-    def test_get_unread_summaries_limit(self):
-        """Test limiting unread summaries."""
-        # Create multiple requests
-        for i in range(5):
-            rid = create_request(
-                type_="url",
-                status="pending",
-                input_url=f"https://example{i}.com",
-                normalized_url=f"https://example{i}.com",
-                correlation_id=None,
-                chat_id=None,
-                user_id=None,
-                route_version=1,
-            )
-            insert_summary(
-                request_id=rid,
-                lang="en",
-                json_payload={"title": f"Article {i}"},
-                is_read=False,
-            )
 
-        # Get limited unread summaries
-        unread = get_unread_summaries(limit=3)
-        assert [row["input_url"] for row in unread] == [
-            "https://example0.com",
-            "https://example1.com",
-            "https://example2.com",
-        ]
-
-    def test_get_unread_summaries_filters_by_user_and_chat(self):
-        """Unread summaries respect user and chat scoping."""
-        rid_target = create_request(
+async def test_get_unread_summaries_topic_filter(session: AsyncSession) -> None:
+    payloads = (
+        {
+            "title": "AI breakthroughs",
+            "topic_tags": ["Artificial Intelligence", "Research"],
+            "metadata": {"description": "Advances in AI"},
+        },
+        {
+            "title": "Gardening tips",
+            "topic_tags": ["Outdoors"],
+            "metadata": {"description": "Plants"},
+        },
+        {
+            "title": "AI safety",
+            "topic_tags": ["Machine Learning"],
+            "metadata": {"keywords": ["AI", "Safety"]},
+        },
+    )
+    for index, payload in enumerate(payloads):
+        rid = await create_request(
+            session,
             type_="url",
             status="pending",
-            input_url="https://visible.com",
-            normalized_url="https://visible.com",
-            correlation_id=None,
-            chat_id=111,
-            user_id=555,
-            route_version=1,
-        )
-        rid_other_user = create_request(
-            type_="url",
-            status="pending",
-            input_url="https://other-user.com",
-            normalized_url="https://other-user.com",
-            correlation_id=None,
-            chat_id=111,
-            user_id=777,
-            route_version=1,
-        )
-        rid_other_chat = create_request(
-            type_="url",
-            status="pending",
-            input_url="https://other-chat.com",
-            normalized_url="https://other-chat.com",
-            correlation_id=None,
-            chat_id=222,
-            user_id=555,
-            route_version=1,
-        )
-
-        for rid in (rid_target, rid_other_user, rid_other_chat):
-            insert_summary(
-                request_id=rid,
-                lang="en",
-                json_payload={"title": "Scoped Article"},
-                is_read=False,
-            )
-
-        unread_scoped = get_unread_summaries(
-            user_id=555,
-            chat_id=111,
-            limit=10,
-        )
-        assert len(unread_scoped) == 1
-        assert unread_scoped[0]["input_url"] == "https://visible.com"
-
-    def test_get_unread_summaries_topic_filter(self):
-        """Unread summaries can be filtered by a topic query."""
-        payloads = (
-            {
-                "title": "AI breakthroughs",
-                "topic_tags": ["Artificial Intelligence", "Research"],
-                "metadata": {"description": "Advances in AI"},
-            },
-            {
-                "title": "Gardening tips",
-                "topic_tags": ["Outdoors"],
-                "metadata": {"description": "Plants"},
-            },
-            {
-                "title": "AI safety",
-                "topic_tags": ["Machine Learning"],
-                "metadata": {"keywords": ["AI", "Safety"]},
-            },
-        )
-
-        for index, payload in enumerate(payloads):
-            rid = create_request(
-                type_="url",
-                status="pending",
-                input_url=f"https://example{index}.com",
-                normalized_url=f"https://example{index}.com",
-                correlation_id=None,
-                chat_id=None,
-                user_id=None,
-                route_version=1,
-            )
-            insert_summary(
-                request_id=rid,
-                lang="en",
-                json_payload=payload,
-                is_read=False,
-            )
-
-        unread_ai = get_unread_summaries(limit=5, topic="AI")
-        assert len(unread_ai) == 2
-        assert all(
-            "example0" in row["input_url"] or "example2" in row["input_url"] for row in unread_ai
-        )
-
-        unread_garden = get_unread_summaries(limit=5, topic="garden")
-        assert len(unread_garden) == 1
-        assert "example1" in unread_garden[0]["input_url"]
-
-    def test_get_unread_summaries_topic_filter_no_matches(self):
-        """Topic filter returns empty when nothing matches."""
-        rid = create_request(
-            type_="url",
-            status="pending",
-            input_url="https://example.com",
-            normalized_url="https://example.com",
+            input_url=f"https://example{index}.com",
+            normalized_url=f"https://example{index}.com",
             correlation_id=None,
             chat_id=None,
             user_id=None,
             route_version=1,
         )
-        insert_summary(
+        await insert_summary(
+            session, request_id=rid, lang="en", json_payload=payload, is_read=False
+        )
+
+    unread_ai = await get_unread_summaries(session, limit=5, topic="AI")
+    assert len(unread_ai) == 2
+    assert all(
+        "example0" in row["input_url"] or "example2" in row["input_url"]
+        for row in unread_ai
+    )
+
+    unread_garden = await get_unread_summaries(session, limit=5, topic="garden")
+    assert len(unread_garden) == 1
+    assert "example1" in unread_garden[0]["input_url"]
+
+
+async def test_get_unread_summaries_topic_filter_no_matches(
+    session: AsyncSession,
+) -> None:
+    rid = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        input_url="https://example.com",
+        normalized_url="https://example.com",
+        correlation_id=None,
+        chat_id=None,
+        user_id=None,
+        route_version=1,
+    )
+    await insert_summary(
+        session,
+        request_id=rid,
+        lang="en",
+        json_payload={
+            "title": "Quantum breakthrough",
+            "topic_tags": ["Physics"],
+            "metadata": {"title": "Quantum breakthrough"},
+        },
+        is_read=False,
+    )
+    unread_none = await get_unread_summaries(session, limit=5, topic="space")
+    assert unread_none == []
+
+
+async def test_get_unread_summaries_topic_filter_large_backlog(
+    session: AsyncSession,
+) -> None:
+    matching_ids: list[int] = []
+    for i in range(130):
+        rid = await create_request(
+            session,
+            type_="url",
+            status="pending",
+            input_url=f"https://example{i}.com",
+            normalized_url=f"https://example{i}.com",
+            correlation_id=None,
+            chat_id=None,
+            user_id=None,
+            route_version=1,
+        )
+        payload: dict[str, Any] = {
+            "title": f"Article {i}",
+            "topic_tags": ["general"],
+            "metadata": {"title": f"Article {i}", "description": "General news"},
+        }
+        if i >= 120:
+            payload = {
+                "title": f"Gardening insights {i}",
+                "topic_tags": ["gardening"],
+                "metadata": {
+                    "title": f"Gardening insights {i}",
+                    "description": "Gardening tips",
+                },
+            }
+            matching_ids.append(rid)
+
+        await insert_summary(
+            session, request_id=rid, lang="en", json_payload=payload, is_read=False
+        )
+
+    unread = await get_unread_summaries(session, limit=3, topic="gardening")
+    assert len(unread) == 3
+    assert [row["request_id"] for row in unread] == matching_ids[:3]
+
+
+async def test_mark_summary_as_read(session: AsyncSession) -> None:
+    rid = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        correlation_id=None,
+        chat_id=None,
+        user_id=None,
+        normalized_url="https://example.com/mark-read",
+        route_version=1,
+    )
+    await insert_summary(
+        session,
+        request_id=rid,
+        lang="en",
+        json_payload={"title": "Test Article"},
+        is_read=False,
+    )
+    row = await get_summary_by_request(session, rid)
+    assert row is not None
+    assert row["is_read"] == 0
+
+    await mark_summary_as_read(session, rid)
+
+    row = await get_summary_by_request(session, rid)
+    assert row is not None
+    assert row["is_read"] == 1
+
+
+async def test_get_read_status(session: AsyncSession) -> None:
+    rid1 = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        correlation_id=None,
+        chat_id=None,
+        user_id=None,
+        normalized_url="https://example.com/read-status-1",
+        route_version=1,
+    )
+    rid2 = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        correlation_id=None,
+        chat_id=None,
+        user_id=None,
+        normalized_url="https://example.com/read-status-2",
+        route_version=1,
+    )
+    await insert_summary(
+        session,
+        request_id=rid1,
+        lang="en",
+        json_payload={"title": "Unread Article"},
+        is_read=False,
+    )
+    await insert_summary(
+        session,
+        request_id=rid2,
+        lang="en",
+        json_payload={"title": "Read Article"},
+        is_read=True,
+    )
+    assert not await get_read_status(session, rid1)
+    assert await get_read_status(session, rid2)
+    assert not await get_read_status(session, 999)  # non-existent
+
+
+async def test_get_unread_summary_by_request_id(session: AsyncSession) -> None:
+    rid = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        input_url="https://example.com",
+        normalized_url="https://example.com",
+        correlation_id=None,
+        chat_id=None,
+        user_id=None,
+        route_version=1,
+    )
+    await insert_summary(
+        session,
+        request_id=rid,
+        lang="en",
+        json_payload={"title": "Test Article"},
+        is_read=False,
+    )
+
+    summary = await get_unread_summary_by_request_id(session, rid)
+    assert summary is not None
+    assert summary["input_url"] == "https://example.com"
+
+    await mark_summary_as_read(session, rid)
+    summary = await get_unread_summary_by_request_id(session, rid)
+    assert summary is None
+
+
+# ---------------------------------------------------------------------------
+# Bot-level commands: /unread and /read
+# ---------------------------------------------------------------------------
+
+
+async def test_unread_command_no_unread(database: Database) -> None:
+    bot = _make_bot(database)
+    msg = FakeMessage("/unread", uid=1)
+    await bot._on_message(msg)
+    assert len(msg._replies) == 1
+    assert "No unread articles found" in msg._replies[0]
+
+
+async def test_unread_command_with_unread(
+    database: Database, session: AsyncSession
+) -> None:
+    bot = _make_bot(database)
+
+    details = [
+        ("https://example1.com", {"title": "Article 1", "metadata": {"title": "Article 1"}}),
+        ("https://example2.com", {"title": "Article 2", "metadata": {"title": "Article 2"}}),
+        ("https://example3.com", {"title": "Article 3", "metadata": None}),
+        (
+            "https://example4.com",
+            {"title": "Article 4", "metadata": '{"title": "Article 4"}'},
+        ),
+    ]
+
+    for i, (url, payload) in enumerate(details, start=1):
+        rid = await create_request(
+            session,
+            type_="url",
+            status="ok",
+            input_url=url,
+            normalized_url=url,
+            correlation_id=f"test-{i}",
+            chat_id=None,
+            user_id=None,
+            route_version=1,
+        )
+        await insert_summary(
+            session, request_id=rid, lang="en", json_payload=payload, is_read=False
+        )
+    await session.commit()
+
+    msg = FakeMessage("/unread", uid=1)
+    await bot._on_message(msg)
+
+    assert len(msg._replies) == 1
+    reply = msg._replies[0]
+    assert "Unread Articles" in reply
+    assert "Article 1" in reply
+    assert "Article 2" in reply
+    assert "Request ID" in reply
+    assert "Article 3" in reply
+    assert "Article 4" in reply
+
+
+async def test_unread_command_with_topic_and_limit(
+    database: Database, session: AsyncSession
+) -> None:
+    bot = _make_bot(database)
+
+    details = [
+        ("https://example-ai.com", "AI Revolution", ["Artificial Intelligence"]),
+        ("https://example-web.com", "Web Dev", ["Web"]),
+        ("https://example-ml.com", "ML Overview", ["Machine Learning"]),
+    ]
+
+    for url, title, tags in details:
+        rid = await create_request(
+            session,
+            type_="url",
+            status="ok",
+            input_url=url,
+            normalized_url=url,
+            correlation_id="test",
+            chat_id=None,
+            user_id=None,
+            route_version=1,
+        )
+        await insert_summary(
+            session,
             request_id=rid,
             lang="en",
             json_payload={
-                "title": "Quantum breakthrough",
-                "topic_tags": ["Physics"],
-                "metadata": {"title": "Quantum breakthrough"},
+                "title": title,
+                "topic_tags": tags,
+                "metadata": {"title": title},
             },
             is_read=False,
         )
-
-        unread_none = get_unread_summaries(limit=5, topic="space")
-        assert unread_none == []
-
-    def test_get_unread_summaries_topic_filter_large_backlog(self):
-        """Topic filtering consults the search index beyond the initial window."""
-        matching_ids: list[int] = []
-        for i in range(130):
-            rid = create_request(
-                type_="url",
-                status="pending",
-                input_url=f"https://example{i}.com",
-                normalized_url=f"https://example{i}.com",
-                correlation_id=None,
-                chat_id=None,
-                user_id=None,
-                route_version=1,
-            )
-            payload: dict[str, Any] = {
-                "title": f"Article {i}",
-                "topic_tags": ["general"],
-                "metadata": {"title": f"Article {i}", "description": "General news"},
-            }
-            if i >= 120:
-                payload = {
-                    "title": f"Gardening insights {i}",
-                    "topic_tags": ["gardening"],
-                    "metadata": {
-                        "title": f"Gardening insights {i}",
-                        "description": "Gardening tips",
-                    },
-                }
-                matching_ids.append(rid)
-
-            insert_summary(
-                request_id=rid,
-                lang="en",
-                json_payload=payload,
-                is_read=False,
-            )
-
-        unread = get_unread_summaries(limit=3, topic="gardening")
-        assert len(unread) == 3
-        assert [row["request_id"] for row in unread] == matching_ids[:3]
-
-    def test_mark_summary_as_read(self):
-        """Test marking summary as read."""
-        rid = create_request(
-            type_="url",
-            status="pending",
-            correlation_id=None,
-            chat_id=None,
-            user_id=None,
-            normalized_url="https://example.com/mark-read",
-            route_version=1,
-        )
-
-        insert_summary(
-            request_id=rid,
-            lang="en",
-            json_payload={"title": "Test Article"},
-            is_read=False,
-        )
-
-        # Verify it's unread
-        row = get_summary_by_request(rid)
-        assert row["is_read"] == 0
-
-        # Mark as read
-        mark_summary_as_read(rid)
-
-        # Verify it's read
-        row = get_summary_by_request(rid)
-        assert row["is_read"] == 1
-
-    def test_get_read_status(self):
-        """Test checking read status."""
-        rid1 = create_request(
-            type_="url",
-            status="pending",
-            correlation_id=None,
-            chat_id=None,
-            user_id=None,
-            normalized_url="https://example.com/read-status-1",
-            route_version=1,
-        )
-        rid2 = create_request(
-            type_="url",
-            status="pending",
-            correlation_id=None,
-            chat_id=None,
-            user_id=None,
-            normalized_url="https://example.com/read-status-2",
-            route_version=1,
-        )
-
-        insert_summary(
-            request_id=rid1,
-            lang="en",
-            json_payload={"title": "Unread Article"},
-            is_read=False,
-        )
-        insert_summary(
-            request_id=rid2,
-            lang="en",
-            json_payload={"title": "Read Article"},
-            is_read=True,
-        )
-
-        assert not get_read_status(rid1)  # Unread
-        assert get_read_status(rid2)  # Read
-        assert not get_read_status(999)  # Non-existent
-
-    def test_get_unread_summary_by_request_id(self):
-        """Test getting specific unread summary by request_id."""
-        rid = create_request(
-            type_="url",
-            status="pending",
-            input_url="https://example.com",
-            normalized_url="https://example.com",
-            correlation_id=None,
-            chat_id=None,
-            user_id=None,
-            route_version=1,
-        )
-
-        insert_summary(
-            request_id=rid,
-            lang="en",
-            json_payload={"title": "Test Article"},
-            is_read=False,
-        )
-
-        # Should find unread summary
-        summary = get_unread_summary_by_request_id(rid)
-        assert summary is not None
-        assert summary["input_url"] == "https://example.com"
-
-        # Mark as read
-        mark_summary_as_read(rid)
-
-        # Should not find it anymore (it's now read)
-        summary = get_unread_summary_by_request_id(rid)
-        assert summary is None
-
-
-class TestReadStatusCommands(unittest.IsolatedAsyncioTestCase):
-    async def test_unread_command_no_unread(self):
-        """Test /unread command when no unread articles exist."""
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-            msg = FakeMessage("/unread", uid=1)
-
-            await bot._on_message(msg)
-
-            # Should get message about no unread articles
-            assert len(msg._replies) == 1
-            assert "No unread articles found" in msg._replies[0]
-
-    async def test_unread_command_with_unread(self):
-        """Test /unread command when unread articles exist."""
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-
-            # Create some unread articles
-            details = [
-                (
-                    "https://example1.com",
-                    {"title": "Article 1", "metadata": {"title": "Article 1"}},
-                ),
-                (
-                    "https://example2.com",
-                    {"title": "Article 2", "metadata": {"title": "Article 2"}},
-                ),
-                (
-                    "https://example3.com",
-                    {"title": "Article 3", "metadata": None},
-                ),
-                (
-                    "https://example4.com",
-                    {
-                        "title": "Article 4",
-                        "metadata": '{"title": "Article 4"}',
-                    },
-                ),
-            ]
-
-            for i, (url, payload) in enumerate(details, start=1):
-                rid = create_request(
-                    type_="url",
-                    status="ok",
-                    input_url=url,
-                    normalized_url=url,
-                    correlation_id=f"test-{i}",
-                    chat_id=None,
-                    user_id=None,
-                    route_version=1,
-                )
-                insert_summary(
-                    request_id=rid,
-                    lang="en",
-                    json_payload=payload,
-                    is_read=False,
-                )
-
-            msg = FakeMessage("/unread", uid=1)
-            await bot._on_message(msg)
-
-            # Should get message with unread articles list
-            assert len(msg._replies) == 1
-            reply = msg._replies[0]
-            assert "Unread Articles" in reply
-            assert "Article 1" in reply
-            assert "Article 2" in reply
-            assert "Request ID" in reply
-            assert "Article 3" in reply
-            assert "Article 4" in reply
-
-    async def test_unread_command_with_topic_and_limit(self):
-        """/unread accepts topic filters and limits results."""
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-
-            details = [
-                ("https://example-ai.com", "AI Revolution", ["Artificial Intelligence"]),
-                ("https://example-web.com", "Web Dev", ["Web"]),
-                ("https://example-ml.com", "ML Overview", ["Machine Learning"]),
-            ]
-
-            for url, title, tags in details:
-                rid = create_request(
-                    type_="url",
-                    status="ok",
-                    input_url=url,
-                    normalized_url=url,
-                    correlation_id="test",
-                    chat_id=None,
-                    user_id=None,
-                    route_version=1,
-                )
-                insert_summary(
-                    request_id=rid,
-                    lang="en",
-                    json_payload={
-                        "title": title,
-                        "topic_tags": tags,
-                        "metadata": {"title": title},
-                    },
-                    is_read=False,
-                )
-
-            msg = FakeMessage("/unread ai 1", uid=1)
-            await bot._on_message(msg)
-
-            assert len(msg._replies) == 1
-            reply = msg._replies[0]
-            assert "topic filter: ai" in reply.casefold()
-            assert "Showing up to 1 article" in reply
-            assert "AI Revolution" in reply
-            assert "Web Dev" not in reply
-
-    async def test_unread_command_topic_no_results(self):
-        """/unread reports when a topic has no unread articles."""
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-
-            rid = create_request(
-                type_="url",
-                status="ok",
-                input_url="https://example.com",
-                normalized_url="https://example.com",
-                correlation_id="test",
-                chat_id=None,
-                user_id=None,
-                route_version=1,
-            )
-            insert_summary(
-                request_id=rid,
-                lang="en",
-                json_payload={
-                    "title": "Space Exploration",
-                    "topic_tags": ["Space"],
-                    "metadata": {"title": "Space Exploration"},
-                },
-                is_read=False,
-            )
-
-            msg = FakeMessage("/unread gardening", uid=1)
-            await bot._on_message(msg)
-
-            assert len(msg._replies) == 1
-            assert 'No unread articles found for topic "gardening"' in msg._replies[0]
-
-    async def test_unread_command_topic_large_backlog(self):
-        """/unread topic queries surface matches beyond the default scan window."""
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-
-            gardening_titles: list[str] = []
-            for i in range(130):
-                rid = create_request(
-                    type_="url",
-                    status="ok",
-                    input_url=f"https://example{i}.com",
-                    normalized_url=f"https://example{i}.com",
-                    correlation_id=f"cid-{i}",
-                    chat_id=None,
-                    user_id=None,
-                    route_version=1,
-                )
-                payload: dict[str, Any] = {
-                    "title": f"General article {i}",
-                    "topic_tags": ["general"],
-                    "metadata": {
-                        "title": f"General article {i}",
-                        "description": "General news",
-                    },
-                }
-                if i >= 120:
-                    payload = {
-                        "title": f"Gardening roundup {i}",
-                        "topic_tags": ["gardening"],
-                        "metadata": {
-                            "title": f"Gardening roundup {i}",
-                            "description": "Gardening tips",
-                        },
-                    }
-                    gardening_titles.append(payload["title"])
-                insert_summary(
-                    request_id=rid,
-                    lang="en",
-                    json_payload=payload,
-                    is_read=False,
-                )
-
-            msg = FakeMessage("/unread gardening", uid=1)
-            await bot._on_message(msg)
-
-            assert len(msg._replies) == 1
-            reply = msg._replies[0]
-            for title in gardening_titles[:5]:
-                assert title in reply
-            assert "Topic filter: gardening" in reply
-
-    async def test_read_command_invalid_id(self):
-        """Test /read command with invalid request ID."""
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-            msg = FakeMessage("/read invalid", uid=1)
-
-            await bot._on_message(msg)
-
-            # Should get error message about invalid ID
-            assert len(msg._replies) == 1
-            assert "Invalid request ID" in msg._replies[0]
-
-    async def test_read_command_nonexistent_id(self):
-        """Test /read command with non-existent request ID."""
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-            msg = FakeMessage("/read 999", uid=1)
-
-            await bot._on_message(msg)
-
-            # Should get error message
-            assert len(msg._replies) == 1
-            assert "not found" in msg._replies[0]
-
-    async def test_read_command_read_article(self):
-        """Test /read command with existing unread article."""
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-
-            # Create an unread article
-            rid = create_request(
-                type_="url",
-                status="ok",
-                input_url="https://example.com",
-                normalized_url="https://example.com",
-                correlation_id="test-read",
-                chat_id=None,
-                user_id=None,
-                route_version=1,
-            )
-            insert_summary(
-                request_id=rid,
-                lang="en",
-                json_payload={
-                    "title": "Test Article",
-                    "summary_250": "This is a test article.",
-                    "metadata": {"title": "Test Article"},
-                },
-                is_read=False,
-            )
-
-            msg = FakeMessage("/read 1", uid=1)
-            await bot._on_message(msg)
-
-            # Should get article content and mark as read
-            assert len(msg._replies) >= 2
-            reply_text = "\n".join(msg._replies)
-            assert "Reading Article" in reply_text
-            assert "Test Article" in reply_text
-
-            # Verify it's now marked as read
-            assert get_read_status(rid)
-
-    async def test_read_command_already_read_article(self):
-        """Test /read command with already read article."""
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-
-            # Create a read article
-            rid = create_request(
-                type_="url",
-                status="ok",
-                input_url="https://example.com",
-                normalized_url="https://example.com",
-                correlation_id="test-read",
-                chat_id=None,
-                user_id=None,
-                route_version=1,
-            )
-            insert_summary(
-                request_id=rid,
-                lang="en",
-                json_payload={"title": "Test Article", "metadata": {"title": "Test Article"}},
-                is_read=True,  # Already read
-            )
-
-            msg = FakeMessage("/read 1", uid=1)
-            await bot._on_message(msg)
-
-            # Should get error message
-            assert len(msg._replies) == 1
-            assert "already read" in msg._replies[0]
-
-
-class TestReadStatusIntegration(unittest.IsolatedAsyncioTestCase):
-    async def test_direct_url_processing_creates_read_articles(self):
-        """Test that direct URL processing creates read articles."""
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-
-            # Test direct URL processing
-            msg = FakeMessage("https://example.com/article", uid=1)
-            await bot._on_message(msg)
-
-            # Check that read articles were created
-            # Note: This test might not work perfectly due to mocked Firecrawl
-            # but we can at least verify the URL was seen
-            assert "https://example.com/article" in bot.seen_urls
-
-    async def test_read_command_marks_article_read(self):
-        """Test that /read command properly marks articles as read."""
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            bot = make_bot(os.path.join(tmp, "app.db"))
-
-            # Create an unread article
-            rid = create_request(
-                type_="url",
-                status="ok",
-                input_url="https://example.com",
-                normalized_url="https://example.com",
-                correlation_id="test-read-integration",
-                chat_id=None,
-                user_id=None,
-                route_version=1,
-            )
-            insert_summary(
-                request_id=rid,
-                lang="en",
-                json_payload={
-                    "title": "Test Article",
-                    "tldr": "Test article summary",
-                    "summary_250": "This is a test article for integration testing.",
-                },
-                is_read=False,
-            )
-
-            # Use /read command
-            msg = FakeMessage("/read 1", uid=1)
-            await bot._on_message(msg)
-
-            # Verify article is now read
-            assert get_read_status(rid)
-
-
-if __name__ == "__main__":
-    unittest.main()
+    await session.commit()
+
+    msg = FakeMessage("/unread ai 1", uid=1)
+    await bot._on_message(msg)
+
+    assert len(msg._replies) == 1
+    reply = msg._replies[0]
+    assert "topic filter: ai" in reply.casefold()
+    assert "Showing up to 1 article" in reply
+    assert "AI Revolution" in reply
+    assert "Web Dev" not in reply
+
+
+async def test_unread_command_topic_no_results(
+    database: Database, session: AsyncSession
+) -> None:
+    bot = _make_bot(database)
+    rid = await create_request(
+        session,
+        type_="url",
+        status="ok",
+        input_url="https://example.com",
+        normalized_url="https://example.com",
+        correlation_id="test",
+        chat_id=None,
+        user_id=None,
+        route_version=1,
+    )
+    await insert_summary(
+        session,
+        request_id=rid,
+        lang="en",
+        json_payload={
+            "title": "Space Exploration",
+            "topic_tags": ["Space"],
+            "metadata": {"title": "Space Exploration"},
+        },
+        is_read=False,
+    )
+    await session.commit()
+
+    msg = FakeMessage("/unread gardening", uid=1)
+    await bot._on_message(msg)
+    assert len(msg._replies) == 1
+    assert 'No unread articles found for topic "gardening"' in msg._replies[0]
+
+
+async def test_read_command_invalid_id(database: Database) -> None:
+    bot = _make_bot(database)
+    msg = FakeMessage("/read invalid", uid=1)
+    await bot._on_message(msg)
+    assert len(msg._replies) == 1
+    assert "Invalid request ID" in msg._replies[0]
+
+
+async def test_read_command_nonexistent_id(database: Database) -> None:
+    bot = _make_bot(database)
+    msg = FakeMessage("/read 999", uid=1)
+    await bot._on_message(msg)
+    assert len(msg._replies) == 1
+    assert "not found" in msg._replies[0]
+
+
+async def test_read_command_read_article(
+    database: Database, session: AsyncSession
+) -> None:
+    bot = _make_bot(database)
+    rid = await create_request(
+        session,
+        type_="url",
+        status="ok",
+        input_url="https://example.com",
+        normalized_url="https://example.com",
+        correlation_id="test-read",
+        chat_id=None,
+        user_id=None,
+        route_version=1,
+    )
+    await insert_summary(
+        session,
+        request_id=rid,
+        lang="en",
+        json_payload={
+            "title": "Test Article",
+            "summary_250": "This is a test article.",
+            "metadata": {"title": "Test Article"},
+        },
+        is_read=False,
+    )
+    await session.commit()
+
+    msg = FakeMessage(f"/read {rid}", uid=1)
+    await bot._on_message(msg)
+    assert len(msg._replies) >= 2
+    reply_text = "\n".join(msg._replies)
+    assert "Reading Article" in reply_text
+    assert "Test Article" in reply_text
+
+    assert await get_read_status(session, rid)
+
+
+async def test_read_command_already_read_article(
+    database: Database, session: AsyncSession
+) -> None:
+    bot = _make_bot(database)
+    rid = await create_request(
+        session,
+        type_="url",
+        status="ok",
+        input_url="https://example.com",
+        normalized_url="https://example.com",
+        correlation_id="test-read",
+        chat_id=None,
+        user_id=None,
+        route_version=1,
+    )
+    await insert_summary(
+        session,
+        request_id=rid,
+        lang="en",
+        json_payload={"title": "Test Article", "metadata": {"title": "Test Article"}},
+        is_read=True,
+    )
+    await session.commit()
+
+    msg = FakeMessage(f"/read {rid}", uid=1)
+    await bot._on_message(msg)
+    assert len(msg._replies) == 1
+    assert "already read" in msg._replies[0]
+
+
+async def test_read_command_marks_article_read(
+    database: Database, session: AsyncSession
+) -> None:
+    bot = _make_bot(database)
+    rid = await create_request(
+        session,
+        type_="url",
+        status="ok",
+        input_url="https://example.com",
+        normalized_url="https://example.com",
+        correlation_id="test-read-integration",
+        chat_id=None,
+        user_id=None,
+        route_version=1,
+    )
+    await insert_summary(
+        session,
+        request_id=rid,
+        lang="en",
+        json_payload={
+            "title": "Test Article",
+            "tldr": "Test article summary",
+            "summary_250": "This is a test article for integration testing.",
+        },
+        is_read=False,
+    )
+    await session.commit()
+
+    msg = FakeMessage(f"/read {rid}", uid=1)
+    await bot._on_message(msg)
+    assert await get_read_status(session, rid)
