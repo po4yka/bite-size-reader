@@ -1,29 +1,39 @@
-import json
-import os
-import tempfile
-import unittest
-from unittest.mock import AsyncMock, patch
+"""Persistence-side coverage of media/forward fields on telegram_messages.
 
-from app.adapters.telegram.telegram_bot import TelegramBot
-from app.cli._legacy_peewee_models import database_proxy
-try:
-    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
-except ImportError:
-    DatabaseSessionManager = None  # type: ignore[assignment,misc]
-from tests.conftest import make_test_app_config
-from tests.db_helpers import create_request
+The legacy version of this file constructed a full TelegramBot just to
+exercise its `_persist_message_snapshot`, which is a literal one-liner
+that delegates to MessagePersistence. The async port drops that
+indirection: the behaviour under test is the same (the right media_type
+and file_ids land on the telegram_messages row), but the test runs
+without spinning up the bot graph.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from sqlalchemy import select
+
+from app.db.models import TelegramMessage
+from app.infrastructure.persistence.message_persistence import MessagePersistence
+from tests.db_helpers_async import create_request
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.session import Database
 
 
 class _Ent:
-    def __init__(self, t):
+    def __init__(self, t: str) -> None:
         self.type = t
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, str]:
         return {"type": self.type}
 
 
 class _Obj:
-    def __init__(self, file_id):
+    def __init__(self, file_id: str) -> None:
         self.file_id = file_id
 
 
@@ -32,193 +42,169 @@ class _Chat:
 
 
 class _MsgBase:
-    def __init__(self):
+    def __init__(self) -> None:
         self.chat = _Chat()
         self.id = 10
         self.message_id = 10
         self.date = 1710000000
-        self.text = None
-        self.caption = None
-        self.entities = [_Ent("bold")]
-        self.caption_entities = []
+        self.text: str | None = None
+        self.caption: str | None = None
+        self.entities: tuple[_Ent, ...] | list[_Ent] = (_Ent("bold"),)
+        self.caption_entities: tuple[_Ent, ...] | list[_Ent] = ()
 
-    def to_dict(self):  # lightweight
+    def to_dict(self) -> dict[str, int]:
         return {"id": self.id, "message_id": self.message_id}
 
 
-def _bot_with_tmpdb(tmp_path):
-    db = DatabaseSessionManager(tmp_path)
-    db.migrate()
-    cfg = make_test_app_config(db_path=tmp_path, allowed_user_ids=(1,))
-    from app.adapters import telegram_bot as tbmod
-
-    tbmod.Client = object  # avoid real client
-    tbmod.filters = None
-
-    # Mock the OpenRouter client to avoid API key validation
-    with patch("app.adapters.openrouter.openrouter_client.OpenRouterClient") as mock_openrouter:
-        mock_openrouter.return_value = AsyncMock()
-        bot = TelegramBot(cfg=cfg, db=db)
-    return bot, db
+async def _new_request(session: AsyncSession) -> int:
+    return await create_request(
+        session,
+        type_="forward",
+        status="pending",
+        correlation_id=None,
+        chat_id=1,
+        user_id=1,
+        route_version=1,
+    )
 
 
-class TestMediaSnapshot(unittest.IsolatedAsyncioTestCase):
-    """Test media snapshot persistence.
-
-    Uses IsolatedAsyncioTestCase because _persist_message_snapshot is async.
-    Uses asyncSetUp/asyncTearDown to properly isolate the database_proxy per test.
-    """
-
-    async def asyncSetUp(self):
-        # Save the original database_proxy object to restore in tearDown
-        # This ensures proper isolation even when tests run in different orders
-        self._old_proxy_obj = database_proxy.obj
-
-        self.tmp = tempfile.TemporaryDirectory()
-        self.db_path = os.path.join(self.tmp.name, "app.db")
-        self.bot, self.db = _bot_with_tmpdb(self.db_path)
-        self.req_id = create_request(
-            type_="forward",
-            status="pending",
-            correlation_id=None,
-            chat_id=1,
-            user_id=1,
-            route_version=1,
-        )
-
-    async def asyncTearDown(self):
-        # Close the database connection before cleanup
-        if hasattr(self, "db") and self.db._database:
-            self.db._database.close()
-
-        # Restore the original database_proxy object
-        # This is critical for test isolation between test files
-        if hasattr(self, "_old_proxy_obj"):
-            database_proxy.initialize(self._old_proxy_obj)
-
-        self.tmp.cleanup()
-
-    def _assert_media(self, expected_type, expected_ids):
-        row = self.db.fetchone(
-            "SELECT media_type, media_file_ids_json FROM telegram_messages WHERE request_id = ?",
-            (self.req_id,),
-        )
-        assert row is not None
-        assert row["media_type"] == expected_type
-        if expected_ids:
-            assert row["media_file_ids_json"] is not None
-            ids = json.loads(row["media_file_ids_json"]) if row["media_file_ids_json"] else []
-            assert ids == expected_ids
-        else:
-            assert row["media_file_ids_json"] is None
-
-    async def test_photo_snapshot(self):
-        class Msg(_MsgBase):
-            def __init__(self):
-                super().__init__()
-                self.photo = _Obj("ph_1")
-
-        await self.bot._persist_message_snapshot(self.req_id, Msg())
-        self._assert_media("photo", ["ph_1"])
-
-    async def test_video_snapshot(self):
-        class Msg(_MsgBase):
-            def __init__(self):
-                super().__init__()
-                self.video = _Obj("vid_1")
-
-        await self.bot._persist_message_snapshot(self.req_id, Msg())
-        self._assert_media("video", ["vid_1"])
-
-    async def test_document_snapshot(self):
-        class Msg(_MsgBase):
-            def __init__(self):
-                super().__init__()
-                self.document = _Obj("doc_1")
-
-        await self.bot._persist_message_snapshot(self.req_id, Msg())
-        self._assert_media("document", ["doc_1"])
-
-    async def test_audio_snapshot(self):
-        class Msg(_MsgBase):
-            def __init__(self):
-                super().__init__()
-                self.audio = _Obj("aud_1")
-
-        await self.bot._persist_message_snapshot(self.req_id, Msg())
-        self._assert_media("audio", ["aud_1"])
-
-    async def test_voice_snapshot(self):
-        class Msg(_MsgBase):
-            def __init__(self):
-                super().__init__()
-                self.voice = _Obj("voc_1")
-
-        await self.bot._persist_message_snapshot(self.req_id, Msg())
-        self._assert_media("voice", ["voc_1"])
-
-    async def test_animation_snapshot(self):
-        class Msg(_MsgBase):
-            def __init__(self):
-                super().__init__()
-                self.animation = _Obj("ani_1")
-
-        await self.bot._persist_message_snapshot(self.req_id, Msg())
-        self._assert_media("animation", ["ani_1"])
-
-    async def test_sticker_snapshot(self):
-        class Msg(_MsgBase):
-            def __init__(self):
-                super().__init__()
-                self.sticker = _Obj("stk_1")
-
-        await self.bot._persist_message_snapshot(self.req_id, Msg())
-        self._assert_media("sticker", ["stk_1"])
-
-    async def test_entities_merge(self):
-        class Msg(_MsgBase):
-            def __init__(self):
-                super().__init__()
-                self.text = "Hello"
-                self.caption = "World"
-                self.entities = (_Ent("bold"),)
-                self.caption_entities = (_Ent("url"),)
-
-        await self.bot._persist_message_snapshot(self.req_id, Msg())
-        row = self.db.fetchone(
-            "SELECT entities_json FROM telegram_messages WHERE request_id = ?", (self.req_id,)
-        )
-        assert row is not None
-        ents = json.loads(row["entities_json"]) if row["entities_json"] else []
-        types = {e.get("type") for e in ents}
-        self.assertSetEqual(types, {"bold", "url"})
-
-    async def test_forward_snapshot(self):
-        class _FwdChat:
-            def __init__(self):
-                self.id = 777
-                self.type = "channel"
-                self.title = "My Channel"
-
-        class Msg(_MsgBase):
-            def __init__(self):
-                super().__init__()
-                self.forward_from_chat = _FwdChat()
-                self.forward_from_message_id = 555
-                self.forward_date = 1700000000
-
-        await self.bot._persist_message_snapshot(self.req_id, Msg())
-        row = self.db.fetchone(
-            "SELECT forward_from_chat_id, forward_from_chat_type, forward_from_chat_title, forward_from_message_id, forward_date_ts FROM telegram_messages WHERE request_id = ?",
-            (self.req_id,),
-        )
-        assert row is not None
-        assert row["forward_from_chat_id"] == 777
-        assert row["forward_from_chat_type"] == "channel"
-        assert row["forward_from_chat_title"] == "My Channel"
-        assert row["forward_from_message_id"] == 555
-        assert row["forward_date_ts"] == 1700000000
+async def _persist(
+    database: Database, session: AsyncSession, message: object
+) -> int:
+    """Create a request, persist a message snapshot, return the request id."""
+    req_id = await _new_request(session)
+    await session.commit()
+    persistence = MessagePersistence(db=database)
+    await persistence.persist_message_snapshot(req_id, message)
+    return req_id
 
 
-if __name__ == "__main__":
-    unittest.main()
+async def _assert_media(
+    session: AsyncSession,
+    req_id: int,
+    expected_type: str,
+    expected_ids: list[str],
+) -> None:
+    row = await session.scalar(
+        select(TelegramMessage).where(TelegramMessage.request_id == req_id)
+    )
+    assert row is not None
+    assert row.media_type == expected_type
+    if expected_ids:
+        assert row.media_file_ids_json == expected_ids
+    else:
+        assert row.media_file_ids_json is None
+
+
+async def test_photo_snapshot(database: Database, session: AsyncSession) -> None:
+    class Msg(_MsgBase):
+        def __init__(self) -> None:
+            super().__init__()
+            self.photo = _Obj("ph_1")
+
+    req_id = await _persist(database, session, Msg())
+    await _assert_media(session, req_id, "photo", ["ph_1"])
+
+
+async def test_video_snapshot(database: Database, session: AsyncSession) -> None:
+    class Msg(_MsgBase):
+        def __init__(self) -> None:
+            super().__init__()
+            self.video = _Obj("vid_1")
+
+    req_id = await _persist(database, session, Msg())
+    await _assert_media(session, req_id, "video", ["vid_1"])
+
+
+async def test_document_snapshot(database: Database, session: AsyncSession) -> None:
+    class Msg(_MsgBase):
+        def __init__(self) -> None:
+            super().__init__()
+            self.document = _Obj("doc_1")
+
+    req_id = await _persist(database, session, Msg())
+    await _assert_media(session, req_id, "document", ["doc_1"])
+
+
+async def test_audio_snapshot(database: Database, session: AsyncSession) -> None:
+    class Msg(_MsgBase):
+        def __init__(self) -> None:
+            super().__init__()
+            self.audio = _Obj("aud_1")
+
+    req_id = await _persist(database, session, Msg())
+    await _assert_media(session, req_id, "audio", ["aud_1"])
+
+
+async def test_voice_snapshot(database: Database, session: AsyncSession) -> None:
+    class Msg(_MsgBase):
+        def __init__(self) -> None:
+            super().__init__()
+            self.voice = _Obj("voc_1")
+
+    req_id = await _persist(database, session, Msg())
+    await _assert_media(session, req_id, "voice", ["voc_1"])
+
+
+async def test_animation_snapshot(database: Database, session: AsyncSession) -> None:
+    class Msg(_MsgBase):
+        def __init__(self) -> None:
+            super().__init__()
+            self.animation = _Obj("ani_1")
+
+    req_id = await _persist(database, session, Msg())
+    await _assert_media(session, req_id, "animation", ["ani_1"])
+
+
+async def test_sticker_snapshot(database: Database, session: AsyncSession) -> None:
+    class Msg(_MsgBase):
+        def __init__(self) -> None:
+            super().__init__()
+            self.sticker = _Obj("stk_1")
+
+    req_id = await _persist(database, session, Msg())
+    await _assert_media(session, req_id, "sticker", ["stk_1"])
+
+
+async def test_entities_merge(database: Database, session: AsyncSession) -> None:
+    class Msg(_MsgBase):
+        def __init__(self) -> None:
+            super().__init__()
+            self.text = "Hello"
+            self.caption = "World"
+            self.entities = (_Ent("bold"),)
+            self.caption_entities = (_Ent("url"),)
+
+    req_id = await _persist(database, session, Msg())
+    row = await session.scalar(
+        select(TelegramMessage).where(TelegramMessage.request_id == req_id)
+    )
+    assert row is not None
+    types = {e.get("type") for e in (row.entities_json or [])}
+    assert types == {"bold", "url"}
+
+
+async def test_forward_snapshot(database: Database, session: AsyncSession) -> None:
+    class _FwdChat:
+        def __init__(self) -> None:
+            self.id = 777
+            self.type = "channel"
+            self.title = "My Channel"
+
+    class Msg(_MsgBase):
+        def __init__(self) -> None:
+            super().__init__()
+            self.forward_from_chat = _FwdChat()
+            self.forward_from_message_id = 555
+            self.forward_date = 1700000000
+
+    req_id = await _persist(database, session, Msg())
+    row = await session.scalar(
+        select(TelegramMessage).where(TelegramMessage.request_id == req_id)
+    )
+    assert row is not None
+    assert row.forward_from_chat_id == 777
+    assert row.forward_from_chat_type == "channel"
+    assert row.forward_from_chat_title == "My Channel"
+    assert row.forward_from_message_id == 555
+    assert row.forward_date_ts == 1700000000
