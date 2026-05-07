@@ -1,80 +1,82 @@
-"""Tests for DatabaseMaintenance."""
+"""Tests for the async DatabaseMaintenanceService.
+
+Replaces the legacy sqlite-targeted DatabaseMaintenance test (which
+checked `:memory:` skipping and `peewee.DatabaseError` paths). The
+current Postgres implementation lives at app.db.runtime.maintenance.
+"""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+import logging
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
-import peewee
+from sqlalchemy.exc import OperationalError
 
-from app.db.database_maintenance import DatabaseMaintenance
-
-
-def _make_maintenance(path: str = "/data/ratatoskr.db") -> DatabaseMaintenance:
-    db = MagicMock()
-    db.connection_context.return_value.__enter__ = MagicMock(return_value=None)
-    db.connection_context.return_value.__exit__ = MagicMock(return_value=False)
-    return DatabaseMaintenance(db, path)
+from app.db.runtime.maintenance import DatabaseMaintenanceService
 
 
-def test_run_maintenance_skips_in_memory() -> None:
-    db = MagicMock()
-    maint = DatabaseMaintenance(db, ":memory:")
-    result = maint.run_maintenance()
-    assert result["status"] == "skipped"
-    db.execute_sql.assert_not_called()
+def _make_service() -> DatabaseMaintenanceService:
+    engine = MagicMock()
+    session_maker = MagicMock()
+    return DatabaseMaintenanceService(
+        engine=engine,
+        session_maker=session_maker,
+        logger=logging.getLogger("test"),
+    )
 
 
-def test_run_analyze_success() -> None:
-    maint = _make_maintenance()
-    result = maint.run_analyze()
-    assert result is True
-    maint._database.execute_sql.assert_called_once_with("ANALYZE;")
+async def test_async_run_analyze_success_returns_true(monkeypatch) -> None:
+    service = _make_service()
+
+    class FakeConnection:
+        execute = AsyncMock()
+        commit = AsyncMock()
+
+    class FakeContextManager:
+        async def __aenter__(self) -> FakeConnection:
+            return FakeConnection()
+
+        async def __aexit__(self, *_args: Any) -> None:
+            return None
+
+    service._engine.connect = MagicMock(return_value=FakeContextManager())
+
+    assert await service.async_run_analyze() is True
+    FakeConnection.execute.assert_awaited_once()
+    FakeConnection.commit.assert_awaited_once()
 
 
-def test_run_analyze_failure() -> None:
-    maint = _make_maintenance()
-    maint._database.execute_sql.side_effect = peewee.DatabaseError("fail")
-    result = maint.run_analyze()
-    assert result is False
+async def test_async_run_analyze_failure_returns_false() -> None:
+    service = _make_service()
+
+    class FakeConnection:
+        async def execute(self, *_args: Any) -> None:
+            raise OperationalError("statement", {}, Exception("fail"))
+
+        commit = AsyncMock()
+
+    class FakeContextManager:
+        async def __aenter__(self) -> FakeConnection:
+            return FakeConnection()
+
+        async def __aexit__(self, *_args: Any) -> None:
+            return None
+
+    service._engine.connect = MagicMock(return_value=FakeContextManager())
+
+    assert await service.async_run_analyze() is False
 
 
-def test_run_vacuum_success() -> None:
-    maint = _make_maintenance()
-    result = maint.run_vacuum()
-    assert result is True
-    maint._database.execute_sql.assert_called_once_with("VACUUM;")
+def test_run_startup_maintenance_is_a_noop() -> None:
+    """Postgres does not require startup PRAGMA/WAL handling."""
+    service = _make_service()
+    # Should not raise; logs the skip and returns.
+    service.run_startup_maintenance()
 
 
-def test_run_wal_checkpoint_invalid_mode() -> None:
-    maint = _make_maintenance()
-    result = maint.run_wal_checkpoint(mode="INVALID")
-    assert result is False
-    maint._database.execute_sql.assert_not_called()
-
-
-def test_run_wal_checkpoint_valid_modes() -> None:
-    for mode in ("PASSIVE", "FULL", "RESTART", "TRUNCATE"):
-        maint = _make_maintenance()
-        result = maint.run_wal_checkpoint(mode=mode)
-        assert result is True
-        maint._database.execute_sql.assert_called_once_with(
-            f"PRAGMA wal_checkpoint({mode.upper()});"
-        )
-
-
-def test_run_maintenance_partial_on_failure() -> None:
-    maint = _make_maintenance()
-    # First call (ANALYZE) succeeds, second call (VACUUM) fails
-    call_count = 0
-
-    def side_effect(*args, **kwargs):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 2:
-            raise peewee.DatabaseError("vacuum failed")
-
-    maint._database.execute_sql.side_effect = side_effect
-    result = maint.run_maintenance()
-    assert result["status"] == "partial"
-    assert result["operations"]["analyze"] == "success"
-    assert result["operations"]["vacuum"] == "failed"
+def test_run_wal_checkpoint_is_a_noop() -> None:
+    """WAL checkpoint is a SQLite concept; the Postgres path returns True."""
+    service = _make_service()
+    assert service.run_wal_checkpoint() is True
+    assert service.run_wal_checkpoint("FULL") is True
