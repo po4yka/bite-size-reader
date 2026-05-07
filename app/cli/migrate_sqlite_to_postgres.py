@@ -74,6 +74,21 @@ def _pk_columns(sa_model: type[Any]) -> list[Any]:
     return list(sa_model.__table__.primary_key.columns)
 
 
+def _legacy_table_exists(legacy_model: type[Any]) -> bool:
+    """Return True when the legacy model's table is present in the source DB.
+
+    Production sources have every table, but partial-schema sources
+    (test fixtures, ad-hoc backups) may not. Callers should skip absent
+    tables with a warning rather than crashing the whole migration.
+    """
+    db = legacy_model._meta.database
+    table_name = legacy_model._meta.table_name
+    try:
+        return bool(db.table_exists(table_name))
+    except peewee.OperationalError:
+        return False
+
+
 def _resolve_sa_model(legacy_model: type[Any]) -> type[Any] | None:
     """Look up the SQLAlchemy model whose class name matches the legacy model."""
     return getattr(sa_models, legacy_model.__name__, None)
@@ -149,6 +164,13 @@ async def _migrate_model(
     pk_cols = _pk_columns(sa_model)
     pk_col_names = [c.name for c in pk_cols]
     table_name = sa_model.__tablename__
+
+    if not _legacy_table_exists(legacy_model):
+        logger.warning(
+            "model_skip_missing_source_table",
+            extra={"model": table_name, "legacy_table": legacy_model._meta.table_name},
+        )
+        return 0, 0
 
     source_count: int = legacy_model.select().count()
     if source_count == 0:
@@ -245,6 +267,8 @@ async def _validate(
     for legacy_model in sorted_models:
         sa_model = sa_model_map.get(legacy_model.__name__)
         if sa_model is None:
+            continue
+        if not _legacy_table_exists(legacy_model):
             continue
         src = legacy_model.select().count()
         tgt = await _count_target(database, sa_model)

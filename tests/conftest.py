@@ -308,10 +308,24 @@ async def database():
 
 @pytest_asyncio.fixture
 async def session(database):
-    """Function-scoped `AsyncSession`; truncates every table after the test."""
+    """Function-scoped `AsyncSession` with a clean slate.
+
+    Truncates every table BEFORE yielding so each test starts from a known
+    empty state, regardless of leftover rows from prior pytest invocations
+    (or other tests that bypass this fixture). Per-test cleanup happens
+    naturally on the next test's setup.
+    """
     from sqlalchemy import text as sql_text
 
     from app.db.base import Base
+
+    table_names = [t.name for t in reversed(Base.metadata.sorted_tables)]
+    if table_names:
+        quoted = ", ".join(f'"{name}"' for name in table_names)
+        async with database.transaction() as cleanup:
+            await cleanup.execute(
+                sql_text(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE")
+            )
 
     sess = database.session_maker()
     try:
@@ -322,12 +336,3 @@ async def session(database):
         raise
     finally:
         await sess.close()
-
-    table_names = [t.name for t in reversed(Base.metadata.sorted_tables)]
-    if not table_names:
-        return
-    quoted = ", ".join(f'"{name}"' for name in table_names)
-    async with database.transaction() as cleanup:
-        await cleanup.execute(
-            sql_text(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE")
-        )
