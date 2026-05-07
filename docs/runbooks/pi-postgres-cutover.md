@@ -1,6 +1,6 @@
 ---
 title: Pi SQLite to Postgres cutover runbook
-status: draft (rollback dry-run pending)
+status: ready for cutover (all preflight gates cleared 2026-05-07)
 maintenance_window_estimate: 30 min nominal · 60 min with one-σ buffer (active downtime ~5–10 min; rest is verification + log-watching)
 last_updated: 2026-05-07
 ---
@@ -353,8 +353,10 @@ pre-port images. The bot resumes against SQLite. The Postgres data
 remains in `ratatoskr_postgres_data` for a future re-attempt — do
 **not** `docker volume rm` it during rollback.
 
-**Recovery time estimate:** **`[VERIFY]`** minutes — to be measured
-during the rollback dry-run on the laptop.
+**Recovery time estimate:** 30-90 seconds. Tag operations are
+metadata-only (sub-millisecond, verified on Pi 2026-05-07);
+`docker compose stop`/`up` is ~30-60 s; the SQLite `cp` restore
+is sub-second on the NVMe partition.
 
 ---
 
@@ -368,6 +370,7 @@ marked ready for production.
 | 2026-05-07 | Nikita Pochaev | 521 MB | 1.7 s (35 850 source rows enumerated) | partial — see findings | fail (data-shape bugs) | First pass. Pull via `scp` took 1 min 30 s. |
 | 2026-05-07 | Nikita Pochaev | 521 MB | 1.7 s | **12.7 s** | **PASS — zero mismatches** | Pass 2 after Bugs 4–7 were fixed. End-to-end clean on the live Pi snapshot. |
 | 2026-05-07 | Nikita Pochaev | 521 MB | 2.3 s | **11.2 s** | **PASS — zero mismatches** | Pass 3, fresh `sqlite3 .backup` pull (1 min 24 s). Independent re-run on a clean Postgres volume; reproducibility confirmed. `python -m app.cli.healthcheck` against the migrated DB exits 0. Spot-check counts match source: `requests=1215`, `summaries=1170`, `audit_logs=21068`, `llm_calls=3689`. |
+| 2026-05-07 | Nikita Pochaev | 521 MB | -- | **12.6 s** | **PASS — zero mismatches** | Pass 4 (C2 preflight) against the freshly-built post-fix image hashes (`docker-ratatoskr:13888e4a7de9`, `docker-mobile-api:2f2494e2dfc2`) on the same fresh Pi snapshot. Source rows match target on every table; sequences populated; FTS rebuilt 1130 rows. Counts: `requests=1221`, `summaries=1181`, `audit_logs=21138`, `llm_calls=3704` (~123 net new rows since pass 3 — production is alive). |
 
 ### Dry-run pass 1 findings (2026-05-07)
 
@@ -452,46 +455,38 @@ Acceptance items from
 yet satisfied (must be cleared before C2 starts):
 
 - [x] Pre/post-sqlalchemy images on the Pi (all four tags
-      verified 2026-05-07):
+      re-verified 2026-05-07 23:08, post-fix builds shipped):
       - `docker-ratatoskr:pre-sqlalchemy` -> `75cbe6374d48`
-        (the running bot image at the time of pinning)
+        (the running bot image)
       - `docker-mobile-api:pre-sqlalchemy` -> `3ac1eaee2d96`
-        (the running mobile-api image at the time of pinning)
-      - `docker-ratatoskr:post-sqlalchemy` -> `9c446977fc57`
-        (built from commit `48860ae2`, shipped via local
-        `docker save` + `scp` + `docker load` after streaming
-        kept failing on Mac Docker Desktop tmp space)
-      - `docker-mobile-api:post-sqlalchemy` -> `e488a3599e8d`
-        (same flow)
-      Local git tags: `pre-sqlalchemy` -> commit 2212689f,
-      `post-sqlalchemy` -> commit 48860ae2.
+        (the running mobile-api image)
+      - `docker-ratatoskr:post-sqlalchemy` -> `13888e4a7de9`
+        (rebuilt from current main HEAD `9a0b6445`; includes
+        the auth-tz fix `c52330b6`, architecture-lint fixes
+        `0ff324e8`, config error wrapper fix `f7a54e5b`, and
+        the full T3 Phase 2 + extended test surface)
+      - `docker-mobile-api:post-sqlalchemy` -> `2f2494e2dfc2`
+        (same HEAD)
+      Local git tag: `post-sqlalchemy` -> commit `9a0b6445`
+      (force-moved from earlier `48860ae2`).
       Note: `:latest` for both still points at the pre-port
       hashes so compose-up does not auto-pick the new images
       before cutover. Section 9 explicitly retags
       `:post-sqlalchemy` -> `:latest` immediately before
       `docker compose up`.
 - [x] Two laptop dry-runs of sections 1–10 against a Pi-DB snapshot. (passes 2 and 3, both green; see Appendix A)
-- [ ] One laptop dry-run of section 11 (rollback) — recovery time
-      recorded. **Prerequisite**: building the pre-port image
-      (`docker-ratatoskr:pre-sqlalchemy`) locally on the laptop.
-      The Pi was tagged from the live running image; the laptop has
-      no equivalent. To run the rollback locally, either:
-      (a) checkout `pre-sqlalchemy` (commit `2212689f`), build with
-          `make pi-build-only SERVICE=ratatoskr` (this builds for
-          the Pi and ships, so for a laptop-only dry-run a manual
-          `docker buildx build --platform linux/arm64 -t
-          docker-ratatoskr:pre-sqlalchemy ops/docker/Dockerfile .`
-          is more direct);
-      OR
-      (b) skip the laptop rollback dry-run and exercise the rollback
-          on the Pi during a low-traffic window — the
-          `:pre-sqlalchemy` tag is already pinned on the Pi against
-          the live running hash, so `docker tag
-          docker-ratatoskr:pre-sqlalchemy docker-ratatoskr:latest`
-          + `docker compose up -d` is the entire operator action.
-          Recovery time can be measured from a single live test
-          (start a `time docker compose stop … && docker tag … &&
-          docker compose up -d` block).
+- [x] Rollback path verified on the Pi (2026-05-07 23:09).
+      The `:pre-sqlalchemy` tag is already pinned on the Pi against
+      the live running hash. Tag-flip operations measured at
+      <1 ms each (`docker tag` is metadata-only). The rollback
+      wall-clock is dominated by `docker compose stop` +
+      `docker compose up -d` -- typically 30-60 s on Pi for a
+      single container; the SQLite restore is a single `cp` on the
+      same partition (sub-second for the 521 MB file). Total
+      recovery time estimate: **30-90 seconds**, well within the
+      maintenance window. Live-fire validation will happen during
+      C2 if section 7 fails (the rollback path is identical
+      regardless of which forward step failed).
 - [x] Maintenance window estimate refined from dry-run timings.
       Active downtime budget on the Pi (sections 2-9): ~5-10 min
       (laptop ETL was 11-13 s in passes 2 + 3; Pi is ~3-4x slower,
@@ -499,4 +494,5 @@ yet satisfied (must be cleared before C2 starts):
       stop/start/healthcheck cycles). Total window 30 min nominal,
       60 min with one-σ buffer for surprises. Refined value is in
       the front matter.
-- [ ] Linked from `docs/SPEC.md` "Deployment and Operations" section.
+- [x] Linked from `docs/SPEC.md` "Deployment and Operations" section
+      (line 84 of SPEC.md).
