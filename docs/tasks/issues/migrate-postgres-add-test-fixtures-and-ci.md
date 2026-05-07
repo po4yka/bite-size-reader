@@ -93,3 +93,47 @@ When this task lands, every redirected import must be replaced with the new
 async helpers and every `try/except ImportError` shim around
 `DatabaseSessionManager` must be removed (the class no longer exists).
 Touched files were enumerated in the commit that introduced the shim.
+
+## Phase 1 foundation landed (2026-05-07)
+
+The async-Postgres test scaffolding is now in place, with no caller
+test bodies touched yet:
+
+- `tests/db_helpers_async.py` — every public helper from
+  `tests/db_helpers.py` (~20 functions) ported to
+  `async def helper(session: AsyncSession, ...)` against
+  `app.db.models` SQLAlchemy ORM. Mirrors the original API name-for-name
+  so caller migration is mechanical (`create_request(**kw)` →
+  `await create_request(session, **kw)`).
+- `tests/conftest.py` — added two new async fixtures gated on
+  `TEST_DATABASE_URL`:
+  - `database` (session-scoped, loop-scoped session): builds a
+    `Database` from the env DSN, runs `await db.migrate()` once, yields,
+    disposes on teardown.
+  - `session` (function-scoped, loop-scoped session): yields an
+    `AsyncSession`; on teardown rolls back and runs
+    `TRUNCATE TABLE … RESTART IDENTITY CASCADE` over every table in
+    `Base.metadata.sorted_tables[::-1]` for clean isolation.
+  Both fixtures `pytest.skip(...)` when `TEST_DATABASE_URL` is unset, so
+  unit tests not needing a DB keep running on developer laptops without
+  Postgres.
+- `tests/fixtures/topic_search_queries.json` — 10-entry skeleton with
+  `_status` placeholder; entries to be populated from a sanitised
+  production snapshot before topic-search regression checks consume it.
+
+What is NOT yet done (open Phase 2+ work):
+
+- Caller test bodies (~30 files) still import from
+  `tests/db_helpers.py` (the legacy shim) and exercise Peewee CRUD via
+  `app.cli._legacy_peewee_models`. They need to be migrated one batch
+  at a time: switch the import to `tests/db_helpers_async`, change the
+  test body to `async def`, take the `session` fixture, `await` each
+  helper. Each migration batch should be verified against a live
+  Postgres (`TEST_DATABASE_URL` set) before commit.
+- The legacy `tests/db_helpers.py` file remains in place and unchanged;
+  it is deleted only when no caller still imports it.
+- `tests/fixtures/topic_search_queries.json` still has placeholder
+  entries; populating it requires access to a production snapshot.
+- CI matrix: no `services: postgres:16-alpine` job has been added to
+  `.github/workflows/ci.yml` yet. That is the final Phase 3 step,
+  blocked on the caller migration so the new fixtures actually run.

@@ -1,0 +1,16 @@
+[
+  {
+    "_comment": "10-entry topic-search regression set per T3 acceptance. Each entry pairs a search query with the request IDs that should appear in the result set, derived from a sanitised production snapshot. Used by M3 and T2 acceptance to verify FTS migration parity (>= 50% overlap with SQLite results).",
+    "_status": "skeleton — entries below are placeholders. Populate from a production-derived snapshot before this file is consumed by acceptance checks."
+  },
+  {"query": "TODO: query 1", "expected_request_ids": []},
+  {"query": "TODO: query 2", "expected_request_ids": []},
+  {"query": "TODO: query 3", "expected_request_ids": []},
+  {"query": "TODO: query 4", "expected_request_ids": []},
+  {"query": "TODO: query 5", "expected_request_ids": []},
+  {"query": "TODO: query 6", "expected_request_ids": []},
+  {"query": "TODO: query 7", "expected_request_ids": []},
+  {"query": "TODO: query 8", "expected_request_ids": []},
+  {"query": "TODO: query 9", "expected_request_ids": []},
+  {"query": "TODO: query 10", "expected_request_ids": []}
+]

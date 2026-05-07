@@ -258,6 +258,7 @@ def make_test_app_config(
     return AppConfig(**defaults)
 
 
+import pytest_asyncio
 import respx as _respx
 
 
@@ -266,3 +267,56 @@ def respx_mock():
     """Per-test respx router; any unmocked httpx call raises immediately."""
     with _respx.mock(assert_all_mocked=True, assert_all_called=False) as router:
         yield router
+
+
+# ---------------------------------------------------------------------------
+# Async Postgres fixtures (T3 foundation)
+#
+# These are the new async SQLAlchemy fixtures that test files migrated off
+# `tests/db_helpers.py` (the legacy Peewee shim) consume. Tests still on the
+# shim are unaffected.
+#
+# Both fixtures skip cleanly if `TEST_DATABASE_URL` is not set so unit tests
+# that do not need a database keep running on developer laptops without
+# Postgres.
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def database():
+    """Session-scoped async `Database` against `TEST_DATABASE_URL`."""
+    dsn = os.environ.get("TEST_DATABASE_URL")
+    if not dsn:
+        pytest.skip("TEST_DATABASE_URL is required for async Postgres fixtures")
+
+    from app.db.session import Database
+
+    db = Database(config=DatabaseConfig(dsn=dsn, pool_size=2, max_overflow=2))
+    await db.migrate()
+    try:
+        yield db
+    finally:
+        await db.dispose()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def session(database):
+    """Function-scoped `AsyncSession`; truncates every table after the test."""
+    from sqlalchemy import text as sql_text
+
+    from app.db.base import Base
+
+    async with database.session_maker()() as sess:
+        try:
+            yield sess
+        finally:
+            await sess.rollback()
+
+    table_names = [t.name for t in reversed(Base.metadata.sorted_tables)]
+    if not table_names:
+        return
+    quoted = ", ".join(f'"{name}"' for name in table_names)
+    async with database.transaction() as cleanup:
+        await cleanup.execute(
+            sql_text(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE")
+        )
