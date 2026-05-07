@@ -259,7 +259,16 @@ ssh raspi 'cd ratatoskr && \
 
 ## 9. Restart
 
+Compose tracks images by their `:latest` tag, so retag the staged
+post-sqlalchemy images as `:latest` immediately before the restart.
+The `:pre-sqlalchemy` and `:post-sqlalchemy` tags continue to point
+at their original hashes regardless — they survive this retag.
+
 ```bash
+ssh raspi 'docker tag docker-ratatoskr:post-sqlalchemy docker-ratatoskr:latest && \
+           docker tag docker-mobile-api:post-sqlalchemy docker-mobile-api:latest && \
+           docker images --filter reference="docker-ratatoskr*" --filter reference="docker-mobile-api*" --format "{{.Repository}}:{{.Tag}} ({{.ID}})"'
+
 ssh raspi 'cd ratatoskr && \
   docker compose -f ops/docker/docker-compose.yml \
                  -f ops/docker/docker-compose.pi.yml \
@@ -325,11 +334,12 @@ errors.
 
 ```bash
 ssh raspi 'cd ratatoskr && \
-  # 11.1 Stop the new images.
+  # 11.1 Stop the new containers.
   docker compose stop ratatoskr mobile-api && \
   # 11.2 Re-tag the pre-port images as :latest so compose picks them up.
-  docker tag ratatoskr:pre-sqlalchemy ratatoskr:latest && \
-  docker tag mobile-api:pre-sqlalchemy mobile-api:latest && \
+  # Note: image names use the docker-* prefix that compose produced.
+  docker tag docker-ratatoskr:pre-sqlalchemy docker-ratatoskr:latest && \
+  docker tag docker-mobile-api:pre-sqlalchemy docker-mobile-api:latest && \
   # 11.3 Restore the SQLite file in place.
   cp data/ratatoskr.db.pre-pg-$(date +%F) data/ratatoskr.db && \
   # 11.4 Restore the env.
@@ -441,16 +451,25 @@ Acceptance items from
 `docs/tasks/issues/migrate-postgres-write-pi-runbook.md` that are not
 yet satisfied (must be cleared before C2 starts):
 
-- [~] Pre/post-sqlalchemy images on the Pi:
-      `docker-ratatoskr:pre-sqlalchemy` and
-      `docker-mobile-api:pre-sqlalchemy` were tagged on 2026-05-07
-      against the EXACT image hashes the running containers use
-      (bot image `75cbe6374d48`, mobile-api `3ac1eaee2d96`); the
-      tags are already in the Pi's local docker daemon. The
-      `:post-sqlalchemy` images are still being built locally on
-      the Mac and shipped via `make pi-build-only`. Local git tags
-      `pre-sqlalchemy` (-> commit 2212689f) and `post-sqlalchemy`
-      (-> commit 48860ae2) are also in place.
+- [x] Pre/post-sqlalchemy images on the Pi (all four tags
+      verified 2026-05-07):
+      - `docker-ratatoskr:pre-sqlalchemy` -> `75cbe6374d48`
+        (the running bot image at the time of pinning)
+      - `docker-mobile-api:pre-sqlalchemy` -> `3ac1eaee2d96`
+        (the running mobile-api image at the time of pinning)
+      - `docker-ratatoskr:post-sqlalchemy` -> `9c446977fc57`
+        (built from commit `48860ae2`, shipped via local
+        `docker save` + `scp` + `docker load` after streaming
+        kept failing on Mac Docker Desktop tmp space)
+      - `docker-mobile-api:post-sqlalchemy` -> `e488a3599e8d`
+        (same flow)
+      Local git tags: `pre-sqlalchemy` -> commit 2212689f,
+      `post-sqlalchemy` -> commit 48860ae2.
+      Note: `:latest` for both still points at the pre-port
+      hashes so compose-up does not auto-pick the new images
+      before cutover. Section 9 explicitly retags
+      `:post-sqlalchemy` -> `:latest` immediately before
+      `docker compose up`.
 - [x] Two laptop dry-runs of sections 1–10 against a Pi-DB snapshot. (passes 2 and 3, both green; see Appendix A)
 - [ ] One laptop dry-run of section 11 (rollback) — recovery time
       recorded.
