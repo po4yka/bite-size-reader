@@ -441,9 +441,16 @@ Acceptance items from
 `docs/tasks/issues/migrate-postgres-write-pi-runbook.md` that are not
 yet satisfied (must be cleared before C2 starts):
 
-- [ ] Both `ratatoskr:pre-sqlalchemy` / `:post-sqlalchemy` images and
-      both `mobile-api:pre-sqlalchemy` / `:post-sqlalchemy` images
-      built, pushed, and pulled to the Pi.
+- [~] Pre/post-sqlalchemy images on the Pi:
+      `docker-ratatoskr:pre-sqlalchemy` and
+      `docker-mobile-api:pre-sqlalchemy` were tagged on 2026-05-07
+      against the EXACT image hashes the running containers use
+      (bot image `75cbe6374d48`, mobile-api `3ac1eaee2d96`); the
+      tags are already in the Pi's local docker daemon. The
+      `:post-sqlalchemy` images are still being built locally on
+      the Mac and shipped via `make pi-build-only`. Local git tags
+      `pre-sqlalchemy` (-> commit 2212689f) and `post-sqlalchemy`
+      (-> commit 48860ae2) are also in place.
 - [x] Two laptop dry-runs of sections 1–10 against a Pi-DB snapshot. (passes 2 and 3, both green; see Appendix A)
 - [ ] One laptop dry-run of section 11 (rollback) — recovery time
       recorded.
