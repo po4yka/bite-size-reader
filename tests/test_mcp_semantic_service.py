@@ -1,5 +1,15 @@
+"""Tests for SemanticSearchService end-to-end behaviour against async Postgres.
+
+Ported off the legacy DatabaseSessionManager + tests.mcp_test_support shim.
+The MCP server context is given the same TEST_DATABASE_URL the conftest
+fixtures use, then opens its own short-lived runtime against it. Each test
+inserts scoped summaries via the async helpers, commits, and asserts the
+service's grouped/filtered output.
+"""
+
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -11,10 +21,16 @@ from app.mcp.http_auth import McpRequestIdentity
 from app.mcp.semantic_service import SemanticSearchService
 from tests.mcp_test_utils import insert_scoped_summary
 
-pytest_plugins = ("tests.mcp_test_support",)
-
 if TYPE_CHECKING:
-    from app.db.session import DatabaseSessionManager
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _mcp_context(user_id: int | None = 1) -> McpServerContext:
+    """Build an MCP context that resolves writes/reads against TEST_DATABASE_URL."""
+    dsn = os.environ.get("TEST_DATABASE_URL")
+    if not dsn:
+        pytest.skip("TEST_DATABASE_URL is required for MCP semantic-search tests")
+    return McpServerContext(user_id=user_id, database_dsn=dsn)
 
 
 class FakeVectorResult:
@@ -61,30 +77,29 @@ class FakeVectorService:
         return FakeVectorSearchPayload(self._results, has_more=False)
 
 
-@pytest.mark.asyncio
 async def test_semantic_search_groups_chunks_and_min_similarity(
-    mcp_test_db: DatabaseSessionManager,
-    monkeypatch: pytest.MonkeyPatch,
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-    sid1, req1 = insert_scoped_summary(
-        db=mcp_test_db,
+    sid1, req1 = await insert_scoped_summary(
+        session,
         user_id=1,
         url="https://example.com/one",
         title="One",
         tags=["#ai"],
         created_at=now,
     )
-    sid2, req2 = insert_scoped_summary(
-        db=mcp_test_db,
+    sid2, req2 = await insert_scoped_summary(
+        session,
         user_id=1,
         url="https://example.com/two",
         title="Two",
         tags=["#ai"],
         created_at=now.replace(hour=11),
     )
+    await session.commit()
 
-    context = McpServerContext(user_id=1)
+    context = _mcp_context(user_id=1)
     service = SemanticSearchService(context, ArticleReadService(context))
     fake_results = [
         FakeVectorResult(
@@ -134,11 +149,10 @@ async def test_semantic_search_groups_chunks_and_min_similarity(
     assert len(results[0]["semantic_matches"]) == 2
 
 
-@pytest.mark.asyncio
 async def test_semantic_search_keyword_fallback_when_semantic_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    context = McpServerContext()
+    context = _mcp_context(user_id=None)
     article_service = ArticleReadService(context)
     service = SemanticSearchService(context, article_service)
 
@@ -165,30 +179,29 @@ async def test_semantic_search_keyword_fallback_when_semantic_unavailable(
     assert payload["results"][0]["summary_id"] == 101
 
 
-@pytest.mark.asyncio
 async def test_find_similar_articles_excludes_source_summary(
-    mcp_test_db: DatabaseSessionManager,
-    monkeypatch: pytest.MonkeyPatch,
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-    sid1, req1 = insert_scoped_summary(
-        db=mcp_test_db,
+    sid1, req1 = await insert_scoped_summary(
+        session,
         user_id=1,
         url="https://example.com/seed",
         title="Seed",
         tags=["#ai"],
         created_at=now,
     )
-    sid2, req2 = insert_scoped_summary(
-        db=mcp_test_db,
+    sid2, req2 = await insert_scoped_summary(
+        session,
         user_id=1,
         url="https://example.com/other",
         title="Other",
         tags=["#ai"],
         created_at=now.replace(hour=11),
     )
+    await session.commit()
 
-    context = McpServerContext(user_id=1)
+    context = _mcp_context(user_id=1)
     service = SemanticSearchService(context, ArticleReadService(context))
     fake_results = [
         FakeVectorResult(
@@ -220,30 +233,29 @@ async def test_find_similar_articles_excludes_source_summary(
     assert sid1 not in result_ids
 
 
-@pytest.mark.asyncio
 async def test_semantic_search_uses_request_scoped_identity(
-    mcp_test_db: DatabaseSessionManager,
-    monkeypatch: pytest.MonkeyPatch,
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-    sid1, req1 = insert_scoped_summary(
-        db=mcp_test_db,
+    sid1, req1 = await insert_scoped_summary(
+        session,
         user_id=1,
         url="https://example.com/user1",
         title="User1",
         tags=["#ai"],
         created_at=now,
     )
-    sid2, req2 = insert_scoped_summary(
-        db=mcp_test_db,
+    sid2, req2 = await insert_scoped_summary(
+        session,
         user_id=2,
         url="https://example.com/user2",
         title="User2",
         tags=["#ai"],
         created_at=now.replace(hour=11),
     )
+    await session.commit()
 
-    context = McpServerContext(user_id=9999)
+    context = _mcp_context(user_id=9999)
     service = SemanticSearchService(context, ArticleReadService(context))
     fake_results = [
         FakeVectorResult(
@@ -289,28 +301,27 @@ async def test_semantic_search_uses_request_scoped_identity(
     assert results[0]["summary_id"] == sid1
 
 
-@pytest.mark.asyncio
 async def test_vector_sync_gap_reports_missing_and_extra(
-    mcp_test_db: DatabaseSessionManager,
-    monkeypatch: pytest.MonkeyPatch,
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-    sid1, _ = insert_scoped_summary(
-        db=mcp_test_db,
+    sid1, _ = await insert_scoped_summary(
+        session,
         user_id=1,
         url="https://example.com/sync-a",
         title="Sync A",
         tags=["#sync"],
         created_at=now,
     )
-    sid2, _ = insert_scoped_summary(
-        db=mcp_test_db,
+    sid2, _ = await insert_scoped_summary(
+        session,
         user_id=1,
         url="https://example.com/sync-b",
         title="Sync B",
         tags=["#sync"],
         created_at=now.replace(hour=11),
     )
+    await session.commit()
 
     class FakeStore:
         def get_indexed_summary_ids(
@@ -328,7 +339,7 @@ async def test_vector_sync_gap_reports_missing_and_extra(
     async def fake_vector() -> FakeVector:
         return FakeVector()
 
-    context = McpServerContext(user_id=1)
+    context = _mcp_context(user_id=1)
     service = SemanticSearchService(context, ArticleReadService(context))
     monkeypatch.setattr(context, "init_vector_service", fake_vector)
 

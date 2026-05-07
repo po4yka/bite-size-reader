@@ -1,26 +1,36 @@
+"""Shared MCP test fixtures.
+
+Provides an async helper for inserting a scoped summary with a fixed
+created_at/updated_at timestamp, used by the MCP semantic-search tests.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from app.cli._legacy_peewee_models import Summary
-from tests.db_helpers import create_request, insert_summary
+from sqlalchemy import update
+
+from app.db.models import Summary
+from tests.db_helpers_async import create_request, insert_summary
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from app.db.session import DatabaseSessionManager
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def insert_scoped_summary(
+async def insert_scoped_summary(
+    session: AsyncSession,
     *,
-    db: DatabaseSessionManager,
     user_id: int,
     url: str,
     title: str,
     tags: list[str],
     created_at: datetime,
 ) -> tuple[int, int]:
-    request_id = create_request(
+    """Insert a request + summary scoped to user_id with deterministic timestamps."""
+    request_id = await create_request(
+        session,
         type_="url",
         status="completed",
         correlation_id=f"cid-{user_id}-{url}",
@@ -29,7 +39,8 @@ def insert_scoped_summary(
         input_url=url,
         normalized_url=url,
     )
-    summary_id = insert_summary(
+    summary_id = await insert_summary(
+        session,
         request_id=request_id,
         lang="en",
         json_payload={
@@ -39,10 +50,9 @@ def insert_scoped_summary(
             "metadata": {"title": title, "domain": "example.com"},
         },
     )
-    Summary.update(
-        {
-            Summary.created_at: created_at,
-            Summary.updated_at: created_at,
-        }
-    ).where(Summary.id == summary_id).execute()
+    await session.execute(
+        update(Summary)
+        .where(Summary.id == summary_id)
+        .values(created_at=created_at, updated_at=created_at)
+    )
     return summary_id, request_id

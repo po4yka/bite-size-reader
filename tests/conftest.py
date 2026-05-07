@@ -74,6 +74,17 @@ os.environ.setdefault("API_ID", "12345")
 os.environ.setdefault("API_HASH", "test_api_hash")
 os.environ.setdefault("FIRECRAWL_API_KEY", "fc-test-firecrawl-key")
 os.environ.setdefault("OPENROUTER_API_KEY", "test_openrouter_key")
+# When TEST_DATABASE_URL is provided (Postgres-backed tests), mirror it into
+# DATABASE_URL so app.config.load_config(...) -- which mcp_di.build_mcp_runtime
+# and other DI paths transitively call -- finds the same DSN. Use a placeholder
+# otherwise so unit tests that don't touch the DB still validate.
+if os.environ.get("TEST_DATABASE_URL"):
+    os.environ.setdefault("DATABASE_URL", os.environ["TEST_DATABASE_URL"])
+else:
+    os.environ.setdefault(
+        "DATABASE_URL",
+        "postgresql+asyncpg://placeholder:placeholder@localhost:5432/placeholder",
+    )
 
 
 @pytest.fixture(autouse=True)
