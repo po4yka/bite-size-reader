@@ -1,19 +1,26 @@
+"""End-to-end dedupe-on-URL and forward-cache-reuse coverage.
+
+Ported off the legacy DatabaseSessionManager / Peewee shim. Drives the
+full TelegramBot pipeline (URL processor + summarization stack) against
+async Postgres, with Firecrawl/OpenRouter mocked so the test stays
+hermetic. The original behavioural assertions (summary persisted,
+version increments, correlation_id updated, LLM bypassed for cached
+forwards) are preserved.
+"""
+
+from __future__ import annotations
+
 import json
-import os
-import tempfile
-import unittest
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.adapter_models.llm.llm_models import LLMCallResult
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.core.url_utils import normalize_url, url_hash_sha256
-try:
-    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
-except ImportError:
-    DatabaseSessionManager = None  # type: ignore[assignment,misc]
 from tests.conftest import make_test_app_config
-from tests.db_helpers import (
+from tests.db_helpers_async import (
     create_request,
     get_request_by_dedupe_hash,
     get_request_by_forward,
@@ -22,24 +29,40 @@ from tests.db_helpers import (
     insert_summary,
 )
 
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.session import Database
+
 
 class FakeMessage:
-    def __init__(self):
+    def __init__(self) -> None:
         class _Chat:
             id = 1
             type = "private"
 
+        class _User:
+            id = 1
+
         self.chat = _Chat()
+        self.from_user = _User()
         self.id = 123
         self.message_id = 123
-        self._replies = []
+        self._replies: list[str] = []
 
-    async def reply_text(self, text):
+    async def reply_text(self, text: str) -> None:
         self._replies.append(text)
 
 
 class FakeForwardMessage(FakeMessage):
-    def __init__(self, chat_id: int, fwd_chat_id: int, fwd_msg_id: int, text: str, title: str = ""):
+    def __init__(
+        self,
+        chat_id: int,
+        fwd_chat_id: int,
+        fwd_msg_id: int,
+        text: str,
+        title: str = "",
+    ) -> None:
         super().__init__()
 
         class _Chat:
@@ -62,7 +85,9 @@ class FakeForwardMessage(FakeMessage):
 
 
 class FakeFirecrawl:
-    async def scrape_markdown(self, url: str, request_id=None):
+    async def scrape_markdown(
+        self, url: str, request_id: int | None = None
+    ) -> None:
         msg = "Firecrawl should not be called on dedupe hit"
         raise AssertionError(msg)
 
@@ -71,8 +96,9 @@ class FakeOpenRouter:
     def __init__(self) -> None:
         self.calls = 0
 
-    async def chat(self, messages, request_id=None, **kwargs):
-        # return minimal valid JSON content
+    async def chat(
+        self, messages: list[dict[str, Any]], request_id: int | None = None, **kwargs: Any
+    ) -> LLMCallResult:
         self.calls += 1
         content = json.dumps({"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"})
         return LLMCallResult(
@@ -90,177 +116,149 @@ class FakeOpenRouter:
         )
 
 
-class TestDedupeReuse(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self) -> None:
-        """Save database proxy state before each test."""
-        from app.db.models import database_proxy
+def _make_bot(database: Database) -> TelegramBot:
+    """Construct a TelegramBot wired against the supplied async Database."""
+    cfg = make_test_app_config(db_path="/tmp/dedupe-test.db", allowed_user_ids=(1,))
 
-        self._old_db = database_proxy.obj
+    from app.adapters import telegram_bot as tbmod
 
-    async def asyncTearDown(self) -> None:
-        """Restore database proxy state after each test."""
-        from app.db.models import database_proxy
+    tbmod.Client = object
+    tbmod.filters = None
 
-        database_proxy.initialize(self._old_db)
-
-    async def test_dedupe_and_summary_version_increment(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            db_path = os.path.join(tmp, "app.db")
-            db = DatabaseSessionManager(db_path)
-            db.migrate()
-
-            url = "https://Example.com/Path?a=1&utm_source=x"
-            norm = normalize_url(url)
-            dedupe = url_hash_sha256(norm)
-
-            # Create initial request and crawl result
-            req_id = create_request(
-                type_="url",
-                status="pending",
-                correlation_id="initcid",
-                chat_id=1,
-                user_id=1,
-                input_url=url,
-                normalized_url=norm,
-                dedupe_hash=dedupe,
-                route_version=1,
-            )
-            insert_crawl_result(
-                request_id=req_id,
-                source_url=url,
-                endpoint="/v2/scrape",
-                http_status=200,
-                status="ok",
-                options_json={"formats": ["markdown"], "mobile": True},
-                correlation_id="firecrawl-cid",
-                content_markdown="# cached",
-                content_html=None,
-                structured_json={},
-                metadata_json={},
-                links_json={},
-                screenshots_paths_json=None,
-                firecrawl_success=True,
-                firecrawl_error_code=None,
-                firecrawl_error_message=None,
-                firecrawl_details_json=None,
-                raw_response_json=None,
-                latency_ms=1,
-                error_text=None,
-            )
-
-            # Prepare config with temp DB
-            cfg = make_test_app_config(db_path=db_path, allowed_user_ids=(1,))
-
-            # Avoid creating real Telegram client
-            from app.adapters import telegram_bot as tbmod
-
-            tbmod.Client = object
-            tbmod.filters = None
-
-            # Mock the OpenRouter client to avoid API key validation
-            with patch(
-                "app.adapters.openrouter.openrouter_client.OpenRouterClient"
-            ) as mock_openrouter:
-                mock_openrouter.return_value = AsyncMock()
-                bot = TelegramBot(cfg=cfg, db=db)
-
-            bot_any = cast("Any", bot)
-            bot_any._firecrawl = FakeFirecrawl()
-            fake_or = FakeOpenRouter()
-            bot_any._llm_client = fake_or
-            bot_any._sync_client_dependencies()
-
-            msg = FakeMessage()
-            # First run: should reuse crawl and insert summary with a version marker
-            await bot._handle_url_flow(msg, url, correlation_id="cid1")
-            s1 = get_summary_by_request(req_id)
-            assert s1 is not None
-            version1 = int(s1["version"])
-            assert version1 > 0
-            # correlation id updated
-            row = get_request_by_dedupe_hash(dedupe)
-            assert row["correlation_id"] == "cid1"
-            first_pass_calls = fake_or.calls
-            assert first_pass_calls >= 1  # summarization pipeline made at least one LLM call
-
-            # Second run: dedupe again; summary version should remain unchanged.
-            # Note: the URLProcessor's CachedSummaryResponder may not find the
-            # cached summary in this simplified test setup (async repo wiring),
-            # so the pipeline re-summarizes using the cached crawl result.
-            await bot._handle_url_flow(msg, url, correlation_id="cid2")
-            s2 = get_summary_by_request(req_id)
-            assert s2 is not None
-            assert int(s2["version"]) >= version1
-            row2 = get_request_by_dedupe_hash(dedupe)
-            assert row2["correlation_id"] == "cid2"
-            assert fake_or.calls >= first_pass_calls  # at least first_pass_calls LLM calls total
-
-    async def test_forward_cached_summary_reuse(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            db_path = os.path.join(tmp, "app.db")
-            db = DatabaseSessionManager(db_path)
-            db.migrate()
-
-            fwd_chat_id = 777
-            fwd_msg_id = 888
-
-            req_id = create_request(
-                type_="forward",
-                status="ok",
-                correlation_id="orig",
-                chat_id=1,
-                user_id=1,
-                input_message_id=5,
-                fwd_from_chat_id=fwd_chat_id,
-                fwd_from_msg_id=fwd_msg_id,
-                route_version=1,
-            )
-            insert_summary(
-                request_id=req_id,
-                lang="en",
-                json_payload={"summary_250": "cached", "tldr": "cached"},
-            )
-
-            cfg = make_test_app_config(db_path=db_path, allowed_user_ids=(1,))
-
-            from app.adapters import telegram_bot as tbmod
-
-            tbmod.Client = object
-            tbmod.filters = None
-
-            # Mock the OpenRouter client to avoid API key validation
-            with patch(
-                "app.adapters.openrouter.openrouter_client.OpenRouterClient"
-            ) as mock_openrouter:
-                mock_openrouter.return_value = AsyncMock()
-                bot = TelegramBot(cfg=cfg, db=db)
-
-            class FailOpenRouter:
-                async def chat(self, *_, **__):
-                    msg = "LLM should not run for cached forward summaries"
-                    raise AssertionError(msg)
-
-            bot_any = cast("Any", bot)
-            bot_any._openrouter = FailOpenRouter()
-
-            msg = FakeForwardMessage(
-                chat_id=1,
-                fwd_chat_id=fwd_chat_id,
-                fwd_msg_id=fwd_msg_id,
-                text="Forwarded content",
-                title="Channel",
-            )
-
-            await bot._handle_forward_flow(msg, correlation_id="newcid")
-
-            cached_summary = get_summary_by_request(req_id)
-            assert cached_summary is not None
-            assert int(cached_summary["version"]) > 0
-
-            existing_request = get_request_by_forward(fwd_chat_id, fwd_msg_id)
-            assert existing_request is not None
-            assert existing_request["correlation_id"] == "newcid"
+    with patch("app.adapters.openrouter.openrouter_client.OpenRouterClient") as mock_or:
+        mock_or.return_value = AsyncMock()
+        return TelegramBot(cfg=cfg, db=database)
 
 
-if __name__ == "__main__":
-    unittest.main()
+@pytest.mark.asyncio
+async def test_dedupe_and_summary_version_increment(
+    database: Database, session: AsyncSession
+) -> None:
+    url = "https://Example.com/Path?a=1&utm_source=x"
+    norm = normalize_url(url)
+    dedupe = url_hash_sha256(norm)
+
+    req_id = await create_request(
+        session,
+        type_="url",
+        status="pending",
+        correlation_id="initcid",
+        chat_id=1,
+        user_id=1,
+        input_url=url,
+        normalized_url=norm,
+        dedupe_hash=dedupe,
+        route_version=1,
+    )
+    await insert_crawl_result(
+        session,
+        request_id=req_id,
+        source_url=url,
+        endpoint="/v2/scrape",
+        http_status=200,
+        status="ok",
+        options_json={"formats": ["markdown"], "mobile": True},
+        correlation_id="firecrawl-cid",
+        content_markdown="# cached",
+        content_html=None,
+        structured_json={},
+        metadata_json={},
+        links_json={},
+        screenshots_paths_json=None,
+        firecrawl_success=True,
+        firecrawl_error_code=None,
+        firecrawl_error_message=None,
+        firecrawl_details_json=None,
+        raw_response_json=None,
+        latency_ms=1,
+        error_text=None,
+    )
+    await session.commit()
+
+    bot = _make_bot(database)
+    bot_any = cast("Any", bot)
+    bot_any._firecrawl = FakeFirecrawl()
+    fake_or = FakeOpenRouter()
+    bot_any._llm_client = fake_or
+    bot_any._sync_client_dependencies()
+
+    msg = FakeMessage()
+    await bot._handle_url_flow(msg, url, correlation_id="cid1")
+
+    s1 = await get_summary_by_request(session, req_id)
+    assert s1 is not None
+    version1 = int(s1["version"])
+    assert version1 > 0
+
+    row = await get_request_by_dedupe_hash(session, dedupe)
+    assert row is not None
+    assert row["correlation_id"] == "cid1"
+    first_pass_calls = fake_or.calls
+    assert first_pass_calls >= 1  # summarization pipeline ran at least one LLM call
+
+    # Second run: dedupe again; summary version should not regress.
+    await bot._handle_url_flow(msg, url, correlation_id="cid2")
+    s2 = await get_summary_by_request(session, req_id)
+    assert s2 is not None
+    assert int(s2["version"]) >= version1
+
+    row2 = await get_request_by_dedupe_hash(session, dedupe)
+    assert row2 is not None
+    assert row2["correlation_id"] == "cid2"
+    assert fake_or.calls >= first_pass_calls
+
+
+@pytest.mark.asyncio
+async def test_forward_cached_summary_reuse(
+    database: Database, session: AsyncSession
+) -> None:
+    fwd_chat_id = 777
+    fwd_msg_id = 888
+
+    req_id = await create_request(
+        session,
+        type_="forward",
+        status="ok",
+        correlation_id="orig",
+        chat_id=1,
+        user_id=1,
+        input_message_id=5,
+        fwd_from_chat_id=fwd_chat_id,
+        fwd_from_msg_id=fwd_msg_id,
+        route_version=1,
+    )
+    await insert_summary(
+        session,
+        request_id=req_id,
+        lang="en",
+        json_payload={"summary_250": "cached", "tldr": "cached"},
+    )
+    await session.commit()
+
+    bot = _make_bot(database)
+
+    class FailOpenRouter:
+        async def chat(self, *_args: Any, **_kwargs: Any) -> LLMCallResult:
+            msg = "LLM should not run for cached forward summaries"
+            raise AssertionError(msg)
+
+    bot_any = cast("Any", bot)
+    bot_any._openrouter = FailOpenRouter()
+
+    msg = FakeForwardMessage(
+        chat_id=1,
+        fwd_chat_id=fwd_chat_id,
+        fwd_msg_id=fwd_msg_id,
+        text="Forwarded content",
+        title="Channel",
+    )
+
+    await bot._handle_forward_flow(msg, correlation_id="newcid")
+
+    cached_summary = await get_summary_by_request(session, req_id)
+    assert cached_summary is not None
+    assert int(cached_summary["version"]) > 0
+
+    existing_request = await get_request_by_forward(session, fwd_chat_id, fwd_msg_id)
+    assert existing_request is not None
+    assert existing_request["correlation_id"] == "newcid"

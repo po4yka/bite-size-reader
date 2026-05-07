@@ -77,6 +77,28 @@ os.environ.setdefault("OPENROUTER_API_KEY", "test_openrouter_key")
 
 
 @pytest.fixture(autouse=True)
+def fast_qdrant_retries(monkeypatch):
+    """Skip Qdrant connect-retry sleeps so bot tests don't pay 6s/test.
+
+    Production Qdrant retries 3 times with 2s/4s backoff. In test environments
+    Qdrant is rarely running and the bot tolerates absence (`required=False`).
+    Forcing one attempt with zero delay keeps behaviour identical (the store
+    still ends up uninitialized) but skips ~6 seconds of `time.sleep`.
+    """
+    try:
+        from app.infrastructure.vector import qdrant_store as qmod
+    except ImportError:
+        return
+
+    original = qmod.QdrantVectorStore._connect_with_retry
+
+    def fast(self, max_attempts: int = 3, base_delay: float = 2.0) -> None:
+        original(self, max_attempts=1, base_delay=0)
+
+    monkeypatch.setattr(qmod.QdrantVectorStore, "_connect_with_retry", fast)
+
+
+@pytest.fixture(autouse=True)
 def manage_config_cache():
     """Clear cached config between tests that mutate environment variables."""
     clear_config_cache()
@@ -237,7 +259,13 @@ def make_test_app_config(
             debug_payloads=False,
         ),
         "telegram_limits": TelegramLimitsConfig(),
-        "database": DatabaseConfig(),
+        "database": (
+            DatabaseConfig(dsn=os.environ["TEST_DATABASE_URL"])
+            if os.environ.get("TEST_DATABASE_URL")
+            else DatabaseConfig.model_construct(
+                dsn="postgresql+asyncpg://placeholder:placeholder@localhost:5432/placeholder"
+            )
+        ),
         "content_limits": ContentLimitsConfig(),
         "vector_store": QdrantConfig(),
         "redis": RedisConfig(enabled=False),
