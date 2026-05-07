@@ -355,8 +355,9 @@ marked ready for production.
 
 | Date | Operator | Snapshot size | ETL dry-run wall-clock | ETL real-run wall-clock | Validation result | Notes |
 |---|---|---|---|---|---|---|
-| 2026-05-07 | Nikita Pochaev | 521 MB | 1.7 s (35 850 source rows enumerated) | partial — see findings | — | First pass against the Pi snapshot. Pull via `scp raspi:/tmp/ratatoskr.snapshot.db` took 1 min 30 s. |
-| `[VERIFY]` | `[VERIFY]` | `[VERIFY]` MB | `[VERIFY]` s | `[VERIFY]` s | pass / fail | — |
+| 2026-05-07 | Nikita Pochaev | 521 MB | 1.7 s (35 850 source rows enumerated) | partial — see findings | fail (data-shape bugs) | First pass. Pull via `scp` took 1 min 30 s. |
+| 2026-05-07 | Nikita Pochaev | 521 MB | 1.7 s | **12.7 s** | **PASS — zero mismatches** | Pass 2 after Bugs 4–7 were fixed. End-to-end clean on the live Pi snapshot. |
+| `[VERIFY]` | `[VERIFY]` | `[VERIFY]` MB | `[VERIFY]` s | `[VERIFY]` s | pass / fail | second-operator dry-run still pending |
 
 ### Dry-run pass 1 findings (2026-05-07)
 
@@ -389,18 +390,46 @@ against it.
   bulk-insert transaction, which suspends FK enforcement for the
   duration of the transaction only. Source observed: dangling
   `request_id=1058` again.
-- **NOT fixed: type-confused values.** `LLMCall.cost_usd` (FLOAT
-  column) holds the string literal `'ok'` for at least one row,
-  rejected by asyncpg with `must be real number, not str`. Likely
-  more cases of legacy code writing strings into typed columns. Fix
-  approach for the next pass: add a small `_coerce_value` helper
-  that attempts type coercion based on the SA column type
-  (`Integer`, `Float`, `Boolean`) and nullifies on failure with a
-  WARNING log. Out of scope for this dry-run pass.
+- **Fixed: type-confused values (Bug 7).** `LLMCall.cost_usd` (FLOAT
+  column) held the string literal `'ok'` for at least one row,
+  rejected by asyncpg with `must be real number, not str`. Added a
+  `_coerce_scalar` helper that attempts type coercion based on the
+  SA column type (`Integer`/`BigInteger`, `Float`/`Numeric`,
+  `Boolean`) and nullifies the cell on failure with a WARNING log.
+  Other rows in the same batch still migrate; the bad cell becomes
+  NULL.
 
-After fixing the first three, re-run on a fresh Postgres still
-fails on the LLMCall row described above. The migration is not yet
-complete end-to-end against this snapshot.
+### Dry-run pass 2 result (2026-05-07, after Bugs 4–7 fixed)
+
+```
+MIGRATION REPORT
+Mode       : LIVE
+Source     : tmp/ratatoskr.snapshot.db   (521 MB, from raspi)
+Batch size : 500
+Elapsed    : 12.7 s
+Total source rows : 35 850
+Total migrated    : 35 850
+Per-table counts  : source == target on EVERY table (zero mismatches)
+STATUS: SUCCESS
+```
+
+Notable per-table volumes from the live snapshot (used for sizing
+the maintenance window):
+
+| Table | Rows | Table | Rows |
+|---|---|---|---|
+| `audit_logs` | 21 068 | `summary_embeddings` | 1 169 |
+| `llm_calls` | 3 689 | `requests` | 1 215 |
+| `channel_posts` | 1 341 | `telegram_messages` | 1 189 |
+| `channel_post_analyses` | 1 287 | `crawl_results` | 1 164 |
+| `summaries` | 1 170 | `user_interactions` | 834 |
+| `feed_items` | 1 341 | `digest_delivery` | 136 |
+
+All other tables either zero rows or single-digit counts.
+
+**Wall-clock implication for the Pi**: laptop ran 12.7 s; the Pi is
+roughly 3–4× slower for this workload, so budget **45–60 s** for the
+ETL itself in section 6, well within the 60-min nominal window.
 
 | Date | Operator | Rollback path | Recovery time | Result |
 |---|---|---|---|---|

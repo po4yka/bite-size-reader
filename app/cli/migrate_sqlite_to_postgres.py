@@ -28,7 +28,17 @@ from typing import Any
 
 import peewee
 import sqlalchemy
-from sqlalchemy import BigInteger, Integer, LargeBinary, func, select, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Float,
+    Integer,
+    LargeBinary,
+    Numeric,
+    func,
+    select,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -85,6 +95,69 @@ def _strip_nul_chars(value: Any) -> Any:
     if isinstance(value, list):
         return [_strip_nul_chars(item) for item in value]
     return value
+
+
+_BOOL_TRUE_LITERALS = frozenset({"true", "t", "yes", "y", "1", "on"})
+_BOOL_FALSE_LITERALS = frozenset({"false", "f", "no", "n", "0", "off"})
+
+
+def _coerce_scalar(raw_value: Any, sa_col: Any, *, table: str, column: str) -> Any:
+    """Coerce a raw legacy value to the type expected by a SA scalar column.
+
+    Legacy SQLite is permissive about types — production data has e.g.
+    `cost_usd='ok'` (string in a Float column). Postgres rejects type
+    mismatches with `asyncpg.DataError`. This helper attempts a sane
+    coercion based on the column type; on failure it nullifies the
+    value and emits a WARNING so the migration completes with the
+    individual bad cell dropped rather than crashing the whole row.
+    """
+    if raw_value is None:
+        return None
+
+    col_type = sa_col.type
+
+    if isinstance(col_type, (Integer, BigInteger)):
+        if isinstance(raw_value, int) and not isinstance(raw_value, bool):
+            return raw_value
+        try:
+            return int(raw_value)
+        except (TypeError, ValueError):
+            logger.warning(
+                "coerce_failed_int",
+                extra={"table": table, "column": column, "value": str(raw_value)[:80]},
+            )
+            return None
+
+    if isinstance(col_type, (Float, Numeric)):
+        if isinstance(raw_value, (int, float)) and not isinstance(raw_value, bool):
+            return raw_value
+        try:
+            return float(raw_value)
+        except (TypeError, ValueError):
+            logger.warning(
+                "coerce_failed_float",
+                extra={"table": table, "column": column, "value": str(raw_value)[:80]},
+            )
+            return None
+
+    if isinstance(col_type, Boolean):
+        if isinstance(raw_value, bool):
+            return raw_value
+        if isinstance(raw_value, (int, float)):
+            return bool(raw_value)
+        if isinstance(raw_value, str):
+            lowered = raw_value.strip().lower()
+            if lowered in _BOOL_TRUE_LITERALS:
+                return True
+            if lowered in _BOOL_FALSE_LITERALS:
+                return False
+        logger.warning(
+            "coerce_failed_bool",
+            extra={"table": table, "column": column, "value": str(raw_value)[:80]},
+        )
+        return None
+
+    return raw_value
 
 
 def _pk_columns(sa_model: type[Any]) -> list[Any]:
@@ -161,7 +234,9 @@ def _legacy_row_to_dict(
             # Pass bytes through unchanged (e.g. SummaryEmbedding.embedding_blob).
             result[col_name] = raw_value
         else:
-            result[col_name] = raw_value
+            result[col_name] = _coerce_scalar(
+                raw_value, sa_col, table=sa_model.__tablename__, column=col_name
+            )
 
     return result
 
