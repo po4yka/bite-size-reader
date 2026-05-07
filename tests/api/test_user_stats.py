@@ -1,6 +1,9 @@
 """Tests for user stats endpoint with ensure_mapping safety."""
 
+from __future__ import annotations
+
 import sys
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
@@ -9,14 +12,11 @@ import pytest
 sys.modules["redis"] = MagicMock()
 sys.modules["redis.asyncio"] = MagicMock()
 
-import app.di.database as _di_database
-from app.api.dependencies.database import clear_session_manager
 from app.api.routers import auth
-from app.cli._legacy_peewee_models import Request, Summary, User, database_proxy
-try:
-    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
-except ImportError:
-    DatabaseSessionManager = None  # type: ignore[assignment,misc]
+from app.db.models import Request, Summary, User
+
+if TYPE_CHECKING:
+    from app.db.session import Database
 
 
 def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -26,42 +26,49 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     auth._cfg = None  # type: ignore[attr-defined]
 
 
-@pytest.fixture
-def user_stats_db(tmp_path):
-    """Create an isolated test database with proper database_proxy handling."""
-    old_proxy_obj = database_proxy.obj
-
-    clear_session_manager()
-
-    db = DatabaseSessionManager(str(tmp_path / "test-user-stats.db"))
-    db.migrate()
-    database_proxy.initialize(db._database)
-    _di_database._cached_runtime_db = db
-
-    yield db
-
-    clear_session_manager()
-    db._database.close()
-    database_proxy.initialize(old_proxy_obj)
+async def _create_user_request_summary(
+    db: Database,
+    *,
+    user_id: int,
+    username: str,
+    url: str,
+    json_payload,
+) -> int:
+    """Insert a User, Request, and Summary; return the summary id."""
+    async with db.transaction() as session:
+        session.add(User(telegram_user_id=user_id, username=username))
+        await session.flush()
+        request = Request(
+            user_id=user_id,
+            input_url=url,
+            normalized_url=url,
+            status="completed",
+            type="url",
+        )
+        session.add(request)
+        await session.flush()
+        summary = Summary(
+            request_id=request.id,
+            lang="en",
+            json_payload=json_payload,
+        )
+        session.add(summary)
+        await session.flush()
+        return int(summary.id)
 
 
 @pytest.mark.asyncio
-async def test_user_stats_with_valid_json_payload(user_stats_db, monkeypatch: pytest.MonkeyPatch):
+async def test_user_stats_with_valid_json_payload(
+    db: Database, monkeypatch: pytest.MonkeyPatch
+):
     """Test user stats with properly formatted json_payload."""
     _configure_env(monkeypatch)
 
-    # Create user and summary with valid json_payload
-    user = User.create(telegram_user_id=123456789, username="testuser")
-    request = Request.create(
-        user_id=user.telegram_user_id,
-        input_url="http://test.com",
-        normalized_url="http://test.com",
-        status="completed",
-        type="url",
-    )
-    Summary.create(
-        request=request.id,
-        lang="en",
+    await _create_user_request_summary(
+        db,
+        user_id=123456789,
+        username="testuser",
+        url="http://test.com",
         json_payload={
             "estimated_reading_time_min": 5,
             "topic_tags": ["tech", "ai"],
@@ -71,108 +78,96 @@ async def test_user_stats_with_valid_json_payload(user_stats_db, monkeypatch: py
 
     from app.api.routers.user import get_user_stats
 
-    user_context = {"user_id": 123456789}
-    response = await get_user_stats(user=user_context)
+    response = await get_user_stats(user={"user_id": 123456789})
 
-    # Response uses camelCase (Pydantic alias)
     assert response["data"]["totalSummaries"] == 1
     assert response["data"]["totalReadingTimeMin"] == 5
 
 
 @pytest.mark.asyncio
-async def test_user_stats_with_none_json_payload(user_stats_db, monkeypatch: pytest.MonkeyPatch):
+async def test_user_stats_with_none_json_payload(
+    db: Database, monkeypatch: pytest.MonkeyPatch
+):
     """Test user stats handles None json_payload gracefully."""
     _configure_env(monkeypatch)
 
-    user = User.create(telegram_user_id=123456790, username="testuser2")
-    request = Request.create(
-        user_id=user.telegram_user_id,
-        input_url="http://test2.com",
-        normalized_url="http://test2.com",
-        status="completed",
-        type="url",
-    )
-    Summary.create(
-        request=request.id,
-        lang="en",
-        json_payload=None,  # None payload
+    await _create_user_request_summary(
+        db,
+        user_id=123456790,
+        username="testuser2",
+        url="http://test2.com",
+        json_payload=None,
     )
 
     from app.api.routers.user import get_user_stats
 
-    user_context = {"user_id": 123456790}
-    response = await get_user_stats(user=user_context)
+    response = await get_user_stats(user={"user_id": 123456790})
 
-    # Response uses camelCase (Pydantic alias)
     assert response["data"]["totalSummaries"] == 1
     assert response["data"]["totalReadingTimeMin"] == 0
 
 
 @pytest.mark.asyncio
-async def test_user_stats_with_string_json_payload(user_stats_db, monkeypatch: pytest.MonkeyPatch):
+async def test_user_stats_with_string_json_payload(
+    db: Database, monkeypatch: pytest.MonkeyPatch
+):
     """Test user stats handles string json_payload (legacy data) gracefully."""
     _configure_env(monkeypatch)
-    db = user_stats_db
 
-    user = User.create(telegram_user_id=123456791, username="testuser3")
-    request = Request.create(
-        user_id=user.telegram_user_id,
-        input_url="http://test3.com",
-        normalized_url="http://test3.com",
-        status="completed",
-        type="url",
-    )
-    summary = Summary.create(
-        request=request.id,
-        lang="en",
-        json_payload={},  # Create with empty dict first
+    summary_id = await _create_user_request_summary(
+        db,
+        user_id=123456791,
+        username="testuser3",
+        url="http://test3.com",
+        json_payload={},
     )
 
-    # Manually set json_payload to a JSON string to simulate legacy data
-    db._database.execute_sql(
-        "UPDATE summaries SET json_payload = ? WHERE id = ?",
-        ('{"estimated_reading_time_min": 10, "topic_tags": ["python"]}', summary.id),
-    )
+    # Simulate legacy data: a JSON-encoded string in a JSONB column.
+    # JSONB rejects raw strings as the column value, but ensure_mapping in
+    # the user-stats reader is supposed to tolerate it. Encode and store
+    # via TEXT cast so the value reaches the reader as a string.
+    from sqlalchemy import text as sql_text
+
+    async with db.transaction() as session:
+        await session.execute(
+            sql_text(
+                "UPDATE summaries SET json_payload = "
+                "to_jsonb('{\"estimated_reading_time_min\": 10, "
+                "\"topic_tags\": [\"python\"]}'::text) "
+                "WHERE id = :sid"
+            ),
+            {"sid": summary_id},
+        )
 
     from app.api.routers.user import get_user_stats
 
-    user_context = {"user_id": 123456791}
-    # This should not raise an error - ensure_mapping handles string JSON
-    response = await get_user_stats(user=user_context)
+    response = await get_user_stats(user={"user_id": 123456791})
 
-    # Response uses camelCase (Pydantic alias)
     assert response["data"]["totalSummaries"] == 1
 
 
 @pytest.mark.asyncio
-async def test_user_stats_with_invalid_topic_tags(user_stats_db, monkeypatch: pytest.MonkeyPatch):
+async def test_user_stats_with_invalid_topic_tags(
+    db: Database, monkeypatch: pytest.MonkeyPatch
+):
     """Test user stats handles invalid topic_tags type gracefully."""
     _configure_env(monkeypatch)
 
-    user = User.create(telegram_user_id=123456792, username="testuser4")
-    request = Request.create(
-        user_id=user.telegram_user_id,
-        input_url="http://test4.com",
-        normalized_url="http://test4.com",
-        status="completed",
-        type="url",
-    )
-    Summary.create(
-        request=request.id,
-        lang="en",
+    await _create_user_request_summary(
+        db,
+        user_id=123456792,
+        username="testuser4",
+        url="http://test4.com",
         json_payload={
             "estimated_reading_time_min": 3,
-            "topic_tags": "not-a-list",  # Invalid: should be list
+            "topic_tags": "not-a-list",  # invalid: should be list
             "metadata": {"title": "Test"},
         },
     )
 
     from app.api.routers.user import get_user_stats
 
-    user_context = {"user_id": 123456792}
-    # Should not raise - isinstance check handles this
-    response = await get_user_stats(user=user_context)
+    response = await get_user_stats(user={"user_id": 123456792})
 
-    # Response uses camelCase (Pydantic alias)
     assert response["data"]["totalSummaries"] == 1
-    assert response["data"]["favoriteTopics"] == []  # No valid tags
+    assert response["data"]["favoriteTopics"] == []
