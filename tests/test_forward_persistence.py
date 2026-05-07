@@ -1,22 +1,24 @@
-import os
-import tempfile
-import unittest
-from typing import Any
+"""Coverage for ForwardContentProcessor persistence (telegram_messages row)."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
+
+from sqlalchemy import select
 
 from app.adapters.external.response_formatter import ResponseFormatter
 from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
-from app.cli._legacy_peewee_models import database_proxy
-try:
-    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
-except ImportError:
-    DatabaseSessionManager = None  # type: ignore[assignment,misc]
+from app.db.models import TelegramMessage
 from tests.conftest import make_test_app_config
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.session import Database
 
 
 class _ForwardMessage:
-    """Simple forward message stub for persistence tests."""
-
     def __init__(self) -> None:
         class _Chat:
             def __init__(self, cid: int) -> None:
@@ -37,7 +39,7 @@ class _ForwardMessage:
         self.id = 321
         self.message_id = 321
         self.text = "Forwarded post body"
-        self.caption = None
+        self.caption: str | None = None
         self.entities: list[Any] = []
         self.caption_entities: list[Any] = []
         self.forward_from_chat = _FwdChat(-100777, "Forwarded Channel")
@@ -45,55 +47,37 @@ class _ForwardMessage:
         self.forward_date = 1_700_000_100
 
 
-class TestForwardMessagePersistence(unittest.IsolatedAsyncioTestCase):
-    @classmethod
-    def setUpClass(cls):
-        # Save the original database_proxy object to restore later
-        cls._old_proxy_obj = database_proxy.obj
+async def test_process_forward_content_persists_snapshot(
+    database: Database, session: AsyncSession
+) -> None:
+    cfg = make_test_app_config(db_path="/tmp/forward-persist.db", allowed_user_ids=(1,))
 
-    @classmethod
-    def tearDownClass(cls):
-        # Restore the original database_proxy object
-        database_proxy.initialize(cls._old_proxy_obj)
+    formatter = MagicMock(spec=ResponseFormatter)
+    formatter.send_forward_accepted_notification = AsyncMock()
+    formatter.send_forward_language_notification = AsyncMock()
 
-    async def test_process_forward_content_persists_snapshot(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = os.path.join(tmpdir, "app.db")
-            db = DatabaseSessionManager(db_path)
-            db.migrate()
+    processor = ForwardContentProcessor(
+        cfg=cfg,
+        db=database,
+        response_formatter=formatter,
+        audit_func=lambda *_args, **_kwargs: None,
+    )
 
-            cfg = make_test_app_config(db_path=db_path, allowed_user_ids=(1,))
+    message = _ForwardMessage()
 
-            formatter = MagicMock(spec=ResponseFormatter)
-            formatter.send_forward_accepted_notification = AsyncMock()
-            formatter.send_forward_language_notification = AsyncMock()
+    req_id, _prompt, _lang, _system_prompt = await processor.process_forward_content(
+        message, correlation_id="cid"
+    )
 
-            processor = ForwardContentProcessor(
-                cfg=cfg,
-                db=db,
-                response_formatter=formatter,
-                audit_func=lambda *args, **kwargs: None,
-            )
-
-            message = _ForwardMessage()
-
-            req_id, _prompt, _lang, _system_prompt = await processor.process_forward_content(
-                message, correlation_id="cid"
-            )
-
-            row = db.fetchone(
-                "SELECT forward_from_chat_id, forward_from_chat_type, forward_from_chat_title, "
-                "forward_from_message_id, forward_date_ts, message_id, chat_id, text_full "
-                "FROM telegram_messages WHERE request_id = ?",
-                (req_id,),
-            )
-
-            assert row is not None
-            assert row["forward_from_chat_id"] == message.forward_from_chat.id
-            assert row["forward_from_chat_type"] == "channel"
-            assert row["forward_from_chat_title"] == message.forward_from_chat.title
-            assert row["forward_from_message_id"] == message.forward_from_message_id
-            assert row["forward_date_ts"] == message.forward_date
-            assert row["message_id"] == message.id
-            assert row["chat_id"] == message.chat.id
-            assert row["text_full"] == message.text
+    row = await session.scalar(
+        select(TelegramMessage).where(TelegramMessage.request_id == req_id)
+    )
+    assert row is not None
+    assert row.forward_from_chat_id == message.forward_from_chat.id
+    assert row.forward_from_chat_type == "channel"
+    assert row.forward_from_chat_title == message.forward_from_chat.title
+    assert row.forward_from_message_id == message.forward_from_message_id
+    assert row.forward_date_ts == message.forward_date
+    assert row.message_id == message.id
+    assert row.chat_id == message.chat.id
+    assert row.text_full == message.text
