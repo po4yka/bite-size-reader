@@ -16,7 +16,10 @@ interface SummariesPayload {
 function mapSummaryCompact(raw: Record<string, unknown>): SummaryCompact {
   return {
     id: Number(raw.id ?? 0),
-    requestId: String(raw.requestId ?? ""),
+    // requestId is number in the generated schema (SummaryListItem); coerce to
+    // match the spec type. Previously coerced to string — see CONTRACT GAP #1
+    // in types.ts.
+    requestId: Number(raw.requestId ?? 0),
     title: String(raw.title ?? "Untitled"),
     url: String(raw.url ?? ""),
     domain: String(raw.domain ?? ""),
@@ -26,8 +29,12 @@ function mapSummaryCompact(raw: Record<string, unknown>): SummaryCompact {
     readingTimeMin: Number(raw.readingTimeMin ?? raw.estimatedReadingTimeMin ?? 0),
     isRead: Boolean(raw.isRead),
     isFavorited: Boolean(raw.isFavorited),
-    lang: String(raw.lang ?? "auto"),
+    // lang is "en" | "ru" | "auto" in the spec; default to "auto" for unknowns
+    lang: (raw.lang as "en" | "ru" | "auto" | undefined) ?? "auto",
     createdAt: String(raw.createdAt ?? ""),
+    confidence: Number(raw.confidence ?? 0),
+    hallucinationRisk: (raw.hallucinationRisk as "low" | "medium" | "high" | "unknown" | undefined) ?? "unknown",
+    imageUrl: (raw.imageUrl as string | null | undefined) ?? null,
   };
 }
 
