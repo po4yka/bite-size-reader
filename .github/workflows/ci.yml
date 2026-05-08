@@ -690,6 +690,51 @@ jobs:
         env:
           SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
 
+  docker-build:
+    name: Docker - Build smoke test
+    needs: prepare-environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # paths-filter scopes the actual build to commits that touched Docker
+      # inputs. PRs always build; pushes to main only build when Dockerfile,
+      # app sources, lockfiles, or pyproject change. Catches Dockerfile and
+      # dependency-pin regressions before release.yml does.
+      - name: Detect Docker-relevant changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            docker:
+              - 'ops/docker/Dockerfile'
+              - 'ops/docker/Dockerfile.api'
+              - 'app/**'
+              - 'bot.py'
+              - 'pyproject.toml'
+              - 'requirements.txt'
+              - 'requirements-dev.txt'
+              - 'uv.lock'
+
+      - name: Set up Docker Buildx
+        if: github.event_name == 'pull_request' || steps.filter.outputs.docker == 'true'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build (no push)
+        if: github.event_name == 'pull_request' || steps.filter.outputs.docker == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ops/docker/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   secrets:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -922,7 +967,7 @@ jobs:
   status-check:
     name: CI Status Check
     if: always()
-    needs: [prepare-environment, web-static-check, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, secrets, integration-tests, migration-smoke-test]
+    needs: [prepare-environment, web-static-check, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, docker-build, secrets, integration-tests, migration-smoke-test]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -969,6 +1014,13 @@ jobs:
 
           if [[ "${{ needs.safety-scan.result }}" != "success" ]]; then
             echo "::error::safety-scan job failed"
+            exit 1
+          fi
+
+          # docker-build is a build-only smoke test; treat skip as ok (paths
+          # filter elides the build when only non-Docker files changed).
+          if [[ "${{ needs.docker-build.result }}" == "failure" ]]; then
+            echo "::error::docker-build job failed"
             exit 1
           fi
 
