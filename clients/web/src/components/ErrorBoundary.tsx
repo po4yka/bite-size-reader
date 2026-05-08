@@ -36,14 +36,14 @@ export default class ErrorBoundary extends Component<Props, State> {
     }
 
     return (
-      <div style={{ padding: "1rem" }}>
+      <section className="page-section">
         <InlineNotification
           kind="error"
           title="Something went wrong"
           subtitle={error.message || "An unexpected error occurred in this section."}
           hideCloseButton
         />
-        <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+        <div className="form-actions">
           <Button kind="primary" size="sm" onClick={this.handleReset}>
             Try again
           </Button>
@@ -51,7 +51,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             Reload page
           </Button>
         </div>
-      </div>
+      </section>
     );
   }
 }

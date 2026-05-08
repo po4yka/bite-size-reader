@@ -6,6 +6,7 @@ import LoginPage from "./auth/LoginPage";
 import { sanitizeRedirectPath } from "./auth/redirect";
 import RouteGuard from "./auth/RouteGuard";
 import AppShell from "./components/AppShell";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { ENABLED_APP_ROUTES, HOME_PATH } from "./routes/manifest";
 
 function RouteLoader() {
@@ -77,10 +78,11 @@ export default function App() {
   const renderRouteElement = (route: (typeof ENABLED_APP_ROUTES)[number]) => {
     const Component = route.component;
     const element = <Component />;
-    if (!route.lazy) {
-      return element;
-    }
-    return <Suspense fallback={<RouteLoader />}>{element}</Suspense>;
+    const inner = route.lazy ? <Suspense fallback={<RouteLoader />}>{element}</Suspense> : element;
+    // Per-route boundary: a crash in one feature page renders this fallback in
+    // place of the route while the AppShell navigation stays mounted. The
+    // top-level ErrorBoundary inside AppShell remains as a last-resort catch.
+    return <ErrorBoundary key={route.path}>{inner}</ErrorBoundary>;
   };
 
   return (
