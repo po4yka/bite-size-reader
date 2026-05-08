@@ -1,6 +1,6 @@
 ---
 title: Pi SQLite to Postgres cutover runbook
-status: ready for cutover (all preflight gates cleared 2026-05-07)
+status: cutover complete (2026-05-08 08:36 +0400 — Pi running on Postgres)
 maintenance_window_estimate: 30 min nominal · 60 min with one-σ buffer (active downtime ~5–10 min; rest is verification + log-watching)
 last_updated: 2026-05-07
 ---
@@ -496,3 +496,75 @@ yet satisfied (must be cleared before C2 starts):
       the front matter.
 - [x] Linked from `docs/SPEC.md` "Deployment and Operations" section
       (line 84 of SPEC.md).
+
+## Appendix C — C2 cutover log (2026-05-08)
+
+The first cutover attempt (2026-05-07 23:21) hit three startup bugs in
+the post-port image and rolled back. Three fixes landed under
+`19a0b08d fix(deploy): three startup bugs that blocked C2 cutover`,
+images were rebuilt, and the second attempt at 2026-05-08 08:36 went
+clean. Active downtime: ~5 min ETL + retry boot.
+
+| Step | Section | Wall-clock |
+|---|---|---|
+| Stop bot + mobile-api | 2 | <1 s |
+| SQLite backup (cp) | 3 | <1 s |
+| Bring up Postgres | 4 | ~12 s (volume init + healthcheck) |
+| Alembic upgrade | 5 | ~7 s (0001 → 0002) |
+| Data migration (live ETL) | 6 | **54.6 s** for 35,850 rows on a 498 MB SQLite |
+| Validation + healthcheck | 7 | ~5 s |
+| .env flip | 8 | <1 s |
+| First boot attempt | 9 | failed: see Bugs A/B/C below |
+| Rollback to pre-port image | 11 | ~30 s (tag-flip + cp + compose up) |
+| Code fix → push → Pi pull | -- | ~5 min (image already on Pi from preflight) |
+| Image rebuild + ship + load | -- | ~70 min (each ~14 GB tarball over Wi-Fi) |
+| Healthcheck timeout fix | -- | additional ~3 min |
+| Re-cutover boot (clean) | 9 (retake) | bot healthy in 60 s, mobile-api in ~75 s |
+| pg_dump backup | 10 | ~3 s, 84 MB dump |
+
+### Bugs surfaced during the first attempt
+
+- **A (image)**: `bot.py:51` called `build_runtime_database(cfg, migrate=True)`
+  which internally does `asyncio.run(db.migrate())`. Inside the bot's
+  `asyncio.run(main())` event loop this raises
+  `RuntimeError: asyncio.run() cannot be called from a running event loop`.
+  Fixed by dropping `migrate=True` and awaiting `db.migrate()` in the
+  surrounding async context.
+- **B (image)**: `app/di/api.py:75` (`build_api_runtime`) had the same
+  pattern under the FastAPI lifespan. Fixed identically.
+- **C (image)**: Dockerfile + Dockerfile.api CMDs passed
+  `${DB_PATH:-/data/ratatoskr.db}` as the first positional arg to
+  `migrate_db`, which the new alembic_runner strict-rejects (it expects
+  a `postgresql+asyncpg://` URL). Dropped the arg so migrate_db falls
+  through to env DATABASE_URL. Also flipped the bot HEALTHCHECK off the
+  stale `sqlite3.connect` probe onto `python -m app.cli.healthcheck`.
+
+### Bug surfaced during the second attempt
+
+- **D (compose)**: `mobile-api` healthcheck timeout of 10 s was tight
+  for the cold path (~15 s on Pi 5: Python startup + FastAPI/SQLAlchemy/
+  asyncpg imports + Alembic plugin scan + Postgres ping). Bot path was
+  ~3 s and within the ceiling. Bumped both healthcheck timeouts to 30 s.
+
+### Lessons
+
+- The runbook's section 9 ("retag :post-sqlalchemy → :latest immediately
+  before docker compose up") is necessary BEFORE section 5 too —
+  `docker compose run --rm ratatoskr ...` reads the `:latest` tag, which
+  in pre-port state still pointed at the old image without `app.cli.migrate_db`
+  awareness of Postgres. Moving the retag to section 4.5 would have caught
+  this earlier.
+- The `:pre-sqlalchemy` tag on the Pi was applied to a hash that
+  actually contains post-port code (the running bot image at pin time).
+  The "rollback to pre-port" path is a misnomer — it rolls back to a
+  post-port image that *happened* to work in production because no
+  DATABASE_URL was set, so the asyncpg-bound migrate_db code was hit
+  but errored silently inside the `&&` short-circuit. The compose YAML
+  also forces a Postgres `DATABASE_URL` default, so a true SQLite
+  rollback would have required compose-file edits too. Document this
+  clearly in any future "rollback drill" plan.
+- Bind mounts in compose (`./bot.py:/app/bot.py`, `./app:/app/app`)
+  override the image filesystem. Image fixes alone are not enough —
+  the host repo on the Pi must also be at the fixed commit. After this
+  cutover, the Pi is on `git pull --ff-only origin main` so the bind
+  mounts and image are coherent.
