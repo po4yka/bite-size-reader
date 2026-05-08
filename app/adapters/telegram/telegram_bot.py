@@ -66,7 +66,11 @@ class TelegramBot:
             audit_task_registry=self._audit_tasks,
         )
         self._runtime = components
-        self._firecrawl = components.core.firecrawl_client or components.core.scraper_chain
+        # Always use the multi-provider scraper chain; the chain already wraps a
+        # FirecrawlProvider as one of its rungs and falls through to JS-rendering
+        # providers when Firecrawl returns thin/empty content. Preferring
+        # `firecrawl_client` here would bypass the chain entirely.
+        self._firecrawl = components.core.scraper_chain
         self._llm_client = components.core.llm_client
         self._ext_sem_obj = None
         self._ext_sem_size = max(1, self.cfg.runtime.max_concurrent_calls)
