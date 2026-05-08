@@ -527,7 +527,7 @@ class FirecrawlClient:
                 latency = int((time.perf_counter() - started) * 1000)
                 last_latency = latency
                 last_error = str(exc)
-                self._payload_logger.log_exception(str(exc), attempt)
+                self._payload_logger.log_exception(exc, attempt)
                 if attempt < self._max_retries:
                     cur_mobile = not cur_mobile
                     if pdf_hint:

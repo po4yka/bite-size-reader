@@ -116,6 +116,14 @@ class ChatContextBuilder:
             "no_structured_outputs_primary" if model == primary_model else "no_structured_outputs"
         )
         self._client.error_handler.log_skip_model(model, reason, request_id)
+        logger.info(
+            "structured_output_disabled_for_model",
+            extra={
+                "model": model,
+                "reason": "model_unsupported_json_schema",
+                "request_id": request_id,
+            },
+        )
         if model == primary_model:
             return False, StructuredOutputState()
         return True, structured_output_state

@@ -310,17 +310,39 @@ class PayloadLogger:
             extra={"error": error, "status": status_code},
         )
 
-    def log_exception(self, error: str, attempt: int) -> None:
-        """Log an exception during request.
+    def log_exception(self, exc: BaseException, attempt: int) -> None:
+        """Log an exception during request with compact error triple.
+
+        At DEBUG level the full traceback is included; at WARNING level only
+        error_class / error_message / top_frame are emitted to keep log volume
+        manageable.
 
         Args:
-            error: Exception message
+            exc: The caught exception object
             attempt: Current attempt number
         """
-        self._logger.exception(
-            "firecrawl_exception",
-            extra={"error": error, "attempt": attempt},
-        )
+        import traceback
+
+        error_class = type(exc).__name__
+        error_message = str(exc) or "<empty>"
+        top_frame = ""
+        tb = exc.__traceback__
+        if tb is not None:
+            frames = traceback.extract_tb(tb)
+            if frames:
+                last = frames[-1]
+                top_frame = f"{last.filename}:{last.lineno}"
+
+        extra = {
+            "error_class": error_class,
+            "error_message": error_message,
+            "top_frame": top_frame,
+            "attempt": attempt,
+        }
+        if self._logger.isEnabledFor(10):  # logging.DEBUG
+            self._logger.exception("firecrawl_exception", extra=extra)
+        else:
+            self._logger.warning("firecrawl_exception", extra=extra)
 
     def log_search_request(
         self,

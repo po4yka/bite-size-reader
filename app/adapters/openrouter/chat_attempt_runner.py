@@ -95,6 +95,14 @@ class ChatAttemptRunner:
                             "request_id": request_id,
                         },
                     )
+                    from app.observability.metrics import record_openrouter_stream_fallback
+
+                    _fallback_reason = (
+                        "stream_request_failed"
+                        if (outcome.error_text or "").startswith("stream_request_failed")
+                        else "non_streaming_chunk_path"
+                    )
+                    record_openrouter_stream_fallback(model=model, reason=_fallback_reason)
                     state.request = self._copy_request_with_stream(state.request, False)
                     rf_mode_current = outcome.retry.rf_mode
                     response_format_current = outcome.retry.response_format

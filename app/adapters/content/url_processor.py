@@ -344,10 +344,27 @@ class URLProcessor:
             return result
         except Exception as exc:
             raise_if_cancelled(exc)
-            logger.exception(
-                "url_processing_failed",
-                extra={"cid": request.correlation_id, "url": request.url_text, "error": str(exc)},
-            )
+            import traceback as _tb
+
+            _error_class = type(exc).__name__
+            _error_message = str(exc) or "<empty>"
+            _top_frame = ""
+            if exc.__traceback__ is not None:
+                _frames = _tb.extract_tb(exc.__traceback__)
+                if _frames:
+                    _last = _frames[-1]
+                    _top_frame = f"{_last.filename}:{_last.lineno}"
+            _compact_extra = {
+                "cid": request.correlation_id,
+                "url": request.url_text,
+                "error_class": _error_class,
+                "error_message": _error_message,
+                "top_frame": _top_frame,
+            }
+            if logger.isEnabledFor(10):  # logging.DEBUG
+                logger.exception("url_processing_failed", extra=_compact_extra)
+            else:
+                logger.warning("url_processing_failed", extra=_compact_extra)
             # Safety-net: ensure request is marked as failed in DB
             req_id = context.req_id if context is not None else None
             if req_id is not None:

@@ -231,6 +231,13 @@ if PROMETHEUS_AVAILABLE:
         registry=REGISTRY,
     )
 
+    OPENROUTER_STREAM_FALLBACK = Counter(
+        "ratatoskr_openrouter_stream_fallback_total",
+        "OpenRouter SSE stream fallbacks to non-streaming.",
+        ["model", "reason"],
+        registry=REGISTRY,
+    )
+
 else:
     # Create dummy metrics when prometheus_client is not available
     REGISTRY = None
@@ -259,6 +266,7 @@ else:
     AGGREGATION_USED_SOURCES = None
     AGGREGATION_COST_USD = None
     SCHEDULER_JOB_CHRONIC_FAILURES = None
+    OPENROUTER_STREAM_FALLBACK = None
 
 
 def get_metrics() -> bytes:
@@ -552,6 +560,18 @@ def record_aggregation_bundle(
             status=status,
             bundle_profile=bundle_profile,
         ).observe(latency_seconds)
+
+
+def record_openrouter_stream_fallback(model: str, reason: str) -> None:
+    """Record an OpenRouter SSE stream fallback to non-streaming.
+
+    Args:
+        model: Model name that triggered the fallback
+        reason: One of stream_request_failed, stream_consumed_early, non_streaming_chunk_path
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+    OPENROUTER_STREAM_FALLBACK.labels(model=model, reason=reason).inc()
 
 
 def record_aggregation_synthesis(

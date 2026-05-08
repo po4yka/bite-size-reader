@@ -357,6 +357,9 @@ class ChatTransport:
                     "latency_ms": latency,
                 },
             )
+            from app.observability.metrics import record_openrouter_stream_fallback
+
+            record_openrouter_stream_fallback(model=model, reason="stream_request_failed")
             return AttemptOutcome(
                 error_text=f"stream_request_failed: {exc_type}: {exc_msg or '<empty>'}",
                 latency=latency,
