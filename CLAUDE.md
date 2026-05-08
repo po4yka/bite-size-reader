@@ -60,6 +60,7 @@ app/
 |   +-- attachment/     # Attachment handling and processing
 |   +-- content/        # URL processing pipeline
 |   |   +-- scraper/    # Multi-provider scraper chain (protocol, chain, factory, providers)
+|   |   +-- streaming/  # In-process StreamHub pub/sub + SummarySectionStreamAssembler (feeds SSE + Telegram drafts)
 |   +-- digest/         # Channel digest orchestration
 |   +-- elevenlabs/     # ElevenLabs TTS integration
 |   +-- external/       # Firecrawl parser, response formatter
@@ -71,7 +72,7 @@ app/
 +-- agents/             # Multi-agent system (extraction, summarization, validation, web search)
 +-- api/                # Mobile API (FastAPI, JWT auth, sync)
 |   +-- models/         # Pydantic request/response models
-|   +-- routers/        # Route handlers (auth, summaries, sync, collections, health, system, tts, search, requests, digest, user)
+|   +-- routers/        # Route handlers (auth, summaries, sync, collections, health, system, tts, search, requests, streams, digest, user)
 |   +-- services/       # API business logic
 +-- application/        # Application layer (DDD)
 |   +-- dto/            # Data transfer objects

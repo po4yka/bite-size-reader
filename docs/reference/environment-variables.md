@@ -507,6 +507,7 @@ Controls which embedding backend generates vectors for semantic search.
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
 | `MAX_TEXT_LENGTH_KB` | `50` | Max text length for URL extraction (KB, regex DoS prevention) |
+| `URL_FLOW_STREAMING_ENABLED` | `true` | Publish phase + section events to the StreamHub during URL summarization. Drives the Telegram URL-flow draft-message updates and the web SubmitPage's SSE consumer. Set to `false` to use the legacy single-shot reply path. |
 
 ## Circuit Breaker
 

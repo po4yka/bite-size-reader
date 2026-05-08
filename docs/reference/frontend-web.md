@@ -168,6 +168,19 @@ The list route (`/web/repositories`) uses `@tanstack/react-virtual` for row virt
 
 ---
 
+## Real-time Progress Streaming (SSE)
+
+The SubmitPage opens a Server-Sent Events stream against `GET /v1/requests/{id}/stream` whenever a request is in flight. As `phase` events land it advances the progress indicator (`extracting → summarizing → validating → persisting → done`), and `section` events progressively populate the summary card before the final `fetchSummary` call resolves.
+
+**Modules:**
+- `clients/web/src/api/streamRequest.ts` -- `subscribeToRequest(requestId, handlers)` helper. Uses `@microsoft/fetch-event-source` so it can attach `Authorization: Bearer <token>` (native `EventSource` cannot). Performs single-shot 401 → `refreshAccessToken` → reconnect using the same `getStoredTokens` / `setStoredTokens` chain as `client.ts`. Exponential backoff 250ms → 5s.
+- `clients/web/src/hooks/useRequestStream.ts` -- `useRequestStream(requestId)` returns `{ phase, sectionsBySlug, isStreaming, error, fellBack }`. After two consecutive fatal closes the hook flips `fellBack=true` so the page can switch to the existing `useRequestStatus` polling path.
+- `clients/web/src/features/submit/SubmitPage.tsx` -- consumes `useRequestStream`; falls back to polling when `fellBack`.
+
+**Generated types:** `StreamPhaseEvent`, `StreamSectionEvent`, `StreamDoneEvent`, `StreamErrorEvent` are emitted into `clients/web/src/api/generated.ts` from `docs/openapi/mobile_api.yaml`.
+
+---
+
 ## Authentication Model
 
 Auth is hybrid and selected at runtime in `detectAuthMode`:

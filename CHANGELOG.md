@@ -48,6 +48,7 @@ authenticates successfully, then stores the old file as
 - Full logging and dynamic status updates for batch processing
 - Redirect-aware X article link resolver with structured reason codes (`path_match`, `redirect_match`, `canonical_match`, `not_article`, `resolve_failed`)
 - Optional manual live smoke script for X article links (`scripts/twitter_article_live_smoke.py`) with per-link JSON diagnostics
+- Real-time streaming summary progress: `GET /v1/requests/{id}/stream` SSE endpoint emits `phase` / `section` / `done` / `error` events sourced from a process-wide `StreamHub`. The Telegram URL flow now streams section snapshots via the existing draft coordinator; the web SubmitPage consumes the SSE stream via `useRequestStream` (with polling fallback after two consecutive fatal closes). Gated by `URL_FLOW_STREAMING_ENABLED` (default `true`)
 
 ### Removed
 - `with-firecrawl` Docker Compose profile alias; use `with-scrapers` instead. Operators with `--profile with-firecrawl` in scripts must update to `--profile with-scrapers`.

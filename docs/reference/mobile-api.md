@@ -126,6 +126,21 @@ Current sync uses explicit sessions and chunked/full + delta + apply endpoints:
 3. `GET /v1/sync/delta?session_id=...&cursor=...&limit=...` for incremental updates
 4. `POST /v1/sync/apply` to send client-side changes back to server
 
+## Streaming Model (SSE)
+
+`GET /v1/requests/{request_id}/stream` returns a Server-Sent Events stream of real-time progress for an in-flight summary. The connection stays open until a terminal `done` or `error` event is emitted, or the client disconnects.
+
+- **Auth**: same bearer JWT chain as the rest of `/v1`. Unauthenticated → `401`. Authenticated but the request is owned by a different user → `403` (collapsed with not-found to prevent request-id enumeration).
+- **Heartbeats**: `EventSourceResponse(ping=15)` emits `: keepalive` comment lines every 15s on idle.
+- **Events**: `event: phase | section | done | error`. The `data:` field is a JSON object whose schemas (`StreamPhaseEvent`, `StreamSectionEvent`, `StreamDoneEvent`, `StreamErrorEvent`) are documented in `docs/openapi/mobile_api.yaml`.
+- **Phase values**: `extracting → summarizing → validating → persisting → done`.
+- **Section values**: JSON field names from the summary contract (`summary_250`, `tldr`, `key_ideas`, `topic_tags`).
+- **Disconnect-tolerant**: closing the SSE connection does not cancel the underlying summarization; the `Summary` and `LLMCall` rows still persist.
+- **Late subscribers**: the `StreamHub` keeps a 64-event ring buffer per request, so a client that subscribes mid-flight replays recent backlog before joining the live tail.
+- **Web client**: `clients/web/src/api/streamRequest.ts` carries the bearer header via `@microsoft/fetch-event-source` and refreshes once on `401`. Polling fallback engages after two consecutive fatal closes — see `clients/web/src/hooks/useRequestStream.ts`.
+
+Backend toggle: `URL_FLOW_STREAMING_ENABLED` (default `true`).
+
 ## Search and Discovery Parameters
 
 `GET /v1/search` supports:

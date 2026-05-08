@@ -37,7 +37,7 @@ Strict JSON schema enforced on every summary: field definitions, character limit
 
 ## Mobile REST API
 
-Full endpoint index, envelope/error contract, authentication modes (Telegram login, secret-key flow, JWT refresh), aggregations surface, signal scoring surface, sync model, search parameters, collections, digest, and system-maintenance endpoints.
+Full endpoint index, envelope/error contract, authentication modes (Telegram login, secret-key flow, JWT refresh), aggregations surface, signal scoring surface, sync model, search parameters, collections, digest, system-maintenance endpoints, and the real-time `GET /v1/requests/{id}/stream` SSE endpoint that emits `phase` / `section` / `done` / `error` events for in-flight summaries.
 
 → [Mobile API Reference](reference/mobile-api.md)
 
