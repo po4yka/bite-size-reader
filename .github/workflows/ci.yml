@@ -179,7 +179,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Heavy macos job (~30 min). Skip when no web/openapi/CI inputs changed.
+      # When the filter says skip, the install/build/test steps no-op and the
+      # job reports success — status-check then sees a clean pass without the
+      # cost. Steps below run on PRs unconditionally and on pushes only when
+      # filter.outputs.web == 'true'.
+      - name: Detect web-relevant changes
+        id: filter
+        # Gate at the top — checkout above is cheap; everything below skips.
+        # Use a working-directory override because dorny/paths-filter runs in
+        # the repo root, not clients/web.
+        working-directory: ${{ github.workspace }}
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            web:
+              - 'clients/web/**'
+              - 'docs/openapi/mobile_api.yaml'
+              - '.github/workflows/ci.yml'
+
       - name: Set up Node.js
+        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -187,18 +207,23 @@ jobs:
           cache-dependency-path: clients/web/package-lock.json
 
       - name: Install dependencies
+        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
         run: npm ci
 
       - name: Install Playwright browsers
+        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
         run: npx playwright install chromium webkit
 
       - name: Build web frontend
+        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
         run: npm run build
 
       - name: Build Storybook
+        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
         run: npm run build-storybook
 
       - name: Run Playwright visual tests (routes + stories)
+        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
         run: npx playwright test
 
       - name: Upload Playwright report
@@ -967,7 +992,7 @@ jobs:
   status-check:
     name: CI Status Check
     if: always()
-    needs: [prepare-environment, web-static-check, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, docker-build, secrets, integration-tests, migration-smoke-test]
+    needs: [prepare-environment, web-static-check, web-playwright-visual, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, docker-build, secrets, integration-tests, migration-smoke-test]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -998,6 +1023,14 @@ jobs:
 
           if [[ "${{ needs.web-static-check.result }}" != "success" ]]; then
             echo "::error::web-static-check job failed"
+            exit 1
+          fi
+
+          # web-playwright-visual is the canonical Frost parity reference. Steps
+          # are gated by the paths filter so the job reports success when no web
+          # inputs changed; only an explicit failure should block status-check.
+          if [[ "${{ needs.web-playwright-visual.result }}" == "failure" ]]; then
+            echo "::error::web-playwright-visual job failed"
             exit 1
           fi
 
