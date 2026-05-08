@@ -113,18 +113,19 @@ ENV DB_PATH=/data/ratatoskr.db \
 # Switch to non-root user
 USER appuser
 
-# Health check to ensure database is accessible
+# Health check pings the runtime Database via the async healthcheck CLI,
+# which respects DATABASE_URL (Postgres) without dragging in sqlite3 paths.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD python -c "import sqlite3, os; \
-    conn = sqlite3.connect(os.getenv('DB_PATH', '/data/ratatoskr.db'), timeout=5); \
-    conn.execute('SELECT 1').fetchone(); \
-    conn.close()"
+  CMD python -m app.cli.healthcheck
 
 # Default command — bot + taskiq worker + taskiq scheduler in one container.
 # The scheduler emits tasks; the worker consumes and executes them.
 # Only one scheduler instance must run per deployment.
+# migrate_db reads DATABASE_URL from env (no positional arg). Without the
+# arg it falls through to env -- passing a sqlite path here would have
+# alembic_runner reject it with "Alembic requires a postgresql+asyncpg:// URL".
 CMD ["sh", "-c", "\
-  python -m app.cli.migrate_db \"${DB_PATH:-/data/ratatoskr.db}\" && \
+  python -m app.cli.migrate_db && \
   taskiq worker app.tasks.broker:broker app.tasks.digest app.tasks.rss --workers ${TASKIQ_WORKER_CONCURRENCY:-4} & WORKER_PID=$! ; \
   taskiq scheduler app.tasks.scheduler:scheduler --skip-first-run & SCHED_PID=$! ; \
   python -m bot ; STATUS=$? ; \

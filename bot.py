@@ -48,7 +48,12 @@ async def main() -> None:
         logging.getLogger(__name__).warning(
             "db_path_not_in_data_volume", extra={"db_path": cfg.runtime.db_path}
         )
-    db = build_runtime_database(cfg, migrate=True, self_heal=True)
+    # `build_runtime_database(..., migrate=True)` calls asyncio.run() internally
+    # and crashes when invoked from a running event loop (such as bot.py's
+    # asyncio.run(main()) entry point). Construct without migrate, then run
+    # migrations in the surrounding async context.
+    db = build_runtime_database(cfg, self_heal=True)
+    await db.migrate()
 
     db_write_queue = DbWriteQueue(maxsize=256)
     db_write_queue.start()

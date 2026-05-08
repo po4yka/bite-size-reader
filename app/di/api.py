@@ -72,7 +72,18 @@ async def build_api_runtime(
                 )
             },
         )
-    database = db or build_runtime_database(app_cfg, connect=True, migrate=True)
+    # `build_runtime_database(..., connect=True, migrate=True)` calls
+    # asyncio.run() internally; doing that from inside an active event loop
+    # (e.g. the FastAPI lifespan or any async caller of build_api_runtime)
+    # raises "asyncio.run() cannot be called from a running event loop".
+    # Build the database without those flags and exercise the equivalents
+    # via await once we hold an async context.
+    if db is None:
+        database = build_runtime_database(app_cfg)
+        await database.healthcheck()
+        await database.migrate()
+    else:
+        database = db
     database_services = DatabaseRuntimeServices(
         executor=database.executor,
         bootstrap=database.bootstrap,
