@@ -17,10 +17,11 @@ import sys
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import peewee
 import pytest
+import pytest_asyncio
+from sqlalchemy import func, select
 
-from app.db.models import ALL_MODELS, Channel, ChannelSubscription, DigestDelivery, User
+from app.db.models import Channel, ChannelSubscription, DigestDelivery, User
 
 # Initial import — provides the names in module globals for the first run.
 # The _fresh_tasks_modules autouse fixture refreshes these before every test
@@ -39,27 +40,25 @@ _LOCK_KEY = "ratatoskr:digest:scheduled:lock"
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
-@pytest.fixture
-def db_mem():
-    """In-memory SQLite bound to all Peewee models for the duration of the test."""
-    database = peewee.SqliteDatabase(":memory:")
-    with database.bind_ctx(ALL_MODELS):
-        database.create_tables(ALL_MODELS)
-        yield database
-    database.close()
+@pytest_asyncio.fixture
+async def populated_db(database, session):
+    """DB pre-loaded with a user, a channel, and an active subscription.
 
-
-@pytest.fixture
-def populated_db(db_mem):
-    """DB pre-loaded with a user, a channel, and an active subscription."""
-    user = User.create(telegram_user_id=_TEST_UID, username="digesttest")
-    channel = Channel.create(username=_TEST_CHAN, title="Test Channel", is_active=True)
-    sub = ChannelSubscription.create(
-        user=user.telegram_user_id,
-        channel=channel,
+    Uses the async-Postgres `database`/`session` fixtures from conftest.py.
+    Skips automatically when `TEST_DATABASE_URL` is unset.
+    """
+    user = User(telegram_user_id=_TEST_UID, username="digesttest")
+    channel = Channel(username=_TEST_CHAN, title="Test Channel", is_active=True)
+    session.add_all([user, channel])
+    await session.flush()
+    sub = ChannelSubscription(
+        user_id=user.telegram_user_id,
+        channel_id=channel.id,
         is_active=True,
     )
-    return db_mem, user, channel, sub
+    session.add(sub)
+    await session.commit()
+    return database, user, channel, sub
 
 
 @pytest.fixture
@@ -102,6 +101,7 @@ def mock_service():
 
     svc = MagicMock()
     svc.get_users_with_subscriptions.return_value = []
+    svc.async_get_users_with_subscriptions = AsyncMock(return_value=[])
     svc.generate_digest = AsyncMock(return_value=DigestResult(user_id=_TEST_UID))
     return svc
 
@@ -216,7 +216,7 @@ class TestDigestBodySmoke:
     ):
         """With no subscribed users the task exits cleanly."""
         cfg = MagicMock()
-        mock_service.get_users_with_subscriptions.return_value = []
+        mock_service.async_get_users_with_subscriptions = AsyncMock(return_value=[])
 
         with (
             patch("app.tasks.digest.create_digest_userbot", return_value=mock_userbot),
@@ -237,7 +237,7 @@ class TestDigestBodySmoke:
         from app.adapters.digest.digest_service import DigestResult
 
         cfg = MagicMock()
-        mock_service.get_users_with_subscriptions.return_value = [111, 222, 333]
+        mock_service.async_get_users_with_subscriptions = AsyncMock(return_value=[111, 222, 333])
         mock_service.generate_digest = AsyncMock(return_value=DigestResult(user_id=0, post_count=2))
 
         with (
@@ -286,7 +286,7 @@ class TestRedisLockContention:
         await fake_redis.set(_LOCK_KEY, "other-instance", nx=True, px=60_000)
 
         cfg = MagicMock()
-        mock_service.get_users_with_subscriptions.return_value = [_TEST_UID]
+        mock_service.async_get_users_with_subscriptions = AsyncMock(return_value=[_TEST_UID])
 
         with (
             patch("app.tasks.digest.create_digest_userbot", return_value=mock_userbot),
@@ -386,7 +386,7 @@ class TestUserbotSessionReuse:
     ):
         """stop() is invoked even when generate_digest raises unexpectedly."""
         cfg = MagicMock()
-        mock_service.get_users_with_subscriptions.return_value = [_TEST_UID]
+        mock_service.async_get_users_with_subscriptions = AsyncMock(return_value=[_TEST_UID])
         mock_service.generate_digest = AsyncMock(side_effect=RuntimeError("boom"))
 
         with (
@@ -436,15 +436,16 @@ class TestUserbotSessionReuse:
 class TestIdempotence:
     """Delivered post-ID tracking prevents duplicate DigestDelivery rows."""
 
-    def test_list_delivered_ids_returns_persisted_post_ids(self, populated_db):
+    @pytest.mark.asyncio
+    async def test_list_delivered_ids_returns_persisted_post_ids(self, populated_db, session):
         """Immediately after create_delivery, those IDs appear in list_delivered_message_ids."""
-        _db, _user, _channel, _sub = populated_db
+        database, _user, _channel, _sub = populated_db
         from app.infrastructure.persistence.digest_store import DigestStore
 
-        store = DigestStore()
-        assert store.list_delivered_message_ids(_TEST_UID) == set()
+        store = DigestStore(database=database)
+        assert await store.async_list_delivered_message_ids(_TEST_UID) == set()
 
-        store.create_delivery(
+        await store.async_create_delivery(
             user_id=_TEST_UID,
             post_count=3,
             channel_count=1,
@@ -453,22 +454,23 @@ class TestIdempotence:
             post_ids=[10, 20, 30],
         )
 
-        delivered = store.list_delivered_message_ids(_TEST_UID)
+        delivered = await store.async_list_delivered_message_ids(_TEST_UID)
         assert {10, 20, 30}.issubset(delivered)
 
-    def test_second_run_filters_all_previously_delivered_posts(self, populated_db):
+    @pytest.mark.asyncio
+    async def test_second_run_filters_all_previously_delivered_posts(self, populated_db, session):
         """If all available posts were delivered in run-1, run-2 has nothing to deliver.
 
         This is the idempotence guarantee: re-running the job for the same
         window does not create a second DigestDelivery row.
         """
-        _db, _user, _channel, _sub = populated_db
+        database, _user, _channel, _sub = populated_db
         from app.infrastructure.persistence.digest_store import DigestStore
 
-        store = DigestStore()
+        store = DigestStore(database=database)
 
         # Simulate run-1 persisting delivery of posts [1, 2]
-        store.create_delivery(
+        await store.async_create_delivery(
             user_id=_TEST_UID,
             post_count=2,
             channel_count=1,
@@ -476,25 +478,29 @@ class TestIdempotence:
             correlation_id="run1",
             post_ids=[1, 2],
         )
-        assert DigestDelivery.select().where(DigestDelivery.user == _TEST_UID).count() == 1
+        count_q = select(func.count()).select_from(DigestDelivery).where(
+            DigestDelivery.user_id == _TEST_UID
+        )
+        assert await session.scalar(count_q) == 1
 
         # Run-2: same posts available from the channel
-        delivered = store.list_delivered_message_ids(_TEST_UID)
+        delivered = await store.async_list_delivered_message_ids(_TEST_UID)
         available = [{"message_id": 1}, {"message_id": 2}]
         undelivered = [p for p in available if p["message_id"] not in delivered]
 
         # Nothing to deliver → ChannelReader skips → no second DeliveryRecord written
         assert undelivered == []
-        assert DigestDelivery.select().where(DigestDelivery.user == _TEST_UID).count() == 1
+        assert await session.scalar(count_q) == 1
 
-    def test_new_posts_are_delivered_on_second_run(self, populated_db):
+    @pytest.mark.asyncio
+    async def test_new_posts_are_delivered_on_second_run(self, populated_db, session):
         """Posts with IDs not in the delivery history ARE delivered on the next run."""
-        _db, _user, _channel, _sub = populated_db
+        database, _user, _channel, _sub = populated_db
         from app.infrastructure.persistence.digest_store import DigestStore
 
-        store = DigestStore()
+        store = DigestStore(database=database)
 
-        store.create_delivery(
+        await store.async_create_delivery(
             user_id=_TEST_UID,
             post_count=1,
             channel_count=1,
@@ -503,7 +509,7 @@ class TestIdempotence:
             post_ids=[1],
         )
 
-        delivered = store.list_delivered_message_ids(_TEST_UID)
+        delivered = await store.async_list_delivered_message_ids(_TEST_UID)
         available = [{"message_id": 1}, {"message_id": 2}, {"message_id": 3}]
         undelivered = [p for p in available if p["message_id"] not in delivered]
 
@@ -524,7 +530,7 @@ class TestFailureModes:
         from app.adapters.digest.digest_service import DigestResult
 
         cfg = MagicMock()
-        mock_service.get_users_with_subscriptions.return_value = [_TEST_UID]
+        mock_service.async_get_users_with_subscriptions = AsyncMock(return_value=[_TEST_UID])
         mock_service.generate_digest = AsyncMock(
             return_value=DigestResult(user_id=_TEST_UID, post_count=1)
         )
@@ -617,7 +623,7 @@ class TestFailureModes:
                 raise RuntimeError("transient failure")
             return DigestResult(user_id=user_id, post_count=1)
 
-        mock_service.get_users_with_subscriptions.return_value = [111, 222, 333]
+        mock_service.async_get_users_with_subscriptions = AsyncMock(return_value=[111, 222, 333])
         mock_service.generate_digest = flaky
 
         with (

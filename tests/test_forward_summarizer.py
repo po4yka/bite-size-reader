@@ -1,12 +1,5 @@
-import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
-
-sys.modules.setdefault("pydantic", MagicMock())
-sys.modules.setdefault("pydantic_settings", MagicMock())
-sys.modules.setdefault("peewee", MagicMock())
-sys.modules.setdefault("playhouse", MagicMock())
-sys.modules.setdefault("playhouse.sqlite_ext", MagicMock())
 
 from app.adapters.telegram.forward_summarizer import ForwardSummarizer
 

@@ -1,9 +1,37 @@
 # SQLite → PostgreSQL + Peewee → SQLAlchemy 2.0 Migration Plan
 
-> **Status:** active. Decisions D1 (dedicated `ratatoskr-postgres` container) and D2
-> (port to SQLAlchemy 2.0 simultaneously) confirmed on 2026-05-06.
-> **Source of truth for tasks:** `docs/tasks/issues/migrate-postgres-*.md`.
-> **Created:** 2026-05-06 · **Owner:** Nikita Pochaev
+> **Status:** in service. Pi cutover executed 2026-05-07 (commit
+> `25e1a6c0 docs(runbooks): cutover complete`). Bot and mobile-api running on
+> PostgreSQL 16 via SQLAlchemy 2.0 + asyncpg. All 19 implementation tasks
+> (D1, D2, F1–F3, M1–M4, R1–R3, O2, O5, T1–T3, C1, C2) complete; only the
+> two time-gated cleanup tasks remain — `migrate-postgres-remove-peewee.md`
+> (L1, earliest 2026-06-06) and `migrate-postgres-update-docs.md` (L2,
+> after L1).
+> **Created:** 2026-05-06 · **Cutover:** 2026-05-07 · **Owner:** Nikita Pochaev
+
+## Final task summary
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| D1 dedicated postgres | ✅ done | `ratatoskr-postgres` container running on Pi |
+| D2 SQLAlchemy 2.0 | ✅ done | 81+ SQLAlchemy importers in `app/`, zero Peewee outside legacy snapshot |
+| F1 audit | ✅ done | `docs/explanation/peewee-sqlite-surface-audit.md` |
+| F2 driver deps | ✅ done | `sqlalchemy[asyncio]>=2.0.30`, `asyncpg>=0.29`, `greenlet>=3.0` in `pyproject.toml` |
+| F3 Database factory | ✅ done | `app/db/session.py::Database`, `get_session`, `get_session_for_request`, `with_serialization_retry` |
+| M1–M3 model port | ✅ done | `app/db/models/{core,aggregation,batch,collections,digest,rss,rules,signal,topic_search,user_content}.py` |
+| M4 Alembic baseline | ✅ done | `app/db/alembic/versions/0001_baseline_sqlalchemy.py` + `0002_widen_summary_version_to_bigint.py`; `_legacy_sqlite/` archived |
+| R1 runtime services | ✅ done | `app/db/rw_lock.py` deleted; zero `asyncio.to_thread` in `app/db/` |
+| R2 persistence repos | ✅ done | All `app/infrastructure/persistence/*.py` use `AsyncSession` |
+| R3 application call sites | ✅ done | Bot + mobile-api running on Postgres in production |
+| O2 raw SQL | ✅ done | Zero `execute_sql` callers outside legacy snapshot + migrator |
+| O5 Alembic env | ✅ done | `app/db/alembic/env.py` uses `async_engine_from_config` |
+| T1 compose | ✅ done | `postgres:16-alpine` service running on Pi |
+| T2 data migrator | ✅ done | `app/cli/migrate_sqlite_to_postgres.py` shipped; used during cutover |
+| T3 test fixtures + CI | ✅ done | Async `database`/`session` fixtures + 3 last test files ported on 2026-05-08 |
+| C1 Pi runbook | ✅ done | `docs/runbooks/pi-postgres-cutover.md` (570 lines) |
+| C2 Pi cutover | ✅ done | Commit `25e1a6c0`; row counts on Pi: 1215 requests, 1170 summaries, 3689 llm_calls, 1130 fts rows |
+| L1 remove peewee | 🕐 gated | Earliest run 2026-06-06 (30 days post-cutover) |
+| L2 update docs | 🕐 gated | After L1 |
 
 ## Goal
 

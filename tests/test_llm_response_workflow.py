@@ -12,10 +12,6 @@ from app.adapters.content.llm_response_workflow import (
     LLMWorkflowNotifications,
 )
 
-# NOTE: Do NOT mock peewee/playhouse at module level - it contaminates sys.modules
-# and breaks tests that run after this one. The workflow tests use mocked
-# repositories directly instead of mocking the ORM layer.
-
 
 class _DummySemaphore:
     async def __aenter__(self) -> None:
