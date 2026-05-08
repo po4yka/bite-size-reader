@@ -131,6 +131,7 @@ class ForwardSummarizer:
                 response_formatter=self.response_formatter,
                 message=message,
                 correlation_id=correlation_id,
+                request_id=str(req_id),
             )
             for request in requests:
                 request.stream = True

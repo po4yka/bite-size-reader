@@ -12,6 +12,7 @@ import {
   Switch,
 } from "../../design";
 import { useDuplicateCheck, useRequestStatus, useSubmitUrl, useRetryRequest } from "../../hooks/useRequests";
+import { useRequestStream } from "../../hooks/useRequestStream";
 import { useTelegramClosingConfirmation } from "../../hooks/useTelegramClosingConfirmation";
 import { useTelegramMainButton } from "../../hooks/useTelegramMainButton";
 import { formatEta, isTerminalStatus, progressFromStatus, statusLabel } from "./status";
@@ -133,8 +134,13 @@ export default function SubmitPage() {
 
   const duplicateQuery = useDuplicateCheck(duplicateProbeUrl, duplicateProbeUrl.length > 0 && requestId == null);
   const submitMutation = useSubmitUrl();
-  const statusQuery = useRequestStatus(requestId, pollingPaused);
   const retryMutation = useRetryRequest();
+
+  // SSE streaming — primary path. Falls back to polling after 2 consecutive fatal closes.
+  const stream = useRequestStream(submission.phase === "polling" ? requestId : null);
+
+  // Polling — secondary path, enabled only when SSE has given up.
+  const statusQuery = useRequestStatus(requestId, pollingPaused || !stream.fellBack);
 
   useEffect(() => {
     if (!requestId || pollingPaused || isTerminalStatus(statusQuery.data?.status ?? "pending")) {
@@ -154,24 +160,63 @@ export default function SubmitPage() {
     return () => window.clearTimeout(timer);
   }, [requestId, pollingPaused, pollingStartedAt, statusQuery.data?.status]);
 
+  // When SSE delivers a done event, navigate to summary if we have the ID.
+  useEffect(() => {
+    if (stream.phase === "done") {
+      dispatchSubmission({ type: "PROCESSING_COMPLETE" });
+    }
+  }, [stream.phase]);
+
+  const streamPhaseLabel: Record<string, string> = {
+    extracting: "Scraping…",
+    summarizing: "Summarizing…",
+    validating: "Validating…",
+    persisting: "Saving…",
+    done: "Done",
+  };
+
   const progress = useMemo(() => {
+    // While streaming, derive progress from the phase
+    if (!stream.fellBack && stream.phase) {
+      const phaseProgress: Record<string, number> = {
+        extracting: 25,
+        summarizing: 55,
+        validating: 80,
+        persisting: 92,
+        done: 100,
+      };
+      return phaseProgress[stream.phase] ?? 10;
+    }
     if (!statusQuery.data) return 0;
     return progressFromStatus(statusQuery.data.status, statusQuery.data.progressPct);
-  }, [statusQuery.data]);
+  }, [stream.fellBack, stream.phase, statusQuery.data]);
 
   const canSubmit = urlValidation.isValid && !submitMutation.isPending && !retryMutation.isPending;
   const duplicateSummaryId = submitDuplicate?.summaryId ?? (duplicateQuery.data?.isDuplicate ? duplicateQuery.data.summaryId : null);
   const duplicateRequestId = submitDuplicate?.requestId ?? (duplicateQuery.data?.isDuplicate ? duplicateQuery.data.requestId : null);
 
   const statusHelperParts = [
-    statusQuery.data ? `Status: ${statusLabel(statusQuery.data.status)}` : null,
-    statusQuery.data?.queuePosition ? `Queue position: ${statusQuery.data.queuePosition}` : null,
-    formatEta(statusQuery.data?.estimatedSecondsRemaining),
+    !stream.fellBack && stream.phase ? (streamPhaseLabel[stream.phase] ?? null) : null,
+    stream.fellBack && statusQuery.data ? `Status: ${statusLabel(statusQuery.data.status)}` : null,
+    stream.fellBack && statusQuery.data?.queuePosition ? `Queue position: ${statusQuery.data.queuePosition}` : null,
+    stream.fellBack ? formatEta(statusQuery.data?.estimatedSecondsRemaining) : null,
   ].filter((part): part is string => Boolean(part));
 
   const statusHelperText = statusHelperParts.join(" · ");
   const completedSummaryId =
     statusQuery.data?.status === "completed" ? (statusQuery.data.summaryId ?? null) : null;
+
+  // Navigate to summary when SSE stream delivers the done event with a summary_id
+  useEffect(() => {
+    if (stream.phase !== "done") return;
+    // The stream done event may carry a summary_id; if so use it directly.
+    // Otherwise fall through to the existing polling-based navigation path.
+    const doneSection = stream.sectionsBySlug["__done_summary_id__"];
+    if (doneSection) {
+      navigate(`/library/${doneSection}`);
+    }
+    // If no summary_id in stream, polling will resolve it via statusQuery
+  }, [stream.phase, stream.sectionsBySlug, navigate]);
   const canRetryStatus = Boolean(
     statusQuery.data?.status === "failed" && (statusQuery.data.canRetry || statusQuery.data.retryable),
   );
@@ -525,7 +570,50 @@ export default function SubmitPage() {
             </p>
           )}
 
-          {requestId && statusQuery.data && (
+          {/* SSE streaming status — shown while SSE is active */}
+          {requestId && !stream.fellBack && (stream.isStreaming || stream.phase) && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--frost-gap-row)",
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: "var(--frost-font-mono)",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: "1px",
+                  color: "color-mix(in oklch, var(--frost-ink) 55%, transparent)",
+                  margin: 0,
+                }}
+              >
+                § STATUS
+              </p>
+              <MonoProgressBar
+                label="Processing status"
+                value={progress}
+                helperText={statusHelperText || undefined}
+              />
+              {completedSummaryId && (
+                <div style={{ display: "flex", gap: "var(--frost-gap-row)", flexWrap: "wrap" }}>
+                  <BracketButton onClick={handleOpenCompletedSummary}>Open summary</BracketButton>
+                </div>
+              )}
+              {stream.error && (
+                <StatusBadge
+                  severity="alarm"
+                  title="Processing failed"
+                  subtitle={stream.error.message}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Polling status — shown only when SSE has fallen back */}
+          {requestId && stream.fellBack && statusQuery.data && (
             <div
               style={{
                 display: "flex",
@@ -593,11 +681,15 @@ export default function SubmitPage() {
             </div>
           )}
 
-          {requestId && statusQuery.isLoading && (
+          {requestId && !stream.fellBack && stream.isStreaming && !stream.phase && (
+            <SparkLoading description="Connecting to stream…" />
+          )}
+
+          {requestId && stream.fellBack && statusQuery.isLoading && (
             <SparkLoading description="Connecting to status stream…" />
           )}
 
-          {requestId && statusQuery.error && (
+          {requestId && stream.fellBack && statusQuery.error && (
             <StatusBadge
               severity="warn"
               title="Status polling interrupted"

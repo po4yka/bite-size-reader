@@ -1731,6 +1731,50 @@ paths:
           $ref: '#/components/responses/TooManyRequestsError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /v1/requests/{request_id}/stream:
+    get:
+      summary: Stream summary progress events as Server-Sent Events
+      description: |
+        Returns a Server-Sent Events (SSE) stream of progress events for the given
+        request. The connection stays open until the underlying summarization reaches
+        a terminal state ('done' or 'error') or the client disconnects.
+
+        Events use the standard SSE format. The 'event:' field is one of
+        'phase' | 'section' | 'done' | 'error'; the 'data:' field is a JSON object
+        whose 'kind' matches the event field, with payload schemas as documented
+        below (StreamPhaseEvent, StreamSectionEvent, StreamDoneEvent, StreamErrorEvent).
+        The server emits a comment-line ': keepalive' heartbeat every 15s on idle.
+      operationId: streamRequest
+      tags:
+      - Streams
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Numeric request id; the authenticated user must own this request.
+      responses:
+        '200':
+          description: SSE stream open. See StreamPhaseEvent / StreamSectionEvent / StreamDoneEvent / StreamErrorEvent for payload shapes.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  Server-Sent Events stream. Each event is one of:
+                  - phase  -> StreamPhaseEvent
+                  - section -> StreamSectionEvent
+                  - done    -> StreamDoneEvent
+                  - error   -> StreamErrorEvent
+        '401':
+          description: Missing or invalid bearer token.
+        '403':
+          description: Authenticated user does not own this request.
+        '404':
+          description: Request id does not exist.
   /v1/aggregations:
     post:
       tags:
@@ -7149,6 +7193,140 @@ components:
           nullable: true
           description: Unique device identifier (optional).
 
+    StreamDoneEvent:
+      type: object
+      required:
+      - kind
+      - payload
+      - timestamp
+      - correlation_id
+      properties:
+        kind:
+          type: string
+          enum:
+          - done
+        payload:
+          type: object
+          required:
+          - request_id
+          properties:
+            summary_id:
+              type: string
+              nullable: true
+            request_id:
+              type: string
+        timestamp:
+          type: string
+          format: date-time
+        correlation_id:
+          type: string
+    StreamErrorEvent:
+      type: object
+      required:
+      - kind
+      - payload
+      - timestamp
+      - correlation_id
+      properties:
+        kind:
+          type: string
+          enum:
+          - error
+        payload:
+          type: object
+          required:
+          - code
+          - message
+          - correlation_id
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            correlation_id:
+              type: string
+        timestamp:
+          type: string
+          format: date-time
+        correlation_id:
+          type: string
+    StreamPhaseEvent:
+      type: object
+      required:
+      - kind
+      - payload
+      - timestamp
+      - correlation_id
+      properties:
+        kind:
+          type: string
+          enum:
+          - phase
+        payload:
+          type: object
+          required:
+          - phase
+          properties:
+            phase:
+              type: string
+              enum:
+              - extracting
+              - summarizing
+              - validating
+              - persisting
+              - done
+        timestamp:
+          type: string
+          format: date-time
+        correlation_id:
+          type: string
+    StreamSectionEvent:
+      type: object
+      required:
+      - kind
+      - payload
+      - timestamp
+      - correlation_id
+      properties:
+        kind:
+          type: string
+          enum:
+          - section
+        payload:
+          type: object
+          required:
+          - section
+          - content
+          - partial
+          properties:
+            section:
+              type: string
+              description: Section name from the summary contract (e.g. tldr, summary_250, key_ideas, topic_tags).
+            content:
+              type: string
+              description: For string sections, the section text; for list sections, a JSON-encoded array string.
+            partial:
+              type: boolean
+              description: True only for in-flight previews; false once the section is closed.
+        timestamp:
+          type: string
+          format: date-time
+        correlation_id:
+          type: string
+    SuccessMessageEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            type: object
+            required:
+            - message
+            properties:
+              message:
+                type: string
     SummaryPayload:
       type: object
       required:

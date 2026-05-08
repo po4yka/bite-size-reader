@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.content.summary_section_stream_assembler import SummarySectionStreamAssembler
+from app.adapters.content.streaming import StreamEvent, SummarySectionStreamAssembler, get_stream_hub
 from app.core.logging_utils import get_logger
 from app.observability.metrics import record_draft_stream_event
 
 if TYPE_CHECKING:
+    from app.adapters.content.streaming import StreamHub
     from app.adapters.external.formatting.protocols import (
         ResponseFormatterFacade as ResponseFormatter,
     )
@@ -24,6 +26,8 @@ class SummaryDraftStreamCoordinator:
     response_formatter: ResponseFormatter
     message: Any
     correlation_id: str | None = None
+    request_id: str | None = None
+    hub: StreamHub | None = None
 
     def __post_init__(self) -> None:
         self._assembler = SummarySectionStreamAssembler()
@@ -41,6 +45,23 @@ class SummaryDraftStreamCoordinator:
 
         self._section_emit_count += len(snapshots)
         record_draft_stream_event("section_emit_count", amount=len(snapshots))
+
+        if self.request_id:
+            hub = self.hub or get_stream_hub()
+            for snap in snapshots:
+                if isinstance(snap.value, list):
+                    content = json.dumps(snap.value, ensure_ascii=False)
+                else:
+                    content = snap.value
+                hub.publish(
+                    self.request_id,
+                    StreamEvent.now(
+                        kind="section",
+                        payload={"section": snap.section, "content": content, "partial": False},
+                        correlation_id=self.correlation_id or "",
+                    ),
+                )
+
         preview = self._assembler.render_preview()
         ok = await self.response_formatter.send_message_draft(self.message, preview)
         if not ok and not self._draft_fallback:

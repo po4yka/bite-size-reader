@@ -100,6 +100,14 @@ class URLFlowContextBuilder:
         title = extraction.title
         images = extraction.images
 
+        if getattr(self._cfg.runtime, "url_flow_streaming_enabled", True):
+            from app.adapters.content.streaming import StreamEvent, get_stream_hub
+
+            get_stream_hub().publish(
+                str(req_id),
+                StreamEvent.now("phase", {"phase": "extracting"}, request.correlation_id or ""),
+            )
+
         chosen_lang = choose_language(self._cfg.runtime.preferred_lang, detected)
         needs_ru_translation = not request.silent and LANG_RU not in (detected, chosen_lang)
         system_prompt = get_url_system_prompt(chosen_lang)
