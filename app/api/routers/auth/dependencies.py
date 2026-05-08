@@ -114,9 +114,14 @@ def get_current_user(
         if not user_id:
             raise TokenInvalidError("Missing user_id in token payload")
 
-        # JWT auth is fail-open when whitelist is empty (supports multi-user deployments).
-        # WebApp auth (webapp_auth.py) is fail-closed: raises if whitelist is unset.
-        if not Config.is_user_allowed(user_id, fail_open_when_empty=True):
+        # All four auth paths (JWT, WebApp, Telegram-Login, secret-login) are
+        # fail-closed when ALLOWED_USER_IDS is empty. Unifying around the
+        # secure default closes the gap previously opened by JWT-only deploys
+        # that instantiate Settings(allow_stub_telegram=True) (the lazy-load
+        # default in secret_auth._get_cfg) — that path bypasses the startup
+        # validator at app/config/settings.py:315-323. Project is owner-only
+        # per CLAUDE.md, so multi-user "fail-open" was never the design intent.
+        if not Config.is_user_allowed(user_id, fail_open_when_empty=False):
             raise AuthorizationError("User not authorized")
 
         # Validate client_id from token

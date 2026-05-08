@@ -43,6 +43,12 @@ The web client uses a hybrid auth strategy:
 
 Digest endpoints (`/v1/digest/*`) require Telegram WebApp authentication via initData (validated by backend middleware/dependencies).
 
+### Allowlist semantics (`ALLOWED_USER_IDS`)
+
+All four authentication paths — JWT (`Authorization: Bearer ...`), Telegram WebApp initData, Telegram Login Widget, and secret-key login — fail **closed** when `ALLOWED_USER_IDS` is empty: the request is rejected with `401`/`403`, regardless of token validity. The matching call sites are `app/api/routers/auth/{dependencies,webapp_auth,telegram,secret_auth}.py`. Bot-internal allowlist enforcement (`app/adapters/telegram/access_controller.py`) shares the same `Config.is_user_allowed` helper.
+
+Setting `ALLOWED_USER_IDS=""` in production is supported only as a deliberate "lock everyone out" posture (e.g. during incident response). Multi-user deployments must enumerate every Telegram user_id explicitly.
+
 ## Router and Service Boundaries
 
 FastAPI routers are transport-focused and delegate orchestration to service collaborators:
