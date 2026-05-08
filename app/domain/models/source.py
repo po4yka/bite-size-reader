@@ -36,6 +36,7 @@ class SourceKind(StrEnum):
     INSTAGRAM_POST = "instagram_post"
     INSTAGRAM_CAROUSEL = "instagram_carousel"
     INSTAGRAM_REEL = "instagram_reel"
+    GITHUB_REPOSITORY = "github_repository"
     WEB_ARTICLE = "web_article"
     TELEGRAM_POST = "telegram_post"
     TELEGRAM_POST_WITH_IMAGES = "telegram_post_with_images"

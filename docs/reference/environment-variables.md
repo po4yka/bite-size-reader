@@ -577,6 +577,32 @@ These knobs govern how long the OpenRouter chat engine spends per model and per 
 | `AGGREGATION_ARTICLE_MEDIA_ENABLED` | `true` | Attach curated article/X image assets to aggregation documents and multimodal summary requests |
 | `AGGREGATION_NON_YOUTUBE_VIDEO_ENABLED` | `true` | Enable shared Telegram/Meta video normalization with transcript/audio/OCR fallbacks |
 
+## GitHub Integration
+
+Per-user GitHub credential storage, OAuth Device Flow, and daily stars sync.
+Configuration owner: `app/config/github.py::GitHubConfig`.
+Generate the Fernet key with: `python tools/scripts/generate_github_encryption_key.py`.
+
+| Variable | Default | Required | Description | Used by |
+|----------|---------|----------|-------------|---------|
+| `GITHUB_REQUEST_TIMEOUT_SEC` | `30.0` | No | HTTP timeout (seconds) for all GitHub REST API calls | `app/adapters/github/github_api_client.py` |
+| `GITHUB_README_MAX_BYTES` | `51200` | No | Maximum README content size (bytes) to fetch and store; text is truncated at a character boundary | `app/adapters/github/platform_extractor.py` |
+| `GITHUB_CONCURRENCY_PER_USER` | `2` | No | Maximum concurrent GitHub API requests per user during sync | `app/tasks/github_sync.py` |
+| `GITHUB_OAUTH_APP_CLIENT_ID` | _(none)_ | No — OAuth Device Flow only | GitHub OAuth App client ID; PAT path works without this | `app/api/routers/auth/github.py` |
+| `GITHUB_OAUTH_APP_CLIENT_SECRET` | _(none)_ | No — OAuth Device Flow only | GitHub OAuth App client secret; stored as `SecretStr`, never logged | `app/api/routers/auth/github.py` |
+| `GITHUB_TOKEN_ENCRYPTION_KEY` | _(none)_ | Yes — when any token is stored | 32-byte URL-safe base64 Fernet key for at-rest token encryption. Missing key raises `MissingEncryptionKeyError` at first use. | `app/security/token_crypto.py` |
+| `GITHUB_SYNC_ENABLED` | `true` | No | Master switch for the Taskiq daily stars sync job; when `false`, the job is not registered with the scheduler | `app/tasks/scheduler.py` |
+| `GITHUB_SYNC_CRON` | `0 2 * * *` | No | UTC cron expression for the sync job (default: 02:00 UTC daily) | `app/tasks/scheduler.py` |
+| `GITHUB_SYNC_LLM_CONCURRENCY` | `2` | No | Maximum concurrent LLM analysis calls within a single sync run | `app/tasks/github_sync.py` |
+| `GITHUB_SYNC_LLM_DAILY_BUDGET` | `100` | No | Maximum LLM calls per calendar day; repos exceeding the cap get `pending_analysis=true` and are re-queued the next day | `app/tasks/github_sync.py` |
+
+**Notes:**
+
+- `GITHUB_TOKEN_ENCRYPTION_KEY` is the only hard requirement when the GitHub integration is used. Without it, `encrypt_token` and `decrypt_token` raise at call time, not at startup, so the rest of the API boots normally.
+- OAuth Device Flow additionally requires `GITHUB_OAUTH_APP_CLIENT_ID`, `GITHUB_OAUTH_APP_CLIENT_SECRET`, and a running Redis instance (`REDIS_URL`). `POST /v1/auth/github/device/start` returns 503 when Redis is unavailable.
+- `GITHUB_SYNC_ENABLED=false` disables only the scheduled Taskiq job. Manual ingestion via `POST /v1/repositories` and `python -m app.cli.repository` still work.
+- The `GITHUB_SYNC_LLM_DAILY_BUDGET` counter resets at the start of each sync run (not at midnight UTC). For owner-only deployments (N=1 user) the effective daily budget equals this value.
+
 ---
 
 ## Configuration Validation Checklist

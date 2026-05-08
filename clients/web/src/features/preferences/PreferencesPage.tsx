@@ -18,6 +18,7 @@ import ReadingGoalsSection from "./ReadingGoalsSection";
 import TelegramLinkSection from "./TelegramLinkSection";
 import SessionsSection from "./SessionsSection";
 import AccountSection from "./AccountSection";
+import GithubIntegrationPanel from "../repositories/GithubIntegrationPanel";
 
 function parseDeliveryTime(settings: Record<string, unknown> | null): string {
   const raw = settings?.delivery_time;
@@ -207,6 +208,7 @@ export default function PreferencesPage() {
       <TelegramLinkSection />
       <SessionsSection />
       <AccountSection />
+      <GithubIntegrationPanel />
     </section>
   );
 }

@@ -1,0 +1,315 @@
+"""Tests for app.cli.backfill_repository_embeddings."""
+
+from __future__ import annotations
+
+import types
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from app.cli import backfill_repository_embeddings as cli_mod
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_repo(
+    repo_id: int,
+    user_id: int = 1,
+    full_name: str | None = None,
+    analysis_json: dict | None = None,
+) -> MagicMock:
+    repo = MagicMock()
+    repo.id = repo_id
+    repo.user_id = user_id
+    repo.full_name = full_name or f"owner/repo-{repo_id}"
+    repo.description = None
+    repo.primary_language = None
+    repo.languages_json = {}
+    repo.topics_json = []
+    repo.readme_excerpt = None
+    repo.analysis_json = analysis_json
+    return repo
+
+
+def _make_embedding(repo_id: int, model_version: str = "1.0") -> MagicMock:
+    emb = MagicMock()
+    emb.id = repo_id * 100
+    emb.repository_id = repo_id
+    emb.model_version = model_version
+    return emb
+
+
+def _make_db_with_rows(
+    row_batches: list[list[tuple[MagicMock, MagicMock | None]]],
+) -> MagicMock:
+    """Build a fake Database whose session() returns batches in order."""
+    batch_iter = iter(row_batches)
+
+    mock_db = MagicMock()
+    mock_db.dispose = AsyncMock()
+
+    def session_ctx():
+        ctx = MagicMock()
+
+        async def _aenter(self):
+            mock_session = AsyncMock()
+            try:
+                batch = next(batch_iter)
+            except StopIteration:
+                batch = []
+            result = MagicMock()
+            result.all.return_value = batch
+            mock_session.execute = AsyncMock(return_value=result)
+            return mock_session
+
+        async def _aexit(self, *args):
+            pass
+
+        ctx.__aenter__ = _aenter
+        ctx.__aexit__ = _aexit
+        return ctx
+
+    mock_db.session = session_ctx
+    return mock_db
+
+
+def _ensure_qdrant_stub() -> None:
+    """Inject a fake qdrant_store module so tests don't need qdrant_client installed.
+
+    The CLI does a lazy ``from app.infrastructure.vector.qdrant_store import
+    QdrantVectorStore`` inside the async function body. We pre-populate
+    sys.modules so that import resolves without the real qdrant_client package.
+    """
+    import sys
+
+    qs_key = "app.infrastructure.vector.qdrant_store"
+    if qs_key not in sys.modules or not hasattr(sys.modules[qs_key], "QdrantVectorStore"):
+        stub = types.ModuleType(qs_key)
+        stub.QdrantVectorStore = MagicMock()  # type: ignore[attr-defined]
+        sys.modules[qs_key] = stub
+
+
+def _patch_infra(monkeypatch, mock_db, embedding_gen):
+    """Monkeypatch load_config, Database, embedding service, qdrant, and generator."""
+    _ensure_qdrant_stub()
+
+    fake_cfg = types.SimpleNamespace(
+        embedding=types.SimpleNamespace(
+            provider="local",
+            max_token_length=512,
+            embedding_dim=768,
+        ),
+        vector_store=types.SimpleNamespace(
+            url="http://localhost:6333",
+            api_key=None,
+            environment="test",
+            user_scope="default",
+            collection_version="v1",
+            required=False,
+            connection_timeout=5,
+        ),
+    )
+    monkeypatch.setattr(cli_mod, "load_config", lambda allow_stub_telegram=True: fake_cfg)
+    monkeypatch.setattr(cli_mod, "DatabaseConfig", lambda dsn=None: MagicMock())
+    monkeypatch.setattr(cli_mod, "Database", lambda config: mock_db)
+    monkeypatch.setattr(cli_mod, "create_embedding_service", lambda cfg: MagicMock())
+    monkeypatch.setattr(
+        cli_mod,
+        "resolve_embedding_space_identifier",
+        lambda cfg: "test-space",
+    )
+    monkeypatch.setattr(
+        cli_mod,
+        "RepositoryEmbeddingGenerator",
+        lambda **_kw: embedding_gen,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stub generator
+# ---------------------------------------------------------------------------
+
+
+class StubEmbeddingGenerator:
+    """Records calls; optionally raises on a specific repository_id."""
+
+    def __init__(self, raise_on_id: int | None = None) -> None:
+        self.calls: list[int] = []
+        self._raise_on_id = raise_on_id
+
+    async def regenerate(self, repository, *, analysis, correlation_id):
+        self.calls.append(repository.id)
+        if self._raise_on_id is not None and repository.id == self._raise_on_id:
+            raise RuntimeError(f"Forced error for repo {repository.id}")
+        result = MagicMock()
+        result.id = repository.id * 100
+        return result
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dry_run_no_writes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--dry-run: 3 repos missing embeddings → no regenerate calls, would_create=3."""
+    repos = [_make_repo(i) for i in range(1, 4)]
+    rows = [(r, None) for r in repos]
+
+    gen = StubEmbeddingGenerator()
+    db = _make_db_with_rows([rows, []])  # second batch empty → stop
+    _patch_infra(monkeypatch, db, gen)
+
+    summary = await cli_mod.backfill_repository_embeddings(dry_run=True)
+
+    assert gen.calls == [], "no regenerate calls in dry-run"
+    assert summary["would_create"] == 3
+    assert summary["embeddings_created"] == 0
+    assert summary["embeddings_refreshed"] == 0
+    assert summary["dry_run"] is True
+    db.dispose.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_creates_missing_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """3 repos with no embeddings → 3 regenerate calls, embeddings_created=3."""
+    repos = [_make_repo(i) for i in range(1, 4)]
+    rows = [(r, None) for r in repos]
+
+    gen = StubEmbeddingGenerator()
+    db = _make_db_with_rows([rows, []])
+    _patch_infra(monkeypatch, db, gen)
+
+    summary = await cli_mod.backfill_repository_embeddings(dry_run=False)
+
+    assert sorted(gen.calls) == [1, 2, 3]
+    assert summary["embeddings_created"] == 3
+    assert summary["embeddings_refreshed"] == 0
+    assert summary["errors"] == 0
+    assert summary["processed"] == 3
+
+
+@pytest.mark.asyncio
+async def test_skips_when_embedding_present_and_no_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Repos with existing embeddings and no --model-version-target → 0 writes.
+
+    When model_version_target is None the WHERE clause filters to IS NULL only,
+    so the DB returns an empty batch and the generator is never called.
+    """
+    gen = StubEmbeddingGenerator()
+    # All repos already have embeddings → the WHERE (IS NULL) returns nothing
+    db = _make_db_with_rows([[]])  # first batch already empty
+    _patch_infra(monkeypatch, db, gen)
+
+    summary = await cli_mod.backfill_repository_embeddings(
+        dry_run=False, model_version_target=None
+    )
+
+    assert gen.calls == []
+    assert summary["embeddings_created"] == 0
+    assert summary["embeddings_refreshed"] == 0
+    assert summary["processed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_refreshes_when_model_version_target_mismatches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repos with model_version='1.0', target='2.0' → 3 refreshed."""
+    repos = [_make_repo(i) for i in range(1, 4)]
+    embeddings = [_make_embedding(r.id, model_version="1.0") for r in repos]
+    rows = list(zip(repos, embeddings))
+
+    gen = StubEmbeddingGenerator()
+    db = _make_db_with_rows([rows, []])
+    _patch_infra(monkeypatch, db, gen)
+
+    summary = await cli_mod.backfill_repository_embeddings(
+        dry_run=False, model_version_target="2.0"
+    )
+
+    assert sorted(gen.calls) == [1, 2, 3]
+    assert summary["embeddings_refreshed"] == 3
+    assert summary["embeddings_created"] == 0
+    assert summary["errors"] == 0
+
+
+@pytest.mark.asyncio
+async def test_user_id_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only repos for user_id=2 are returned (WHERE clause enforced by DB mock)."""
+    user_b_repos = [_make_repo(i, user_id=2) for i in range(10, 13)]
+    rows = [(r, None) for r in user_b_repos]
+
+    gen = StubEmbeddingGenerator()
+    db = _make_db_with_rows([rows, []])
+    _patch_infra(monkeypatch, db, gen)
+
+    summary = await cli_mod.backfill_repository_embeddings(
+        dry_run=False, user_id=2
+    )
+
+    assert summary["processed"] == 3
+    assert summary["embeddings_created"] == 3
+
+
+@pytest.mark.asyncio
+async def test_idempotent_second_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Second run with same args returns 0 writes (DB returns empty batch)."""
+    gen = StubEmbeddingGenerator()
+    # Simulate: after first run all embeddings exist → query returns nothing
+    db = _make_db_with_rows([[]])
+    _patch_infra(monkeypatch, db, gen)
+
+    summary = await cli_mod.backfill_repository_embeddings(dry_run=False)
+
+    assert gen.calls == []
+    assert summary["embeddings_created"] == 0
+    assert summary["embeddings_refreshed"] == 0
+    assert summary["processed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_error_in_one_row_does_not_abort(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Generator raises on repo 2 → rows 1 and 3 still processed; errors=1."""
+    repos = [_make_repo(i) for i in [1, 2, 3]]
+    rows = [(r, None) for r in repos]
+
+    gen = StubEmbeddingGenerator(raise_on_id=2)
+    db = _make_db_with_rows([rows, []])
+    _patch_infra(monkeypatch, db, gen)
+
+    summary = await cli_mod.backfill_repository_embeddings(dry_run=False)
+
+    assert 1 in gen.calls
+    assert 2 in gen.calls
+    assert 3 in gen.calls
+    assert summary["errors"] == 1
+    assert summary["embeddings_created"] == 2
+    assert summary["processed"] == 3
+
+
+# ---------------------------------------------------------------------------
+# main() smoke tests
+# ---------------------------------------------------------------------------
+
+
+def test_main_help(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    monkeypatch.setattr(cli_mod.sys, "argv", ["prog", "--help"])
+    assert cli_mod.main() == 0
+    out = capsys.readouterr().out
+    assert "--dry-run" in out
+    assert "--batch-size" in out
+
+
+def test_main_invalid_batch_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli_mod.sys, "argv", ["prog", "--batch-size=abc"])
+    assert cli_mod.main() == 1
+
+
+def test_main_unknown_arg(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli_mod.sys, "argv", ["prog", "--unknown-flag"])
+    assert cli_mod.main() == 1

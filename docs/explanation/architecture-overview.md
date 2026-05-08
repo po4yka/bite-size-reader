@@ -218,6 +218,7 @@ Each subsystem has a canonical doc; this page is the entry point.
 | Observability | Prometheus metrics, structured logs, correlation-ID tracing, Loki / Promtail / Grafana stack. | [`docs/explanation/observability-strategy.md`](observability-strategy.md) |
 | Redis (optional) | Response cache, rate-limit store, sync session locks, distributed background-task locks. | [`docs/guides/setup-redis-caching.md`](../guides/setup-redis-caching.md) |
 | ElevenLabs TTS (optional) | Generate audio from a stored summary on demand. | `app/adapters/elevenlabs/` (no standalone doc yet) |
+| GitHub repository ingestion | Index GitHub repos as a first-class content source: manual URL ingest, daily starred-repo sync, LLM analysis, Qdrant embedding, and semantic search. | [`docs/explanation/github-repository-ingestion.md`](github-repository-ingestion.md) |
 
 ---
 

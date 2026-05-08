@@ -40,6 +40,7 @@ from .scraper import ScraperConfig
 from .signal_ingestion import SignalIngestionConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig
 from .tts import ElevenLabsConfig
+from .github import GitHubConfig
 from .twitter import TwitterConfig
 
 logger = get_logger(__name__)
@@ -185,6 +186,7 @@ class AppConfig:
     signal_ingestion: SignalIngestionConfig = field(default_factory=SignalIngestionConfig)
     otel: OtelConfig = field(default_factory=OtelConfig)
     sentry: SentryConfig = field(default_factory=SentryConfig)
+    github: GitHubConfig = field(default_factory=GitHubConfig)
 
 
 class Settings(BaseSettings):
@@ -237,6 +239,7 @@ class Settings(BaseSettings):
     signal_ingestion: SignalIngestionConfig = Field(default_factory=SignalIngestionConfig)
     otel: OtelConfig = Field(default_factory=OtelConfig)
     sentry: SentryConfig = Field(default_factory=SentryConfig)
+    github: GitHubConfig = Field(default_factory=GitHubConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -373,6 +376,7 @@ class Settings(BaseSettings):
             signal_ingestion=self.signal_ingestion,
             otel=self.otel,
             sentry=self.sentry,
+            github=self.github,
         )
 
 

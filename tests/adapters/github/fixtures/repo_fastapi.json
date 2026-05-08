@@ -1,0 +1,29 @@
+{
+  "id": 164513901,
+  "name": "fastapi",
+  "full_name": "tiangolo/fastapi",
+  "owner": {
+    "login": "tiangolo",
+    "id": 1326112,
+    "type": "User"
+  },
+  "description": "FastAPI framework, high performance, easy to learn, fast to code, ready for production",
+  "homepage": "https://fastapi.tiangolo.com",
+  "language": "Python",
+  "topics": ["api", "fastapi", "json", "openapi", "python", "rest"],
+  "stargazers_count": 75000,
+  "forks_count": 6000,
+  "watchers_count": 75000,
+  "default_branch": "master",
+  "license": {
+    "key": "mit",
+    "name": "MIT License",
+    "spdx_id": "MIT"
+  },
+  "archived": false,
+  "fork": false,
+  "is_template": false,
+  "pushed_at": "2024-01-15T10:00:00Z",
+  "created_at": "2018-12-26T00:00:00Z",
+  "html_url": "https://github.com/tiangolo/fastapi"
+}

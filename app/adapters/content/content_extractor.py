@@ -119,11 +119,18 @@ class ContentExtractor(
         if self._platform_router is not None:
             return self._platform_router
 
+        from app.adapters.github.url_patterns import is_github_repo_url
         from app.core.urls.meta import is_instagram_url, is_threads_url
         from app.core.urls.twitter import is_twitter_url
         from app.core.urls.youtube import is_youtube_url
 
         router = PlatformExtractionRouter()
+        # GitHub must be registered before the generic scraper chain so that
+        # repo URLs short-circuit the fallback path.
+        router.register(
+            predicate=is_github_repo_url,
+            factory=self._build_github_platform_extractor,
+        )
         router.register(
             predicate=is_youtube_url,
             factory=self._build_youtube_platform_extractor,
@@ -182,6 +189,87 @@ class ContentExtractor(
             scraper=self.scraper,
             firecrawl_sem=self._sem,
             lifecycle=self._platform_request_lifecycle,
+        )
+
+    def _build_github_platform_extractor(self) -> Any:
+        from app.adapters.github.platform_extractor import GitHubPlatformExtractor
+        from app.agents.repo_analysis_agent import RepoAnalysisAgent
+        from app.application.use_cases.analyze_repository import AnalyzeRepositoryUseCase
+        from app.infrastructure.embedding.embedding_factory import create_embedding_service
+        from app.infrastructure.embedding.repository_embedding import RepositoryEmbeddingGenerator
+
+        # Thin adapter: RepoAnalysisAgent expects LLMServiceProtocol.call(*, system_prompt,
+        # user_prompt, correlation_id) -> str, while ContentExtractor holds an LLMClientProtocol
+        # that exposes chat().  Bridge them here to avoid touching either side.
+        llm_client = self._quality_llm_client
+        if llm_client is None:
+            raise RuntimeError(
+                "GitHubPlatformExtractor requires an LLM client "
+                "(quality_llm_client was not provided to ContentExtractor)"
+            )
+
+        class _LLMClientAdapter:
+            """Bridges LLMClientProtocol.chat() to LLMServiceProtocol.call()."""
+
+            def __init__(self, client: Any) -> None:
+                self._client = client
+
+            async def call(
+                self,
+                *,
+                system_prompt: str,
+                user_prompt: str,
+                correlation_id: str,
+            ) -> str:
+                from app.adapter_models.llm.llm_models import LLMCallResult
+
+                result: LLMCallResult = await self._client.chat(
+                    [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ]
+                )
+                return result.response_text or ""
+
+        embedding_service = create_embedding_service(self.cfg.embedding)
+
+        try:
+            from app.core.embedding_space import resolve_embedding_space_identifier
+            from app.infrastructure.vector.qdrant_store import QdrantVectorStore
+
+            qdrant_store: Any = QdrantVectorStore(
+                url=self.cfg.vector_store.url,
+                api_key=self.cfg.vector_store.api_key,
+                environment=self.cfg.vector_store.environment,
+                user_scope=self.cfg.vector_store.user_scope,
+                collection_version=self.cfg.vector_store.collection_version,
+                embedding_space=resolve_embedding_space_identifier(self.cfg.embedding),
+                required=False,
+                connection_timeout=self.cfg.vector_store.connection_timeout,
+            )
+            if not qdrant_store.available:
+                qdrant_store = None
+        except Exception:
+            qdrant_store = None
+
+        embedding_gen = RepositoryEmbeddingGenerator(
+            embedding_service=embedding_service,
+            qdrant_store=qdrant_store,
+            db=self.db,
+            environment=self.cfg.vector_store.environment,
+            user_scope=self.cfg.vector_store.user_scope,
+        )
+        agent = RepoAnalysisAgent(llm_service=_LLMClientAdapter(llm_client))
+        analyze_use_case = AnalyzeRepositoryUseCase(
+            db=self.db,
+            agent=agent,
+            embedding_gen=embedding_gen,
+        )
+
+        return GitHubPlatformExtractor(
+            db=self.db,
+            github_config=self.cfg.github,
+            analyze_use_case=analyze_use_case,
         )
 
     async def extract_content_pure(

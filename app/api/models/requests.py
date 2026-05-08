@@ -1,6 +1,7 @@
 """Pydantic models for API request validation."""
 
 import json
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
@@ -372,3 +373,23 @@ class QuickSaveRequest(BaseModel):
     selected_text: str | None = None
     tag_names: list[str] = Field(default_factory=list)
     summarize: bool = True
+
+
+# ---------------------------------------------------------------------------
+# Repository endpoints
+# ---------------------------------------------------------------------------
+
+
+class IngestRepositoryRequest(BaseModel):
+    """Request body for ingesting a GitHub repository by URL."""
+
+    url: str = Field(..., min_length=10, max_length=500)
+
+
+class RepositoryListSort(StrEnum):
+    """Sort order for repository list."""
+
+    STARS_DESC = "stars_desc"
+    PUSHED_DESC = "pushed_desc"
+    CREATED_DESC = "created_desc"
+    FULL_NAME_ASC = "full_name_asc"

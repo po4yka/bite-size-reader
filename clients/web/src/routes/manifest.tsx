@@ -22,6 +22,8 @@ import LibraryPage from "../features/library/LibraryPage";
 import PreferencesPage from "../features/preferences/PreferencesPage";
 import SubmitPage from "../features/submit/SubmitPage";
 
+const RepositoriesPage = lazy(() => import("../features/repositories/RepositoriesPage"));
+const RepositoryDetailPage = lazy(() => import("../features/repositories/RepositoryDetailPage"));
 const CollectionsPage = lazy(() => import("../features/collections/CollectionsPage"));
 const DigestPage = lazy(() => import("../features/digest/DigestPage"));
 const CustomDigestViewPage = lazy(() => import("../features/digest/CustomDigestViewPage"));
@@ -57,6 +59,17 @@ interface AppRouteDefinition {
 }
 
 const APP_ROUTE_DEFINITIONS: readonly AppRouteDefinition[] = [
+  {
+    path: "repositories",
+    component: RepositoriesPage,
+    lazy: true,
+    nav: { label: "Repositories", icon: Catalog, group: 1 },
+  },
+  {
+    path: "repositories/:repositoryId",
+    component: RepositoryDetailPage,
+    lazy: true,
+  },
   {
     path: "library",
     component: LibraryPage,

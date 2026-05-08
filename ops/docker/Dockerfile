@@ -126,7 +126,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # alembic_runner reject it with "Alembic requires a postgresql+asyncpg:// URL".
 CMD ["sh", "-c", "\
   python -m app.cli.migrate_db && \
-  taskiq worker app.tasks.broker:broker app.tasks.digest app.tasks.rss --workers ${TASKIQ_WORKER_CONCURRENCY:-4} & WORKER_PID=$! ; \
+  taskiq worker app.tasks.broker:broker app.tasks.digest app.tasks.rss app.tasks.github_sync --workers ${TASKIQ_WORKER_CONCURRENCY:-4} & WORKER_PID=$! ; \
   taskiq scheduler app.tasks.scheduler:scheduler --skip-first-run & SCHED_PID=$! ; \
   python -m bot ; STATUS=$? ; \
   kill $WORKER_PID $SCHED_PID 2>/dev/null ; exit $STATUS"]

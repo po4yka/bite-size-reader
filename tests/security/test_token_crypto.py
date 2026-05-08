@@ -1,0 +1,63 @@
+import pytest
+from cryptography.fernet import Fernet
+
+from app.security.token_crypto import (
+    encrypt_token,
+    decrypt_token,
+    reset_key_cache,
+    MissingEncryptionKeyError,
+    InvalidEncryptedTokenError,
+)
+
+
+@pytest.fixture(autouse=True)
+def _reset_cache():
+    reset_key_cache()
+    yield
+    reset_key_cache()
+
+
+def _set_valid_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+
+
+def test_encrypt_decrypt_round_trip(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_valid_key(monkeypatch)
+    plaintext = "ghp_thisIsATestToken12345"
+    ct = encrypt_token(plaintext)
+    assert isinstance(ct, bytes)
+    assert ct != plaintext.encode()
+    assert decrypt_token(ct) == plaintext
+
+
+def test_missing_key_raises_at_use(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_TOKEN_ENCRYPTION_KEY", raising=False)
+    with pytest.raises(MissingEncryptionKeyError):
+        encrypt_token("anything")
+
+
+def test_malformed_key_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN_ENCRYPTION_KEY", "not-a-valid-fernet-key")
+    with pytest.raises(MissingEncryptionKeyError):
+        encrypt_token("x")
+
+
+def test_invalid_ciphertext_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_valid_key(monkeypatch)
+    with pytest.raises(InvalidEncryptedTokenError):
+        decrypt_token(b"this is not a valid ciphertext")
+
+
+def test_decrypt_with_different_key_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_valid_key(monkeypatch)
+    ct = encrypt_token("secret")
+    reset_key_cache()
+    monkeypatch.setenv("GITHUB_TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    with pytest.raises(InvalidEncryptedTokenError):
+        decrypt_token(ct)
+
+
+def test_empty_plaintext_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_valid_key(monkeypatch)
+    with pytest.raises(ValueError):
+        encrypt_token("")

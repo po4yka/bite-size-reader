@@ -108,9 +108,61 @@ this turns subscribed channels into a periodic recap.
 - **MCP server** — Expose summaries and search to external AI agents via the Model Context Protocol. See [MCP Server](docs/reference/mcp-server.md).
 - **Multi-agent pipeline** — ContentExtraction, Summarization, Validation, and WebSearch agents coordinate via an orchestrator with self-correction. See [Multi-Agent Architecture](docs/explanation/multi-agent-architecture.md).
 - **Semantic search** — Qdrant vector store with local (sentence-transformers) or Gemini embedding providers.
+- **GitHub repositories** — Index your starred GitHub repos as a searchable knowledge base. Paste a `github.com/<owner>/<repo>` URL for immediate ingestion, or connect a PAT / OAuth Device Flow token and let the daily sync import and LLM-analyze your entire stars list automatically. See [Setup: GitHub integration](#setup-github-integration-optional) below.
 - **Channel digests** — Subscribe to Telegram channels and receive periodic structured recaps.
 - **RSS feeds** — Ingest RSS feed items as summarization sources.
 - **Text-to-speech** — Optional ElevenLabs TTS audio generation for summaries.
+
+## Setup: GitHub integration (optional)
+
+Ratatoskr can index your GitHub repositories as a first-class searchable archive.
+All three steps below require a running Qdrant instance (`QDRANT_URL`).
+
+**1. Generate a Fernet encryption key** (required for token storage):
+
+```bash
+python tools/scripts/generate_github_encryption_key.py
+```
+
+Copy the output into your `.env`:
+
+```env
+GITHUB_TOKEN_ENCRYPTION_KEY=<paste key here>
+```
+
+**2. Connect a GitHub token** — choose one method:
+
+- **Fine-grained PAT (recommended, no extra config):** Create a token at
+  [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens/new)
+  with scopes `read:user` and `public_repo`. Submit it via the web UI's GitHub
+  Integration settings panel (`POST /v1/auth/github/pat`).
+
+- **OAuth Device Flow (optional, requires an OAuth App):** Register a GitHub
+  OAuth App at [github.com/settings/applications/new](https://github.com/settings/applications/new).
+  Use any name (e.g., "Ratatoskr") and any homepage URL; no callback URL is needed.
+  Copy the client ID and secret into `.env`:
+
+  ```env
+  GITHUB_OAUTH_APP_CLIENT_ID=<client_id>
+  GITHUB_OAUTH_APP_CLIENT_SECRET=<client_secret>
+  ```
+
+  Then use the Device Flow button in the GitHub Integration settings panel. A
+  short code and `github.com/login/device` URL are displayed; enter the code in
+  your browser to authorize. Device Flow requires a running Redis instance
+  (`REDIS_URL`).
+
+**3. Sync runs automatically** at 02:00 UTC daily (`GITHUB_SYNC_CRON`). To
+trigger a manual sync:
+
+```bash
+python -m app.cli.sync_github_stars --user-id <your_telegram_user_id>
+```
+
+A budget cap (`GITHUB_LLM_DAILY_BUDGET=100`) limits LLM analysis calls per run;
+repos beyond the cap show as "still indexing" in the web UI and are re-queued the
+next day. See [GitHub Repository Ingestion](docs/explanation/github-repository-ingestion.md)
+for architecture details and all configuration options.
 
 ## Configure & extend
 

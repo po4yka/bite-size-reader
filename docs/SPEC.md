@@ -109,4 +109,88 @@ Prometheus metrics, structured logs, correlation-ID tracing, and the Loki/Promta
 
 ---
 
-*Last updated: 2026-05-05*
+## GitHub Repository Schema
+
+Three tables added by the GitHub repository ingestion subsystem
+(`app/db/models/repository.py`). They have no foreign key to `summaries`;
+repos use the `RepoAnalysis` contract, not the 35-field `Summary` contract.
+
+### `repositories`
+
+| Column | Type | Null | Purpose |
+|--------|------|------|---------|
+| `id` | integer PK | no | Auto-increment surrogate key |
+| `github_id` | bigint | no | GitHub's stable numeric repo ID |
+| `owner` | varchar(100) | no | Owner login |
+| `name` | varchar(200) | no | Repo name |
+| `full_name` | varchar(320) | no | `owner/name` |
+| `url` | varchar(500) | no | Canonical `https://github.com/owner/repo` URL |
+| `homepage_url` | varchar(500) | yes | Project homepage |
+| `description` | text | yes | GitHub description |
+| `primary_language` | varchar(100) | yes | Dominant language |
+| `languages_json` | jsonb | yes | Full language breakdown: `{"Python": 12345}` |
+| `topics_json` | jsonb | yes | Topic list: `["web", "async"]` |
+| `stars` | integer | no | Star count; refreshed every sync |
+| `forks` | integer | no | Fork count; refreshed every sync |
+| `watchers` | integer | no | Watcher count; refreshed every sync |
+| `default_branch` | varchar(100) | yes | Default branch for README fetch |
+| `license_spdx` | varchar(100) | yes | SPDX license identifier |
+| `is_archived` | boolean | no | Archived on GitHub |
+| `is_fork` | boolean | no | Fork of another repo |
+| `is_template` | boolean | no | Template repo |
+| `pushed_at` | timestamptz | yes | Last push time |
+| `created_at_github` | timestamptz | yes | Repo creation time on GitHub |
+| `readme_excerpt` | text | yes | First `GITHUB_README_MAX_BYTES` of raw README |
+| `readme_etag` | varchar(200) | yes | HTTP ETag; reserved for conditional fetch |
+| `analysis_json` | jsonb | yes | LLM-derived `RepoAnalysis` fields |
+| `analysis_model` | varchar(200) | yes | Model used; surfaced for re-analyze affordance |
+| `analysis_at` | timestamptz | yes | When analysis was last computed |
+| `content_hash` | varchar(64) | yes | SHA256 of `description + sorted(topics) + readme_excerpt` |
+| `source` | repo_source enum | no | `manual` or `starred` |
+| `is_starred` | boolean | no | Currently in user's GitHub stars |
+| `user_id` | bigint FK | no | References `users.telegram_user_id` |
+| `last_synced_at` | timestamptz | no | Last metadata pull from GitHub |
+| `pending_analysis` | boolean | no | LLM analysis deferred by budget cap |
+| `created_at` | timestamptz | no | Row insertion time |
+| `updated_at` | timestamptz | no | Last modification time |
+
+Unique constraint: `(user_id, github_id)`.
+Indexes: `(user_id, is_starred)`, `(user_id, primary_language)`, `(user_id, pushed_at DESC)`, `(github_id)`.
+
+### `repository_embeddings`
+
+| Column | Type | Null | Purpose |
+|--------|------|------|---------|
+| `id` | integer PK | no | Surrogate key |
+| `repository_id` | integer FK unique | no | References `repositories.id` ON DELETE CASCADE |
+| `model_name` | varchar(200) | no | Embedding model identifier |
+| `model_version` | varchar(50) | no | Version; backfill CLI detects staleness on mismatch |
+| `embedding_blob` | bytea | no | Serialized float32 embedding |
+| `dimensions` | integer | no | Vector dimensionality |
+| `language` | varchar(10) | yes | Language of embedded text |
+| `created_at` | timestamptz | no | Row insertion time |
+
+### `user_github_integrations`
+
+| Column | Type | Null | Purpose |
+|--------|------|------|---------|
+| `id` | integer PK | no | Surrogate key |
+| `user_id` | bigint FK unique | no | References `users.telegram_user_id` ON DELETE CASCADE |
+| `auth_method` | github_auth_method enum | no | `pat` or `oauth_device` |
+| `encrypted_token` | bytea | no | Fernet-encrypted access token |
+| `token_scopes` | varchar(500) | yes | Scopes from GitHub token validation |
+| `github_login` | varchar(100) | yes | Cached GitHub username |
+| `github_user_id` | bigint | yes | GitHub's numeric user ID |
+| `status` | github_integration_status enum | no | `active`, `needs_reauth`, or `revoked` |
+| `last_synced_at` | timestamptz | yes | Most recent sync completion time |
+| `last_sync_cursor` | varchar(500) | yes | Reserved for pagination cursor |
+| `last_full_sync_at` | timestamptz | yes | Most recent full-pagination sync completion |
+| `notified_needs_reauth_at` | timestamptz | yes | When the one-shot reauth DM was sent |
+| `created_at` | timestamptz | no | Row insertion time |
+| `updated_at` | timestamptz | no | Last modification time |
+
+→ [GitHub Repository Ingestion](explanation/github-repository-ingestion.md) for data-flow, sync algorithm, and cost model.
+
+---
+
+*Last updated: 2026-05-08*

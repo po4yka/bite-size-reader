@@ -45,6 +45,7 @@ from app.api.routers import (
     notifications,
     proxy,
     quick_save,
+    repositories,
     requests,
     rss,
     rules,
@@ -58,6 +59,7 @@ from app.api.routers import (
     user,
     webhooks,
 )
+from app.api.routers.auth import github as github_auth
 from app.api.routers.auth import get_current_user
 from app.config import Config
 from app.core.logging_utils import get_logger, setup_json_logging
@@ -204,9 +206,12 @@ app.middleware("http")(correlation_id_middleware)
 
 # Include routers
 app.include_router(auth.router, prefix="/v1/auth", tags=["Authentication"])
+
+app.include_router(github_auth.router)
 app.include_router(aggregation.router, prefix="/v1/aggregations", tags=["Aggregations"])
 app.include_router(collections.router, prefix="/v1/collections", tags=["Collections"])
 app.include_router(summaries.router, prefix="/v1/summaries", tags=["Summaries"])
+app.include_router(repositories.router)
 app.include_router(summaries.router, prefix="/v1/articles", tags=["Articles"])
 app.include_router(requests.router, prefix="/v1/requests", tags=["Requests"])
 app.include_router(search.router, prefix="/v1", tags=["Search"])

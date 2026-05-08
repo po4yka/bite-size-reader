@@ -47,6 +47,15 @@ from app.db.models.digest import (
     DigestDelivery,
     UserDigestPreference,
 )
+from app.db.models.repository import (
+    REPOSITORY_MODELS,
+    GitHubAuthMethod,
+    GitHubIntegrationStatus,
+    Repository,
+    RepositoryEmbedding,
+    RepoSource,
+    UserGitHubIntegration,
+)
 from app.db.models.rss import RSS_MODELS, RSSFeed, RSSFeedItem, RSSFeedSubscription, RSSItemDelivery
 from app.db.models.rules import (
     RULE_MODELS,
@@ -76,6 +85,7 @@ ALL_MODELS: tuple[type[Base], ...] = (
     *BATCH_MODELS,
     *COLLECTION_MODELS,
     *DIGEST_MODELS,
+    *REPOSITORY_MODELS,
     *RSS_MODELS,
     *RULE_MODELS,
     *SIGNAL_MODELS,
@@ -90,6 +100,7 @@ __all__ = [
     "COLLECTION_MODELS",
     "CORE_MODELS",
     "DIGEST_MODELS",
+    "REPOSITORY_MODELS",
     "RSS_MODELS",
     "RULE_MODELS",
     "SIGNAL_MODELS",
@@ -126,7 +137,12 @@ __all__ = [
     "RSSFeedItem",
     "RSSFeedSubscription",
     "RSSItemDelivery",
+    "GitHubAuthMethod",
+    "GitHubIntegrationStatus",
     "RefreshToken",
+    "Repository",
+    "RepositoryEmbedding",
+    "RepoSource",
     "Request",
     "RuleExecutionLog",
     "Source",
@@ -143,6 +159,7 @@ __all__ = [
     "User",
     "UserBackup",
     "UserCredential",
+    "UserGitHubIntegration",
     "UserDevice",
     "UserDigestPreference",
     "UserGoal",

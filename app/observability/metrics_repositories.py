@@ -1,0 +1,71 @@
+"""Prometheus metrics for GitHub repository sync and search.
+
+Counters and histograms for:
+- github_stars_sync task runs and per-run repo counts
+- Repository semantic search latency
+
+Usage:
+    from app.observability.metrics_repositories import (
+        GITHUB_SYNC_RUNS_TOTAL,
+        REPOSITORY_SEARCH_LATENCY_SECONDS,
+    )
+
+    GITHUB_SYNC_RUNS_TOTAL.labels(status="ok").inc()
+
+    with REPOSITORY_SEARCH_LATENCY_SECONDS.time():
+        results = await search(...)
+"""
+
+from __future__ import annotations
+
+from app.observability.metrics import PROMETHEUS_AVAILABLE, REGISTRY
+
+if PROMETHEUS_AVAILABLE:
+    from prometheus_client import Counter, Histogram
+
+    GITHUB_SYNC_RUNS_TOTAL = Counter(
+        "ratatoskr_github_sync_runs_total",
+        "Number of github_stars_sync runs by status",
+        ["status"],  # "ok" | "partial" | "failed"
+        registry=REGISTRY,
+    )
+
+    GITHUB_SYNC_REPOS_IMPORTED_TOTAL = Counter(
+        "ratatoskr_github_sync_repos_imported_total",
+        "Total newly imported starred repositories across all sync runs",
+        registry=REGISTRY,
+    )
+
+    GITHUB_SYNC_REPOS_UPDATED_TOTAL = Counter(
+        "ratatoskr_github_sync_repos_updated_total",
+        "Total starred repositories updated (metadata refresh) across all sync runs",
+        registry=REGISTRY,
+    )
+
+    GITHUB_SYNC_REPOS_UNSTARRED_TOTAL = Counter(
+        "ratatoskr_github_sync_repos_unstarred_total",
+        "Total repositories soft-unstarred across all sync runs",
+        registry=REGISTRY,
+    )
+
+    GITHUB_SYNC_LLM_CALLS_TOTAL = Counter(
+        "ratatoskr_github_sync_llm_calls_total",
+        "Repository analysis LLM calls during sync, by trigger",
+        ["trigger"],  # "made" | "deferred"
+        registry=REGISTRY,
+    )
+
+    REPOSITORY_SEARCH_LATENCY_SECONDS = Histogram(
+        "ratatoskr_repository_search_latency_seconds",
+        "Repository semantic search latency",
+        buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+        registry=REGISTRY,
+    )
+
+else:
+    GITHUB_SYNC_RUNS_TOTAL = None
+    GITHUB_SYNC_REPOS_IMPORTED_TOTAL = None
+    GITHUB_SYNC_REPOS_UPDATED_TOTAL = None
+    GITHUB_SYNC_REPOS_UNSTARRED_TOTAL = None
+    GITHUB_SYNC_LLM_CALLS_TOTAL = None
+    REPOSITORY_SEARCH_LATENCY_SECONDS = None

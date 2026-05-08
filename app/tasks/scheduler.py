@@ -84,6 +84,17 @@ class _AppConfigScheduleSource(ScheduleSource):
                 )
             )
 
+        if cfg.github.sync_enabled:
+            tasks.append(
+                ScheduledTask(
+                    task_name="ratatoskr.github.sync_stars",
+                    cron=cfg.github.sync_cron,
+                    labels={"job": "github_stars_sync"},
+                    args=[],
+                    kwargs={},
+                )
+            )
+
         return tasks
 
     async def get_schedules(self) -> list[ScheduledTask]:

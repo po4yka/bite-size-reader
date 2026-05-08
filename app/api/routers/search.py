@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import uuid
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 
@@ -188,3 +189,105 @@ async def check_duplicate(
         include_summary=include_summary,
     )
     return success_response(payload)
+
+
+def _get_repo_search_service(request: Request) -> Any:
+    """Build RepositorySearchService from the app runtime."""
+    from app.di.api import resolve_api_runtime
+    from app.infrastructure.search.repository_search_service import RepositorySearchService
+
+    runtime = resolve_api_runtime(request)
+    db = get_session_manager(request)
+    cfg = runtime.cfg
+
+    qdrant = runtime.search.vector_store
+    if qdrant is None:
+        return None
+
+    return RepositorySearchService(
+        embedding_service=runtime.search.embedding_service,
+        qdrant_store=qdrant,
+        db=db,
+        environment=cfg.vector_store.environment,
+        user_scope=cfg.vector_store.user_scope,
+    )
+
+
+def _get_repo_correlation_id(request: Request) -> str:
+    return getattr(request.state, "correlation_id", None) or str(uuid.uuid4())
+
+
+@router.get("/search/repositories")
+async def search_repositories(
+    q: str = Query(..., min_length=2, max_length=200),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    min_similarity: float = Query(0.2, ge=0.0, le=1.0),
+    languages: list[str] | None = Query(None),
+    topics: list[str] | None = Query(None),
+    is_starred: bool | None = Query(None),
+    source: Literal["manual", "starred"] | None = Query(None),
+    user: dict[str, Any] = Depends(get_current_user),
+    service: Any = Depends(_get_repo_search_service),
+    correlation_id: str = Depends(_get_repo_correlation_id),
+) -> Any:
+    """Semantic search over GitHub repositories."""
+    from app.api.models.responses.common import PaginationInfo
+    from app.api.models.responses.repositories import (
+        RepositorySearchHit,
+        RepositorySearchResponse,
+    )
+
+    if service is None:
+        raise ProcessingError("Repository search is not available (Qdrant not configured)")
+
+    try:
+        results = await service.search(
+            q,
+            user_id=user["user_id"],
+            languages=languages,
+            topics=topics,
+            is_starred=is_starred,
+            source=source,
+            limit=limit,
+            offset=offset,
+            min_similarity=min_similarity,
+            correlation_id=correlation_id,
+        )
+    except Exception as exc:
+        logger.error("repository_search_failed: %s", exc, exc_info=True)
+        raise ProcessingError(f"Repository search failed: {exc!s}") from exc
+
+    hits = []
+    for item in results.items:
+        hits.append(
+            RepositorySearchHit(
+                id=item.repository_id,
+                github_id=item.github_id,
+                full_name=item.full_name,
+                owner=item.owner,
+                name=item.name,
+                description=item.description,
+                primary_language=item.primary_language,
+                topics=item.topics,
+                stars=item.stars,
+                forks=0,
+                is_starred=item.is_starred,
+                is_archived=False,
+                pushed_at=item.pushed_at,
+                last_synced_at=item.pushed_at,  # best effort
+                pending_analysis=False,
+                has_analysis=False,
+                source="manual",
+                distance=item.distance,
+            )
+        )
+
+    pagination = PaginationInfo(
+        total=results.total,
+        limit=limit,
+        offset=offset,
+        has_more=(offset + len(hits)) < results.total,
+    )
+    response = RepositorySearchResponse(results=hits, pagination=pagination, query=q)
+    return success_response(response, pagination=pagination)

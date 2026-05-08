@@ -325,6 +325,7 @@ Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch
 - **PDF Export** -- Summary export to PDF via weasyprint
 - **Background Scheduling** -- APScheduler-based background task processing with Redis distributed locks
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Telethon userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow. Ops reference: `docs/reference/digest-subsystem-ops.md`.
+- **GitHub Repository Ingestion** -- Indexes GitHub repositories as a first-class content source alongside articles and videos. Two paths: manual URL paste (any `github.com/<owner>/<repo>` URL) and a Taskiq daily cron job that syncs the authenticated user's starred repos. LLM analysis produces a `RepoAnalysis` JSON (purpose, tech_stack, architecture_summary, key_concepts) stored in `repositories.analysis_json`; Fernet-encrypted PAT or OAuth Device Flow tokens live in `user_github_integrations`. Semantic search uses the shared Qdrant collection with an `entity_type="repository"` discriminator. Key files: `app/adapters/github/` (API client, URL patterns, platform extractor), `app/tasks/github_sync.py` (Taskiq cron body), `app/api/routers/repositories.py` (CRUD + ingest endpoints), `app/api/routers/auth/github.py` (PAT and Device Flow auth). Architecture doc: `docs/explanation/github-repository-ingestion.md`.
 
 ### Safety Hooks
 
@@ -392,6 +393,10 @@ When making changes, these are the most critical files to understand:
 - **`bot.py`** -- Entrypoint (wires everything together)
 - **`docs/SPEC.md`** -- Full technical specification (canonical reference)
 - **`DESIGN.md`** -- Frost design system specification (DESIGN.md format, https://github.com/google-labs-code/design.md). Canonical reference for tokens, typography, components, and UI rules for the web client.
+- **`app/adapters/github/`** -- GitHub API client, URL pattern matcher, platform extractor, and exception types for repository ingestion
+- **`app/db/models/repository.py`** -- `Repository`, `RepositoryEmbedding`, `UserGitHubIntegration` ORM models and their Postgres enum types
+- **`app/tasks/github_sync.py`** -- Taskiq task `ratatoskr.github.sync_stars`; daily per-user starred-repo sync with budget cap and reauth handling
+- **`app/security/token_crypto.py`** -- Fernet encrypt/decrypt for at-rest GitHub tokens; key loaded lazily from `GITHUB_TOKEN_ENCRYPTION_KEY`
 
 ## Impeccable Design Skills
 
@@ -468,6 +473,17 @@ SCRAPER_SCRAPEGRAPH_TIMEOUT_SEC=90
 DIGEST_ENABLED=false                # Enable channel digest subsystem
 API_BASE_URL=http://localhost:8000  # Mobile API base URL (for session init)
 
+# GitHub Integration (optional)
+GITHUB_TOKEN_ENCRYPTION_KEY=        # Required when storing any token; generate with tools/scripts/generate_github_encryption_key.py
+GITHUB_OAUTH_APP_CLIENT_ID=         # OAuth Device Flow only; PAT path works without this
+GITHUB_OAUTH_APP_CLIENT_SECRET=     # OAuth Device Flow only
+GITHUB_SYNC_ENABLED=true            # Master switch for daily starred-repo sync
+GITHUB_SYNC_CRON="0 2 * * *"        # UTC cron for sync job (default 02:00 UTC)
+GITHUB_LLM_DAILY_BUDGET=100         # Max LLM analysis calls per sync run; excess deferred
+GITHUB_LLM_CONCURRENCY=2            # Max concurrent LLM calls within one sync run
+GITHUB_REQUEST_TIMEOUT_SEC=30.0     # HTTP timeout for GitHub API calls
+GITHUB_README_MAX_BYTES=51200       # Max README size to fetch (50 KB default)
+
 # Embedding provider (optional -- defaults to local sentence-transformers)
 EMBEDDING_PROVIDER=local              # "local" (sentence-transformers) or "gemini"
 GEMINI_API_KEY=                        # Required when provider=gemini
@@ -484,7 +500,7 @@ Full reference: `docs/reference/environment-variables.md`
 
 ---
 
-**Last Updated:** 2026-05-04
+**Last Updated:** 2026-05-08
 
 For questions about the codebase, always refer to:
 
