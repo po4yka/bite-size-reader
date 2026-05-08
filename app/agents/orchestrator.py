@@ -33,6 +33,22 @@ class PipelineStage(StrEnum):
     COMPLETE = "complete"
 
 
+class PipelineStageError(RuntimeError):
+    """Pipeline failure with the failing stage attached for structured diagnostics.
+
+    The orchestrator's outer catch handler logs the `stage` field so network
+    errors, extraction failures, and summarization rejections can be told apart
+    without scraping exception messages.
+    """
+
+    def __init__(
+        self, stage: str, message: str, *, cause: Exception | None = None
+    ) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.cause = cause
+
+
 class RetryStrategy(StrEnum):
     """Retry strategy types."""
 
@@ -196,7 +212,10 @@ class AgentOrchestrator:
 
         if not extraction_result.success:
             self._log("error", f"Extraction failed: {extraction_result.error}", correlation_id)
-            raise Exception(f"Content extraction failed: {extraction_result.error}") from None
+            raise PipelineStageError(
+                stage=PipelineStage.EXTRACTION,
+                message=f"Content extraction failed: {extraction_result.error}",
+            ) from None
 
         extracted_output = extraction_result.output
         self._log(
@@ -219,7 +238,10 @@ class AgentOrchestrator:
             self._log(
                 "error", f"Summarization failed: {summarization_result.error}", correlation_id
             )
-            raise Exception(f"Summarization failed: {summarization_result.error}") from None
+            raise PipelineStageError(
+                stage=PipelineStage.SUMMARIZATION,
+                message=f"Summarization failed: {summarization_result.error}",
+            ) from None
 
         summary_output = summarization_result.output
         self._log(
@@ -395,12 +417,17 @@ class AgentOrchestrator:
                         attempts=attempts,
                     )
                 except Exception as e:
+                    extra: dict[str, Any] = {
+                        "url": url,
+                        "correlation_id": correlation_id,
+                    }
+                    if isinstance(e, PipelineStageError):
+                        extra["stage"] = e.stage
                     log_exception(
                         logger,
                         "batch_url_processing_failed",
                         e,
-                        url=url,
-                        correlation_id=correlation_id,
+                        **extra,
                     )
                     # For failures, we don't know the exact attempts, use 1 as fallback
                     return BatchPipelineOutput(
@@ -428,6 +455,7 @@ class AgentOrchestrator:
         """Execute pipeline with configurable retry strategy; raises after all attempts fail."""
         retry_config = input_data.retry_config or RetryConfig()
         last_error = None
+        last_exception: Exception | None = None
 
         for attempt in range(1, retry_config.max_attempts + 1):
             try:
@@ -445,6 +473,7 @@ class AgentOrchestrator:
 
             except Exception as e:
                 last_error = str(e)
+                last_exception = e
                 logger.warning(
                     f"[Retry] Attempt {attempt} failed: {e}",
                     extra={"correlation_id": input_data.correlation_id},
@@ -463,7 +492,11 @@ class AgentOrchestrator:
         # All attempts exhausted
         error_msg = f"Pipeline failed after {retry_config.max_attempts} attempts: {last_error}"
         logger.error(error_msg, extra={"correlation_id": input_data.correlation_id})
-        raise Exception(error_msg) from None
+        raise PipelineStageError(
+            stage="pipeline_retry",
+            message=error_msg,
+            cause=last_exception,
+        ) from None
 
     def _calculate_retry_delay(
         self, attempt: int, strategy: RetryStrategy, config: RetryConfig

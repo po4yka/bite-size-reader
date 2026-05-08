@@ -11,6 +11,7 @@ from app.agents.orchestrator import (
     PipelineInput,
     PipelineOutput,
     PipelineStage,
+    PipelineStageError,
     RetryConfig,
     RetryStrategy,
 )
@@ -94,9 +95,10 @@ class TestAgentOrchestrator(unittest.IsolatedAsyncioTestCase):
             language="en",
         )
 
-        with self.assertRaises(Exception) as context:
+        with self.assertRaises(PipelineStageError) as context:
             await self.orchestrator.execute_pipeline(input_data)
 
+        self.assertEqual(context.exception.stage, PipelineStage.EXTRACTION)
         self.assertIn("Content extraction failed", str(context.exception))
         self.assertIn("404 Not Found", str(context.exception))
 
@@ -120,9 +122,10 @@ class TestAgentOrchestrator(unittest.IsolatedAsyncioTestCase):
             language="en",
         )
 
-        with self.assertRaises(Exception) as context:
+        with self.assertRaises(PipelineStageError) as context:
             await self.orchestrator.execute_pipeline(input_data)
 
+        self.assertEqual(context.exception.stage, PipelineStage.SUMMARIZATION)
         self.assertIn("Summarization failed", str(context.exception))
         self.assertIn("after 3 attempts", str(context.exception))
 
