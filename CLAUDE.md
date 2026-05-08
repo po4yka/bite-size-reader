@@ -10,7 +10,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - Accepts YouTube video URLs, downloads them in 1080p, extracts transcripts, and generates summaries
 - Accepts forwarded channel posts and summarizes them directly
 - Returns structured JSON summaries with a strict contract
-- Stores all artifacts (Telegram messages, crawl results, video downloads, LLM calls, summaries) in SQLite
+- Stores all artifacts (Telegram messages, crawl results, video downloads, LLM calls, summaries) in PostgreSQL via SQLAlchemy 2.0 + asyncpg
 - Exposes a web frontend (`clients/web/`) served by FastAPI on `/web/*`
 - Runs as a single Docker container with owner-only access control
 
@@ -24,7 +24,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - youtube-transcript-api (YouTube transcript extraction)
 - ffmpeg (video/audio merging for yt-dlp)
 - OpenRouter API (OpenAI-compatible LLM completions)
-- SQLite (persistence with Peewee ORM)
+- PostgreSQL 16 (persistence via SQLAlchemy 2.0 + asyncpg, async sessions; Alembic migrations)
 - httpx (async HTTP client)
 - pydantic / pydantic-settings (validation, configuration)
 - trafilatura, spacy (lightweight sentence tokenizer via spacy.blank())
@@ -109,9 +109,18 @@ tools/
 
 ## Database Models
 
-48 Peewee model classes registered in `ALL_MODELS` (`app/db/models.py`):
+SQLAlchemy 2.0 typed declarative models registered in `ALL_MODELS` (`app/db/models/__init__.py`), grouped by file under `app/db/models/`:
 
-`User`, `Chat`, `Request`, `AggregationSession`, `AggregationSessionItem`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `TopicSearchIndex` (FTS5), `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `AudioGeneration`, `AttachmentProcessing`, `ClientSecret`, `Collection`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`, `UserDevice`, `RefreshToken`, `BatchSession`, `BatchSessionItem`, `Channel`, `ChannelCategory`, `ChannelSubscription`, `ChannelPost`, `ChannelPostAnalysis`, `DigestDelivery`, `UserDigestPreference`, `SummaryFeedback`, `CustomDigest`, `SummaryHighlight`, `UserGoal`, `Tag`, `SummaryTag`, `WebhookSubscription`, `WebhookDelivery`, `AutomationRule`, `RuleExecutionLog`, `ImportJob`, `UserBackup`, `RSSFeed`, `RSSFeedSubscription`, `RSSFeedItem`, `RSSItemDelivery`
+- `core.py` — `User`, `Chat`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `AudioGeneration`, `AttachmentProcessing`, `UserDevice`, `RefreshToken`, `ClientSecret`
+- `aggregation.py` — `AggregationSession`, `AggregationSessionItem`
+- `batch.py` — `BatchSession`, `BatchSessionItem`
+- `collections.py` — `Collection`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`
+- `digest.py` — `Channel`, `ChannelCategory`, `ChannelSubscription`, `ChannelPost`, `ChannelPostAnalysis`, `DigestDelivery`, `UserDigestPreference`
+- `rss.py` — `RSSFeed`, `RSSFeedSubscription`, `RSSFeedItem`, `RSSItemDelivery`
+- `rules.py` — `WebhookSubscription`, `WebhookDelivery`, `AutomationRule`, `RuleExecutionLog`, `ImportJob`, `UserBackup`
+- `signal.py` — `Source`, `Subscription`, `FeedItem`, `Topic`, `UserSignal`
+- `topic_search.py` — `TopicSearchIndex` (Postgres TSVECTOR + GIN; replaces the former FTS5 virtual table)
+- `user_content.py` — `SummaryFeedback`, `CustomDigest`, `SummaryHighlight`, `UserGoal`, `Tag`, `SummaryTag`
 
 ## Summary JSON Contract
 
@@ -224,10 +233,10 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
    - Ensure backward compatibility with existing DB summaries
 
 3. **Database Schema Changes:**
-   - Use `app/cli/migrate_db.py` for migrations
-   - Update `app/db/models.py` (Peewee ORM models)
+   - Add a SQLAlchemy 2.0 model under `app/db/models/<area>.py` and re-export from `app/db/models/__init__.py`
+   - Generate the Alembic revision: `alembic revision --autogenerate -m "<short summary>"`; hand-review the diff before committing
+   - Apply via `python -m app.cli.migrate_db` (runs `alembic upgrade head` against `DATABASE_URL`)
    - Document in docs/SPEC.md data model section
-   - Consider migration path for existing data
 
 4. **Telegram Message Handling:**
    - All messages flow through `message_router.py`
@@ -249,7 +258,7 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 
 7. **Concurrency:**
    - Semaphore-based rate limiting for Firecrawl/OpenRouter (`MAX_CONCURRENT_CALLS`)
-   - Async/await throughout (Telethon, httpx, SQLite via peewee-async patterns)
+   - Async/await throughout (Telethon, httpx, PostgreSQL via SQLAlchemy 2.0 `AsyncSession` + asyncpg). Postgres MVCC handles write concurrency natively — no application-level locking
    - Optional `uvloop` for async performance
 
 8. **Web Frontend Changes (`clients/web/`):**
@@ -296,7 +305,7 @@ When `WEB_SEARCH_ENABLED=true`, the bot enriches summaries with current web cont
 1. **Correlation IDs:** Every request gets a unique `correlation_id` -- use it to trace through logs and DB
 2. **Debug Payloads:** Set `DEBUG_PAYLOADS=1` to log Firecrawl/OpenRouter request/response previews (Authorization redacted)
 3. **CLI Runner:** Use `python -m app.cli.summary` to test URL processing without Telegram
-4. **Database Inspection:** SQLite at `DB_PATH` (default: `/data/ratatoskr.db`) -- use any SQLite browser
+4. **Database Inspection:** PostgreSQL via `DATABASE_URL` -- `docker exec -it ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr` for ad-hoc queries; any standard PG client (DBeaver, pgcli, TablePlus) works
 5. **Logs:** Structured JSON logs to stdout; use `LOG_LEVEL=DEBUG` for verbose traces
 6. **Scraper Chain:** Each provider logs success/failure with provider name. Check logs for `scraper` context to see which provider served the request and which ones failed in the fallback chain. Config in `app/config/scraper.py` (`ScraperConfig`)
 
@@ -346,8 +355,8 @@ Claude Code hooks provide automatic safety checks. See `docs/reference/claude-co
 ### Debugging a Failing Summarization
 
 1. Find `correlation_id` from error message
-2. Query SQLite: `SELECT * FROM requests WHERE id = '<correlation_id>'`
-3. Check `crawl_results` for Firecrawl response
+2. Query PostgreSQL: `docker exec -it ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "SELECT * FROM requests WHERE correlation_id = '<correlation_id>'"`
+3. Check `crawl_results` for the scraper-chain response
 4. Check `llm_calls` for OpenRouter requests/responses
 5. Inspect `summaries` table for final JSON payload
 6. Review logs for structured events with matching `correlation_id`

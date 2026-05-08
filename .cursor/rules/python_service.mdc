@@ -7,7 +7,7 @@ alwaysApply: true
 
 # Python Service Coding Guidelines
 
-- Use async/await for all I/O (Pyrogram, httpx, SQLite/Peewee) and avoid blocking operations.
+- Use async/await for all I/O (Telethon, httpx, PostgreSQL via SQLAlchemy 2.0 `AsyncSession` + asyncpg) and avoid blocking operations.
 - Keep layers isolated: Telegram adapters, content pipeline (Firecrawl + YouTube), OpenRouter client, DB models, and agents/orchestrator.
 - Enforce summary contract validation and URL normalization/deduping before processing; add retries with backoff for Firecrawl/OpenRouter.
 - Redact sensitive headers in logs and include correlation IDs in structured logging.

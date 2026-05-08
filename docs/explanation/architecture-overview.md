@@ -101,17 +101,17 @@ flowchart LR
     Redis -.-> LLMSummarizer
     Redis -.-> MobileAPI
     Qdrant[(Qdrant)] -.-> SearchService
-    MCPServer[MCP server] -.-> SQLite
+    MCPServer[MCP server] -.-> Postgres
     MCPServer -.-> SearchService
   end
 
   ForwardProcessor --> LLMSummarizer
   LLMSummarizer -.->|optional| WebSearch[WebSearchAgent]
   WebSearch -.-> Firecrawl[(Firecrawl sidecar)]
-  ContentExtractor --> SQLite[(SQLite)]
-  MessagePersistence --> SQLite
-  LLMSummarizer --> SQLite
-  DigestService --> SQLite
+  ContentExtractor --> Postgres[(PostgreSQL)]
+  MessagePersistence --> Postgres
+  LLMSummarizer --> Postgres
+  DigestService --> Postgres
   MessageRouter --> ResponseFormatter
   ResponseFormatter --> TGClient
   TGClient -->|replies| Telegram
@@ -120,13 +120,13 @@ flowchart LR
   ResponseFormatter --> Logs[(Structured + audit logs)]
 
   subgraph MobileAPI[Mobile API]
-    FastAPI[FastAPI + JWT] --> SQLite
+    FastAPI[FastAPI + JWT] --> Postgres
     FastAPI --> SearchService[SearchService]
     FastAPI --> DigestFacade
     DigestFacade --> DigestAPIService
-    DigestAPIService --> SQLite
+    DigestAPIService --> Postgres
     FastAPI --> SystemMaint[SystemMaintenanceService]
-    SystemMaint --> SQLite
+    SystemMaint --> Postgres
     SystemMaint -.-> Redis
   end
 ```
@@ -147,7 +147,7 @@ For the mobile API, routers are transport-focused and delegate
 infrastructure orchestration to dedicated services (`DigestFacade`,
 `SystemMaintenanceService`) rather than performing DB / Redis / file
 operations inline. `ResponseFormatter` centralizes Telegram replies and
-audit logging while all artifacts land in SQLite.
+audit logging while all artifacts land in PostgreSQL.
 
 ---
 
@@ -164,9 +164,9 @@ for the rationale.
 | Adapters | `app/adapters/` | Talk to the outside world: Telegram, scrapers, OpenRouter, YouTube, Twitter, ElevenLabs. No business logic; translate I/O to / from domain DTOs. |
 | Domain | `app/domain/` | DDD entities, value objects, and pure-Python domain services. No I/O. |
 | Application | `app/application/` | Use cases, DTOs, application services that orchestrate domain logic and adapter ports. |
-| Infrastructure | `app/infrastructure/` | Concrete persistence (SQLite), event bus, cache (Redis), HTTP clients, vector store, embedding factories. |
+| Infrastructure | `app/infrastructure/` | Concrete persistence (PostgreSQL), event bus, cache (Redis), HTTP clients, vector store, embedding factories. |
 | Core | `app/core/` | Cross-cutting utilities: URL normalisation, JSON parsing / repair, summary-contract validation, structured logging. |
-| Database | `app/db/` | Peewee ORM models and `DatabaseSessionManager` (the sole DB entry point). 48 model classes registered in `ALL_MODELS` (`app/db/models.py`). |
+| Database | `app/db/` | SQLAlchemy 2.0 typed declarative models under `app/db/models/` and the async `Database` engine/session factory in `app/db/session.py` (the sole DB entry point). Alembic migrations in `app/db/alembic/`. |
 | DI | `app/di/` | Runtime composition only — concrete dependency graphs are not assembled outside this package. |
 
 ---
@@ -187,11 +187,11 @@ Telegram update
                     └─ LLMSummarizer
                        └─ OpenRouter (with retries; web-search enrichment optional)
                           └─ Summary JSON (validated against summary_contract.py)
-                             ├─ SQLite: summaries / llm_calls / requests / crawl_results
+                             ├─ PostgreSQL: summaries / llm_calls / requests / crawl_results
                              └─ ResponseFormatter → TelegramClient → Telegram reply
 ```
 
-Every step writes to SQLite (full request, all crawl attempts, every
+Every step writes to PostgreSQL (full request, all crawl attempts, every
 LLM call, the final summary) and stamps the correlation ID into
 structured logs so a single ID lets you trace from the Telegram message
 to the OpenRouter response and back.
@@ -211,7 +211,7 @@ Each subsystem has a canonical doc; this page is the entry point.
 | Web search enrichment | Inject up-to-date context via self-hosted Firecrawl search (`FIRECRAWL_SELF_HOSTED_ENABLED=true`) before final summary. | [`docs/guides/enable-web-search.md`](../guides/enable-web-search.md) |
 | Channel digest | Userbot reads subscribed channels; scheduled digests via `/digest`. | [`docs/SPEC.md`](../SPEC.md) (`Channel digest` section) |
 | Mixed-source aggregation | Bundle one or more links + forwards / attachments into a single synthesised result. | [`docs/SPEC.md`](../SPEC.md) (`Mixed-source aggregation` section) |
-| Search (FTS5 + vector) | Local full-text plus optional Qdrant semantic / hybrid search. | [`docs/guides/setup-qdrant-vector-search.md`](../guides/setup-qdrant-vector-search.md) |
+| Search (Postgres tsvector + vector) | PostgreSQL `TSVECTOR` + `GIN` full-text plus optional Qdrant semantic / hybrid search. | [`docs/guides/setup-qdrant-vector-search.md`](../guides/setup-qdrant-vector-search.md) |
 | Mobile API | FastAPI + JWT, sync v2, ratelimit, summary CRUD, aggregations. | [`docs/reference/mobile-api.md`](../reference/mobile-api.md) |
 | Web frontend | React SPA served on `/web/*`; library, search, submit, collections, digest, preferences, admin. Uses a project-owned design shim under `clients/web/src/design/`. | [`docs/reference/frontend-web.md`](../reference/frontend-web.md) |
 | MCP server | Model Context Protocol server: 22 tools and 16 resources for external AI agents (OpenClaw, Claude Desktop). | [`docs/reference/mcp-server.md`](../reference/mcp-server.md) |
@@ -259,8 +259,8 @@ This doc keeps our layering consistent across Telegram, CLI, and the mobile API.
 
 ## DB Layer
 
-- `DatabaseSessionManager` (`app/db/session.py`) is the sole database entry point. It handles connection management, migrations, FTS5 indexing, and async operations via `AsyncRWLock`.
-- New business workflows should go through application use cases and repository ports in `app/infrastructure/persistence/sqlite/repositories/*`, not through the session manager directly.
+- `Database` (`app/db/session.py`) is the sole database entry point. It owns the SQLAlchemy 2.0 `AsyncEngine` + `async_sessionmaker[AsyncSession]`, exposes `session()` / `transaction()` async context managers and the `with_serialization_retry` decorator, and runs Alembic migrations via `migrate()`.
+- New business workflows should go through application use cases and repository ports in `app/infrastructure/persistence/repositories/*`, not through the session factory directly.
 
 ## Current seam examples (2026-03)
 
@@ -291,7 +291,7 @@ sequenceDiagram
   participant UC as Use Cases (URL/Forward)
   participant Extract as Extractors (ScraperChain/YouTube)
   participant LLM as Summarizer+Validator
-  participant DB as SQLite/Persistence
+  participant DB as PostgreSQL/Persistence
 
   TG->>Router: incoming message / API call
   Router->>UC: normalize + route

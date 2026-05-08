@@ -4,7 +4,7 @@ A self-hosted Telegram bot that turns the things you read, watch, and
 forward into a searchable, structured archive — web articles,
 YouTube videos, Twitter / X posts, forwarded channel messages, or any
 mix of those bundled together. Owner-only by design, runs as a single
-Docker container, stores everything in SQLite.
+Docker container, stores everything in PostgreSQL.
 
 [![CI](https://github.com/po4yka/ratatoskr/actions/workflows/ci.yml/badge.svg)](https://github.com/po4yka/ratatoskr/actions/workflows/ci.yml)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue)](https://www.python.org/downloads/)

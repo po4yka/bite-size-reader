@@ -46,7 +46,8 @@ the variable is handled after this change.
 | `OPENROUTER_MODEL`, `OPENROUTER_FALLBACK_MODELS`, `OPENROUTER_LONG_CONTEXT_MODEL`, `OPENROUTER_FLASH_MODEL`, `OPENROUTER_FLASH_FALLBACK_MODELS`, `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE` | `app/config/llm.py::OpenRouterConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
 | `YOUTUBE_*` | `app/config/media.py::YouTubeConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
 | `TWITTER_*` | `app/config/twitter.py::TwitterConfig` | optional-defaulted | Move to `ratatoskr.yaml`; keep disabled unless explicitly needed |
-| `DB_PATH`, `DB_OPERATION_TIMEOUT`, `DB_MAX_RETRIES`, `DB_JSON_*` | `app/config/runtime.py::RuntimeConfig`, `app/config/database.py::DatabaseConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
+| `DATABASE_URL`, `POSTGRES_PASSWORD` | `app/config/database.py::DatabaseConfig` | required | Set in `.env`; do not commit |
+| `DB_OPERATION_TIMEOUT`, `DB_MAX_RETRIES`, `DB_JSON_*` | `app/config/runtime.py::RuntimeConfig`, `app/config/database.py::DatabaseConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
 | `SUMMARY_CONTRACT_BACKEND`, `MIGRATION_SHADOW_MODE_*`, `MIGRATION_INTERFACE_*`, `MIGRATION_TELEGRAM_RUNTIME_TIMEOUT_MS`, `MIGRATION_CUTOVER_EVENTS_FILE`, `MIGRATION_RELEASE_WINDOW_DAYS` | legacy migration runtime controls | deprecated/removable | Remove; Phase 1 startup rejects deprecated shadow-mode env vars |
 | `LOG_LEVEL`, `DEBUG_PAYLOADS`, `REQUEST_TIMEOUT_SEC`, `PREFERRED_LANG`, `MAX_CONCURRENT_CALLS`, `SUMMARY_STREAMING_*` | `app/config/runtime.py::RuntimeConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
 | `TELEGRAM_MAX_*`, `TELEGRAM_MIN_MESSAGE_INTERVAL_MS`, `TELEGRAM_DRAFT_*` | `app/config/telegram.py::TelegramLimitsConfig`, `TelegramConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
@@ -441,17 +442,18 @@ Controls which embedding backend generates vectors for semantic search.
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `DB_PATH` | `/data/ratatoskr.db` | SQLite database path |
-| `DB_BACKUP_ENABLED` | `1` | Enable automatic backups (0/1) |
+| `DATABASE_URL` | _(required)_ | PostgreSQL DSN, e.g. `postgresql+asyncpg://ratatoskr_app:${POSTGRES_PASSWORD}@postgres:5432/ratatoskr` |
+| `POSTGRES_PASSWORD` | _(required)_ | Password for the `ratatoskr_app` role; injected into the compose `postgres` service and used to assemble `DATABASE_URL` |
+| `DB_BACKUP_ENABLED` | `1` | Enable scheduled `pg_dump` backups (0/1) |
 | `DB_BACKUP_INTERVAL_MINUTES` | `360` | Backup interval |
 | `DB_BACKUP_RETENTION` | `14` | Backup retention (days) |
-| `DB_BACKUP_DIR` | `/data/backups` | Backup directory |
-| `DB_OPERATION_TIMEOUT` | `30.0` | Database operation timeout (seconds) |
-| `DB_MAX_RETRIES` | `3` | Retries for transient DB errors |
-| `DB_JSON_MAX_SIZE` | `10000000` | Max JSON payload size (bytes, 10MB) |
-| `DB_JSON_MAX_DEPTH` | `20` | Max JSON nesting depth |
-| `DB_JSON_MAX_ARRAY_LENGTH` | `10000` | Max JSON array length |
-| `DB_JSON_MAX_DICT_KEYS` | `1000` | Max JSON dictionary keys |
+| `DB_BACKUP_DIR` | `/data/backups` | Backup directory inside the bot container |
+| `DB_OPERATION_TIMEOUT` | `30.0` | Per-operation timeout (seconds) |
+| `DB_MAX_RETRIES` | `3` | Retries on transient `serialization_failure` / deadlock |
+| `DB_JSON_MAX_SIZE` | `10000000` | Max JSONB payload size validated at the application layer (bytes, 10MB) |
+| `DB_JSON_MAX_DEPTH` | `20` | Max JSON nesting depth validated at the application layer |
+| `DB_JSON_MAX_ARRAY_LENGTH` | `10000` | Max JSON array length validated at the application layer |
+| `DB_JSON_MAX_DICT_KEYS` | `1000` | Max JSON dictionary keys validated at the application layer |
 
 ## Telegram Limits
 
@@ -558,7 +560,7 @@ Use this checklist to verify your configuration before deploying:
 
 ### ✅ Performance & Storage
 
-- [ ] **Database path writable**: `DB_PATH` directory exists and is writable
+- [ ] **Postgres reachable**: `docker exec ratatoskr-postgres pg_isready -U ratatoskr_app -d ratatoskr` returns ok; `DATABASE_URL` matches the running role/db
 - [ ] **YouTube storage configured**: `YOUTUBE_STORAGE_PATH` has sufficient space
 - [ ] **Concurrency tuned**: `MAX_CONCURRENT_CALLS` appropriate for your rate limits
 - [ ] **Log level set**: `LOG_LEVEL=INFO` for production (DEBUG for troubleshooting)

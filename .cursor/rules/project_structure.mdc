@@ -8,8 +8,8 @@ alwaysApply: true
 # File and Module Organization
 
 - `bot.py` wires DI and starts the Telegram bot.
-- `app/` contains core packages: adapters (`telegram/`, `content/`, `youtube/`, `openrouter/`, `external/`), `core/` utilities (URL normalization, summary contract, logging), `db/` (SQLite + Peewee models), `agents/`, `cli/`, `api/` (FastAPI mobile endpoints), `services/`, `domain/`, and `prompts/`.
+- `app/` contains core packages: adapters (`telegram/`, `content/`, `youtube/`, `openrouter/`, `external/`), `core/` utilities (URL normalization, summary contract, logging), `db/` (PostgreSQL + SQLAlchemy 2.0 typed declarative models under `db/models/`, `Database` async-engine factory in `db/session.py`, Alembic in `db/alembic/`), `agents/`, `cli/`, `api/` (FastAPI mobile endpoints), `services/`, `domain/`, and `prompts/`.
 - `SPEC.md` and `.docs/` are the canonical references for architecture, requirements, tests, and ADRs.
 - `tests/` holds unit/integration/E2E tests (pytest + pytest-asyncio).
-- `Dockerfile` builds the runtime image; persistent data (SQLite, downloads) live under `/data`.
+- `Dockerfile` builds the runtime image; relational state lives in the dedicated `ratatoskr-postgres` container (named volume `ratatoskr_postgres_data`); on-disk artefacts (video downloads, generated audio, backups) live under `/data` in the bot container.
 - Keep business logic separated from transport layers (Telegram, FastAPI, CLI).
