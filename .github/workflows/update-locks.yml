@@ -50,10 +50,15 @@ jobs:
       - name: Refresh uv.lock
         run: uv lock
 
-      - name: Compile locked requirements (runtime)
-        run: uv pip compile --python-version 3.13 pyproject.toml -o requirements.txt
+      # Use the same `uv export --no-dev` invocation as ci.yml's prepare-environment
+      # job and the Makefile `lock-uv` target. `uv pip compile` re-resolves from
+      # pyproject.toml (a different resolution strategy), which historically
+      # produced different output than `uv export` and triggered false
+      # lockfile-drift alerts on the next push.
+      - name: Export locked requirements (runtime)
+        run: uv export --no-dev --format requirements-txt -p 3.13 -o requirements.txt
 
-      - name: Compile locked requirements (dev)
+      - name: Export locked requirements (dev)
         run: uv export --only-group dev --no-hashes --format requirements-txt -p 3.13 -o requirements-dev.txt
 
       - name: Check for changes
@@ -74,13 +79,13 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ env.ACTIONS_PR_TOKEN }}
-          commit-message: "chore(lock): update requirements via uv compile"
+          commit-message: "chore(lock): update requirements via uv export"
           title: "chore(lock): update requirements"
           body: |
             Automated lockfile refresh from pyproject.toml.
 
             - Updated `uv.lock` with `uv lock`.
-            - Updated requirements.txt and requirements-dev.txt using `uv pip compile`.
+            - Updated requirements.txt and requirements-dev.txt using `uv export`.
           branch: chore/update-locks
           delete-branch: true
           labels: dependencies, automated pr
@@ -95,13 +100,13 @@ jobs:
         continue-on-error: true
         uses: peter-evans/create-pull-request@v8
         with:
-          commit-message: "chore(lock): update requirements via uv compile"
+          commit-message: "chore(lock): update requirements via uv export"
           title: "chore(lock): update requirements"
           body: |
             Automated lockfile refresh from pyproject.toml.
 
             - Updated `uv.lock` with `uv lock`.
-            - Updated requirements.txt and requirements-dev.txt using `uv pip compile`.
+            - Updated requirements.txt and requirements-dev.txt using `uv export`.
           branch: chore/update-locks
           delete-branch: true
           labels: dependencies, automated pr
