@@ -45,8 +45,16 @@ export function useSubmitUrl() {
 }
 
 export function useRetryRequest() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (requestId: string) => retryRequest(requestId),
+    onSuccess: (_data, requestId) => {
+      // The backend creates a NEW request for each retry (correlation_id="<old>-retry-N").
+      // The original request stays in "failed" state permanently, so its cached status
+      // entry is now stale. Invalidate it so any subscriber re-fetches the terminal state
+      // rather than continuing to see outdated in-progress data.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.requests.status(requestId) });
+    },
   });
 }
 
