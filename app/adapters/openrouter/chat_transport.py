@@ -344,16 +344,21 @@ class ChatTransport:
         except Exception as exc:
             raise_if_cancelled(exc)
             latency = int((time.perf_counter() - started) * 1000)
+            exc_type = type(exc).__name__
+            exc_msg = str(exc)
             logger.warning(
                 "openrouter_stream_request_failed",
                 extra={
                     "request_id": request_id,
                     "model": model,
-                    "error": str(exc),
+                    "error": exc_msg,
+                    "error_type": exc_type,
+                    "error_repr": repr(exc),
+                    "latency_ms": latency,
                 },
             )
             return AttemptOutcome(
-                error_text=f"stream_request_failed: {exc}",
+                error_text=f"stream_request_failed: {exc_type}: {exc_msg or '<empty>'}",
                 latency=latency,
                 retry=RetryDirective(
                     rf_mode=payload.rf_mode_current,

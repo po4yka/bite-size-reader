@@ -245,12 +245,20 @@ class LLMWorkflowExecutionMixin:
         sem_timeout = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
         llm_timeout, timeout_source = await self._resolve_llm_timeout(request.model_override)
 
-        # Compute per-model timeout: divide total budget among models in fallback chain
+        # Compute per-model timeout: divide total budget among models in fallback chain,
+        # then enforce a minimum floor so slow models in long ladders are not starved.
+        # The floor (LLM_PER_MODEL_TIMEOUT_MIN_SEC, default 120s) can push the worst-case
+        # total runtime past llm_timeout when every model fails — that is the intended
+        # trade-off: a coherent answer from one slow model beats a guaranteed-fast
+        # cascade of timeouts.
         fallback_models = request.fallback_models_override or getattr(
             self.openrouter, "_fallback_models", ()
         )
         num_models = 1 + len(fallback_models or ())
-        per_model_timeout = llm_timeout / max(num_models, 1)
+        per_model_min = float(
+            getattr(self.cfg.runtime, "llm_per_model_timeout_min_sec", 120.0)
+        )
+        per_model_timeout = max(per_model_min, llm_timeout / max(num_models, 1))
 
         logger.debug(
             "llm_timeout_resolved",
@@ -259,6 +267,7 @@ class LLMWorkflowExecutionMixin:
                 "model": request.model_override,
                 "llm_timeout_sec": llm_timeout,
                 "per_model_timeout_sec": per_model_timeout,
+                "per_model_min_sec": per_model_min,
                 "num_models": num_models,
                 "timeout_source": timeout_source,
             },

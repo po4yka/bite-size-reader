@@ -23,12 +23,14 @@ def _active_env_assignments(path: Path) -> list[str]:
 def test_env_example_exposes_only_first_run_required_assignments() -> None:
     env_vars = _active_env_assignments(Path(".env.example"))
 
-    assert len(env_vars) <= 7
+    assert len(env_vars) <= 9
     assert env_vars == [
         "API_ID",
         "API_HASH",
         "BOT_TOKEN",
         "ALLOWED_USER_IDS",
+        "POSTGRES_PASSWORD",
+        "DATABASE_URL",
         "OPENROUTER_API_KEY",
     ]
 
