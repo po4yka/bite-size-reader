@@ -177,10 +177,25 @@ async def test_dedupe_and_summary_version_increment(
 
     bot = _make_bot(database)
     bot_any = cast("Any", bot)
-    bot_any._firecrawl = FakeFirecrawl()
+    fake_firecrawl = FakeFirecrawl()
     fake_or = FakeOpenRouter()
-    bot_any._llm_client = fake_or
-    bot_any._sync_client_dependencies()
+
+    # Wire fakes directly into the sub-components that use them.
+    if hasattr(bot_any, "url_processor"):
+        extractor = getattr(bot_any.url_processor, "content_extractor", None)
+        if extractor is not None:
+            extractor.firecrawl = fake_firecrawl
+        chunker = getattr(bot_any.url_processor, "content_chunker", None)
+        if chunker is not None:
+            chunker.openrouter = fake_or
+        runtime = getattr(bot_any.url_processor, "summarization_runtime", None)
+        if runtime is not None:
+            runtime.openrouter = fake_or
+            runtime.workflow.openrouter = fake_or
+            runtime.search_enricher._openrouter = fake_or
+            runtime.insights_generator._openrouter = fake_or
+            runtime.metadata_helper._openrouter = fake_or
+            runtime.article_generator._openrouter = fake_or
 
     msg = FakeMessage()
     await bot._handle_url_flow(msg, url, correlation_id="cid1")

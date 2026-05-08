@@ -13,10 +13,19 @@ def _make_bot():
 
     bot = TelegramBot.__new__(TelegramBot)
     bot.cfg = MagicMock()
-    bot._firecrawl = MagicMock()
-    bot._firecrawl.aclose = AsyncMock()
-    bot._llm_client = MagicMock()
-    bot._llm_client.aclose = AsyncMock()
+
+    # Wire a minimal _runtime.core so _shutdown can reach scraper_chain / llm_client.
+    scraper_chain_mock = MagicMock()
+    scraper_chain_mock.aclose = AsyncMock()
+    llm_client_mock = MagicMock()
+    llm_client_mock.aclose = AsyncMock()
+    core_mock = MagicMock()
+    core_mock.scraper_chain = scraper_chain_mock
+    core_mock.llm_client = llm_client_mock
+    runtime_mock = MagicMock()
+    runtime_mock.core = core_mock
+    bot._runtime = runtime_mock
+
     return bot
 
 
@@ -24,14 +33,14 @@ def _make_bot():
 async def test_shutdown_closes_firecrawl_client():
     bot = _make_bot()
     await bot._shutdown()
-    bot._firecrawl.aclose.assert_awaited_once()
+    bot._runtime.core.scraper_chain.aclose.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_shutdown_closes_llm_client():
     bot = _make_bot()
     await bot._shutdown()
-    bot._llm_client.aclose.assert_awaited_once()
+    bot._runtime.core.llm_client.aclose.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -49,11 +58,11 @@ async def test_shutdown_cleans_openrouter_pool():
 async def test_shutdown_tolerates_client_close_failure():
     """Shutdown must not crash if a client's aclose() raises."""
     bot = _make_bot()
-    bot._firecrawl.aclose = AsyncMock(side_effect=RuntimeError("close failed"))
+    bot._runtime.core.scraper_chain.aclose = AsyncMock(side_effect=RuntimeError("close failed"))
     # Should not raise
     await bot._shutdown()
-    # LLM client should still be closed even if firecrawl fails
-    bot._llm_client.aclose.assert_awaited_once()
+    # LLM client should still be closed even if scraper chain close fails
+    bot._runtime.core.llm_client.aclose.assert_awaited_once()
 
 
 @pytest.mark.asyncio

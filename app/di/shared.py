@@ -22,6 +22,7 @@ from app.di.types import CoreDependencies
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from app.adapters.content.scraper.protocol import ContentScraperProtocol
     from app.application.ports.requests import RequestRepositoryPort
     from app.application.ports.summaries import SummaryRepositoryPort
     from app.application.services.related_reads_service import RelatedReadsService
@@ -90,7 +91,7 @@ def build_scraper_chain(
     cfg: AppConfig,
     *,
     audit: Callable[[str, str, dict[str, Any]], None] | None = None,
-) -> Any:
+) -> ContentScraperProtocol:
     """Construct the content scraper chain.
 
     Centralised here so the architecture lint
@@ -180,7 +181,7 @@ def build_url_processor(
     *,
     cfg: AppConfig,
     db: Database,
-    firecrawl: Any,
+    firecrawl: ContentScraperProtocol,
     openrouter: Any,
     response_formatter: Any,
     audit_func: Callable[[str, str, dict[str, Any]], None],

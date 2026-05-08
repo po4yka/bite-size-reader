@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.article_media import extract_firecrawl_image_assets
+
+if TYPE_CHECKING:
+    from app.adapters.content.scraper.protocol import ContentScraperProtocol
 from app.adapters.content.quality_filters import detect_low_value_content
 from app.adapters.twitter.article_quality import is_low_quality_article_content
 from app.core.async_utils import raise_if_cancelled
@@ -27,7 +30,7 @@ class TwitterFirecrawlExtractor:
     def __init__(
         self,
         *,
-        firecrawl: Any,
+        firecrawl: ContentScraperProtocol,
         firecrawl_sem: Any,
         schedule_crawl_persistence: Any,
         request_repo: Any,

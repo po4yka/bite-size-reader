@@ -81,9 +81,6 @@ class TelegramBot:
             llm_client=self._llm_client,
         )
 
-        # Sync dependencies (in case they were updated)
-        self._sync_client_dependencies()
-
         # Lifecycle helpers for background startup/shutdown orchestration.
         self._lifecycle = TelegramLifecycleManager(self)
         self._backup_task: asyncio.Task[None] | None = None
@@ -154,18 +151,19 @@ class TelegramBot:
                 raise_if_cancelled(e)
                 logger.warning("shutdown_url_processor_close_failed", exc_info=True)
 
-        # 1. Close Firecrawl client
-        firecrawl = getattr(self, "_firecrawl", None)
-        if firecrawl is not None and hasattr(firecrawl, "aclose"):
+        # 1. Close the scraper chain (multi-provider; aclose propagates to all rungs)
+        _core = getattr(getattr(self, "_runtime", None), "core", None)
+        scraper_chain = getattr(_core, "scraper_chain", None)
+        if scraper_chain is not None and hasattr(scraper_chain, "aclose"):
             try:
                 async with asyncio.timeout(drain_timeout):
-                    await firecrawl.aclose()
+                    await scraper_chain.aclose()
             except Exception as e:
                 raise_if_cancelled(e)
-                logger.warning("shutdown_firecrawl_close_failed", exc_info=True)
+                logger.warning("shutdown_scraper_chain_close_failed", exc_info=True)
 
         # 2. Close LLM client
-        llm_client = getattr(self, "_llm_client", None)
+        llm_client = getattr(_core, "llm_client", None)
         if llm_client is not None and hasattr(llm_client, "aclose"):
             try:
                 async with asyncio.timeout(drain_timeout):
@@ -221,34 +219,6 @@ class TelegramBot:
             return str(path).replace(str(Path.home()), "~")
         except Exception:
             return path
-
-    def _sync_client_dependencies(self) -> None:
-        """Ensure helper components reference the active external clients."""
-        firecrawl = getattr(self, "_firecrawl", None)
-        llm_client = getattr(self, "_llm_client", None)
-
-        if hasattr(self, "url_processor"):
-            extractor = getattr(self.url_processor, "content_extractor", None)
-            if extractor is not None:
-                extractor.firecrawl = firecrawl
-
-            chunker = getattr(self.url_processor, "content_chunker", None)
-            if chunker is not None:
-                chunker.openrouter = llm_client
-
-            runtime = getattr(self.url_processor, "summarization_runtime", None)
-            if runtime is not None:
-                runtime.openrouter = llm_client
-                runtime.workflow.openrouter = llm_client
-                runtime.search_enricher._openrouter = llm_client
-                runtime.insights_generator._openrouter = llm_client
-                runtime.metadata_helper._openrouter = llm_client
-                runtime.article_generator._openrouter = llm_client
-
-        if hasattr(self, "forward_processor"):
-            forward_summarizer = getattr(self.forward_processor, "summarizer", None)
-            if forward_summarizer is not None:
-                forward_summarizer.openrouter = llm_client
 
     def _get_backup_settings(self) -> tuple[bool, int, int, str | None]:
         """Return sanitized backup configuration values."""
@@ -702,12 +672,8 @@ class TelegramBot:
         await self.message_handler.handle_message(message)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """Track client updates so helper components stay in sync."""
+        """Re-bind reply callbacks on the response formatter when they are replaced."""
         super().__setattr__(name, value)
-        if name in {"_firecrawl", "_openrouter"}:
-            # During ``__init__`` the helper attributes may not exist yet.
-            if hasattr(self, "_sync_client_dependencies"):
-                self._sync_client_dependencies()
         if name in {"_safe_reply", "_reply_json"} and hasattr(self, "response_formatter"):
             self.response_formatter.set_reply_callbacks(
                 safe_reply_func=getattr(self, "_safe_reply", None),

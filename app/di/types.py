@@ -4,8 +4,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    import asyncio
     from collections.abc import Callable
 
+    from app.adapters.content.scraper.protocol import ContentScraperProtocol
+    from app.adapters.external.firecrawl.client import FirecrawlClient
+    from app.adapters.llm.protocol import LLMClientProtocol
     from app.config import AppConfig
     from app.db.session import Database
 
@@ -15,11 +19,11 @@ class CoreDependencies:
     cfg: AppConfig
     db: Database
     audit_sink: Callable[[str, str, dict[str, Any]], None]
-    semaphore_factory: Callable[[], Any]
-    llm_client: Any
-    scraper_chain: Any
-    response_formatter: Any
-    firecrawl_client: Any | None = None
+    semaphore_factory: Callable[[], asyncio.Semaphore]
+    llm_client: LLMClientProtocol
+    scraper_chain: ContentScraperProtocol
+    response_formatter: Any  # ResponseFormatter has no standalone protocol yet
+    firecrawl_client: FirecrawlClient | None = None
 
 
 @dataclass(frozen=True, slots=True)
