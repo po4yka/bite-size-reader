@@ -68,6 +68,10 @@ jobs:
           context: .
           file: ops/docker/Dockerfile
           push: true
+          # arm64 covers the Raspberry Pi 5 deployment described in
+          # ops/docker/docker-compose.monitoring.yml. setup-qemu-action above
+          # provides the cross-build emulation for the non-native platform.
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
