@@ -328,7 +328,7 @@ class ModelRoutingConfig(BaseModel):
         validation_alias="MODEL_ROUTING_QUICK_THRESHOLD_TOKENS",
     )
     long_context_threshold_tokens: int = Field(
-        default=80000,
+        default=180000,
         validation_alias="MODEL_ROUTING_LONG_CONTEXT_THRESHOLD_TOKENS",
     )
 
@@ -382,7 +382,7 @@ class ModelRoutingConfig(BaseModel):
     @classmethod
     def _validate_threshold(cls, value: Any) -> int:
         if value in (None, ""):
-            return 80000
+            return 180000
         try:
             threshold = int(str(value))
         except ValueError as exc:

@@ -167,7 +167,7 @@ Optional routing layer that selects different models by content tier (technical,
 | `MODEL_ROUTING_TECHNICAL` | `deepseek/deepseek-v4-pro` | Model for technical/research content |
 | `MODEL_ROUTING_SOCIOPOLITICAL` | `x-ai/grok-4.20-beta` | Model for political/historical/opinion content |
 | `MODEL_ROUTING_LONG_CONTEXT` | `qwen/qwen3.6-plus-04-02` | Model for content exceeding token threshold |
-| `MODEL_ROUTING_LONG_CONTEXT_THRESHOLD_TOKENS` | `80000` | Token count above which the long-context model is used (~4 chars per token) |
+| `MODEL_ROUTING_LONG_CONTEXT_THRESHOLD_TOKENS` | `180000` | Token count above which the long-context model is used (~4 chars per token); under Gemini 2.5 Pro 200K pricing cliff |
 | `MODEL_ROUTING_VISION` | _(none)_ | Model to use when content has images; opt-in, no default |
 | `MODEL_ROUTING_QUICK` | _(none)_ | Model for short-form content (tweets, forwarded posts); opt-in, no default |
 | `MODEL_ROUTING_QUICK_THRESHOLD_TOKENS` | `500` | Token count at or below which the quick model is used |

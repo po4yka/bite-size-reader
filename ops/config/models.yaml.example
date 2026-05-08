@@ -70,7 +70,7 @@ model_routing:
   #   - "deepseek/deepseek-v4-flash"
 
   # Token threshold for long-context model selection (~4 chars per token heuristic)
-  long_context_threshold_tokens: 80000
+  long_context_threshold_tokens: 180000
 
   # Vision model (opt-in; used when has_images=True; no default)
   # vision_model: "google/gemini-2.0-flash"
