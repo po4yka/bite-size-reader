@@ -22,6 +22,7 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 | Content | `app/adapters/content/` | Scraper chain (Scrapling -> Defuddle -> Firecrawl -> Playwright -> Crawlee -> direct HTTP) |
 | YouTube | `app/adapters/youtube/` | yt-dlp download, transcript extraction |
 | Twitter/X | `app/adapters/twitter/` | Firecrawl + Playwright extraction |
+| GitHub | `app/adapters/github/`, `app/tasks/github_sync.py`, `app/api/routers/repositories.py`, `app/api/routers/auth/github.py` | GitHub repo ingestion, daily stars sync (cron `0 2 * * *` UTC), LLM analysis, semantic search via `repository_embeddings`. Tokens encrypted at rest with Fernet (`cryptography`). See `docs/explanation/github-repository-ingestion.md`. |
 | LLM | `app/adapters/llm/`, `app/adapters/openrouter/` | Provider-agnostic LLM interface |
 | Domain | `app/domain/` | Business models and domain services |
 | Application | `app/application/` | DTOs, ports, use cases, and application services |

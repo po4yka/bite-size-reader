@@ -963,6 +963,80 @@ Raise those limits carefully and monitor for spikes, because `/v1/aggregations` 
 
 ---
 
+## GitHub Integration Issues
+
+### "GitHub integration required" when submitting a github.com URL
+
+The bot and API have no anonymous GitHub path. Connect first:
+
+```bash
+# Via PAT (no Redis or OAuth App required)
+curl -X POST http://localhost:8000/v1/auth/github/pat \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"token": "ghp_..."}'
+
+# Or via the web UI: Preferences -> GitHub Integration
+```
+
+### 401 from GitHub API / integration status shows `needs_reauth`
+
+The stored token was revoked on GitHub's side. The integration status is set to `needs_reauth` automatically. Logs will contain `event=needs_reauth_dm_skipped` (background workers do not send Telegram DMs directly).
+
+**Fix:** disconnect and reconnect:
+
+```bash
+curl -X DELETE http://localhost:8000/v1/auth/github \
+  -H "Authorization: Bearer <jwt>"
+# Then POST /v1/auth/github/pat with a fresh token
+```
+
+### 503 on POST /v1/auth/github/device/start
+
+Either `REDIS_URL` is not configured or `GITHUB_OAUTH_APP_CLIENT_ID` is unset. The Device Flow requires both. The PAT path (`POST /v1/auth/github/pat`) has no such dependency.
+
+```bash
+grep GITHUB_OAUTH_APP_CLIENT_ID .env
+grep REDIS_URL .env
+```
+
+### Daily sync did not import all starred repositories
+
+The `GITHUB_SYNC_LLM_DAILY_BUDGET` cap was reached. Remaining repos are stored with `pending_analysis=true`.
+
+```bash
+# Check how many are pending
+psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM repositories WHERE pending_analysis = true AND user_id = <id>;"
+
+# Trigger another sync run (resets day counter)
+python -m app.cli.sync_github_stars --user-id <id>
+
+# Or increase the daily budget
+echo "GITHUB_SYNC_LLM_DAILY_BUDGET=100" >> .env
+```
+
+### "No module named 'cryptography'" at startup
+
+The `cryptography` package (Fernet) is not installed.
+
+```bash
+pip install -r requirements.txt
+# Verify
+python -c "from cryptography.fernet import Fernet; print('ok')"
+```
+
+### Encryption key changed; existing GitHub tokens are unreadable
+
+Changing `GITHUB_TOKEN_ENCRYPTION_KEY` without rotating breaks all existing integrations. Follow the MultiFernet rotation procedure documented in `app/security/token_crypto.py`:
+
+1. Add the new key as `MultiFernet([new_key, old_key])` -- this decrypts with the old key and re-encrypts with the new one.
+2. Run a one-off migration pass to re-encrypt all rows.
+3. Switch to `MultiFernet([new_key])` and remove the old key from config.
+
+If the old key is already lost, all affected users must reconnect their GitHub integrations.
+
+---
+
 ## MCP Server Issues
 
 ### Connection Failures

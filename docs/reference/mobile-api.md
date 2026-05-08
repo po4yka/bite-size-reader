@@ -531,6 +531,57 @@ Execution failures:
 }
 ```
 
+### Repositories
+
+See `docs/reference/api-contracts.md` for full request/response schemas.
+
+- `GET /v1/repositories` -- list with filters (`is_starred`, `language`, `topic`, `source`, `pending_analysis`, `sort`, `limit`, `offset`)
+- `GET /v1/repositories/{id}` -- full detail including `analysis`
+- `POST /v1/repositories` -- ingest by URL (202, non-blocking)
+- `POST /v1/repositories/{id}/reanalyze` -- force LLM reanalysis
+- `DELETE /v1/repositories/{id}` -- 204
+- `GET /v1/search/repositories` -- semantic search with `q`, filters, `min_similarity`
+
+Example list request:
+
+```http
+GET /v1/repositories?is_starred=true&language=rust&limit=20
+Authorization: Bearer eyJ...
+```
+
+Example ingest request:
+
+```http
+POST /v1/repositories
+Authorization: Bearer eyJ...
+Content-Type: application/json
+
+{
+  "url": "https://github.com/rust-lang/rust"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "repository_id": "a1b2c3d4-...",
+    "status": "pending",
+    "full_name": "rust-lang/rust"
+  }
+}
+```
+
+### GitHub Auth
+
+- `POST /v1/auth/github/pat` -- connect via Personal Access Token
+- `POST /v1/auth/github/device/start` -- begin Device Flow
+- `POST /v1/auth/github/device/poll` -- poll Device Flow status
+- `GET /v1/auth/github/status` -- connection status + repo_count
+- `DELETE /v1/auth/github` -- revoke integration (204)
+
 ### Search and Topics
 
 - `GET /v1/search`

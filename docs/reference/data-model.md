@@ -1383,6 +1383,86 @@ Source: `app/core/url_utils.py`.
 
 ---
 
+## GitHub Repository Tables
+
+Three tables added in the GitHub repository ingestion feature. SQLAlchemy models: `app/db/models/repository.py`.
+
+### repositories
+
+**Purpose:** One row per ingested GitHub repository per user. Stores metadata fetched from the GitHub API and the LLM-generated analysis fields.
+
+**Key columns:**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `user_id` | int FK -> users | Owner of the integration |
+| `github_repo_id` | int | GitHub's numeric repo ID (unique per user) |
+| `full_name` | text | `owner/repo` |
+| `description` | text, nullable | GitHub description |
+| `html_url` | text | `https://github.com/owner/repo` |
+| `language` | text, nullable | Primary language |
+| `topics` | JSON array | GitHub topic tags |
+| `stargazers_count` | int | Stars at last sync |
+| `is_starred` | bool | Whether in the user's starred list |
+| `source` | text | `manual` or `stars_sync` |
+| `content_hash` | text, nullable | Hash of readme + description; change triggers reanalysis |
+| `analysis` | JSON, nullable | LLM output: `summary`, `key_topics`, `use_cases`, `technical_highlights`, `target_audience`, `complexity_level` |
+| `analysis_model` | text, nullable | Model used for analysis |
+| `analysis_generated_at` | timestamp, nullable | |
+| `last_synced_at` | timestamp, nullable | Last GitHub API fetch |
+| `ingested_at` | timestamp | Row creation |
+| `updated_at` | timestamp | |
+
+Unique constraint: `(user_id, github_repo_id)`.
+
+Indexes: `(user_id, is_starred)`, `(user_id, language)`, `(user_id, source)`, `ingested_at`.
+
+### repository_embeddings
+
+**Purpose:** Vector embeddings for `repositories` rows, used by `GET /v1/search/repositories`.
+
+**Key columns:**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `repository_id` | UUID FK -> repositories | One-to-one |
+| `user_id` | int FK -> users | Denormalized for fast per-user vector scans |
+| `embedding_model` | text | Model identifier |
+| `model_version` | text | Version tag; stale rows are targets for `backfill_repository_embeddings` |
+| `embedding_vector` | binary | Serialized float32 array |
+| `embedding_dim` | int | Vector dimensions |
+| `created_at` | timestamp | |
+| `updated_at` | timestamp | |
+
+Unique constraint: `(repository_id)`.
+
+### user_github_integrations
+
+**Purpose:** Per-user GitHub OAuth or PAT integration record. The encrypted token is stored here; the encryption key (`GITHUB_TOKEN_ENCRYPTION_KEY`) is required at runtime. Losing the key renders existing tokens unreadable -- see the MultiFernet rotation hint in `app/security/token_crypto.py`.
+
+**Key columns:**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `user_id` | int FK -> users | Unique per user |
+| `github_user_id` | int | GitHub numeric user ID |
+| `login` | text | GitHub username |
+| `auth_method` | text | `pat` or `device_flow` |
+| `encrypted_token` | text | Fernet-encrypted access token |
+| `status` | text | `connected`, `needs_reauth`, `revoked` |
+| `token_scopes` | JSON array, nullable | OAuth scopes granted |
+| `repo_count` | int | Cached count from last sync |
+| `last_sync_at` | timestamp, nullable | |
+| `connected_at` | timestamp | |
+| `updated_at` | timestamp | |
+
+Unique constraint: `(user_id)`.
+
+---
+
 ## See Also
 
 - [SPEC.md](../SPEC.md) - Navigation index

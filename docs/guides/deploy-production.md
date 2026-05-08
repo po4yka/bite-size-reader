@@ -188,6 +188,49 @@ These profile services are not required but enhance functionality when available
 
 Full variable reference: `docs/reference/environment-variables.md`
 
+## GitHub Integration Secrets
+
+These variables are only required when users connect GitHub accounts.
+
+### GITHUB_TOKEN_ENCRYPTION_KEY (REQUIRED if any user connects GitHub)
+
+Fernet symmetric key used to encrypt stored GitHub tokens at rest.
+
+Generate once:
+
+```bash
+python tools/scripts/generate_github_encryption_key.py
+```
+
+Add the output to `.env`:
+
+```env
+GITHUB_TOKEN_ENCRYPTION_KEY=<base64-fernet-key>
+```
+
+**This key must never change without a rotation procedure.** A lost or replaced key renders all stored tokens unreadable and all GitHub integrations broken. To rotate, follow the MultiFernet hint in `app/security/token_crypto.py` (use `MultiFernet([new_key, old_key])` to decrypt old tokens while encrypting new ones, then swap to `[new_key]` after all rows are re-encrypted).
+
+### GITHUB_OAUTH_APP_CLIENT_ID and GITHUB_OAUTH_APP_CLIENT_SECRET (OPTIONAL)
+
+Only required for the OAuth Device Flow (`POST /v1/auth/github/device/start`). The PAT path (`POST /v1/auth/github/pat`) works without these.
+
+Register an OAuth App at https://github.com/settings/applications/new. The callback URL is unused for Device Flow (set it to your domain for record-keeping).
+
+```env
+GITHUB_OAUTH_APP_CLIENT_ID=Iv1.abc123...
+GITHUB_OAUTH_APP_CLIENT_SECRET=<secret>
+```
+
+### Redis dependency
+
+Device Flow requires Redis to store pending device codes. PAT auth has no Redis dependency. If `REDIS_URL` is not set, `POST /v1/auth/github/device/start` returns `503`.
+
+### LLM cost for first sync
+
+The first sync for a user with many starred repositories can be expensive. With the default daily budget of 50 repos at ~$0.002 per analysis, a 1 000-star user amortizes across approximately 20 days. Tune `GITHUB_SYNC_LLM_DAILY_BUDGET` and `GITHUB_SYNC_LLM_CONCURRENCY` before onboarding heavy users.
+
+---
+
 ## Security & Hardening
 
 - Access control: set `ALLOWED_USER_IDS`; restrict `ALLOWED_CLIENT_IDS` for API if used.

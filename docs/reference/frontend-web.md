@@ -141,12 +141,30 @@ Build output contract:
 - `/web/feeds`
 - `/web/signals`
 - `/web/digest`
+- `/web/repositories`
+- `/web/repositories/:repositoryId`
 - `/web/preferences`
 - `/web/admin`
 - `/web/login`
 
 Route-level feature flags live in `clients/web/src/routes/features.ts`.
 The canonical route and side-nav manifest lives in `clients/web/src/routes/manifest.tsx`.
+
+---
+
+## Repositories Feature
+
+**Routes:** `/web/repositories` (list), `/web/repositories/:repositoryId` (detail)
+
+**Feature directory:** `clients/web/src/features/repositories/`
+
+**API client modules:**
+- `clients/web/src/api/repositories.ts` -- `GET /v1/repositories`, `POST /v1/repositories`, `GET /v1/repositories/{id}`, `POST /v1/repositories/{id}/reanalyze`, `DELETE /v1/repositories/{id}`
+- `clients/web/src/api/github.ts` -- `GET /v1/auth/github/status`, `POST /v1/auth/github/pat`, `POST /v1/auth/github/device/start`, `POST /v1/auth/github/device/poll`, `DELETE /v1/auth/github`
+
+The list route (`/web/repositories`) uses `@tanstack/react-virtual` for row virtualization (same pattern as LibraryPage) and Frost design tokens throughout. No deviations from DESIGN.md defaults; `--frost-*` custom properties only.
+
+**GitHub Integration panel:** `clients/web/src/features/preferences/` -- `PreferencesPage.tsx` contains a GitHub Integration slot where users connect via PAT or initiate the OAuth Device Flow (when the backend is configured with `GITHUB_OAUTH_APP_CLIENT_ID`).
 
 ---
 

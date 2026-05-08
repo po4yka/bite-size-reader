@@ -542,6 +542,139 @@ except TranscriptsDisabled:
 
 ---
 
+## Ratatoskr Mobile API: Repositories
+
+**Auth:** All endpoints require `Authorization: Bearer <access_token>` (JWT mode).
+**Models:** `app/api/models/responses/repositories.py`
+**Deep dive:** `docs/explanation/github-repository-ingestion.md`
+
+### GET /v1/repositories
+
+List ingested repositories with optional filters.
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `is_starred` | bool | Filter to GitHub-starred repos only |
+| `language` | string | Primary language filter (e.g. `python`) |
+| `topic` | string | GitHub topic tag filter |
+| `source` | string | Ingest source: `manual` or `stars_sync` |
+| `pending_analysis` | bool | Filter to repos awaiting LLM analysis |
+| `sort` | string | `stars`, `ingested_at`, `name` (default: `ingested_at`) |
+| `limit` | int | Page size (default: 20, max: 100) |
+| `offset` | int | Pagination offset |
+
+**Response:** `RepositoryListResponse { repositories: RepositoryCompact[], pagination }`
+
+Notable errors: `401` (invalid token), `403` (user not in allowlist).
+
+### GET /v1/repositories/{id}
+
+Fetch full detail for one repository.
+
+**Response:** `RepositoryDetail` -- includes all `RepositoryCompact` fields plus `analysis: RepositoryAnalysis | null` (LLM-generated fields: `summary`, `key_topics`, `use_cases`, `technical_highlights`, `target_audience`, `complexity_level`).
+
+Notable errors: `404` (repo not found or not owned by caller).
+
+### POST /v1/repositories
+
+Ingest a GitHub repository by URL.
+
+**Body:** `{ "url": "https://github.com/owner/repo" }`
+
+**Response:** `202 IngestRepositoryResponse { repository_id, status, full_name }`
+
+The response is non-blocking: `status` will be `pending` while scraping and LLM analysis run in the background. Poll `GET /v1/repositories/{id}` until `analysis` is populated.
+
+Notable errors: `400` (malformed or non-GitHub URL), `401`, `409` (already ingested).
+
+### POST /v1/repositories/{id}/reanalyze
+
+Force LLM reanalysis, bypassing cached `content_hash`.
+
+**Response:** `RepositoryDetail` with updated `analysis`.
+
+Notable errors: `401`, `404`.
+
+### DELETE /v1/repositories/{id}
+
+Delete a repository and its embeddings.
+
+**Response:** `204 No Content`
+
+Notable errors: `401`, `404`.
+
+### GET /v1/search/repositories
+
+Semantic search over ingested repositories.
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `q` | string (required) | Search query |
+| `is_starred` | bool | Restrict to starred repos |
+| `language` | string | Language filter |
+| `topic` | string | Topic filter |
+| `min_similarity` | float | Minimum cosine similarity (0.0-1.0; default: 0.3) |
+| `limit` | int | Page size (default: 10, max: 50) |
+| `offset` | int | Pagination offset |
+
+**Response:** `RepositorySearchResponse { repositories: RepositorySearchHit[], pagination }` where each hit includes a `distance` field (lower = more similar).
+
+Notable errors: `401`, `503` (embedding service unavailable).
+
+---
+
+## Ratatoskr Mobile API: GitHub Auth
+
+**Models:** `app/api/routers/auth/github.py`
+
+### POST /v1/auth/github/pat
+
+Connect a GitHub account via Personal Access Token.
+
+**Body:** `{ "token": "ghp_..." }`
+
+**Response:** `200 { login, github_user_id, auth_method: "pat", status: "connected" }`
+
+**Errors:** `400` (token invalid or lacks required scopes), `401` (bearer auth missing).
+
+The token is encrypted with Fernet before storage (`GITHUB_TOKEN_ENCRYPTION_KEY`).
+
+### POST /v1/auth/github/device/start
+
+Begin GitHub OAuth Device Flow. Returns the user code the caller must display.
+
+**Response:** `{ user_code, verification_uri, device_code, interval, expires_in }`
+
+**Errors:** `503` (Redis not configured or `GITHUB_OAUTH_APP_CLIENT_ID` unset).
+
+### POST /v1/auth/github/device/poll
+
+Poll for Device Flow completion.
+
+**Body:** `{ "device_code": "..." }`
+
+**Response:** `{ status }` where `status` is one of `pending`, `slow_down`, `expired`, `ok`, `denied`.
+
+On `status: ok` the integration is stored and the GitHub token is encrypted at rest.
+
+### GET /v1/auth/github/status
+
+Return the current GitHub integration status for the authenticated user.
+
+**Response:** `{ connected: bool, login: string | null, auth_method: string | null, repo_count: int }`
+
+### DELETE /v1/auth/github
+
+Revoke the GitHub integration. Deletes the stored encrypted token.
+
+**Response:** `204 No Content`
+
+---
+
 ## Service Comparison
 
 | Service | Purpose | Free Tier | Rate Limits | Fallback |

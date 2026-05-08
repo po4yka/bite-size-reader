@@ -334,6 +334,14 @@ Web views are assembled from these components in
 `clients/web/src/design/`. When a new view is needed, prefer
 composing from existing primitives over inventing new ones.
 
+## Page Inventory Notes
+
+**Repositories list** (`/web/repositories`): virtualized row list via `@tanstack/react-virtual`, identical pattern to LibraryPage. Each row is a `BrutalistCard` with mono-body typography. Filter controls use `MonoSelect` and `BracketSearch`. No deviations from Frost defaults.
+
+**Repository detail** (`/web/repositories/:repositoryId`): two-column layout at desktop strip widths (`strip-4` content + `strip-2` sidebar). Analysis fields rendered as `UnorderedList` entries. `StatusBadge` for complexity level. No deviations from Frost defaults.
+
+---
+
 ## Do's and Don'ts
 
 **Do**

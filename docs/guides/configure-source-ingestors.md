@@ -58,6 +58,53 @@ https://www.custom-domain.com -> https://www.custom-domain.com/feed
 Substack feed rows are persisted as `kind=substack` while using the same
 `RssSignalIngester` contract as RSS.
 
+## GitHub Repositories
+
+GitHub repository ingestion is a pull-based ingestor: it reads repositories from a user's GitHub starred list on a daily schedule and optionally accepts on-demand ingest via the API or bot.
+
+**An active GitHub integration is required.** There is no anonymous path; github.com URLs are rejected without a connected account.
+
+### Connecting via PAT (preferred for headless or first-time setup)
+
+Generate a token at https://github.com/settings/tokens/new with at least the `public_repo` scope (add `repo` for private repositories).
+
+```http
+POST /v1/auth/github/pat
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{ "token": "ghp_..." }
+```
+
+PAT auth does not require Redis or an OAuth App registration.
+
+### Connecting via OAuth Device Flow (better UX for interactive setup)
+
+The Device Flow is only available when `GITHUB_OAUTH_APP_CLIENT_ID` and `GITHUB_OAUTH_APP_CLIENT_SECRET` are set, and Redis is running.
+
+1. Call `POST /v1/auth/github/device/start` -- the server returns `user_code` and `verification_uri`.
+2. Display the `user_code` to the user; they visit `verification_uri` and authorize.
+3. Poll `POST /v1/auth/github/device/poll` with `{ "device_code": "..." }` until `status: ok`.
+
+### Daily sync schedule
+
+The stars sync task runs at `0 2 * * *` UTC (`app/tasks/github_sync.py`). To trigger manually:
+
+```bash
+python -m app.cli.sync_github_stars --user-id <id>
+```
+
+### LLM concurrency and daily budget
+
+Two env vars cap analysis cost:
+
+```env
+GITHUB_SYNC_LLM_CONCURRENCY=3       # parallel LLM calls during sync (default: 3)
+GITHUB_SYNC_LLM_DAILY_BUDGET=50     # max repos analyzed per day per user (default: 50)
+```
+
+If the daily budget is reached, remaining repos are stored with `analysis=null` and `pending_analysis=true`. Run the next day's sync or use `--force-reanalyze` to clear the backlog.
+
 ## X/Twitter Cost Gate
 
 Default installs never start X/Twitter ingestion. To opt in, both flags are

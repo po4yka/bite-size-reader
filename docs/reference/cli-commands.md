@@ -777,6 +777,116 @@ See: [MCP Server Documentation](mcp-server.md)
 
 ---
 
+## Repository Ingest
+
+**Command:** `python -m app.cli.repository`
+
+**Purpose:** Manually ingest a single GitHub repository and run LLM analysis without going through the Telegram bot or API.
+
+**Prerequisites:** Active GitHub integration for the target user (`GITHUB_TOKEN_ENCRYPTION_KEY` set, user has connected via PAT or Device Flow).
+
+### Basic Usage
+
+```bash
+python -m app.cli.repository --url https://github.com/owner/repo --user-id 123456789
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--url` | string | required | GitHub repository URL |
+| `--user-id` | int | required | Telegram user ID that owns the integration |
+| `--json-path` | string | - | Save result JSON to file |
+| `--force-reanalyze` | flag | false | Bypass content_hash cache and re-run LLM analysis |
+
+### Exit Codes
+
+- `0` - Success
+- `1` - Invalid URL or missing env vars
+- `2` - GitHub API error (bad token, repo not found)
+- `3` - LLM analysis failed
+- `4` - Database error
+
+---
+
+## GitHub Stars Sync
+
+**Command:** `python -m app.cli.sync_github_stars`
+
+**Purpose:** Manually trigger the daily GitHub stars sync that normally runs on the `0 2 * * *` UTC cron schedule (`app/tasks/github_sync.py`). Fetches the starred-repository list from GitHub and enqueues LLM analysis for any new repos.
+
+**Prerequisites:** At least one user must have an active GitHub integration (`GITHUB_TOKEN_ENCRYPTION_KEY` set).
+
+### Basic Usage
+
+```bash
+# Sync all users with active integrations
+python -m app.cli.sync_github_stars
+
+# Sync one specific user
+python -m app.cli.sync_github_stars --user-id 123456789
+
+# Preview what would be synced without writing
+python -m app.cli.sync_github_stars --dry-run
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--user-id` | int | - | Limit sync to one user (default: all active integrations) |
+| `--dry-run` | flag | false | Print repos that would be ingested without writing to DB |
+
+### Exit Codes
+
+- `0` - Success (or no-op on dry-run)
+- `1` - No active integrations found
+- `2` - GitHub API error
+
+---
+
+## Backfill Repository Embeddings
+
+**Command:** `python -m app.cli.backfill_repository_embeddings`
+
+**Purpose:** Generate or refresh vector embeddings for repository records that are missing them or have a stale `model_version` (stored in `repository_embeddings`). Run after changing the embedding model or after bulk imports.
+
+**Prerequisites:** `GITHUB_TOKEN_ENCRYPTION_KEY` set; embedding provider configured (`EMBEDDING_PROVIDER`).
+
+### Basic Usage
+
+```bash
+# Fill all missing embeddings
+python -m app.cli.backfill_repository_embeddings
+
+# Dry-run to count what would be processed
+python -m app.cli.backfill_repository_embeddings --dry-run
+
+# Upgrade stale embeddings to a new model version
+python -m app.cli.backfill_repository_embeddings --model-version-target v2
+
+# Scope to one user
+python -m app.cli.backfill_repository_embeddings --user-id 123456789 --batch-size 25
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--dry-run` | flag | false | Print counts without writing |
+| `--batch-size` | int | 50 | Repositories per embedding batch |
+| `--model-version-target` | string | current | Re-embed rows whose `model_version` differs |
+| `--user-id` | int | - | Limit to one user |
+
+### Exit Codes
+
+- `0` - Success
+- `1` - Missing env vars
+- `2` - Embedding service error
+
+---
+
 ## Common Patterns
 
 ### Debugging Failed Summarization

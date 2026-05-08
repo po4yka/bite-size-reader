@@ -237,6 +237,7 @@ Background, context, and "why" discussions.
 | [Architecture Overview](explanation/architecture-overview.md) | Component diagram, request lifecycle, subsystem index | Operators, Developers, Integrators |
 | [Hexagonal Architecture](explanation/architecture-overview.md#layering-quick-reference) | Why ports and adapters (see Architecture Overview) | Developers |
 | [Multi-Agent Architecture](explanation/multi-agent-architecture.md) | Why specialized agents | Developers |
+| [GitHub Repository Ingestion](explanation/github-repository-ingestion.md) | GitHub stars sync, LLM analysis, semantic search | Developers, Integrators |
 | [FAQ](explanation/faq.md) | Frequently asked questions | All |
 | [Observability Strategy](explanation/observability-strategy.md) | Observability and telemetry strategy | Operators, Developers |
 | [MCP Server](reference/mcp-server.md) | AI agent integration explained | Integrators |
