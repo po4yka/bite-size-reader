@@ -139,6 +139,15 @@ class SyncService:
         )
         self._sync_sessions = self._fallback_store._sessions
 
+        # In-memory dedup cache for /v1/sync/apply idempotency. Key is
+        # (session_id, idempotency_key); value is (cached_at_monotonic,
+        # response). TTL keeps the cache from growing unbounded; cross-worker
+        # dedup needs Redis (out of scope for this in-memory implementation —
+        # documented as a follow-up). Survives only while this SyncService
+        # instance lives.
+        self._apply_dedup_cache: dict[tuple[str, str], tuple[float, SyncApplyResponseData]] = {}
+        self._apply_dedup_ttl_sec: float = 300.0
+
     @property
     def _redis_warning_logged(self) -> bool:
         return getattr(self._session_store, "_redis_warning_logged", False)
@@ -333,8 +342,22 @@ class SyncService:
         )
 
     async def apply_changes(
-        self, *, session_id: str, user_id: int, client_id: str | None, changes: list[SyncApplyItem]
+        self,
+        *,
+        session_id: str,
+        user_id: int,
+        client_id: str | None,
+        changes: list[SyncApplyItem],
+        idempotency_key: str | None = None,
     ) -> SyncApplyResponseData:
+        # Idempotent re-apply: if the client provided a key and the same
+        # (session_id, key) pair was applied within the TTL, return the
+        # cached response and skip re-running the changes. Lets the client
+        # safely retry after a network failure without risking double-apply.
+        cache_hit = self._lookup_apply_dedup_cache(session_id, idempotency_key)
+        if cache_hit is not None:
+            return cache_hit
+
         await self._load_session(session_id, user_id, client_id)
         results: list[SyncApplyItemResult] = []
         for change in changes:
@@ -351,12 +374,44 @@ class SyncService:
             results.append(await self._apply_summary_change(change, user_id))
 
         conflicts_list = [r for r in results if r.status == "conflict"]
-        return SyncApplyResponseData(
+        response = SyncApplyResponseData(
             session_id=session_id,
             results=results,
             conflicts=conflicts_list or None,
             has_more=None,
         )
+        self._store_apply_dedup_cache(session_id, idempotency_key, response)
+        return response
+
+    def _lookup_apply_dedup_cache(
+        self, session_id: str, idempotency_key: str | None
+    ) -> SyncApplyResponseData | None:
+        if not idempotency_key:
+            return None
+        import time as _time
+
+        now = _time.monotonic()
+        # Drop any expired entries on read so the cache stays bounded under
+        # adversarial input (lots of unique keys with no retries).
+        expired = [k for k, (ts, _) in self._apply_dedup_cache.items() if now - ts > self._apply_dedup_ttl_sec]
+        for k in expired:
+            del self._apply_dedup_cache[k]
+        entry = self._apply_dedup_cache.get((session_id, idempotency_key))
+        if entry is None:
+            return None
+        return entry[1]
+
+    def _store_apply_dedup_cache(
+        self,
+        session_id: str,
+        idempotency_key: str | None,
+        response: SyncApplyResponseData,
+    ) -> None:
+        if not idempotency_key:
+            return
+        import time as _time
+
+        self._apply_dedup_cache[(session_id, idempotency_key)] = (_time.monotonic(), response)
 
     async def _apply_summary_change(
         self, change: SyncApplyItem, user_id: int

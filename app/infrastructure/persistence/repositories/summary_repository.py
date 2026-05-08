@@ -14,7 +14,7 @@ from app.core.logging_utils import get_logger
 from app.core.time_utils import coerce_datetime
 from app.db.json_utils import prepare_json_payload
 from app.db.models import CrawlResult, Request, Summary, SummaryFeedback, model_to_dict
-from app.db.types import _utcnow
+from app.db.types import _next_server_version, _utcnow
 from app.domain.models.request import RequestStatus
 from app.domain.models.summary import Summary as DomainSummary
 
@@ -484,7 +484,18 @@ class SummaryRepositoryAdapter:
         deleted_at: datetime | None = None,
         is_read: bool | None = None,
     ) -> int:
-        """Apply a sync change to a summary."""
+        """Apply a sync change to a summary and advance its server_version.
+
+        server_version MUST advance on every real mutation so that:
+          1. Other clients calling delta-sync since their last cursor will
+             observe the row as updated.
+          2. A subsequent stale upload (using the pre-mutation server_version)
+             is detected as a conflict by SyncApplyService instead of silently
+             overwriting the new state.
+
+        Returns the post-mutation server_version (or the existing one if the
+        caller passed no fields to mutate — a no-op).
+        """
         update_values: dict[str, Any] = {"updated_at": _utcnow()}
         if is_deleted is not None:
             update_values["is_deleted"] = is_deleted
@@ -493,8 +504,14 @@ class SummaryRepositoryAdapter:
         if is_read is not None:
             update_values["is_read"] = is_read
 
+        # Only bump server_version when there's a real mutation. updated_at
+        # alone is a heartbeat, not a sync-visible change.
+        has_mutation = len(update_values) > 1
+        if has_mutation:
+            update_values["server_version"] = _next_server_version()
+
         async with self._database.transaction() as session:
-            if len(update_values) > 1:
+            if has_mutation:
                 await session.execute(
                     update(Summary).where(Summary.id == summary_id).values(**update_values)
                 )

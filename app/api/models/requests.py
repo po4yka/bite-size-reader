@@ -77,6 +77,18 @@ class SyncApplyRequest(BaseModel):
 
     session_id: str
     changes: list[SyncApplyItem]
+    idempotency_key: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        description=(
+            "Optional client-generated key (UUID is fine) for safe retries. "
+            "When set, a duplicate apply with the same (session_id, "
+            "idempotency_key) within ~5 minutes returns the original "
+            "response without re-applying any changes. Lets a client retry "
+            "after a network failure without risking double-apply."
+        ),
+    )
 
 
 class CollectionCreateRequest(BaseModel):

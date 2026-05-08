@@ -114,5 +114,6 @@ async def apply_changes(
         user_id=user["user_id"],
         client_id=user.get("client_id"),
         changes=payload.changes,
+        idempotency_key=payload.idempotency_key,
     )
     return success_response(result)

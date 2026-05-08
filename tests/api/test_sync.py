@@ -215,27 +215,64 @@ async def test_delta_sync_returns_changed_items(db, sync_user, summary_factory):
 
 
 # ---------------------------------------------------------------------------
-# Scenario 4: Apply idempotent re-apply (no idempotency_key support yet)
+# Scenario 4: Apply idempotent re-apply via idempotency_key
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_apply_idempotency_skipped():
-    """
-    Idempotent re-apply requires an idempotency_key on SyncApplyRequest so the
-    service can detect duplicate submissions and return the cached result.
-    SyncApplyRequest and SyncApplyService have no such field yet.
+async def test_apply_idempotent_reapply_returns_cached_response(
+    db, sync_user, sync_summary
+):
+    """Sending the same apply payload twice with the same idempotency_key
+    must return the original response on the second call without re-applying
+    the change. Lets clients retry safely after a network failure."""
+    svc = _make_svc(db)
+    user_ctx = _user_ctx(sync_user)
 
-    This test is intentionally skipped.  When idempotency_key support is added,
-    this test should:
-      1. Send an apply with a unique idempotency_key.
-      2. Send the identical payload a second time.
-      3. Assert the second response is identical to the first (same serverVersion,
-         no double-bump).
-    """
-    pytest.skip(
-        "Idempotent re-apply requires idempotency_key on SyncApplyRequest/SyncApplyService "
-        "(not yet implemented).  Add this test once the feature is shipped."
+    # Bootstrap a session.
+    session_resp = await create_sync_session(SyncSessionRequest(), user=user_ctx, svc=svc)
+    session_id = session_resp["data"]["sessionId"]
+
+    # Capture the row's pre-apply server_version so we can assert no
+    # double-bump after the second (idempotent) call.
+    apply_payload = SyncApplyRequest(
+        session_id=session_id,
+        idempotency_key="retry-key-test-42",
+        changes=[
+            SyncApplyItem(
+                entity_type="summary",
+                id=str(sync_summary.id),
+                action="update",
+                last_seen_version=sync_summary.server_version,
+                payload={"is_read": True},
+            )
+        ],
+    )
+
+    first = await apply_changes(payload=apply_payload, user=user_ctx, svc=svc)
+    second = await apply_changes(payload=apply_payload, user=user_ctx, svc=svc)
+
+    # The data payload (camelCase wire shape) must be identical on the
+    # idempotent retry. The meta envelope intentionally diverges per-call
+    # (correlation_id and timestamp are per-request observability, not part
+    # of the apply contract).
+    assert first["data"] == second["data"], (
+        "second apply with same idempotency_key must return cached data"
+    )
+
+    # The row was mutated exactly once: server_version advanced once and
+    # the second call did NOT bump it again.
+    from sqlalchemy import select as _select
+
+    from app.db.models import Summary
+
+    async with db.session() as session:
+        row = await session.scalar(_select(Summary).where(Summary.id == sync_summary.id))
+    assert row is not None
+    assert row.is_read is True
+    first_result = first["data"]["results"][0]
+    assert row.server_version == first_result["serverVersion"], (
+        "second idempotent call must not advance server_version"
     )
 
 
@@ -255,9 +292,9 @@ async def test_apply_conflict_stale_version(db, sync_user, summary_factory):
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
     session_id = session_result["data"]["sessionId"]
 
-    # server_version is set at INSERT time (epoch millis) and never bumped by
-    # async_apply_sync_change.  A stale last_seen_version is any value strictly
-    # less than the current server_version.  Use 0 which is always stale.
+    # server_version is set at INSERT (epoch millis) and now ALSO advances on
+    # every successful sync-apply mutation. A stale last_seen_version is any
+    # value strictly less than the current server_version. 0 is always stale.
     stale_apply = SyncApplyRequest(
         session_id=session_id,
         changes=[
@@ -280,3 +317,64 @@ async def test_apply_conflict_stale_version(db, sync_user, summary_factory):
     assert data2.get("conflicts"), (
         f"Expected non-empty conflicts list, got: {data2.get('conflicts')!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Scenario 6: server_version monotonicity regression
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_apply_advances_server_version_on_mutation(db, sync_user, sync_summary):
+    """A successful sync-apply MUST advance the row's server_version.
+
+    Two invariants depend on this:
+      1. Other clients calling /v1/sync/delta since their last cursor will
+         observe this row as updated.
+      2. A subsequent stale upload (using the pre-mutation server_version)
+         is detected as a conflict, not silently overwritten.
+
+    Earlier the bump was missing — async_apply_sync_change updated is_read /
+    is_deleted but left server_version frozen at its INSERT-time value, so
+    a re-apply with the same client cursor would slip through. This test
+    locks the fix.
+    """
+    svc = _make_svc(db)
+    user_ctx = _user_ctx(sync_user)
+
+    session_resp = await create_sync_session(SyncSessionRequest(), user=user_ctx, svc=svc)
+    session_id = session_resp["data"]["sessionId"]
+
+    initial_version = sync_summary.server_version
+
+    apply_req = SyncApplyRequest(
+        session_id=session_id,
+        changes=[
+            SyncApplyItem(
+                entity_type="summary",
+                id=str(sync_summary.id),
+                action="update",
+                last_seen_version=initial_version,
+                payload={"is_read": True},
+            )
+        ],
+    )
+    result = await apply_changes(payload=apply_req, user=user_ctx, svc=svc)
+
+    item = result["data"]["results"][0]
+    assert item["status"] == "applied"
+    assert item["serverVersion"] > initial_version, (
+        f"server_version must advance after apply; got {item['serverVersion']} "
+        f"<= initial {initial_version}"
+    )
+
+    # Confirm the DB row reflects the bumped version, not just the response.
+    from sqlalchemy import select as _select
+
+    from app.db.models import Summary
+
+    async with db.session() as session:
+        row = await session.scalar(_select(Summary).where(Summary.id == sync_summary.id))
+    assert row is not None
+    assert row.server_version > initial_version
+    assert row.server_version == item["serverVersion"]
