@@ -74,3 +74,56 @@ def test_no_auth_path_passes_fail_open_when_empty_true(relative_path: str):
         f"{relative_path} reintroduces fail-open semantics — see "
         "docs/tasks/issues archive: unify-allowed-user-ids-allowlist-semantics"
     )
+
+
+def test_config_helper_delegates_to_appconfig(monkeypatch):
+    """Patching AppConfig.telegram.allowed_user_ids must propagate through
+    Config.is_user_allowed — proving the helper reads the validated config
+    object, not raw env vars. This is the contract that keeps tests honest
+    about which deploys can authenticate which users.
+    """
+    from app.config import settings
+
+    monkeypatch.setenv("ALLOWED_USER_IDS", "111,222")
+    settings.clear_config_cache()
+    assert settings.Config.get_allowed_user_ids() == (111, 222)
+    assert settings.Config.is_user_allowed(111) is True
+    assert settings.Config.is_user_allowed(333) is False
+
+    monkeypatch.setenv("ALLOWED_USER_IDS", "555")
+    settings.clear_config_cache()
+    assert settings.Config.get_allowed_user_ids() == (555,)
+    assert settings.Config.is_user_allowed(111) is False
+    assert settings.Config.is_user_allowed(555) is True
+
+
+def test_config_helper_get_allowed_client_ids_delegates_to_authconfig(monkeypatch):
+    """ALLOWED_CLIENT_IDS now lives on AuthConfig.allowed_client_ids; the
+    helper reads it through load_config() rather than os.getenv directly."""
+    from app.config import settings
+
+    monkeypatch.setenv("ALLOWED_CLIENT_IDS", "android-app, ios-app, cli")
+    settings.clear_config_cache()
+    assert settings.Config.get_allowed_client_ids() == ("android-app", "ios-app", "cli")
+
+    # Empty / unset → no restriction (back-compat default).
+    monkeypatch.setenv("ALLOWED_CLIENT_IDS", "")
+    settings.clear_config_cache()
+    assert settings.Config.get_allowed_client_ids() == ()
+
+
+def test_authconfig_drops_invalid_client_ids(monkeypatch):
+    """The validator silently drops client ids with invalid characters or
+    excessive length. Behavior preserved from the previous helper."""
+    from app.config import settings
+    from app.config.api import AuthConfig
+
+    cfg = AuthConfig(allowed_client_ids="ok-1,bad space,also$bad,fine_id")
+    assert cfg.allowed_client_ids == ("ok-1", "fine_id")
+
+    too_long = "a" * 101
+    cfg = AuthConfig(allowed_client_ids=f"keeper,{too_long}")
+    assert cfg.allowed_client_ids == ("keeper",)
+
+    monkeypatch.setenv("ALLOWED_CLIENT_IDS", "")
+    settings.clear_config_cache()

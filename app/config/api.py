@@ -193,6 +193,47 @@ class AuthConfig(BaseModel):
         description="argon2id parallelism (lanes)",
     )
 
+    allowed_client_ids: tuple[str, ...] = Field(
+        default_factory=tuple,
+        validation_alias="ALLOWED_CLIENT_IDS",
+        description=(
+            "Comma-separated list of mobile/CLI client_id values allowed to "
+            "obtain access tokens (e.g. android-app, ios-app, cli). Empty "
+            "tuple = no restriction (back-compat default). Values are "
+            "validated to alphanumeric + - _ . characters, max 100 chars; "
+            "invalid pieces are silently dropped with a warning log."
+        ),
+    )
+
+    @field_validator("allowed_client_ids", mode="before")
+    @classmethod
+    def _parse_client_ids(cls, value: Any) -> tuple[str, ...]:
+        if value in (None, "", ()):
+            return ()
+        if isinstance(value, (list, tuple)):
+            raw_pieces = [str(piece) for piece in value]
+        else:
+            raw_pieces = str(value).split(",")
+        client_ids: list[str] = []
+        for piece in raw_pieces:
+            piece = piece.strip()
+            if not piece:
+                continue
+            if not all(c.isalnum() or c in "-_." for c in piece):
+                logger.warning(
+                    f"Ignoring invalid client ID format: {piece}",
+                    extra={"client_id": piece},
+                )
+                continue
+            if len(piece) > 100:
+                logger.warning(
+                    f"Ignoring client ID that is too long: {piece}",
+                    extra={"client_id": piece, "length": len(piece)},
+                )
+                continue
+            client_ids.append(piece)
+        return tuple(client_ids)
+
     @model_validator(mode="after")
     def _validate_lengths(self) -> AuthConfig:
         if self.secret_min_length <= 0 or self.secret_max_length <= 0:

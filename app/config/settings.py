@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 from pydantic import AliasChoices, BaseModel, Field, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from ._validators import _parse_allowed_user_ids
 from .adaptive_timeout import AdaptiveTimeoutConfig
 from .api import ApiLimitsConfig, AuthConfig, SyncConfig
 from .background import BackgroundProcessorConfig
@@ -479,9 +478,15 @@ class ConfigHelper:
 
     @staticmethod
     def get_allowed_user_ids() -> tuple[int, ...]:
-        """Get list of allowed Telegram user IDs."""
-        value = os.getenv("ALLOWED_USER_IDS", "")
-        return _parse_allowed_user_ids(value)
+        """Get list of allowed Telegram user IDs.
+
+        Delegates to the validated AppConfig so tests that monkeypatch the
+        cached config object see consistent behavior in auth checks.
+        allow_stub_telegram=True matches the lenient lookup path used by
+        secret-login (the validator at settings.py:331 still rejects empty
+        allowlists in real production loads).
+        """
+        return load_config(allow_stub_telegram=True).telegram.allowed_user_ids
 
     @staticmethod
     def is_user_allowed(user_id: int, *, fail_open_when_empty: bool = False) -> bool:
@@ -498,42 +503,17 @@ class ConfigHelper:
 
     @staticmethod
     def get_allowed_client_ids() -> tuple[str, ...]:
+        """Get list of allowed client application IDs.
+
+        Client IDs are arbitrary strings that identify specific client
+        applications (e.g., "android-app-v1.0", "ios-app-v2.0"). Only clients
+        with these IDs can authenticate and receive access tokens. Empty tuple
+        = no client restriction (backward compatible).
+
+        Delegates to AuthConfig.allowed_client_ids; the env-var parsing /
+        validation lives there as a field validator.
         """
-        Get list of allowed client application IDs.
-
-        Client IDs are arbitrary strings that identify specific client applications
-        (e.g., "android-app-v1.0", "ios-app-v2.0"). Only clients with these IDs
-        can authenticate and receive access tokens.
-
-        Returns:
-            Tuple of allowed client ID strings (empty tuple allows all clients)
-        """
-        value = os.getenv("ALLOWED_CLIENT_IDS", "")
-        if value in (None, ""):
-            return ()  # Empty tuple = no client restriction (backward compatible)
-
-        # Parse comma-separated list
-        client_ids = []
-        for piece in value.split(","):
-            piece = piece.strip()
-            if not piece:
-                continue
-            # Validate client ID format (alphanumeric, hyphens, underscores, dots)
-            if not all(c.isalnum() or c in "-_." for c in piece):
-                logger.warning(
-                    f"Ignoring invalid client ID format: {piece}",
-                    extra={"client_id": piece},
-                )
-                continue
-            if len(piece) > 100:
-                logger.warning(
-                    f"Ignoring client ID that is too long: {piece}",
-                    extra={"client_id": piece, "length": len(piece)},
-                )
-                continue
-            client_ids.append(piece)
-
-        return tuple(client_ids)
+        return load_config(allow_stub_telegram=True).auth.allowed_client_ids
 
 
 # Public alias used across the codebase.
