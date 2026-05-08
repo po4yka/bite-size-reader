@@ -1,27 +1,28 @@
+import hashlib
 from datetime import datetime, timedelta
+from unittest.mock import MagicMock
 
 import pytest
+import pytest_asyncio
+from sqlalchemy import func
+from sqlalchemy import select as sa_select
 
-from app.api.routers.auth.tokens import create_access_token, create_refresh_token
+from app.api.dependencies.database import get_auth_repository
+from app.api.exceptions import TokenRevokedError
+from app.api.models.auth import RefreshTokenRequest
+from app.api.routers.auth.endpoints_sessions import refresh_access_token
+from app.api.routers.auth.tokens import create_refresh_token
 from app.core.time_utils import UTC
-from app.db.models import RefreshToken, User
+from app.db.models import RefreshToken as RefreshTokenModel
 
 
-@pytest.fixture
-def clean_db(db):
-    # Ensure fresh start
-    RefreshToken.delete().execute()
-    User.delete().execute()
-    return db
-
-
-@pytest.fixture
-def auth_user(db):
-    return User.create(telegram_user_id=123456789, username="test_auth")
+@pytest_asyncio.fixture
+async def auth_user(db, user_factory):
+    return await user_factory(telegram_user_id=123456789, username="test_auth")
 
 
 @pytest.mark.asyncio
-async def test_create_refresh_token_persists(auth_user):
+async def test_create_refresh_token_persists(db, auth_user):
     token, session_id = await create_refresh_token(
         user_id=auth_user.telegram_user_id,
         client_id="test-client",
@@ -31,10 +32,19 @@ async def test_create_refresh_token_persists(auth_user):
 
     assert token is not None
     assert session_id is not None
-    assert RefreshToken.select().count() == 1
 
-    record = RefreshToken.select().first()
-    assert record.user == auth_user
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    async with db.session() as session:
+        count = await session.scalar(
+            sa_select(func.count()).select_from(RefreshTokenModel)
+        )
+        record = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == token_hash)
+        )
+
+    assert count == 1
+    assert record is not None
+    assert record.user_id == auth_user.telegram_user_id
     assert record.client_id == "test-client"
     assert record.device_info == "TestDevice"
     assert record.ip_address == "127.0.0.1"
@@ -42,56 +52,76 @@ async def test_create_refresh_token_persists(auth_user):
 
 
 @pytest.mark.asyncio
-async def test_logout_revokes_token(client, auth_user):
-    # Create persistent token manually via helper (now async)
+async def test_logout_revokes_token(db, auth_user):
+    from app.api.dependencies.database import get_auth_repository
+    from app.api.models.auth import RefreshTokenRequest
+    from app.api.routers.auth.endpoints_sessions import logout
+
     token, _ = await create_refresh_token(auth_user.telegram_user_id, "mobile-app")
 
-    access_token = create_access_token(auth_user.telegram_user_id, client_id="mobile-app")
+    http_request = MagicMock()
+    http_request.cookies = {}
+    response = MagicMock()
+    body = RefreshTokenRequest(refresh_token=token)
+    current_user = {"user_id": auth_user.telegram_user_id}
+    auth_repo = get_auth_repository()
 
-    # Call logout
-    response = client.post(
-        "/v1/auth/logout",
-        json={"refresh_token": token},
-        headers={"Authorization": f"Bearer {access_token}"},
+    result = await logout(
+        http_request=http_request,
+        response=response,
+        request=body,
+        current_user=current_user,
+        auth_repo=auth_repo,
     )
 
-    assert response.status_code == 200
-    assert "Logged out" in response.json()["data"]["message"]
+    assert "Logged out" in result["data"]["message"]
 
-    # Verify DB
-    record = RefreshToken.select().first()
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    async with db.session() as session:
+        record = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == token_hash)
+        )
+    assert record is not None
     assert record.is_revoked is True
 
 
 @pytest.mark.asyncio
-async def test_list_sessions(client, auth_user):
-    # Create 3 sessions (now async)
-    # 1. Active
-    await create_refresh_token(auth_user.telegram_user_id, "client-1", device_info="Device 1")
-    # 2. Revoked
-    await create_refresh_token(auth_user.telegram_user_id, "client-2", device_info="Device 2")
-    r2 = RefreshToken.get(RefreshToken.client_id == "client-2")
-    r2.is_revoked = True
-    r2.save()
-    # 3. Expired (manually manipulate)
-    await create_refresh_token(auth_user.telegram_user_id, "client-3", device_info="Device 3")
-    r3 = RefreshToken.get(RefreshToken.client_id == "client-3")
-    r3.expires_at = datetime.now(UTC) - timedelta(days=1)
-    r3.save()
+async def test_list_sessions(db, auth_user, user_factory):
+    from app.api.dependencies.database import get_auth_repository
+    from app.api.routers.auth.endpoints_sessions import list_sessions
 
-    # 4. Another user's session
-    other = User.create(telegram_user_id=67890)
+    # 1. Active session
+    await create_refresh_token(auth_user.telegram_user_id, "client-1", device_info="Device 1")
+
+    # 2. Revoked session
+    _, _ = await create_refresh_token(auth_user.telegram_user_id, "client-2", device_info="Device 2")
+    async with db.transaction() as session:
+        r2 = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.client_id == "client-2")
+        )
+        r2.is_revoked = True
+        await session.flush()
+
+    # 3. Expired session
+    await create_refresh_token(auth_user.telegram_user_id, "client-3", device_info="Device 3")
+    async with db.transaction() as session:
+        r3 = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.client_id == "client-3")
+        )
+        r3.expires_at = datetime.now(UTC) - timedelta(days=1)
+        await session.flush()
+
+    # 4. Another user's session (should not appear in auth_user's list)
+    other = await user_factory(telegram_user_id=67890)
     await create_refresh_token(other.telegram_user_id, "other-client")
 
-    # Get sessions
-    access_token = create_access_token(auth_user.telegram_user_id, client_id="client-1")
+    current_user = {"user_id": auth_user.telegram_user_id}
+    auth_repo = get_auth_repository()
 
-    response = client.get("/v1/auth/sessions", headers={"Authorization": f"Bearer {access_token}"})
+    result = await list_sessions(current_user=current_user, auth_repo=auth_repo)
 
-    assert response.status_code == 200
-    sessions = response.json()["data"]["sessions"]
-
-    # Should only see session 1
+    sessions = result["data"]["sessions"]
+    # Should only see the single active, non-expired session (client-1)
     assert len(sessions) == 1
     assert sessions[0]["clientId"] == "client-1"
     assert sessions[0]["deviceInfo"] == "Device 1"
@@ -99,30 +129,15 @@ async def test_list_sessions(client, auth_user):
 
 # ----- Refresh-token rotation regression tests -------------------------------
 #
-# The 3 tests above were written against the old peewee ORM (User.create(),
-# RefreshToken.select(), .save()) and now error at fixture setup since the
-# project moved to SQLAlchemy 2.0. These new tests use the modern db /
-# user_factory / client fixtures from tests/api/conftest.py.
+# All tests above and below use the modern db / user_factory fixtures from
+# tests/api/conftest.py and call endpoint functions directly to avoid the
+# TestClient / asyncpg event-loop conflict.
 #
 # Test contract: POST /v1/auth/refresh MUST issue a new refresh token AND
 # revoke the previous one. Without this, an attacker who steals a single
 # refresh token could keep refreshing indefinitely. A revoked token replayed
 # against /refresh MUST trigger reuse detection and revoke ALL of that user's
 # refresh tokens (defense in depth — assume the original was stolen).
-
-
-import hashlib
-from unittest.mock import MagicMock
-
-from sqlalchemy import select as sa_select
-
-from app.api.dependencies.database import get_auth_repository
-from app.api.exceptions import TokenRevokedError
-from app.api.models.auth import RefreshTokenRequest
-from app.api.routers.auth.endpoints_sessions import (
-    refresh_access_token,
-)
-from app.db.models import RefreshToken as RefreshTokenModel
 
 
 def _mock_request_response() -> tuple[MagicMock, MagicMock]:

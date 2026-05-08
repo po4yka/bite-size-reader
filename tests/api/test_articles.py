@@ -1,26 +1,24 @@
+"""Article endpoint tests using the direct-call pattern (no HTTP client)."""
+
+from typing import Any
+
 import pytest
+import pytest_asyncio
 
-from app.api.routers.auth.tokens import create_access_token
-from app.db.models import Request, Summary, User
-
-
-@pytest.fixture
-def article_user(db):
-    return User.create(telegram_user_id=123456789, username="article_test_user")
+from app.api.dependencies.database import get_summary_read_model_use_case
+from app.api.exceptions import ResourceNotFoundError
+from app.api.routers.summaries import get_summary, get_summary_by_url
+from app.db.models import Request, Summary
 
 
-@pytest.fixture
-def article_data(db, article_user):
-    # Create request
-    req = Request.create(
-        user_id=article_user.telegram_user_id,
-        type="url",
-        status="completed",
-        input_url="https://example.com/article",
-        normalized_url="https://example.com/article",
-    )
-    # Create summary with full json_payload to satisfy API response model
-    full_payload = {
+@pytest_asyncio.fixture
+async def article_user(db, user_factory):
+    return await user_factory(telegram_user_id=123456789, username="article_test_user")
+
+
+@pytest_asyncio.fixture
+async def article_data(db, article_user):
+    full_payload: dict[str, Any] = {
         "summary_250": "Short summary",
         "summary_1000": "Long summary",
         "tldr": "Too long",
@@ -41,58 +39,79 @@ def article_data(db, article_user):
         "confidence": 0.9,
         "hallucination_risk": "low",
     }
-    summary = Summary.create(
-        request=req,
-        lang="en",
-        json_payload=full_payload,
-    )
+
+    async with db.transaction() as session:
+        req = Request(
+            user_id=article_user.telegram_user_id,
+            type="url",
+            status="completed",
+            input_url="https://example.com/article",
+            normalized_url="https://example.com/article",
+        )
+        session.add(req)
+        await session.flush()
+
+        summary = Summary(
+            request_id=req.id,
+            lang="en",
+            json_payload=full_payload,
+        )
+        session.add(summary)
+        await session.flush()
+
     return {"user": article_user, "request": req, "summary": summary}
 
 
-def test_get_article_by_id(client, article_data):
+@pytest.mark.asyncio
+async def test_get_article_by_id(db, article_data):
     user = article_data["user"]
     summary = article_data["summary"]
 
-    token = create_access_token(user.telegram_user_id, client_id="test")
+    user_ctx = {
+        "user_id": user.telegram_user_id,
+        "username": user.username,
+        "client_id": "test",
+    }
+    use_case = get_summary_read_model_use_case(session_manager=db)
 
-    response = client.get(
-        f"/v1/articles/{summary.id}", headers={"Authorization": f"Bearer {token}"}
-    )
+    result = await get_summary(summary_id=summary.id, user=user_ctx, use_case=use_case)
 
-    assert response.status_code == 200
-    data = response.json()["data"]
-    # Response uses SummaryDetail model with camelCase keys
+    data = result["data"]
     assert data["summary"]["tldr"] == "Too long"
     assert data["request"]["url"] == "https://example.com/article"
 
 
-def test_get_article_by_url(client, article_data):
+@pytest.mark.asyncio
+async def test_get_article_by_url(db, article_data):
     user = article_data["user"]
-    summary = article_data["summary"]
 
-    token = create_access_token(user.telegram_user_id, client_id="test")
+    user_ctx = {
+        "user_id": user.telegram_user_id,
+        "username": user.username,
+        "client_id": "test",
+    }
+    use_case = get_summary_read_model_use_case(session_manager=db)
 
-    # Test strict match
     url = "https://example.com/article"
-    response = client.get(
-        "/v1/articles/by-url", params={"url": url}, headers={"Authorization": f"Bearer {token}"}
-    )
+    result = await get_summary_by_url(url=url, user=user_ctx, use_case=use_case)
 
-    assert response.status_code == 200
-    data = response.json()["data"]
-    # Response uses SummaryDetail model with camelCase keys
+    data = result["data"]
     assert data["summary"]["tldr"] == "Too long"
     assert data["request"]["url"] == url
 
 
-def test_get_article_by_url_not_found(client, article_data):
+@pytest.mark.asyncio
+async def test_get_article_by_url_not_found(db, article_data):
     user = article_data["user"]
-    token = create_access_token(user.telegram_user_id, client_id="test")
 
-    response = client.get(
-        "/v1/articles/by-url",
-        params={"url": "https://nonexistent.com"},
-        headers={"Authorization": f"Bearer {token}"},
-    )
+    user_ctx = {
+        "user_id": user.telegram_user_id,
+        "username": user.username,
+        "client_id": "test",
+    }
+    use_case = get_summary_read_model_use_case(session_manager=db)
 
-    assert response.status_code == 404
+    with pytest.raises(ResourceNotFoundError):
+        await get_summary_by_url(
+            url="https://nonexistent.com", user=user_ctx, use_case=use_case
+        )
