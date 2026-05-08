@@ -8,6 +8,14 @@
 # Postgres uses the dedicated ratatoskr-postgres container from the base
 # compose file; no Pi-specific shared database override is needed.
 #
+# The Firecrawl scraper sidecars (firecrawl-api, firecrawl-redis,
+# firecrawl-playwright, firecrawl-postgres, firecrawl-rabbitmq) run on the
+# Pi as a separate compose project that owns the `firecrawl_internal`
+# bridge network.  The bot and mobile-api need to attach to that network
+# at recreate-time so DNS for `firecrawl-api:3002` (used by the Firecrawl
+# rung of the scraper chain) resolves correctly.  Declared as external so
+# this overlay does not own its lifecycle.
+#
 # Usage (Pi only):
 #   docker compose \
 #     -f ops/docker/docker-compose.yml \
@@ -20,6 +28,9 @@ services:
       - QDRANT_URL=http://host-gateway:6333
     extra_hosts:
       - "host-gateway:host-gateway"
+    networks:
+      default: {}
+      firecrawl_internal: {}
     depends_on:
       qdrant:
         condition: service_started
@@ -30,6 +41,9 @@ services:
       - QDRANT_URL=http://host-gateway:6333
     extra_hosts:
       - "host-gateway:host-gateway"
+    networks:
+      default: {}
+      firecrawl_internal: {}
     depends_on:
       qdrant:
         condition: service_started
@@ -62,3 +76,7 @@ services:
 
   postgres:
     platform: linux/arm64
+
+networks:
+  firecrawl_internal:
+    external: true
