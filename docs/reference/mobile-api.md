@@ -49,6 +49,31 @@ All four authentication paths — JWT (`Authorization: Bearer ...`), Telegram We
 
 Setting `ALLOWED_USER_IDS=""` in production is supported only as a deliberate "lock everyone out" posture (e.g. during incident response). Multi-user deployments must enumerate every Telegram user_id explicitly.
 
+## API Surface Freeze Policy
+
+The mobile API surface is contract-locked against `docs/openapi/mobile_api.yaml`. Changes are gated by:
+
+- **CI snapshot test** — `tests/api/test_openapi_sync.py` rejects PRs that add or rename a route without a matching YAML entry (`test_all_routes_documented`), introduce orphan YAML routes (`test_no_orphan_spec_routes`), or shift response shapes / required fields (`test_property_names_match`, `test_required_fields_match`). The job runs on every PR via the `test` CI job.
+- **Contract semver in the envelope** — every success response carries `meta.api_version` (sourced from `app.api.models.responses.common.API_CONTRACT_VERSION`). The constant is independent of `meta.version` (which tracks app/build deploys).
+
+### When to bump `api_version`
+
+Bump the major version when **any** of the following changes:
+- Removing or renaming a path or HTTP method
+- Removing a required field from a response or request
+- Tightening a field type (e.g. `string` → `integer`)
+- Changing the envelope shape (`success`, `data`, `error`, `meta`)
+
+Bump the minor version when:
+- Adding a new path / method
+- Adding a non-required response field
+
+Patch is reserved for documentation-only changes (`description`, examples).
+
+### Migration path for clients
+
+Mobile and CLI clients pin against `meta.api_version` and SHOULD refuse to upgrade across major versions automatically. Backend changes that bump the major version MUST be coordinated with the [`ratatoskr-client`](https://github.com/po4yka/ratatoskr-client) KMP team — see `docs/tasks/issues/map-ratatoskr-mobile-api-contract-to-kmp-readiness.md` for the contract map.
+
 ## Router and Service Boundaries
 
 FastAPI routers are transport-focused and delegate orchestration to service collaborators:

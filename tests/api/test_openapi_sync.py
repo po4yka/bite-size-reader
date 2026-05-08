@@ -422,6 +422,28 @@ class TestWireShapeConventions:
         if errors:
             pytest.fail("Non-string response status keys found:\n" + "\n".join(errors))
 
+    def test_meta_carries_api_version(self, spec: dict[str, Any]) -> None:
+        """Meta envelope must declare api_version so KMP/CLI clients can pin against
+        the contract semver. Bumping API_CONTRACT_VERSION in app code is the
+        canonical signal for breaking changes."""
+        meta = spec["components"]["schemas"]["Meta"]
+        assert "api_version" in meta["properties"], (
+            "docs/openapi/mobile_api.yaml Meta schema is missing api_version — "
+            "bump API_CONTRACT_VERSION in app/api/models/responses/common.py "
+            "and add the field here."
+        )
+        assert "api_version" in meta["required"]
+
+    def test_success_response_emits_api_version(self) -> None:
+        """The success_response helper actually writes api_version into meta."""
+        from app.api.models.responses.common import (
+            API_CONTRACT_VERSION,
+            success_response,
+        )
+
+        envelope = success_response({"hello": "world"})
+        assert envelope["meta"]["api_version"] == API_CONTRACT_VERSION
+
     def test_secured_operations_document_4xx_and_5xx(self, spec: dict[str, Any]) -> None:
         """Every HTTPBearer-protected operation should document both client/server errors."""
         failures: list[str] = []

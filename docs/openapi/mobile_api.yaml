@@ -1008,6 +1008,72 @@ paths:
           $ref: '#/components/responses/TooManyRequestsError'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /v1/auth/credentials-login:
+    post:
+      tags:
+      - Authentication
+      summary: Credentials Login (nickname/email + password)
+      description: |
+        Exchange nickname/email + password for JWT tokens. Bootstrap is
+        CLI-only (`ratatoskr credentials set`) — no public signup. Route
+        is gated on `CREDENTIALS_LOGIN_PEPPER` presence; when unset, returns
+        503 Configuration error. `remember_me=True` issues a 30-day refresh
+        token; `False` issues a short-lived (default 12h) refresh and a
+        session-only cookie (no Max-Age).
+      operationId: credentials_login_v1_auth_credentials_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialsLoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokensResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '503':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/auth/credentials/change-password:
+    post:
+      tags:
+      - Authentication
+      summary: Change password (owner)
+      description: |
+        Change the current user's password. Requires the current password.
+        Returns generic 401 on any failure (unknown user, mismatched current
+        password, locked-out row) to avoid disclosing whether password auth
+        is set up for the caller.
+      operationId: change_password_v1_auth_credentials_change_password_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+        required: true
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessageEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /v1/auth/secret-keys:
     post:
       tags:
@@ -6414,6 +6480,7 @@ components:
       - correlation_id
       - timestamp
       - version
+      - api_version
       properties:
         correlation_id:
           type: string
@@ -6424,7 +6491,13 @@ components:
           description: ISO 8601 response timestamp.
         version:
           type: string
-          description: API version string.
+          description: App / build version (changes every deploy). Sourced from APP_VERSION env var.
+        api_version:
+          type: string
+          description: |
+            API contract semver. Distinct from `version` — bumps only on breaking contract
+            changes (response shape, request shape, routing surface). Mobile / CLI clients
+            should pin against this value and refuse to upgrade major versions blindly.
         build:
           type: string
           nullable: true
@@ -6640,6 +6713,56 @@ components:
           type: string
           nullable: true
           description: Optional username to associate with the session.
+    CredentialsLoginRequest:
+      type: object
+      description: Request body for nickname/email + password login.
+      required:
+      - identifier
+      - password
+      - client_id
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: |
+            Nickname or email. Presence of `@` routes to the email branch;
+            otherwise treated as a nickname. Lookup is canonicalized
+            (lowercase + trim) before hitting the credentials table.
+        password:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: Plaintext password (HMAC-peppered + argon2id-verified server-side).
+        remember_me:
+          type: boolean
+          default: false
+          description: |
+            True → 30-day refresh TTL, web client persists tokens in localStorage.
+            False → short-lived refresh (default 12h), refresh cookie issued as a
+            session cookie (no Max-Age) so it vanishes on browser close.
+        client_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Client application identifier (must be in ALLOWED_CLIENT_IDS if that env var is set).
+    ChangePasswordRequest:
+      type: object
+      description: Request body for owner-only password change.
+      required:
+      - current_password
+      - new_password
+      properties:
+        current_password:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: Current plaintext password (verified before update).
+        new_password:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: New plaintext password (validated against credentials_password_min_length).
     SecretKeyCreateRequest:
       type: object
       required:

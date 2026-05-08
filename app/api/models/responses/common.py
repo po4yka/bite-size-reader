@@ -86,6 +86,14 @@ class PaginationInfo(BaseModel):
     has_more: bool = Field(serialization_alias="hasMore")
 
 
+API_CONTRACT_VERSION = "1.0.0"
+"""Mobile API contract semver. Bump on every breaking change to the response
+shape, request shape, or routing surface (path/method). Coordinates with
+docs/openapi/mobile_api.yaml `info.version`. Mobile/CLI clients read this
+from the success envelope's meta.api_version to pin against a known
+contract."""
+
+
 class MetaInfo(BaseModel):
     """Metadata for all API responses."""
 
@@ -94,6 +102,13 @@ class MetaInfo(BaseModel):
         default_factory=lambda: datetime.now(UTC).isoformat().replace("+00:00", "Z")
     )
     version: str = Field(default_factory=lambda: os.getenv("APP_VERSION", "1.0.0"))
+    api_version: str = Field(
+        default=API_CONTRACT_VERSION,
+        description=(
+            "API contract semver. Distinct from `version` (app/build version that "
+            "changes every deploy). Bumps only on breaking contract changes."
+        ),
+    )
     build: str | None = Field(default_factory=lambda: os.getenv("APP_BUILD") or None)
     pagination: PaginationInfo | None = None
     debug: dict[str, Any] | None = None
