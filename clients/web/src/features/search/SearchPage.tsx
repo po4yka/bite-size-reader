@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   BracketButton,
   BracketPagination,
@@ -31,19 +31,91 @@ function toggleValue(list: string[], value: string): string[] {
   return [...list, value];
 }
 
+type SearchMode = "auto" | "keyword" | "semantic" | "hybrid";
+type ReadState = "all" | "read" | "unread";
+type FavoriteState = "all" | "favorited" | "not-favorited";
+
+const SEARCH_MODES: ReadonlySet<SearchMode> = new Set(["auto", "keyword", "semantic", "hybrid"]);
+const READ_STATES: ReadonlySet<ReadState> = new Set(["all", "read", "unread"]);
+const FAVORITE_STATES: ReadonlySet<FavoriteState> = new Set([
+  "all",
+  "favorited",
+  "not-favorited",
+]);
+
+function readEnum<T extends string>(
+  raw: string | null,
+  allowed: ReadonlySet<T>,
+  fallback: T,
+): T {
+  return raw !== null && (allowed as ReadonlySet<string>).has(raw) ? (raw as T) : fallback;
+}
+
+function readList(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function readNumber(raw: string | null, fallback: number): number {
+  if (raw === null || raw === "") return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export default function SearchPage() {
-  const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<"auto" | "keyword" | "semantic" | "hybrid">("auto");
-  const [language, setLanguage] = useState("");
-  const [readState, setReadState] = useState<"all" | "read" | "unread">("all");
-  const [favoriteState, setFavoriteState] = useState<"all" | "favorited" | "not-favorited">("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [minSimilarity, setMinSimilarity] = useState(0.2);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [selectedDomains, setSelectedDomains] = useState<string[]>([]);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Filter state lives in the URL so back/forward navigation restores it and
+  // the URL is shareable. Defaults match the old useState defaults; non-default
+  // values round-trip through the query string.
+  const query = searchParams.get("q") ?? "";
+  const mode = readEnum<SearchMode>(searchParams.get("mode"), SEARCH_MODES, "auto");
+  const language = searchParams.get("language") ?? "";
+  const readState = readEnum<ReadState>(searchParams.get("readState"), READ_STATES, "all");
+  const favoriteState = readEnum<FavoriteState>(
+    searchParams.get("favoriteState"),
+    FAVORITE_STATES,
+    "all",
+  );
+  const startDate = searchParams.get("startDate") ?? "";
+  const endDate = searchParams.get("endDate") ?? "";
+  const minSimilarity = Math.max(0, Math.min(1, readNumber(searchParams.get("minSim"), 0.2)));
+  const selectedTags = readList(searchParams.get("tags"));
+  const selectedDomains = readList(searchParams.get("domains"));
+  const page = Math.max(1, Math.floor(readNumber(searchParams.get("page"), 1)));
+  const pageSize = Math.max(1, Math.floor(readNumber(searchParams.get("pageSize"), 20)));
+
+  // updateFilters writes a patch to the URL, dropping keys whose value matches
+  // the default so the URL stays clean. resetPage clears the page key whenever
+  // a filter changes — same setPage(1)-on-filter-change behavior as before.
+  function updateFilters(
+    patch: Record<string, string | string[] | number | undefined>,
+    options?: { resetPage?: boolean },
+  ): void {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [key, value] of Object.entries(patch)) {
+          const isEmpty =
+            value === undefined ||
+            value === "" ||
+            (Array.isArray(value) && value.length === 0);
+          if (isEmpty) {
+            next.delete(key);
+          } else if (Array.isArray(value)) {
+            next.set(key, value.join(","));
+          } else {
+            next.set(key, String(value));
+          }
+        }
+        if (options?.resetPage) {
+          next.delete("page");
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  }
 
   const semanticMode = mode === "semantic" || mode === "hybrid";
 
@@ -114,21 +186,24 @@ export default function SearchPage() {
     searchQuery.isFetching && !searchQuery.data && query.trim().length > 1;
 
   function resetFilters(): void {
-    setMode("auto");
-    setLanguage("");
-    setReadState("all");
-    setFavoriteState("all");
-    setStartDate("");
-    setEndDate("");
-    setMinSimilarity(0.2);
-    setSelectedTags([]);
-    setSelectedDomains([]);
-    setPage(1);
+    updateFilters(
+      {
+        mode: undefined,
+        language: undefined,
+        readState: undefined,
+        favoriteState: undefined,
+        startDate: undefined,
+        endDate: undefined,
+        minSim: undefined,
+        tags: undefined,
+        domains: undefined,
+      },
+      { resetPage: true },
+    );
   }
 
   function clearSearch(): void {
-    setQuery("");
-    resetFilters();
+    setSearchParams(new URLSearchParams(), { replace: true });
   }
 
   return (
@@ -163,8 +238,7 @@ export default function SearchPage() {
           value={query}
           size="lg"
           onChange={(event) => {
-            setQuery(event.currentTarget.value);
-            setPage(1);
+            updateFilters({ q: event.currentTarget.value }, { resetPage: true });
           }}
         />
       </div>
@@ -219,8 +293,8 @@ export default function SearchPage() {
             labelText="Search mode"
             value={mode}
             onChange={(event) => {
-              setMode(event.currentTarget.value as "auto" | "keyword" | "semantic" | "hybrid");
-              setPage(1);
+              const next = event.currentTarget.value as SearchMode;
+              updateFilters({ mode: next === "auto" ? undefined : next }, { resetPage: true });
             }}
           >
             <MonoSelectItem value="auto" text="Auto" />
@@ -234,8 +308,7 @@ export default function SearchPage() {
             labelText="Language"
             value={language}
             onChange={(event) => {
-              setLanguage(event.currentTarget.value);
-              setPage(1);
+              updateFilters({ language: event.currentTarget.value }, { resetPage: true });
             }}
           >
             <MonoSelectItem value="" text="All languages" />
@@ -249,8 +322,11 @@ export default function SearchPage() {
             labelText="Read state"
             value={readState}
             onChange={(event) => {
-              setReadState(event.currentTarget.value as "all" | "read" | "unread");
-              setPage(1);
+              const next = event.currentTarget.value as ReadState;
+              updateFilters(
+                { readState: next === "all" ? undefined : next },
+                { resetPage: true },
+              );
             }}
           >
             <MonoSelectItem value="all" text="All" />
@@ -263,8 +339,11 @@ export default function SearchPage() {
             labelText="Favorite state"
             value={favoriteState}
             onChange={(event) => {
-              setFavoriteState(event.currentTarget.value as "all" | "favorited" | "not-favorited");
-              setPage(1);
+              const next = event.currentTarget.value as FavoriteState;
+              updateFilters(
+                { favoriteState: next === "all" ? undefined : next },
+                { resetPage: true },
+              );
             }}
           >
             <MonoSelectItem value="all" text="All" />
@@ -277,8 +356,7 @@ export default function SearchPage() {
             labelText="From date"
             value={startDate}
             onChange={(event) => {
-              setStartDate(event.currentTarget.value);
-              setPage(1);
+              updateFilters({ startDate: event.currentTarget.value }, { resetPage: true });
             }}
           >
             <MonoSelectItem value="" text="Any date" />
@@ -289,8 +367,7 @@ export default function SearchPage() {
             labelText="To date"
             value={endDate}
             onChange={(event) => {
-              setEndDate(event.currentTarget.value);
-              setPage(1);
+              updateFilters({ endDate: event.currentTarget.value }, { resetPage: true });
             }}
           >
             <MonoSelectItem value="" text="Any date" />
@@ -307,8 +384,11 @@ export default function SearchPage() {
             onChange={(_, state) => {
               const value = Number(state.value);
               if (Number.isFinite(value)) {
-                setMinSimilarity(Math.max(0, Math.min(1, value)));
-                setPage(1);
+                const clamped = Math.max(0, Math.min(1, value));
+                updateFilters(
+                  { minSim: clamped === 0.2 ? undefined : clamped },
+                  { resetPage: true },
+                );
               }
             }}
           />
@@ -325,8 +405,7 @@ export default function SearchPage() {
           selectedItems={knownTags.filter((tag) => selectedTags.includes(tag.id))}
           onChange={(selection) => {
             const items = (selection.selectedItems ?? []) as SelectOption[];
-            setSelectedTags(items.map((item) => item.id));
-            setPage(1);
+            updateFilters({ tags: items.map((item) => item.id) }, { resetPage: true });
           }}
         />
         <MultiSelect
@@ -338,8 +417,7 @@ export default function SearchPage() {
           selectedItems={knownDomains.filter((domain) => selectedDomains.includes(domain.id))}
           onChange={(selection) => {
             const items = (selection.selectedItems ?? []) as SelectOption[];
-            setSelectedDomains(items.map((item) => item.id));
-            setPage(1);
+            updateFilters({ domains: items.map((item) => item.id) }, { resetPage: true });
           }}
         />
       </div>
@@ -410,8 +488,10 @@ export default function SearchPage() {
                         : undefined
                     }
                     onClick={() => {
-                      setSelectedDomains((prev) => toggleValue(prev, facet.value));
-                      setPage(1);
+                      updateFilters(
+                        { domains: toggleValue(selectedDomains, facet.value) },
+                        { resetPage: true },
+                      );
                     }}
                   >
                     {facet.value} ({facet.count})
@@ -451,8 +531,10 @@ export default function SearchPage() {
                         : undefined
                     }
                     onClick={() => {
-                      setSelectedTags((prev) => toggleValue(prev, facet.value));
-                      setPage(1);
+                      updateFilters(
+                        { tags: toggleValue(selectedTags, facet.value) },
+                        { resetPage: true },
+                      );
                     }}
                   >
                     {facet.value} ({facet.count})
@@ -492,8 +574,10 @@ export default function SearchPage() {
                         : undefined
                     }
                     onClick={() => {
-                      setLanguage((prev) => (prev === facet.value ? "" : facet.value));
-                      setPage(1);
+                      updateFilters(
+                        { language: language === facet.value ? undefined : facet.value },
+                        { resetPage: true },
+                      );
                     }}
                   >
                     {facet.value} ({facet.count})
@@ -530,8 +614,10 @@ export default function SearchPage() {
                 kind="ghost"
                 size="sm"
                 onClick={() => {
-                  setQuery(topic.tag.replace(/^#/, ""));
-                  setPage(1);
+                  updateFilters(
+                    { q: topic.tag.replace(/^#/, "") },
+                    { resetPage: true },
+                  );
                 }}
               >
                 {topic.tag} ({topic.count})
@@ -702,8 +788,10 @@ export default function SearchPage() {
           pageSizes={[10, 20, 50, 100]}
           totalItems={searchQuery.data.pagination.total}
           onChange={(event) => {
-            setPage(event.page);
-            setPageSize(event.pageSize);
+            updateFilters({
+              page: event.page === 1 ? undefined : event.page,
+              pageSize: event.pageSize === 20 ? undefined : event.pageSize,
+            });
           }}
         />
       )}
