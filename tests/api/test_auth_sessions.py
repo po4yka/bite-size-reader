@@ -139,8 +139,6 @@ def _mock_request_response() -> tuple[MagicMock, MagicMock]:
 
 @pytest.mark.asyncio
 async def test_refresh_rotates_refresh_token_and_revokes_previous(db, user_factory):
-    import asyncio
-
     user = await user_factory(telegram_user_id=987654321, username="rotator")
 
     old_token, _ = await create_refresh_token(
@@ -148,14 +146,6 @@ async def test_refresh_rotates_refresh_token_and_revokes_previous(db, user_facto
         client_id="mobile-app",
     )
     old_hash = hashlib.sha256(old_token.encode()).hexdigest()
-
-    # The current create_refresh_token does not embed a unique jti — JWTs with
-    # identical (user_id, client_id, iat-second) payloads collide byte-for-byte.
-    # In production a real refresh hits seconds-to-minutes after issuance, so
-    # collision is rare; the test sleeps just past the second boundary so iat
-    # differs and the rotation is observable as both bytes and DB rows. The
-    # JWT-jti gap is a separate hardening issue and out of scope here.
-    await asyncio.sleep(1.1)
 
     request, response = _mock_request_response()
     payload = RefreshTokenRequest(refresh_token=old_token, client_id="mobile-app")

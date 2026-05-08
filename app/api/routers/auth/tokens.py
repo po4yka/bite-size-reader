@@ -5,6 +5,7 @@ JWT token creation and validation.
 from __future__ import annotations
 
 import hashlib
+import secrets
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -108,6 +109,7 @@ def create_token(
             "exp": now + timedelta(seconds=ttl_seconds),
             "type": "access",
             "iat": now,
+            "jti": secrets.token_urlsafe(16),
         }
     elif token_type == "refresh":
         if ttl_seconds is None:
@@ -118,6 +120,7 @@ def create_token(
             "exp": now + timedelta(seconds=ttl_seconds),
             "type": "refresh",
             "iat": now,
+            "jti": secrets.token_urlsafe(16),
         }
     else:
         raise ValueError(f"Invalid token type: {token_type}")
