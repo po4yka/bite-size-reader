@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useSummariesList } from "../../hooks/useSummaries";
 import type { SummaryCompact } from "../../api/types";
 
@@ -34,10 +35,16 @@ function fmtTime(iso: string): string {
   return `${days[d.getDay()]} ${hh}:${mm}`;
 }
 
+/** Estimated row height (px). Real height is measured by the virtualizer's
+ * dynamic-measurement path, but a sane initial estimate keeps the scrollbar
+ * stable on first paint. Matches the existing .queue li line-height in CSS. */
+const ROW_ESTIMATE_PX = 28;
+
 export default function LibraryPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<FilterKey>("ALL");
   const [cursor, setCursor] = useState(0);
+  const parentRef = useRef<HTMLDivElement>(null);
 
   const summariesQuery = useSummariesList({
     limit: 100,
@@ -58,6 +65,17 @@ export default function LibraryPage() {
   const total = summariesQuery.data?.pagination.total ?? visible.length;
   const pending = visible.filter((s) => !s.isRead).length;
 
+  // React Compiler skips memoising components that touch useVirtualizer
+  // because the hook returns functions; this is documented and intentional
+  // (see TanStack Virtual issues). The advisory is a warning-only signal.
+  // eslint-disable-next-line
+  const rowVirtualizer = useVirtualizer({
+    count: visible.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_ESTIMATE_PX,
+    overscan: 8,
+  });
+
   // Clamp cursor on data changes
   useEffect(() => {
     if (visible.length > 0) {
@@ -65,23 +83,32 @@ export default function LibraryPage() {
     }
   }, [visible.length]);
 
-  // Keyboard navigation (disabled on mobile — no physical keyboard)
+  // Keyboard navigation (disabled on mobile — no physical keyboard).
+  // After cursor moves, scroll the active row into view via the virtualizer.
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (window.matchMedia("(max-width: 768px)").matches) return;
       if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
-        setCursor((c) => Math.min(c + 1, visible.length - 1));
+        setCursor((c) => {
+          const next = Math.min(c + 1, visible.length - 1);
+          rowVirtualizer.scrollToIndex(next, { align: "auto" });
+          return next;
+        });
       } else if (e.key === "ArrowUp" || e.key === "k") {
         e.preventDefault();
-        setCursor((c) => Math.max(c - 1, 0));
+        setCursor((c) => {
+          const next = Math.max(c - 1, 0);
+          rowVirtualizer.scrollToIndex(next, { align: "auto" });
+          return next;
+        });
       } else if (e.key === "Enter" && visible[cursor]) {
         navigate(`/library/${visible[cursor].id}`);
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [cursor, visible, navigate]);
+  }, [cursor, visible, navigate, rowVirtualizer]);
 
   return (
     <main style={{ maxWidth: "var(--strip-7, var(--frost-strip-7))", padding: "0 calc(var(--char, 8px) * 4)" }}>
@@ -133,31 +160,63 @@ export default function LibraryPage() {
           INBOX ZERO
         </div>
       ) : (
-        <ul className="queue" id="queue-list">
-          {visible.map((item, idx) => {
-            const conf = (item as SummaryCompact & { confidence?: number }).confidence ?? 0.5;
-            const sig = sigClass(conf);
-            const isCursor = idx === cursor;
-            return (
-              <li
-                key={item.id}
-                className={`row ${sig}${isCursor ? " cursor" : ""}`}
-                data-id={item.id}
-                data-idx={idx}
-                onClick={() => navigate(`/article/${item.id}`)}
-                onMouseEnter={() => setCursor(idx)}
-              >
-                <span className="timestamp">{fmtTime(item.createdAt)}</span>
-                <span className="dot">∙</span>
-                <span className="source">{item.domain}</span>
-                <span className="dot">∙</span>
-                <span className="title">{item.title}</span>
-                <span className="topics">{item.topicTags.join(" ∙ ")}</span>
-                <span className="signal">{conf.toFixed(3)}</span>
-              </li>
-            );
-          })}
-        </ul>
+        // Virtualized container: parentRef is the scroll element; the inner
+        // <ul> is sized to the total list height so the native scrollbar tracks
+        // the full dataset. Only the rows in `getVirtualItems()` mount in the
+        // DOM (overscan keeps a few off-screen rows ready). Each row is
+        // absolute-positioned at translateY(virtualRow.start) and shares the
+        // same .row classNames + grid columns used by the (non-virtualized)
+        // header above, so column alignment is preserved.
+        <div
+          ref={parentRef}
+          id="queue-list"
+          style={{ maxHeight: "70vh", overflow: "auto" }}
+        >
+          <ul
+            className="queue"
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              position: "relative",
+              margin: 0,
+              padding: 0,
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const item = visible[virtualRow.index];
+              if (!item) return null;
+              const conf = (item as SummaryCompact & { confidence?: number }).confidence ?? 0.5;
+              const sig = sigClass(conf);
+              const isCursor = virtualRow.index === cursor;
+              return (
+                <li
+                  key={item.id}
+                  ref={rowVirtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  className={`row ${sig}${isCursor ? " cursor" : ""}`}
+                  data-id={item.id}
+                  data-idx={virtualRow.index}
+                  onClick={() => navigate(`/article/${item.id}`)}
+                  onMouseEnter={() => setCursor(virtualRow.index)}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <span className="timestamp">{fmtTime(item.createdAt)}</span>
+                  <span className="dot">∙</span>
+                  <span className="source">{item.domain}</span>
+                  <span className="dot">∙</span>
+                  <span className="title">{item.title}</span>
+                  <span className="topics">{item.topicTags.join(" ∙ ")}</span>
+                  <span className="signal">{conf.toFixed(3)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
 
       {/* Ingest status */}
