@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import httpx
+from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
+
 from app.adapter_models.llm.llm_models import ChatRequest, LLMCallResult
 from app.adapters.openrouter.chat_models import (
+    AttemptOutcome,
     ModelRunState,
     OpenRouterChatClient,
     StructuredOutputState,
@@ -13,17 +17,81 @@ from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
-    import httpx
-
     from app.adapters.openrouter.chat_transport import ChatTransport
 
 logger = get_logger(__name__)
+
+# Network-class exceptions that are safe to retry transparently.
+# These indicate the connection never reached the server (or the server closed
+# it before sending a response), so retrying the identical request is safe.
+# Non-network errors (e.g. 4xx/5xx HTTP responses, JSON parse failures) are
+# handled by the state-machine loop in run_attempts_for_model and must NOT be
+# caught here so they can drive request-shape mutations.
+_TRANSPORT_RETRY_EXCEPTIONS = (
+    httpx.ConnectError,
+    httpx.ReadTimeout,
+    httpx.ConnectTimeout,
+    httpx.WriteTimeout,
+    httpx.PoolTimeout,
+)
 
 
 class ChatAttemptRunner:
     def __init__(self, client: OpenRouterChatClient, transport: ChatTransport) -> None:
         self._client = client
         self._transport = transport
+
+    async def _attempt_transport(
+        self,
+        http_client: httpx.AsyncClient,
+        *,
+        model: str,
+        attempt: int,
+        sanitized_messages: list[dict[str, Any]],
+        request: ChatRequest,
+        rf_mode_current: str | None,
+        response_format_current: dict[str, Any] | None,
+        message_lengths: list[int],
+        message_roles: list[str],
+        total_chars: int,
+        request_id: int | None,
+        on_stream_delta: Any | None,
+    ) -> AttemptOutcome:
+        """Call _transport.attempt_request with tenacity retries on network errors.
+
+        Only httpx connection/timeout errors are retried here.  All other
+        exceptions (HTTP error responses, parse failures, CancelledError) are
+        re-raised immediately so the state-machine loop can handle them.
+        """
+        max_attempts = getattr(self._client, "_transport_retry_max_attempts", 3)
+        min_wait = getattr(self._client, "_transport_retry_min_wait_sec", 0.5)
+        max_wait = getattr(self._client, "_transport_retry_max_wait_sec", 5.0)
+
+        async for tenacity_attempt in AsyncRetrying(
+            retry=retry_if_exception_type(_TRANSPORT_RETRY_EXCEPTIONS),
+            stop=stop_after_attempt(max_attempts),
+            wait=wait_exponential(multiplier=1, min=min_wait, max=max_wait),
+            reraise=True,
+        ):
+            with tenacity_attempt:
+                return await self._transport.attempt_request(
+                    http_client,
+                    model=model,
+                    attempt=attempt,
+                    sanitized_messages=sanitized_messages,
+                    request=request,
+                    rf_mode_current=rf_mode_current,
+                    response_format_current=response_format_current,
+                    message_lengths=message_lengths,
+                    message_roles=message_roles,
+                    total_chars=total_chars,
+                    request_id=request_id,
+                    on_stream_delta=on_stream_delta,
+                )
+
+        # AsyncRetrying with reraise=True will raise on exhaustion; this line
+        # is unreachable but satisfies the type checker.
+        raise RuntimeError("unreachable")  # pragma: no cover
 
     async def run_attempts_for_model(
         self,
@@ -51,7 +119,7 @@ class ChatAttemptRunner:
 
         for attempt in range(self._client.error_handler._max_retries + 1):
             try:
-                outcome = await self._transport.attempt_request(
+                outcome = await self._attempt_transport(
                     client,
                     model=model,
                     attempt=attempt,

@@ -70,6 +70,10 @@ class OpenRouterClientConfig:
     prompt_cache_ttl_anthropic: str = "1h"
     cache_system_prompt: bool = True
     cache_large_content_threshold: int = 4096
+    # Transport-layer retry settings (tenacity, network errors only)
+    transport_retry_max_attempts: int = 3
+    transport_retry_min_wait_sec: float = 0.5
+    transport_retry_max_wait_sec: float = 5.0
     # Debug/logging
     debug_payloads: bool = False
     enable_stats: bool = False
@@ -145,6 +149,9 @@ class OpenRouterClient:
             cache_system_prompt=cfg.cache_system_prompt,
             cache_large_content_threshold=cfg.cache_large_content_threshold,
         )
+        self._transport_retry_max_attempts = cfg.transport_retry_max_attempts
+        self._transport_retry_min_wait_sec = cfg.transport_retry_min_wait_sec
+        self._transport_retry_max_wait_sec = cfg.transport_retry_max_wait_sec
         self._set_pricing_overrides()
         self._initialize_components(
             api_key=api_key,
@@ -201,6 +208,9 @@ class OpenRouterClient:
             prompt_cache_ttl_anthropic=or_cfg.prompt_cache_ttl_anthropic,
             cache_system_prompt=or_cfg.cache_system_prompt,
             cache_large_content_threshold=or_cfg.cache_large_content_threshold,
+            transport_retry_max_attempts=or_cfg.transport_retry_max_attempts,
+            transport_retry_min_wait_sec=or_cfg.transport_retry_min_wait_sec,
+            transport_retry_max_wait_sec=or_cfg.transport_retry_max_wait_sec,
         )
         return cls(
             or_cfg.api_key,

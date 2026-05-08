@@ -102,6 +102,22 @@ class OpenRouterConfig(BaseModel):
         validation_alias="OPENROUTER_CACHE_LARGE_CONTENT_THRESHOLD",
         description="Minimum tokens to auto-cache content (Gemini requires 4096)",
     )
+    # Transport-layer retry settings (tenacity, network errors only)
+    transport_retry_max_attempts: int = Field(
+        default=3,
+        validation_alias="OPENROUTER_TRANSPORT_RETRY_MAX_ATTEMPTS",
+        description="Max attempts for network-class transport errors (httpx connection/timeout)",
+    )
+    transport_retry_min_wait_sec: float = Field(
+        default=0.5,
+        validation_alias="OPENROUTER_TRANSPORT_RETRY_MIN_WAIT_SEC",
+        description="Initial wait (seconds) before first transport retry",
+    )
+    transport_retry_max_wait_sec: float = Field(
+        default=5.0,
+        validation_alias="OPENROUTER_TRANSPORT_RETRY_MAX_WAIT_SEC",
+        description="Maximum wait (seconds) between transport retries",
+    )
 
     @field_validator("api_key", mode="before")
     @classmethod
