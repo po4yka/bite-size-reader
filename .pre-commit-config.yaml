@@ -56,3 +56,13 @@ repos:
         name: Disallow files > 1500 LOC
         entry: python tools/scripts/check_file_size.py --max-loc 1500 --baseline tools/scripts/file_size_baseline.json
         language: python
+      # Regenerates clients/web/src/api/generated.ts whenever the OpenAPI YAML
+      # is in the staged file set, then re-stages the result so the commit
+      # captures it. Without this hook, generated.ts drifts from mobile_api.yaml
+      # between PRs and is only caught later by the web-static-check CI job.
+      - id: regenerate-openapi-types
+        name: Regenerate clients/web/src/api/generated.ts from mobile_api.yaml
+        entry: bash -c 'cd clients/web && npm run --silent generate:api && cd ../.. && git add clients/web/src/api/generated.ts'
+        language: system
+        files: ^docs/openapi/mobile_api\.yaml$
+        pass_filenames: false
