@@ -17,9 +17,14 @@ class LLMWorkflowStorageMixin:
     cfg: Any
     llm_repo: Any
 
-    def _build_llm_call_payload(self, llm: Any, req_id: int) -> dict[str, Any]:
+    def _build_llm_call_payload(
+        self,
+        llm: Any,
+        req_id: int,
+        attempt_trigger: str | None = None,
+    ) -> dict[str, Any]:
         """Serialize an LLM call once so queue batching can reuse the payload."""
-        return {
+        payload: dict[str, Any] = {
             "request_id": req_id,
             "provider": "openrouter",
             "model": llm.model or self.cfg.openrouter.model,
@@ -42,6 +47,9 @@ class LLMWorkflowStorageMixin:
                 else None
             ),
         }
+        if attempt_trigger is not None:
+            payload["attempt_trigger"] = attempt_trigger
+        return payload
 
     async def _persist_llm_calls_batch(self, calls: list[dict[str, Any]]) -> None:
         """Persist multiple LLM calls together when the queue can coalesce them."""
@@ -53,8 +61,14 @@ class LLMWorkflowStorageMixin:
                 extra={"error": str(exc), "count": len(calls)},
             )
 
-    async def _persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
-        payload = self._build_llm_call_payload(llm, req_id)
+    async def _persist_llm_call(
+        self,
+        llm: Any,
+        req_id: int,
+        correlation_id: str | None,
+        attempt_trigger: str | None = None,
+    ) -> None:
+        payload = self._build_llm_call_payload(llm, req_id, attempt_trigger=attempt_trigger)
 
         if self._db_write_queue is not None:
             await self._db_write_queue.enqueue_batch(

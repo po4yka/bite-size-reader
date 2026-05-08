@@ -218,9 +218,15 @@ class LLMWorkflowExecutionMixin:
         except (AttributeError, ValueError, RuntimeError):
             return {"type": "json_object"}
 
-    async def persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
+    async def persist_llm_call(
+        self,
+        llm: Any,
+        req_id: int,
+        correlation_id: str | None,
+        attempt_trigger: str | None = None,
+    ) -> None:
         """Public helper to persist an LLM call."""
-        await self._persist_llm_call(llm, req_id, correlation_id)
+        await self._persist_llm_call(llm, req_id, correlation_id, attempt_trigger=attempt_trigger)
 
     async def _resolve_llm_timeout(self, model: str | None) -> tuple[float, str]:
         """Determine the LLM call timeout, preferring the adaptive service."""

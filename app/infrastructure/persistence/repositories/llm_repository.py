@@ -42,6 +42,12 @@ def _build_llm_call_payload(call_data: dict[str, Any] | Any) -> dict[str, Any]:
         "error_context_json": error_context_payload,
     }
 
+    # Attempt-tracking: pass through if present; the repo layer fills in
+    # attempt_index automatically when it is None.
+    attempt_trigger = call_data.get("attempt_trigger")
+    if attempt_trigger is not None:
+        payload["attempt_trigger"] = attempt_trigger
+
     if provider == "openrouter":
         payload["openrouter_response_text"] = response_text
         payload["openrouter_response_json"] = response_payload
@@ -54,6 +60,33 @@ def _build_llm_call_payload(call_data: dict[str, Any] | Any) -> dict[str, Any]:
     return payload
 
 
+async def _compute_next_attempt_index(session: Any, request_id: int | None) -> int:
+    """Return max(attempt_index) + 1 for *request_id* within the current transaction.
+
+    Falls back to 1 when request_id is None or no prior rows exist.
+    """
+    if request_id is None:
+        return 1
+    current_max = await session.scalar(
+        select(func.max(LLMCall.attempt_index)).where(LLMCall.request_id == request_id)
+    )
+    return (current_max or 0) + 1
+
+
+async def _resolve_initial_trigger(session: Any, request_id: int | None) -> str | None:
+    """Return the ``initial_attempt_trigger`` stored on the parent request.
+
+    Used to inherit the trigger value for the first LLM call of a cloned
+    request (e.g. user-initiated retry) without requiring every call site to
+    pass the trigger explicitly.  Returns ``None`` when the column is unset.
+    """
+    if request_id is None:
+        return None
+    return await session.scalar(
+        select(Request.initial_attempt_trigger).where(Request.id == request_id)
+    )
+
+
 class LLMRepositoryAdapter:
     """Adapter for LLM call logging operations."""
 
@@ -61,9 +94,28 @@ class LLMRepositoryAdapter:
         self._database = database
 
     async def async_insert_llm_call(self, record: LLMCallRecord) -> int:
-        """Insert an LLM call log record."""
+        """Insert an LLM call log record.
+
+        ``attempt_index`` is auto-computed as max(attempt_index)+1 for the
+        same ``request_id`` when not provided in *record*.
+
+        ``attempt_trigger`` defaults to the ``initial_attempt_trigger`` field
+        stored on the parent ``Request`` row (set by retry flows) when this is
+        the first call (attempt_index == 1) and no explicit trigger is given.
+        Falls back to ``"initial"`` when neither is set.
+        """
         async with self._database.transaction() as session:
-            call = LLMCall(**_build_llm_call_payload(record))
+            payload = _build_llm_call_payload(record)
+            req_id: int | None = payload.get("request_id")
+            if "attempt_index" not in payload or payload.get("attempt_index") is None:
+                payload["attempt_index"] = await _compute_next_attempt_index(session, req_id)
+            # For the first call, inherit trigger from the parent request when
+            # no explicit trigger was supplied by the caller.
+            if payload.get("attempt_trigger") is None and payload.get("attempt_index") == 1:
+                inherited = await _resolve_initial_trigger(session, req_id)
+                if inherited:
+                    payload["attempt_trigger"] = inherited
+            call = LLMCall(**payload)
             session.add(call)
             await session.flush()
             return call.id
@@ -72,12 +124,33 @@ class LLMRepositoryAdapter:
         self,
         calls: list[dict[str, Any]],
     ) -> list[int]:
-        """Insert multiple LLM calls in a single transaction."""
+        """Insert multiple LLM calls in a single transaction.
+
+        ``attempt_index`` is auto-computed per row when not provided.
+        """
         if not calls:
             return []
 
         async with self._database.transaction() as session:
-            rows = [LLMCall(**_build_llm_call_payload(call_data)) for call_data in calls]
+            # Track the running max per request_id so that rows within the
+            # same batch are numbered correctly without extra round-trips.
+            running_max: dict[int | None, int] = {}
+            rows: list[LLMCall] = []
+            for call_data in calls:
+                payload = _build_llm_call_payload(call_data)
+                if "attempt_index" not in payload or payload.get("attempt_index") is None:
+                    req_id: int | None = payload.get("request_id")
+                    if req_id not in running_max:
+                        running_max[req_id] = await _compute_next_attempt_index(session, req_id)
+                    else:
+                        running_max[req_id] += 1
+                    payload["attempt_index"] = running_max[req_id]
+                else:
+                    # Caller provided explicit value; keep running_max in sync.
+                    req_id = payload.get("request_id")
+                    explicit = int(payload["attempt_index"])
+                    running_max[req_id] = max(running_max.get(req_id, 0), explicit)
+                rows.append(LLMCall(**payload))
             session.add_all(rows)
             await session.flush()
             return [row.id for row in rows]

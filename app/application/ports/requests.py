@@ -30,6 +30,11 @@ class LLMCallRecord(TypedDict, total=False):
     structured_output_used: bool | None
     structured_output_mode: str | None
     error_context_json: Any
+    # Attempt-tracking fields (improvement #6).
+    # attempt_index: when omitted the repository computes max(attempt_index)+1
+    # for the same request_id within the same transaction.
+    attempt_index: int | None
+    attempt_trigger: str | None
 
 
 @runtime_checkable
@@ -83,6 +88,7 @@ class RequestRepositoryPort(Protocol):
         lang_detected: str | None = None,
         content_text: str | None = None,
         route_version: int = 1,
+        initial_attempt_trigger: str | None = None,
     ) -> int:
         """Create a request."""
 

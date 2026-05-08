@@ -299,6 +299,8 @@ class RequestService:
             fwd_from_chat_id=original.get("fwd_from_chat_id"),
             fwd_from_msg_id=original.get("fwd_from_msg_id"),
             lang_detected=original.get("lang_detected"),
+            # Mark the first LLM call for this retry request as "user_retry".
+            initial_attempt_trigger="user_retry",
         )
         created = await self._request_repo.async_get_request_by_id(new_request_id)
         if created is None:

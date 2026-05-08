@@ -3,14 +3,48 @@
 from __future__ import annotations
 
 import datetime as dt  # noqa: TC003 - SQLAlchemy resolves string annotations at runtime.
+import enum
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, LargeBinary
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, LargeBinary
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.db.types import JSONB, JSONValue, _next_server_version, _utcnow
+
+
+class LLMAttemptTrigger(enum.StrEnum):
+    """Identifies which pathway created this LLM call row.
+
+    Values:
+    - ``initial``: first call for the request (the request just landed).
+    - ``user_retry``: first call of a request cloned by
+      ``RequestService.retry_failed_request`` (mobile API retry action).
+    - ``auto_backfill``: reserved for an automated backfill / scheduled retry
+      pipeline. No current code path writes this value.
+    - ``repair_loop``: call issued by the JSON-repair self-correction path in
+      ``app/adapters/content/llm_response_workflow_repair.py``.
+    - ``stream_fallback_retry``: reserved for a fresh request created when
+      streaming falls back to non-streaming. The current implementation reuses
+      the same in-flight ``LLMCall`` row rather than inserting a new one, so
+      this value is not written by any active code path.
+    """
+
+    initial = "initial"
+    user_retry = "user_retry"
+    auto_backfill = "auto_backfill"
+    repair_loop = "repair_loop"
+    stream_fallback_retry = "stream_fallback_retry"
+
+
+_llm_attempt_trigger_enum = Enum(
+    LLMAttemptTrigger,
+    name="llm_attempt_trigger",
+    native_enum=True,
+    create_constraint=True,
+    values_callable=lambda obj: [e.value for e in obj],
+)
 
 
 def _json_column() -> Mapped[JSONValue]:
@@ -224,6 +258,10 @@ class Request(Base):
     )
     processing_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_context_json: Mapped[JSONValue] = _json_column()
+    # When set, the first LLM call for this request will inherit this trigger
+    # value rather than defaulting to "initial".  Used by retry flows to mark
+    # cloned requests as "user_retry" without modifying every LLM call site.
+    initial_attempt_trigger: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     telegram_message: Mapped[TelegramMessage | None] = relationship(
         back_populates="request", cascade="all, delete-orphan"
@@ -316,10 +354,28 @@ class CrawlResult(Base):
 
 class LLMCall(Base):
     __tablename__ = "llm_calls"
+    __table_args__ = (
+        # Cheap retrieval of "all attempts for a request, ordered".
+        Index("ix_llm_calls_request_id_attempt_index", "request_id", "attempt_index"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     request_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("requests.id", ondelete="CASCADE"), nullable=False
+    )
+    attempt_index: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+        comment="1-based index within a request's attempt sequence.",
+    )
+    attempt_trigger: Mapped[str] = mapped_column(
+        _llm_attempt_trigger_enum,
+        nullable=False,
+        default=LLMAttemptTrigger.initial,
+        server_default=LLMAttemptTrigger.initial.value,
+        comment="Pathway that created this LLM call row. See LLMAttemptTrigger.",
     )
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
@@ -664,6 +720,7 @@ __all__ = [
     "Chat",
     "ClientSecret",
     "CrawlResult",
+    "LLMAttemptTrigger",
     "LLMCall",
     "RefreshToken",
     "Request",
