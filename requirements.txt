@@ -906,10 +906,6 @@ packaging==26.2 \
     #   spacy
     #   thinc
     #   weasel
-peewee==4.0.5 \
-    --hash=sha256:05bf687660f04f925bcb7d744e5af826ca526322f2fad894bfa4f1d0f3bcaf50 \
-    --hash=sha256:b43a21493f19f205a016cb4a9e29c7eca3500576d29447a89732022d193450ba
-    # via ratatoskr
 preshed==3.0.13 \
     --hash=sha256:09f96b477c987755b3c945df214ea1c1c80bfb350e9f34e78da89585535b77e8 \
     --hash=sha256:0e5b2865aecbd2e1e10e5d19bb8bfad765863c1307c6c3e51f2a08bd64122409 \

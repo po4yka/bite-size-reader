@@ -1,4 +1,4 @@
-.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate check-file-loc check-layout clean-generated
+.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate check-file-loc check-layout clean-generated security
 
 COMPOSE_FILE := ops/docker/docker-compose.yml
 DOCKERFILE_BOT := ops/docker/Dockerfile
@@ -33,6 +33,14 @@ test-all:
 test-fast:
 	pytest tests/ -m "not slow and not integration" -v -x
 
+# Mirrors the bandit-scan and pip-audit-scan jobs in .github/workflows/ci.yml so
+# devs can reproduce CI security checks locally before pushing. Not part of
+# `make all` because pip-audit hits the network and is slow on cold caches.
+security:
+	uv run --frozen bandit -r app -ll
+	uv run --frozen pip-audit
+
+# Note: `all` deliberately omits `security`; run `make security` separately.
 all: format lint type test
 
 setup-dev:
