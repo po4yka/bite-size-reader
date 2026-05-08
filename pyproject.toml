@@ -283,7 +283,35 @@ dev = [
 ]
 
 [tool.uv]
-override-dependencies = ["protobuf>=7.34.1"]
+# Constrain torch's CUDA satellite deps to x86_64 Linux only.
+#
+# The torch 2.11.0 lockfile entry pins nvidia-* / triton / cuda-bindings /
+# cuda-toolkit under marker `sys_platform == 'linux'` with no platform_machine
+# qualifier, which makes uv attempt to install them on linux/arm64 too. The
+# Pi (aarch64) has no NVIDIA GPU and the aarch64 torch wheel is CPU-only,
+# so these are pure download bloat (~1.2 GB) and slow ARM image builds by
+# 5-10 min. The overrides below mirror torch's marker but add
+# `platform_machine == 'x86_64'`, so on aarch64 they evaluate False and uv
+# skips the wheels entirely.
+override-dependencies = [
+  "protobuf>=7.34.1",
+  "cuda-bindings; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "cuda-toolkit; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-cublas; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-cuda-cupti; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-cuda-nvrtc; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-cuda-runtime; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-cudnn-cu13; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-cufft; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-curand; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-cusolver; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-cusparse; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-cusparselt-cu13; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-nccl-cu13; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-nvjitlink; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "nvidia-nvshmem-cu13; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "triton; sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
 
 [[tool.uv.index]]
 name = "safety"
