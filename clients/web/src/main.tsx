@@ -2,9 +2,19 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as Sentry from "@sentry/react";
 import "./styles.css";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthProvider";
+
+const _sentryDsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+if (_sentryDsn) {
+  Sentry.init({
+    dsn: _sentryDsn,
+    integrations: [Sentry.browserTracingIntegration()],
+    tracesSampleRate: 0.1,
+  });
+}
 
 function setRootCssVar(name: string, value?: number | string): void {
   if (value === undefined || value === null || value === "") {

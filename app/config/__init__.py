@@ -17,6 +17,7 @@ from .redis import RedisConfig
 from .rss import RSSConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
+from .otel import SentryConfig
 from .settings import AppConfig, Config, ConfigHelper, Settings, clear_config_cache, load_config
 from .signal_ingestion import SignalIngestionConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig
@@ -52,6 +53,7 @@ __all__ = [
     "RedisConfig",
     "RuntimeConfig",
     "ScraperConfig",
+    "SentryConfig",
     "Settings",
     "SignalIngestionConfig",
     "SyncConfig",

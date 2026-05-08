@@ -29,6 +29,10 @@ apify-fingerprint-datapoints==0.13.0
     # via
     #   browserforge
     #   crawlee
+argon2-cffi==25.1.0
+    # via ratatoskr
+argon2-cffi-bindings==25.1.0
+    # via argon2-cffi
 asgiref==3.11.1
     # via opentelemetry-instrumentation-asgi
 async-timeout==5.0.1
@@ -70,6 +74,7 @@ certifi==2026.4.22
     #   trafilatura
 cffi==2.0.0
     # via
+    #   argon2-cffi-bindings
     #   brotlicffi
     #   cryptography
     #   curl-cffi
@@ -109,11 +114,11 @@ cssselect==1.4.0
     # via scrapling
 cssselect2==0.9.0
     # via weasyprint
-cuda-bindings==13.2.0 ; sys_platform == 'linux'
+cuda-bindings==13.2.0 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via torch
-cuda-pathfinder==1.5.4 ; sys_platform == 'linux'
+cuda-pathfinder==1.5.4 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via cuda-bindings
-cuda-toolkit==13.0.2 ; sys_platform == 'linux'
+cuda-toolkit==13.0.2 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via torch
 curl-cffi==0.15.0
     # via ratatoskr
@@ -276,45 +281,16 @@ numpy==2.4.4
     #   spacy
     #   thinc
     #   transformers
-nvidia-cublas==13.1.0.3 ; sys_platform == 'linux'
-    # via
-    #   cuda-toolkit
-    #   nvidia-cudnn-cu13
-    #   nvidia-cusolver
-nvidia-cuda-cupti==13.0.85 ; sys_platform == 'linux'
-    # via cuda-toolkit
-nvidia-cuda-nvrtc==13.0.88 ; sys_platform == 'linux'
-    # via cuda-toolkit
-nvidia-cuda-runtime==13.0.96 ; sys_platform == 'linux'
-    # via cuda-toolkit
-nvidia-cudnn-cu13==9.19.0.56 ; sys_platform == 'linux'
+nvidia-cublas==13.1.0.3 ; platform_machine == 'x86_64' and sys_platform == 'linux'
+    # via nvidia-cudnn-cu13
+nvidia-cudnn-cu13==9.19.0.56 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via torch
-nvidia-cufft==12.0.0.61 ; sys_platform == 'linux'
-    # via cuda-toolkit
-nvidia-cufile==1.15.1.6 ; sys_platform == 'linux'
-    # via cuda-toolkit
-nvidia-curand==10.4.0.35 ; sys_platform == 'linux'
-    # via cuda-toolkit
-nvidia-cusolver==12.0.4.66 ; sys_platform == 'linux'
-    # via cuda-toolkit
-nvidia-cusparse==12.6.3.3 ; sys_platform == 'linux'
-    # via
-    #   cuda-toolkit
-    #   nvidia-cusolver
-nvidia-cusparselt-cu13==0.8.0 ; sys_platform == 'linux'
+nvidia-cusparselt-cu13==0.8.0 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via torch
-nvidia-nccl-cu13==2.28.9 ; sys_platform == 'linux'
+nvidia-nccl-cu13==2.28.9 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via torch
-nvidia-nvjitlink==13.0.88 ; sys_platform == 'linux'
-    # via
-    #   cuda-toolkit
-    #   nvidia-cufft
-    #   nvidia-cusolver
-    #   nvidia-cusparse
-nvidia-nvshmem-cu13==3.4.5 ; sys_platform == 'linux'
+nvidia-nvshmem-cu13==3.4.5 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via torch
-nvidia-nvtx==13.0.85 ; sys_platform == 'linux'
-    # via cuda-toolkit
 openai==2.33.0
     # via
     #   instructor
@@ -386,8 +362,6 @@ packaging==26.2
     #   thinc
     #   transformers
     #   weasel
-peewee==4.0.5
-    # via ratatoskr
 pillow==12.2.0
     # via weasyprint
 playwright==1.59.0
@@ -583,7 +557,9 @@ taskiq-redis==1.2.2
 telethon==1.43.2
     # via ratatoskr
 tenacity==9.1.4
-    # via instructor
+    # via
+    #   instructor
+    #   ratatoskr
 thinc==8.3.13
     # via spacy
 threadpoolctl==3.6.0
@@ -619,7 +595,7 @@ transformers==5.7.0
     # via
     #   ratatoskr
     #   sentence-transformers
-triton==3.6.0 ; sys_platform == 'linux'
+triton==3.6.0 ; platform_machine == 'x86_64' and sys_platform == 'linux'
     # via torch
 typer==0.25.1
     # via

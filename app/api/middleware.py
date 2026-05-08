@@ -117,6 +117,13 @@ async def correlation_id_middleware(request: Request, call_next: Callable):
         pass
 
     try:
+        import sentry_sdk
+
+        sentry_sdk.set_tag("correlation_id", correlation_id)
+    except ImportError:
+        pass
+
+    try:
         response = await call_next(request)
         response.headers["X-Correlation-ID"] = correlation_id
         return response

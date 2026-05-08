@@ -1,4 +1,4 @@
-"""OpenTelemetry observability configuration."""
+"""OpenTelemetry and Sentry observability configuration."""
 
 from __future__ import annotations
 
@@ -21,4 +21,23 @@ class OtelConfig(BaseSettings):
 
     @classmethod
     def from_env(cls) -> OtelConfig:
+        return cls()
+
+
+class SentryConfig(BaseSettings):
+    """Sentry error-monitoring configuration.
+
+    All fields default to safe no-op values so Sentry is disabled unless
+    SENTRY_DSN is explicitly set in the environment.
+    """
+
+    model_config = {"populate_by_name": True, "extra": "ignore"}
+
+    sentry_dsn: str | None = Field(default=None, validation_alias="SENTRY_DSN")
+    traces_sample_rate: float = Field(
+        default=0.1, validation_alias="SENTRY_TRACES_SAMPLE_RATE"
+    )
+
+    @classmethod
+    def from_env(cls) -> SentryConfig:
         return cls()

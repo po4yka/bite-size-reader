@@ -81,7 +81,27 @@ async def lifespan(app: FastAPI):
         from app.config import load_config as _load_config
         from app.observability.otel import init_tracing
 
-        init_tracing(_load_config(allow_stub_telegram=True))
+        _cfg = _load_config(allow_stub_telegram=True)
+        init_tracing(_cfg)
+
+        # Initialize Sentry when DSN is configured; no-op otherwise.
+        if _cfg.sentry.sentry_dsn:
+            try:
+                import sentry_sdk
+                from sentry_sdk.integrations.fastapi import FastApiIntegration
+                from sentry_sdk.integrations.loguru import LoguruIntegration
+
+                sentry_sdk.init(
+                    dsn=_cfg.sentry.sentry_dsn,
+                    integrations=[FastApiIntegration(), LoguruIntegration()],
+                    traces_sample_rate=_cfg.sentry.traces_sample_rate,
+                )
+                logger.info("sentry_initialized")
+            except ImportError:
+                logger.warning(
+                    "sentry_sdk not installed; install monitoring extra to enable Sentry"
+                )
+
         runtime = await build_api_runtime()
         setup_json_logging(runtime.cfg.runtime.log_level)
         try:
