@@ -98,7 +98,7 @@ YOUTUBE_DOWNLOAD_TRANSCRIPT=true
 # Fastest models (ranked)
 1. google/gemini-2.0-flash-001:free  # Free, 2-4s
 2. qwen/qwen3-max                    # $0.02, 3-5s
-3. deepseek/deepseek-v3.2            # $0.01, 6-8s
+3. deepseek/deepseek-v4-flash            # $0.01, 6-8s
 
 # Avoid slow models
 # claude-opus-4: ~15-20s
@@ -148,7 +148,7 @@ SCRAPER_FORCE_PROVIDER=scrapling
 ```bash
 # Free tier models (zero cost)
 OPENROUTER_MODEL=google/gemini-2.0-flash-001:free
-OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1:free
+OPENROUTER_FALLBACK_MODELS=qwen/qwen3-coder:free
 
 # Check OpenRouter for current free models
 # https://openrouter.ai/models?order=newest&max_price=0

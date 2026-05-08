@@ -137,7 +137,7 @@ ALLOWED_USER_IDS=your_user_id
 
 # LLM (required)
 OPENROUTER_API_KEY=your_openrouter_key
-OPENROUTER_MODEL=deepseek/deepseek-v3.2
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash
 
 # Database (local dev)
 DB_PATH=./data/ratatoskr.db

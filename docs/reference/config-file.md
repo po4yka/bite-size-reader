@@ -45,7 +45,7 @@ runtime:
   max_concurrent_calls: 4
 
 openrouter:
-  model: deepseek/deepseek-v3.2
+  model: deepseek/deepseek-v4-flash
   fallback_models:
     - qwen/qwen3.5-plus-02-15
     - moonshotai/kimi-k2-0905

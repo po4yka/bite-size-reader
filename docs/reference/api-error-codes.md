@@ -524,7 +524,7 @@ The language model service is temporarily unavailable. Trying fallback model...
   "error_code": "LLM001",
   "openrouter_status": 503,
   "openrouter_message": "Model temporarily unavailable",
-  "model": "deepseek/deepseek-v3.2",
+  "model": "deepseek/deepseek-v4-flash",
   "correlation_id": "req_abc123"
 }
 ```

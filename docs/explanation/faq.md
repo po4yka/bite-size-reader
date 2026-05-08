@@ -165,7 +165,7 @@ FIRECRAWL_API_KEY=...   # Only needed for cloud Firecrawl or web search (Scrapli
 **Optional but recommended**:
 
 ```bash
-OPENROUTER_MODEL=deepseek/deepseek-v3.2
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash
 OPENROUTER_FALLBACK_MODELS=qwen/qwen3-max,moonshotai/kimi-k2.5
 DB_PATH=/data/ratatoskr.db
 LOG_LEVEL=INFO
@@ -617,7 +617,7 @@ See [Architecture Overview § Layering quick reference](architecture-overview.md
 
    ```bash
    OPENROUTER_MODEL=google/gemini-2.0-flash-001:free
-   OPENROUTER_FALLBACK_MODELS=deepseek/deepseek-r1:free
+   OPENROUTER_FALLBACK_MODELS=qwen/qwen3-coder:free
    ```
 
 2. **Use free content extraction** (no cloud API costs):
@@ -652,7 +652,7 @@ See [Architecture Overview § Layering quick reference](architecture-overview.md
 **Ranked by cost/quality** (as of Feb 2026):
 
 1. **Free tier**: `google/gemini-2.0-flash-001:free` (best free option)
-2. **Ultra-cheap**: `deepseek/deepseek-v3.2` (~$0.01/summary)
+2. **Ultra-cheap**: `deepseek/deepseek-v4-flash` (~$0.01/summary)
 3. **Cheap + good**: `qwen/qwen3-max` (~$0.02/summary)
 4. **Balanced**: `moonshotai/kimi-k2.5` (~$0.03/summary, great for long content)
 

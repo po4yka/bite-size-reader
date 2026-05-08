@@ -59,7 +59,8 @@ def test_chat_context_builder_sanitizes_messages_and_collects_stats() -> None:
 
 
 def test_chat_context_builder_adds_safe_structured_fallbacks_for_reasoning_models() -> None:
-    builder = ChatContextBuilder(_make_client(model="deepseek/deepseek-r1"))
+    reasoning_model = "qwen/qwen3-next-80b-a3b-thinking"
+    builder = ChatContextBuilder(_make_client(model=reasoning_model))
 
     context = builder.prepare(
         [{"role": "user", "content": "hello"}],
@@ -73,15 +74,15 @@ def test_chat_context_builder_adds_safe_structured_fallbacks_for_reasoning_model
         fallback_models_override=None,
     )
 
-    assert context.models_to_try[0] == "deepseek/deepseek-r1"
+    assert context.models_to_try[0] == reasoning_model
     assert "fallback/model" in context.models_to_try
-    # Reasoning models append the safe structured fallback list (currently
-    # minimax/qwen/deepseek-v3.2) -- assert at least one of the safe entries
-    # appears so the test isn't tied to a single rotating model name.
+    # Reasoning models append the safe structured fallback list -- assert at
+    # least one of the safe entries appears so the test isn't tied to a single
+    # rotating model name.
     safe_fallbacks = {
         "minimax/minimax-m2",
         "qwen/qwen3.5-plus-02-15",
-        "deepseek/deepseek-v3.2",
+        "deepseek/deepseek-v4-flash",
     }
     assert safe_fallbacks.intersection(context.models_to_try)
 

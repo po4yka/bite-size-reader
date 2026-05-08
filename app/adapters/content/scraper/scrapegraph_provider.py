@@ -80,7 +80,7 @@ class ScrapeGraphAIProvider:
             )
 
         # scrapegraphai splits model on "/" to derive model_provider: split[0].
-        # Passing model="deepseek/deepseek-v3.2" would set model_provider="deepseek",
+        # Passing model="deepseek/deepseek-v4-flash" would set model_provider="deepseek",
         # which is not in its registry. Prepending "openai/" makes the lib parse
         # model_provider="openai" and passes the remainder (original slash-form string)
         # to OpenRouter, which accepts the full model identifier unchanged.

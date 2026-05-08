@@ -123,7 +123,7 @@ class LatencyStatsRepositoryAdapter:
         within the specified time window.
 
         Args:
-            model: The model identifier (e.g., "deepseek/deepseek-v3.2")
+            model: The model identifier (e.g., "deepseek/deepseek-v4-flash")
             days: Number of days of history to consider
 
         Returns:

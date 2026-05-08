@@ -26,7 +26,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 
 - Sign up: https://openrouter.ai/
 - Create an API key and set `OPENROUTER_API_KEY`.
-- Choose a model (e.g., `deepseek/deepseek-v3.2`) and set `OPENROUTER_MODEL`.
+- Choose a model (e.g., `deepseek/deepseek-v4-flash`) and set `OPENROUTER_MODEL`.
 - Optional attribution: `OPENROUTER_HTTP_REFERER`, `OPENROUTER_X_TITLE`.
 
 ## Scraper Sidecar Setup (Optional)

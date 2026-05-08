@@ -367,7 +367,7 @@ docker compose -f ops/docker/docker-compose.yml --profile with-scrapers restart
 curl https://openrouter.ai/api/v1/models | jq '.data[] | {id, name}'
 
 # Update to working model
-echo "OPENROUTER_MODEL=deepseek/deepseek-v3.2" >> .env
+echo "OPENROUTER_MODEL=deepseek/deepseek-v4-flash" >> .env
 echo "OPENROUTER_FALLBACK_MODELS=qwen/qwen3-max,moonshotai/kimi-k2.5" >> .env
 
 # Restart bot
@@ -1230,7 +1230,7 @@ curl -X POST https://openrouter.ai/api/v1/chat/completions \
   -H "Authorization: Bearer $OPENROUTER_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "deepseek/deepseek-v3.2",
+    "model": "deepseek/deepseek-v4-flash",
     "messages": [{"role": "user", "content": "Hello"}]
   }' | jq .
 ```

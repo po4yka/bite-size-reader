@@ -108,7 +108,7 @@ def test_ratatoskr_yaml_is_below_process_environment(
         encoding="utf-8",
     )
     monkeypatch.setenv("RATATOSKR_CONFIG", str(cfg))
-    monkeypatch.setenv("OPENROUTER_MODEL", "deepseek/deepseek-v3.2")
+    monkeypatch.setenv("OPENROUTER_MODEL", "deepseek/deepseek-v4-flash")
 
     env = {
         "API_ID": "123456",
@@ -122,12 +122,12 @@ def test_ratatoskr_yaml_is_below_process_environment(
         for key, value in env.items():
             mp.setenv(key, value)
         mp.setenv("RATATOSKR_CONFIG", str(cfg))
-        mp.setenv("OPENROUTER_MODEL", "deepseek/deepseek-v3.2")
+        mp.setenv("OPENROUTER_MODEL", "deepseek/deepseek-v4-flash")
         settings = Settings(_env_file=None)  # type: ignore[call-arg]
 
     app_config = settings.as_app_config()
     assert app_config.runtime.log_level == "WARNING"
-    assert app_config.openrouter.model == "deepseek/deepseek-v3.2"
+    assert app_config.openrouter.model == "deepseek/deepseek-v4-flash"
 
 
 def test_missing_required_startup_config_lists_exact_names(

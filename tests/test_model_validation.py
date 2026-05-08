@@ -10,7 +10,7 @@ class TestModelValidation(unittest.TestCase):
         from app.config import validate_model_name
 
         valid_models = [
-            "deepseek/deepseek-v3.2",
+            "deepseek/deepseek-v4-flash",
             "qwen/qwen3-max",
             "moonshotai/kimi-k2.5",
         ]
@@ -107,8 +107,8 @@ class TestModelValidation(unittest.TestCase):
             # Check that defaults are applied when env vars are not set
             assert cfg.runtime.db_path == "/data/ratatoskr.db"
             assert cfg.openrouter.temperature == 0.2
-            # DeepSeek v3.2 is the code default (YAML file not loaded in this test)
-            assert cfg.openrouter.model == "deepseek/deepseek-v3.2"
+            # DeepSeek v4-flash is the code default (YAML file not loaded in this test)
+            assert cfg.openrouter.model == "deepseek/deepseek-v4-flash"
             # Default fallback models from config.py
             assert cfg.openrouter.fallback_models == (
                 "qwen/qwen3.5-plus-02-15",

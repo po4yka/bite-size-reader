@@ -206,7 +206,7 @@ async def test_success_response_parsing(respx_mock, or_client):
             json={
                 "choices": [{"message": {"content": "Test response"}}],
                 "usage": {"prompt_tokens": 10, "completion_tokens": 5},
-                "model": "deepseek/deepseek-v3.2",
+                "model": "deepseek/deepseek-v4-flash",
             },
         )
     )
@@ -215,7 +215,7 @@ async def test_success_response_parsing(respx_mock, or_client):
     assert result.response_text == "Test response"
     assert result.tokens_prompt == 10
     assert result.tokens_completion == 5
-    assert result.model == "deepseek/deepseek-v3.2"
+    assert result.model == "deepseek/deepseek-v4-flash"
     assert result.endpoint == "/api/v1/chat/completions"
 
 
@@ -285,7 +285,7 @@ async def test_models_endpoint(respx_mock, or_client):
             200,
             json={
                 "data": [
-                    {"id": "deepseek/deepseek-v3.2", "name": "DeepSeek V3"},
+                    {"id": "deepseek/deepseek-v4-flash", "name": "DeepSeek V3"},
                     {"id": "google/gemini-3.1-pro-preview", "name": "Gemini 3.1 Pro Preview"},
                 ]
             },

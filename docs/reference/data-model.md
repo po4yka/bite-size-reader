@@ -711,7 +711,7 @@ CREATE TABLE llm_calls (
 - `id` (int, PK, autoincrement) - Internal ID
 - `request_id` (str, FK) - Foreign key to `requests`
 - `provider` (str) - LLM provider (`openrouter`)
-- `model` (str) - Model name (e.g., `deepseek/deepseek-v3.2`)
+- `model` (str) - Model name (e.g., `deepseek/deepseek-v4-flash`)
 - `endpoint` (str) - API endpoint
 - `request_headers_json` (str, nullable) - Request headers (Authorization redacted)
 - `request_messages_json` (str) - Chat messages array as JSON

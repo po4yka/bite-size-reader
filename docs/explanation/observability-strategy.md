@@ -278,7 +278,7 @@ WHERE created_at > datetime('now', '-7 days');
 
 **Stored Fields:**
 
-- `llm_calls.model` - Model used (e.g., `deepseek/deepseek-v3.2`)
+- `llm_calls.model` - Model used (e.g., `deepseek/deepseek-v4-flash`)
 - `llm_calls.prompt` - Full prompt sent to LLM
 - `llm_calls.completion` - Full LLM response
 - `llm_calls.prompt_tokens` - Input tokens
@@ -405,7 +405,7 @@ def estimate_costs():
     costs = {}
     for call in llm_calls:
         model_pricing = {
-            "deepseek/deepseek-v3.2": {"prompt": 0.14, "completion": 0.28},  # per 1M tokens
+            "deepseek/deepseek-v4-flash": {"prompt": 0.14, "completion": 0.28},  # per 1M tokens
             "qwen/qwen3-max": {"prompt": 0.20, "completion": 0.60},
             # ...
         }

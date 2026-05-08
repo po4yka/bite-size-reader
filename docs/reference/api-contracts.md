@@ -172,7 +172,7 @@ X-Title: Ratatoskr
 Content-Type: application/json
 
 {
-  "model": "deepseek/deepseek-v3.2",
+  "model": "deepseek/deepseek-v4-flash",
   "messages": [
     {
       "role": "system",
@@ -192,7 +192,7 @@ Content-Type: application/json
 
 **Request Fields:**
 
-- `model` (string, required) - Model ID (e.g., `deepseek/deepseek-v3.2`)
+- `model` (string, required) - Model ID (e.g., `deepseek/deepseek-v4-flash`)
 - `messages` (array, required) - Chat messages with `role` and `content`
 - `temperature` (float, optional) - Randomness (0.0-2.0, default: 1.0)
 - `max_tokens` (int, optional) - Max completion tokens
@@ -207,7 +207,7 @@ Content-Type: application/json
 ```json
 {
   "id": "chatcmpl-xxx",
-  "model": "deepseek/deepseek-v3.2",
+  "model": "deepseek/deepseek-v4-flash",
   "created": 1707490800,
   "object": "chat.completion",
   "choices": [
@@ -260,11 +260,10 @@ Content-Type: application/json
 
 ```python
 # app/config/settings.py
-OPENROUTER_MODEL = "deepseek/deepseek-v3.2"
+OPENROUTER_MODEL = "deepseek/deepseek-v4-flash"
 OPENROUTER_FALLBACK_MODELS = [
     "moonshotai/kimi-k2.5",
     "qwen/qwen3-max",
-    "deepseek/deepseek-r1",
     "google/gemini-2.0-flash-001:free"
 ]
 ```
@@ -295,7 +294,7 @@ async def complete_with_fallback(messages, model=None):
 cost_usd = (prompt_tokens * pricing["prompt"] + completion_tokens * pricing["completion"]) / 1_000_000
 
 # Example pricing (per 1M tokens):
-# deepseek/deepseek-v3.2: $0.14 prompt, $0.28 completion
+# deepseek/deepseek-v4-flash: $0.14 prompt, $0.28 completion
 # qwen/qwen3-max: $0.20 prompt, $0.60 completion
 ```
 
@@ -571,7 +570,7 @@ SCRAPER_DEFUDDLE_API_BASE_URL=http://defuddle-api:3003
 
 # OpenRouter
 OPENROUTER_API_KEY=sk-or-xxx...
-OPENROUTER_MODEL=deepseek/deepseek-v3.2
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash
 OPENROUTER_FALLBACK_MODELS=moonshotai/kimi-k2.5,qwen/qwen3-max
 
 # Telegram

@@ -435,7 +435,7 @@ API_HASH=...                        # Telegram API hash
 BOT_TOKEN=...                       # Telegram bot token
 ALLOWED_USER_IDS=123456789          # Comma-separated owner IDs
 OPENROUTER_API_KEY=...              # OpenRouter API key
-OPENROUTER_MODEL=deepseek/deepseek-v3.2  # Default model
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash  # Default model
 OPENROUTER_FALLBACK_MODELS=qwen/qwen3.6-plus-04-02,google/gemini-3.1-flash-lite-preview,moonshotai/kimi-k2.5
 
 # Scraper chain (all optional -- defaults enable full fallback chain)

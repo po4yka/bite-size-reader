@@ -61,7 +61,7 @@ def _mock_llm_result() -> Mock:
     result = Mock()
     result.status = "ok"
     result.response_text = '{"title": "Test", "summary": "Test summary"}'
-    result.model = "deepseek/deepseek-v3.2"
+    result.model = "deepseek/deepseek-v4-flash"
     result.endpoint = "https://openrouter.ai/api/v1/chat/completions"
     result.request_headers = {}
     result.request_messages = []

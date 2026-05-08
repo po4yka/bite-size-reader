@@ -837,7 +837,7 @@ QDRANT_REQUIRED=true
 
 # LLM (for summary CLI)
 OPENROUTER_API_KEY=...
-OPENROUTER_MODEL=deepseek/deepseek-v3.2
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash
 
 # Scraper sidecars (optional; in-process Scrapling works without them)
 FIRECRAWL_SELF_HOSTED_ENABLED=true

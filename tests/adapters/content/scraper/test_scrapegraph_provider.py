@@ -174,14 +174,14 @@ class TestScrapeGraphAIProvider:
         """The config passed to SmartScraperGraph has model prefixed with 'openai/'.
 
         scrapegraphai splits model on '/' once to derive model_provider: split[0].
-        Passing model='deepseek/deepseek-v3.2' would set model_provider='deepseek',
+        Passing model='deepseek/deepseek-v4-flash' would set model_provider='deepseek',
         which is not in its provider registry. Prefixing with 'openai/' makes the lib
         parse model_provider='openai' and passes the remainder (original slash-form
         string) to OpenRouter, which accepts the full model identifier unchanged.
         """
         provider = ScrapeGraphAIProvider(
             openrouter_api_key="sk-or-test",
-            openrouter_model="deepseek/deepseek-v3.2",
+            openrouter_model="deepseek/deepseek-v4-flash",
             timeout_sec=30,
         )
 
@@ -211,6 +211,6 @@ class TestScrapeGraphAIProvider:
         assert len(captured_configs) == 1
         llm_cfg = captured_configs[0]["llm"]
         # Model must be prefixed with 'openai/' so scrapegraphai parses provider correctly
-        assert llm_cfg["model"] == "openai/deepseek/deepseek-v3.2"
+        assert llm_cfg["model"] == "openai/deepseek/deepseek-v4-flash"
         # 'model_provider' must NOT be present; the prefix supplies it via scrapegraphai's split
         assert "model_provider" not in llm_cfg
