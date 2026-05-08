@@ -545,6 +545,17 @@ Controls which embedding backend generates vectors for semantic search.
 | `SUMMARY_STREAMING_PROVIDER_SCOPE` | `openrouter` | Provider scope for token streaming (`openrouter`, `all`, `disabled`) |
 | `TELEGRAM_REPLY_TIMEOUT_SEC` | `30.0` | Timeout for Telegram reply operations |
 
+## LLM Call Timeouts
+
+These knobs govern how long the OpenRouter chat engine spends per model and per call.
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `LLM_CALL_TIMEOUT_SEC` | `300.0` | Total wall-clock budget for one LLM call (across the full fallback ladder) |
+| `LLM_PER_MODEL_TIMEOUT_MIN_SEC` | `120.0` | Minimum per-model budget. Per-model timeout is `max(this, LLM_CALL_TIMEOUT_SEC / num_models)` so slow models in long ladders are not starved |
+| `LLM_PER_MODEL_TIMEOUT_OVERRIDES` | _(empty)_ | Comma-separated `model=seconds` overrides, e.g. `moonshotai/kimi-k2.5=180,minimax/minimax-m1=240`. Overrides win over the formula above. Malformed entries are skipped with a warning |
+| `LLM_CALL_MAX_RETRIES` | `2` | Retries on transient HTTP failures inside a single model attempt |
+
 ## Mixed-Source Aggregation Rollout
 
 | Variable | Default | Description |

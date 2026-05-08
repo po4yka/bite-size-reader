@@ -116,6 +116,8 @@ SQLAlchemy 2.0 typed declarative models registered in `ALL_MODELS` (`app/db/mode
 - `batch.py` — `BatchSession`, `BatchSessionItem`
 - `collections.py` — `Collection`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`
 - `digest.py` — `Channel`, `ChannelCategory`, `ChannelSubscription`, `ChannelPost`, `ChannelPostAnalysis`, `DigestDelivery`, `UserDigestPreference`
+
+Each `LLMCall` row also carries `attempt_index` (1-based, monotonic per `request_id`) and `attempt_trigger` (Postgres enum: `initial`, `user_retry`, `auto_backfill`, `repair_loop`, `stream_fallback_retry`) so retries and self-correction loops are queryable without timestamp inference.
 - `rss.py` — `RSSFeed`, `RSSFeedSubscription`, `RSSFeedItem`, `RSSItemDelivery`
 - `rules.py` — `WebhookSubscription`, `WebhookDelivery`, `AutomationRule`, `RuleExecutionLog`, `ImportJob`, `UserBackup`
 - `signal.py` — `Source`, `Subscription`, `FeedItem`, `Topic`, `UserSignal`

@@ -33,7 +33,7 @@ Docker container, stores everything in PostgreSQL.
 ```sh
 git clone https://github.com/po4yka/ratatoskr.git
 cd ratatoskr
-cp .env.example .env                  # set the 5 required values
+cp .env.example .env                  # set the 7 required values
 docker compose -f ops/docker/docker-compose.yml up -d
 ```
 
@@ -44,6 +44,8 @@ API_ID=                # https://my.telegram.org/apps
 API_HASH=
 BOT_TOKEN=             # @BotFather
 ALLOWED_USER_IDS=      # your Telegram user ID
+POSTGRES_PASSWORD=     # password for the ratatoskr_app DB role
+DATABASE_URL=          # postgresql+asyncpg://ratatoskr_app:${POSTGRES_PASSWORD}@postgres:5432/ratatoskr
 OPENROUTER_API_KEY=    # https://openrouter.ai
 ```
 
