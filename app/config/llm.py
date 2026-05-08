@@ -18,7 +18,7 @@ class OpenRouterConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     api_key: str = Field(..., validation_alias="OPENROUTER_API_KEY")
-    model: str = Field(default="deepseek/deepseek-v3.2", validation_alias="OPENROUTER_MODEL")
+    model: str = Field(default="deepseek/deepseek-v4-flash", validation_alias="OPENROUTER_MODEL")
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: (
             "qwen/qwen3.6-plus-04-02",
@@ -280,11 +280,11 @@ class ModelRoutingConfig(BaseModel):
 
     enabled: bool = Field(default=False, validation_alias="MODEL_ROUTING_ENABLED")
     default_model: str = Field(
-        default="deepseek/deepseek-v3.2",
+        default="deepseek/deepseek-v4-flash",
         validation_alias="MODEL_ROUTING_DEFAULT",
     )
     technical_model: str = Field(
-        default="deepseek/deepseek-v3.2",
+        default="deepseek/deepseek-v4-pro",
         validation_alias="MODEL_ROUTING_TECHNICAL",
     )
     sociopolitical_model: str = Field(
@@ -297,15 +297,39 @@ class ModelRoutingConfig(BaseModel):
     )
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: (
-            "deepseek/deepseek-v3.2",
+            "deepseek/deepseek-v4-flash",
             "qwen/qwen3.6-plus-04-02",
             "minimax/minimax-m2",
         ),
         validation_alias="MODEL_ROUTING_FALLBACK_MODELS",
     )
-    long_context_threshold: int = Field(
-        default=50000,
-        validation_alias="MODEL_ROUTING_LONG_CONTEXT_THRESHOLD",
+    technical_fallback_models: tuple[str, ...] = Field(
+        default_factory=tuple,
+        validation_alias="MODEL_ROUTING_TECHNICAL_FALLBACK_MODELS",
+    )
+    sociopolitical_fallback_models: tuple[str, ...] = Field(
+        default_factory=tuple,
+        validation_alias="MODEL_ROUTING_SOCIOPOLITICAL_FALLBACK_MODELS",
+    )
+    default_fallback_models: tuple[str, ...] = Field(
+        default_factory=tuple,
+        validation_alias="MODEL_ROUTING_DEFAULT_FALLBACK_MODELS",
+    )
+    vision_model: str | None = Field(
+        default=None,
+        validation_alias="MODEL_ROUTING_VISION",
+    )
+    quick_model: str | None = Field(
+        default=None,
+        validation_alias="MODEL_ROUTING_QUICK",
+    )
+    quick_threshold_tokens: int = Field(
+        default=500,
+        validation_alias="MODEL_ROUTING_QUICK_THRESHOLD_TOKENS",
+    )
+    long_context_threshold_tokens: int = Field(
+        default=80000,
+        validation_alias="MODEL_ROUTING_LONG_CONTEXT_THRESHOLD_TOKENS",
     )
 
     @field_validator(
@@ -321,16 +345,44 @@ class ModelRoutingConfig(BaseModel):
             return str(value or "")
         return validate_model_name(str(value))
 
-    @field_validator("fallback_models", mode="before")
+    @field_validator(
+        "fallback_models",
+        "technical_fallback_models",
+        "sociopolitical_fallback_models",
+        "default_fallback_models",
+        mode="before",
+    )
     @classmethod
     def _parse_fallback_models(cls, value: Any) -> tuple[str, ...]:
         return parse_fallback_models(value)
 
-    @field_validator("long_context_threshold", mode="before")
+    @field_validator("vision_model", "quick_model", mode="before")
+    @classmethod
+    def _validate_optional_model(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        return validate_model_name(str(value))
+
+    @field_validator("quick_threshold_tokens", mode="before")
+    @classmethod
+    def _validate_quick_threshold(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 500
+        try:
+            threshold = int(str(value))
+        except ValueError as exc:
+            msg = "Quick threshold must be a valid integer"
+            raise ValueError(msg) from exc
+        if threshold < 1:
+            msg = "Quick threshold must be at least 1"
+            raise ValueError(msg)
+        return threshold
+
+    @field_validator("long_context_threshold_tokens", mode="before")
     @classmethod
     def _validate_threshold(cls, value: Any) -> int:
         if value in (None, ""):
-            return 50000
+            return 80000
         try:
             threshold = int(str(value))
         except ValueError as exc:

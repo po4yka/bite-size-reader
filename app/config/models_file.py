@@ -51,7 +51,7 @@ _YAML_TO_ENV: dict[str, dict[str, str]] = {
         "sociopolitical_model": "MODEL_ROUTING_SOCIOPOLITICAL",
         "long_context_model": "MODEL_ROUTING_LONG_CONTEXT",
         "fallback_models": "MODEL_ROUTING_FALLBACK_MODELS",
-        "long_context_threshold": "MODEL_ROUTING_LONG_CONTEXT_THRESHOLD",
+        "long_context_threshold_tokens": "MODEL_ROUTING_LONG_CONTEXT_THRESHOLD_TOKENS",
     },
     "openai": {
         "model": "OPENAI_MODEL",

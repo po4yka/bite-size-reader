@@ -132,8 +132,8 @@ mcp:
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
-| `OPENROUTER_MODEL` | `deepseek/deepseek-v3.2` | Primary model |
-| `OPENROUTER_FALLBACK_MODELS` | `moonshotai/kimi-k2.5,qwen/qwen3-max,deepseek/deepseek-r1` | Comma-separated fallback chain |
+| `OPENROUTER_MODEL` | `deepseek/deepseek-v4-flash` | Primary model |
+| `OPENROUTER_FALLBACK_MODELS` | `qwen/qwen3.6-plus-04-02,moonshotai/kimi-k2-0905,minimax/minimax-m2` | Comma-separated fallback chain |
 | `OPENROUTER_LONG_CONTEXT_MODEL` | `google/gemini-3-flash-preview` | Model for long-context content (1M ctx) |
 | `OPENROUTER_TEMPERATURE` | `0.2` | Sampling temperature (0-2) |
 | `OPENROUTER_TOP_P` | _(none)_ | Top-p sampling |
@@ -155,6 +155,28 @@ mcp:
 | `OPENROUTER_PROMPT_CACHE_TTL` | `ephemeral` | Cache TTL: `ephemeral` (5min) or `1h` |
 | `OPENROUTER_CACHE_SYSTEM_PROMPT` | `true` | Cache system message for reuse |
 | `OPENROUTER_CACHE_LARGE_CONTENT_THRESHOLD` | `4096` | Min tokens to auto-cache (Gemini requires 4096) |
+
+## Content-Aware Model Routing
+
+Optional routing layer that selects different models by content tier (technical, sociopolitical, default) and content characteristics. Enable with `MODEL_ROUTING_ENABLED=true`. Owner: `app/config/llm.py::ModelRoutingConfig`.
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `MODEL_ROUTING_ENABLED` | `false` | Enable content-aware routing |
+| `MODEL_ROUTING_DEFAULT` | `deepseek/deepseek-v4-flash` | Model for general content |
+| `MODEL_ROUTING_TECHNICAL` | `deepseek/deepseek-v4-pro` | Model for technical/research content |
+| `MODEL_ROUTING_SOCIOPOLITICAL` | `x-ai/grok-4.20-beta` | Model for political/historical/opinion content |
+| `MODEL_ROUTING_LONG_CONTEXT` | `qwen/qwen3.6-plus-04-02` | Model for content exceeding token threshold |
+| `MODEL_ROUTING_LONG_CONTEXT_THRESHOLD_TOKENS` | `80000` | Token count above which the long-context model is used (~4 chars per token) |
+| `MODEL_ROUTING_VISION` | _(none)_ | Model to use when content has images; opt-in, no default |
+| `MODEL_ROUTING_QUICK` | _(none)_ | Model for short-form content (tweets, forwarded posts); opt-in, no default |
+| `MODEL_ROUTING_QUICK_THRESHOLD_TOKENS` | `500` | Token count at or below which the quick model is used |
+| `MODEL_ROUTING_FALLBACK_MODELS` | `deepseek/deepseek-v4-flash,qwen/qwen3.6-plus-04-02,minimax/minimax-m2` | Shared fallback chain (used when no tier-specific list is set) |
+| `MODEL_ROUTING_TECHNICAL_FALLBACK_MODELS` | _(empty)_ | Fallback chain for technical tier (overrides shared when non-empty) |
+| `MODEL_ROUTING_SOCIOPOLITICAL_FALLBACK_MODELS` | _(empty)_ | Fallback chain for sociopolitical tier (overrides shared when non-empty) |
+| `MODEL_ROUTING_DEFAULT_FALLBACK_MODELS` | _(empty)_ | Fallback chain for default tier (overrides shared when non-empty) |
+
+Override priority: vision > quick > long-context > content-tier.
 
 ## [ADVANCED] Firecrawl (Content Extraction)
 
@@ -544,7 +566,7 @@ Use this checklist to verify your configuration before deploying:
 - [ ] **Telegram user allowlist configured**: `ALLOWED_USER_IDS` contains your Telegram user ID if you use the bot or an allowlist-gated rollout stage
 - [ ] **Firecrawl API key valid** (if using cloud Firecrawl): Test with `curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" https://api.firecrawl.dev/v1/account`
 - [ ] **OpenRouter API key valid**: Test with `curl -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/models`
-- [ ] **OpenRouter model specified**: `OPENROUTER_MODEL` set to valid model (e.g., `deepseek/deepseek-v3.2`)
+- [ ] **OpenRouter model specified**: `OPENROUTER_MODEL` set to valid model (e.g., `deepseek/deepseek-v4-flash`)
 
 ### ✅ Optional Features (If Enabled)
 
@@ -674,7 +696,7 @@ curl -H "Authorization: Bearer $OPENROUTER_API_KEY" \
      -X POST https://openrouter.ai/api/v1/chat/completions \
      -H "Content-Type: application/json" \
      -d '{
-       "model": "deepseek/deepseek-v3.2",
+       "model": "deepseek/deepseek-v4-flash",
        "messages": [{"role": "user", "content": "Hello"}]
      }' | jq .
 

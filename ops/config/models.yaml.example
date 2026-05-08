@@ -9,13 +9,12 @@
 # --- OpenRouter (primary LLM provider) ---
 openrouter:
   # Primary model for summarization
-  model: "deepseek/deepseek-v3.2"
+  model: "deepseek/deepseek-v4-flash"
 
   # Fallback chain (tried in order if primary fails)
   fallback_models:
     - "moonshotai/kimi-k2.5"
     - "qwen/qwen3-max"
-    - "deepseek/deepseek-r1"
 
   # Model for content exceeding long_context_threshold
   long_context_model: "minimax/minimax-m1"
@@ -45,10 +44,10 @@ model_routing:
   enabled: false
 
   # Model for general content (blogs, tutorials, news)
-  default_model: "deepseek/deepseek-v3.2"
+  default_model: "deepseek/deepseek-v4-flash"
 
   # Model for technical/research content (papers, code, deep technical)
-  technical_model: "deepseek/deepseek-v3.2"
+  technical_model: "deepseek/deepseek-v4-pro"
 
   # Model for political/historical/opinion content
   sociopolitical_model: "x-ai/grok-4.20-beta"
@@ -56,14 +55,29 @@ model_routing:
   # Model for long documents (>50K chars)
   long_context_model: "qwen/qwen3.5-plus-02-15"
 
-  # Shared fallback chain (used when routing is enabled)
+  # Shared fallback chain (used when routing is enabled and no tier-specific list is set)
   fallback_models:
-    - "deepseek/deepseek-v3.2"
+    - "deepseek/deepseek-v4-flash"
     - "qwen/qwen3.5-plus-02-15"
     - "minimax/minimax-m1"
 
-  # Character threshold for long-context model selection
-  long_context_threshold: 50000
+  # Per-tier fallback chains (optional; override shared fallback_models when non-empty)
+  # technical_fallback_models:
+  #   - "deepseek/deepseek-v4-pro"
+  # sociopolitical_fallback_models:
+  #   - "x-ai/grok-4.20-beta"
+  # default_fallback_models:
+  #   - "deepseek/deepseek-v4-flash"
+
+  # Token threshold for long-context model selection (~4 chars per token heuristic)
+  long_context_threshold_tokens: 80000
+
+  # Vision model (opt-in; used when has_images=True; no default)
+  # vision_model: "google/gemini-2.0-flash"
+
+  # Flash model for short-form content (opt-in; no default)
+  # quick_model: "qwen/qwen3.6-flash"
+  # quick_threshold_tokens: 500
 
 # --- OpenAI (optional direct provider) ---
 # openai:

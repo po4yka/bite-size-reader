@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from typing import Any
 
@@ -31,6 +32,17 @@ EXPLICIT_CACHING_PROVIDERS: frozenset[str] = frozenset({"anthropic", "google"})
 # Providers with automatic/implicit caching (no configuration needed)
 # These handle caching server-side without explicit cache_control
 LOGGER = get_logger(__name__)
+
+# Anchored regex patterns for reasoning-heavy model detection.
+# Plain substring matching (e.g. "o1") produces false positives on model names
+# that happen to contain those characters (e.g. "mistral/medio1").
+# These patterns require the indicator to sit at a path/name boundary.
+_REASONING_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?:^|[/_-])o\d+(?:[/_-]|$)"),
+    re.compile(r"(?:^|[/_-])-?r\d+(?:[/_-]|$)"),
+    re.compile(r"thinking"),
+    re.compile(r"reasoning"),
+)
 
 AUTOMATIC_CACHING_PROVIDERS: frozenset[str] = frozenset(
     {
@@ -163,8 +175,8 @@ class ModelCapabilities:
         # Known models that support structured outputs (fallback list)
         self._known_structured_models = {
             # DeepSeek models (JSON mode support)
-            "deepseek/deepseek-v3.2",
-            "deepseek/deepseek-r1",
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
             # Moonshot AI (Kimi) models
             "moonshotai/kimi-k2",
             "moonshotai/kimi-k2-0905",
@@ -181,17 +193,20 @@ class ModelCapabilities:
         }
 
     def is_reasoning_heavy_model(self, model: str) -> bool:
-        """Check if model is reasoning-heavy (like DeepSeek R1, Kimi K2 Thinking)."""
+        """Check if model is reasoning-heavy (like Kimi K2 Thinking, OpenAI o1).
+
+        Uses anchored regex patterns to avoid false positives from models whose
+        names happen to contain indicator substrings (e.g. ``mistral/medio1``).
+        """
         model_lower = model.lower()
-        reasoning_indicators = ["o1", "reasoning", "-r1", "thinking", "deepseek-r1"]
-        return any(indicator in model_lower for indicator in reasoning_indicators)
+        return any(pat.search(model_lower) for pat in _REASONING_PATTERNS)
 
     def get_safe_structured_fallbacks(self) -> list[str]:
         """Get list of models known to support structured outputs reliably."""
         return [
             "minimax/minimax-m2",  # structured-output capable per live capability probe
             "qwen/qwen3.5-plus-02-15",  # strong structured-output support
-            "deepseek/deepseek-v3.2",  # paid fallback
+            "deepseek/deepseek-v4-flash",  # paid fallback
         ]
 
     def supports_structured_outputs(self, model: str) -> bool:

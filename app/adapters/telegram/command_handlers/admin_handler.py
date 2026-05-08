@@ -348,7 +348,7 @@ class AdminHandler:
                 f"  Technical: <code>{rt_cfg.technical_model}</code>",
                 f"  Sociopolitical: <code>{rt_cfg.sociopolitical_model}</code>",
                 f"  Long context: <code>{rt_cfg.long_context_model}</code>",
-                f"  Threshold: {rt_cfg.long_context_threshold:,} chars",
+                f"  Threshold: {rt_cfg.long_context_threshold_tokens:,} tokens",
                 "",
                 "<b>Vision</b>",
                 f"  Model: <code>{att_cfg.vision_model}</code>",

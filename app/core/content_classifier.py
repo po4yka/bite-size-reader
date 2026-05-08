@@ -23,6 +23,7 @@ class ContentTier(enum.Enum):
     DEFAULT = "default"
     TECHNICAL = "technical"
     SOCIOPOLITICAL = "sociopolitical"
+    QUICK = "quick"
 
 
 # ---------------------------------------------------------------------------

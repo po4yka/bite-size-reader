@@ -40,14 +40,14 @@ class TestLoadModelsYaml:
             dedent("""\
                 openrouter:
                   fallback_models:
-                    - "deepseek/deepseek-v3.2"
+                    - "deepseek/deepseek-v4-flash"
                     - "anthropic/claude-opus-4.6"
             """)
         )
         result = load_models_yaml(cfg)
         assert (
             result["OPENROUTER_FALLBACK_MODELS"]
-            == "deepseek/deepseek-v3.2,anthropic/claude-opus-4.6"
+            == "deepseek/deepseek-v4-flash,anthropic/claude-opus-4.6"
         )
 
     def test_loads_model_routing(self, yaml_dir: Path) -> None:
@@ -58,14 +58,14 @@ class TestLoadModelsYaml:
                   enabled: true
                   default_model: "test/model"
                   technical_model: "tech/model"
-                  long_context_threshold: 75000
+                  long_context_threshold_tokens: 75000
             """)
         )
         result = load_models_yaml(cfg)
         assert result["MODEL_ROUTING_ENABLED"] == "true"
         assert result["MODEL_ROUTING_DEFAULT"] == "test/model"
         assert result["MODEL_ROUTING_TECHNICAL"] == "tech/model"
-        assert result["MODEL_ROUTING_LONG_CONTEXT_THRESHOLD"] == "75000"
+        assert result["MODEL_ROUTING_LONG_CONTEXT_THRESHOLD_TOKENS"] == "75000"
 
     def test_loads_multiple_sections(self, yaml_dir: Path) -> None:
         cfg = yaml_dir / "models.yaml"
