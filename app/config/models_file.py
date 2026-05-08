@@ -34,6 +34,7 @@ _YAML_TO_ENV: dict[str, dict[str, str]] = {
         "enable_stats": "OPENROUTER_ENABLE_STATS",
         "enable_prompt_caching": "OPENROUTER_ENABLE_PROMPT_CACHING",
         "prompt_cache_ttl": "OPENROUTER_PROMPT_CACHE_TTL",
+        "prompt_cache_ttl_anthropic": "OPENROUTER_PROMPT_CACHE_TTL_ANTHROPIC",
         "cache_system_prompt": "OPENROUTER_CACHE_SYSTEM_PROMPT",
         "cache_large_content_threshold": "OPENROUTER_CACHE_LARGE_CONTENT_THRESHOLD",
         "summary_temperature_relaxed": "OPENROUTER_SUMMARY_TEMPERATURE_RELAXED",

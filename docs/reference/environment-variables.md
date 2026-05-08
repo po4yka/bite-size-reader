@@ -152,7 +152,8 @@ mcp:
 | `OPENROUTER_SUMMARY_TEMPERATURE_JSON` | _(none)_ | Temperature override for JSON fallback |
 | `OPENROUTER_SUMMARY_TOP_P_JSON` | _(none)_ | Top-p override for JSON fallback |
 | `OPENROUTER_ENABLE_PROMPT_CACHING` | `true` | Enable prompt caching for supported providers |
-| `OPENROUTER_PROMPT_CACHE_TTL` | `ephemeral` | Cache TTL: `ephemeral` (5min) or `1h` |
+| `OPENROUTER_PROMPT_CACHE_TTL` | `ephemeral` | Cache TTL for non-Anthropic explicit-cache providers (Google): `ephemeral` (5min) or `1h` |
+| `OPENROUTER_PROMPT_CACHE_TTL_ANTHROPIC` | `1h` | Cache TTL for Anthropic models specifically. `1h` (2x write / 0.10x read) amortizes positively across batched requests vs `ephemeral` (1.25x write / 0.10x read) |
 | `OPENROUTER_CACHE_SYSTEM_PROMPT` | `true` | Cache system message for reuse |
 | `OPENROUTER_CACHE_LARGE_CONTENT_THRESHOLD` | `4096` | Min tokens to auto-cache (Gemini requires 4096) |
 

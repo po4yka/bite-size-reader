@@ -67,6 +67,7 @@ class OpenRouterClientConfig:
     # Prompt caching settings
     enable_prompt_caching: bool = True
     prompt_cache_ttl: str = "ephemeral"
+    prompt_cache_ttl_anthropic: str = "1h"
     cache_system_prompt: bool = True
     cache_large_content_threshold: int = 4096
     # Debug/logging
@@ -140,6 +141,7 @@ class OpenRouterClient:
             keepalive_expiry=cfg.keepalive_expiry,
             enable_prompt_caching=cfg.enable_prompt_caching,
             prompt_cache_ttl=cfg.prompt_cache_ttl,
+            prompt_cache_ttl_anthropic=cfg.prompt_cache_ttl_anthropic,
             cache_system_prompt=cfg.cache_system_prompt,
             cache_large_content_threshold=cfg.cache_large_content_threshold,
         )
@@ -154,6 +156,7 @@ class OpenRouterClient:
             require_parameters=cfg.require_parameters,
             enable_prompt_caching=cfg.enable_prompt_caching,
             prompt_cache_ttl=cfg.prompt_cache_ttl,
+            prompt_cache_ttl_anthropic=cfg.prompt_cache_ttl_anthropic,
             cache_system_prompt=cfg.cache_system_prompt,
             cache_large_content_threshold=cfg.cache_large_content_threshold,
             enable_stats=cfg.enable_stats,
@@ -193,6 +196,11 @@ class OpenRouterClient:
             require_parameters=or_cfg.require_parameters,
             auto_fallback_structured=or_cfg.auto_fallback_structured,
             max_response_size_mb=or_cfg.max_response_size_mb,
+            enable_prompt_caching=or_cfg.enable_prompt_caching,
+            prompt_cache_ttl=or_cfg.prompt_cache_ttl,
+            prompt_cache_ttl_anthropic=or_cfg.prompt_cache_ttl_anthropic,
+            cache_system_prompt=or_cfg.cache_system_prompt,
+            cache_large_content_threshold=or_cfg.cache_large_content_threshold,
         )
         return cls(
             or_cfg.api_key,
@@ -220,6 +228,7 @@ class OpenRouterClient:
         keepalive_expiry: float,
         enable_prompt_caching: bool,
         prompt_cache_ttl: str,
+        prompt_cache_ttl_anthropic: str,
         cache_system_prompt: bool,
         cache_large_content_threshold: int,
     ) -> None:
@@ -235,6 +244,7 @@ class OpenRouterClient:
         self._max_response_size_bytes = int(max_response_size_mb) * 1024 * 1024
         self._enable_prompt_caching = enable_prompt_caching
         self._prompt_cache_ttl = prompt_cache_ttl
+        self._prompt_cache_ttl_anthropic = prompt_cache_ttl_anthropic
         self._cache_system_prompt = cache_system_prompt
         self._cache_large_content_threshold = cache_large_content_threshold
         self._limits = httpx.Limits(
@@ -265,6 +275,7 @@ class OpenRouterClient:
         require_parameters: bool,
         enable_prompt_caching: bool,
         prompt_cache_ttl: str,
+        prompt_cache_ttl_anthropic: str,
         cache_system_prompt: bool,
         cache_large_content_threshold: int,
         enable_stats: bool,
@@ -288,6 +299,7 @@ class OpenRouterClient:
                 require_parameters=require_parameters,
                 enable_prompt_caching=enable_prompt_caching,
                 prompt_cache_ttl=prompt_cache_ttl,
+                prompt_cache_ttl_anthropic=prompt_cache_ttl_anthropic,
                 cache_system_prompt=cache_system_prompt,
                 cache_large_content_threshold=cache_large_content_threshold,
             ),

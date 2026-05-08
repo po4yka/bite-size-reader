@@ -35,7 +35,8 @@ openrouter:
 
   # Prompt caching (reduces cost for repeated system prompts)
   # enable_prompt_caching: true
-  # prompt_cache_ttl: "ephemeral"  # or "1h"
+  # prompt_cache_ttl: "ephemeral"           # Google/other explicit-cache providers; "ephemeral" or "1h"
+  # prompt_cache_ttl_anthropic: "1h"        # Anthropic-specific TTL; "1h" amortizes well across batched requests
 
 # --- Content-aware model routing (optional) ---
 # Routes articles to different models based on content type.

@@ -34,6 +34,7 @@ class RequestBuilder:
         # Prompt caching settings
         enable_prompt_caching: bool = True,
         prompt_cache_ttl: str = "ephemeral",
+        prompt_cache_ttl_anthropic: str = "1h",
         cache_system_prompt: bool = True,
         cache_large_content_threshold: int = 4096,
     ) -> None:
@@ -47,6 +48,7 @@ class RequestBuilder:
         # Prompt caching settings
         self._enable_prompt_caching = enable_prompt_caching
         self._prompt_cache_ttl = prompt_cache_ttl
+        self._prompt_cache_ttl_anthropic = prompt_cache_ttl_anthropic
         self._cache_system_prompt = cache_system_prompt
         self._cache_large_content_threshold = cache_large_content_threshold
 
@@ -419,12 +421,18 @@ class RequestBuilder:
         result: list[dict[str, Any]] = []
         breakpoints_added = 0
         max_breakpoints = 4 if provider == "anthropic" else 1  # Gemini only uses last breakpoint
+        # Anthropic supports a 1h TTL (2x write, 0.10x read) that amortizes well
+        # across batched requests; Google's cache_control through OpenRouter does
+        # not document the same surface, so keep the generic TTL there.
+        effective_ttl = (
+            self._prompt_cache_ttl_anthropic if provider == "anthropic" else self._prompt_cache_ttl
+        )
 
         for i, msg in enumerate(messages):
             if self._should_cache_message(msg, provider, i, len(messages)):
                 # Only add breakpoints up to the limit
                 if breakpoints_added < max_breakpoints:
-                    result.append(self._add_cache_control(msg))
+                    result.append(self._add_cache_control(msg, effective_ttl))
                     breakpoints_added += 1
                     logger.debug(
                         "cache_control_added",
@@ -488,11 +496,13 @@ class RequestBuilder:
 
         return estimated_tokens >= self._cache_large_content_threshold
 
-    def _add_cache_control(self, msg: dict[str, Any]) -> dict[str, Any]:
+    def _add_cache_control(self, msg: dict[str, Any], ttl: str) -> dict[str, Any]:
         """Convert message to multipart format with cache_control.
 
         Args:
             msg: Original message dict
+            ttl: Cache TTL string ('ephemeral' or '1h'); resolved per-provider
+                 by the caller.
 
         Returns:
             Message with cache_control added to content
@@ -506,7 +516,7 @@ class RequestBuilder:
                 if i == len(content) - 1 and isinstance(part, dict) and part.get("type") == "text":
                     # Add cache_control to last text part
                     new_part = dict(part)
-                    new_part["cache_control"] = {"type": self._prompt_cache_ttl}
+                    new_part["cache_control"] = {"type": ttl}
                     new_content.append(new_part)
                 else:
                     new_content.append(part)
@@ -520,7 +530,7 @@ class RequestBuilder:
                     {
                         "type": "text",
                         "text": content,
-                        "cache_control": {"type": self._prompt_cache_ttl},
+                        "cache_control": {"type": ttl},
                     }
                 ],
             }

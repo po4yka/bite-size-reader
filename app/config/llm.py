@@ -81,7 +81,16 @@ class OpenRouterConfig(BaseModel):
     prompt_cache_ttl: str = Field(
         default="ephemeral",
         validation_alias="OPENROUTER_PROMPT_CACHE_TTL",
-        description="Cache TTL: 'ephemeral' (5min) or '1h'",
+        description="Cache TTL for non-Anthropic explicit-cache providers (Google): 'ephemeral' (5min) or '1h'",
+    )
+    prompt_cache_ttl_anthropic: str = Field(
+        default="1h",
+        validation_alias="OPENROUTER_PROMPT_CACHE_TTL_ANTHROPIC",
+        description=(
+            "Cache TTL for Anthropic models: 'ephemeral' (1.25x write, 0.10x read) "
+            "or '1h' (2x write, 0.10x read). Defaults to '1h' since the longer TTL "
+            "amortizes positively across batched summarization requests."
+        ),
     )
     cache_system_prompt: bool = Field(
         default=True,
@@ -242,7 +251,7 @@ class OpenRouterConfig(BaseModel):
             raise ValueError(msg)
         return size_mb
 
-    @field_validator("prompt_cache_ttl", mode="before")
+    @field_validator("prompt_cache_ttl", "prompt_cache_ttl_anthropic", mode="before")
     @classmethod
     def _validate_prompt_cache_ttl(cls, value: Any) -> str:
         if value in (None, ""):
