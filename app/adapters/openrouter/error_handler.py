@@ -286,7 +286,18 @@ class ErrorHandler:
             {"model": model, "request_id": request_id},
         )
 
-        self._logger.warning("disable_structured_outputs", extra={"model": model})
+        self._logger.warning(
+            "disable_structured_outputs",
+            extra={"model": model, "request_id": request_id},
+        )
+        self._logger.info(
+            "structured_output_disabled_for_model",
+            extra={
+                "model": model,
+                "reason": "explicit_disable",
+                "request_id": request_id,
+            },
+        )
 
     def log_truncated_completion(
         self,

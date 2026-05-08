@@ -218,9 +218,15 @@ class LLMWorkflowExecutionMixin:
         except (AttributeError, ValueError, RuntimeError):
             return {"type": "json_object"}
 
-    async def persist_llm_call(self, llm: Any, req_id: int, correlation_id: str | None) -> None:
+    async def persist_llm_call(
+        self,
+        llm: Any,
+        req_id: int,
+        correlation_id: str | None,
+        attempt_trigger: str | None = None,
+    ) -> None:
         """Public helper to persist an LLM call."""
-        await self._persist_llm_call(llm, req_id, correlation_id)
+        await self._persist_llm_call(llm, req_id, correlation_id, attempt_trigger=attempt_trigger)
 
     async def _resolve_llm_timeout(self, model: str | None) -> tuple[float, str]:
         """Determine the LLM call timeout, preferring the adaptive service."""
@@ -260,6 +266,10 @@ class LLMWorkflowExecutionMixin:
         )
         per_model_timeout = max(per_model_min, llm_timeout / max(num_models, 1))
 
+        per_model_overrides: dict[str, float] = dict(
+            getattr(self.cfg.runtime, "llm_per_model_timeout_overrides", {}) or {}
+        )
+
         logger.debug(
             "llm_timeout_resolved",
             extra={
@@ -270,6 +280,7 @@ class LLMWorkflowExecutionMixin:
                 "per_model_min_sec": per_model_min,
                 "num_models": num_models,
                 "timeout_source": timeout_source,
+                "per_model_overrides_keys": sorted(per_model_overrides.keys()),
             },
         )
 
@@ -303,6 +314,7 @@ class LLMWorkflowExecutionMixin:
                     fallback_models_override=request.fallback_models_override,
                     on_stream_delta=getattr(request, "on_stream_delta", None),
                     per_model_timeout_sec=per_model_timeout,
+                    per_model_timeout_overrides=per_model_overrides or None,
                 )
         except TimeoutError:
             logger.error(

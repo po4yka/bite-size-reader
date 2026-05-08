@@ -67,6 +67,14 @@ class LLMCallResult(BaseModel):
     cache_discount: float | None = Field(
         default=None, description="Cost discount from prompt caching."
     )
+    models_attempted: list[tuple[str, str]] = Field(
+        default_factory=list,
+        description=(
+            "Ordered list of (model_name, outcome) pairs from the fallback ladder. "
+            "Outcomes: 'success', 'timeout', 'error', 'skipped_unsupported_structured', "
+            "'non_content_response'."
+        ),
+    )
 
 
 class ChatRequest(BaseModel):

@@ -230,6 +230,7 @@ class RequestRepositoryAdapter:
         lang_detected: str | None = None,
         content_text: str | None = None,
         route_version: int = 1,
+        initial_attempt_trigger: str | None = None,
     ) -> int:
         payload = {
             "user_id": user_id,
@@ -246,6 +247,7 @@ class RequestRepositoryAdapter:
             "status": _status_value(status),
             "content_text": content_text,
             "route_version": route_version,
+            "initial_attempt_trigger": initial_attempt_trigger,
         }
         async with self._database.transaction() as session:
             stmt = insert(Request).values(**payload)

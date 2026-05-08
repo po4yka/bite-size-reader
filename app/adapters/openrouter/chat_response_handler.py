@@ -374,6 +374,14 @@ class ChatResponseHandler:
                 "structured_output_downgrading_json_schema_to_json_object",
                 extra={"model": model, "attempt": attempt + 1},
             )
+            logger.info(
+                "structured_output_disabled_for_model",
+                extra={
+                    "model": model,
+                    "reason": "auto_fallback_after_json_schema_parse_error",
+                    "attempt": attempt + 1,
+                },
+            )
             return text, AttemptOutcome(
                 retry=RetryDirective(
                     rf_mode="json_object",
@@ -390,6 +398,14 @@ class ChatResponseHandler:
             logger.warning(
                 "structured_output_disabling_after_json_object_failure",
                 extra={"model": model, "attempt": attempt + 1},
+            )
+            logger.info(
+                "structured_output_disabled_for_model",
+                extra={
+                    "model": model,
+                    "reason": "auto_fallback_after_422",
+                    "attempt": attempt + 1,
+                },
             )
             return text, AttemptOutcome(
                 retry=RetryDirective(

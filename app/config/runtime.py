@@ -54,6 +54,9 @@ class RuntimeConfig(BaseModel):
     llm_per_model_timeout_min_sec: float = Field(
         default=120.0, validation_alias="LLM_PER_MODEL_TIMEOUT_MIN_SEC"
     )
+    llm_per_model_timeout_overrides: dict[str, float] = Field(
+        default_factory=dict, validation_alias="LLM_PER_MODEL_TIMEOUT_OVERRIDES"
+    )
     llm_call_max_retries: int = Field(default=2, validation_alias="LLM_CALL_MAX_RETRIES")
     json_parse_timeout_sec: float = Field(default=60.0, validation_alias="JSON_PARSE_TIMEOUT_SEC")
     summary_two_pass_enabled: bool = Field(
@@ -266,6 +269,59 @@ class RuntimeConfig(BaseModel):
             msg = "DB backup directory contains invalid characters"
             raise ValueError(msg)
         return trimmed
+
+    @field_validator("llm_per_model_timeout_overrides", mode="before")
+    @classmethod
+    def _validate_llm_per_model_timeout_overrides(cls, value: Any) -> dict[str, float]:
+        """Parse comma-separated 'model=seconds' pairs into a dict.
+
+        Accepts either a pre-built dict (e.g. from YAML config) or a raw
+        string value from the environment variable.  Malformed entries are
+        logged and skipped so a bad value never prevents startup.
+        """
+        if isinstance(value, dict):
+            # Already parsed (e.g. loaded from ratatoskr.yaml).
+            result: dict[str, float] = {}
+            for k, v in value.items():
+                try:
+                    result[str(k).strip()] = float(v)
+                except (ValueError, TypeError):
+                    logger.warning(
+                        "llm_per_model_timeout_overrides_bad_entry",
+                        extra={"key": k, "value": v},
+                    )
+            return result
+        raw = str(value or "").strip()
+        if not raw:
+            return {}
+        result = {}
+        for entry in raw.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            if "=" not in entry:
+                logger.warning(
+                    "llm_per_model_timeout_overrides_bad_entry",
+                    extra={"entry": entry},
+                )
+                continue
+            model_name, _, seconds_str = entry.partition("=")
+            model_name = model_name.strip()
+            seconds_str = seconds_str.strip()
+            if not model_name or not seconds_str:
+                logger.warning(
+                    "llm_per_model_timeout_overrides_bad_entry",
+                    extra={"entry": entry},
+                )
+                continue
+            try:
+                result[model_name] = float(seconds_str)
+            except ValueError:
+                logger.warning(
+                    "llm_per_model_timeout_overrides_bad_entry",
+                    extra={"entry": entry, "seconds_str": seconds_str},
+                )
+        return result
 
     @field_validator("llm_call_max_retries", mode="before")
     @classmethod

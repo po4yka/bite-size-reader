@@ -95,6 +95,14 @@ class ChatAttemptRunner:
                             "request_id": request_id,
                         },
                     )
+                    from app.observability.metrics import record_openrouter_stream_fallback
+
+                    _fallback_reason = (
+                        "stream_request_failed"
+                        if (outcome.error_text or "").startswith("stream_request_failed")
+                        else "non_streaming_chunk_path"
+                    )
+                    record_openrouter_stream_fallback(model=model, reason=_fallback_reason)
                     state.request = self._copy_request_with_stream(state.request, False)
                     rf_mode_current = outcome.retry.rf_mode
                     response_format_current = outcome.retry.response_format
@@ -170,6 +178,7 @@ class ChatAttemptRunner:
         last_error_context: dict[str, Any] | None,
         sanitized_messages: list[dict[str, Any]],
         structured_output_state: StructuredOutputState,
+        models_attempted: list[tuple[str, str]] | None = None,
     ) -> LLMCallResult:
         redacted_headers = self._client.request_builder.get_redacted_headers(
             {"Authorization": "REDACTED", "Content-Type": "application/json"}
@@ -196,6 +205,7 @@ class ChatAttemptRunner:
             structured_output_used=structured_output_state.used,
             structured_output_mode=structured_output_state.mode,
             error_context=last_error_context,
+            models_attempted=models_attempted or [],
         )
 
     def _copy_request_with_max_tokens(self, request: ChatRequest, max_tokens: int) -> ChatRequest:

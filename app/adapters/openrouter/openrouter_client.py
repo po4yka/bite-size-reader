@@ -484,6 +484,7 @@ class OpenRouterClient:
         fallback_models_override: tuple[str, ...] | list[str] | None = None,
         on_stream_delta: Callable[[str], Any] | None = None,
         per_model_timeout_sec: float | None = None,
+        per_model_timeout_overrides: dict[str, float] | None = None,
     ) -> LLMCallResult:
         from app.observability.otel import get_tracer
 
@@ -507,6 +508,7 @@ class OpenRouterClient:
                 fallback_models_override=fallback_models_override,
                 on_stream_delta=on_stream_delta,
                 per_model_timeout_sec=per_model_timeout_sec,
+                per_model_timeout_overrides=per_model_timeout_overrides,
             )
             if hasattr(result, "cost_usd") and result.cost_usd:
                 span.set_attribute("llm.cost_usd", result.cost_usd)

@@ -26,6 +26,7 @@ class LLMWorkflowRepairMixin:
 
     # Explicit host contract for composition with LLMResponseWorkflow.
     _audit: Callable[..., None]
+    _persist_llm_call: Callable[..., Any]
     _sem: Callable[..., Any]
     _set_failure_context: Callable[..., None]
     cfg: Any
@@ -129,6 +130,9 @@ class LLMWorkflowRepairMixin:
                     "repair_semaphore_acquired",
                     extra={"req_id": req_id, "cid": correlation_id},
                 )
+                per_model_overrides: dict[str, float] = dict(
+                    getattr(self.cfg.runtime, "llm_per_model_timeout_overrides", {}) or {}
+                )
                 async with asyncio.timeout(llm_timeout):
                     repair = await self.openrouter.chat(
                         repair_messages,
@@ -139,6 +143,7 @@ class LLMWorkflowRepairMixin:
                         response_format=repair_context.repair_response_format,
                         model_override=request_config.model_override,
                         per_model_timeout_sec=llm_timeout,
+                        per_model_timeout_overrides=per_model_overrides or None,
                     )
             except TimeoutError:
                 logger.error(
@@ -153,6 +158,11 @@ class LLMWorkflowRepairMixin:
                 raise
             finally:
                 await sem_cm.__aexit__(None, None, None)
+
+            # Persist the repair LLM call so it appears in llm_calls with the
+            # correct pathway attribution.  We always persist regardless of
+            # success/failure so that failed repair attempts are visible too.
+            await self._persist_llm_call(repair, req_id, correlation_id, attempt_trigger="repair_loop")
 
             if repair.status == CallStatus.OK:
                 from app.adapters.content import llm_response_workflow as workflow_module

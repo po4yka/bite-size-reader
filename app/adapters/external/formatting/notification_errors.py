@@ -144,10 +144,16 @@ class NotificationErrorPresenter:
         _l = self._context.lang
         models_info = ""
         error_info = details or ""
+
+        # New-style "all attempts failed" details from _handle_all_attempts_failed.
         if "Tried" in error_info and "model(s):" in error_info:
             lines = error_info.split("\n")
             models_info = f"\n• {lines[0]}" if lines else ""
             error_detail = "\n".join(lines[1:]) if len(lines) > 1 else ""
+        # Timeout-specific message — render as a human-friendly block, not raw jargon.
+        elif "per-model time budget" in error_info:
+            # The message is already user-friendly; present it verbatim in an italic block.
+            error_detail = f"\n\n<i>{error_info}</i>"
         else:
             error_detail = f"\n\n<i>Provider response: {details}</i>" if details else ""
 
