@@ -7,7 +7,7 @@ owner: unassigned
 blocks: []
 blocked_by: []
 created: 2026-04-30
-updated: 2026-05-04
+updated: 2026-05-08
 ---
 
 - [ ] #task Add LLM call retry-budget telemetry #repo/ratatoskr #area/observability #status/backlog 🔼
@@ -32,4 +32,4 @@ Expose how often summarization burns its retry budget so OpenRouter outages and 
 ## References
 
 - `app/adapters/openrouter/`, `app/adapters/llm/`
-- `app/db/models.py` (`LLMCall`)
+- `app/db/models/core.py` (`LLMCall` — note that `attempt_index` and `attempt_trigger` columns already exist; this task adds **fallback-model**, **retry-exhaustion**, and **total-latency** signals on top)

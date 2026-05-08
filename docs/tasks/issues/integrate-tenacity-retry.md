@@ -1,35 +1,52 @@
 ---
-title: Replace bespoke retry loops in OpenRouter and Firecrawl adapters with tenacity
+title: Evaluate splitting OpenRouter transport retry from the logical state machine and apply tenacity to the transport layer
 status: backlog
 area: llm
-priority: medium
+priority: low
 owner: unassigned
 blocks: []
 blocked_by: []
 created: 2026-05-04
-updated: 2026-05-04
+updated: 2026-05-08
 ---
 
-- [ ] #task Replace bespoke retry loops in OpenRouter and Firecrawl adapters with tenacity #repo/ratatoskr #area/llm #status/backlog 🔼
+- [ ] #task Evaluate splitting OpenRouter transport retry from the logical state machine and apply tenacity to the transport layer #repo/ratatoskr #area/llm #status/backlog 🔽
 
-## Objective
+## Background — original spec was inaccurate
 
-OpenRouter and Firecrawl adapters both implement manual exponential backoff retry loops (~60 lines each of bespoke logic). Using `tenacity` reduces this to a declarative `@retry` decorator, eliminates retry logic drift between adapters, and provides built-in jitter, `stop_after_attempt`, and `wait_exponential`.
+The 2026-05-04 spec asked to "replace bespoke retry loops in OpenRouter and Firecrawl adapters with tenacity." A 2026-05-08 audit against the code found the premise wrong on two counts:
 
-## Context
+- **`app/adapters/content/content_extractor.py` has no retry loop.** `rg 'for attempt|range\(.*retries' app/adapters/content/` returns zero matches. The file sets `retryable=True` on extracted errors so callers can decide policy, but there is no manual retry to replace.
+- **`app/adapters/openrouter/chat_attempt_runner.py:52` is a state machine, not a retry loop.** Each iteration mutates `state.request` (downgrades `stream=True` → `False`), `rf_mode_current` and `response_format_current` (downgrades `json_schema` → `json_object` → `off`), and `state.request.max_tokens` (raises ceiling on truncation). It branches on `outcome.should_retry`, `outcome.should_try_next_model`, `outcome.success` — three different exit signals — and only sometimes calls `sleep_backoff` based on `outcome.retry.backoff_needed`. `tenacity.@retry` re-invokes a callable with the same arguments on raised exceptions; it cannot model "retry with a different request shape based on what the last response said."
 
-- `app/adapters/openrouter/` — error handler + retry in `chat_attempt_runner.py`
-- `app/adapters/content/content_extractor.py` — Firecrawl retry logic
-- `tenacity` is not currently in `pyproject.toml` dependencies
+Mechanically satisfying the original DoD (`rg 'for.*attempt|while.*retry'` returns zero) would require either (a) wrapping the state machine in a class that exposes a tenacity-callable shim, which is more code than the current loop, or (b) deleting the per-attempt request mutation, which loses the schema-downgrade and stream-fallback capabilities the loop exists for.
 
-## Acceptance criteria
+## Reframed objective
 
-- [ ] `tenacity` added to core dependencies in `pyproject.toml`
-- [ ] OpenRouter retry logic replaced with `@retry(wait=wait_exponential(...), stop=stop_after_attempt(...), retry=retry_if_exception_type(...))`
-- [ ] Firecrawl retry logic replaced similarly
-- [ ] Retry counts and backoff parameters are configurable via `AppConfig`, not hardcoded in the decorator
-- [ ] Existing tests for retry behavior pass unchanged
+The only real "transport-level retry" hidden inside the state machine is the bare `except Exception` branch at `chat_attempt_runner.py:68-78`: catch any exception from `_transport.attempt_request`, sleep, retry the same call. This sub-fragment IS amenable to `tenacity` — it's a network-error retry with backoff and a max-attempts cap, no request mutation.
+
+If the maintainer chooses to take this on, the work is:
+
+1. Extract `_transport.attempt_request` into a tenacity-decorated helper that retries on `httpx.HTTPError` / connection-class exceptions, leaving non-network errors to bubble up.
+2. The remaining state-machine loop in `_run` then handles only **logical** retries (response-format downgrade, stream fallback, truncation recovery). It still iterates, but no longer catches transport errors itself.
+3. Configurable via `AppConfig.openrouter` (max attempts, initial wait, max wait).
+4. `tenacity` added to core dependencies.
+
+## Acceptance criteria (reframed)
+
+- [ ] Decision recorded: keep the current single-loop design (close this issue), or proceed with the transport/logical split.
+- [ ] If proceeding: only the **transport-error** branch of `chat_attempt_runner.py` (currently lines 68-78) moves under tenacity. The state-machine loop stays.
+- [ ] `tenacity` added to core deps; transport retry config sourced from `AppConfig`, not hardcoded.
+- [ ] Existing OpenRouter retry tests (`tests/test_openrouter_chat_attempt_runner.py`) pass unchanged.
+- [ ] No change to `app/adapters/content/` — there is no retry loop there to replace.
 
 ## Definition of done
 
-`rg 'for.*attempt\|while.*retry' app/adapters/openrouter/ app/adapters/content/` returns zero manual retry loops.
+Issue is either closed with rationale (state machine fits the problem; tenacity adds nothing), or the transport-retry slice is shipped with passing tests and `pyproject.toml` updated.
+
+## Audit notes (2026-05-08)
+
+- Verified: `app/adapters/openrouter/chat_attempt_runner.py:52-168` is a stateful retry loop, not a simple network retry.
+- Verified: `app/adapters/content/content_extractor.py` has zero retry loops.
+- Verified: `tenacity` is not in `pyproject.toml` dependencies.
+- Existing related tests: `tests/test_openrouter_chat_attempt_runner.py`, `tests/test_retry_utils.py`.

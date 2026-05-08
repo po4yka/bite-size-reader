@@ -7,7 +7,7 @@ owner: unassigned
 blocks: []
 blocked_by: []
 created: 2026-05-04
-updated: 2026-05-04
+updated: 2026-05-08
 ---
 
 - [ ] #task Add @tanstack/react-virtual to LibraryPage for 100-item list virtualization #repo/ratatoskr #area/frontend #status/backlog 🔽
@@ -18,7 +18,7 @@ updated: 2026-05-04
 
 ## Context
 
-- `clients/web/src/features/library/LibraryPage.tsx` — renders full list, cursor state causes re-renders
+- `clients/web/src/features/library/LibraryPage.tsx` — renders full list, cursor state causes re-renders. Audit 2026-05-08: file currently has 3 `useState` hooks (cursor + 2 unrelated) — the re-render cost is real but smaller than the spec implied; verify with a Performance profile before optimising.
 - `@tanstack/react-virtual` is not currently a dependency; `@tanstack/react-query` is already installed (same org, compatible versioning)
 
 ## Acceptance criteria
