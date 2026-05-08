@@ -439,13 +439,23 @@ class NotificationPipelinePresenter:
                 await self._admin_log(debug_text, correlation_id=correlation_id)
                 return
 
+            models_attempted = getattr(llm, "models_attempted", None) or []
+            if len(models_attempted) > 1:
+                tried_summary = ", ".join(
+                    f"{m} ({o})" for m, o in models_attempted
+                )
+                fallback_line = f"Tried {len(models_attempted)} models: {tried_summary}"
+            elif len(models_attempted) == 1:
+                m, o = models_attempted[0]
+                fallback_line = f"Model: {m} ({o})"
+            else:
+                fallback_line = f"Model: {model_name}"
             error_text = (
                 "AI Analysis Failed\n"
                 "Status: Error\n"
-                f"Model: {model_name}\n"
                 f"Processing time: {latency_sec:.1f}s\n"
                 f"Error: {llm.error_text or 'Unknown error'}\n"
-                "Smart fallbacks: Active\n"
+                f"{fallback_line}\n"
                 f"Error ID: {correlation_id}"
             )
             if self._context.progress_tracker is not None:

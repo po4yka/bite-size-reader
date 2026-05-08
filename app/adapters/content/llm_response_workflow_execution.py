@@ -260,6 +260,10 @@ class LLMWorkflowExecutionMixin:
         )
         per_model_timeout = max(per_model_min, llm_timeout / max(num_models, 1))
 
+        per_model_overrides: dict[str, float] = dict(
+            getattr(self.cfg.runtime, "llm_per_model_timeout_overrides", {}) or {}
+        )
+
         logger.debug(
             "llm_timeout_resolved",
             extra={
@@ -270,6 +274,7 @@ class LLMWorkflowExecutionMixin:
                 "per_model_min_sec": per_model_min,
                 "num_models": num_models,
                 "timeout_source": timeout_source,
+                "per_model_overrides_keys": sorted(per_model_overrides.keys()),
             },
         )
 
@@ -303,6 +308,7 @@ class LLMWorkflowExecutionMixin:
                     fallback_models_override=request.fallback_models_override,
                     on_stream_delta=getattr(request, "on_stream_delta", None),
                     per_model_timeout_sec=per_model_timeout,
+                    per_model_timeout_overrides=per_model_overrides or None,
                 )
         except TimeoutError:
             logger.error(

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Mapping
 
 from app.adapter_models.llm.llm_models import LLMCallResult
 from app.adapters.openrouter.chat_attempt_runner import ChatAttemptRunner
@@ -102,6 +102,7 @@ class OpenRouterChatEngine:
         fallback_models_override: tuple[str, ...] | list[str] | None = None,
         on_stream_delta: Any | None = None,
         per_model_timeout_sec: float | None = None,
+        per_model_timeout_overrides: Mapping[str, float] | None = None,
     ) -> LLMCallResult:
         if self._client._closed:
             msg = "Client has been closed"
@@ -131,14 +132,21 @@ class OpenRouterChatEngine:
         last_response_text: str | None = None
         last_error_context: dict[str, Any] | None = None
         images_stripped = False
+        models_attempted: list[tuple[str, str]] = []
 
         try:
             async with self._client._request_context() as http_client:
                 for model_index, model in enumerate(context.models_to_try):
                     try:
+                        # Resolve per-model timeout: explicit override wins, then base floor.
+                        effective_timeout: float | None = per_model_timeout_sec
+                        if per_model_timeout_overrides:
+                            override = per_model_timeout_overrides.get(model)
+                            if override is not None:
+                                effective_timeout = override
                         model_timeout_cm = (
-                            asyncio.timeout(per_model_timeout_sec)
-                            if per_model_timeout_sec is not None
+                            asyncio.timeout(effective_timeout)
+                            if effective_timeout is not None
                             else _noop_timeout()
                         )
                         async with model_timeout_cm:
@@ -153,6 +161,7 @@ class OpenRouterChatEngine:
                                 structured_output_state=structured_output_state,
                             )
                             if skip_model:
+                                models_attempted.append((model, "skipped_unsupported_structured"))
                                 continue
 
                             model_state = await self._attempt_runner.run_attempts_for_model(
@@ -171,20 +180,27 @@ class OpenRouterChatEngine:
                             )
                     except TimeoutError:
                         last_model_reported = model
-                        last_error_text = f"Model {model} timed out after {per_model_timeout_sec}s"
+                        last_error_text = (
+                            f"All AI models exceeded the per-model time budget "
+                            f"({effective_timeout}s) on this content.\n"
+                            f"Likely cause: OpenRouter latency or model congestion.\n"
+                            f"Try resending in a few minutes; if it persists, "
+                            f"the content may exceed model context windows."
+                        )
                         last_error_context = {
                             "status_code": None,
                             "message": "Per-model timeout",
                             "timeout": True,
                             "model": model,
-                            "timeout_sec": per_model_timeout_sec,
+                            "timeout_sec": effective_timeout,
                         }
+                        models_attempted.append((model, "timeout"))
                         logger.warning(
                             "per_model_timeout",
                             extra={
                                 "model": model,
                                 "request_id": request_id,
-                                "timeout_sec": per_model_timeout_sec,
+                                "timeout_sec": effective_timeout,
                                 "models_remaining": len(context.models_to_try) - model_index - 1,
                             },
                         )
@@ -206,12 +222,19 @@ class OpenRouterChatEngine:
                     last_error_context = model_state.last_error_context
 
                     if model_state.terminal_result is not None:
+                        outcome = "success" if getattr(model_state.terminal_result, "status", None) == "ok" else "error"
+                        models_attempted.append((model, outcome))
                         if self._client._circuit_breaker:
-                            if getattr(model_state.terminal_result, "status", None) == "ok":
+                            if outcome == "success":
                                 self._client._circuit_breaker.record_success()
                             else:
                                 self._client._circuit_breaker.record_failure()
-                        return model_state.terminal_result
+                        return model_state.terminal_result.model_copy(
+                            update={"models_attempted": list(models_attempted)}
+                        )
+
+                    # Non-terminal: model failed, will try next in ladder.
+                    models_attempted.append((model, "error"))
 
                     if not images_stripped and _has_image_fetch_error(
                         last_error_text, last_error_context
@@ -276,6 +299,7 @@ class OpenRouterChatEngine:
             last_error_context=last_error_context,
             sanitized_messages=context.sanitized_messages,
             structured_output_state=structured_output_state,
+            models_attempted=models_attempted,
         )
 
     def _circuit_breaker_open_result(self, request_id: int | None) -> LLMCallResult:

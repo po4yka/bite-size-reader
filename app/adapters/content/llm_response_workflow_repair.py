@@ -129,6 +129,9 @@ class LLMWorkflowRepairMixin:
                     "repair_semaphore_acquired",
                     extra={"req_id": req_id, "cid": correlation_id},
                 )
+                per_model_overrides: dict[str, float] = dict(
+                    getattr(self.cfg.runtime, "llm_per_model_timeout_overrides", {}) or {}
+                )
                 async with asyncio.timeout(llm_timeout):
                     repair = await self.openrouter.chat(
                         repair_messages,
@@ -139,6 +142,7 @@ class LLMWorkflowRepairMixin:
                         response_format=repair_context.repair_response_format,
                         model_override=request_config.model_override,
                         per_model_timeout_sec=llm_timeout,
+                        per_model_timeout_overrides=per_model_overrides or None,
                     )
             except TimeoutError:
                 logger.error(
