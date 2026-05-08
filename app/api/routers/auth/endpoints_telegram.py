@@ -4,6 +4,7 @@ Telegram login and Telegram-linking endpoints.
 
 from __future__ import annotations
 
+import hmac
 import secrets
 from datetime import datetime, timedelta
 from typing import Any
@@ -143,7 +144,7 @@ async def complete_telegram_link(
         raise ValidationError("Linking not initiated", details={"field": "nonce"})
 
     now = utcnow_naive()
-    if payload.nonce != link_nonce:
+    if not hmac.compare_digest(payload.nonce, link_nonce):
         raise ValidationError("Invalid link nonce", details={"field": "nonce"})
 
     expires_naive = link_nonce_expires_at

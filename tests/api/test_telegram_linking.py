@@ -52,9 +52,7 @@ async def test_link_happy_path(db: Database, monkeypatch: pytest.MonkeyPatch) ->
     _configure_env(monkeypatch)
     user = await _create_owner(db)
 
-    begin_resp = await auth_endpoints.begin_telegram_link(
-        user={"user_id": user.telegram_user_id}
-    )
+    begin_resp = await auth_endpoints.begin_telegram_link(user={"user_id": user.telegram_user_id})
     nonce = begin_resp["data"]["nonce"]
 
     payload = {
@@ -63,9 +61,7 @@ async def test_link_happy_path(db: Database, monkeypatch: pytest.MonkeyPatch) ->
         "username": "linked_user",
         "client_id": "android-app",
     }
-    auth_hash = _fake_auth_hash(
-        "1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload
-    )
+    auth_hash = _fake_auth_hash("1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload)
 
     complete_req = TelegramLinkCompleteRequest(
         id=payload["id"],  # type: ignore[arg-type]
@@ -86,10 +82,53 @@ async def test_link_happy_path(db: Database, monkeypatch: pytest.MonkeyPatch) ->
     )
     assert status_resp["data"]["linked"] is True
 
-    unlink_resp = await auth_endpoints.unlink_telegram(
-        user={"user_id": user.telegram_user_id}
-    )
+    unlink_resp = await auth_endpoints.unlink_telegram(user={"user_id": user.telegram_user_id})
     assert unlink_resp["data"]["linked"] is False
+
+
+async def test_link_uses_constant_time_nonce_compare(
+    db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: nonce comparison must go through hmac.compare_digest."""
+    _configure_env(monkeypatch)
+    user = await _create_owner(db)
+
+    begin_resp = await auth_endpoints.begin_telegram_link(user={"user_id": user.telegram_user_id})
+    nonce = begin_resp["data"]["nonce"]
+
+    from app.api.routers.auth import endpoints_telegram
+
+    calls: list[tuple[str, str]] = []
+    real_compare = endpoints_telegram.hmac.compare_digest
+
+    def spy_compare(a, b):  # type: ignore[no-untyped-def]
+        calls.append((a, b))
+        return real_compare(a, b)
+
+    monkeypatch.setattr(endpoints_telegram.hmac, "compare_digest", spy_compare)
+
+    payload = {
+        "auth_date": int(time.time()),
+        "id": 123456789,
+        "username": "linked_user",
+        "client_id": "android-app",
+    }
+    auth_hash = _fake_auth_hash("1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload)
+    complete_req = TelegramLinkCompleteRequest(
+        id=payload["id"],  # type: ignore[arg-type]
+        auth_date=payload["auth_date"],  # type: ignore[arg-type]
+        hash=auth_hash,
+        username=payload["username"],  # type: ignore[arg-type]
+        client_id=payload["client_id"],  # type: ignore[arg-type]
+        nonce=nonce,
+    )
+    await auth_endpoints.complete_telegram_link(
+        complete_req, user={"user_id": user.telegram_user_id}
+    )
+
+    assert any(a == nonce and b == nonce for a, b in calls), (
+        f"compare_digest not called with nonce; calls={calls!r}"
+    )
 
 
 async def test_link_invalid_nonce(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -104,9 +143,7 @@ async def test_link_invalid_nonce(db: Database, monkeypatch: pytest.MonkeyPatch)
         "username": "linked_user",
         "client_id": "android-app",
     }
-    auth_hash = _fake_auth_hash(
-        "1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload
-    )
+    auth_hash = _fake_auth_hash("1000000000:TESTTOKENPLACEHOLDER1234567890ABC", payload)
 
     complete_req = TelegramLinkCompleteRequest(
         id=payload["id"],  # type: ignore[arg-type]
