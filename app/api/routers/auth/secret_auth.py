@@ -40,15 +40,28 @@ def _get_auth_config():
 
 
 def _get_secret_pepper() -> str:
-    """Resolve pepper used to hash secrets (prefers explicit pepper, falls back to JWT secret)."""
-    from app.api.routers.auth.tokens import _get_secret_key
+    """Return the SECRET_LOGIN_PEPPER used to hash client secrets.
 
+    Two unrelated security domains must not share one secret: rotating
+    JWT_SECRET_KEY would invalidate every stored ClientSecret.secret_hash and
+    lock every machine client out of secret-login. JWT signing keys also live
+    in different places (env, CI runners, deploy secrets) than DB peppers
+    should. The previous fallback to jwt_secret_key was removed for that
+    reason — see docs/tasks/issues archive: decouple-secret-login-pepper-
+    from-jwt-key.
+
+    Raises RuntimeError when secret-login is enabled but the pepper is unset.
+    """
     cfg = _get_cfg()
     if cfg.auth.secret_pepper:
         return cfg.auth.secret_pepper
-    if cfg.runtime.jwt_secret_key:
-        return cfg.runtime.jwt_secret_key
-    return _get_secret_key()
+    raise RuntimeError(
+        "SECRET_LOGIN_PEPPER is unset but SECRET_LOGIN_ENABLED=true. "
+        "Generate one with `openssl rand -hex 32` (≥32 chars required) and "
+        "set it independently of JWT_SECRET_KEY. The previous fallback to "
+        "the JWT signing key was removed because rotating JWT_SECRET_KEY "
+        "would invalidate every stored ClientSecret.secret_hash."
+    )
 
 
 def coerce_naive(dt_value: datetime | None) -> datetime | None:

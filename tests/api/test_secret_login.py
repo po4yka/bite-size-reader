@@ -32,6 +32,12 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SECRET_LOGIN_MAX_LENGTH", "128")
     monkeypatch.setenv("SECRET_LOGIN_MAX_FAILED_ATTEMPTS", "2")
     monkeypatch.setenv("SECRET_LOGIN_LOCKOUT_MINUTES", "1")
+    # SECRET_LOGIN_PEPPER is required when secret-login is enabled — there is
+    # no JWT-key fallback. 64-char hex test value matches the >=32 floor.
+    monkeypatch.setenv(
+        "SECRET_LOGIN_PEPPER",
+        "test-pepper-32chars-minimum-for-secret-login-fixtures-do-not-reuse",
+    )
     monkeypatch.setenv("ALLOWED_USER_IDS", "123456789")
     monkeypatch.setenv("ALLOWED_CLIENT_IDS", "")
     monkeypatch.setenv("API_ID", "1")
@@ -301,3 +307,35 @@ async def test_secret_key_creation_does_not_promote_target_to_owner(
         target_user = await session.scalar(select(User).where(User.telegram_user_id == 222222222))
     assert target_user is not None
     assert target_user.is_owner is False
+
+
+# ----- pepper / JWT-key decoupling regression tests ----------------------------
+
+
+def test_get_secret_pepper_returns_configured_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Happy path: SECRET_LOGIN_PEPPER returns through, no JWT fallback consulted."""
+    _configure_env(monkeypatch)
+    pepper = secret_auth._get_secret_pepper()  # type: ignore[attr-defined]
+    assert pepper == (
+        "test-pepper-32chars-minimum-for-secret-login-fixtures-do-not-reuse"
+    )
+
+
+def test_get_secret_pepper_raises_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: with secret-login enabled but no pepper set, _get_secret_pepper
+    must raise rather than fall back to the JWT signing key. Rotating
+    JWT_SECRET_KEY would otherwise invalidate every stored ClientSecret hash."""
+    _configure_env(monkeypatch)
+    monkeypatch.delenv("SECRET_LOGIN_PEPPER", raising=False)
+    secret_auth._cfg = None  # type: ignore[attr-defined]
+
+    with pytest.raises(RuntimeError, match="SECRET_LOGIN_PEPPER is unset"):
+        secret_auth._get_secret_pepper()  # type: ignore[attr-defined]
+
+
+def test_pepper_validator_rejects_short_value() -> None:
+    """A pepper shorter than 32 chars must fail config load, not just warn."""
+    from app.config.api import AuthConfig
+
+    with pytest.raises(ValueError, match="at least 32 chars"):
+        AuthConfig(secret_pepper="short-value")

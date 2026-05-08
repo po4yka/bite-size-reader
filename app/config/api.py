@@ -264,8 +264,15 @@ class AuthConfig(BaseModel):
         if value in (None, ""):
             return None
         pepper = str(value).strip()
-        if len(pepper) < 16:
-            logger.warning("Login pepper length is below recommended minimum (16 characters)")
+        # 32-char floor matches credentials_pepper and ensures we never accept
+        # a JWT-key-derived value at the field level. The previous 16-char
+        # warning was too lenient.
+        if len(pepper) < 32:
+            msg = (
+                "SECRET_LOGIN_PEPPER must be at least 32 chars. "
+                "Generate one with: openssl rand -hex 32"
+            )
+            raise ValueError(msg)
         if len(pepper) > 500:
             msg = "SECRET_LOGIN_PEPPER appears too long"
             raise ValueError(msg)
