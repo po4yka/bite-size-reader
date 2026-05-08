@@ -266,7 +266,8 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 8. **Web Frontend Changes (`clients/web/`):**
    - Read `docs/reference/frontend-web.md` before changing web architecture, routing, auth, or data layer behavior
    - Keep same-host serving contract intact (`/web`, `/web/*`, `/static/web/*`)
-   - Preserve hybrid auth behavior (Telegram WebApp header mode and JWT mode with refresh)
+   - Preserve hybrid auth behavior. Three JWT-mode variants share the same refresh chain: Telegram Login Widget (`/v1/auth/telegram-login`), secret-key login (`/v1/auth/secret-login`, machine clients), and credentials login (`/v1/auth/credentials-login`, gated only by `CREDENTIALS_LOGIN_PEPPER` presence — no separate enable flag; the route returns `503` if the pepper is unset). Bootstrap the credentials row via `ratatoskr credentials set` (CLI is the only writer; there is no public signup).
+   - Token storage is dual-bucket: `localStorage` when Remember Me is checked, `sessionStorage` when unchecked. The chosen bucket travels in the persisted envelope (`AuthTokens.persistent`) so `client.ts:refreshAccessToken` and the backend `/v1/auth/refresh` rotation both preserve the TTL family across rotation.
    - Web UI must adapt to ≤768px via container queries on AppShell main; see DESIGN.md Mobile section.
    - Run `cd clients/web && npm run check:static && npm run test` before finalizing
 

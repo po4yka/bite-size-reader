@@ -42,6 +42,7 @@ class AuthRepositoryAdapter:
         device_info: str | None,
         ip_address: str | None,
         expires_at: dt.datetime,
+        remember_me: bool = True,
     ) -> int:
         """Create a new refresh token record."""
         async with self._database.transaction() as session:
@@ -53,6 +54,7 @@ class AuthRepositoryAdapter:
                 ip_address=ip_address,
                 expires_at=expires_at,
                 is_revoked=False,
+                remember_me=remember_me,
             )
             session.add(record)
             await session.flush()

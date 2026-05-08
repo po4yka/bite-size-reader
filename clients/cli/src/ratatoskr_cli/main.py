@@ -69,6 +69,7 @@ def _register_commands() -> None:
     from ratatoskr_cli.commands.admin import admin
     from ratatoskr_cli.commands.aggregation import aggregate, aggregation
     from ratatoskr_cli.commands.collections import collections
+    from ratatoskr_cli.commands.credentials import credentials
     from ratatoskr_cli.commands.get import get
     from ratatoskr_cli.commands.import_export import export_cmd, import_cmd
     from ratatoskr_cli.commands.list_cmd import list_cmd
@@ -90,6 +91,7 @@ def _register_commands() -> None:
     cli.add_command(export_cmd)
     cli.add_command(import_cmd)
     cli.add_command(admin)
+    cli.add_command(credentials)
 
 
 _register_commands()

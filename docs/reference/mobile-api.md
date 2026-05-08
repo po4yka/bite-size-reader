@@ -147,10 +147,37 @@ Current sync uses explicit sessions and chunked/full + delta + apply endpoints:
 - `POST /v1/auth/secret-keys`
 - `POST /v1/auth/secret-keys/{key_id}/rotate`
 - `POST /v1/auth/secret-keys/{key_id}/revoke`
+- `POST /v1/auth/credentials-login`
+- `POST /v1/auth/credentials/change-password`
 - `GET /v1/auth/me/telegram`
 - `POST /v1/auth/me/telegram/link`
 - `POST /v1/auth/me/telegram/complete`
 - `DELETE /v1/auth/me/telegram`
+
+The web client uses the credentials flow whenever `CREDENTIALS_LOGIN_PEPPER` is set on the server (pepper presence is the only gate; there is no separate enable flag — without a pepper the route returns `503 Configuration error`):
+
+1. The owner runs `ratatoskr credentials set --user-id <id> --nickname <name> [--email <addr>]` once after deploy to seed the row in `user_credentials`. There is no public signup; this is the only writer.
+2. `POST /v1/auth/credentials-login` accepts `{ identifier, password, remember_me, client_id }` where `identifier` is either the nickname or email (case-folded; `@` presence disambiguates). Returns the same `{ tokens, sessionId }` envelope as the other login flows.
+3. Remember Me semantics:
+   - `remember_me=true`  → 30-day refresh TTL; web client persists tokens in `localStorage`.
+   - `remember_me=false` → 12-hour refresh TTL (configurable via `CREDENTIALS_LOGIN_NO_REMEMBER_HOURS`); web client persists tokens in `sessionStorage` (vanish on browser close); refresh cookie is issued without `Max-Age` so it is also a session cookie.
+4. Anti-enumeration: every failure path (unknown identifier, wrong password, non-allowlisted user, exhausted lockout) returns the same uniform `401 Invalid credentials`; a decoy argon2 verify runs on the no-row-found path to keep wall-clock timing matched. A `Retry-After` header is set only when the row is locked.
+5. Lockout follows the secret-login pattern (default 5 failures / 15 minutes) but uses a *separate* counter on `user_credentials.failed_attempts`; locking credentials login does not lock secret-key login and vice versa.
+6. `POST /v1/auth/credentials/change-password` requires the current password and is bearer-auth gated. Active sessions are not revoked on rotation (parity with secret-key rotation).
+
+Example `credentials-login` request:
+
+```http
+POST /v1/auth/credentials-login
+Content-Type: application/json
+
+{
+  "identifier": "owner",
+  "password": "correct horse battery staple",
+  "remember_me": true,
+  "client_id": "web-v1"
+}
+```
 
 External CLI and hosted MCP clients usually use the secret-key flow instead of Telegram login:
 

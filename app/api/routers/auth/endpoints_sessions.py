@@ -94,12 +94,32 @@ async def refresh_access_token(
     if not user:
         raise ResourceNotFoundError("User", user_id)
 
+    # Preserve the TTL family across rotation: a session that began as a
+    # short-lived non-remembered credentials login must rotate into another
+    # short-lived token (and session-cookie max_age=None), and vice versa.
+    # Default to True for legacy rows persisted before remember_me existed.
+    remember_me = bool(refresh_token_record.get("remember_me", True))
+
+    if remember_me:
+        ttl_seconds: float = 30 * 24 * 60 * 60
+        cookie_max_age: int | None = 30 * 24 * 60 * 60
+    else:
+        # Match the credentials-login no-remember TTL (read from config to keep
+        # this in sync with credentials_no_remember_hours).
+        from app.config import load_config
+
+        cfg = load_config(allow_stub_telegram=True)
+        ttl_seconds = cfg.auth.credentials_no_remember_hours * 60 * 60
+        cookie_max_age = None  # session cookie -- vanishes on browser close
+
     # Rotate: revoke old token, issue new one
     await auth_repo.async_revoke_refresh_token(token_hash)
     new_refresh_token, session_id = await create_refresh_token(
         user_id=user_id,
         client_id=client_id,
         auth_repo=auth_repo,
+        ttl_seconds=ttl_seconds,
+        remember_me=remember_me,
     )
 
     access_token = create_access_token(
@@ -108,10 +128,19 @@ async def refresh_access_token(
         client_id,
     )
 
-    logger.info("session_refreshed", extra={"user_id": user_id, "client_id": client_id})
+    logger.info(
+        "session_refreshed",
+        extra={
+            "user_id": user_id,
+            "client_id": client_id,
+            "remember_me": remember_me,
+        },
+    )
 
-    # Set the new refresh token as httpOnly cookie for web clients
-    set_refresh_cookie(response, new_refresh_token)
+    # Set the new refresh token as httpOnly cookie for web clients.
+    # max_age=None issues a session cookie (vanishes on browser close) for
+    # the credentials-login no-remember mode.
+    set_refresh_cookie(response, new_refresh_token, max_age=cookie_max_age)
 
     tokens = TokenPair(
         access_token=access_token,

@@ -149,6 +149,18 @@ def get_auth_repository(
     )
 
 
+def get_user_credential_repository(
+    session_manager: Database | None = None,
+    request: Any = None,
+) -> Any:
+    """Build a user-credentials repository bound to the shared session manager."""
+    from app.infrastructure.persistence.repositories.user_credentials_repository import (
+        UserCredentialRepositoryAdapter,
+    )
+
+    return UserCredentialRepositoryAdapter(resolve_repository_session(session_manager, request))
+
+
 def get_collection_repository(
     session_manager: Database | None = None,
     request: Any = None,
@@ -242,9 +254,7 @@ def get_audio_generation_repository(
         AudioGenerationRepositoryAdapter,
     )
 
-    return AudioGenerationRepositoryAdapter(
-        resolve_repository_session(session_manager, request)
-    )
+    return AudioGenerationRepositoryAdapter(resolve_repository_session(session_manager, request))
 
 
 def get_topic_search_repository(

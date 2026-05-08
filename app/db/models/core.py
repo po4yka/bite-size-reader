@@ -6,7 +6,17 @@ import datetime as dt  # noqa: TC003 - SQLAlchemy resolves string annotations at
 import enum
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, LargeBinary
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+)
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -81,6 +91,9 @@ class User(Base):
 
     client_secrets: Mapped[list[ClientSecret]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    credentials: Mapped[UserCredential | None] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
     )
     devices: Mapped[list[UserDevice]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
@@ -179,9 +192,7 @@ class ClientSecret(Base):
     label: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_used_at: Mapped[dt.datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_used_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     server_version: Mapped[int] = mapped_column(
@@ -195,6 +206,52 @@ class ClientSecret(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="client_secrets")
+
+
+class UserCredential(Base):
+    """Owner-managed nickname/email + password credentials for web/JWT login.
+
+    Independent of ClientSecret (machine-client secrets) -- argon2id-hashed
+    user passwords with HMAC pre-hash (CREDENTIALS_LOGIN_PEPPER). One row per
+    user (UNIQUE constraint on user_id) for the single-owner deployment;
+    schema permits future multi-credential extension by relaxing the UNIQUE.
+    """
+
+    __tablename__ = "user_credentials"
+    __table_args__ = (Index("ix_user_credentials_locked_until", "locked_until"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.telegram_user_id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    nickname: Mapped[str] = mapped_column(Text, nullable=False)
+    nickname_canonical: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    email_canonical: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    pepper_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    password_updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    server_version: Mapped[int] = mapped_column(
+        BigInteger, default=_next_server_version, nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    user: Mapped[User] = relationship(back_populates="credentials")
 
 
 class Chat(Base):
@@ -408,7 +465,9 @@ class LLMCall(Base):
     deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     request: Mapped[Request] = relationship(back_populates="llm_calls")
-    digest_analyses: Mapped[list[Any]] = relationship("ChannelPostAnalysis", back_populates="llm_call")
+    digest_analyses: Mapped[list[Any]] = relationship(
+        "ChannelPostAnalysis", back_populates="llm_call"
+    )
 
 
 class Summary(Base):
@@ -511,7 +570,9 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    ts: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
     level: Mapped[str] = mapped_column(Text, nullable=False)
     event: Mapped[str] = mapped_column(Text, nullable=False)
     details_json: Mapped[JSONValue] = _json_column()
@@ -519,7 +580,9 @@ class AuditLog(Base):
 
 class SummaryEmbedding(Base):
     __tablename__ = "summary_embeddings"
-    __table_args__ = (Index("ix_summary_embeddings_model_name_model_version", "model_name", "model_version"),)
+    __table_args__ = (
+        Index("ix_summary_embeddings_model_name_model_version", "model_name", "model_version"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     summary_id: Mapped[int] = mapped_column(
@@ -682,6 +745,7 @@ class RefreshToken(Base):
     device_info: Mapped[str | None] = mapped_column(Text, nullable=True)
     ip_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    remember_me: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_used_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
@@ -696,6 +760,7 @@ class RefreshToken(Base):
 CORE_MODELS: tuple[type[Base], ...] = (
     User,
     ClientSecret,
+    UserCredential,
     Chat,
     Request,
     TelegramMessage,
@@ -728,6 +793,7 @@ __all__ = [
     "SummaryEmbedding",
     "TelegramMessage",
     "User",
+    "UserCredential",
     "UserDevice",
     "UserInteraction",
     "VideoDownload",

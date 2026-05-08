@@ -1,4 +1,4 @@
-import { setStoredTokens } from "../auth/storage";
+import { getStoredTokens, setStoredTokens } from "../auth/storage";
 import type { AuthTokens } from "../auth/types";
 import { normalizeKeys } from "../lib/case";
 import { config } from "../lib/config";
@@ -69,12 +69,18 @@ async function refreshAccessToken(refreshToken: string | null): Promise<AuthToke
   }
 
   const tokens = normalizeKeys(body.data.tokens);
+  // Preserve the bucket the active envelope was using -- a credentials login
+  // with Remember Me=false started in sessionStorage and must rotate back
+  // into sessionStorage. Default to true (legacy Telegram/secret-login).
+  const previousEnvelope = getStoredTokens();
+  const persistent = previousEnvelope?.persistent ?? true;
   const normalized: AuthTokens = {
     accessToken: tokens.accessToken,
     refreshToken: null, // Cookie handles refresh token storage
     expiresIn: tokens.expiresIn,
     tokenType: tokens.tokenType,
     sessionId: body.data.sessionId ?? null,
+    persistent,
   };
 
   const current = getApiSession();
@@ -83,7 +89,7 @@ async function refreshAccessToken(refreshToken: string | null): Promise<AuthToke
     accessToken: normalized.accessToken,
     refreshToken: null,
   });
-  setStoredTokens(normalized);
+  setStoredTokens(normalized, { persistent });
 
   return normalized;
 }

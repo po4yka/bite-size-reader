@@ -103,7 +103,7 @@ this turns subscribed channels into a periodic recap.
 
 ## What else it includes
 
-- **Web frontend** — A React + TypeScript UI at `/web/*`, served by FastAPI. See [Web Frontend](docs/reference/frontend-web.md).
+- **Web frontend** — A React + TypeScript UI at `/web/*`, served by FastAPI. Hybrid auth: Telegram WebApp, Telegram Login Widget, or nickname/email + password with Remember Me. Set `CREDENTIALS_LOGIN_PEPPER` (≥32 chars, generated separately from `JWT_SECRET_KEY`) and bootstrap the password once via `ratatoskr credentials set --user-id <your_telegram_id> --nickname <name>`. See [Web Frontend](docs/reference/frontend-web.md).
 - **Mobile REST API** — JWT-authenticated REST API with device sync, collections, and aggregations. See [Mobile API Reference](docs/reference/mobile-api.md).
 - **MCP server** — Expose summaries and search to external AI agents via the Model Context Protocol. See [MCP Server](docs/reference/mcp-server.md).
 - **Multi-agent pipeline** — ContentExtraction, Summarization, Validation, and WebSearch agents coordinate via an orchestrator with self-correction. See [Multi-Agent Architecture](docs/explanation/multi-agent-architecture.md).

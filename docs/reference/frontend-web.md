@@ -161,12 +161,23 @@ Auth is hybrid and selected at runtime in `detectAuthMode`:
 
 2. `jwt` mode
    - Trigger: no WebApp initData
-   - Login: Telegram Login Widget -> `POST /v1/auth/telegram-login`
+   - Two login variants share this mode:
+     - Telegram Login Widget → `POST /v1/auth/telegram-login`
+     - Nickname/email + password → `POST /v1/auth/credentials-login`. Always rendered as the primary form in JWT mode; the route returns `503` if the deploy has not set `CREDENTIALS_LOGIN_PEPPER`, which surfaces as the canonical sign-in error in the UI.
    - Client id: `web-v1`
    - Session: bearer token storage + auto refresh via `POST /v1/auth/refresh`
    - Pre-v1 client id renames may require signing in again because sessions are scoped by client id.
 
-Auth provider implementation: `clients/web/src/auth/AuthProvider.tsx`.
+### Token storage (dual-bucket)
+
+`clients/web/src/auth/storage.ts` writes to two buckets keyed by the same `ratatoskr_web_auth_tokens` envelope name:
+
+- `localStorage` when the login persists across browser close (Telegram, secret-key, or credentials with Remember Me checked).
+- `sessionStorage` when the credentials login was made with Remember Me unchecked. Tokens are dropped automatically when the browser tab closes; the refresh cookie is also issued without `Max-Age` so the server-side rotation chain stops at the same point.
+
+The chosen bucket is encoded in the persisted JSON (`persistent: boolean`) so `client.ts:refreshAccessToken` writes the rotated tokens back to the same place. Read order is `sessionStorage → localStorage` so a fresh non-remembered login can never be shadowed by a stale localStorage row.
+
+Auth provider implementation: `clients/web/src/auth/AuthProvider.tsx`. Credentials form: `clients/web/src/features/auth/CredentialsLoginForm.tsx` — Frost primitives only (`MonoInput`, `Checkbox`, `BracketButton`, `StatusBadge`); the form renders a single canonical "Invalid credentials." string for every 401 path so timing/wording cannot leak which dimension was wrong.
 
 ---
 

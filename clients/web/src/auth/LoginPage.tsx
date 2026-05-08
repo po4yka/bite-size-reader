@@ -7,6 +7,7 @@ import {
   SparkLoading,
   StatusBadge,
 } from "../design";
+import CredentialsLoginForm from "../features/auth/CredentialsLoginForm";
 import SecretLoginForm from "../features/auth/SecretLoginForm";
 import type { TelegramAuthPayload } from "./types";
 import { useAuth } from "./AuthProvider";
@@ -32,7 +33,13 @@ function mapTelegramUserToPayload(user: {
 }
 
 export default function LoginPage() {
-  const { login, logout, error, dismissError } = useAuth();
+  const { login, logout, error, dismissError, mode } = useAuth();
+  // Credentials login is a JWT-mode variant: the form is shown whenever we
+  // are NOT inside the Telegram WebApp container (which uses initData
+  // headers instead). Server-side, the route returns 503 if the deploy
+  // hasn't set CREDENTIALS_LOGIN_PEPPER -- the form will render that error
+  // back to the user the first time they try to sign in.
+  const showCredentialsForm = mode === "jwt";
   const widgetRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -137,6 +144,24 @@ export default function LoginPage() {
             Sign in to access your summaries.
           </p>
         </div>
+
+        {showCredentialsForm && (
+          <div className="login-credentials" style={{ marginBottom: "1rem" }}>
+            <CredentialsLoginForm />
+          </div>
+        )}
+
+        {showCredentialsForm && (
+          <hr
+            className="login-divider"
+            style={{
+              margin: "1rem 0",
+              border: "none",
+              borderTop:
+                "1px solid color-mix(in oklch, var(--frost-ink) 25%, transparent)",
+            }}
+          />
+        )}
 
         <div className="login-hero" style={{ marginBottom: "1rem" }}>
           {!botUsername && (

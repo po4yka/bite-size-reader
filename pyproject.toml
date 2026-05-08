@@ -194,6 +194,7 @@ api = [
   "pyjwt>=2.12.0",
   "python-multipart>=0.0.26",
   "defusedxml>=0.7.1",
+  "argon2-cffi>=23.1.0",
 ]
 
 # Machine learning dependencies (embeddings, vector search, transformers)

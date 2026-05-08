@@ -7,6 +7,11 @@ export interface AuthTokens {
   expiresIn: number;
   tokenType: string;
   sessionId: number | null;
+  // True when the user picked Remember Me (or for legacy Telegram/secret-key
+  // logins that always persist). False for credentials-login with the box
+  // unchecked: tokens go to sessionStorage so they vanish on browser close.
+  // The storage layer reads this on refresh to write back to the same bucket.
+  persistent?: boolean;
 }
 
 export interface AuthUser {
@@ -29,5 +34,12 @@ export interface TelegramAuthPayload {
 
 export interface SecretAuthPayload {
   secretKey: string;
+  clientId: string;
+}
+
+export interface CredentialsAuthPayload {
+  identifier: string; // nickname or email; "@" presence routes to email branch
+  password: string;
+  rememberMe: boolean;
   clientId: string;
 }

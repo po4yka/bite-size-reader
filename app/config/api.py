@@ -30,6 +30,10 @@ class ApiLimitsConfig(BaseModel):
         default=10,
         validation_alias="API_RATE_LIMIT_SECRET_LOGIN",
     )
+    credentials_login_limit: int = Field(
+        default=10,
+        validation_alias="API_RATE_LIMIT_CREDENTIALS_LOGIN",
+    )
     aggregation_create_user_limit: int = Field(
         default=5,
         validation_alias="API_RATE_LIMIT_AGGREGATION_CREATE_USER",
@@ -73,6 +77,7 @@ class ApiLimitsConfig(BaseModel):
         "search_limit",
         "auth_limit",
         "secret_login_limit",
+        "credentials_login_limit",
         "aggregation_create_user_limit",
         "aggregation_create_client_limit",
         mode="before",
@@ -127,12 +132,88 @@ class AuthConfig(BaseModel):
         description="Optional pepper used when hashing secret keys",
     )
 
+    credentials_pepper: str | None = Field(
+        default=None,
+        validation_alias="CREDENTIALS_LOGIN_PEPPER",
+        description=(
+            "Pepper applied as HMAC pre-hash before argon2id. Required to use "
+            "credentials login; must be independent of JWT_SECRET_KEY and "
+            "SECRET_LOGIN_PEPPER. When unset, the credentials-login route "
+            "returns 503 Configuration error -- the pepper presence is the "
+            "only gate."
+        ),
+    )
+    credentials_max_failed_attempts: int = Field(
+        default=5,
+        validation_alias="CREDENTIALS_LOGIN_MAX_FAILED_ATTEMPTS",
+        description="Maximum failed credential attempts before lockout",
+    )
+    credentials_lockout_minutes: int = Field(
+        default=15,
+        validation_alias="CREDENTIALS_LOGIN_LOCKOUT_MINUTES",
+        description="Lockout duration after repeated credential failures",
+    )
+    credentials_password_min_length: int = Field(
+        default=12,
+        validation_alias="CREDENTIALS_LOGIN_PASSWORD_MIN_LENGTH",
+        description="Minimum password length",
+    )
+    credentials_password_max_length: int = Field(
+        default=256,
+        validation_alias="CREDENTIALS_LOGIN_PASSWORD_MAX_LENGTH",
+        description="Maximum password length (DoS guard for argon2)",
+    )
+    credentials_remember_me_days: int = Field(
+        default=30,
+        validation_alias="CREDENTIALS_LOGIN_REMEMBER_ME_DAYS",
+        description="Refresh-token TTL when Remember Me is checked (days)",
+    )
+    credentials_no_remember_hours: int = Field(
+        default=12,
+        validation_alias="CREDENTIALS_LOGIN_NO_REMEMBER_HOURS",
+        description=(
+            "Refresh-token TTL when Remember Me is unchecked (hours). "
+            "Frontend stores tokens in sessionStorage in this mode so they "
+            "vanish on browser close regardless of TTL."
+        ),
+    )
+    credentials_argon2_time_cost: int = Field(
+        default=3,
+        validation_alias="CREDENTIALS_LOGIN_ARGON2_TIME_COST",
+        description="argon2id iterations (RFC 9106 recommends >=3)",
+    )
+    credentials_argon2_memory_kib: int = Field(
+        default=65536,
+        validation_alias="CREDENTIALS_LOGIN_ARGON2_MEMORY_KIB",
+        description="argon2id memory cost in KiB (default 64 MiB)",
+    )
+    credentials_argon2_parallelism: int = Field(
+        default=1,
+        validation_alias="CREDENTIALS_LOGIN_ARGON2_PARALLELISM",
+        description="argon2id parallelism (lanes)",
+    )
+
     @model_validator(mode="after")
     def _validate_lengths(self) -> AuthConfig:
         if self.secret_min_length <= 0 or self.secret_max_length <= 0:
             raise ValueError("secret lengths must be positive")
         if self.secret_min_length >= self.secret_max_length:
             raise ValueError("secret_min_length must be less than secret_max_length")
+        if self.credentials_password_min_length >= self.credentials_password_max_length:
+            raise ValueError(
+                "credentials_password_min_length must be less than credentials_password_max_length"
+            )
+        # If a pepper is set, enforce the 32-char floor at config load. An
+        # unset pepper is allowed -- credentials-login is gated by pepper
+        # presence at request time, so deploys that don't use the feature
+        # don't have to set it. A short pepper, however, is a misconfiguration
+        # we want to catch before any login attempt.
+        pepper = self.credentials_pepper
+        if pepper and len(pepper) < 32:
+            raise ValueError(
+                "CREDENTIALS_LOGIN_PEPPER must be at least 32 chars. "
+                "Generate one with: openssl rand -hex 32"
+            )
         return self
 
     @field_validator("secret_max_failed_attempts", mode="before")
@@ -189,6 +270,42 @@ class AuthConfig(BaseModel):
             msg = "SECRET_LOGIN_PEPPER appears too long"
             raise ValueError(msg)
         return pepper
+
+    @field_validator("credentials_pepper", mode="before")
+    @classmethod
+    def _validate_credentials_pepper(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        pepper = str(value).strip()
+        if len(pepper) > 500:
+            msg = "CREDENTIALS_LOGIN_PEPPER appears too long"
+            raise ValueError(msg)
+        return pepper
+
+    @field_validator(
+        "credentials_max_failed_attempts",
+        "credentials_password_min_length",
+        "credentials_password_max_length",
+        "credentials_remember_me_days",
+        "credentials_no_remember_hours",
+        "credentials_argon2_time_cost",
+        "credentials_argon2_parallelism",
+        "credentials_argon2_memory_kib",
+        "credentials_lockout_minutes",
+        mode="before",
+    )
+    @classmethod
+    def _validate_credentials_ints(cls, value: Any, info: ValidationInfo) -> int:
+        default = cls.model_fields[info.field_name].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except ValueError as exc:
+            msg = f"{info.field_name.replace('_', ' ')} must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed <= 0:
+            msg = f"{info.field_name.replace('_', ' ')} must be positive"
+            raise ValueError(msg)
+        return parsed
 
 
 class SyncConfig(BaseModel):

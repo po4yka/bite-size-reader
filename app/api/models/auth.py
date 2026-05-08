@@ -150,3 +150,34 @@ class SessionInfo(BaseModel):
     last_used_at: str | None = Field(serialization_alias="lastUsedAt")
     created_at: str = Field(serialization_alias="createdAt")
     is_current: bool = Field(default=False, serialization_alias="isCurrent")
+
+
+class CredentialsLoginRequest(BaseModel):
+    """Request body for nickname/email + password login."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    identifier: str = Field(
+        ...,
+        min_length=1,
+        max_length=256,
+        description="Nickname or email. '@' presence routes to the email branch.",
+    )
+    password: str = Field(..., min_length=1, max_length=4096)
+    remember_me: bool = Field(
+        default=False,
+        description=(
+            "When True, issue a long-lived refresh token (default 30d) so the "
+            "session survives reload. When False, issue a short-lived refresh "
+            "(default 12h); the web client stores it in sessionStorage so it "
+            "vanishes on browser close."
+        ),
+    )
+    client_id: str = Field(..., min_length=1, max_length=100)
+
+
+class ChangePasswordRequest(BaseModel):
+    """Request body for owner-only password change."""
+
+    current_password: str = Field(..., min_length=1, max_length=4096)
+    new_password: str = Field(..., min_length=1, max_length=4096)

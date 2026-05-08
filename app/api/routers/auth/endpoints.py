@@ -10,6 +10,7 @@ from __future__ import annotations
 from app.api.routers.auth._fastapi import APIRouter
 
 from . import (
+    endpoints_credentials,
     endpoints_me,
     endpoints_secret_keys,
     endpoints_sessions,
@@ -21,6 +22,7 @@ router = APIRouter()
 # Aggregate routers (route paths are defined in each sub-router)
 router.include_router(endpoints_telegram.router)
 router.include_router(endpoints_secret_keys.router)
+router.include_router(endpoints_credentials.router)
 router.include_router(endpoints_me.router)
 router.include_router(endpoints_sessions.router)
 
@@ -39,6 +41,9 @@ list_secret_keys = endpoints_secret_keys.list_secret_keys
 
 get_current_user_info = endpoints_me.get_current_user_info
 delete_account = endpoints_me.delete_account
+
+credentials_login = endpoints_credentials.credentials_login
+change_password = endpoints_credentials.change_password
 
 refresh_access_token = endpoints_sessions.refresh_access_token
 logout = endpoints_sessions.logout

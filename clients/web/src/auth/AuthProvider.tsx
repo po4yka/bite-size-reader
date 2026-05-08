@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { fetchCurrentUser, loginWithTelegram } from "../api/auth";
+import * as apiCredentialsAuth from "../api/credentialsAuth";
 import { setApiSession } from "../api/session";
 import * as apiSocialAuth from "../api/socialAuth";
 import { detectAuthMode } from "./mode";
@@ -18,6 +19,7 @@ import type {
   AuthStatus,
   AuthTokens,
   AuthUser,
+  CredentialsAuthPayload,
   SecretAuthPayload,
   TelegramAuthPayload,
 } from "./types";
@@ -30,6 +32,7 @@ interface AuthContextValue {
   error: string | null;
   login: (payload: TelegramAuthPayload) => Promise<void>;
   loginWithSecret: (payload: SecretAuthPayload) => Promise<void>;
+  loginWithCredentials: (payload: CredentialsAuthPayload) => Promise<void>;
   logout: () => void;
   reloadUser: () => Promise<void>;
   dismissError: () => void;
@@ -187,6 +190,33 @@ export function AuthProvider({ children }: PropsWithChildren) {
     [syncApiSession],
   );
 
+  const loginWithCredentials = useCallback(
+    async (payload: CredentialsAuthPayload) => {
+      setStatus("loading");
+      setError(null);
+      try {
+        const nextTokens = await apiCredentialsAuth.loginWithCredentials(payload);
+        // Persistent bucket follows the Remember Me checkbox: localStorage if
+        // checked (so the session survives reload), sessionStorage if not (so
+        // the tokens vanish when the tab closes).
+        setStoredTokens(nextTokens, { persistent: payload.rememberMe });
+        setTokens(nextTokens);
+        setStatus("authenticated");
+        syncApiSession(nextTokens);
+        const current = await fetchCurrentUser();
+        setUser(current);
+      } catch (err) {
+        setStatus("unauthenticated");
+        setTokens(null);
+        setStoredTokens(null);
+        setUser(null);
+        setError(err instanceof Error ? err.message : "Invalid credentials.");
+        throw err;
+      }
+    },
+    [syncApiSession],
+  );
+
   const logout = useCallback(() => {
     setStoredTokens(null);
     setTokens(null);
@@ -209,11 +239,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
       error,
       login,
       loginWithSecret,
+      loginWithCredentials,
       logout,
       reloadUser,
       dismissError,
     }),
-    [dismissError, error, login, loginWithSecret, logout, mode, reloadUser, status, tokens, user],
+    [
+      dismissError,
+      error,
+      login,
+      loginWithCredentials,
+      loginWithSecret,
+      logout,
+      mode,
+      reloadUser,
+      status,
+      tokens,
+      user,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

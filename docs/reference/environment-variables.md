@@ -425,6 +425,7 @@ Controls which embedding backend generates vectors for semantic search.
 | `API_RATE_LIMIT_REQUESTS` | `10` | Requests endpoint limit |
 | `API_RATE_LIMIT_SEARCH` | `50` | Search endpoint limit |
 | `API_RATE_LIMIT_SECRET_LOGIN` | `10` | Dedicated `POST /v1/auth/secret-login` limit |
+| `API_RATE_LIMIT_CREDENTIALS_LOGIN` | `10` | Dedicated `POST /v1/auth/credentials-login` limit (separate counter from secret-login so brute-forcing one channel cannot lock out the other) |
 | `API_RATE_LIMIT_AGGREGATION_CREATE_USER` | `5` | Aggregation create limit per authenticated user |
 | `API_RATE_LIMIT_AGGREGATION_CREATE_CLIENT` | `20` | Aggregation create limit per client ID across users |
 | `SYNC_EXPIRY_HOURS` | `1` | Sync session expiry |
@@ -438,6 +439,16 @@ Controls which embedding backend generates vectors for semantic search.
 | `SECRET_LOGIN_MAX_FAILED_ATTEMPTS` | `5` | Max failed login attempts before lockout |
 | `SECRET_LOGIN_LOCKOUT_MINUTES` | `15` | Lockout duration |
 | `SECRET_LOGIN_PEPPER` | _(none)_ | Optional pepper for secret hashing |
+| `CREDENTIALS_LOGIN_PEPPER` | _(none)_ | Pepper presence is the gate for credentials login (`POST /v1/auth/credentials-login`) — there is no separate enable flag. ≥32 chars; MUST be independent of `JWT_SECRET_KEY` and `SECRET_LOGIN_PEPPER`. Applied as HMAC-SHA256 pre-hash before argon2id. Generate with `openssl rand -hex 32`. Unset → the route returns `503 Configuration error`; the rest of the API still boots. A short (<32 char) value is rejected at config load. |
+| `CREDENTIALS_LOGIN_MAX_FAILED_ATTEMPTS` | `5` | Max failed credential attempts before lockout |
+| `CREDENTIALS_LOGIN_LOCKOUT_MINUTES` | `15` | Lockout duration after repeated credential failures |
+| `CREDENTIALS_LOGIN_PASSWORD_MIN_LENGTH` | `12` | Minimum password length |
+| `CREDENTIALS_LOGIN_PASSWORD_MAX_LENGTH` | `256` | Maximum password length (DoS guard for argon2) |
+| `CREDENTIALS_LOGIN_REMEMBER_ME_DAYS` | `30` | Refresh-token TTL when Remember Me is checked (days) |
+| `CREDENTIALS_LOGIN_NO_REMEMBER_HOURS` | `12` | Refresh-token TTL when Remember Me is unchecked (hours). Web client also writes tokens to `sessionStorage` in this mode so they vanish on browser close. |
+| `CREDENTIALS_LOGIN_ARGON2_TIME_COST` | `3` | argon2id iterations |
+| `CREDENTIALS_LOGIN_ARGON2_MEMORY_KIB` | `65536` | argon2id memory cost in KiB (default 64 MiB) |
+| `CREDENTIALS_LOGIN_ARGON2_PARALLELISM` | `1` | argon2id parallelism (lanes) |
 
 **External client ID guidance**:
 

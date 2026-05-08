@@ -77,7 +77,12 @@ def _get_secret_key() -> str:
 
 
 def create_token(
-    user_id: int, token_type: str, username: str | None = None, client_id: str | None = None
+    user_id: int,
+    token_type: str,
+    username: str | None = None,
+    client_id: str | None = None,
+    *,
+    ttl_seconds: float | None = None,
 ) -> str:
     """
     Create JWT token (access or refresh).
@@ -87,28 +92,32 @@ def create_token(
         token_type: "access" or "refresh"
         username: Optional username to include
         client_id: Optional client application ID to include
+        ttl_seconds: Override the default TTL (access=30 min, refresh=30 days).
 
     Returns:
         Encoded JWT token
     """
+    now = datetime.now(UTC)
     if token_type == "access":
-        expire = datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        if ttl_seconds is None:
+            ttl_seconds = ACCESS_TOKEN_EXPIRE_MINUTES * 60
         payload = {
             "user_id": user_id,
             "username": username,
             "client_id": client_id,
-            "exp": expire,
+            "exp": now + timedelta(seconds=ttl_seconds),
             "type": "access",
-            "iat": datetime.now(UTC),
+            "iat": now,
         }
     elif token_type == "refresh":
-        expire = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        if ttl_seconds is None:
+            ttl_seconds = REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
         payload = {
             "user_id": user_id,
             "client_id": client_id,
-            "exp": expire,
+            "exp": now + timedelta(seconds=ttl_seconds),
             "type": "refresh",
-            "iat": datetime.now(UTC),
+            "iat": now,
         }
     else:
         raise ValueError(f"Invalid token type: {token_type}")
@@ -129,6 +138,9 @@ async def create_refresh_token(
     device_info: str | None = None,
     ip_address: str | None = None,
     auth_repo: Any | None = None,
+    *,
+    ttl_seconds: float | None = None,
+    remember_me: bool = True,
 ) -> tuple[str, int]:
     """Create and persist JWT refresh token.
 
@@ -138,15 +150,22 @@ async def create_refresh_token(
         device_info: Device information string.
         ip_address: Client IP address.
         auth_repo: Optional auth repository with cache. If None, creates one.
+        ttl_seconds: Override the refresh-token TTL (default REFRESH_TOKEN_EXPIRE_DAYS days).
+            Credentials login uses this to issue 12h-or-30d tokens depending on Remember Me.
+        remember_me: Tag persisted on the refresh-token row so /refresh rotation
+            preserves the TTL family. Defaults to True for Telegram/secret-login
+            callers (existing 30-day behavior unchanged).
 
     Returns:
         Tuple of (token_string, session_id) where session_id is the refresh token record ID.
     """
-    token = create_token(user_id, "refresh", client_id=client_id)
+    if ttl_seconds is None:
+        ttl_seconds = REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+    token = create_token(user_id, "refresh", client_id=client_id, ttl_seconds=ttl_seconds)
 
     # Persist token hash
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    expires_at = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expires_at = datetime.now(UTC) + timedelta(seconds=ttl_seconds)
 
     if auth_repo is None:
         from app.api.routers.auth.dependencies import get_auth_repository
@@ -160,6 +179,7 @@ async def create_refresh_token(
         device_info=device_info,
         ip_address=ip_address,
         expires_at=expires_at,
+        remember_me=remember_me,
     )
 
     return token, session_id
