@@ -13,6 +13,17 @@ vi.mock("../../api/requests", () => ({
   submitUrl: vi.fn(),
 }));
 
+// Stub the SSE hook so tests exercise the polling fallback path by default.
+vi.mock("../../hooks/useRequestStream", () => ({
+  useRequestStream: vi.fn(() => ({
+    phase: null,
+    sectionsBySlug: {},
+    isStreaming: false,
+    error: null,
+    fellBack: true,
+  })),
+}));
+
 // SubmitPage uses Telegram hooks; stub them so the component renders cleanly.
 vi.mock("../../hooks/useTelegramClosingConfirmation", () => ({
   useTelegramClosingConfirmation: vi.fn(),

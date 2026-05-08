@@ -87,6 +87,9 @@ class RuntimeConfig(BaseModel):
     related_reads_min_similarity: float = Field(
         default=0.75, validation_alias="RELATED_READS_MIN_SIMILARITY"
     )
+    url_flow_streaming_enabled: bool = Field(
+        default=True, validation_alias="URL_FLOW_STREAMING_ENABLED"
+    )
 
     @field_validator("llm_provider", mode="before")
     @classmethod

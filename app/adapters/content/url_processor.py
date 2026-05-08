@@ -24,6 +24,7 @@ from app.adapters.content.url_flow_models import (
 )
 from app.adapters.content.url_post_summary_task_service import URLPostSummaryTaskService
 from app.adapters.content.url_summary_delivery_service import URLSummaryDeliveryService
+from app.adapters.content.streaming import StreamEvent, get_stream_hub
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
 
@@ -265,6 +266,12 @@ class URLProcessor:
                     display_model,
                 )
 
+            if getattr(self.cfg.runtime, "url_flow_streaming_enabled", True):
+                get_stream_hub().publish(
+                    str(context.req_id),
+                    StreamEvent.now("phase", {"phase": "summarizing"}, request.correlation_id or ""),
+                )
+
             if context.should_chunk and context.chunks:
                 summary_json = await self.content_chunker.process_chunks(
                     context.chunks,
@@ -318,6 +325,17 @@ class URLProcessor:
                     batch_mode=request.batch_mode,
                 )
 
+            _streaming_enabled = getattr(self.cfg.runtime, "url_flow_streaming_enabled", True)
+            if _streaming_enabled:
+                get_stream_hub().publish(
+                    str(context.req_id),
+                    StreamEvent.now("phase", {"phase": "validating"}, request.correlation_id or ""),
+                )
+                get_stream_hub().publish(
+                    str(context.req_id),
+                    StreamEvent.now("phase", {"phase": "persisting"}, request.correlation_id or ""),
+                )
+
             result = await self.summary_delivery.deliver_summary(
                 message=request.message,
                 summary_result=summary_result,
@@ -327,6 +345,12 @@ class URLProcessor:
                 silent=request.silent,
                 batch_mode=request.batch_mode,
             )
+
+            if _streaming_enabled:
+                get_stream_hub().publish(
+                    str(context.req_id),
+                    StreamEvent.now("phase", {"phase": "done"}, request.correlation_id or ""),
+                )
 
             if not request.batch_mode:
                 await self.post_summary_tasks.schedule_tasks(

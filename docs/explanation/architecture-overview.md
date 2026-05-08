@@ -32,7 +32,7 @@ themselves, integrators planning how to attach.
 
 - Multi-tenant access control.
 - Long-term vector search, RAG, or analytics dashboards (future work).
-- Real-time streaming summaries.
+- Multi-tenant streaming or cross-user event fan-out.
 
 ---
 
@@ -212,6 +212,7 @@ Each subsystem has a canonical doc; this page is the entry point.
 | Channel digest | Userbot reads subscribed channels; scheduled digests via `/digest`. | [`docs/SPEC.md`](../SPEC.md) (`Channel digest` section) |
 | Mixed-source aggregation | Bundle one or more links + forwards / attachments into a single synthesised result. | [`docs/SPEC.md`](../SPEC.md) (`Mixed-source aggregation` section) |
 | Search (Postgres tsvector + vector) | PostgreSQL `TSVECTOR` + `GIN` full-text plus optional Qdrant semantic / hybrid search. | [`docs/guides/setup-qdrant-vector-search.md`](../guides/setup-qdrant-vector-search.md) |
+| Streaming (SSE) | Real-time summary-progress events via `GET /v1/requests/{request_id}/stream`. Publishes four event kinds: `phase`, `section`, `done`, `error`. Consumed by the Telegram URL flow (draft updates) and the web frontend SubmitPage. Implementation: `app/adapters/content/streaming/` (hub, events, assembler) + `app/api/routers/streams.py`. | `app/adapters/content/streaming/` |
 | Mobile API | FastAPI + JWT, sync v2, ratelimit, summary CRUD, aggregations. | [`docs/reference/mobile-api.md`](../reference/mobile-api.md) |
 | Web frontend | React SPA served on `/web/*`; library, search, submit, collections, digest, preferences, admin. Uses a project-owned design shim under `clients/web/src/design/`. | [`docs/reference/frontend-web.md`](../reference/frontend-web.md) |
 | MCP server | Model Context Protocol server: 22 tools and 16 resources for external AI agents (OpenClaw, Claude Desktop). | [`docs/reference/mcp-server.md`](../reference/mcp-server.md) |

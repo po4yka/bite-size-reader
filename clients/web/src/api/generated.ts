@@ -460,6 +460,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/credentials-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Credentials Login (nickname/email + password)
+         * @description Exchange nickname/email + password for JWT tokens. Bootstrap is
+         *     CLI-only (`ratatoskr credentials set`) — no public signup. Route
+         *     is gated on `CREDENTIALS_LOGIN_PEPPER` presence; when unset, returns
+         *     503 Configuration error. `remember_me=True` issues a 30-day refresh
+         *     token; `False` issues a short-lived (default 12h) refresh and a
+         *     session-only cookie (no Max-Age).
+         */
+        post: operations["credentials_login_v1_auth_credentials_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/credentials/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change password (owner)
+         * @description Change the current user's password. Requires the current password.
+         *     Returns generic 401 on any failure (unknown user, mismatched current
+         *     password, locked-out row) to avoid disclosing whether password auth
+         *     is set up for the caller.
+         */
+        post: operations["change_password_v1_auth_credentials_change_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/secret-keys": {
         parameters: {
             query?: never;
@@ -743,6 +791,34 @@ export interface paths {
          * @description Retry a failed request. Processes asynchronously in the background.
          */
         post: operations["retry_request_v1_requests__request_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/requests/{request_id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream summary progress events as Server-Sent Events
+         * @description Returns a Server-Sent Events (SSE) stream of progress events for the given
+         *     request. The connection stays open until the underlying summarization reaches
+         *     a terminal state ('done' or 'error') or the client disconnects.
+         *
+         *     Events use the standard SSE format. The 'event:' field is one of
+         *     'phase' | 'section' | 'done' | 'error'; the 'data:' field is a JSON object
+         *     whose 'kind' matches the event field, with payload schemas as documented
+         *     below (StreamPhaseEvent, StreamSectionEvent, StreamDoneEvent, StreamErrorEvent).
+         *     The server emits a comment-line ': keepalive' heartbeat every 15s on idle.
+         */
+        get: operations["streamRequest"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2933,8 +3009,14 @@ export interface components {
              * @description ISO 8601 response timestamp.
              */
             timestamp: string;
-            /** @description API version string. */
+            /** @description App / build version (changes every deploy). Sourced from APP_VERSION env var. */
             version: string;
+            /**
+             * @description API contract semver. Distinct from `version` — bumps only on breaking contract
+             *     changes (response shape, request shape, routing surface). Mobile / CLI clients
+             *     should pin against this value and refuse to upgrade major versions blindly.
+             */
+            api_version: string;
             /** @description Build identifier (if available). */
             build?: string | null;
             pagination?: components["schemas"]["Pagination"];
@@ -3024,6 +3106,33 @@ export interface components {
             secret: string;
             /** @description Optional username to associate with the session. */
             username?: string | null;
+        };
+        /** @description Request body for nickname/email + password login. */
+        CredentialsLoginRequest: {
+            /**
+             * @description Nickname or email. Presence of `@` routes to the email branch;
+             *     otherwise treated as a nickname. Lookup is canonicalized
+             *     (lowercase + trim) before hitting the credentials table.
+             */
+            identifier: string;
+            /** @description Plaintext password (HMAC-peppered + argon2id-verified server-side). */
+            password: string;
+            /**
+             * @description True → 30-day refresh TTL, web client persists tokens in localStorage.
+             *     False → short-lived refresh (default 12h), refresh cookie issued as a
+             *     session cookie (no Max-Age) so it vanishes on browser close.
+             * @default false
+             */
+            remember_me: boolean;
+            /** @description Client application identifier (must be in ALLOWED_CLIENT_IDS if that env var is set). */
+            client_id: string;
+        };
+        /** @description Request body for owner-only password change. */
+        ChangePasswordRequest: {
+            /** @description Current plaintext password (verified before update). */
+            current_password: string;
+            /** @description New plaintext password (validated against credentials_password_min_length). */
+            new_password: string;
         };
         SecretKeyCreateRequest: {
             user_id: number;
@@ -3181,6 +3290,60 @@ export interface components {
             platform: "ios" | "android";
             /** @description Unique device identifier (optional). */
             device_id?: string | null;
+        };
+        StreamDoneEvent: {
+            /** @enum {string} */
+            kind: "done";
+            payload: {
+                summary_id?: string | null;
+                request_id: string;
+            };
+            /** Format: date-time */
+            timestamp: string;
+            correlation_id: string;
+        };
+        StreamErrorEvent: {
+            /** @enum {string} */
+            kind: "error";
+            payload: {
+                code: string;
+                message: string;
+                correlation_id: string;
+            };
+            /** Format: date-time */
+            timestamp: string;
+            correlation_id: string;
+        };
+        StreamPhaseEvent: {
+            /** @enum {string} */
+            kind: "phase";
+            payload: {
+                /** @enum {string} */
+                phase: "extracting" | "summarizing" | "validating" | "persisting" | "done";
+            };
+            /** Format: date-time */
+            timestamp: string;
+            correlation_id: string;
+        };
+        StreamSectionEvent: {
+            /** @enum {string} */
+            kind: "section";
+            payload: {
+                /** @description Section name from the summary contract (e.g. tldr, summary_250, key_ideas, topic_tags). */
+                section: string;
+                /** @description For string sections, the section text; for list sections, a JSON-encoded array string. */
+                content: string;
+                /** @description True only for in-flight previews; false once the section is closed. */
+                partial: boolean;
+            };
+            /** Format: date-time */
+            timestamp: string;
+            correlation_id: string;
+        };
+        SuccessMessageEnvelope: components["schemas"]["BaseSuccessResponse"] & {
+            data: {
+                message: string;
+            };
         };
         SummaryPayload: {
             summary_250: string;
@@ -5060,6 +5223,61 @@ export interface operations {
             500: components["responses"]["InternalServerError"];
         };
     };
+    credentials_login_v1_auth_credentials_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialsLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Login success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokensResponseEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequestsError"];
+            503: components["responses"]["InternalServerError"];
+        };
+    };
+    change_password_v1_auth_credentials_change_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessMessageEnvelope"];
+                };
+            };
+            401: components["responses"]["UnauthorizedError"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
     list_secret_keys_v1_auth_secret_keys_get: {
         parameters: {
             query?: {
@@ -5539,6 +5757,50 @@ export interface operations {
             422: components["responses"]["ValidationError"];
             429: components["responses"]["TooManyRequestsError"];
             500: components["responses"]["InternalServerError"];
+        };
+    };
+    streamRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Numeric request id; the authenticated user must own this request. */
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSE stream open. See StreamPhaseEvent / StreamSectionEvent / StreamDoneEvent / StreamErrorEvent for payload shapes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated user does not own this request. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request id does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     list_aggregation_bundles_v1_aggregations_get: {

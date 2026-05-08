@@ -51,6 +51,7 @@ from app.api.routers import (
     rules,
     search,
     signals,
+    streams,
     summaries,
     sync,
     system,
@@ -214,6 +215,7 @@ app.include_router(summaries.router, prefix="/v1/summaries", tags=["Summaries"])
 app.include_router(repositories.router)
 app.include_router(summaries.router, prefix="/v1/articles", tags=["Articles"])
 app.include_router(requests.router, prefix="/v1/requests", tags=["Requests"])
+app.include_router(streams.router, prefix="/v1/requests", tags=["Streams"])
 app.include_router(search.router, prefix="/v1", tags=["Search"])
 app.include_router(signals.router, prefix="/v1/signals", tags=["Signals"])
 app.include_router(sync.router, prefix="/v1/sync", tags=["Sync"])

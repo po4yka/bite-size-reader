@@ -206,6 +206,7 @@ class SummaryRequestFactory:
             message=request.message,
             correlation_id=request.correlation_id,
             silent=request.silent,
+            request_id=str(request.req_id),
         )
 
         return SummaryExecutionPlan(
@@ -527,6 +528,7 @@ class SummaryRequestFactory:
         message: Any,
         correlation_id: str | None,
         silent: bool,
+        request_id: str | None = None,
     ) -> Any | None:
         if not self._summary_streaming_enabled(silent=silent):
             return None
@@ -537,6 +539,7 @@ class SummaryRequestFactory:
             response_formatter=self._runtime.response_formatter,
             message=message,
             correlation_id=correlation_id,
+            request_id=request_id,
         )
         for request in requests:
             request.stream = True
