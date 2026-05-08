@@ -57,7 +57,12 @@ services:
     healthcheck:
       test: ["CMD", "python", "-m", "app.cli.healthcheck"]
       interval: 30s
-      timeout: 10s
+      # Cold healthcheck has to spin up the Python interpreter, import
+      # FastAPI/SQLAlchemy/asyncpg, run an Alembic plugin scan, and ping
+      # Postgres. On a Pi 5 this measures ~15 s for mobile-api and ~3 s
+      # for the bot; 30 s gives sufficient headroom over the prior 10 s
+      # ceiling that produced spurious "unhealthy" verdicts post-cutover.
+      timeout: 30s
       retries: 5
       start_period: 60s
     depends_on:
@@ -144,7 +149,12 @@ services:
     healthcheck:
       test: ["CMD", "python", "-m", "app.cli.healthcheck"]
       interval: 30s
-      timeout: 10s
+      # Cold healthcheck has to spin up the Python interpreter, import
+      # FastAPI/SQLAlchemy/asyncpg, run an Alembic plugin scan, and ping
+      # Postgres. On a Pi 5 this measures ~15 s for mobile-api and ~3 s
+      # for the bot; 30 s gives sufficient headroom over the prior 10 s
+      # ceiling that produced spurious "unhealthy" verdicts post-cutover.
+      timeout: 30s
       retries: 5
       start_period: 60s
     logging:
