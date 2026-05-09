@@ -1605,6 +1605,96 @@
         }
       }
     },
+    "/v1/auth/credentials-login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Credentials Login (nickname/email + password)",
+        "description": "Exchange nickname/email + password for JWT tokens. Bootstrap is\nCLI-only (`ratatoskr credentials set`) — no public signup. Route\nis gated on `CREDENTIALS_LOGIN_PEPPER` presence; when unset, returns\n503 Configuration error. `remember_me=True` issues a 30-day refresh\ntoken; `False` issues a short-lived (default 12h) refresh and a\nsession-only cookie (no Max-Age).\n",
+        "operationId": "credentials_login_v1_auth_credentials_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialsLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Login success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokensResponseEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequestsError"
+          },
+          "503": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/auth/credentials/change-password": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Change password (owner)",
+        "description": "Change the current user's password. Requires the current password.\nReturns generic 401 on any failure (unknown user, mismatched current\npassword, locked-out row) to avoid disclosing whether password auth\nis set up for the caller.\n",
+        "operationId": "change_password_v1_auth_credentials_change_password_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessMessageEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/v1/auth/secret-keys": {
       "post": {
         "tags": [
@@ -2631,6 +2721,54 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/requests/{request_id}/stream": {
+      "get": {
+        "summary": "Stream summary progress events as Server-Sent Events",
+        "description": "Returns a Server-Sent Events (SSE) stream of progress events for the given\nrequest. The connection stays open until the underlying summarization reaches\na terminal state ('done' or 'error') or the client disconnects.\n\nEvents use the standard SSE format. The 'event:' field is one of\n'phase' | 'section' | 'done' | 'error'; the 'data:' field is a JSON object\nwhose 'kind' matches the event field, with payload schemas as documented\nbelow (StreamPhaseEvent, StreamSectionEvent, StreamDoneEvent, StreamErrorEvent).\nThe server emits a comment-line ': keepalive' heartbeat every 15s on idle.\n",
+        "operationId": "streamRequest",
+        "tags": [
+          "Streams"
+        ],
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Numeric request id; the authenticated user must own this request."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream open. See StreamPhaseEvent / StreamSectionEvent / StreamDoneEvent / StreamErrorEvent for payload shapes.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Server-Sent Events stream. Each event is one of:\n- phase  -> StreamPhaseEvent\n- section -> StreamSectionEvent\n- done    -> StreamDoneEvent\n- error   -> StreamErrorEvent\n"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token."
+          },
+          "403": {
+            "description": "Authenticated user does not own this request."
+          },
+          "404": {
+            "description": "Request id does not exist."
           }
         }
       }
@@ -10185,7 +10323,8 @@
         "required": [
           "correlation_id",
           "timestamp",
-          "version"
+          "version",
+          "api_version"
         ],
         "properties": {
           "correlation_id": {
@@ -10199,7 +10338,11 @@
           },
           "version": {
             "type": "string",
-            "description": "API version string."
+            "description": "App / build version (changes every deploy). Sourced from APP_VERSION env var."
+          },
+          "api_version": {
+            "type": "string",
+            "description": "API contract semver. Distinct from `version` — bumps only on breaking contract\nchanges (response shape, request shape, routing surface). Mobile / CLI clients\nshould pin against this value and refuse to upgrade major versions blindly.\n"
           },
           "build": {
             "type": "string",
@@ -10484,6 +10627,62 @@
             "type": "string",
             "nullable": true,
             "description": "Optional username to associate with the session."
+          }
+        }
+      },
+      "CredentialsLoginRequest": {
+        "type": "object",
+        "description": "Request body for nickname/email + password login.",
+        "required": [
+          "identifier",
+          "password",
+          "client_id"
+        ],
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Nickname or email. Presence of `@` routes to the email branch;\notherwise treated as a nickname. Lookup is canonicalized\n(lowercase + trim) before hitting the credentials table.\n"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Plaintext password (HMAC-peppered + argon2id-verified server-side)."
+          },
+          "remember_me": {
+            "type": "boolean",
+            "default": false,
+            "description": "True → 30-day refresh TTL, web client persists tokens in localStorage.\nFalse → short-lived refresh (default 12h), refresh cookie issued as a\nsession cookie (no Max-Age) so it vanishes on browser close.\n"
+          },
+          "client_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Client application identifier (must be in ALLOWED_CLIENT_IDS if that env var is set)."
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "description": "Request body for owner-only password change.",
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Current plaintext password (verified before update)."
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "New plaintext password (validated against credentials_password_min_length)."
           }
         }
       },
@@ -11068,6 +11267,202 @@
             "description": "Unique device identifier (optional)."
           }
         }
+      },
+      "StreamDoneEvent": {
+        "type": "object",
+        "required": [
+          "kind",
+          "payload",
+          "timestamp",
+          "correlation_id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "done"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "request_id"
+            ],
+            "properties": {
+              "summary_id": {
+                "type": "string",
+                "nullable": true
+              },
+              "request_id": {
+                "type": "string"
+              }
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "correlation_id": {
+            "type": "string"
+          }
+        }
+      },
+      "StreamErrorEvent": {
+        "type": "object",
+        "required": [
+          "kind",
+          "payload",
+          "timestamp",
+          "correlation_id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "correlation_id"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "correlation_id": {
+                "type": "string"
+              }
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "correlation_id": {
+            "type": "string"
+          }
+        }
+      },
+      "StreamPhaseEvent": {
+        "type": "object",
+        "required": [
+          "kind",
+          "payload",
+          "timestamp",
+          "correlation_id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "phase"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "phase"
+            ],
+            "properties": {
+              "phase": {
+                "type": "string",
+                "enum": [
+                  "extracting",
+                  "summarizing",
+                  "validating",
+                  "persisting",
+                  "done"
+                ]
+              }
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "correlation_id": {
+            "type": "string"
+          }
+        }
+      },
+      "StreamSectionEvent": {
+        "type": "object",
+        "required": [
+          "kind",
+          "payload",
+          "timestamp",
+          "correlation_id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "section"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "required": [
+              "section",
+              "content",
+              "partial"
+            ],
+            "properties": {
+              "section": {
+                "type": "string",
+                "description": "Section name from the summary contract (e.g. tldr, summary_250, key_ideas, topic_tags)."
+              },
+              "content": {
+                "type": "string",
+                "description": "For string sections, the section text; for list sections, a JSON-encoded array string."
+              },
+              "partial": {
+                "type": "boolean",
+                "description": "True only for in-flight previews; false once the section is closed."
+              }
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "correlation_id": {
+            "type": "string"
+          }
+        }
+      },
+      "SuccessMessageEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseSuccessResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
       },
       "SummaryPayload": {
         "type": "object",
