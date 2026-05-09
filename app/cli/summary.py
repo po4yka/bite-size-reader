@@ -164,7 +164,8 @@ async def run_summary_cli(args: argparse.Namespace) -> None:
 
     setup_json_logging(cfg.runtime.log_level)
 
-    db = build_runtime_database(cfg, migrate=True)
+    db = build_runtime_database(cfg, migrate=False)
+    await db.migrate()
     runtime = build_summary_cli_runtime(cfg, db)
 
     message = CLIMessage(text=text, json_output_path=args.json_path)
