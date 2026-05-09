@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -81,6 +82,9 @@ def log_llm_content_validation(
 
 
 _INVALID_IMAGE_SEGMENTS = ("/undefined", "/null", "/none", "/[object%20object]")
+# Cloudflare image resize proxy paths (e.g. /p/w_36, /p/fl_progressive:steep/...)
+# These rate-limit external fetchers (429) causing OpenRouter to return HTTP 400.
+_CF_IMAGE_PROXY_RE = re.compile(r"^/p/(?:w_|h_|c_|fl_|q_|f_|pg_|\d)")
 _ACCEPTED_IMAGE_EXTENSIONS = (
     ".jpg",
     ".jpeg",
@@ -118,6 +122,9 @@ def _is_valid_image_url(url: str) -> bool:
         return False
     # Block obvious non-image extensions to avoid HTML/JSON URLs slipping in.
     if path.endswith((".html", ".htm", ".json", ".xml", ".pdf")):
+        return False
+    # Block Cloudflare image resize proxy URLs — these rate-limit external fetchers.
+    if _CF_IMAGE_PROXY_RE.match(path):
         return False
     return True
 
