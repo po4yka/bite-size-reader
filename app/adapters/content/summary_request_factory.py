@@ -109,6 +109,9 @@ def _is_valid_image_url(url: str) -> bool:
     """
     if not url or not url.startswith("https://"):
         return False
+    # Uninterpolated JS/template literals (e.g. substackcdn.com/image/fetch/$s_!wNKU!)
+    if "$" in url:
+        return False
     try:
         parsed = urlparse(url)
     except ValueError:
@@ -170,11 +173,15 @@ class SummaryRequestFactory:
         callbacks: Any,
     ) -> SummaryExecutionPlan:
         """Build the full workflow input bundle for an interactive summary."""
+        # Pre-filter images so model selection and message building use the same set.
+        filtered_images = (
+            [u for u in request.images if _is_valid_image_url(u)] if request.images else None
+        )
         content_for_summary, model_override, content_tier = self._prepare_summary_content(
             content_text=request.content_text,
             max_chars=request.max_chars,
             correlation_id=request.correlation_id,
-            images=request.images,
+            images=filtered_images,
             url=request.url,
         )
         search_context = await self._runtime.search_enricher.enrich(
@@ -197,7 +204,7 @@ class SummaryRequestFactory:
         messages = self.build_summary_messages(
             request.system_prompt,
             user_content,
-            images=request.images,
+            images=filtered_images,
         )
 
         base_model = model_override or self._runtime.cfg.openrouter.model
