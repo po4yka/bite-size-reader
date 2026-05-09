@@ -1,10 +1,12 @@
 # Web Frontend Guide
 
-Reference for the web interface implemented in `clients/web/`.
+Reference for the web interface. Source code lives in [ratatoskr-web](https://github.com/po4yka/ratatoskr-web).
 
 **Audience:** Frontend developers, integrators, operators
 **Type:** Reference
 **Related:** [Mobile API Spec](mobile-api.md), [Deployment Guide](../guides/deploy-production.md)
+
+> **Source repository:** The frontend source code lives in [ratatoskr-web](https://github.com/po4yka/ratatoskr-web). This document covers deployment integration, auth contracts, and API surface from the backend perspective.
 
 ---
 
@@ -13,14 +15,14 @@ Reference for the web interface implemented in `clients/web/`.
 The web interface is the sole frontend surface — a standalone SPA built with:
 
 - React 19 + TypeScript + Vite
-- The Frost design system under `clients/web/src/design/` (project-owned, brutalist; see `DESIGN.md`)
+- The Frost design system under `src/design/` (project-owned, brutalist; see `DESIGN.md`)
 - `@tanstack/react-query` for server state and polling
 
-It is built into `app/static/web` and served by FastAPI on `/web` and `/web/*`.
+Built with `npm run build` in the ratatoskr-web repo (output: `dist/`); `dist/` is then placed into the backend's `app/static/web/` for FastAPI to serve on `/web` and `/web/*`.
 
 ### Design system — Frost
 
-`clients/web/src/design/` exports the Frost design system: editorial monospace
+`src/design/` exports the Frost design system: editorial monospace
 minimalism with a two-color rule (ink + page) and a single critical accent
 (spark). See `DESIGN.md` at the repo root for the canonical spec.
 
@@ -51,7 +53,7 @@ Multiselect / pickers: `MultiSelect`, `FilterableMultiSelect`,
 Feature code imports exclusively from `../design`. Tokens (`tokens.css`),
 fonts (`fonts.css`, self-hosted JetBrains Mono + Source Serif 4 italic
 via `@fontsource`), and reset/skeleton styles (`base.css`) are imported
-once through `clients/web/src/design/index.ts` and read via `var(--frost-*)`
+once through `src/design/index.ts` and read via `var(--frost-*)`
 custom properties. The Frost token surface includes `--frost-ink`,
 `--frost-page`, `--frost-spark`, the eight-step alpha ladder
 (`--frost-alpha-quiet` … `--frost-alpha-active`), cell-grid spacing
@@ -60,8 +62,8 @@ custom properties. The Frost token surface includes `--frost-ink`,
 `--frost-strip-8` 176-1408px), mono/serif typography slots, and motion
 keyframes (`frost-blinker`, `frost-pulse`, `frost-toast`).
 
-The mobile-consumable token source is `clients/web/tokens/tokens.json`;
-update that JSON first, then keep `clients/web/src/design/tokens.css` in
+The mobile-consumable token source is `tokens/tokens.json` (in the ratatoskr-web repo);
+update that JSON first, then keep `src/design/tokens.css` in
 sync. Theme selection writes `data-theme="light" | "dark"` on `<html>`
 so token CSS resolves on first paint without a flash. Add new components
 by extending the design directory; never reach for an external design
@@ -79,7 +81,7 @@ match the available content width even though the viewport is
 larger).
 
 Below 768px the cell grid switches to 48 columns (boot script in
-`clients/web/index.html` sets `--ch = window.innerWidth / 48` vs
+`index.html` sets `--ch = window.innerWidth / 48` vs
 `/178` on desktop), the FrostHeader collapses to 54px, the
 FrostSideNav becomes a slide-in drawer with a `page@0.85` backdrop,
 and a fixed-bottom 56px MobileTabBar
@@ -95,14 +97,14 @@ Mobile-specific tokens (in `tokens.css`): `--frost-spark-mobile`
 `--frost-mobile-header` (54px), `--frost-pad-page-mobile` (16px),
 `--frost-gap-ext` (10px). Per-route mobile CSS lives in dedicated
 `*.mobile.css` files imported once via the `mobile.css` aggregator
-at `clients/web/src/design/mobile.css`.
+at `src/design/mobile.css`.
 
 ---
 
 ## Directory Layout
 
 ```text
-clients/web/
+ratatoskr-web/         # https://github.com/po4yka/ratatoskr-web
   src/
     api/            # Typed API gateway + envelope normalization
     auth/           # Hybrid auth provider, guards, storage, redirects
@@ -110,7 +112,7 @@ clients/web/
     design/         # Project-owned design shim: primitives, table, modal, icons, tokens
     features/       # Route-level pages (library/search/submit/collections/...)
     routes/         # Route manifest + feature flags
-  vite.config.ts    # base=/static/web, outDir=../../app/static/web
+  vite.config.ts    # base=/static/web, outDir points to backend app/static/web
 ```
 
 ---
@@ -147,8 +149,8 @@ Build output contract:
 - `/web/admin`
 - `/web/login`
 
-Route-level feature flags live in `clients/web/src/routes/features.ts`.
-The canonical route and side-nav manifest lives in `clients/web/src/routes/manifest.tsx`.
+Route-level feature flags live in `src/routes/features.ts`.
+The canonical route and side-nav manifest lives in `src/routes/manifest.tsx`.
 
 ---
 
@@ -156,15 +158,15 @@ The canonical route and side-nav manifest lives in `clients/web/src/routes/manif
 
 **Routes:** `/web/repositories` (list), `/web/repositories/:repositoryId` (detail)
 
-**Feature directory:** `clients/web/src/features/repositories/`
+**Feature directory:** `src/features/repositories/`
 
 **API client modules:**
-- `clients/web/src/api/repositories.ts` -- `GET /v1/repositories`, `POST /v1/repositories`, `GET /v1/repositories/{id}`, `POST /v1/repositories/{id}/reanalyze`, `DELETE /v1/repositories/{id}`
-- `clients/web/src/api/github.ts` -- `GET /v1/auth/github/status`, `POST /v1/auth/github/pat`, `POST /v1/auth/github/device/start`, `POST /v1/auth/github/device/poll`, `DELETE /v1/auth/github`
+- `src/api/repositories.ts` -- `GET /v1/repositories`, `POST /v1/repositories`, `GET /v1/repositories/{id}`, `POST /v1/repositories/{id}/reanalyze`, `DELETE /v1/repositories/{id}`
+- `src/api/github.ts` -- `GET /v1/auth/github/status`, `POST /v1/auth/github/pat`, `POST /v1/auth/github/device/start`, `POST /v1/auth/github/device/poll`, `DELETE /v1/auth/github`
 
 The list route (`/web/repositories`) uses `@tanstack/react-virtual` for row virtualization (same pattern as LibraryPage) and Frost design tokens throughout. No deviations from DESIGN.md defaults; `--frost-*` custom properties only.
 
-**GitHub Integration panel:** `clients/web/src/features/preferences/` -- `PreferencesPage.tsx` contains a GitHub Integration slot where users connect via PAT or initiate the OAuth Device Flow (when the backend is configured with `GITHUB_OAUTH_APP_CLIENT_ID`).
+**GitHub Integration panel:** `src/features/preferences/` -- `PreferencesPage.tsx` contains a GitHub Integration slot where users connect via PAT or initiate the OAuth Device Flow (when the backend is configured with `GITHUB_OAUTH_APP_CLIENT_ID`).
 
 ---
 
@@ -173,11 +175,11 @@ The list route (`/web/repositories`) uses `@tanstack/react-virtual` for row virt
 The SubmitPage opens a Server-Sent Events stream against `GET /v1/requests/{id}/stream` whenever a request is in flight. As `phase` events land it advances the progress indicator (`extracting → summarizing → validating → persisting → done`), and `section` events progressively populate the summary card before the final `fetchSummary` call resolves.
 
 **Modules:**
-- `clients/web/src/api/streamRequest.ts` -- `subscribeToRequest(requestId, handlers)` helper. Uses `@microsoft/fetch-event-source` so it can attach `Authorization: Bearer <token>` (native `EventSource` cannot). Performs single-shot 401 → `refreshAccessToken` → reconnect using the same `getStoredTokens` / `setStoredTokens` chain as `client.ts`. Exponential backoff 250ms → 5s.
-- `clients/web/src/hooks/useRequestStream.ts` -- `useRequestStream(requestId)` returns `{ phase, sectionsBySlug, isStreaming, error, fellBack }`. After two consecutive fatal closes the hook flips `fellBack=true` so the page can switch to the existing `useRequestStatus` polling path.
-- `clients/web/src/features/submit/SubmitPage.tsx` -- consumes `useRequestStream`; falls back to polling when `fellBack`.
+- `src/api/streamRequest.ts` -- `subscribeToRequest(requestId, handlers)` helper. Uses `@microsoft/fetch-event-source` so it can attach `Authorization: Bearer <token>` (native `EventSource` cannot). Performs single-shot 401 → `refreshAccessToken` → reconnect using the same `getStoredTokens` / `setStoredTokens` chain as `client.ts`. Exponential backoff 250ms → 5s.
+- `src/hooks/useRequestStream.ts` -- `useRequestStream(requestId)` returns `{ phase, sectionsBySlug, isStreaming, error, fellBack }`. After two consecutive fatal closes the hook flips `fellBack=true` so the page can switch to the existing `useRequestStatus` polling path.
+- `src/features/submit/SubmitPage.tsx` -- consumes `useRequestStream`; falls back to polling when `fellBack`.
 
-**Generated types:** `StreamPhaseEvent`, `StreamSectionEvent`, `StreamDoneEvent`, `StreamErrorEvent` are emitted into `clients/web/src/api/generated.ts` from `docs/openapi/mobile_api.yaml`.
+**Generated types:** `StreamPhaseEvent`, `StreamSectionEvent`, `StreamDoneEvent`, `StreamErrorEvent` are emitted into `src/api/generated.ts` from `docs/openapi/mobile_api.yaml`.
 
 ---
 
@@ -201,20 +203,20 @@ Auth is hybrid and selected at runtime in `detectAuthMode`:
 
 ### Token storage (dual-bucket)
 
-`clients/web/src/auth/storage.ts` writes to two buckets keyed by the same `ratatoskr_web_auth_tokens` envelope name:
+`src/auth/storage.ts` writes to two buckets keyed by the same `ratatoskr_web_auth_tokens` envelope name:
 
 - `localStorage` when the login persists across browser close (Telegram, secret-key, or credentials with Remember Me checked).
 - `sessionStorage` when the credentials login was made with Remember Me unchecked. Tokens are dropped automatically when the browser tab closes; the refresh cookie is also issued without `Max-Age` so the server-side rotation chain stops at the same point.
 
 The chosen bucket is encoded in the persisted JSON (`persistent: boolean`) so `client.ts:refreshAccessToken` writes the rotated tokens back to the same place. Read order is `sessionStorage → localStorage` so a fresh non-remembered login can never be shadowed by a stale localStorage row.
 
-Auth provider implementation: `clients/web/src/auth/AuthProvider.tsx`. Credentials form: `clients/web/src/features/auth/CredentialsLoginForm.tsx` — Frost primitives only (`MonoInput`, `Checkbox`, `BracketButton`, `StatusBadge`); the form renders a single canonical "Invalid credentials." string for every 401 path so timing/wording cannot leak which dimension was wrong.
+Auth provider implementation: `src/auth/AuthProvider.tsx`. Credentials form: `src/features/auth/CredentialsLoginForm.tsx` — Frost primitives only (`MonoInput`, `Checkbox`, `BracketButton`, `StatusBadge`); the form renders a single canonical "Invalid credentials." string for every 401 path so timing/wording cannot leak which dimension was wrong.
 
 ---
 
 ## API Layer Conventions
 
-The frontend API gateway (`clients/web/src/api/client.ts`) provides:
+The frontend API gateway (`src/api/client.ts`) provides:
 
 - Envelope handling (`success/data/meta/error`)
 - Mixed key-style normalization (`snake_case` + `camelCase`)
@@ -222,7 +224,7 @@ The frontend API gateway (`clients/web/src/api/client.ts`) provides:
 - JWT refresh retry on `401` in JWT mode
 - Automatic auth header injection based on active auth mode
 
-Submission flow (`clients/web/src/features/submit`) includes:
+Submission flow (`src/features/submit`) includes:
 
 - URL validation + duplicate pre-check
 - Status polling lifecycle (`pending` -> `crawling|processing` -> `completed|failed`)
@@ -266,7 +268,7 @@ Admin page (`/web/admin`) includes:
 
 ## Generated API Types
 
-`clients/web/src/api/generated.ts` is auto-generated by `openapi-typescript` from
+`src/api/generated.ts` is auto-generated by `openapi-typescript` from
 `docs/openapi/mobile_api.yaml`. Do not edit it manually — CI verifies freshness via
 `npm run generate:api`.
 
@@ -282,7 +284,7 @@ generated schema:
 | `auth.ts` | `SummaryCompact`, `SummaryDetail`, `Request` |
 | `requests.ts` | `SummaryCompact`, `SummaryDetail` |
 
-Derived types live in `clients/web/src/api/types.ts`:
+Derived types live in `src/api/types.ts`:
 
 ```ts
 import type { components } from "./generated";
@@ -302,7 +304,7 @@ Migrate them incrementally — highest traffic first:
 
 1. Find the matching schema name in `generated.ts`:
    ```bash
-   grep -n "YourTypeName\|YourSchemaName" clients/web/src/api/generated.ts
+   grep -n "YourTypeName\|YourSchemaName" src/api/generated.ts
    ```
 
 2. In `types.ts`, replace (or add) the hand-written interface with a type alias:
@@ -337,7 +339,7 @@ Migrate them incrementally — highest traffic first:
 
 ## UI Architecture
 
-- Global shell: design `Header` + `SideNav` (`clients/web/src/components/AppShell.tsx`)
+- Global shell: design `Header` + `SideNav` (`src/components/AppShell.tsx`)
 - Session UX:
   - in-app session status label
   - manual "Verify session" action
@@ -352,8 +354,9 @@ Migrate them incrementally — highest traffic first:
 
 ## Local Development
 
+Run these commands from the ratatoskr-web repo root:
+
 ```bash
-cd clients/web
 npm ci
 npm run dev
 ```
@@ -367,9 +370,8 @@ Optional environment variables:
 When testing same-host serving (instead of Vite proxy):
 
 ```bash
-cd clients/web
 npm run build
-cd ..
+# Then in the backend repo:
 uvicorn app.api.main:app --reload
 # open http://localhost:8000/web/library
 ```
@@ -378,10 +380,9 @@ uvicorn app.api.main:app --reload
 
 ## Quality Checks
 
-Web commands:
+Web commands (run from the ratatoskr-web repo root):
 
 ```bash
-cd clients/web
 npm run lint
 npm run typecheck
 npm run check:static
@@ -402,7 +403,7 @@ CI jobs in `.github/workflows/ci.yml`:
 
 ## Deployment Notes
 
-- `ops/docker/Dockerfile` and `ops/docker/Dockerfile.api` both build `clients/web/`.
+- The CI/CD pipeline builds ratatoskr-web separately, copies `dist/` into the backend's `app/static/web/`, then builds and pushes the backend container.
 - Runtime image ships the static bundle at `/app/app/static/web`.
 - Same-host deployment avoids CORS complexity.
 
@@ -415,9 +416,10 @@ CI jobs in `.github/workflows/ci.yml`:
 Web bundle is not built into `app/static/web`.
 
 ```bash
-cd clients/web
+# In the ratatoskr-web repo:
 npm ci
 npm run build
+# Then copy dist/ into the backend's app/static/web/
 ```
 
 ### Login page shows "Missing configuration"

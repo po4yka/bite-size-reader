@@ -6,6 +6,8 @@ Reference for the Playwright-based local visual-regression solution.
 **Type:** Reference
 **Related:** [Web Frontend Guide](frontend-web.md)
 
+> **Source repository:** Visual regression specs and baselines live in [ratatoskr-web](https://github.com/po4yka/ratatoskr-web) under `src/tests/e2e/`. Run all commands from the ratatoskr-web repo root.
+
 ---
 
 ## Overview
@@ -26,7 +28,6 @@ required, all baselines committed to the repo.
 ### Route-level (mobile-routes.spec.ts)
 
 ```bash
-cd clients/web
 # Run against all 4 device projects:
 npm run test:e2e -- mobile-routes
 
@@ -40,7 +41,6 @@ npm run test:e2e -- mobile-routes --update-snapshots
 ### Component-level (storybook-visual.spec.ts)
 
 ```bash
-cd clients/web
 # Build Storybook first (required — spec reads storybook-static/index.json):
 npm run build-storybook
 
@@ -54,7 +54,6 @@ npm run test:e2e -- storybook-visual --project=storybook --update-snapshots
 ### Both specs together (convenience scripts)
 
 ```bash
-cd clients/web
 # Run both specs (builds Storybook first):
 npm run test:visual
 
@@ -68,8 +67,8 @@ npm run test:visual:update
 
 All baseline PNGs are committed to the repository alongside their specs:
 
-- `clients/web/src/tests/e2e/mobile-routes.spec.ts-snapshots/`
-- `clients/web/src/tests/e2e/storybook-visual.spec.ts-snapshots/`
+- `src/tests/e2e/mobile-routes.spec.ts-snapshots/`
+- `src/tests/e2e/storybook-visual.spec.ts-snapshots/`
 
 When you make an intentional UI change that alters screenshots:
 
@@ -78,7 +77,7 @@ When you make an intentional UI change that alters screenshots:
 3. Commit the new baselines together with the code change:
 
 ```bash
-git add clients/web/src/tests/e2e/
+git add src/tests/e2e/
 git commit -m "test(web): update Playwright visual baselines for <change>"
 ```
 
@@ -90,7 +89,7 @@ purpose of the check.
 ## Where baselines live
 
 ```text
-clients/web/src/tests/e2e/
+src/tests/e2e/
   mobile-routes.spec.ts-snapshots/
     mobile-library-chromium-darwin.png        # desktop
     mobile-library-iPhone-12-darwin.png       # iPhone 12

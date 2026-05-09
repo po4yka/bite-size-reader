@@ -103,7 +103,7 @@ this turns subscribed channels into a periodic recap.
 
 ## What else it includes
 
-- **Web frontend** — A React + TypeScript UI at `/web/*`, served by FastAPI. Hybrid auth: Telegram WebApp, Telegram Login Widget, or nickname/email + password with Remember Me. Set `CREDENTIALS_LOGIN_PEPPER` (≥32 chars, generated separately from `JWT_SECRET_KEY`) and bootstrap the password once via `ratatoskr credentials set --user-id <your_telegram_id> --nickname <name>`. See [Web Frontend](docs/reference/frontend-web.md).
+- **Web frontend** — A React + TypeScript UI at `/web/*`, served by FastAPI. Hybrid auth: Telegram WebApp, Telegram Login Widget, or nickname/email + password with Remember Me. Set `CREDENTIALS_LOGIN_PEPPER` (≥32 chars, generated separately from `JWT_SECRET_KEY`) and bootstrap the password once via `ratatoskr credentials set --user-id <your_telegram_id> --nickname <name>`. See [Web Frontend](docs/reference/frontend-web.md) · [ratatoskr-web repo](https://github.com/po4yka/ratatoskr-web).
 - **Mobile REST API** — JWT-authenticated REST API with device sync, collections, and aggregations. See [Mobile API Reference](docs/reference/mobile-api.md).
 - **Real-time progress streaming** — `GET /v1/requests/{id}/stream` is a Server-Sent Events stream of phase + section events for in-flight summaries. Consumed by the web SubmitPage and by the Telegram URL flow's progressive draft-message updates.
 - **MCP server** — Expose summaries and search to external AI agents via the Model Context Protocol. See [MCP Server](docs/reference/mcp-server.md).
@@ -173,7 +173,7 @@ for architecture details and all configuration options.
 | Production deploy, monitoring, backups, TLS | [docs/guides/deploy-production.md](docs/guides/deploy-production.md) |
 | Architecture diagram, request lifecycle, subsystem index | [docs/explanation/architecture-overview.md](docs/explanation/architecture-overview.md) |
 | Mobile REST API (JWT auth, sync, aggregations) | [docs/reference/mobile-api.md](docs/reference/mobile-api.md) |
-| Web frontend (`/web/*`) | [docs/reference/frontend-web.md](docs/reference/frontend-web.md) |
+| Web frontend (`/web/*`) | [docs/reference/frontend-web.md](docs/reference/frontend-web.md) · [ratatoskr-web](https://github.com/po4yka/ratatoskr-web) |
 | MCP server for external AI agents | [docs/reference/mcp-server.md](docs/reference/mcp-server.md) |
 | FAQ / troubleshooting | [docs/explanation/faq.md](docs/explanation/faq.md) · [docs/reference/troubleshooting.md](docs/reference/troubleshooting.md) |
 | Full doc index | [docs/README.md](docs/README.md) |
