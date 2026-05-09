@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 _STRING_LIST_SPLITTER_RE = re.compile(r"[,;|\n]+")
+_MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\([^)]+\)")
 
 
 def coerce_string_list(value: Any) -> list[str]:
@@ -39,6 +40,15 @@ def coerce_string_list(value: Any) -> list[str]:
 
     text = str(value).strip()
     return [text] if text else []
+
+
+def strip_markdown_images(content: str) -> str:
+    """Remove inline markdown images, keeping alt text.
+
+    Prevents vision models from fetching image URLs embedded in scraped content,
+    which can fail with 429s from rate-limiting image hosts (e.g. blog.kilo.ai).
+    """
+    return _MARKDOWN_IMAGE_RE.sub(r"\1", content)
 
 
 def truncate_content_text(content_text: str, max_chars: int) -> str:

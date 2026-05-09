@@ -13,7 +13,7 @@ from app.adapters.content.llm_response_workflow import (
     LLMSummaryPersistenceSettings,
     LLMWorkflowNotifications,
 )
-from app.adapters.content.llm_summarizer_text import truncate_content_text
+from app.adapters.content.llm_summarizer_text import strip_markdown_images, truncate_content_text
 from app.core.content_cleaner import clean_content_for_llm
 from app.core.lang import LANG_RU
 from app.core.logging_utils import get_logger
@@ -316,7 +316,7 @@ class SummaryRequestFactory:
         url: str | None = None,
     ) -> tuple[str, str | None, str | None]:
         """Choose truncation/model strategy and return (cleaned_content, model_override, content_tier)."""
-        content_for_summary = content_text
+        content_for_summary = strip_markdown_images(content_text)
         attachment_cfg = self._runtime.cfg.attachment
         article_vision_enabled = bool(getattr(attachment_cfg, "article_vision_enabled", True))
         use_vision = bool(images) and article_vision_enabled
