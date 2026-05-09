@@ -137,192 +137,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  web-storybook-build:
-    name: Web Storybook Build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: clients/web
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: clients/web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Storybook
-        run: npm run build-storybook
-
-      - name: Upload Storybook artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: storybook-static
-          path: clients/web/storybook-static
-          retention-days: 7
-
-  web-playwright-visual:
-    name: Web Playwright Visual Regression
-    runs-on: macos-latest
-    timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: clients/web
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # Heavy macos job (~30 min). Skip when no web/openapi/CI inputs changed.
-      # When the filter says skip, the install/build/test steps no-op and the
-      # job reports success — status-check then sees a clean pass without the
-      # cost. Steps below run on PRs unconditionally and on pushes only when
-      # filter.outputs.web == 'true'.
-      - name: Detect web-relevant changes
-        id: filter
-        # Gate at the top — checkout above is cheap; everything below skips.
-        # Use a working-directory override because dorny/paths-filter runs in
-        # the repo root, not clients/web.
-        working-directory: ${{ github.workspace }}
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            web:
-              - 'clients/web/**'
-              - 'docs/openapi/mobile_api.yaml'
-              - '.github/workflows/ci.yml'
-
-      - name: Set up Node.js
-        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: clients/web/package-lock.json
-
-      - name: Install dependencies
-        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
-        run: npm ci
-
-      - name: Install Playwright browsers
-        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
-        run: npx playwright install chromium webkit
-
-      - name: Build web frontend
-        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
-        run: npm run build
-
-      - name: Build Storybook
-        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
-        run: npm run build-storybook
-
-      - name: Run Playwright visual tests (routes + stories)
-        if: github.event_name == 'pull_request' || steps.filter.outputs.web == 'true'
-        run: npx playwright test
-
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-${{ github.run_id }}
-          path: clients/web/playwright-report/
-          retention-days: 14
-
-      - name: Upload screenshot diffs (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-screenshot-diffs-${{ github.run_id }}
-          path: clients/web/test-results/
-          retention-days: 14
-
-  web-build:
-    name: Web Build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: clients/web
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: clients/web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build web interface
-        run: npm run build
-
-  web-test:
-    name: Web Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: clients/web
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: clients/web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browser
-        run: npx playwright install chromium
-
-      - name: Run web unit tests with coverage
-        run: npm run test:coverage
-
-  web-static-check:
-    name: Web Static Checks
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: clients/web
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: clients/web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Verify generated API types are fresh
-        run: |
-          npx openapi-typescript ../../docs/openapi/mobile_api.yaml -o src/api/generated.check.ts
-          diff src/api/generated.ts src/api/generated.check.ts
-          rm src/api/generated.check.ts
-
-      - name: Run web static checks
-        run: npm run check:static
-
   lint-and-format:
     name: Lint and Format Checks
     needs: prepare-environment
@@ -371,6 +185,18 @@ jobs:
           uv pip install --system openapi-spec-validator
           openapi-spec-validator docs/openapi/mobile_api.yaml
           openapi-spec-validator docs/openapi/mobile_api.json
+
+      - name: Check JSON/YAML OpenAPI drift
+        run: |
+          python3 -c "
+          import json, yaml
+          spec = yaml.safe_load(open('docs/openapi/mobile_api.yaml'))
+          f = open('docs/openapi/mobile_api.json', 'w')
+          json.dump(spec, f, indent=2, ensure_ascii=False)
+          f.write('\n')
+          "
+          git diff --exit-code docs/openapi/mobile_api.json || \
+            (echo "mobile_api.json is out of sync with mobile_api.yaml — run 'make sync-openapi' and commit the result" && exit 1)
 
       - name: Check OpenAPI spec sync with code
         run: pytest tests/api/test_openapi_sync.py -v --tb=short

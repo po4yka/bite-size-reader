@@ -40,22 +40,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     echo "uv sync completed successfully"
 
 # =============================================================================
-# Stage 2: Web - Build Carbon Web App
-# =============================================================================
-FROM node:25-alpine AS web-builder
-
-ARG VITE_TELEGRAM_BOT_USERNAME=""
-ENV VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
-
-WORKDIR /app/web
-COPY clients/web/package*.json clients/web/.npmrc ./
-RUN npm ci
-COPY clients/web/ ./
-RUN npm run build
-# Output: /app/static/web/
-
-# =============================================================================
-# Stage 3: Runtime - Minimal production image
+# Stage 2: Runtime - Minimal production image
 # =============================================================================
 FROM python:3.13-slim AS runtime
 
@@ -94,8 +79,7 @@ COPY app ./app
 COPY bot.py ./
 COPY alembic.ini ./
 
-# Copy built Carbon web assets
-COPY --from=web-builder /app/static/web /app/app/static/web
+# Web assets are built by ratatoskr-web and deployed into app/static/web/ via CI/CD.
 
 # Create non-root user for security
 RUN useradd -r -u 1000 -m -d /home/appuser -s /sbin/nologin appuser \

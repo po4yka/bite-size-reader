@@ -246,30 +246,21 @@ tests/test_summary_contract.py ......................                    [100%]
 
 ## Step 7.5: Run Web Interface (Optional, 3 minutes)
 
-Use this when you work on `clients/web/` (React + TypeScript + Vite (with the project design shim)).
+The web frontend lives in the separate **ratatoskr-web** repository. Clone it alongside this repo and follow its `CLAUDE.md` / `docs/reference/frontend-web.md` for the local dev workflow.
 
 ```bash
-# In a new terminal from project root
-cd clients/web
+# From the ratatoskr-web repo root
 npm ci
-
-# Start Vite dev server
-npm run dev
-
-# Static checks (lint + typecheck)
-npm run check:static
-
-# Unit tests
-npm run test
+npm run dev       # Vite dev server at http://localhost:5173
 ```
+
+Set `VITE_API_BASE_URL=http://localhost:8000` in `.env` so the dev server proxies to the local API.
 
 Useful URLs during local development:
 
 - Web app (Vite): `http://localhost:5173`
 - API host (when running `uvicorn app.api.main:app --reload`): `http://localhost:8000`
-- Same-host SPA route (when web is built to `app/static/web`): `http://localhost:8000/web/library`
-
-JWT login mode requires `VITE_TELEGRAM_BOT_USERNAME` in the `clients/web` environment (for Telegram Login Widget).
+- Same-host SPA route (when web bundle is deployed to `app/static/web/`): `http://localhost:8000/web/library`
 
 ---
 
@@ -431,8 +422,8 @@ make type
 # Run all quality checks
 make format lint type
 
-# Web static checks
-cd clients/web && npm run check:static
+# Web static checks (run from ratatoskr-web repo)
+# npm run check:static
 ```
 
 ### Debugging Tips
@@ -502,10 +493,8 @@ open http://localhost:8000/docs
 ### Testing Web Routes Through FastAPI
 
 ```bash
-# Build web bundle into app/static/web
-cd clients/web
-npm run build
-cd ..
+# Build web bundle in ratatoskr-web, then copy dist/ into app/static/web/
+# (from ratatoskr-web repo):  npm run build && cp -r dist/ ../ratatoskr/app/static/web/
 
 # Start API host
 uvicorn app.api.main:app --reload

@@ -22,6 +22,7 @@ import yaml  # type: ignore[import-untyped,unused-ignore]
 from app.api.exceptions import ErrorCode as ExceptionsErrorCode, ErrorType as ExceptionsErrorType
 
 SPEC_PATH = Path(__file__).resolve().parents[2] / "docs" / "openapi" / "mobile_api.yaml"
+JSON_SPEC_PATH = Path(__file__).resolve().parents[2] / "docs" / "openapi" / "mobile_api.json"
 
 # HTTP methods we care about (skip OPTIONS which FastAPI auto-generates for CORS)
 RELEVANT_METHODS = frozenset({"GET", "POST", "PATCH", "DELETE", "PUT", "HEAD"})
@@ -590,3 +591,63 @@ def _build_alias_map(model_cls: type) -> dict[str, str]:
             wire = field_info.alias
         mapping[field_name] = wire
     return mapping
+
+
+class TestJsonYamlSync:
+    """Verify that mobile_api.json is a faithful representation of mobile_api.yaml.
+
+    JSON is a derived format regenerated via `make sync-openapi`. This class
+    catches drift introduced by editing one file without updating the other.
+    """
+
+    def _load_yaml(self) -> dict[str, Any]:
+        import json as _json
+
+        with open(SPEC_PATH) as f:
+            return yaml.safe_load(f)  # type: ignore[no-any-return]
+
+    def _load_json(self) -> dict[str, Any]:
+        import json as _json
+
+        with open(JSON_SPEC_PATH) as f:
+            return _json.load(f)  # type: ignore[no-any-return]
+
+    def test_json_spec_exists(self) -> None:
+        assert JSON_SPEC_PATH.exists(), (
+            f"mobile_api.json not found at {JSON_SPEC_PATH}. "
+            "Run `make sync-openapi` to generate it."
+        )
+
+    def test_json_path_count_matches_yaml(self) -> None:
+        yaml_spec = self._load_yaml()
+        json_spec = self._load_json()
+        yaml_paths = set(yaml_spec.get("paths", {}).keys())
+        json_paths = set(json_spec.get("paths", {}).keys())
+        only_in_yaml = yaml_paths - json_paths
+        only_in_json = json_paths - yaml_paths
+        assert not only_in_yaml and not only_in_json, (
+            f"Path mismatch between mobile_api.yaml and mobile_api.json.\n"
+            f"Only in YAML ({len(only_in_yaml)}): {sorted(only_in_yaml)}\n"
+            f"Only in JSON ({len(only_in_json)}): {sorted(only_in_json)}\n"
+            "Run `make sync-openapi` to regenerate mobile_api.json from the YAML source."
+        )
+
+    def test_json_top_level_keys_match_yaml(self) -> None:
+        yaml_spec = self._load_yaml()
+        json_spec = self._load_json()
+        yaml_keys = set(yaml_spec.keys())
+        json_keys = set(json_spec.keys())
+        assert yaml_keys == json_keys, (
+            f"Top-level key mismatch.\n"
+            f"Only in YAML: {yaml_keys - json_keys}\n"
+            f"Only in JSON: {json_keys - yaml_keys}\n"
+            "Run `make sync-openapi` to regenerate mobile_api.json from the YAML source."
+        )
+
+    def test_json_info_matches_yaml(self) -> None:
+        yaml_spec = self._load_yaml()
+        json_spec = self._load_json()
+        assert yaml_spec.get("info") == json_spec.get("info"), (
+            "info block differs between YAML and JSON. "
+            "Run `make sync-openapi` to regenerate mobile_api.json."
+        )

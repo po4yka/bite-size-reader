@@ -18,8 +18,8 @@ Make the All Articles + Library screens usable as a real workspace. Today users 
 
 ## Concrete defects to fix
 
-- `clients/web/src/features/articles/ArticlesPage.tsx`: `searchTerm` is local state only and never reaches the API; no filter beyond sort.
-- `clients/web/src/features/library/LibraryPage.tsx`: hardcoded `limit:100, offset:0` (no real pagination); HIGH SIGNAL filter casts to `SummaryCompact & { confidence?: number }` — field is not in the API contract; INBOX/PENDING/TOTAL counters reflect only the loaded page; the `INGEST · SYNC ACTIVE` footer is a static literal.
+- `ratatoskr-web/src/features/articles/ArticlesPage.tsx`: `searchTerm` is local state only and never reaches the API; no filter beyond sort.
+- `ratatoskr-web/src/features/library/LibraryPage.tsx`: hardcoded `limit:100, offset:0` (no real pagination); HIGH SIGNAL filter casts to `SummaryCompact & { confidence?: number }` — field is not in the API contract; INBOX/PENDING/TOTAL counters reflect only the loaded page; the `INGEST · SYNC ACTIVE` footer is a static literal.
 
 ## Scope
 
@@ -40,11 +40,11 @@ Make the All Articles + Library screens usable as a real workspace. Today users 
 - [ ] Library scrolls smoothly with 5000 rows in the dataset (virtualized).
 - [ ] Saved views survive reload and tab close.
 - [ ] New tests: pytest on batch endpoints; Playwright on filter + bulk-action flow; React Testing Library on saved-view persistence.
-- [ ] `cd clients/web && npm run check:static && npm run test` passes; backend `make lint type` and pytest pass.
+- [ ] `cd ratatoskr-web && npm run check:static && npm run test` passes; backend `make lint type` and pytest pass.
 
 ## References
 
-- `clients/web/src/features/articles/ArticlesPage.tsx`
-- `clients/web/src/features/library/LibraryPage.tsx`
+- `ratatoskr-web/src/features/articles/ArticlesPage.tsx`
+- `ratatoskr-web/src/features/library/LibraryPage.tsx`
 - `app/api/routers/summaries.py`, `app/api/routers/search.py`
 - [[run-frost-phase-7-mobile-regression]]

@@ -37,8 +37,6 @@ venv.bak/
 htmlcov/
 coverage.json
 coverage.xml
-clients/web/coverage/
-
 # Hypothesis test database
 .hypothesis/
 
@@ -130,14 +128,10 @@ Desktop.ini
 # --- act (local GitHub Actions runner) ---
 .actrc
 
-# --- Frontend ---
-# Legacy local workspace; the maintained frontend lives in clients/web/
+# --- Frontend build artifacts ---
+# Web frontend lives in ratatoskr-web; dist is deployed into app/static/web/ by CI/CD.
 frontend/
 web/
-clients/web/node_modules/
-clients/web/tsconfig.tsbuildinfo
-clients/web/test-results/
-clients/web/playwright-report/
 app/static/web/
 app/static/digest/
 

@@ -56,8 +56,6 @@ check-layout:
 clean-generated:
 	rm -rf htmlcov
 	rm -f .coverage coverage.json coverage.xml debug_fav.log error.log traceback.log
-	rm -rf clients/web/coverage clients/web/test-results clients/web/playwright-report
-	find clients/web -name '*.tsbuildinfo' -delete
 	rm -rf frontend
 
 .PHONY: pre-commit-install
@@ -81,12 +79,20 @@ check-lock:
 	uv export --only-group dev --no-hashes --format requirements-txt -p 3.13 -o requirements-dev.txt
 	@git diff --exit-code uv.lock requirements.txt requirements-dev.txt || (echo "Lockfiles are out of date. Run 'make lock-uv' and commit changes." && exit 1)
 
-check-openapi: ## Run OpenAPI spec sync checks
+sync-openapi: ## Regenerate mobile_api.json from mobile_api.yaml (YAML is source of truth)
+	python3 -c "import json, yaml; spec = yaml.safe_load(open('docs/openapi/mobile_api.yaml')); f = open('docs/openapi/mobile_api.json', 'w'); json.dump(spec, f, indent=2, ensure_ascii=False); f.write('\n')"
+	@echo "Regenerated docs/openapi/mobile_api.json from mobile_api.yaml"
+
+check-openapi: ## Run OpenAPI spec sync checks (includes JSON/YAML equivalence)
 	pytest tests/api/test_openapi_sync.py -v
 
 check-openapi-validate: ## Validate OpenAPI spec syntax
 	openapi-spec-validator docs/openapi/mobile_api.yaml
 	openapi-spec-validator docs/openapi/mobile_api.json
+
+check-openapi-json-sync: ## Fail if mobile_api.json is stale relative to mobile_api.yaml
+	$(MAKE) sync-openapi
+	git diff --exit-code docs/openapi/mobile_api.json || (echo "mobile_api.json is out of sync — run 'make sync-openapi' and commit the result" && exit 1)
 
 # ==============================================================================
 # Docker targets

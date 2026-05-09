@@ -34,11 +34,8 @@ def test_runtime_migration_entrypoint_uses_alembic_runner() -> None:
 
 
 def test_active_web_contracts_do_not_use_carbon_client_id() -> None:
+    # Frontend source files moved to ratatoskr-web repo; only check backend docs here.
     checked_paths = [
-        "clients/web/src/api/auth.ts",
-        "clients/web/src/features/auth/SecretLoginForm.tsx",
-        "clients/web/src/api/auth.test.ts",
-        "clients/web/src/tests/e2e/web-smoke.spec.ts",
         "docs/reference/frontend-web.md",
         "docs/SPEC.md",
     ]

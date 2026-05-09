@@ -116,7 +116,7 @@ components:
 ## Overview
 
 Frost is the design system for Ratatoskr — an editorial news-aggregation
-product. Components ship at `clients/web/src/design/`.
+product. Components ship at `ratatoskr-web/src/design/`.
 
 Frost's three principles:
 
@@ -184,10 +184,10 @@ Line-height is one of three percentages: `tight` 115% (ultra-dense
 rows), `body` 130% (default), `reader` 155% (Source Serif italic).
 
 Font stacks are defined via `--frost-font-mono` and `--frost-font-serif`
-in `clients/web/src/design/tokens.css`. The `@font-face` declarations
+in `ratatoskr-web/src/design/tokens.css`. The `@font-face` declarations
 for JetBrains Mono and Source Serif 4 italic are in
-`clients/web/src/design/fonts.css`; fonts are self-hosted under
-`clients/web/public/fonts/`.
+`ratatoskr-web/src/design/fonts.css`; fonts are self-hosted under
+`ratatoskr-web/public/fonts/`.
 
 ## Layout
 
@@ -219,7 +219,7 @@ Breakpoints:
 
 Frost spans web (1440px / 178-col grid) and mobile (393px / 48-col
 grid) with a tablet (768-1199px) range that uses web tokens. The
-React frontend at `clients/web/` adapts via container queries on
+React frontend at `ratatoskr-web/` adapts via container queries on
 the AppShell main content area: every responsive component uses
 `@container main (max-width: 768px)` rather than `@media`,
 isolating mobile reflow from the viewport.
@@ -227,7 +227,7 @@ isolating mobile reflow from the viewport.
 Below 768px:
 
 - **Cell grid switches to 48 columns.** Boot script in
-  `clients/web/index.html` sets `--ch = window.innerWidth / 48`
+  `ratatoskr-web/index.html` sets `--ch = window.innerWidth / 48`
   (vs `/178` on desktop). Strip widths recompute live; font-size
   derives from cell. `Math.max(ch, 6)` floors smartwatch viewports.
 - **Header collapses** to 54px (`--frost-mobile-header`); wordmark
@@ -298,7 +298,7 @@ Selected anchors:
   list views.
 
 The full implemented component surface exported from
-`clients/web/src/design/index.ts` includes:
+`ratatoskr-web/src/design/index.ts` includes:
 
 **Primitives:** `BracketButton`, `BracketSearch`, `BrutalistCard`,
 `BrutalistSkeleton` / `BrutalistSkeletonText` / `BrutalistSkeletonPlaceholder` /
@@ -331,7 +331,7 @@ The full implemented component surface exported from
 **Pickers:** `DatePicker` / `DatePickerInput`, `TimePicker`
 
 Web views are assembled from these components in
-`clients/web/src/design/`. When a new view is needed, prefer
+`ratatoskr-web/src/design/`. When a new view is needed, prefer
 composing from existing primitives over inventing new ones.
 
 ## Page Inventory Notes
@@ -381,8 +381,8 @@ composing from existing primitives over inventing new ones.
 - Canonical tokens: `frost-tokens.json` (DTCG, repo root of the
   Frost project; tracked separately from this repo).
 - Figma source: file id `dvCkDlNR6CKgfekPgrWo87`.
-- Web tokens: `clients/web/src/design/tokens.css` — Frost token
+- Web tokens: `ratatoskr-web/src/design/tokens.css` — Frost token
   definitions (`--frost-ink`, `--frost-page`, `--frost-spark`,
   `--frost-alpha-*`, `--frost-cell`, grid, typography slots).
 - Web design primitives (canonical implementation):
-  `clients/web/src/design/`.
+  `ratatoskr-web/src/design/`.

@@ -9,7 +9,7 @@ This guide explains how to prepare environments, configure secrets, and run the 
 - OpenRouter API key
 - Self-hosted scraper sidecars are optional but recommended (Firecrawl, Crawl4AI, Defuddle); started via `with-scrapers` compose profile — no cloud API keys required
 - Docker (for containerized deployment)
-- Node.js 20+ (optional; needed for local `clients/web/` frontend development)
+- Node.js 20+ (optional; needed for local frontend development in the **ratatoskr-web** repo)
 - (Optional) Redis for API rate limits/sync locks
 
 ## Telegram Setup
@@ -62,9 +62,8 @@ required only when web/API/browser-extension JWT auth is enabled.
 3) Tests: `make test` (or `make lint`, `make format`, `make type` as needed).
 4) Run Telegram bot: `python bot.py`
 5) Run API host (serves `/v1/*`, `/static/*`, and `/web/*`): `uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000`
-6) Optional web frontend local loop:
-   - `cd clients/web && npm ci`
-   - `npm run dev` (Vite dev server)
+6) Optional web frontend local loop (run from the **ratatoskr-web** repo):
+   - `npm ci && npm run dev` (Vite dev server)
    - `npm run check:static` (lint + typecheck)
 
 ## Web Interface Serving Contract
@@ -74,12 +73,12 @@ The FastAPI service serves the web frontend from a static bundle:
 - Web static files: `/static/web/*`
 - Web SPA entry routes: `/web` and `/web/{path:path}` (returns `app/static/web/index.html`)
 
-If `/web` returns `404 "Web interface is not built"`, rebuild static assets with:
+If `/web` returns `404 "Web interface is not built"`, build and deploy from the **ratatoskr-web** repo:
 
 ```bash
-cd clients/web
-npm ci
-npm run build
+# In ratatoskr-web repo
+npm ci && npm run build
+cp -r dist/ /path/to/ratatoskr/app/static/web/
 ```
 
 How to use (no commands needed)
@@ -110,7 +109,7 @@ Notes
 - SQLite at `/data/ratatoskr.db`; backups under `/data/backups`. Mount `/data` for durability.
 - Set `ALLOWED_USER_IDS`; keep `DEBUG_PAYLOADS=0` in prod.
 - If using web/API/browser-extension JWT auth, ensure `JWT_SECRET_KEY` is set and port 8000 exposed.
-- Docker build includes the `clients/web/` bundle and publishes it under `/static/web/*`.
+- Web assets are built in **ratatoskr-web** and deployed into `app/static/web/` via CI/CD; they are served by FastAPI under `/static/web/*`.
 
 ## Docker Compose (recommended)
 
@@ -404,4 +403,4 @@ docker compose -f ops/docker/docker-compose.yml up -d --build
 - Telegram auth: verify `API_ID`, `API_HASH`, `BOT_TOKEN`; ensure bot not banned.
 - DB permissions: ensure host `data/` is writable by the Docker user.
 - Large summaries: The bot returns JSON in a message; if too large, consider implementing file replies.
-- `/web` returns 404: web bundle is missing; build `clients/web/` (`npm run build`) or redeploy an image that includes the web build stage.
+- `/web` returns 404: web bundle is missing; build and deploy from the **ratatoskr-web** repo (`npm run build`, then copy `dist/` into `app/static/web/`).

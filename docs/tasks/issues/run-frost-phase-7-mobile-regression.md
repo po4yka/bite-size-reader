@@ -25,11 +25,11 @@ Prove the mobile rollout shipped in commits 8aa4ec8b..7092000d (Phase 7a–7d, G
 
 ## Acceptance criteria
 
-- [ ] New `clients/web/tests/playwright/mobile-phase7.spec.ts` runs in CI green.
-- [ ] Visual snapshots stored under `clients/web/tests/playwright/__snapshots__/` for each screen × viewport.
+- [ ] New `ratatoskr-web/tests/playwright/mobile-phase7.spec.ts` runs in CI green.
+- [ ] Visual snapshots stored under `ratatoskr-web/tests/playwright/__snapshots__/` for each screen × viewport.
 - [ ] Defect list captured in the issue or as linked children.
 
 ## References
 
-- `clients/web/`
+- `ratatoskr-web/`
 - `DESIGN.md` (Mobile section)

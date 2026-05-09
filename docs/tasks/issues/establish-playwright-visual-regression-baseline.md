@@ -32,5 +32,5 @@ Finish the migration started in `d4b22a52 ci(web): replace Chromatic with local-
 ## References
 
 - Commit d4b22a52
-- `clients/web/` Playwright config
+- `ratatoskr-web/` Playwright config
 - `docs/reference/frontend-web.md`

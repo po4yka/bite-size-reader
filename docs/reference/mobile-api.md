@@ -9,7 +9,7 @@
 This document is a developer-facing summary of the mobile API implemented by the FastAPI app.
 
 - Base API prefix: `/v1`
-- Primary clients: mobile apps (Android/iOS/KMP), Telegram Mini App, web interface (`clients/web/`)
+- Primary clients: mobile apps (Android/iOS/KMP), Telegram Mini App, web interface (`ratatoskr-web` repo)
 - Envelope contract: all JSON business responses use `success`, `data`, `meta`, and standardized `error`
 - Mixed-source aggregation surface: `/v1/aggregations`
 - Phase 3 signal/source triage surface: `/v1/signals`
@@ -137,7 +137,7 @@ Current sync uses explicit sessions and chunked/full + delta + apply endpoints:
 - **Section values**: JSON field names from the summary contract (`summary_250`, `tldr`, `key_ideas`, `topic_tags`).
 - **Disconnect-tolerant**: closing the SSE connection does not cancel the underlying summarization; the `Summary` and `LLMCall` rows still persist.
 - **Late subscribers**: the `StreamHub` keeps a 64-event ring buffer per request, so a client that subscribes mid-flight replays recent backlog before joining the live tail.
-- **Web client**: `clients/web/src/api/streamRequest.ts` carries the bearer header via `@microsoft/fetch-event-source` and refreshes once on `401`. Polling fallback engages after two consecutive fatal closes — see `clients/web/src/hooks/useRequestStream.ts`.
+- **Web client**: `ratatoskr-web/src/api/streamRequest.ts` carries the bearer header via `@microsoft/fetch-event-source` and refreshes once on `401`. Polling fallback engages after two consecutive fatal closes — see `ratatoskr-web/src/hooks/useRequestStream.ts`.
 
 Backend toggle: `URL_FLOW_STREAMING_ENABLED` (default `true`).
 

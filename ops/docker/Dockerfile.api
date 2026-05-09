@@ -32,17 +32,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra api --extra otel
 
 # Stage 1.5: Web - Build Carbon Web App assets
-FROM node:25-alpine AS web-builder
-
-ARG VITE_TELEGRAM_BOT_USERNAME=""
-ENV VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
-
-WORKDIR /app/web
-COPY clients/web/package*.json clients/web/.npmrc ./
-RUN npm ci
-COPY clients/web/ ./
-RUN npm run build
-
 # Stage 2: Runtime - Minimal runtime environment (no build tools)
 FROM python:3.13-slim AS runtime
 
@@ -71,8 +60,7 @@ RUN if [ "${WITH_PLAYWRIGHT}" = "1" ]; then playwright install --with-deps chrom
 # Copy application source
 COPY app ./app
 
-# Copy built Carbon web static assets
-COPY --from=web-builder /app/static/web /app/app/static/web
+# Web assets are built by ratatoskr-web and deployed into app/static/web/ via CI/CD.
 
 # Create non-root user and data directory
 RUN useradd -r -u 1000 -m -d /home/appuser -s /sbin/nologin appuser \
