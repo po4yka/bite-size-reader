@@ -70,11 +70,15 @@ class LLMClientProtocol(Protocol):
 
         Returns:
             LLMCallResult containing the response text, token usage, cost,
-            latency, and any error information.
+            latency, and error information. API-level failures (rate limits,
+            timeouts, model errors, empty responses) are captured in
+            ``result.error_text`` with ``result.status = CallStatus.ERROR``.
+            Callers must check ``result.status`` — no exception is raised for
+            recoverable API errors. Only structural failures raise exceptions.
 
         Raises:
-            RuntimeError: If the client has been closed.
-            ValidationError: If the request parameters are invalid.
+            RuntimeError: If the client has been closed or all fallback models
+                are exhausted without a successful response.
         """
         ...
 

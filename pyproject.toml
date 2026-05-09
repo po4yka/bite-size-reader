@@ -118,6 +118,10 @@ plugins = ["sqlalchemy.ext.mypy.plugin"]
 strict_optional = false
 
 [[tool.mypy.overrides]]
+module = ["app.core.*", "app.domain.*", "app.models.*"]
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
 module = ["tests.test_telegram_retry_command"]
 ignore_errors = true
 

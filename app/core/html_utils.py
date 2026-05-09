@@ -5,6 +5,7 @@ from functools import lru_cache
 from html import unescape
 from html.parser import HTMLParser
 from threading import Lock
+from typing import Any
 
 from app.core.logging_utils import get_logger
 
@@ -36,7 +37,7 @@ class _TextExtractor(HTMLParser):
         self._buf: list[str] = []
         self._skip_depth = 0  # skip script/style
 
-    def handle_starttag(self, tag: str, attrs):
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in ("script", "style"):
             self._skip_depth += 1
         elif self._skip_depth == 0:
@@ -278,7 +279,7 @@ def chunk_sentences(sentences: list[str], max_chars: int = 2000) -> list[str]:
 
 
 @lru_cache(maxsize=4)
-def _get_spacy_sentencizer(lang: str):
+def _get_spacy_sentencizer(lang: str) -> Any:
     """Return a cached spaCy blank pipeline with a sentencizer component."""
     with _SPACY_SENTENCIZER_LOCK:
         import spacy

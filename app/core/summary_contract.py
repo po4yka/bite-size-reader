@@ -1,3 +1,5 @@
+"""Runtime validation functions for the summary JSON contract (field checks, shaping, schema)."""
+
 from __future__ import annotations
 
 from app.core.summary_contract_impl.common import SummaryJSON

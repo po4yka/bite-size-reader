@@ -1,26 +1,31 @@
-"""Request and persistence helpers for content extraction."""
-# mypy: disable-error-code=attr-defined
+"""Mixin that handles request creation, deduplication, and persistence for content extraction.
+
+Separated from the main extractor to keep the core crawl logic readable; all DB-write
+paths (request rows, crawl results, message snapshots, sender metadata) live here.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-from app.core.async_utils import raise_if_cancelled
+    from app.infrastructure.persistence.message_persistence import MessagePersistence
 
-logger = logging.getLogger("app.adapters.content.content_extractor")
+from app.core.async_utils import raise_if_cancelled
+from app.core.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class ContentExtractorRequestsMixin:
     """Request creation/dedupe and persistence primitives."""
 
-    # Explicit host contract: these members are provided by URLProcessor.
+    # Explicit host contract: these members are provided by ContentExtractor.
     _audit: Callable[..., None]
-    message_persistence: Any
+    message_persistence: MessagePersistence
 
     def _schedule_crawl_persistence(
         self, req_id: int, crawl: Any, correlation_id: str | None
@@ -35,6 +40,18 @@ class ContentExtractorRequestsMixin:
                         "persist_crawl_error",
                         extra={"cid": correlation_id, "error": str(t.exception())},
                     )
+                    try:
+                        from app.observability.metrics import EXTRACTION_FAILURES, PROMETHEUS_AVAILABLE
+
+                        if PROMETHEUS_AVAILABLE:
+                            EXTRACTION_FAILURES.labels(
+                                stage="persist_crawl",
+                                component="background_task",
+                                reason_code="exception",
+                                retryable="false",
+                            ).inc()
+                    except Exception:
+                        pass
 
             task.add_done_callback(_log_err)
             return task
@@ -44,7 +61,7 @@ class ContentExtractorRequestsMixin:
     async def _persist_crawl_result(
         self, req_id: int, crawl: Any, correlation_id: str | None
     ) -> None:
-        """Persist crawl result with error logging."""
+        """Persist crawl result; exceptions propagate so the task callback can log and meter them."""
         try:
             await self.message_persistence.crawl_repo.async_insert_crawl_result(
                 request_id=req_id,
@@ -63,6 +80,7 @@ class ContentExtractorRequestsMixin:
             )
         except Exception as e:
             raise_if_cancelled(e)
+            raise  # let _log_err callback see the exception for logging and metrics
             logger.error("persist_crawl_error", extra={"error": str(e), "cid": correlation_id})
 
     async def _handle_request_dedupe_or_create(
@@ -107,6 +125,7 @@ class ContentExtractorRequestsMixin:
             safe_telegram_chat_id,
             safe_telegram_user_id,
         )
+        from app.domain.models.request import RequestStatus
 
         chat_obj = getattr(message, "chat", None)
         chat_id_raw = getattr(chat_obj, "id", 0) if chat_obj is not None else None
@@ -121,7 +140,7 @@ class ContentExtractorRequestsMixin:
 
         req_id = await self.message_persistence.request_repo.async_create_request(
             type_="url",
-            status="pending",
+            status=RequestStatus.PENDING,
             correlation_id=correlation_id,
             chat_id=chat_id,
             user_id=user_id,

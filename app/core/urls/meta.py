@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 from app.core.urls.normalization import normalize_url
 
@@ -67,7 +67,7 @@ def extract_instagram_shortcode(url: str) -> str | None:
     return None
 
 
-def _parse_meta_url(url: str):
+def _parse_meta_url(url: str) -> ParseResult | None:
     try:
         normalized = normalize_url(url)
     except ValueError:

@@ -67,7 +67,15 @@ class ContentExtractor(
     ContentExtractorRequestsMixin,
     ContentExtractorCrawlMixin,
 ):
-    """Orchestrates multi-provider content extraction, quality filtering, and platform routing."""
+    """Content extraction entry point for URL-based inputs.
+
+    Mixin split rationale: ContentExtractorRequestsMixin owns all DB-write paths
+    (request rows, crawl results, message snapshots, sender metadata) while
+    ContentExtractorCrawlMixin owns scraper orchestration and HTML salvage.
+    The split keeps each file focused on one responsibility and avoids a single
+    1000-line class. Both mixins declare their host contract as typed class variables
+    so the coupling is explicit rather than implicit duck-typing.
+    """
 
     @property
     def firecrawl(self) -> ContentScraperProtocol:

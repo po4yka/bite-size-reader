@@ -60,7 +60,13 @@ __all__ = [
 
 
 class URLProcessor:
-    """Coordinate extraction, summarization, delivery, and follow-up services."""
+    """Single composition root for the URL processing pipeline.
+
+    Assembles ContentExtractor, SummarizationRuntime, SummaryDelivery, and
+    PostSummaryTasks into a single ordered pipeline. Exists so that call sites
+    (message_router, CLI) deal with one object instead of constructing and
+    sequencing five services themselves.
+    """
 
     def __init__(
         self,
@@ -179,7 +185,7 @@ class URLProcessor:
 
     @property
     def audit_func(self) -> Callable[[str, str, dict], None]:
-        """Public accessor for the audit callable."""
+        """Expose the audit callable to platform extractors that need to log events."""
         return self._audit
 
     async def aclose(self, timeout: float = 5.0) -> None:

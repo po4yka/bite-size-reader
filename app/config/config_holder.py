@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import threading
+from collections.abc import Callable
 from dataclasses import replace as dc_replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -185,7 +186,7 @@ class ConfigReloader:
         changes: dict[str, tuple[str, str]] = {}
 
         try:
-            new_cfg = self._rebuild_config(old_cfg, new_env, changes)
+            new_cfg = self._rebuild_model_sections(old_cfg, new_env, changes)
         except Exception:
             logger.exception("config_rebuild_failed")
             return False
@@ -200,66 +201,92 @@ class ConfigReloader:
         )
         return True
 
-    def _rebuild_config(
+    @staticmethod
+    def _apply_section_overrides(
+        section_name: str,
+        field_map: dict[str, tuple[str, Any]],
+        new_env: dict[str, str],
+        changes: dict[str, tuple[str, str]],
+        coerce: Callable[[str, str], Any] | None = None,
+    ) -> dict[str, Any]:
+        """Apply env overrides for one config section; record diffs in changes."""
+        updates: dict[str, Any] = {}
+        for env_key, (field, old_val) in field_map.items():
+            if env_key in new_env and new_env[env_key] != str(old_val):
+                new_val = new_env[env_key]
+                changes[f"{section_name}.{field}"] = (str(old_val), new_val)
+                updates[field] = coerce(field, new_val) if coerce else new_val
+        return updates
+
+    def _rebuild_model_sections(
         self,
         old_cfg: AppConfig,
         new_env: dict[str, str],
         changes: dict[str, tuple[str, str]],
     ) -> AppConfig:
-        """Rebuild config sections from new YAML values."""
-        or_updates: dict[str, Any] = {}
-        rt_updates: dict[str, Any] = {}
+        """Apply model-section overrides from new YAML values and return updated AppConfig."""
+
+        def _coerce_or(field: str, val: str) -> Any:
+            if field in ("fallback_models", "flash_fallback_models"):
+                return tuple(m.strip() for m in val.split(",") if m.strip())
+            return val
+
+        def _coerce_rt(field: str, val: str) -> Any:
+            if field == "enabled":
+                return val.lower() in ("true", "1", "yes")
+            if field == "fallback_models":
+                return tuple(m.strip() for m in val.split(",") if m.strip())
+            return val
+
+        or_updates = self._apply_section_overrides(
+            "openrouter",
+            {
+                "OPENROUTER_MODEL": ("model", old_cfg.openrouter.model),
+                "OPENROUTER_FLASH_MODEL": ("flash_model", old_cfg.openrouter.flash_model),
+                "OPENROUTER_FALLBACK_MODELS": (
+                    "fallback_models",
+                    ",".join(old_cfg.openrouter.fallback_models),
+                ),
+                "OPENROUTER_FLASH_FALLBACK_MODELS": (
+                    "flash_fallback_models",
+                    ",".join(old_cfg.openrouter.flash_fallback_models),
+                ),
+                "OPENROUTER_LONG_CONTEXT_MODEL": (
+                    "long_context_model",
+                    old_cfg.openrouter.long_context_model or "",
+                ),
+            },
+            new_env,
+            changes,
+            _coerce_or,
+        )
+        rt_updates = self._apply_section_overrides(
+            "model_routing",
+            {
+                "MODEL_ROUTING_DEFAULT": ("default_model", old_cfg.model_routing.default_model),
+                "MODEL_ROUTING_TECHNICAL": (
+                    "technical_model",
+                    old_cfg.model_routing.technical_model,
+                ),
+                "MODEL_ROUTING_SOCIOPOLITICAL": (
+                    "sociopolitical_model",
+                    old_cfg.model_routing.sociopolitical_model,
+                ),
+                "MODEL_ROUTING_LONG_CONTEXT": (
+                    "long_context_model",
+                    old_cfg.model_routing.long_context_model,
+                ),
+                "MODEL_ROUTING_ENABLED": (
+                    "enabled",
+                    str(old_cfg.model_routing.enabled).lower(),
+                ),
+            },
+            new_env,
+            changes,
+            _coerce_rt,
+        )
+
         att_updates: dict[str, Any] = {}
-
-        _or_map = {
-            "OPENROUTER_MODEL": ("model", old_cfg.openrouter.model),
-            "OPENROUTER_FLASH_MODEL": ("flash_model", old_cfg.openrouter.flash_model),
-            "OPENROUTER_FALLBACK_MODELS": (
-                "fallback_models",
-                ",".join(old_cfg.openrouter.fallback_models),
-            ),
-            "OPENROUTER_FLASH_FALLBACK_MODELS": (
-                "flash_fallback_models",
-                ",".join(old_cfg.openrouter.flash_fallback_models),
-            ),
-            "OPENROUTER_LONG_CONTEXT_MODEL": (
-                "long_context_model",
-                old_cfg.openrouter.long_context_model or "",
-            ),
-        }
-        for env_key, (field, old_val) in _or_map.items():
-            if env_key in new_env and new_env[env_key] != str(old_val):
-                new_val = new_env[env_key]
-                changes[f"openrouter.{field}"] = (str(old_val), new_val)
-                if field in ("fallback_models", "flash_fallback_models"):
-                    or_updates[field] = tuple(m.strip() for m in new_val.split(",") if m.strip())
-                else:
-                    or_updates[field] = new_val
-
-        _rt_map = {
-            "MODEL_ROUTING_DEFAULT": ("default_model", old_cfg.model_routing.default_model),
-            "MODEL_ROUTING_TECHNICAL": ("technical_model", old_cfg.model_routing.technical_model),
-            "MODEL_ROUTING_SOCIOPOLITICAL": (
-                "sociopolitical_model",
-                old_cfg.model_routing.sociopolitical_model,
-            ),
-            "MODEL_ROUTING_LONG_CONTEXT": (
-                "long_context_model",
-                old_cfg.model_routing.long_context_model,
-            ),
-            "MODEL_ROUTING_ENABLED": ("enabled", str(old_cfg.model_routing.enabled).lower()),
-        }
-        for env_key, (field, old_val) in _rt_map.items():
-            if env_key in new_env and new_env[env_key] != str(old_val):
-                new_val = new_env[env_key]
-                changes[f"model_routing.{field}"] = (str(old_val), new_val)
-                if field == "enabled":
-                    rt_updates[field] = new_val.lower() in ("true", "1", "yes")
-                elif field == "fallback_models":
-                    rt_updates[field] = tuple(m.strip() for m in new_val.split(",") if m.strip())
-                else:
-                    rt_updates[field] = new_val
-
         if "ATTACHMENT_VISION_MODEL" in new_env:
             old_vision = old_cfg.attachment.vision_model
             new_vision = new_env["ATTACHMENT_VISION_MODEL"]
@@ -267,24 +294,12 @@ class ConfigReloader:
                 changes["attachment.vision_model"] = (old_vision, new_vision)
                 att_updates["vision_model"] = new_vision
 
-        new_openrouter = (
-            old_cfg.openrouter.model_copy(update=or_updates) if or_updates else old_cfg.openrouter
-        )
-        new_routing = (
-            old_cfg.model_routing.model_copy(update=rt_updates)
-            if rt_updates
-            else old_cfg.model_routing
-        )
-        new_attachment = (
-            old_cfg.attachment.model_copy(update=att_updates) if att_updates else old_cfg.attachment
-        )
-
         app_updates: dict[str, Any] = {}
         if or_updates:
-            app_updates["openrouter"] = new_openrouter
+            app_updates["openrouter"] = old_cfg.openrouter.model_copy(update=or_updates)
         if rt_updates:
-            app_updates["model_routing"] = new_routing
+            app_updates["model_routing"] = old_cfg.model_routing.model_copy(update=rt_updates)
         if att_updates:
-            app_updates["attachment"] = new_attachment
+            app_updates["attachment"] = old_cfg.attachment.model_copy(update=att_updates)
 
         return dc_replace(old_cfg, **app_updates) if app_updates else old_cfg

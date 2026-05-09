@@ -518,10 +518,13 @@ class AgentOrchestrator:
 
 
 class SingleAgentOrchestrator:
-    """Simpler orchestrator for single-agent workflows.
+    """Thin execution wrapper for one-agent workflows.
 
-    Use this when you need to execute a single agent in isolation
-    rather than the full multi-agent pipeline.
+    Use instead of AgentOrchestrator when the task does not need content
+    extraction or validation (e.g. repo analysis, standalone summarization
+    of already-extracted text). AgentOrchestrator owns the full
+    Extract → Summarize → Validate → Retry pipeline; this class skips all
+    of that and just drives a single agent's execute() call.
     """
 
     def __init__(self, agent: Any):

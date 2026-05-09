@@ -1,3 +1,5 @@
+"""Pydantic schema model for the summary JSON output (field definitions and validators)."""
+
 from __future__ import annotations
 
 from enum import StrEnum

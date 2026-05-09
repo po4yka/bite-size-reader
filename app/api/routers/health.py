@@ -197,6 +197,40 @@ async def _check_scraper() -> dict[str, Any]:
         }
 
 
+async def _check_vector_store(request: Request | None = None) -> dict[str, Any]:
+    """Check vector store (Qdrant) availability using the shared store instance."""
+    start = time.perf_counter()
+    try:
+        vector_store: Any = None
+        with contextlib.suppress(RuntimeError):
+            runtime = resolve_api_runtime(request)
+            vector_store = runtime.search.vector_store
+
+        if vector_store is None:
+            return {"status": "disabled", "latency_ms": 0}
+
+        latency_ms = (time.perf_counter() - start) * 1000
+        if vector_store.available:
+            return {
+                "status": "healthy",
+                "collection": vector_store.collection_name,
+                "latency_ms": round(latency_ms, 2),
+            }
+        return {
+            "status": "unavailable",
+            "url": vector_store._url,
+            "latency_ms": round(latency_ms, 2),
+        }
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - start) * 1000
+        logger.debug("health_check_vector_store_failed", extra={"error": str(exc)})
+        return {
+            "status": "unhealthy",
+            "error": str(exc),
+            "latency_ms": round(latency_ms, 2),
+        }
+
+
 def _get_circuit_breaker_states() -> dict[str, str]:
     """Get circuit breaker summary.
 
@@ -222,16 +256,18 @@ async def detailed_health_check(request: Request, _: dict = Depends(get_current_
     # Run component checks concurrently
     try:
         async with asyncio.timeout(10.0):
-            db_status, redis_status, scraper_status = await asyncio.gather(
+            db_status, redis_status, scraper_status, vector_status = await asyncio.gather(
                 _check_database(include_details=True, request=request),
                 _check_redis(),
                 _check_scraper(),
+                _check_vector_store(request),
                 return_exceptions=True,
             )
     except TimeoutError:
         db_status = {"status": "timeout", "error": "Health check timed out"}
         redis_status = {"status": "timeout", "error": "Health check timed out"}
         scraper_status = {"status": "timeout", "error": "Health check timed out"}
+        vector_status = {"status": "timeout", "error": "Health check timed out"}
 
     # Handle exceptions from gather
     if isinstance(db_status, BaseException):
@@ -240,6 +276,8 @@ async def detailed_health_check(request: Request, _: dict = Depends(get_current_
         redis_status = {"status": "error", "error": str(redis_status)}
     if isinstance(scraper_status, BaseException):
         scraper_status = {"status": "error", "error": str(scraper_status)}
+    if isinstance(vector_status, BaseException):
+        vector_status = {"status": "error", "error": str(vector_status)}
 
     circuit_breaker_states = _get_circuit_breaker_states()
 
@@ -273,6 +311,7 @@ async def detailed_health_check(request: Request, _: dict = Depends(get_current_
                 "database": db_status,
                 "redis": redis_status,
                 "scraper": scraper_status,
+                "vector_store": vector_status,
                 "circuit_breakers": circuit_breaker_states,
             },
         }

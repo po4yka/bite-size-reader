@@ -30,7 +30,7 @@ LowValueReason = Literal[
 
 
 def extract_content_text_candidates(crawl: FirecrawlResult) -> list[str]:
-    """Return cleaned text candidates derived from markdown and HTML content."""
+    """Build the candidate pool for low-value detection — markdown first, HTML as fallback."""
     text_candidates: list[str] = []
     if crawl.content_markdown and crawl.content_markdown.strip():
         text_candidates.append(clean_markdown_article_text(crawl.content_markdown))
@@ -40,7 +40,7 @@ def extract_content_text_candidates(crawl: FirecrawlResult) -> list[str]:
 
 
 def best_content_text(crawl: FirecrawlResult) -> str:
-    """Return the richest available text candidate for threshold checks."""
+    """Select the longest candidate — length is a proxy for content richness at this stage."""
     candidates = [t for t in extract_content_text_candidates(crawl) if t and t.strip()]
     return max(candidates, key=len, default="")
 
@@ -159,6 +159,28 @@ def _load_quality_system_prompt() -> str:
     return _quality_system_prompt
 
 
+def _parse_quality_verdict(response_text: str) -> _QualityVerdict | None:
+    """Parse LLM response text into a QualityVerdict, returning None on any failure."""
+    import json as _json
+
+    from app.core.json_utils import extract_json
+
+    parsed_data = extract_json(response_text)
+    if not isinstance(parsed_data, dict):
+        try:
+            parsed_data = _json.loads(response_text)
+        except (ValueError, TypeError):
+            return None
+
+    if not isinstance(parsed_data, dict):
+        return None
+
+    try:
+        return _QualityVerdict(**parsed_data)
+    except (TypeError, ValueError):
+        return None
+
+
 async def classify_content_quality_llm(
     text_preview: str,
     metrics: dict[str, Any],
@@ -175,10 +197,6 @@ async def classify_content_quality_llm(
     Returns (is_stub, llm_result). On any failure, defers to the heuristic
     verdict by returning (True, None).
     """
-    import json as _json
-
-    from app.core.json_utils import extract_json
-
     system_prompt = _load_quality_system_prompt()
     user_message = (
         f"Text (first 500 chars): {text_preview[:500]}\n"
@@ -208,27 +226,11 @@ async def classify_content_quality_llm(
         logger.warning("quality_llm_error", extra={"request_id": request_id}, exc_info=True)
         return True, None
 
-    response_text = llm_result.response_text or ""
-    parsed_data = extract_json(response_text)
-    if not isinstance(parsed_data, dict):
-        try:
-            parsed_data = _json.loads(response_text)
-        except (ValueError, TypeError):
-            parsed_data = None
-
-    if not isinstance(parsed_data, dict):
+    verdict = _parse_quality_verdict(llm_result.response_text or "")
+    if verdict is None:
         logger.warning("quality_llm_parse_error", extra={"request_id": request_id})
         return True, llm_result
 
-    try:
-        verdict = _QualityVerdict(**parsed_data)
-    except (TypeError, ValueError):
-        logger.warning("quality_llm_parse_error", extra={"request_id": request_id})
-        return True, llm_result
-
-    classification = verdict.classification
-    confidence = verdict.confidence
-
-    if classification == "real_content" and confidence >= confidence_threshold:
+    if verdict.classification == "real_content" and verdict.confidence >= confidence_threshold:
         return False, llm_result
     return True, llm_result

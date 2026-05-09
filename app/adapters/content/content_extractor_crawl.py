@@ -1,10 +1,8 @@
 """Crawl/cache/content-processing helpers for content extraction."""
-# mypy: disable-error-code=attr-defined
 
 from __future__ import annotations
 
 import json
-import logging
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +16,9 @@ if TYPE_CHECKING:
     from app.adapters.external.formatting.protocols import (
         ResponseFormatterFacade as ResponseFormatter,
     )
+    from app.application.ports.requests import LLMCallRecord
+    from app.config.settings import AppConfig
+    from app.infrastructure.persistence.message_persistence import MessagePersistence
 
 from app.adapters.content.quality_filters import (
     classify_content_quality_llm,
@@ -27,6 +28,7 @@ from app.adapters.content.quality_filters import (
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.async_utils import raise_if_cancelled
 from app.core.html_utils import clean_markdown_article_text, html_to_text, normalize_text
+from app.core.logging_utils import get_logger
 from app.domain.models.request import RequestStatus
 from app.observability.failure_observability import (
     REASON_DIRECT_FETCH_FAILED,
@@ -35,7 +37,7 @@ from app.observability.failure_observability import (
     persist_request_failure,
 )
 
-logger = logging.getLogger("app.adapters.content.content_extractor")
+logger = get_logger(__name__)
 
 
 def _select_content_text(
@@ -64,14 +66,15 @@ def _apply_normalization(content_text: str, cfg: Any) -> str:
 class ContentExtractorCrawlMixin:
     """Scraper cache/processing and HTML salvage behavior."""
 
-    # Explicit host contract: these members are provided by URLProcessor.
+    # Explicit host contract: these members are provided by ContentExtractor.
     _audit: Callable[..., None]
     _cache: Any
+    _quality_llm_client: Any | None  # optional LLM client for quality classification
     _schedule_crawl_persistence: Callable[..., asyncio.Task[None] | None]
     _sem: Callable[..., Any]
-    cfg: Any
+    cfg: AppConfig
     scraper: ContentScraperProtocol
-    message_persistence: Any
+    message_persistence: MessagePersistence
     response_formatter: ResponseFormatter
 
     async def _extract_or_reuse_content_with_title(
@@ -401,7 +404,7 @@ class ContentExtractorCrawlMixin:
     ) -> None:
         """Persist an LLM quality-check call for cost tracking."""
         try:
-            record = {
+            record: LLMCallRecord = {
                 "request_id": req_id,
                 "provider": "openrouter",
                 "model": llm_result.model,

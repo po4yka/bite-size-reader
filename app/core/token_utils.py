@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -10,7 +12,7 @@ _encoder = None
 _encoder_loaded = False
 
 
-def _get_encoder():
+def _get_encoder() -> Any | None:
     """Lazily load tiktoken encoder. Returns None if tiktoken unavailable."""
     global _encoder, _encoder_loaded
     if _encoder_loaded:

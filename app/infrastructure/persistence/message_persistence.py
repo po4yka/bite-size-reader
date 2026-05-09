@@ -15,6 +15,9 @@ from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.repositories.crawl_result_repository import (
     CrawlResultRepositoryAdapter,
 )
+from app.infrastructure.persistence.repositories.llm_repository import (
+    LLMRepositoryAdapter,
+)
 from app.infrastructure.persistence.repositories.request_repository import (
     RequestRepositoryAdapter,
 )
@@ -36,6 +39,7 @@ class MessagePersistence:
         self.request_repo = RequestRepositoryAdapter(db)
         self.user_repo = UserRepositoryAdapter(db)
         self.crawl_repo = CrawlResultRepositoryAdapter(db)
+        self.llm_repo = LLMRepositoryAdapter(db)
 
     async def persist_message_snapshot(self, request_id: int, message: Any) -> None:
         """Persist message snapshot to database."""
