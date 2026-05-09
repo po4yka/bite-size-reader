@@ -38,7 +38,7 @@ class ContentExtractorRequestsMixin:
 
             task.add_done_callback(_log_err)
             return task
-        except Exception:
+        except RuntimeError:
             return None
 
     async def _persist_crawl_result(

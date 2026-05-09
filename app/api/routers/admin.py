@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.dependencies.database import get_session_manager
 from app.api.models.responses import success_response
-from app.api.routers.auth import get_current_user
+from app.api.routers.auth import AuthenticatedUser, get_current_user
 from app.api.services.admin_read_service import AdminReadService
 from app.api.services.auth_service import AuthService
 from app.core.logging_utils import get_logger
@@ -30,11 +30,8 @@ def _resolve_db(request: Any) -> Any:
     return get_session_manager(request)
 
 
-def _extract_user_id(user: dict[str, Any]) -> int:
-    raw_user_id = user.get("user_id")
-    if isinstance(raw_user_id, bool) or not isinstance(raw_user_id, int):
-        raise ValueError("Authenticated user payload is missing integer user_id")
-    return raw_user_id
+def _extract_user_id(user: AuthenticatedUser) -> int:
+    return user["user_id"]
 
 
 def _seven_days_ago() -> _dt.datetime:
@@ -53,7 +50,7 @@ def _today_start() -> _dt.datetime:
 @router.get("/users")
 async def list_users(
     request: Request,
-    user: dict[str, Any] = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """List all users with per-user summary/request/tag/collection counts."""
     await AuthService.require_owner(user)
@@ -72,7 +69,7 @@ async def list_users(
 @router.get("/jobs")
 async def job_status(
     request: Request,
-    user: dict[str, Any] = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Pipeline and import job status overview."""
     await AuthService.require_owner(user)
@@ -92,7 +89,7 @@ async def job_status(
 @router.get("/health/content")
 async def content_health(
     request: Request,
-    user: dict[str, Any] = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Content pipeline health: totals, failure breakdown, recent errors."""
     await AuthService.require_owner(user)
@@ -111,7 +108,7 @@ async def content_health(
 @router.get("/metrics")
 async def system_metrics(
     request: Request,
-    user: dict[str, Any] = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Database, LLM, and scraper metrics."""
     await AuthService.require_owner(user)
@@ -131,7 +128,7 @@ async def system_metrics(
 @router.get("/audit-log")
 async def audit_log(
     request: Request,
-    user: dict[str, Any] = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
     action: str | None = Query(None, description="Filter by event name"),
     user_id_filter: int | None = Query(
         None, alias="user_id", description="Filter by user_id in details"

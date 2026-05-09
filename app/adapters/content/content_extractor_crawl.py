@@ -14,6 +14,7 @@ from app.core.call_status import CallStatus
 if TYPE_CHECKING:
     import asyncio
 
+    from app.adapters.content.scraper.protocol import ContentScraperProtocol
     from app.adapters.external.formatting.protocols import (
         ResponseFormatterFacade as ResponseFormatter,
     )
@@ -69,8 +70,7 @@ class ContentExtractorCrawlMixin:
     _schedule_crawl_persistence: Callable[..., asyncio.Task[None] | None]
     _sem: Callable[..., Any]
     cfg: Any
-    scraper: Any
-    firecrawl: Any
+    scraper: ContentScraperProtocol
     message_persistence: Any
     response_formatter: ResponseFormatter
 
@@ -129,7 +129,7 @@ class ContentExtractorCrawlMixin:
         if isinstance(metadata, str):
             try:
                 metadata = json.loads(metadata)
-            except Exception:
+            except (json.JSONDecodeError, ValueError):
                 metadata = None
 
         if isinstance(metadata, dict):

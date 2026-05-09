@@ -67,15 +67,15 @@ class ContentExtractor(
     ContentExtractorRequestsMixin,
     ContentExtractorCrawlMixin,
 ):
-    """Handles Firecrawl operations and content extraction/processing."""
+    """Orchestrates multi-provider content extraction, quality filtering, and platform routing."""
 
     @property
-    def firecrawl(self) -> Any:
+    def firecrawl(self) -> ContentScraperProtocol:
         """Backward-compatible alias for the configured scraper chain."""
         return self.scraper
 
     @firecrawl.setter
-    def firecrawl(self, scraper: Any) -> None:
+    def firecrawl(self, scraper: ContentScraperProtocol) -> None:
         self.scraper = scraper
 
     def __init__(
@@ -250,6 +250,7 @@ class ContentExtractor(
             if not qdrant_store.available:
                 qdrant_store = None
         except Exception:
+            logger.debug("qdrant_store_unavailable_for_github", exc_info=True)
             qdrant_store = None
 
         embedding_gen = RepositoryEmbeddingGenerator(

@@ -213,7 +213,7 @@ async def classify_content_quality_llm(
     if not isinstance(parsed_data, dict):
         try:
             parsed_data = _json.loads(response_text)
-        except Exception:
+        except (ValueError, TypeError):
             parsed_data = None
 
     if not isinstance(parsed_data, dict):
@@ -222,7 +222,7 @@ async def classify_content_quality_llm(
 
     try:
         verdict = _QualityVerdict(**parsed_data)
-    except Exception:
+    except (TypeError, ValueError):
         logger.warning("quality_llm_parse_error", extra={"request_id": request_id})
         return True, llm_result
 

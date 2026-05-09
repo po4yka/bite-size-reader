@@ -12,7 +12,41 @@ from typing import TYPE_CHECKING, Any
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
+    from app.config.adaptive_timeout import AdaptiveTimeoutConfig
+    from app.config.api import ApiLimitsConfig, AuthConfig, SyncConfig
+    from app.config.background import BackgroundProcessorConfig
+    from app.config.circuit_breaker import CircuitBreakerConfig
+    from app.config.content import ContentLimitsConfig
+    from app.config.database import DatabaseConfig
+    from app.config.digest import ChannelDigestConfig
+    from app.config.firecrawl import FirecrawlConfig
+    from app.config.github import GitHubConfig
+    from app.config.integrations import (
+        BatchAnalysisConfig,
+        EmbeddingConfig,
+        McpConfig,
+        QdrantConfig,
+        WebSearchConfig,
+    )
+    from app.config.llm import (
+        AnthropicConfig,
+        ModelRoutingConfig,
+        OllamaConfig,
+        OpenAIConfig,
+        OpenRouterConfig,
+    )
+    from app.config.media import AttachmentConfig, YouTubeConfig
+    from app.config.otel import OtelConfig, SentryConfig
+    from app.config.push import PushNotificationConfig
+    from app.config.redis import RedisConfig
+    from app.config.rss import RSSConfig
+    from app.config.runtime import RuntimeConfig
+    from app.config.scraper import ScraperConfig
     from app.config.settings import AppConfig
+    from app.config.signal_ingestion import SignalIngestionConfig
+    from app.config.telegram import TelegramConfig, TelegramLimitsConfig
+    from app.config.tts import ElevenLabsConfig
+    from app.config.twitter import TwitterConfig
 
 logger = get_logger(__name__)
 
@@ -25,6 +59,44 @@ class ConfigHolder:
     Delegates attribute access to the underlying AppConfig so existing code
     using ``cfg.openrouter.model`` continues to work when given a ConfigHolder.
     """
+
+    if TYPE_CHECKING:
+        # Typed view of AppConfig fields — __getattr__ provides the runtime values.
+        telegram: TelegramConfig
+        firecrawl: FirecrawlConfig
+        openrouter: OpenRouterConfig
+        openai: OpenAIConfig
+        ollama: OllamaConfig
+        anthropic: AnthropicConfig
+        youtube: YouTubeConfig
+        attachment: AttachmentConfig
+        runtime: RuntimeConfig
+        telegram_limits: TelegramLimitsConfig
+        database: DatabaseConfig
+        content_limits: ContentLimitsConfig
+        vector_store: QdrantConfig
+        redis: RedisConfig
+        api_limits: ApiLimitsConfig
+        auth: AuthConfig
+        sync: SyncConfig
+        background: BackgroundProcessorConfig
+        circuit_breaker: CircuitBreakerConfig
+        web_search: WebSearchConfig
+        adaptive_timeout: AdaptiveTimeoutConfig
+        batch_analysis: BatchAnalysisConfig
+        twitter: TwitterConfig
+        digest: ChannelDigestConfig
+        mcp: McpConfig
+        scraper: ScraperConfig
+        embedding: EmbeddingConfig
+        tts: ElevenLabsConfig
+        push: PushNotificationConfig
+        model_routing: ModelRoutingConfig
+        rss: RSSConfig
+        signal_ingestion: SignalIngestionConfig
+        otel: OtelConfig
+        sentry: SentryConfig
+        github: GitHubConfig
 
     def __init__(self, initial: AppConfig) -> None:
         self._cfg: AppConfig = initial

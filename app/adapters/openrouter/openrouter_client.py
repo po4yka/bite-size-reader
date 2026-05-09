@@ -666,14 +666,3 @@ class OpenRouterClient:
             msg = "Client has been closed"
             raise RuntimeError(msg)
         return await self.model_capabilities.get_structured_models()
-
-
-# Utility function for backoff (kept for compatibility)
-async def asyncio_sleep_backoff(base: float, attempt: int) -> None:
-    """Exponential backoff with light jitter."""
-    import asyncio
-    import random
-
-    base_delay = max(0.0, base * (2**attempt))
-    jitter = 1.0 + random.uniform(-0.25, 0.25)
-    await asyncio.sleep(base_delay * jitter)

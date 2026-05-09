@@ -2,13 +2,19 @@
 Authentication service - business logic for auth operations.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import AuthorizationError, ResourceNotFoundError
 from app.api.models.auth import TelegramLinkStatus
 from app.core.logging_utils import get_logger
 from app.core.time_utils import UTC
+
+if TYPE_CHECKING:
+    from app.api.routers.auth.dependencies import AuthenticatedUser
 
 # ``app.api.routers.auth.tokens`` is imported lazily inside the methods that
 # need it: importing it at module load triggers the routers package, which
@@ -36,7 +42,7 @@ class AuthService:
     """Service for authentication-related business logic."""
 
     @staticmethod
-    async def require_owner(user: dict) -> dict:
+    async def require_owner(user: AuthenticatedUser) -> dict:
         """Verify user is an owner and return user data dict.
 
         Args:
@@ -56,7 +62,7 @@ class AuthService:
 
     @staticmethod
     async def require_secret_key_manager(
-        user: dict,
+        user: AuthenticatedUser,
         *,
         target_user_id: int,
         client_id: str,

@@ -4,7 +4,13 @@ FastAPI authentication dependencies.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict
+
+
+class AuthenticatedUser(TypedDict):
+    user_id: int
+    username: str | None
+    client_id: str
 
 from app.core.logging_utils import get_logger
 
@@ -83,7 +89,7 @@ def get_auth_repository() -> Any:
 def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
-) -> dict:
+) -> AuthenticatedUser:
     """
     Dependency to get current authenticated user.
 
