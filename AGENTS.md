@@ -31,7 +31,6 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 | Core | `app/core/` | URL normalization, JSON parsing, summary contract, logging |
 | Database | `app/db/` | Peewee ORM models (48 classes), `DatabaseSessionManager` (`session.py`) is sole DB entry point |
 | API | `app/api/` | FastAPI REST API with JWT auth |
-| Web | `clients/web/` | Frost web interface (React + TypeScript + Vite); visual regression via Playwright (route screenshots + Storybook story snapshots, baselines committed to repo) |
 | Search | `app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/` | Search workflows, vector search, and embedding services |
 | MCP | `app/mcp/` | Model Context Protocol server |
 
@@ -47,8 +46,6 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 - `app/config/scraper.py` -- Scraper chain configuration
 - `bot.py` -- Entrypoint
 - `docs/SPEC.md` -- Full technical specification (canonical reference)
-- `docs/reference/frontend-web.md` -- Web frontend contracts
-- `DESIGN.md` -- Frost design system spec (DESIGN.md format). Canonical for web UI tokens, typography, components, and anti-patterns.
 
 ## Development Commands
 
@@ -57,7 +54,6 @@ source .venv/bin/activate
 make format          # ruff format + isort
 make lint            # ruff
 make type            # mypy
-cd clients/web && npm run check:static && npm run test  # Web frontend
 python -m app.cli.summary --url <URL>           # CLI test runner
 
 # Pi deployment: build linux/arm64 image on the Mac, stream to the Pi over
@@ -87,13 +83,11 @@ bash tools/scripts/build-and-deploy-pi.sh --help
 5. Update both `en/` and `ru/` prompts when changing LLM behavior
 6. Validate summary JSON with `app/core/summary_contract.py`
 7. Database changes require migration via `app/cli/migrate_db.py` + docs/SPEC.md update
-8. Web frontend changes: read `docs/reference/frontend-web.md` first, run `npm run check:static` before finalizing. Web UI must adapt to ≤768px via container queries on AppShell main; see DESIGN.md Mobile section.
-9. State scope explicitly when giving an instruction; don't expect silent generalization across items
-10. Tell the agent what to do, not what to avoid (e.g., "use `tests/db_helpers.py`" vs. "don't write new fixtures")
-11. Front-load the full task spec on the first turn; iterative refinement loses context against multi-step plans
-12. Make independent tool calls in parallel; sequence only when one result determines the next call's parameters
-13. Read code before asserting its behavior; cite `file:line` for non-obvious claims
-14. Web UI design: read `DESIGN.md` (Frost) before adding tokens, components, colors, or motion. Use `--frost-*` tokens; do not introduce arbitrary hex values or new CSS custom properties outside the Frost token set.
+8. State scope explicitly when giving an instruction; don't expect silent generalization across items
+9. Tell the agent what to do, not what to avoid (e.g., "use `tests/db_helpers.py`" vs. "don't write new fixtures")
+10. Front-load the full task spec on the first turn; iterative refinement loses context against multi-step plans
+11. Make independent tool calls in parallel; sequence only when one result determines the next call's parameters
+12. Read code before asserting its behavior; cite `file:line` for non-obvious claims
 
 ## Database
 
@@ -233,22 +227,6 @@ When desloppify itself appears wrong or inconsistent:
 
 <!-- desloppify-end -->
 
-## Impeccable Design Skills
-
-Curated UI/UX design skills from [impeccable](https://github.com/pbakaus/impeccable) for the Frost web frontend. Codex skills in `.codex/skills/i-*/`.
-
-| Command | Purpose |
-|---------|---------|
-| `i-frontend-design` | Core design framework -- run first |
-| `i-audit` | Accessibility, performance, responsive checks |
-| `i-polish` | Final refinement pass |
-| `i-normalize` | Align to design system tokens |
-| `i-typeset` | Typography improvements |
-| `i-colorize` | Strategic color usage |
-| `i-clarify` | UX copy improvements |
-| `i-harden` | i18n, error handling, edge cases |
-| `i-optimize` | Performance (Core Web Vitals) |
-
 ## Codex Overlay
 
 This is the canonical Codex overlay used by the README install command.
@@ -288,7 +266,6 @@ This is the canonical Codex overlay used by the README install command.
 9. Assessment scores are auto-applied from trusted internal run-batches imports, or via Claude cloud session imports (`desloppify review --external-start --external-runner claude` then printed `--external-submit`). Legacy attested external import via `--attested-external` remains supported.
 10. Manual override is safety-scoped: you cannot combine it with `--allow-partial`, and provisional manual scores expire on the next `scan` unless replaced by trusted internal or attested-external imports.
 11. If a batch fails, retry only that slice with `desloppify review --run-batches --packet <packet.json> --only-batches <idxs>`.
-12. For Frost web frontend tasks, consult `docs/reference/frontend-web.md` and `DESIGN.md`, and run `cd clients/web && npm run check:static` before completion.
 
 <!-- desloppify-overlay: codex -->
 <!-- desloppify-end -->

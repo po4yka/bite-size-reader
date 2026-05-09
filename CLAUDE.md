@@ -11,7 +11,6 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - Accepts forwarded channel posts and summarizes them directly
 - Returns structured JSON summaries with a strict contract
 - Stores all artifacts (Telegram messages, crawl results, video downloads, LLM calls, summaries) in PostgreSQL via SQLAlchemy 2.0 + asyncpg
-- Exposes a web frontend (`clients/web/`) served by FastAPI on `/web/*`
 - Runs as a single Docker container with owner-only access control
 
 **Tech Stack:**
@@ -33,9 +32,6 @@ This document helps AI assistants (like Claude) understand and work effectively 
 - google-genai (optional: Gemini Embedding 2 API provider)
 - loguru, orjson (structured logging, fast JSON serialization)
 - FastAPI / uvicorn (Mobile REST API)
-- React 18 + TypeScript + Vite (web frontend)
-- Frost design system (`clients/web/src/design/`) — editorial monospace minimalism with two-color rule + spark accent. See DESIGN.md.
-- @tanstack/react-query (web data fetching, caching, polling)
 - PyJWT (JWT authentication)
 - redis (optional caching and distributed locking)
 - apscheduler (background task scheduling)
@@ -94,10 +90,6 @@ app/
 +-- security/           # Security utilities
 +-- types/              # Type definitions
 +-- utils/              # Helper utilities (progress, formatting, validation)
-clients/
-+-- cli/                # CLI tools (summary runner, search, MCP server, migrations, vector store backfill)
-+-- browser-extension/  # Browser extension assets and docs
-+-- web/                # Web interface (React + TypeScript + Vite)
 integrations/
 +-- openclaw-skill/     # OpenClaw MCP skill bundle
 ops/
@@ -151,12 +143,6 @@ pip install -r requirements.txt -r requirements-dev.txt
 make format                # Format code (ruff format + isort)
 make lint                  # Lint code (ruff)
 make type                  # Type-check code (mypy)
-
-# Web frontend
-cd clients/web && npm ci
-cd clients/web && npm run dev
-cd clients/web && npm run check:static
-cd clients/web && npm run test
 
 # Dependencies
 make lock-uv               # Lock dependencies with uv (recommended)
@@ -263,14 +249,6 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
    - Semaphore-based rate limiting for Firecrawl/OpenRouter (`MAX_CONCURRENT_CALLS`)
    - Async/await throughout (Telethon, httpx, PostgreSQL via SQLAlchemy 2.0 `AsyncSession` + asyncpg). Postgres MVCC handles write concurrency natively — no application-level locking
    - Optional `uvloop` for async performance
-
-8. **Web Frontend Changes (`clients/web/`):**
-   - Read `docs/reference/frontend-web.md` before changing web architecture, routing, auth, or data layer behavior
-   - Keep same-host serving contract intact (`/web`, `/web/*`, `/static/web/*`)
-   - Preserve hybrid auth behavior. Three JWT-mode variants share the same refresh chain: Telegram Login Widget (`/v1/auth/telegram-login`), secret-key login (`/v1/auth/secret-login`, machine clients), and credentials login (`/v1/auth/credentials-login`, gated only by `CREDENTIALS_LOGIN_PEPPER` presence — no separate enable flag; the route returns `503` if the pepper is unset). Bootstrap the credentials row via `ratatoskr credentials set` (CLI is the only writer; there is no public signup).
-   - Token storage is dual-bucket: `localStorage` when Remember Me is checked, `sessionStorage` when unchecked. The chosen bucket travels in the persisted envelope (`AuthTokens.persistent`) so `client.ts:refreshAccessToken` and the backend `/v1/auth/refresh` rotation both preserve the TTL family across rotation.
-   - Web UI must adapt to ≤768px via container queries on AppShell main; see DESIGN.md Mobile section.
-   - Run `cd clients/web && npm run check:static && npm run test` before finalizing
 
 ### Security Considerations
 
@@ -387,35 +365,13 @@ When making changes, these are the most critical files to understand:
 - **`app/config/scraper.py`** -- Scraper chain configuration (`ScraperConfig`)
 - **`app/adapters/content/scraper/`** -- `ContentScraperProtocol`, `ContentScraperChain`, `ContentScraperFactory`, providers
 - **`app/api/main.py`** -- Mobile API entry point
-- **`docs/reference/frontend-web.md`** -- Web frontend architecture, auth, and local workflow
-- **`clients/web/src/App.tsx`** -- Web route map and route guards
-- **`clients/web/src/auth/AuthProvider.tsx`** -- Hybrid auth mode selection and session handling
 - **`app/mcp/server.py`** -- MCP server for AI agents
 - **`bot.py`** -- Entrypoint (wires everything together)
 - **`docs/SPEC.md`** -- Full technical specification (canonical reference)
-- **`DESIGN.md`** -- Frost design system specification (DESIGN.md format, https://github.com/google-labs-code/design.md). Canonical reference for tokens, typography, components, and UI rules for the web client.
 - **`app/adapters/github/`** -- GitHub API client, URL pattern matcher, platform extractor, and exception types for repository ingestion
 - **`app/db/models/repository.py`** -- `Repository`, `RepositoryEmbedding`, `UserGitHubIntegration` ORM models and their Postgres enum types
 - **`app/tasks/github_sync.py`** -- Taskiq task `ratatoskr.github.sync_stars`; daily per-user starred-repo sync with budget cap and reauth handling
 - **`app/security/token_crypto.py`** -- Fernet encrypt/decrypt for at-rest GitHub tokens; key loaded lazily from `GITHUB_TOKEN_ENCRYPTION_KEY`
-
-## Impeccable Design Skills
-
-Curated UI/UX design skills from [impeccable](https://github.com/pbakaus/impeccable) (Apache 2.0). Available as `/i-*` commands for the web frontend.
-
-| Command | Purpose |
-|---------|---------|
-| `/i-frontend-design` | Core design framework -- run first to establish design context |
-| `/i-audit` | Technical quality checks (accessibility, performance, responsive, anti-patterns) |
-| `/i-polish` | Final refinement across alignment, typography, color, interactions |
-| `/i-normalize` | Align UI to project design system tokens, spacing, patterns |
-| `/i-typeset` | Typography hierarchy, font choices, readability |
-| `/i-colorize` | Strategic color usage with 60-30-10 distribution |
-| `/i-clarify` | Improve UX copy, error messages, labels |
-| `/i-harden` | i18n, error handling, edge cases, text overflow resilience |
-| `/i-optimize` | Core Web Vitals, rendering, bundle size performance |
-
-Most skills require `/i-frontend-design` context first. Skills are in `.claude/skills/i-*/` (Claude Code) and `.codex/skills/i-*/` (Codex CLI).
 
 ## Best Practices
 
@@ -507,10 +463,8 @@ For questions about the codebase, always refer to:
 
 1. This file (CLAUDE.md) for AI assistant guidance
 2. docs/SPEC.md for technical specification
-3. docs/reference/frontend-web.md for web frontend contracts and workflows
-4. DESIGN.md for the Frost design system (tokens, typography, components, anti-patterns). Read before any web UI change.
-5. README.md for user-facing documentation
-6. Code comments and docstrings for implementation details
+3. README.md for user-facing documentation
+4. Code comments and docstrings for implementation details
 
 ---
 
