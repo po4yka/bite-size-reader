@@ -58,9 +58,7 @@ async def _create_user_request_summary(
 
 
 @pytest.mark.asyncio
-async def test_user_stats_with_valid_json_payload(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-):
+async def test_user_stats_with_valid_json_payload(db: Database, monkeypatch: pytest.MonkeyPatch):
     """Test user stats with properly formatted json_payload."""
     _configure_env(monkeypatch)
 
@@ -85,9 +83,7 @@ async def test_user_stats_with_valid_json_payload(
 
 
 @pytest.mark.asyncio
-async def test_user_stats_with_none_json_payload(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-):
+async def test_user_stats_with_none_json_payload(db: Database, monkeypatch: pytest.MonkeyPatch):
     """Test user stats handles None json_payload gracefully."""
     _configure_env(monkeypatch)
 
@@ -108,9 +104,7 @@ async def test_user_stats_with_none_json_payload(
 
 
 @pytest.mark.asyncio
-async def test_user_stats_with_string_json_payload(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-):
+async def test_user_stats_with_string_json_payload(db: Database, monkeypatch: pytest.MonkeyPatch):
     """Test user stats handles string json_payload (legacy data) gracefully."""
     _configure_env(monkeypatch)
 
@@ -132,8 +126,8 @@ async def test_user_stats_with_string_json_payload(
         await session.execute(
             sql_text(
                 "UPDATE summaries SET json_payload = "
-                "to_jsonb('{\"estimated_reading_time_min\": 10, "
-                "\"topic_tags\": [\"python\"]}'::text) "
+                'to_jsonb(\'{"estimated_reading_time_min": 10, '
+                '"topic_tags": ["python"]}\'::text) '
                 "WHERE id = :sid"
             ),
             {"sid": summary_id},
@@ -147,9 +141,7 @@ async def test_user_stats_with_string_json_payload(
 
 
 @pytest.mark.asyncio
-async def test_user_stats_with_invalid_topic_tags(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-):
+async def test_user_stats_with_invalid_topic_tags(db: Database, monkeypatch: pytest.MonkeyPatch):
     """Test user stats handles invalid topic_tags type gracefully."""
     _configure_env(monkeypatch)
 

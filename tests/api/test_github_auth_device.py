@@ -123,6 +123,7 @@ def client_no_db(monkeypatch: pytest.MonkeyPatch) -> Any:
     )
 
     from app.config import clear_config_cache
+
     clear_config_cache()
 
     import app.api.main
@@ -224,11 +225,15 @@ async def test_device_start_returns_user_code(
 
 
 async def test_device_start_returns_503_when_oauth_unconfigured(
-    client: Any, db: Any, gh_user: Any, fake_redis: fakeredis.FakeRedis,
+    client: Any,
+    db: Any,
+    gh_user: Any,
+    fake_redis: fakeredis.FakeRedis,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("GITHUB_OAUTH_APP_CLIENT_ID", raising=False)
     from app.config import clear_config_cache
+
     clear_config_cache()
 
     _inject_redis(client, fake_redis)
@@ -267,7 +272,10 @@ async def test_device_start_returns_503_when_redis_unavailable(
 
 
 async def test_device_poll_pending(
-    client: Any, db: Any, gh_user: Any, fake_redis: fakeredis.FakeRedis,
+    client: Any,
+    db: Any,
+    gh_user: Any,
+    fake_redis: fakeredis.FakeRedis,
 ) -> None:
     await fake_redis.set(
         f"gh:device:{_DEVICE_CODE}",
@@ -299,7 +307,10 @@ async def test_device_poll_pending(
 
 
 async def test_device_poll_ok_stores_token(
-    client: Any, db: Any, gh_user: Any, fake_redis: fakeredis.FakeRedis,
+    client: Any,
+    db: Any,
+    gh_user: Any,
+    fake_redis: fakeredis.FakeRedis,
 ) -> None:
     await fake_redis.set(
         f"gh:device:{_DEVICE_CODE}",
@@ -345,7 +356,8 @@ async def test_device_poll_ok_stores_token(
 
 
 async def test_device_poll_unknown_device_code_returns_expired(
-    client_no_db: Any, fake_redis: fakeredis.FakeRedis,
+    client_no_db: Any,
+    fake_redis: fakeredis.FakeRedis,
 ) -> None:
     # Do NOT seed Redis — no entry exists; returns 'expired' before any DB access.
     _inject_redis(client_no_db, fake_redis)
@@ -369,7 +381,8 @@ async def test_device_poll_unknown_device_code_returns_expired(
 
 
 async def test_device_poll_csrf_other_user_returns_expired(
-    client_no_db: Any, fake_redis: fakeredis.FakeRedis,
+    client_no_db: Any,
+    fake_redis: fakeredis.FakeRedis,
 ) -> None:
     # Seed Redis as if _OTHER_USER_ID started the flow
     await fake_redis.set(
@@ -402,7 +415,8 @@ async def test_device_poll_csrf_other_user_returns_expired(
 
 
 async def test_device_poll_slow_down_when_polled_too_fast(
-    client_no_db: Any, fake_redis: fakeredis.FakeRedis,
+    client_no_db: Any,
+    fake_redis: fakeredis.FakeRedis,
 ) -> None:
     # last_poll_at = now (just polled) — rate-limit fires before GitHub call
     recent_poll = int(time.time())
@@ -436,7 +450,10 @@ async def test_device_poll_slow_down_when_polled_too_fast(
 
 
 async def test_device_poll_expired(
-    client: Any, db: Any, gh_user: Any, fake_redis: fakeredis.FakeRedis,
+    client: Any,
+    db: Any,
+    gh_user: Any,
+    fake_redis: fakeredis.FakeRedis,
 ) -> None:
     await fake_redis.set(
         f"gh:device:{_DEVICE_CODE}",

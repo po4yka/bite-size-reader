@@ -227,9 +227,7 @@ async def test_insert_llm_and_telegram_and_audit(session: AsyncSession) -> None:
         telegram_raw_json={"k": "v"},
     )
     assert isinstance(mid, int)
-    tg_row = await session.scalar(
-        select(TelegramMessage).where(TelegramMessage.request_id == rid)
-    )
+    tg_row = await session.scalar(select(TelegramMessage).where(TelegramMessage.request_id == rid))
     assert tg_row is not None
     assert tg_row.media_type == "photo"
     assert tg_row.chat_id == 1
@@ -288,9 +286,7 @@ async def test_insert_llm_and_telegram_and_audit(session: AsyncSession) -> None:
     ),
     strict=True,
 )
-async def test_verify_processing_integrity(
-    session: AsyncSession, database: Database
-) -> None:
+async def test_verify_processing_integrity(session: AsyncSession, database: Database) -> None:
     base_summary = {
         "summary_250": "Short summary.",
         "summary_1000": "Medium summary providing additional detail.",
@@ -553,9 +549,7 @@ async def test_insert_telegram_message_handles_duplicate_request(
 
     assert mid1 == mid2
 
-    row = await session.scalar(
-        select(TelegramMessage).where(TelegramMessage.request_id == rid)
-    )
+    row = await session.scalar(select(TelegramMessage).where(TelegramMessage.request_id == rid))
     assert row is not None
     # The original payload should remain intact
     assert row.media_type == "photo"

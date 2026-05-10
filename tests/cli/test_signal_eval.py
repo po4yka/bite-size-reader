@@ -75,9 +75,7 @@ async def test_export_eval_set_uses_postgres_database(monkeypatch, tmp_path) -> 
     )
 
     assert count == 1
-    fake_repo.async_list_user_signals.assert_awaited_once_with(
-        1, status="candidate", limit=10
-    )
+    fake_repo.async_list_user_signals.assert_awaited_once_with(1, status="candidate", limit=10)
     fake_db.dispose.assert_awaited_once()
     exported = json.loads(output_path.read_text(encoding="utf-8"))
     assert exported["signal_id"] == 12

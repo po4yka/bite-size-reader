@@ -104,8 +104,8 @@ def _build_app_and_client(monkeypatch: pytest.MonkeyPatch, owner_id: int = _OWNE
 
 def _patch_hub(monkeypatch: pytest.MonkeyPatch, hub: Any) -> None:
     """Patch get_stream_hub() in both the hub module and the streams router."""
-    from app.adapters.content.streaming import stream_hub as _hub_mod
     import app.api.routers.streams as _streams_mod
+    from app.adapters.content.streaming import stream_hub as _hub_mod
 
     monkeypatch.setattr(_hub_mod, "get_stream_hub", lambda: hub)
     monkeypatch.setattr(_streams_mod, "get_stream_hub", lambda: hub)
@@ -121,7 +121,7 @@ def _make_hub(*events, request_id: str) -> Any:
     """
     from collections import deque
 
-    from app.adapters.content.streaming.stream_hub import StreamHub, _RING_BUFFER_MAXLEN
+    from app.adapters.content.streaming.stream_hub import _RING_BUFFER_MAXLEN, StreamHub
 
     hub = StreamHub()
     if events:
@@ -135,9 +135,7 @@ def _make_hub(*events, request_id: str) -> Any:
 def _parse_event_types(raw_lines: list[str]) -> list[str]:
     """Extract event type names from raw SSE lines."""
     return [
-        line.removeprefix("event: ").strip()
-        for line in raw_lines
-        if line.startswith("event: ")
+        line.removeprefix("event: ").strip() for line in raw_lines if line.startswith("event: ")
     ]
 
 
@@ -154,8 +152,8 @@ def test_stream_returns_401_without_bearer_token(monkeypatch: pytest.MonkeyPatch
 
 def test_stream_returns_403_for_foreign_request(monkeypatch: pytest.MonkeyPatch) -> None:
     """A valid token for a user who does not own the request returns 403."""
-    from app.api.routers.auth.tokens import create_access_token
     from app.adapters.content.streaming.events import DonePayload, StreamEvent
+    from app.api.routers.auth.tokens import create_access_token
 
     request_id = 99999
     # Pre-load a done event so the SSE generator exits quickly even if accessed by owner.
@@ -296,9 +294,7 @@ def test_disconnect_mid_stream_does_not_raise(
 
     request_id = 33333
     phase_ev = StreamEvent.now("phase", PhasePayload(phase="summarizing"), "c")
-    done_ev = StreamEvent.now(
-        "done", DonePayload(summary_id=None, request_id=str(request_id)), "c"
-    )
+    done_ev = StreamEvent.now("done", DonePayload(summary_id=None, request_id=str(request_id)), "c")
 
     hub = _make_hub(phase_ev, done_ev, request_id=str(request_id))
     _patch_hub(monkeypatch, hub)

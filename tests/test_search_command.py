@@ -53,9 +53,7 @@ class BotSpy(TelegramBot):
         super().__init__(*args, **kwargs)
         self.seen_urls: list[str] = []
 
-    async def _handle_url_flow(
-        self, message: Any, url_text: str, **_: object
-    ) -> None:
+    async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)
         await self._safe_reply(message, f"OK {url_text}")
 

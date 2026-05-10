@@ -54,9 +54,7 @@ async def test_digest_store_mirrors_channel_posts_to_signal_tables(
 
     store = DigestStore(database=database)
     await store.async_persist_posts(channel, posts)
-    await store.async_mirror_posts_to_signal_sources(
-        user_id=1001, channel=channel, posts=posts
-    )
+    await store.async_mirror_posts_to_signal_sources(user_id=1001, channel=channel, posts=posts)
 
     async with database.session() as s:
         source = await s.scalar(
@@ -66,9 +64,7 @@ async def test_digest_store_mirrors_channel_posts_to_signal_tables(
         )
         assert source is not None
         item = await s.scalar(
-            select(FeedItem).where(
-                FeedItem.source_id == source.id, FeedItem.external_id == "42"
-            )
+            select(FeedItem).where(FeedItem.source_id == source.id, FeedItem.external_id == "42")
         )
         assert item is not None
         subscription = await s.scalar(

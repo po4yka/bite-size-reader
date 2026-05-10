@@ -93,12 +93,8 @@ async def test_truncate_cleanup_isolates_rows_between_tests(session) -> None:
 
 
 async def test_user_chat_upsert_round_trip(session) -> None:
-    await dbh.upsert_user(
-        session, telegram_user_id=8001, username="smoke", is_owner=True
-    )
-    await dbh.upsert_user(
-        session, telegram_user_id=8001, username="smoke-renamed", is_owner=False
-    )
+    await dbh.upsert_user(session, telegram_user_id=8001, username="smoke", is_owner=True)
+    await dbh.upsert_user(session, telegram_user_id=8001, username="smoke-renamed", is_owner=False)
     await dbh.upsert_chat(session, chat_id=9001, type_="private", title="Smoke Chat")
 
     from sqlalchemy import select

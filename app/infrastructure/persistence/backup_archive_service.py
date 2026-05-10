@@ -220,7 +220,9 @@ async def async_create_backup_archive(
             archive.writestr("tags.json", json.dumps(tags_data, default=str))
             archive.writestr("summary_tags.json", json.dumps(summary_tags_data, default=str))
             archive.writestr("collections.json", json.dumps(collections_data, default=str))
-            archive.writestr("collection_items.json", json.dumps(collection_items_data, default=str))
+            archive.writestr(
+                "collection_items.json", json.dumps(collection_items_data, default=str)
+            )
             archive.writestr("highlights.json", json.dumps(highlights_data, default=str))
             archive.writestr(
                 "preferences.json",
@@ -377,7 +379,9 @@ async def async_restore_from_archive(
 
             for tag in tags_data:
                 try:
-                    normalized_name = tag.get("normalized_name") or tag.get("name", "").strip().lower()
+                    normalized_name = (
+                        tag.get("normalized_name") or tag.get("name", "").strip().lower()
+                    )
                     existing_tag = await session.scalar(
                         select(Tag).where(
                             Tag.user_id == user_id,
@@ -466,7 +470,9 @@ async def async_restore_from_archive(
                     new_collection_id = collection_id_map.get(
                         _old_id(item, "collection_id", "collection") or -1
                     )
-                    new_summary_id = summary_id_map.get(_old_id(item, "summary_id", "summary") or -1)
+                    new_summary_id = summary_id_map.get(
+                        _old_id(item, "summary_id", "summary") or -1
+                    )
                     if new_collection_id is None or new_summary_id is None:
                         continue
                     existing = await session.scalar(

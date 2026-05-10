@@ -294,9 +294,7 @@ async def test_post_ingest_happy_path(client: Any, db: Database) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_post_reanalyze_calls_use_case_with_force_true(
-    client: Any, db: Database
-) -> None:
+async def test_post_reanalyze_calls_use_case_with_force_true(client: Any, db: Database) -> None:
     await _create_user(db, _USER_A_ID)
     repo = await _create_repo(db, user_id=_USER_A_ID)
 

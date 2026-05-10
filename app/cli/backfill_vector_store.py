@@ -370,7 +370,9 @@ def main() -> int:
             asyncio.run(_run_coco())
             return 0
         except ImportError:
-            logger.error("CocoIndex not installed; install with: pip install 'cocoindex>=1.0.3,<1.1'")
+            logger.error(
+                "CocoIndex not installed; install with: pip install 'cocoindex>=1.0.3,<1.1'"
+            )
             return 1
         except Exception:
             logger.exception("CocoIndex one-shot run failed")

@@ -150,9 +150,7 @@ class GitHubAPIClient:
                 status = response.status_code
 
                 if status == 401:
-                    raise GitHubAuthError(
-                        f"GitHub returned 401 Unauthorized for {url}"
-                    )
+                    raise GitHubAuthError(f"GitHub returned 401 Unauthorized for {url}")
 
                 if status == 403:
                     remaining = response.headers.get("X-RateLimit-Remaining", "")
@@ -160,14 +158,10 @@ class GitHubAPIClient:
                         reset_epoch = int(response.headers.get("X-RateLimit-Reset", "0"))
                         raise GitHubRateLimitError(reset_epoch=reset_epoch)
                     # Other 403s (e.g. forbidden scope) — treat as auth error
-                    raise GitHubAuthError(
-                        f"GitHub returned 403 Forbidden for {url}"
-                    )
+                    raise GitHubAuthError(f"GitHub returned 403 Forbidden for {url}")
 
                 if status == 404:
-                    raise GitHubNotFoundError(
-                        f"GitHub returned 404 Not Found for {url}"
-                    )
+                    raise GitHubNotFoundError(f"GitHub returned 404 Not Found for {url}")
 
                 if 500 <= status < 600:
                     last_exc = GitHubServerError(
@@ -206,9 +200,7 @@ class GitHubAPIClient:
         response = await self._request("GET", f"/repos/{owner}/{name}")
         return RepositoryDTO.model_validate(response.json())
 
-    async def get_readme(
-        self, owner: str, name: str, *, ref: str | None = None
-    ) -> str | None:
+    async def get_readme(self, owner: str, name: str, *, ref: str | None = None) -> str | None:
         """GET /repos/{owner}/{name}/readme with Accept: application/vnd.github.raw.
 
         Returns the raw markdown string, or None if the repo has no README (404).

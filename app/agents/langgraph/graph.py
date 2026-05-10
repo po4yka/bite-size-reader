@@ -28,6 +28,7 @@ logger = get_logger(__name__)
 
 # ── routing ───────────────────────────────────────────────────────────────────
 
+
 def _route_after_validate(state: SummarizationGraphState) -> str:
     """Choose next node after validation completes."""
     if state.get("validation_passed"):
@@ -40,6 +41,7 @@ def _route_after_validate(state: SummarizationGraphState) -> str:
 
 
 # ── graph builder ─────────────────────────────────────────────────────────────
+
 
 def build_summarization_graph(
     pure_summary_service: PureSummaryService,
@@ -66,6 +68,7 @@ def build_summarization_graph(
 
 
 # ── public facade ─────────────────────────────────────────────────────────────
+
 
 class SummarizationGraph:
     """LangGraph-backed drop-in for SummarizationAgent's internal retry loop.

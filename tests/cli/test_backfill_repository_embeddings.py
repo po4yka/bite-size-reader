@@ -9,7 +9,6 @@ import pytest
 
 from app.cli import backfill_repository_embeddings as cli_mod
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -205,9 +204,7 @@ async def test_skips_when_embedding_present_and_no_target(monkeypatch: pytest.Mo
     db = _make_db_with_rows([[]])  # first batch already empty
     _patch_infra(monkeypatch, db, gen)
 
-    summary = await cli_mod.backfill_repository_embeddings(
-        dry_run=False, model_version_target=None
-    )
+    summary = await cli_mod.backfill_repository_embeddings(dry_run=False, model_version_target=None)
 
     assert gen.calls == []
     assert summary["embeddings_created"] == 0
@@ -248,9 +245,7 @@ async def test_user_id_filter(monkeypatch: pytest.MonkeyPatch) -> None:
     db = _make_db_with_rows([rows, []])
     _patch_infra(monkeypatch, db, gen)
 
-    summary = await cli_mod.backfill_repository_embeddings(
-        dry_run=False, user_id=2
-    )
+    summary = await cli_mod.backfill_repository_embeddings(dry_run=False, user_id=2)
 
     assert summary["processed"] == 3
     assert summary["embeddings_created"] == 3

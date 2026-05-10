@@ -90,9 +90,7 @@ async def run_repository_cli(args: argparse.Namespace) -> None:
 
     # 3. Resolve UserGitHubIntegration
     async with db.session() as session:
-        stmt = select(UserGitHubIntegration).where(
-            UserGitHubIntegration.user_id == args.user_id
-        )
+        stmt = select(UserGitHubIntegration).where(UserGitHubIntegration.user_id == args.user_id)
         result = await session.execute(stmt)
         integration = result.scalar_one_or_none()
 
@@ -195,7 +193,9 @@ async def run_repository_cli(args: argparse.Namespace) -> None:
         repo_row = res.scalar_one_or_none()
 
     if repo_row is None:
-        print(f"Error: Repository row not found after extraction for {full_name!r}.", file=sys.stderr)
+        print(
+            f"Error: Repository row not found after extraction for {full_name!r}.", file=sys.stderr
+        )
         raise SystemExit(1)
 
     analysis_data = repo_row.analysis_json or {}

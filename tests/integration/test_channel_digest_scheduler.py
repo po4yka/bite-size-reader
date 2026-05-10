@@ -478,8 +478,10 @@ class TestIdempotence:
             correlation_id="run1",
             post_ids=[1, 2],
         )
-        count_q = select(func.count()).select_from(DigestDelivery).where(
-            DigestDelivery.user_id == _TEST_UID
+        count_q = (
+            select(func.count())
+            .select_from(DigestDelivery)
+            .where(DigestDelivery.user_id == _TEST_UID)
         )
         assert await session.scalar(count_q) == 1
 

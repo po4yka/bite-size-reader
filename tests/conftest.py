@@ -362,9 +362,7 @@ async def session(database):
     if table_names:
         quoted = ", ".join(f'"{name}"' for name in table_names)
         async with database.transaction() as cleanup:
-            await cleanup.execute(
-                sql_text(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE")
-            )
+            await cleanup.execute(sql_text(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE"))
 
     sess = database.session_maker()
     try:

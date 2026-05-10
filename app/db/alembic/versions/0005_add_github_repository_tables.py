@@ -36,7 +36,9 @@ depends_on: tuple[str, ...] | None = None
 # The actual CREATE TYPE is emitted explicitly via DO blocks in upgrade().
 # ---------------------------------------------------------------------------
 _repo_source = postgresql.ENUM("manual", "starred", name="repo_source", create_type=False)
-_github_auth_method = postgresql.ENUM("pat", "oauth_device", name="github_auth_method", create_type=False)
+_github_auth_method = postgresql.ENUM(
+    "pat", "oauth_device", name="github_auth_method", create_type=False
+)
 _github_integration_status = postgresql.ENUM(
     "active", "needs_reauth", "revoked", name="github_integration_status", create_type=False
 )
@@ -186,11 +188,15 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # 4. Drop repository_embeddings first (depends on repositories).
-    op.drop_index(op.f("ix_repository_embeddings_repository_id"), table_name="repository_embeddings")
+    op.drop_index(
+        op.f("ix_repository_embeddings_repository_id"), table_name="repository_embeddings"
+    )
     op.drop_table("repository_embeddings")
 
     # 3. Drop user_github_integrations.
-    op.drop_index(op.f("ix_user_github_integrations_user_id"), table_name="user_github_integrations")
+    op.drop_index(
+        op.f("ix_user_github_integrations_user_id"), table_name="user_github_integrations"
+    )
     op.drop_table("user_github_integrations")
 
     # 2. Drop repositories and its indexes.

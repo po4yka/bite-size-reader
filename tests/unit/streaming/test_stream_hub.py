@@ -14,8 +14,7 @@ from app.adapters.content.streaming.events import (
     SectionPayload,
     StreamEvent,
 )
-from app.adapters.content.streaming.stream_hub import StreamHub, _QUEUE_MAXSIZE
-
+from app.adapters.content.streaming.stream_hub import _QUEUE_MAXSIZE, StreamHub
 
 # ---------------------------------------------------------------------------
 # Helpers

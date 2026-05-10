@@ -161,22 +161,16 @@ async def test_stale_tracking_state_is_reclaimed(database: Database) -> None:
 
     with patch("app.adapters.telegram.access_controller.time.time", fake_time):
         # 2 failed attempts at early time (< MAX_FAILED_ATTEMPTS)
-        await controller.check_access(
-            stale_uid, FakeMessage("/help", uid=stale_uid), "cid", 0, 0.0
-        )
+        await controller.check_access(stale_uid, FakeMessage("/help", uid=stale_uid), "cid", 0, 0.0)
         fake_time.advance(0.5)
-        await controller.check_access(
-            stale_uid, FakeMessage("/help", uid=stale_uid), "cid", 0, 0.0
-        )
+        await controller.check_access(stale_uid, FakeMessage("/help", uid=stale_uid), "cid", 0, 0.0)
 
     # Advance far past the stale window
     fake_time.value = 20
 
     with patch("app.adapters.telegram.access_controller.time.time", fake_time):
         # Trigger cleanup via an allowed user call
-        allowed = await controller.check_access(
-            1, FakeMessage("/help", uid=1), "cid", 0, 0.0
-        )
+        allowed = await controller.check_access(1, FakeMessage("/help", uid=1), "cid", 0, 0.0)
         assert allowed is True
 
         # stale_uid should need MAX fresh attempts to be blocked again

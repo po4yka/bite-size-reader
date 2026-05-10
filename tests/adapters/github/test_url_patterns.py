@@ -75,6 +75,7 @@ def test_parse_github_repo_url_handles_dots_in_repo_name() -> None:
 
 
 def test_parse_github_repo_url_handles_dashes() -> None:
-    assert parse_github_repo_url(
-        "https://github.com/great-scott/back-to-the-future"
-    ) == ("great-scott", "back-to-the-future")
+    assert parse_github_repo_url("https://github.com/great-scott/back-to-the-future") == (
+        "great-scott",
+        "back-to-the-future",
+    )

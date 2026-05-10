@@ -36,7 +36,9 @@ class PureSummaryService:
         content_for_summary = request.content_text
         model_override = None
         routing_cfg = self._runtime.cfg.model_routing
-        max_chars_threshold = (routing_cfg.long_context_threshold_tokens * 4) if routing_cfg.enabled else 320000
+        max_chars_threshold = (
+            (routing_cfg.long_context_threshold_tokens * 4) if routing_cfg.enabled else 320000
+        )
         if len(request.content_text) > max_chars_threshold:
             long_ctx_model = (
                 routing_cfg.long_context_model

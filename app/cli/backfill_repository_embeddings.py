@@ -56,6 +56,7 @@ async def backfill_repository_embeddings(
         qdrant_store: QdrantVectorStore | None = None
         if not dry_run:
             from app.infrastructure.vector.qdrant_store import QdrantVectorStore
+
             qdrant_store = QdrantVectorStore(
                 url=qdrant_cfg.url,
                 api_key=qdrant_cfg.api_key,

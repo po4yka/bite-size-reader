@@ -252,9 +252,7 @@ async def test_self_service_secret_key_management_rejects_invalid_scope(
     _configure_env(monkeypatch)
 
     async with db.transaction() as session:
-        session.add(
-            User(telegram_user_id=222222222, username="regular-user", is_owner=False)
-        )
+        session.add(User(telegram_user_id=222222222, username="regular-user", is_owner=False))
 
     user_context = {
         "user_id": 222222222,
@@ -316,9 +314,7 @@ def test_get_secret_pepper_returns_configured_value(monkeypatch: pytest.MonkeyPa
     """Happy path: SECRET_LOGIN_PEPPER returns through, no JWT fallback consulted."""
     _configure_env(monkeypatch)
     pepper = secret_auth._get_secret_pepper()
-    assert pepper == (
-        "test-pepper-32chars-minimum-for-secret-login-fixtures-do-not-reuse"
-    )
+    assert pepper == ("test-pepper-32chars-minimum-for-secret-login-fixtures-do-not-reuse")
 
 
 def test_get_secret_pepper_raises_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:

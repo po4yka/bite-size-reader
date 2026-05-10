@@ -41,9 +41,7 @@ class PipelineStageError(RuntimeError):
     without scraping exception messages.
     """
 
-    def __init__(
-        self, stage: str, message: str, *, cause: Exception | None = None
-    ) -> None:
+    def __init__(self, stage: str, message: str, *, cause: Exception | None = None) -> None:
         super().__init__(message)
         self.stage = stage
         self.cause = cause

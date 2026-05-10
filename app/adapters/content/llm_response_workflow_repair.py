@@ -162,7 +162,9 @@ class LLMWorkflowRepairMixin:
             # Persist the repair LLM call so it appears in llm_calls with the
             # correct pathway attribution.  We always persist regardless of
             # success/failure so that failed repair attempts are visible too.
-            await self._persist_llm_call(repair, req_id, correlation_id, attempt_trigger="repair_loop")
+            await self._persist_llm_call(
+                repair, req_id, correlation_id, attempt_trigger="repair_loop"
+            )
 
             if repair.status == CallStatus.OK:
                 from app.adapters.content import llm_response_workflow as workflow_module

@@ -10,8 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from app.db.json_utils import prepare_json_payload
 from app.db.models import CrawlResult, Request, Summary, TelegramMessage, model_to_dict
 from app.db.types import _utcnow
-from app.domain.models.request import Request as DomainRequest
-from app.domain.models.request import RequestStatus, RequestType
+from app.domain.models.request import Request as DomainRequest, RequestStatus, RequestType
 
 if TYPE_CHECKING:
     from datetime import datetime

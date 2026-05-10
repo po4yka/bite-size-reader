@@ -99,9 +99,7 @@ async def test_sync_aux_read_adapter_reads_user_scoped_records(database: Databas
         session.add_all([highlight, tag, other_tag])
         await session.flush()
         session.add(SummaryTag(summary_id=summary.id, tag_id=tag.id, source="manual"))
-        session.add(
-            SummaryTag(summary_id=other_summary.id, tag_id=other_tag.id, source="manual")
-        )
+        session.add(SummaryTag(summary_id=other_summary.id, tag_id=other_tag.id, source="manual"))
 
     adapter = SyncAuxReadAdapter(database)
 

@@ -6,10 +6,11 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from sqlalchemy import select
+
 from app.core.logging_utils import get_logger
 from app.db.models.repository import Repository
 from app.observability.metrics_repositories import REPOSITORY_SEARCH_LATENCY_SECONDS
-from sqlalchemy import select
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -79,7 +80,11 @@ class RepositorySearchService:
             msg = "query must be a non-empty string"
             raise ValueError(msg)
 
-        _timer = REPOSITORY_SEARCH_LATENCY_SECONDS.time() if REPOSITORY_SEARCH_LATENCY_SECONDS is not None else None
+        _timer = (
+            REPOSITORY_SEARCH_LATENCY_SECONDS.time()
+            if REPOSITORY_SEARCH_LATENCY_SECONDS is not None
+            else None
+        )
         if _timer is not None:
             _timer.__enter__()
         try:

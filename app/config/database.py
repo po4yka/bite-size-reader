@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
-
 import os
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
@@ -71,10 +70,7 @@ class DatabaseConfig(BaseModel):
         if not dsn:
             password = os.getenv("POSTGRES_PASSWORD", "").strip()
             if password:
-                dsn = (
-                    "postgresql+asyncpg://ratatoskr_app:"
-                    f"{password}@postgres:5432/ratatoskr"
-                )
+                dsn = f"postgresql+asyncpg://ratatoskr_app:{password}@postgres:5432/ratatoskr"
                 object.__setattr__(self, "dsn", dsn)
         if not self.dsn.startswith("postgresql+asyncpg://"):
             msg = "DATABASE_URL must use postgresql+asyncpg://..."

@@ -9,7 +9,6 @@ import pytest
 
 from app.cli import repository as repo_cli
 
-
 # ---------------------------------------------------------------------------
 # URL validation
 # ---------------------------------------------------------------------------
@@ -131,9 +130,7 @@ def test_missing_integration_exits_3_via_main(monkeypatch: pytest.MonkeyPatch) -
 
 def test_parse_args_defaults() -> None:
     """Default values are set correctly."""
-    args = repo_cli.parse_args(
-        ["--url", "https://github.com/owner/repo", "--user-id", "42"]
-    )
+    args = repo_cli.parse_args(["--url", "https://github.com/owner/repo", "--user-id", "42"])
     assert args.url == "https://github.com/owner/repo"
     assert args.user_id == 42
     assert args.json_path is None
@@ -148,12 +145,17 @@ def test_parse_args_all_flags() -> None:
 
     args = repo_cli.parse_args(
         [
-            "--url", "https://github.com/owner/repo",
-            "--user-id", "7",
-            "--json-path", "/tmp/out.json",
-            "--log-level", "DEBUG",
+            "--url",
+            "https://github.com/owner/repo",
+            "--user-id",
+            "7",
+            "--json-path",
+            "/tmp/out.json",
+            "--log-level",
+            "DEBUG",
             "--force-reanalyze",
-            "--correlation-id", "abc-123",
+            "--correlation-id",
+            "abc-123",
         ]
     )
     assert args.json_path == Path("/tmp/out.json")

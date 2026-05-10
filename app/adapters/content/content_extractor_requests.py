@@ -41,7 +41,10 @@ class ContentExtractorRequestsMixin:
                         extra={"cid": correlation_id, "error": str(t.exception())},
                     )
                     try:
-                        from app.observability.metrics import EXTRACTION_FAILURES, PROMETHEUS_AVAILABLE
+                        from app.observability.metrics import (
+                            EXTRACTION_FAILURES,
+                            PROMETHEUS_AVAILABLE,
+                        )
 
                         if PROMETHEUS_AVAILABLE:
                             EXTRACTION_FAILURES.labels(

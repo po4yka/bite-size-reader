@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.observability import metrics as _metrics_mod
-from app.observability import metrics_repositories as repo_metrics
+from app.observability import metrics as _metrics_mod, metrics_repositories as repo_metrics
 
 
-@pytest.mark.skipif(
-    not _metrics_mod.PROMETHEUS_AVAILABLE, reason="prometheus_client not installed"
-)
+@pytest.mark.skipif(not _metrics_mod.PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
 def test_metrics_module_exports() -> None:
     """All six metrics are importable and have expected names/types."""
     from prometheus_client import Counter, Histogram
@@ -37,9 +34,7 @@ def test_metrics_module_exports() -> None:
     )
 
     assert isinstance(repo_metrics.GITHUB_SYNC_LLM_CALLS_TOTAL, Counter)
-    assert (
-        repo_metrics.GITHUB_SYNC_LLM_CALLS_TOTAL._name == "ratatoskr_github_sync_llm_calls_total"
-    )
+    assert repo_metrics.GITHUB_SYNC_LLM_CALLS_TOTAL._name == "ratatoskr_github_sync_llm_calls_total"
 
     assert isinstance(repo_metrics.REPOSITORY_SEARCH_LATENCY_SECONDS, Histogram)
     assert (
@@ -48,9 +43,7 @@ def test_metrics_module_exports() -> None:
     )
 
 
-@pytest.mark.skipif(
-    not _metrics_mod.PROMETHEUS_AVAILABLE, reason="prometheus_client not installed"
-)
+@pytest.mark.skipif(not _metrics_mod.PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
 def test_sync_run_increments_status_counter() -> None:
     """Direct counter increment for status='ok' is reflected in the registry."""
     counter = repo_metrics.GITHUB_SYNC_RUNS_TOTAL
@@ -59,22 +52,16 @@ def test_sync_run_increments_status_counter() -> None:
     registry = _metrics_mod.REGISTRY
     assert registry is not None
 
-    before = registry.get_sample_value(
-        "ratatoskr_github_sync_runs_total", {"status": "ok"}
-    ) or 0.0
+    before = registry.get_sample_value("ratatoskr_github_sync_runs_total", {"status": "ok"}) or 0.0
 
     counter.labels(status="ok").inc()
 
-    after = registry.get_sample_value(
-        "ratatoskr_github_sync_runs_total", {"status": "ok"}
-    ) or 0.0
+    after = registry.get_sample_value("ratatoskr_github_sync_runs_total", {"status": "ok"}) or 0.0
 
     assert after - before == pytest.approx(1.0)
 
 
-@pytest.mark.skipif(
-    not _metrics_mod.PROMETHEUS_AVAILABLE, reason="prometheus_client not installed"
-)
+@pytest.mark.skipif(not _metrics_mod.PROMETHEUS_AVAILABLE, reason="prometheus_client not installed")
 def test_search_latency_histogram_observes() -> None:
     """Histogram records at least one sample after a timed block."""
     histogram = repo_metrics.REPOSITORY_SEARCH_LATENCY_SECONDS
@@ -83,15 +70,11 @@ def test_search_latency_histogram_observes() -> None:
     registry = _metrics_mod.REGISTRY
     assert registry is not None
 
-    before = registry.get_sample_value(
-        "ratatoskr_repository_search_latency_seconds_count"
-    ) or 0.0
+    before = registry.get_sample_value("ratatoskr_repository_search_latency_seconds_count") or 0.0
 
     with histogram.time():
         pass  # minimal timed block
 
-    after = registry.get_sample_value(
-        "ratatoskr_repository_search_latency_seconds_count"
-    ) or 0.0
+    after = registry.get_sample_value("ratatoskr_repository_search_latency_seconds_count") or 0.0
 
     assert after - before >= 1.0

@@ -26,7 +26,6 @@ from app.di.repositories import (
     build_user_repository,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers  (verbatim layout from test_sync.py)
 # ---------------------------------------------------------------------------
@@ -94,9 +93,7 @@ async def test_full_sync_items_ordered_by_server_version(db, contract_user, summ
     assert len(items) >= 4
 
     versions = [it["serverVersion"] for it in items]
-    assert versions == sorted(versions), (
-        f"items not sorted ascending by serverVersion: {versions}"
-    )
+    assert versions == sorted(versions), f"items not sorted ascending by serverVersion: {versions}"
 
 
 @pytest.mark.asyncio
@@ -183,9 +180,7 @@ async def test_delta_pagination_covers_all_entities_without_duplicates(
 
         # next_since must advance on every non-final page
         assert next_since is not None, "next_since must not be None when has_more=True"
-        assert next_since > prev_since, (
-            f"next_since did not advance: {next_since} <= {prev_since}"
-        )
+        assert next_since > prev_since, f"next_since did not advance: {next_since} <= {prev_since}"
         prev_since = next_since
         since = next_since
 
@@ -278,6 +273,7 @@ async def test_expired_session_raises_410(db, contract_user):
     exc = exc_info.value
     assert exc.status_code == 410
     from app.api.exceptions import ErrorCode
+
     assert exc.error_code == ErrorCode.SYNC_SESSION_EXPIRED
 
 
@@ -315,7 +311,9 @@ async def test_apply_unknown_field_returns_invalid_fields(db, contract_user, sum
     assert result["success"] is True
     item = result["data"]["results"][0]
     assert item["status"] == "invalid", f"expected invalid, got: {item['status']}"
-    assert item["errorCode"] == "INVALID_FIELDS", f"expected INVALID_FIELDS, got: {item['errorCode']}"
+    assert item["errorCode"] == "INVALID_FIELDS", (
+        f"expected INVALID_FIELDS, got: {item['errorCode']}"
+    )
 
 
 # ---------------------------------------------------------------------------

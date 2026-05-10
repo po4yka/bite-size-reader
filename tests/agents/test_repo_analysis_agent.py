@@ -18,8 +18,7 @@ _VALID_PAYLOAD: dict[str, Any] = {
     "purpose": "A test repository that demonstrates testing patterns for CI.",
     "tech_stack": ["Python 3.13", "pytest"],
     "architecture_summary": (
-        "Single-package layout with a tests/ directory. "
-        "Each module is independently testable."
+        "Single-package layout with a tests/ directory. Each module is independently testable."
     ),
     "key_concepts": [{"term": "pytest fixture", "explanation": "Reusable test setup."}],
     "code_patterns": [],
@@ -75,7 +74,6 @@ class _StubLLMRepo:
 
 
 class TestRepoAnalysisAgent(unittest.IsolatedAsyncioTestCase):
-
     async def test_first_attempt_succeeds(self) -> None:
         """Stub LLM returns valid JSON -> agent returns RepoAnalysis, 1 LLMCall persisted."""
         repo = _StubLLMRepo()
@@ -127,11 +125,15 @@ class TestRepoAnalysisAgent(unittest.IsolatedAsyncioTestCase):
         """EN vs RU loads different prompt content."""
         agent = RepoAnalysisAgent(llm_service=_StubLLM([_VALID_JSON, _VALID_JSON]))
 
-        with patch.object(agent, "_load_system_prompt", wraps=agent._load_system_prompt) as mock_load:
+        with patch.object(
+            agent, "_load_system_prompt", wraps=agent._load_system_prompt
+        ) as mock_load:
             await agent.analyze(_make_input(), chosen_lang="en", correlation_id="cid-en")
             en_prompt = mock_load.call_args[0][0]
 
-        with patch.object(agent, "_load_system_prompt", wraps=agent._load_system_prompt) as mock_load:
+        with patch.object(
+            agent, "_load_system_prompt", wraps=agent._load_system_prompt
+        ) as mock_load:
             agent2 = RepoAnalysisAgent(llm_service=_StubLLM([_VALID_JSON]))
             # Call the method directly to compare content
             prompt_en = agent2._load_system_prompt("en")

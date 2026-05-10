@@ -112,6 +112,4 @@ async def test_get_article_by_url_not_found(db, article_data):
     use_case = get_summary_read_model_use_case(session_manager=db)
 
     with pytest.raises(ResourceNotFoundError):
-        await get_summary_by_url(
-            url="https://nonexistent.com", user=user_ctx, use_case=use_case
-        )
+        await get_summary_by_url(url="https://nonexistent.com", user=user_ctx, use_case=use_case)

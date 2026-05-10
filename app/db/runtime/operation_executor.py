@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from app.core.logging_utils import get_logger
 from sqlalchemy.exc import OperationalError
+
+from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

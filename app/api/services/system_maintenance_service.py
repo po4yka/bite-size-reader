@@ -23,10 +23,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-_DB_INFO_TABLE_ALLOWLIST: frozenset[str] = frozenset(
-    model.__tablename__
-    for model in ALL_MODELS
-)
+_DB_INFO_TABLE_ALLOWLIST: frozenset[str] = frozenset(model.__tablename__ for model in ALL_MODELS)
 
 
 @dataclass(frozen=True)

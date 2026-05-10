@@ -60,8 +60,7 @@ from app.api.routers import (
     user,
     webhooks,
 )
-from app.api.routers.auth import github as github_auth
-from app.api.routers.auth import get_current_user
+from app.api.routers.auth import get_current_user, github as github_auth
 from app.config import Config
 from app.core.logging_utils import get_logger, setup_json_logging
 from app.core.time_utils import UTC

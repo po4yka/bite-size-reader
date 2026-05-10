@@ -134,20 +134,14 @@ async def get_request_by_forward(
     return model_to_dict(request)
 
 
-async def update_request_status(
-    session: AsyncSession, request_id: int, status: str
-) -> None:
-    await session.execute(
-        update(Request).where(Request.id == request_id).values(status=status)
-    )
+async def update_request_status(session: AsyncSession, request_id: int, status: str) -> None:
+    await session.execute(update(Request).where(Request.id == request_id).values(status=status))
 
 
 async def get_crawl_result_by_request(
     session: AsyncSession, request_id: int
 ) -> dict[str, Any] | None:
-    result = await session.scalar(
-        select(CrawlResult).where(CrawlResult.request_id == request_id)
-    )
+    result = await session.scalar(select(CrawlResult).where(CrawlResult.request_id == request_id))
     data = model_to_dict(result)
     if data:
         _convert_bool_fields(data, ["firecrawl_success"])
@@ -423,9 +417,7 @@ async def update_user_interaction(
         update_values.setdefault("updated_at", dt.datetime.now(UTC))
 
     await session.execute(
-        update(UserInteraction)
-        .where(UserInteraction.id == interaction_id)
-        .values(**update_values)
+        update(UserInteraction).where(UserInteraction.id == interaction_id).values(**update_values)
     )
 
 
@@ -502,12 +494,8 @@ async def upsert_summary(
     return int(version) if version is not None else 0
 
 
-async def get_summary_by_request(
-    session: AsyncSession, request_id: int
-) -> dict[str, Any] | None:
-    summary = await session.scalar(
-        select(Summary).where(Summary.request_id == request_id)
-    )
+async def get_summary_by_request(session: AsyncSession, request_id: int) -> dict[str, Any] | None:
+    summary = await session.scalar(select(Summary).where(Summary.request_id == request_id))
     data = model_to_dict(summary)
     if data:
         _convert_bool_fields(data, ["is_read"])
@@ -515,9 +503,7 @@ async def get_summary_by_request(
 
 
 async def get_read_status(session: AsyncSession, request_id: int) -> bool:
-    summary = await session.scalar(
-        select(Summary).where(Summary.request_id == request_id)
-    )
+    summary = await session.scalar(select(Summary).where(Summary.request_id == request_id))
     return bool(summary.is_read) if summary else False
 
 

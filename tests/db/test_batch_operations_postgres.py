@@ -83,9 +83,12 @@ async def test_batch_operations_use_postgres(database: Database) -> None:
     )
     assert len(call_ids) == 2
 
-    assert await batch.async_update_request_statuses_batch(
-        [(request_ids[0], "completed"), (request_ids[1], "completed")]
-    ) == 2
+    assert (
+        await batch.async_update_request_statuses_batch(
+            [(request_ids[0], "completed"), (request_ids[1], "completed")]
+        )
+        == 2
+    )
 
     fetched_requests = await batch.async_get_requests_by_ids_batch(request_ids)
     assert [request.id for request in fetched_requests] == request_ids

@@ -186,7 +186,9 @@ class TestExtractHappyPath:
         )
 
         # Patch decrypt_token so we never import app.security.token_crypto
-        with patch("app.adapters.github.platform_extractor.decrypt_token", return_value="tok", create=True):
+        with patch(
+            "app.adapters.github.platform_extractor.decrypt_token", return_value="tok", create=True
+        ):
             # The lazy import inside extract() will resolve to the patch
             # We need to patch at import time inside the method
             pass
@@ -253,8 +255,9 @@ class TestExtractHappyPath:
         )
 
         # The update_set in _upsert_repository must NOT include analysis_json
-        from app.adapters.github import platform_extractor as _mod
         import inspect
+
+        from app.adapters.github import platform_extractor as _mod
 
         src = inspect.getsource(_mod.GitHubPlatformExtractor._upsert_repository)
         assert "analysis_json" not in src, (

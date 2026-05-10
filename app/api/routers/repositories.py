@@ -265,11 +265,7 @@ async def list_repositories(
         # Rows
         order_by = _sort_clause(sort)
         rows_stmt = (
-            select(Repository)
-            .where(*conditions)
-            .order_by(*order_by)
-            .limit(limit)
-            .offset(offset)
+            select(Repository).where(*conditions).order_by(*order_by).limit(limit).offset(offset)
         )
         result = await session.execute(rows_stmt)
         rows = list(result.scalars().all())
@@ -315,9 +311,7 @@ async def ingest_repository(
 ) -> IngestRepositoryResponse:
     """Ingest a GitHub repository by URL."""
     if not is_github_repo_url(body.url):
-        raise HTTPException(
-            status_code=400, detail="URL is not a github.com repository URL"
-        )
+        raise HTTPException(status_code=400, detail="URL is not a github.com repository URL")
 
     from app.adapters.content.platform_extraction.models import PlatformExtractionRequest
 
@@ -469,6 +463,4 @@ async def delete_repository(
                 RepositoryEmbedding.repository_id == repository_id
             )
         )
-        await session.execute(
-            sql_delete(Repository).where(Repository.id == repository_id)
-        )
+        await session.execute(sql_delete(Repository).where(Repository.id == repository_id))

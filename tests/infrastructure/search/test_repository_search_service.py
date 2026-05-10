@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 # must inject stubs before the first call, not just before the module load.
 # ---------------------------------------------------------------------------
 
+
 def _make_qdrant_stubs() -> None:
     """Inject minimal qdrant_client stubs into sys.modules."""
     if "qdrant_client" in sys.modules:
@@ -71,7 +72,6 @@ import pytest
 from app.infrastructure.search.repository_search_service import (
     RepositorySearchService,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -195,10 +195,7 @@ async def test_search_filters_by_user_id() -> None:
     call_kwargs = store._client.query_points.call_args
     qdrant_filter = call_kwargs.kwargs.get("query_filter") or call_kwargs.args[2]
     must_conditions = qdrant_filter.must
-    user_id_conditions = [
-        c for c in must_conditions
-        if hasattr(c, "key") and c.key == "user_id"
-    ]
+    user_id_conditions = [c for c in must_conditions if hasattr(c, "key") and c.key == "user_id"]
     assert len(user_id_conditions) == 1
     assert user_id_conditions[0].match.value == 42
 
@@ -216,8 +213,7 @@ async def test_search_filters_by_language() -> None:
     call_kwargs = store._client.query_points.call_args
     qdrant_filter = call_kwargs.kwargs.get("query_filter") or call_kwargs.args[2]
     lang_conditions = [
-        c for c in qdrant_filter.must
-        if hasattr(c, "key") and c.key == "primary_language"
+        c for c in qdrant_filter.must if hasattr(c, "key") and c.key == "primary_language"
     ]
     assert len(lang_conditions) == 1
     assert set(lang_conditions[0].match.any) == {"Python", "Go"}
@@ -313,7 +309,7 @@ async def test_search_offset_and_limit_pagination() -> None:
 async def test_search_excludes_other_users_repos() -> None:
     """Even if Qdrant returns a repo for another user, Postgres query filters it out."""
     hits = [
-        _make_qdrant_hit(10, 0.9),   # user 1's repo
+        _make_qdrant_hit(10, 0.9),  # user 1's repo
         _make_qdrant_hit(20, 0.85),  # user 99's repo — must not appear
     ]
     store = _make_qdrant_store(hits)

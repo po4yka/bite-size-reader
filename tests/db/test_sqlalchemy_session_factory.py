@@ -25,7 +25,9 @@ def _test_dsn() -> str:
     return os.getenv("TEST_DATABASE_URL", "")
 
 
-def test_database_config_derives_compose_dsn_from_postgres_password(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_database_config_derives_compose_dsn_from_postgres_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("POSTGRES_PASSWORD", "secret")
 

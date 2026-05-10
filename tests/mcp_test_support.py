@@ -51,9 +51,7 @@ async def mcp_test_db() -> AsyncGenerator[Database]:
     if table_names:
         quoted = ", ".join(f'"{name}"' for name in table_names)
         async with db.transaction() as cleanup:
-            await cleanup.execute(
-                sql_text(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE")
-            )
+            await cleanup.execute(sql_text(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE"))
 
     try:
         yield db

@@ -20,6 +20,7 @@ Blocked:
   - tail -f /var/log/foo
   - sed -n '1,10p' app/main.py
 """
+
 from __future__ import annotations
 
 import json
@@ -29,12 +30,27 @@ import sys
 VIEWERS = {"cat", "head", "tail", "sed", "less", "more", "bat"}
 
 KNOWN_BARE_FILES = {
-    "Makefile", "GNUmakefile", "BSDmakefile",
-    "Dockerfile", "Containerfile",
-    "LICENSE", "COPYING", "NOTICE", "AUTHORS",
-    "README", "CHANGELOG", "HISTORY", "TODO",
-    "MANIFEST", "INSTALL", "VERSION",
-    "Procfile", "Vagrantfile", "Rakefile", "Gemfile", "Brewfile",
+    "Makefile",
+    "GNUmakefile",
+    "BSDmakefile",
+    "Dockerfile",
+    "Containerfile",
+    "LICENSE",
+    "COPYING",
+    "NOTICE",
+    "AUTHORS",
+    "README",
+    "CHANGELOG",
+    "HISTORY",
+    "TODO",
+    "MANIFEST",
+    "INSTALL",
+    "VERSION",
+    "Procfile",
+    "Vagrantfile",
+    "Rakefile",
+    "Gemfile",
+    "Brewfile",
 }
 
 

@@ -27,9 +27,7 @@ class SyncAuxReadAdapter:
 
     async def get_tags_for_user(self, user_id: int) -> list[dict[str, Any]]:
         async with self._database.session() as session:
-            rows = (
-                await session.execute(select(Tag).where(Tag.user_id == user_id))
-            ).scalars()
+            rows = (await session.execute(select(Tag).where(Tag.user_id == user_id))).scalars()
             return [model_to_dict(row) or {} for row in rows]
 
     async def get_summary_tags_for_user(self, user_id: int) -> list[dict[str, Any]]:

@@ -43,9 +43,7 @@ async def get_summaries_for_embedding_backfill(
         else:
             query = query.outerjoin(
                 SummaryEmbedding, SummaryEmbedding.summary_id == Summary.id
-            ).where(
-                SummaryEmbedding.id.is_(None)
-            )
+            ).where(SummaryEmbedding.id.is_(None))
         if limit:
             query = query.limit(limit)
 

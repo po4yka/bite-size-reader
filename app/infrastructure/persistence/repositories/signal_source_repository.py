@@ -159,9 +159,7 @@ class SignalSourceRepositoryAdapter:
         async with self._database.transaction() as session:
             now = _utcnow()
             error_count = int(
-                await session.scalar(
-                    select(Source.fetch_error_count).where(Source.id == source_id)
-                )
+                await session.scalar(select(Source.fetch_error_count).where(Source.id == source_id))
                 or 0
             )
             error_count += 1

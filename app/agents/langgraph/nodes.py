@@ -25,6 +25,7 @@ logger = get_logger(__name__)
 
 # ── web search ────────────────────────────────────────────────────────────────
 
+
 def make_web_search_node(web_search_agent: WebSearchAgent):
     """Return a node that runs web search enrichment before summarization."""
 
@@ -46,6 +47,7 @@ def make_web_search_node(web_search_agent: WebSearchAgent):
 
 
 # ── summarize ─────────────────────────────────────────────────────────────────
+
 
 def make_summarize_node(pure_summary_service: PureSummaryService):
     """Return a node that calls the LLM and tracks duplicate responses."""
@@ -74,9 +76,7 @@ def make_summarize_node(pure_summary_service: PureSummaryService):
         # Prepend web search context to content when available
         content = state["content"]
         if state.get("web_search_context"):
-            content = (
-                f"{content}\n\n---WEB SEARCH CONTEXT---\n{state['web_search_context']}"
-            )
+            content = f"{content}\n\n---WEB SEARCH CONTEXT---\n{state['web_search_context']}"
 
         result = await pure_summary_service.summarize(
             PureSummaryRequest(
@@ -121,6 +121,7 @@ def make_summarize_node(pure_summary_service: PureSummaryService):
 
 # ── validate ──────────────────────────────────────────────────────────────────
 
+
 def make_validate_node(validation_agent: ValidationAgent):
     """Return a node that validates the current summary_json against contract."""
 
@@ -135,9 +136,7 @@ def make_validate_node(validation_agent: ValidationAgent):
                 "validation_passed": False,
             }
 
-        result = await validation_agent.execute(
-            ValidationInput(summary_json=state["summary_json"])
-        )
+        result = await validation_agent.execute(ValidationInput(summary_json=state["summary_json"]))
 
         if result.success and result.output:
             return {
@@ -158,6 +157,7 @@ def make_validate_node(validation_agent: ValidationAgent):
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _hash_response(response: dict[str, Any]) -> str:
     try:

@@ -143,4 +143,6 @@ class TopicSearchIndexManager:
             "body": stmt.excluded.body,
             "tags": stmt.excluded.tags,
         }
-        await session.execute(stmt.on_conflict_do_update(index_elements=["request_id"], set_=update_values))
+        await session.execute(
+            stmt.on_conflict_do_update(index_elements=["request_id"], set_=update_values)
+        )

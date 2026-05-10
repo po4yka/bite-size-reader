@@ -69,9 +69,7 @@ async def test_process_forward_content_persists_snapshot(
         message, correlation_id="cid"
     )
 
-    row = await session.scalar(
-        select(TelegramMessage).where(TelegramMessage.request_id == req_id)
-    )
+    row = await session.scalar(select(TelegramMessage).where(TelegramMessage.request_id == req_id))
     assert row is not None
     assert row.forward_from_chat_id == message.forward_from_chat.id
     assert row.forward_from_chat_type == "channel"

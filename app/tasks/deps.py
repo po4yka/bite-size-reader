@@ -18,7 +18,6 @@ from taskiq import TaskiqDepends
 from app.config import AppConfig  # noqa: TC001 — taskiq resolves type hints at runtime
 from app.db.session import Database  # noqa: TC001 — taskiq resolves type hints at runtime
 
-
 # ── singleton providers ───────────────────────────────────────────────────────
 
 

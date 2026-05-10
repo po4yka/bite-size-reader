@@ -16,8 +16,8 @@ from sqlalchemy import (
     Index,
     Integer,
     LargeBinary,
+    Text,
 )
-from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -596,15 +596,11 @@ class SummaryEmbedding(Base):
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
-    content_hash: Mapped[str | None] = mapped_column(
-        Text, nullable=True, index=False
-    )
+    content_hash: Mapped[str | None] = mapped_column(Text, nullable=True, index=False)
     last_indexed_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    index_status: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default="pending"
-    )
+    index_status: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
 
     summary: Mapped[Summary] = relationship(back_populates="embedding")
 

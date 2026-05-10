@@ -12,12 +12,12 @@ from .firecrawl import FirecrawlConfig
 from .integrations import EmbeddingConfig, McpConfig, QdrantConfig, WebSearchConfig
 from .llm import AnthropicConfig, ModelRoutingConfig, OllamaConfig, OpenAIConfig, OpenRouterConfig
 from .media import AttachmentConfig, YouTubeConfig
+from .otel import SentryConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
 from .rss import RSSConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
-from .otel import SentryConfig
 from .settings import AppConfig, Config, ConfigHelper, Settings, clear_config_cache, load_config
 from .signal_ingestion import SignalIngestionConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig

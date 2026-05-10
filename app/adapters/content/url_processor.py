@@ -9,6 +9,7 @@ from app.adapters.content.content_chunker import ContentChunker
 from app.adapters.content.content_extractor import ContentExtractor
 from app.adapters.content.interactive_summary_service import InteractiveSummaryService
 from app.adapters.content.pure_summary_service import PureSummaryService
+from app.adapters.content.streaming import StreamEvent, get_stream_hub
 from app.adapters.content.summarization_models import (
     InteractiveSummaryRequest,
     InteractiveSummaryResult,
@@ -24,7 +25,6 @@ from app.adapters.content.url_flow_models import (
 )
 from app.adapters.content.url_post_summary_task_service import URLPostSummaryTaskService
 from app.adapters.content.url_summary_delivery_service import URLSummaryDeliveryService
-from app.adapters.content.streaming import StreamEvent, get_stream_hub
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
 
@@ -275,7 +275,9 @@ class URLProcessor:
             if getattr(self.cfg.runtime, "url_flow_streaming_enabled", True):
                 get_stream_hub().publish(
                     str(context.req_id),
-                    StreamEvent.now("phase", {"phase": "summarizing"}, request.correlation_id or ""),
+                    StreamEvent.now(
+                        "phase", {"phase": "summarizing"}, request.correlation_id or ""
+                    ),
                 )
 
             if context.should_chunk and context.chunks:

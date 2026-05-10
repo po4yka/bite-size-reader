@@ -59,7 +59,9 @@ class BackupHandler(HandlerDependenciesMixin):
         )
 
         try:
-            await async_create_backup_archive(user_id=user_id, backup_id=int(backup["id"]), db=self._db)
+            await async_create_backup_archive(
+                user_id=user_id, backup_id=int(backup["id"]), db=self._db
+            )
 
             # Reload to get updated fields
             backup = await self._backup_repo.async_get_backup(int(backup["id"]))

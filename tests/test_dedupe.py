@@ -85,9 +85,7 @@ class FakeForwardMessage(FakeMessage):
 
 
 class FakeFirecrawl:
-    async def scrape_markdown(
-        self, url: str, request_id: int | None = None
-    ) -> None:
+    async def scrape_markdown(self, url: str, request_id: int | None = None) -> None:
         msg = "Firecrawl should not be called on dedupe hit"
         raise AssertionError(msg)
 
@@ -224,9 +222,7 @@ async def test_dedupe_and_summary_version_increment(
 
 
 @pytest.mark.asyncio
-async def test_forward_cached_summary_reuse(
-    database: Database, session: AsyncSession
-) -> None:
+async def test_forward_cached_summary_reuse(database: Database, session: AsyncSession) -> None:
     fwd_chat_id = 777
     fwd_msg_id = 888
 

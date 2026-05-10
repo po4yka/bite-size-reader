@@ -84,10 +84,14 @@ class BatchOperations:
 
         async with self.database.session() as session:
             rows = (
-                await session.execute(
-                    select(Request).where(Request.id.in_(request_ids)).order_by(Request.id)
+                (
+                    await session.execute(
+                        select(Request).where(Request.id.in_(request_ids)).order_by(Request.id)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
         logger.debug("requests_batch_fetched", extra={"count": len(rows)})
         return list(rows)
@@ -101,12 +105,16 @@ class BatchOperations:
 
         async with self.database.session() as session:
             rows = (
-                await session.execute(
-                    select(Summary)
-                    .where(Summary.request_id.in_(request_ids))
-                    .order_by(Summary.request_id)
+                (
+                    await session.execute(
+                        select(Summary)
+                        .where(Summary.request_id.in_(request_ids))
+                        .order_by(Summary.request_id)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
         logger.debug("summaries_batch_fetched", extra={"count": len(rows)})
         return list(rows)

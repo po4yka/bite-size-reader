@@ -111,9 +111,7 @@ class DigestChannelService:
             username, title=metadata.get("title")
         )
         await self._store.async_update_channel_metadata(channel, metadata)
-        is_subscribed = await self._store.async_is_user_subscribed(
-            user_id=user_id, channel=channel
-        )
+        is_subscribed = await self._store.async_is_user_subscribed(user_id=user_id, channel=channel)
 
         return ResolveChannelResponse(
             username=metadata.get("username", username),

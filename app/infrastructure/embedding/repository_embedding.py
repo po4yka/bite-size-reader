@@ -70,9 +70,7 @@ class RepositoryEmbeddingGenerator:
             else []
         )
         topics: list[str] = (
-            list(repository.topics_json)
-            if isinstance(repository.topics_json, list)
-            else []
+            list(repository.topics_json) if isinstance(repository.topics_json, list) else []
         )
 
         text = self.compose_embedding_text(
@@ -270,9 +268,7 @@ class RepositoryEmbeddingGenerator:
         point_id = _str_to_uuid(point_key)
 
         created_at_iso = (
-            repository.created_at.isoformat()
-            if repository.created_at is not None
-            else None
+            repository.created_at.isoformat() if repository.created_at is not None else None
         )
 
         metadata: dict[str, Any] = {

@@ -126,9 +126,7 @@ async def _index_summary(
         normalized_url=input_url,
         content_text=content_text,
     )
-    await insert_summary(
-        session, request_id=request_id, lang="en", json_payload=summary_payload
-    )
+    await insert_summary(session, request_id=request_id, lang="en", json_payload=summary_payload)
     await session.commit()
     await repo.async_refresh_index(request_id)
     return request_id

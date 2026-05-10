@@ -58,17 +58,13 @@ class BotSpy(TelegramBot):
 
         if hasattr(self, "url_processor"):
 
-            async def mock_handle_url_flow(
-                message: Any, url_text: str, **_: object
-            ) -> None:
+            async def mock_handle_url_flow(message: Any, url_text: str, **_: object) -> None:
                 self.seen_urls.append(url_text)
                 await self._safe_reply(message, f"OK {url_text}")
 
             self.url_processor.handle_url_flow = mock_handle_url_flow
 
-    async def _handle_url_flow(
-        self, message: Any, url_text: str, **_: object
-    ) -> None:
+    async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)
         await self._safe_reply(message, f"OK {url_text}")
 
@@ -128,9 +124,7 @@ async def test_cancel_awaiting_request(database: Database) -> None:
     await bot._on_message(cancel_msg)
 
     assert uid not in bot._awaiting_url_users  # type: ignore[attr-defined]
-    assert any(
-        "Cancelled your pending URL request" in reply for reply in cancel_msg._replies
-    )
+    assert any("Cancelled your pending URL request" in reply for reply in cancel_msg._replies)
 
 
 async def test_cancel_after_multi_links_direct_processing(database: Database) -> None:
@@ -169,9 +163,7 @@ async def test_cancel_includes_active_requests(database: Database) -> None:
     cancel_msg = FakeMessage("/cancel", uid=uid)
     await bot._on_message(cancel_msg)
 
-    bot.message_handler.task_manager.cancel.assert_awaited_once_with(
-        uid, exclude_current=True
-    )
+    bot.message_handler.task_manager.cancel.assert_awaited_once_with(uid, exclude_current=True)
     assert any("ongoing requests" in reply for reply in cancel_msg._replies)
 
 

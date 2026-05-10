@@ -18,9 +18,7 @@ async def _run_healthcheck() -> None:
     # healthcheck command works whether or not `POSTGRES_PASSWORD` is
     # also set.
     dsn = os.environ.get("DATABASE_URL", "").strip()
-    config = (
-        DatabaseConfig.model_validate({"DATABASE_URL": dsn}) if dsn else DatabaseConfig()
-    )
+    config = DatabaseConfig.model_validate({"DATABASE_URL": dsn}) if dsn else DatabaseConfig()
     database = Database(config=config)
     try:
         await database.healthcheck()

@@ -54,9 +54,7 @@ def _make_handler(
     cfg = _make_config(enabled=enabled, max_channels=max_channels)
     formatter = MagicMock()
     formatter.safe_reply = AsyncMock()
-    handler = DigestHandler(
-        cfg=cast("Any", cfg), db=database, response_formatter=formatter
-    )
+    handler = DigestHandler(cfg=cast("Any", cfg), db=database, response_formatter=formatter)
     return handler, formatter.safe_reply
 
 
@@ -86,9 +84,7 @@ async def _create_subscription(
     channel_id: int,
     is_active: bool = True,
 ) -> ChannelSubscription:
-    sub = ChannelSubscription(
-        user_id=user_id, channel_id=channel_id, is_active=is_active
-    )
+    sub = ChannelSubscription(user_id=user_id, channel_id=channel_id, is_active=is_active)
     session.add(sub)
     await session.flush()
     return sub
@@ -118,9 +114,7 @@ class TestHandleSubscribe:
         reply.assert_awaited_once()
         assert "Usage" in reply.call_args[0][1]
 
-    async def test_invalid_username_replies_validation_error(
-        self, database: Database
-    ) -> None:
+    async def test_invalid_username_replies_validation_error(self, database: Database) -> None:
         handler, reply = _make_handler(database)
         ctx = _make_ctx("/subscribe ab")
 
@@ -246,9 +240,7 @@ class TestHandleUnsubscribe:
         reply.assert_awaited_once()
         assert "Usage" in reply.call_args[0][1]
 
-    async def test_invalid_username_replies_validation_error(
-        self, database: Database
-    ) -> None:
+    async def test_invalid_username_replies_validation_error(self, database: Database) -> None:
         handler, reply = _make_handler(database)
         ctx = _make_ctx("/unsubscribe xy")
 
@@ -266,9 +258,7 @@ class TestHandleUnsubscribe:
         reply.assert_awaited_once()
         assert "not found" in reply.call_args[0][1].lower()
 
-    async def test_not_subscribed(
-        self, database: Database, session: AsyncSession
-    ) -> None:
+    async def test_not_subscribed(self, database: Database, session: AsyncSession) -> None:
         await _ensure_user(session)
         await session.commit()
         handler, reply = _make_handler(database)
@@ -282,9 +272,7 @@ class TestHandleUnsubscribe:
         reply.assert_awaited_once()
         assert "Not subscribed" in reply.call_args[0][1]
 
-    async def test_successful_unsubscribe(
-        self, database: Database, session: AsyncSession
-    ) -> None:
+    async def test_successful_unsubscribe(self, database: Database, session: AsyncSession) -> None:
         await _ensure_user(session)
         await session.commit()
         handler, reply = _make_handler(database)

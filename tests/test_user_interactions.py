@@ -34,9 +34,7 @@ def _make_config():
     return make_test_app_config()
 
 
-async def test_message_router_logs_interaction(
-    database: Database, session: AsyncSession
-) -> None:
+async def test_message_router_logs_interaction(database: Database, session: AsyncSession) -> None:
     cfg = _make_config()
     recorder = MessageInteractionRecorder(
         user_repo=UserRepositoryAdapter(database),
@@ -65,9 +63,7 @@ async def test_message_router_logs_interaction(
 
     assert interaction_id > 0
 
-    row = await session.scalar(
-        select(UserInteraction).where(UserInteraction.id == interaction_id)
-    )
+    row = await session.scalar(select(UserInteraction).where(UserInteraction.id == interaction_id))
     assert row is not None
     assert row.user_id == 42
     assert row.interaction_type == "command"
@@ -124,9 +120,7 @@ async def test_safe_update_user_interaction_updates_interaction(
     if pending:
         await asyncio.gather(*pending, return_exceptions=True)
 
-    row = await session.scalar(
-        select(UserInteraction).where(UserInteraction.id == interaction_id)
-    )
+    row = await session.scalar(select(UserInteraction).where(UserInteraction.id == interaction_id))
     assert row is not None
     assert row.response_sent is True
     assert row.response_type == "help"
@@ -171,9 +165,7 @@ async def test_async_safe_update_user_interaction_updates_interaction(
         request_id=request_id,
     )
 
-    row = await session.scalar(
-        select(UserInteraction).where(UserInteraction.id == interaction_id)
-    )
+    row = await session.scalar(select(UserInteraction).where(UserInteraction.id == interaction_id))
     assert row is not None
     assert row.response_sent is True
     assert row.response_type == "summary"

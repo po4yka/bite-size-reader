@@ -34,9 +34,7 @@ class SentryConfig(BaseSettings):
     model_config = {"populate_by_name": True, "extra": "ignore"}
 
     sentry_dsn: str | None = Field(default=None, validation_alias="SENTRY_DSN")
-    traces_sample_rate: float = Field(
-        default=0.1, validation_alias="SENTRY_TRACES_SAMPLE_RATE"
-    )
+    traces_sample_rate: float = Field(default=0.1, validation_alias="SENTRY_TRACES_SAMPLE_RATE")
 
     @classmethod
     def from_env(cls) -> SentryConfig:

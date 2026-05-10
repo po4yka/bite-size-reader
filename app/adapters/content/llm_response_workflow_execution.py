@@ -261,9 +261,7 @@ class LLMWorkflowExecutionMixin:
             self.openrouter, "_fallback_models", ()
         )
         num_models = 1 + len(fallback_models or ())
-        per_model_min = float(
-            getattr(self.cfg.runtime, "llm_per_model_timeout_min_sec", 120.0)
-        )
+        per_model_min = float(getattr(self.cfg.runtime, "llm_per_model_timeout_min_sec", 120.0))
         per_model_timeout = max(per_model_min, llm_timeout / max(num_models, 1))
 
         per_model_overrides: dict[str, float] = dict(

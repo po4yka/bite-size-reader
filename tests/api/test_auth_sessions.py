@@ -4,8 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import func
-from sqlalchemy import select as sa_select
+from sqlalchemy import func, select as sa_select
 
 from app.api.dependencies.database import get_auth_repository
 from app.api.exceptions import TokenRevokedError
@@ -35,9 +34,7 @@ async def test_create_refresh_token_persists(db, auth_user):
 
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     async with db.session() as session:
-        count = await session.scalar(
-            sa_select(func.count()).select_from(RefreshTokenModel)
-        )
+        count = await session.scalar(sa_select(func.count()).select_from(RefreshTokenModel))
         record = await session.scalar(
             sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == token_hash)
         )
@@ -94,7 +91,9 @@ async def test_list_sessions(db, auth_user, user_factory):
     await create_refresh_token(auth_user.telegram_user_id, "client-1", device_info="Device 1")
 
     # 2. Revoked session
-    _, _ = await create_refresh_token(auth_user.telegram_user_id, "client-2", device_info="Device 2")
+    _, _ = await create_refresh_token(
+        auth_user.telegram_user_id, "client-2", device_info="Device 2"
+    )
     async with db.transaction() as session:
         r2 = await session.scalar(
             sa_select(RefreshTokenModel).where(RefreshTokenModel.client_id == "client-2")
@@ -189,9 +188,7 @@ async def test_refresh_rotates_refresh_token_and_revokes_previous(db, user_facto
 
 
 @pytest.mark.asyncio
-async def test_refresh_with_revoked_token_raises_and_revokes_all_user_tokens(
-    db, user_factory
-):
+async def test_refresh_with_revoked_token_raises_and_revokes_all_user_tokens(db, user_factory):
     user = await user_factory(telegram_user_id=987654322, username="replay-victim")
 
     revoked_token, _ = await create_refresh_token(

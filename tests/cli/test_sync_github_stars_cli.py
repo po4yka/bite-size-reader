@@ -170,7 +170,6 @@ def _stub_taskiq_static() -> None:
 
 import app.cli.sync_github_stars as sync_cli
 
-
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -183,7 +182,9 @@ def test_no_active_integrations_exits_0_with_message(
     mock_cfg = _build_cfg()
     monkeypatch.setattr(sync_cli, "_prepare_config", lambda _: mock_cfg)
     monkeypatch.setattr(sync_cli, "setup_json_logging", lambda _: None)
-    monkeypatch.setattr(sync_cli, "build_runtime_database", lambda *a, **kw: _make_db_with_integrations([]))
+    monkeypatch.setattr(
+        sync_cli, "build_runtime_database", lambda *a, **kw: _make_db_with_integrations([])
+    )
 
     rc = sync_cli.main(["--log-level", "INFO"])
 
@@ -216,9 +217,12 @@ def test_user_id_filter_processes_only_one_integration(
 
     sync_all_calls: list[tuple] = []
 
-    async def _fake_sync_all(integrations, *, cfg, db, bot=None, correlation_id=None, dry_run=False):
+    async def _fake_sync_all(
+        integrations, *, cfg, db, bot=None, correlation_id=None, dry_run=False
+    ):
         sync_all_calls.append((integrations, dry_run))
         from app.tasks.github_sync import SyncSummary
+
         return SyncSummary(
             users_processed=len(integrations),
             repos_imported=0,
@@ -259,9 +263,12 @@ def test_dry_run_no_db_writes(
 
     dry_run_received: list[bool] = []
 
-    async def _fake_sync_all(integrations, *, cfg, db, bot=None, correlation_id=None, dry_run=False):
+    async def _fake_sync_all(
+        integrations, *, cfg, db, bot=None, correlation_id=None, dry_run=False
+    ):
         dry_run_received.append(dry_run)
         from app.tasks.github_sync import SyncSummary
+
         return SyncSummary(
             users_processed=1,
             repos_imported=2,
@@ -279,7 +286,11 @@ def test_dry_run_no_db_writes(
     captured = capsys.readouterr()
     # stdout contains the summary JSON with would-be counts
     assert "repos_imported" in captured.out
-    assert '"repos_imported": 2' in captured.out or "'repos_imported': 2" in captured.out or "2" in captured.out
+    assert (
+        '"repos_imported": 2' in captured.out
+        or "'repos_imported': 2" in captured.out
+        or "2" in captured.out
+    )
 
 
 def test_summary_printed_to_stdout(
@@ -302,8 +313,11 @@ def test_summary_printed_to_stdout(
         lambda *a, **kw: _make_db_with_integrations([integ]),
     )
 
-    async def _fake_sync_all(integrations, *, cfg, db, bot=None, correlation_id=None, dry_run=False):
+    async def _fake_sync_all(
+        integrations, *, cfg, db, bot=None, correlation_id=None, dry_run=False
+    ):
         from app.tasks.github_sync import SyncSummary
+
         return SyncSummary(
             users_processed=1,
             repos_imported=5,
@@ -362,7 +376,9 @@ def test_parse_args_defaults() -> None:
 def test_parse_args_all_flags() -> None:
     from pathlib import Path
 
-    args = sync_cli.parse_args(["--user-id", "99", "--dry-run", "--log-level", "DEBUG", "--env-file", "/tmp/.env"])
+    args = sync_cli.parse_args(
+        ["--user-id", "99", "--dry-run", "--log-level", "DEBUG", "--env-file", "/tmp/.env"]
+    )
     assert args.user_id == 99
     assert args.dry_run is True
     assert args.log_level == "DEBUG"

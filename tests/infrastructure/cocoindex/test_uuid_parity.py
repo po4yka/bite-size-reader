@@ -10,7 +10,6 @@ import uuid
 
 import pytest
 
-
 _UUID_NAMESPACE = uuid.NAMESPACE_OID
 
 

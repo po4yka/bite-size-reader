@@ -77,7 +77,9 @@ class Repository(Base):
     is_fork: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_template: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     pushed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at_github: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at_github: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     readme_excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
     readme_etag: Mapped[str | None] = mapped_column(String(200), nullable=True)
     analysis_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
@@ -153,10 +155,16 @@ class UserGitHubIntegration(Base):
         default=GitHubIntegrationStatus.ACTIVE,
         nullable=False,
     )
-    last_synced_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_synced_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     last_sync_cursor: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    last_full_sync_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    notified_needs_reauth_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_full_sync_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    notified_needs_reauth_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

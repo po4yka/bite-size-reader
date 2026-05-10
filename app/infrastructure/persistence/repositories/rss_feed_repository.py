@@ -59,7 +59,9 @@ class RSSFeedRepositoryAdapter:
             return
         update_data["updated_at"] = _utcnow()
         async with self._database.transaction() as session:
-            await session.execute(update(RSSFeed).where(RSSFeed.id == feed_id).values(**update_data))
+            await session.execute(
+                update(RSSFeed).where(RSSFeed.id == feed_id).values(**update_data)
+            )
 
     async def async_list_active_feeds(self) -> list[dict[str, Any]]:
         """Return feeds that have at least one active subscription."""
@@ -192,7 +194,9 @@ class RSSFeedRepositoryAdapter:
                 await session.execute(
                     select(RSSFeedSubscription, RSSFeed, ChannelCategory)
                     .join(RSSFeed, RSSFeedSubscription.feed_id == RSSFeed.id)
-                    .outerjoin(ChannelCategory, RSSFeedSubscription.category_id == ChannelCategory.id)
+                    .outerjoin(
+                        ChannelCategory, RSSFeedSubscription.category_id == ChannelCategory.id
+                    )
                     .where(
                         RSSFeedSubscription.id == subscription_id,
                         RSSFeedSubscription.user_id == user_id,
@@ -365,9 +369,7 @@ class RSSFeedRepositoryAdapter:
         """Increment RSS feed error counters and disable on threshold."""
         async with self._database.transaction() as session:
             error_count = int(
-                await session.scalar(
-                    select(RSSFeed.fetch_error_count).where(RSSFeed.id == feed_id)
-                )
+                await session.scalar(select(RSSFeed.fetch_error_count).where(RSSFeed.id == feed_id))
                 or 0
             )
             error_count += 1
@@ -395,7 +397,9 @@ class RSSFeedRepositoryAdapter:
         if not data:
             return data
         data["user"] = data.get("user_id")
-        data["feed"] = model_to_dict(feed) if include_feed and feed is not None else data.get("feed_id")
+        data["feed"] = (
+            model_to_dict(feed) if include_feed and feed is not None else data.get("feed_id")
+        )
         data["category"] = data.get("category_id")
         data["category_name"] = category.name if category is not None else None
         if include_flat_feed and feed is not None:

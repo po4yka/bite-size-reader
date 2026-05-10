@@ -167,9 +167,7 @@ class GitHubPlatformExtractor:
 
     async def _load_active_integration(self, user_id: int) -> UserGitHubIntegration:
         async with self._db.session() as session:
-            stmt = select(UserGitHubIntegration).where(
-                UserGitHubIntegration.user_id == user_id
-            )
+            stmt = select(UserGitHubIntegration).where(UserGitHubIntegration.user_id == user_id)
             result = await session.execute(stmt)
             integration = result.scalar_one_or_none()
 

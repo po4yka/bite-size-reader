@@ -209,9 +209,7 @@ async def test_list_starred_paginates_via_link_header() -> None:
             headers={"Link": f'<{page2_url}>; rel="next"'},
         )
     )
-    router.get(page2_url).mock(
-        return_value=httpx.Response(200, json=_starred_page2())
-    )
+    router.get(page2_url).mock(return_value=httpx.Response(200, json=_starred_page2()))
 
     async with router:
         async with _make_client() as gh:
@@ -237,9 +235,7 @@ async def test_list_starred_since_early_exits() -> None:
     starred_page1_url = f"{STARRED_URL}?sort=created&direction=desc&per_page=100"
 
     router = respx.MockRouter(assert_all_called=False)
-    router.get(starred_page1_url).mock(
-        return_value=httpx.Response(200, json=_starred_page1())
-    )
+    router.get(starred_page1_url).mock(return_value=httpx.Response(200, json=_starred_page1()))
 
     async with router:
         async with _make_client() as gh:
@@ -267,7 +263,5 @@ async def test_authorization_header_redacted_in_logs(caplog: pytest.LogCaptureFi
                 await gh.get_repo("tiangolo", "fastapi")
 
     # The raw token must not appear in any log record
-    all_log_text = "\n".join(
-        r.getMessage() + str(r.__dict__) for r in caplog.records
-    )
+    all_log_text = "\n".join(r.getMessage() + str(r.__dict__) for r in caplog.records)
     assert token not in all_log_text, "Token found in log output — redaction failed"

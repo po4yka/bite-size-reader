@@ -161,9 +161,7 @@ async def test_get_preferences_default_for_new_user(
 
     from app.api.routers.user import get_user_preferences  # type: ignore[attr-defined]
 
-    response = await get_user_preferences(
-        user={"user_id": 123456789, "username": "testuser"}
-    )
+    response = await get_user_preferences(user={"user_id": 123456789, "username": "testuser"})
     assert response["success"] is True
     data = response["data"]
     assert data["userId"] == 123456789
@@ -192,9 +190,7 @@ async def test_get_preferences_with_stored_preferences(
 
     from app.api.routers.user import get_user_preferences  # type: ignore[attr-defined]
 
-    response = await get_user_preferences(
-        user={"user_id": 123456789, "username": "testuser"}
-    )
+    response = await get_user_preferences(user={"user_id": 123456789, "username": "testuser"})
     data = response["data"]
     assert data["langPreference"] == "ru"
     assert data["notificationSettings"]["enabled"] is False
@@ -222,9 +218,7 @@ async def test_get_preferences_user_not_found(
 
 async def _read_user(db: Database, telegram_user_id: int) -> User:
     async with db.session() as session:
-        user = await session.scalar(
-            select(User).where(User.telegram_user_id == telegram_user_id)
-        )
+        user = await session.scalar(select(User).where(User.telegram_user_id == telegram_user_id))
         assert user is not None
         return user
 
@@ -280,9 +274,7 @@ async def test_update_preferences_app_settings(
     from app.api.routers.user import update_user_preferences  # type: ignore[attr-defined]
 
     response = await update_user_preferences(
-        preferences=UpdatePreferencesRequest(
-            app_settings={"theme": "light", "font_size": "large"}
-        ),
+        preferences=UpdatePreferencesRequest(app_settings={"theme": "light", "font_size": "large"}),
         user={"user_id": 123456789, "username": "testuser"},
     )
     fields = response["data"]["updatedFields"]
@@ -294,9 +286,7 @@ async def test_update_preferences_app_settings(
     assert user.preferences_json["app_settings"]["font_size"] == "large"  # type: ignore[index, call-overload]
 
 
-async def test_update_preferences_all_fields(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_update_preferences_all_fields(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
 
     from app.api.models.requests import UpdatePreferencesRequest
@@ -393,9 +383,7 @@ async def test_update_preferences_app_settings_no_existing(
 # =============================================================================
 
 
-async def test_get_stats_no_summaries(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_get_stats_no_summaries(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
     await _create_user(db, telegram_user_id=123456789, username="testuser")
 
@@ -414,9 +402,7 @@ async def test_get_stats_no_summaries(
     assert data["languageDistribution"]["ru"] == 0
 
 
-async def test_get_stats_with_summaries(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_get_stats_with_summaries(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
     await _create_user(db, telegram_user_id=123456789, username="testuser")
 
@@ -472,9 +458,7 @@ async def test_get_stats_language_distribution(
     assert data["languageDistribution"]["ru"] == 1
 
 
-async def test_get_stats_topic_counter(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_get_stats_topic_counter(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
     await _create_user(db, telegram_user_id=123456789, username="testuser")
 
@@ -501,9 +485,7 @@ async def test_get_stats_topic_counter(
     assert topics.get("ml") == 1
 
 
-async def test_get_stats_domain_extraction(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_get_stats_domain_extraction(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
     await _create_user(db, telegram_user_id=123456789, username="testuser")
 
@@ -559,9 +541,7 @@ async def test_get_stats_invalid_topic_tags_type(
     assert data["favoriteTopics"] == []
 
 
-async def test_get_stats_none_json_payload(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_get_stats_none_json_payload(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
     await _create_user(db, telegram_user_id=123456789, username="testuser")
     await _create_summary(db, user_id=123456789, url="http://test.com", json_payload=None)
@@ -573,9 +553,7 @@ async def test_get_stats_none_json_payload(
     assert data["totalReadingTimeMin"] == 0
 
 
-async def test_get_stats_url_parse_error(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_get_stats_url_parse_error(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
     await _create_user(db, telegram_user_id=123456789, username="testuser")
 
@@ -620,9 +598,7 @@ async def test_get_stats_last_summary_timestamp(
         assert isinstance(data["lastSummaryAt"], str)
 
 
-async def test_get_stats_joined_at_timestamp(
-    db: Database, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_get_stats_joined_at_timestamp(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_env(monkeypatch)
     await _create_user(db, telegram_user_id=123456789, username="testuser")
 

@@ -8,7 +8,15 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.core.logging_utils import get_logger
-from app.db.models import Collection, CollectionItem, Request, Summary, SummaryTag, Tag, model_to_dict
+from app.db.models import (
+    Collection,
+    CollectionItem,
+    Request,
+    Summary,
+    SummaryTag,
+    Tag,
+    model_to_dict,
+)
 from app.domain.services.smart_collection import evaluate_summary
 from app.domain.services.summary_context import build_summary_context
 

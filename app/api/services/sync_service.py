@@ -393,7 +393,11 @@ class SyncService:
         now = _time.monotonic()
         # Drop any expired entries on read so the cache stays bounded under
         # adversarial input (lots of unique keys with no retries).
-        expired = [k for k, (ts, _) in self._apply_dedup_cache.items() if now - ts > self._apply_dedup_ttl_sec]
+        expired = [
+            k
+            for k, (ts, _) in self._apply_dedup_cache.items()
+            if now - ts > self._apply_dedup_ttl_sec
+        ]
         for k in expired:
             del self._apply_dedup_cache[k]
         entry = self._apply_dedup_cache.get((session_id, idempotency_key))

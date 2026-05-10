@@ -82,9 +82,7 @@ async def _rss_poll_body(cfg: AppConfig, db: Database) -> None:
         )
 
 
-async def _run_signal_ingestion(
-    cfg: AppConfig, db: Database, correlation_id: str
-) -> None:
+async def _run_signal_ingestion(cfg: AppConfig, db: Database, correlation_id: str) -> None:
     signal_sources_enabled = bool(getattr(cfg.signal_ingestion, "any_enabled", False))
     if not signal_sources_enabled:
         logger.info("signal_ingestion_skipped", extra={"cid": correlation_id})
@@ -101,9 +99,7 @@ async def _run_signal_ingestion(
         )
 
 
-async def _run_optional_source_ingestors(
-    cfg: AppConfig, db: Database, correlation_id: str
-) -> None:
+async def _run_optional_source_ingestors(cfg: AppConfig, db: Database, correlation_id: str) -> None:
     if not cfg.signal_ingestion.any_enabled:
         logger.info("source_ingestion_skipped", extra={"cid": correlation_id})
         return

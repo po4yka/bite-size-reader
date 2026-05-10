@@ -2,11 +2,11 @@ import pytest
 from cryptography.fernet import Fernet
 
 from app.security.token_crypto import (
-    encrypt_token,
-    decrypt_token,
-    reset_key_cache,
-    MissingEncryptionKeyError,
     InvalidEncryptedTokenError,
+    MissingEncryptionKeyError,
+    decrypt_token,
+    encrypt_token,
+    reset_key_cache,
 )
 
 

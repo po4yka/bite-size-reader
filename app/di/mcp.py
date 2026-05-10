@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any
 from app.config import DatabaseConfig, load_config
 from app.core.embedding_space import resolve_embedding_space_identifier
 from app.core.logging_utils import get_logger
-from app.di.types import McpRuntime, McpScope, McpServiceState
 from app.db.session import Database
+from app.di.types import McpRuntime, McpScope, McpServiceState
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine

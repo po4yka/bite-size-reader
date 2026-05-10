@@ -6,6 +6,9 @@ import asyncio
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import selectinload
+
 from app.core.time_utils import utc_now
 from app.db.models import (
     Channel,
@@ -20,9 +23,6 @@ from app.db.models import (
     UserDigestPreference,
     _utcnow,
 )
-
-from sqlalchemy import func, select, update
-from sqlalchemy.orm import selectinload
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine
@@ -249,9 +249,7 @@ class DigestStore:
     def get_or_create_channel(self, username: str, *, title: str | None = None) -> Any:
         return _run_sync(self.async_get_or_create_channel(username, title=title))
 
-    async def async_update_channel_metadata(
-        self, channel: Any, metadata: dict[str, Any]
-    ) -> None:
+    async def async_update_channel_metadata(self, channel: Any, metadata: dict[str, Any]) -> None:
         changed: dict[str, Any] = {}
         for field in ("title", "description", "member_count"):
             value = metadata.get(field)
@@ -261,7 +259,9 @@ class DigestStore:
         if changed:
             changed["updated_at"] = utc_now()
             async with self._database().transaction() as session:
-                await session.execute(update(Channel).where(Channel.id == channel.id).values(**changed))
+                await session.execute(
+                    update(Channel).where(Channel.id == channel.id).values(**changed)
+                )
 
     def update_channel_metadata(self, channel: Any, metadata: dict[str, Any]) -> None:
         _run_sync(self.async_update_channel_metadata(channel, metadata))
@@ -513,9 +513,7 @@ class DigestStore:
                 )
             )
             if subscription is None:
-                session.add(
-                    Subscription(user_id=user_id, source_id=source.id, is_active=True)
-                )
+                session.add(Subscription(user_id=user_id, source_id=source.id, is_active=True))
 
             for post in posts:
                 channel_post = await session.scalar(
@@ -643,9 +641,7 @@ class DigestStore:
     def find_cached_analysis(self, post: dict[str, Any]) -> dict[str, Any] | None:
         return _run_sync(self.async_find_cached_analysis(post))
 
-    async def async_persist_analysis(
-        self, post: dict[str, Any], fields: dict[str, Any]
-    ) -> None:
+    async def async_persist_analysis(self, post: dict[str, Any], fields: dict[str, Any]) -> None:
         async with self._database().transaction() as session:
             channel_post = await session.scalar(
                 select(ChannelPost).where(

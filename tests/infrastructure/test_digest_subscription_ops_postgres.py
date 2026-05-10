@@ -50,9 +50,7 @@ async def test_digest_subscription_lifecycle_uses_postgres(database: Database) -
     async with database.transaction() as session:
         session.add(User(telegram_user_id=user_id, username="digest-owner"))
 
-    assert (
-        await async_subscribe_channel_atomic(user_id, "digestchan", db=database)
-    ) == "created"
+    assert (await async_subscribe_channel_atomic(user_id, "digestchan", db=database)) == "created"
     assert (
         await async_subscribe_channel_atomic(user_id, "digestchan", db=database)
     ) == "already_subscribed"
@@ -70,13 +68,17 @@ async def test_digest_subscription_lifecycle_uses_postgres(database: Database) -
         channel = await session.scalar(select(Channel).where(Channel.username == "digestchan"))
         assert channel is not None
         subscriptions = (
-            await session.execute(
-                select(ChannelSubscription).where(
-                    ChannelSubscription.user_id == user_id,
-                    ChannelSubscription.channel_id == channel.id,
+            (
+                await session.execute(
+                    select(ChannelSubscription).where(
+                        ChannelSubscription.user_id == user_id,
+                        ChannelSubscription.channel_id == channel.id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     assert len(subscriptions) == 1
     assert subscriptions[0].is_active is True

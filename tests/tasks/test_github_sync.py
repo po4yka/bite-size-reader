@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Taskiq stub helpers (copied from test_digest_task pattern)
 # ---------------------------------------------------------------------------
@@ -105,7 +104,13 @@ def _make_integration(
     return integ
 
 
-def _make_repo(*, github_id: int = 1001, user_id: int = 42, content_hash: str | None = None, pending_analysis: bool = False):
+def _make_repo(
+    *,
+    github_id: int = 1001,
+    user_id: int = 42,
+    content_hash: str | None = None,
+    pending_analysis: bool = False,
+):
     from app.db.models.repository import RepoSource
 
     repo = MagicMock()
@@ -257,9 +262,7 @@ async def test_sync_imports_new_starred_repos(monkeypatch):
         patch("app.tasks.github_sync._build_analyze_use_case", return_value=fake_use_case),
         patch(
             "app.adapters.github.github_api_client.GitHubAPIClient.__aenter__",
-            return_value=MagicMock(
-                list_starred=AsyncMock(return_value=_async_iter(starred_items))
-            ),
+            return_value=MagicMock(list_starred=AsyncMock(return_value=_async_iter(starred_items))),
         ),
     ):
         # Patch GitHubAPIClient directly
@@ -537,9 +540,7 @@ async def test_auth_error_recent_notification_no_dm(monkeypatch):
 
     from app.tasks.github_sync import _notify_needs_reauth
 
-    integration = _make_integration(
-        notified_needs_reauth_at=datetime.now(UTC) - timedelta(days=1)
-    )
+    integration = _make_integration(notified_needs_reauth_at=datetime.now(UTC) - timedelta(days=1))
 
     bot = MagicMock()
     bot.send_message = AsyncMock()

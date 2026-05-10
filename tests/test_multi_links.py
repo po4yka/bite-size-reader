@@ -42,17 +42,13 @@ class SpyBot(TelegramBot):
 
         if hasattr(self, "url_processor"):
 
-            async def mock_handle_url_flow(
-                message: Any, url_text: str, **_: object
-            ) -> None:
+            async def mock_handle_url_flow(message: Any, url_text: str, **_: object) -> None:
                 self.seen_urls.append(url_text)
                 await self._safe_reply(message, f"OK {url_text}")
 
             self.url_processor.handle_url_flow = mock_handle_url_flow
 
-    async def _handle_url_flow(
-        self, message: Any, url_text: str, **_: object
-    ) -> None:
+    async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)
         await self._safe_reply(message, f"OK {url_text}")
 

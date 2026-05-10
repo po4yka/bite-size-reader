@@ -47,9 +47,7 @@ async def test_delete_account(db: Database, monkeypatch: pytest.MonkeyPatch) -> 
     assert response["data"]["success"] is True
 
     async with db.session() as session:
-        remaining = await session.scalar(
-            select(User).where(User.telegram_user_id == 123456789)
-        )
+        remaining = await session.scalar(select(User).where(User.telegram_user_id == 123456789))
     assert remaining is None
 
 

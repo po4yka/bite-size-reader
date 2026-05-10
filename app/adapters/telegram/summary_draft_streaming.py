@@ -6,7 +6,11 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.content.streaming import StreamEvent, SummarySectionStreamAssembler, get_stream_hub
+from app.adapters.content.streaming import (
+    StreamEvent,
+    SummarySectionStreamAssembler,
+    get_stream_hub,
+)
 from app.core.logging_utils import get_logger
 from app.observability.metrics import record_draft_stream_event
 

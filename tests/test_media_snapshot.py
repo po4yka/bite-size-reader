@@ -68,9 +68,7 @@ async def _new_request(session: AsyncSession) -> int:
     )
 
 
-async def _persist(
-    database: Database, session: AsyncSession, message: object
-) -> int:
+async def _persist(database: Database, session: AsyncSession, message: object) -> int:
     """Create a request, persist a message snapshot, return the request id."""
     req_id = await _new_request(session)
     await session.commit()
@@ -85,9 +83,7 @@ async def _assert_media(
     expected_type: str,
     expected_ids: list[str],
 ) -> None:
-    row = await session.scalar(
-        select(TelegramMessage).where(TelegramMessage.request_id == req_id)
-    )
+    row = await session.scalar(select(TelegramMessage).where(TelegramMessage.request_id == req_id))
     assert row is not None
     assert row.media_type == expected_type
     if expected_ids:
@@ -176,9 +172,7 @@ async def test_entities_merge(database: Database, session: AsyncSession) -> None
             self.caption_entities = (_Ent("url"),)
 
     req_id = await _persist(database, session, Msg())
-    row = await session.scalar(
-        select(TelegramMessage).where(TelegramMessage.request_id == req_id)
-    )
+    row = await session.scalar(select(TelegramMessage).where(TelegramMessage.request_id == req_id))
     assert row is not None
     types = {e.get("type") for e in (row.entities_json or [])}  # type: ignore[union-attr]
     assert types == {"bold", "url"}
@@ -199,9 +193,7 @@ async def test_forward_snapshot(database: Database, session: AsyncSession) -> No
             self.forward_date = 1700000000
 
     req_id = await _persist(database, session, Msg())
-    row = await session.scalar(
-        select(TelegramMessage).where(TelegramMessage.request_id == req_id)
-    )
+    row = await session.scalar(select(TelegramMessage).where(TelegramMessage.request_id == req_id))
     assert row is not None
     assert row.forward_from_chat_id == 777
     assert row.forward_from_chat_type == "channel"

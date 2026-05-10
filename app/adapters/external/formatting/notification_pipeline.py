@@ -441,9 +441,7 @@ class NotificationPipelinePresenter:
 
             models_attempted = getattr(llm, "models_attempted", None) or []
             if len(models_attempted) > 1:
-                tried_summary = ", ".join(
-                    f"{m} ({o})" for m, o in models_attempted
-                )
+                tried_summary = ", ".join(f"{m} ({o})" for m, o in models_attempted)
                 fallback_line = f"Tried {len(models_attempted)} models: {tried_summary}"
             elif len(models_attempted) == 1:
                 m, o = models_attempted[0]

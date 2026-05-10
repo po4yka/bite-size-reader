@@ -57,9 +57,7 @@ async def test_update_user_interaction_rejects_unknown_field(session: AsyncSessi
     interaction_id = await _insert_interaction(session)
 
     with pytest.raises(ValueError):
-        await update_user_interaction(
-            session, interaction_id, updates={"invalid": "noop"}
-        )
+        await update_user_interaction(session, interaction_id, updates={"invalid": "noop"})
 
 
 async def test_update_user_interaction_ignores_empty_updates(session: AsyncSession) -> None:

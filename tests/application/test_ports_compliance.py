@@ -36,6 +36,8 @@ from app.application.ports.requests import (
 )
 from app.application.ports.summaries import SummaryRepositoryPort as SummaryRepositoryPortDirect
 from app.application.ports.users import UserRepositoryPort as UserRepositoryPortDirect
+
+
 @pytest.fixture
 def db():
     return object()

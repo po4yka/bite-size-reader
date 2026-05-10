@@ -222,7 +222,11 @@ class OpenRouterChatEngine:
                     last_error_context = model_state.last_error_context
 
                     if model_state.terminal_result is not None:
-                        outcome = "success" if getattr(model_state.terminal_result, "status", None) == "ok" else "error"
+                        outcome = (
+                            "success"
+                            if getattr(model_state.terminal_result, "status", None) == "ok"
+                            else "error"
+                        )
                         models_attempted.append((model, outcome))
                         if self._client._circuit_breaker:
                             if outcome == "success":

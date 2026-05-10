@@ -109,14 +109,10 @@ class AnalyzeRepositoryUseCase:
         from app.core.repo_analysis_schema import RepoAnalysisInput
 
         languages: dict[str, int] = (
-            dict(repository.languages_json)
-            if isinstance(repository.languages_json, dict)
-            else {}
+            dict(repository.languages_json) if isinstance(repository.languages_json, dict) else {}
         )
         topics: list[str] = (
-            list(repository.topics_json)
-            if isinstance(repository.topics_json, list)
-            else []
+            list(repository.topics_json) if isinstance(repository.topics_json, list) else []
         )
         agent_input = RepoAnalysisInput(
             full_name=repository.full_name,
@@ -242,13 +238,7 @@ def _compute_content_hash(repository: Repository) -> str:
     sorted_topics = sorted(topics_raw) if isinstance(topics_raw, list) else []
     readme = repository.readme_excerpt or ""
 
-    payload = (
-        description
-        + "\n"
-        + json.dumps(sorted_topics, ensure_ascii=False)
-        + "\n"
-        + readme
-    )
+    payload = description + "\n" + json.dumps(sorted_topics, ensure_ascii=False) + "\n" + readme
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

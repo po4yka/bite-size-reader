@@ -478,9 +478,7 @@ async def test_long_prompt_truncated() -> None:
     mock_workflow = AsyncMock(return_value={"summary_250": "ok"})
 
     with patch.object(summarizer._workflow, "execute_summary_workflow", new=mock_workflow):
-        await summarizer.summarize_forward(
-            MagicMock(), long_prompt, "en", "sys", 1, "cid", None
-        )
+        await summarizer.summarize_forward(MagicMock(), long_prompt, "en", "sys", 1, "cid", None)
 
     user_content = mock_workflow.call_args.kwargs["requests"][0].messages[1]["content"]
     assert "[Content truncated due to length]" in user_content
@@ -519,9 +517,7 @@ async def test_english_language_prompt() -> None:
     mock_workflow = AsyncMock(return_value={"summary_250": "ok"})
 
     with patch.object(summarizer._workflow, "execute_summary_workflow", new=mock_workflow):
-        await summarizer.summarize_forward(
-            MagicMock(), "English text", "en", "sys", 1, "cid", None
-        )
+        await summarizer.summarize_forward(MagicMock(), "English text", "en", "sys", 1, "cid", None)
 
     user_content = mock_workflow.call_args.kwargs["requests"][0].messages[1]["content"]
     assert "English" in user_content
@@ -689,9 +685,7 @@ async def test_persist_forward_from_message_id_none_stored_as_null(
 
     await persistence.persist_message_snapshot(req_id, msg)
 
-    row = await session.scalar(
-        select(TelegramMessage).where(TelegramMessage.request_id == req_id)
-    )
+    row = await session.scalar(select(TelegramMessage).where(TelegramMessage.request_id == req_id))
     assert row is not None
     assert row.forward_from_message_id is None
 
@@ -715,9 +709,7 @@ async def test_persist_forward_from_message_id_present_stored_correctly(
 
     await persistence.persist_message_snapshot(req_id, msg)
 
-    row = await session.scalar(
-        select(TelegramMessage).where(TelegramMessage.request_id == req_id)
-    )
+    row = await session.scalar(select(TelegramMessage).where(TelegramMessage.request_id == req_id))
     assert row is not None
     assert row.forward_from_message_id == 456
 

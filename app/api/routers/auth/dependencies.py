@@ -12,6 +12,7 @@ class AuthenticatedUser(TypedDict):
     username: str | None
     client_id: str
 
+
 from app.core.logging_utils import get_logger
 
 try:

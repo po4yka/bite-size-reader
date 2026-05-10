@@ -101,9 +101,7 @@ class SemanticSearchService:
                 pieces.append(str(tag))
         return " ".join(pieces).strip()
 
-    async def _fetch_summaries_by_ids(
-        self, summary_ids: list[int]
-    ) -> dict[int, tuple[Any, Any]]:
+    async def _fetch_summaries_by_ids(self, summary_ids: list[int]) -> dict[int, tuple[Any, Any]]:
         from app.db.models import Request, Summary
 
         if not summary_ids:
@@ -124,10 +122,7 @@ class SemanticSearchService:
                 )
             ).all()
 
-        return {
-            int(summary.id): (summary, summary.request)
-            for summary in rows
-        }
+        return {int(summary.id): (summary, summary.request) for summary in rows}
 
     @staticmethod
     def _semantic_match_from_row(row: dict[str, Any]) -> dict[str, Any]:

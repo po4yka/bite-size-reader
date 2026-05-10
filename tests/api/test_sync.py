@@ -26,7 +26,6 @@ from app.di.repositories import (
     build_user_repository,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -209,9 +208,7 @@ async def test_delta_sync_returns_changed_items(db, sync_user, summary_factory):
     delta_data = delta_result["data"]
     # The summary should appear in created (server_version > 0).
     all_ids = [it["id"] for it in delta_data.get("created", [])]
-    assert summary.id in all_ids, (
-        f"Summary {summary.id} not found in delta created={all_ids}"
-    )
+    assert summary.id in all_ids, f"Summary {summary.id} not found in delta created={all_ids}"
 
 
 # ---------------------------------------------------------------------------
@@ -220,9 +217,7 @@ async def test_delta_sync_returns_changed_items(db, sync_user, summary_factory):
 
 
 @pytest.mark.asyncio
-async def test_apply_idempotent_reapply_returns_cached_response(
-    db, sync_user, sync_summary
-):
+async def test_apply_idempotent_reapply_returns_cached_response(db, sync_user, sync_summary):
     """Sending the same apply payload twice with the same idempotency_key
     must return the original response on the second call without re-applying
     the change. Lets clients retry safely after a network failure."""

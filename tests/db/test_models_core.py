@@ -53,7 +53,9 @@ async def test_core_models_round_trip_against_postgres() -> None:
     try:
         async with database.engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=_core_tables())
-            await connection.run_sync(Base.metadata.create_all, tables=list(reversed(_core_tables())))
+            await connection.run_sync(
+                Base.metadata.create_all, tables=list(reversed(_core_tables()))
+            )
 
         async with database.transaction() as session:
             user = User(
@@ -201,7 +203,9 @@ async def test_server_version_before_update_is_monotonic_against_postgres() -> N
     try:
         async with database.engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=_core_tables())
-            await connection.run_sync(Base.metadata.create_all, tables=list(reversed(_core_tables())))
+            await connection.run_sync(
+                Base.metadata.create_all, tables=list(reversed(_core_tables()))
+            )
 
         async with database.transaction() as session:
             request = Request(type="url", status="pending")
