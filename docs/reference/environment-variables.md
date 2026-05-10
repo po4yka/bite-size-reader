@@ -379,6 +379,30 @@ Controls which embedding backend generates vectors for semantic search.
 - `google-genai` package is an optional dependency (`pip install ratatoskr[gemini]`). The app works without it when `EMBEDDING_PROVIDER=local`.
 - Gemini uses task-type-aware embeddings: `RETRIEVAL_DOCUMENT` for indexing, `RETRIEVAL_QUERY` for search queries.
 
+## Vector-Index Sync (CocoIndex + Reconciler)
+
+See [`docs/cocoindex.md`](../cocoindex.md) for architecture, drift-detection
+semantics, and rollback procedure.
+
+### CocoIndex live updater (opt-in)
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `RATATOSKR_COCOINDEX_ENABLED` | `0` | Enable CocoIndex `FlowLiveUpdater` inside FastAPI |
+| `RATATOSKR_COCOINDEX_DSN` | _(DATABASE_URL)_ | Override Postgres DSN (asyncpg prefix stripped automatically) |
+| `RATATOSKR_COCOINDEX_POLL_INTERVAL_SEC` | `30` | Seconds between watermark polls when LISTEN/NOTIFY is idle |
+| `RATATOSKR_COCOINDEX_LISTEN_CHANNEL` | `ratatoskr_summaries_changed` | Postgres LISTEN/NOTIFY channel |
+| `RATATOSKR_COCOINDEX_BATCH_SIZE` | `32` | Rows per processing batch |
+| `RATATOSKR_COCOINDEX_POOL_MAX` | `4` | Max psycopg3 connections (counts against `max_connections`) |
+
+### Vector reconciler (Taskiq, on by default)
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `VECTOR_RECONCILE_ENABLED` | `true` | Enable the `ratatoskr.vector.reconcile` Taskiq job |
+| `VECTOR_RECONCILE_CRON` | `*/30 * * * *` | Cron expression in UTC |
+| `VECTOR_RECONCILE_BATCH_SIZE` | `100` | Maximum stale summaries re-embedded per run |
+
 ## [OPTIONAL] ElevenLabs Text-to-Speech (TTS)
 
 | Variable | Default | Description |

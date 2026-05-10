@@ -1,8 +1,10 @@
-# CocoIndex Integration
+# Vector-Index Sync: CocoIndex + Reconciler
 
-CocoIndex is an opt-in, incremental ETL reconciler that keeps Qdrant in
-sync with the Postgres `summaries` table. It runs inside the FastAPI
-process as a background `FlowLiveUpdater` task.
+Ratatoskr keeps the Qdrant vector store in sync with Postgres `summaries`
+through three cooperating paths. The fast path is best-effort. The
+CocoIndex live updater (opt-in) reconciles within ~30s. The Taskiq
+reconciler (`ratatoskr.vector.reconcile`) runs every 30 minutes as a
+steady-state fallback for when CocoIndex is disabled or misbehaves.
 
 ## Quick start
 
@@ -16,16 +18,29 @@ RATATOSKR_COCOINDEX_ENABLED=1
 
 ## How it works
 
-Two paths write summary vectors to Qdrant:
+Three paths write summary vectors to Qdrant:
 
 | Path | Latency | Owner |
 |------|---------|-------|
 | **Fast path** (`SummaryEmbeddingGenerator`) | ~instant | write-through, best-effort |
-| **CocoIndex flow** (`FlowLiveUpdater`) | ≤30s | authoritative, eventually-consistent |
+| **CocoIndex flow** (`FlowLiveUpdater`, opt-in) | ≤30s | authoritative when enabled |
+| **Taskiq reconciler** (`ratatoskr.vector.reconcile`) | 30 min | steady-state fallback |
 
-Both paths produce the same Qdrant point UUID (`uuid5(NAMESPACE_OID, f"{request_id}:{summary_id}")`), so writes are idempotent. The fast path can silently lose a write; CocoIndex reconciles within one poll interval.
+All paths produce the same Qdrant point UUID (`uuid5(NAMESPACE_OID, f"{request_id}:{summary_id}")`), so writes are idempotent. The fast path can silently lose a write; CocoIndex reconciles within one poll interval, and the Taskiq reconciler closes the gap when CocoIndex is disabled.
+
+### Drift detection via `content_hash`
+
+Every successful write to `summary_embeddings` stamps:
+
+- `content_hash` — SHA256 of the text fed to the embedding model (computed by `SummaryEmbeddingGenerator`).
+- `last_indexed_at` — UTC timestamp of the write.
+- `index_status` — set to `"indexed"`.
+
+On a subsequent generate call the generator short-circuits when an existing row's `content_hash` matches the freshly-prepared text — no embedding API call, no Qdrant upsert. The reconciler treats `last_indexed_at < summaries.updated_at` (or NULL) as drift and re-runs the generator with `force=True`.
 
 ## Environment variables
+
+### CocoIndex live updater (opt-in)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -35,6 +50,16 @@ Both paths produce the same Qdrant point UUID (`uuid5(NAMESPACE_OID, f"{request_
 | `RATATOSKR_COCOINDEX_LISTEN_CHANNEL` | `ratatoskr_summaries_changed` | Postgres LISTEN/NOTIFY channel |
 | `RATATOSKR_COCOINDEX_BATCH_SIZE` | `32` | Rows per processing batch |
 | `RATATOSKR_COCOINDEX_POOL_MAX` | `4` | Max psycopg3 connections |
+
+### Vector reconciler (Taskiq, on by default)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VECTOR_RECONCILE_ENABLED` | `true` | Enable the periodic reconciler |
+| `VECTOR_RECONCILE_CRON` | `*/30 * * * *` | Cron expression governing runs (UTC) |
+| `VECTOR_RECONCILE_BATCH_SIZE` | `100` | Maximum stale summaries re-embedded per run |
+
+The reconciler runs in the Taskiq worker process. When CocoIndex is enabled the two paths overlap harmlessly — both produce the same UUIDs. To rely solely on CocoIndex, set `VECTOR_RECONCILE_ENABLED=false`.
 
 ## Connection budget
 
@@ -61,7 +86,9 @@ the fast path continues as the sole writer to Qdrant.
 
 1. Set `RATATOSKR_COCOINDEX_ENABLED=0` in `.env`
 2. Redeploy — FastAPI starts without CocoIndex
-3. Existing fast path + CLI backfill continue working unchanged
+3. The Taskiq reconciler (`ratatoskr.vector.reconcile`) keeps Qdrant
+   converged on its 30-minute cadence; existing fast path + CLI backfill
+   continue working unchanged
 
 ## CLI backfill with CocoIndex
 

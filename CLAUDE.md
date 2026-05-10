@@ -301,6 +301,7 @@ Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch
 - **Device Sync** -- Multi-device sync with full/delta modes and conflict resolution (`app/api/routers/sync.py`, UserDevice model)
 - **Event Bus** -- Internal event publishing/subscribing (`app/infrastructure/messaging/`)
 - **Qdrant Vector Store** -- Semantic search via Qdrant embeddings (`app/infrastructure/vector/qdrant_store.py`, `app/cli/backfill_vector_store.py`). Embedding provider switchable via `EmbeddingConfig` (local sentence-transformers or Gemini API); see `app/infrastructure/embedding/embedding_factory.py`
+- **Vector-Index Sync** -- Three cooperating writers keep `summary_embeddings` and Qdrant converged with `summaries`: the synchronous fast path (`SummaryEmbeddingGenerator`), an opt-in CocoIndex `FlowLiveUpdater` running inside FastAPI (gated by `RATATOSKR_COCOINDEX_ENABLED`), and a steady-state Taskiq reconciler `ratatoskr.vector.reconcile` (`app/tasks/reconcile_vector_index.py`) that scans rows where `last_indexed_at < summaries.updated_at` every 30 minutes. The generator stamps `content_hash` / `last_indexed_at` / `index_status` on every write so unchanged inputs short-circuit. Ops reference: `docs/cocoindex.md`.
 - **PDF Export** -- Summary export to PDF via weasyprint
 - **Background Scheduling** -- APScheduler-based background task processing with Redis distributed locks
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Telethon userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow. Ops reference: `docs/reference/digest-subsystem-ops.md`.
@@ -447,6 +448,15 @@ GEMINI_API_KEY=                        # Required when provider=gemini
 GEMINI_EMBEDDING_MODEL=gemini-embedding-2-preview  # Model ID
 GEMINI_EMBEDDING_DIMENSIONS=768       # Output dimensions (1-3072)
 EMBEDDING_MAX_TOKEN_LENGTH=512        # Max tokens for text preparation
+
+# Vector-Index Sync (optional)
+RATATOSKR_COCOINDEX_ENABLED=0         # Enable CocoIndex live updater inside FastAPI
+RATATOSKR_COCOINDEX_POLL_INTERVAL_SEC=30
+RATATOSKR_COCOINDEX_BATCH_SIZE=32
+RATATOSKR_COCOINDEX_POOL_MAX=4
+VECTOR_RECONCILE_ENABLED=true         # Steady-state Taskiq reconciler (on by default)
+VECTOR_RECONCILE_CRON="*/30 * * * *"  # UTC cron for ratatoskr.vector.reconcile
+VECTOR_RECONCILE_BATCH_SIZE=100       # Max stale summaries re-embedded per run
 
 # ElevenLabs TTS (optional)
 ELEVENLABS_ENABLED=false              # Enable text-to-speech
