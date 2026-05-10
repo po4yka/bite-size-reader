@@ -61,9 +61,7 @@ class ReadStatusBot(TelegramBot):
         if hasattr(self, "url_processor"):
             self.url_processor.handle_url_flow = self._fake_url_flow
 
-    async def _handle_url_flow(
-        self, message: Any, url_text: str, **_: object
-    ) -> None:
+    async def _handle_url_flow(self, message: Any, url_text: str, **_: object) -> None:
         self.seen_urls.append(url_text)
         await self._safe_reply(message, f"OK {url_text}")
 
@@ -98,9 +96,7 @@ class TestParseUnreadArguments:
         assert topic is None
 
     def test_parse_unread_with_mention_and_topic(self) -> None:
-        limit, topic = TelegramCommandDispatcher._parse_unread_arguments(
-            "/unread@bot gardening"
-        )
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread@bot gardening")
         assert limit == 5
         assert topic == "gardening"
 
@@ -110,9 +106,7 @@ class TestParseUnreadArguments:
         assert topic == "2024"
 
     def test_parse_unread_with_numeric_topic_and_limit(self) -> None:
-        limit, topic = TelegramCommandDispatcher._parse_unread_arguments(
-            "/unread 2024 limit=3"
-        )
+        limit, topic = TelegramCommandDispatcher._parse_unread_arguments("/unread 2024 limit=3")
         assert limit == 3
         assert topic == "2024"
 
@@ -153,9 +147,7 @@ async def test_summary_read_status_defaults(session: AsyncSession) -> None:
         normalized_url="https://example.com/test-defaults",
         route_version=1,
     )
-    await insert_summary(
-        session, request_id=rid, lang="en", json_payload={"title": "Test Article"}
-    )
+    await insert_summary(session, request_id=rid, lang="en", json_payload={"title": "Test Article"})
     row = await get_summary_by_request(session, rid)
     assert row is not None
     assert row["is_read"] == 0  # boolean column rendered as 0/1 by helper
@@ -326,9 +318,7 @@ async def test_get_unread_summaries_filters_by_user_and_chat(
             is_read=False,
         )
 
-    unread_scoped = await get_unread_summaries(
-        session, user_id=555, chat_id=111, limit=10
-    )
+    unread_scoped = await get_unread_summaries(session, user_id=555, chat_id=111, limit=10)
     assert len(unread_scoped) == 1
     assert unread_scoped[0]["input_url"] == "https://visible.com"
 
@@ -370,8 +360,7 @@ async def test_get_unread_summaries_topic_filter(session: AsyncSession) -> None:
     unread_ai = await get_unread_summaries(session, limit=5, topic="AI")
     assert len(unread_ai) == 2
     assert all(
-        "example0" in row["input_url"] or "example2" in row["input_url"]
-        for row in unread_ai
+        "example0" in row["input_url"] or "example2" in row["input_url"] for row in unread_ai
     )
 
     unread_garden = await get_unread_summaries(session, limit=5, topic="garden")
@@ -560,9 +549,7 @@ async def test_unread_command_no_unread(database: Database) -> None:
     assert "No unread articles found" in msg._replies[0]
 
 
-async def test_unread_command_with_unread(
-    database: Database, session: AsyncSession
-) -> None:
+async def test_unread_command_with_unread(database: Database, session: AsyncSession) -> None:
     bot = _make_bot(database)
 
     details = [
@@ -588,7 +575,11 @@ async def test_unread_command_with_unread(
             route_version=1,
         )
         await insert_summary(
-            session, request_id=rid, lang="en", json_payload=payload, is_read=False  # type: ignore[arg-type]
+            session,
+            request_id=rid,
+            lang="en",
+            json_payload=payload,  # type: ignore[arg-type]
+            is_read=False,
         )
     await session.commit()
 
@@ -652,9 +643,7 @@ async def test_unread_command_with_topic_and_limit(
     assert "Web Dev" not in reply
 
 
-async def test_unread_command_topic_no_results(
-    database: Database, session: AsyncSession
-) -> None:
+async def test_unread_command_topic_no_results(database: Database, session: AsyncSession) -> None:
     bot = _make_bot(database)
     rid = await create_request(
         session,
@@ -702,9 +691,7 @@ async def test_read_command_nonexistent_id(database: Database) -> None:
     assert "not found" in msg._replies[0]
 
 
-async def test_read_command_read_article(
-    database: Database, session: AsyncSession
-) -> None:
+async def test_read_command_read_article(database: Database, session: AsyncSession) -> None:
     bot = _make_bot(database)
     rid = await create_request(
         session,
@@ -740,9 +727,7 @@ async def test_read_command_read_article(
     assert await get_read_status(session, rid)
 
 
-async def test_read_command_already_read_article(
-    database: Database, session: AsyncSession
-) -> None:
+async def test_read_command_already_read_article(database: Database, session: AsyncSession) -> None:
     bot = _make_bot(database)
     rid = await create_request(
         session,
@@ -770,9 +755,7 @@ async def test_read_command_already_read_article(
     assert "already read" in msg._replies[0]
 
 
-async def test_read_command_marks_article_read(
-    database: Database, session: AsyncSession
-) -> None:
+async def test_read_command_marks_article_read(database: Database, session: AsyncSession) -> None:
     bot = _make_bot(database)
     rid = await create_request(
         session,

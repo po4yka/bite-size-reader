@@ -95,6 +95,17 @@ class _AppConfigScheduleSource(ScheduleSource):
                 )
             )
 
+        if cfg.vector_reconcile.enabled:
+            tasks.append(
+                ScheduledTask(
+                    task_name="ratatoskr.vector.reconcile",
+                    cron=cfg.vector_reconcile.cron,
+                    labels={"job": "vector_reconcile"},
+                    args=[],
+                    kwargs={},
+                )
+            )
+
         return tasks
 
     async def get_schedules(self) -> list[ScheduledTask]:

@@ -1,10 +1,29 @@
 from __future__ import annotations
 
+import hashlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
+from app.core.embedding_text import prepare_text_for_embedding
+
+
+def _expected_hash(payload: dict, *, max_length: int = 512) -> str:
+    metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+    text = prepare_text_for_embedding(
+        title=metadata.get("title") or payload.get("title"),
+        summary_1000=payload.get("summary_1000"),
+        summary_250=payload.get("summary_250"),
+        tldr=payload.get("tldr"),
+        key_ideas=payload.get("key_ideas"),
+        topic_tags=payload.get("topic_tags"),
+        semantic_boosters=payload.get("semantic_boosters"),
+        query_expansion_keywords=payload.get("query_expansion_keywords"),
+        semantic_chunks=payload.get("semantic_chunks"),
+        max_length=max_length,
+    )
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 @pytest.fixture
@@ -39,9 +58,32 @@ async def test_generate_embedding_for_summary_skips_existing_matching_model(
     generator_fixture,
 ) -> None:
     generator, embedding_service, embedding_repo, _, _ = generator_fixture
+    payload = {"summary_250": "Summary text"}
     embedding_repo.async_get_summary_embedding.return_value = {
         "model_name": "test-model",
         "dimensions": 3,
+        "content_hash": _expected_hash(payload),
+    }
+
+    created = await generator.generate_embedding_for_summary(
+        10,
+        payload,
+        language="en",
+    )
+
+    assert created is False
+    embedding_service.generate_embedding.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generate_embedding_for_summary_regenerates_when_content_hash_differs(
+    generator_fixture,
+) -> None:
+    generator, embedding_service, embedding_repo, _, _ = generator_fixture
+    embedding_repo.async_get_summary_embedding.return_value = {
+        "model_name": "test-model",
+        "dimensions": 3,
+        "content_hash": "stale-hash",
     }
 
     created = await generator.generate_embedding_for_summary(
@@ -50,8 +92,8 @@ async def test_generate_embedding_for_summary_skips_existing_matching_model(
         language="en",
     )
 
-    assert created is False
-    embedding_service.generate_embedding.assert_not_awaited()
+    assert created is True
+    embedding_service.generate_embedding.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -94,13 +136,14 @@ async def test_generate_embedding_for_summary_returns_false_for_empty_prepared_t
 async def test_generate_embedding_for_summary_persists_generated_vector(generator_fixture) -> None:
     generator, embedding_service, embedding_repo, _, _ = generator_fixture
 
+    payload = {
+        "summary_1000": "Detailed summary",
+        "topic_tags": ["#ai"],
+        "metadata": {"title": "Title"},
+    }
     created = await generator.generate_embedding_for_summary(
         11,
-        {
-            "summary_1000": "Detailed summary",
-            "topic_tags": ["#ai"],
-            "metadata": {"title": "Title"},
-        },
+        payload,
         language="ru",
         force=True,
     )
@@ -114,6 +157,7 @@ async def test_generate_embedding_for_summary_persists_generated_vector(generato
         model_version="2.0",
         dimensions=3,
         language="ru",
+        content_hash=_expected_hash(payload),
     )
 
 

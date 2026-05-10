@@ -70,29 +70,46 @@ class EmbeddingRepositoryAdapter:
         model_version: str,
         dimensions: int,
         language: str | None = None,
+        content_hash: str | None = None,
     ) -> None:
-        """Store or update embedding for a summary."""
+        """Store or update embedding for a summary.
+
+        When ``content_hash`` is provided we also stamp ``last_indexed_at`` and
+        flip ``index_status`` to ``"indexed"`` so the vector reconciler can
+        skip rows whose hash already matches.
+        """
+        now = _utcnow()
+        values: dict[str, Any] = {
+            "summary_id": summary_id,
+            "embedding_blob": embedding_blob,
+            "model_name": model_name,
+            "model_version": model_version,
+            "dimensions": dimensions,
+            "language": language,
+        }
+        update_set: dict[str, Any] = {
+            "embedding_blob": embedding_blob,
+            "model_name": model_name,
+            "model_version": model_version,
+            "dimensions": dimensions,
+            "language": language,
+            "created_at": now,
+        }
+        if content_hash is not None:
+            values["content_hash"] = content_hash
+            values["last_indexed_at"] = now
+            values["index_status"] = "indexed"
+            update_set["content_hash"] = content_hash
+            update_set["last_indexed_at"] = now
+            update_set["index_status"] = "indexed"
+
         async with self._database.transaction() as session:
             stmt = (
                 insert(SummaryEmbedding)
-                .values(
-                    summary_id=summary_id,
-                    embedding_blob=embedding_blob,
-                    model_name=model_name,
-                    model_version=model_version,
-                    dimensions=dimensions,
-                    language=language,
-                )
+                .values(**values)
                 .on_conflict_do_update(
                     index_elements=[SummaryEmbedding.summary_id],
-                    set_={
-                        "embedding_blob": embedding_blob,
-                        "model_name": model_name,
-                        "model_version": model_version,
-                        "dimensions": dimensions,
-                        "language": language,
-                        "created_at": _utcnow(),
-                    },
+                    set_=update_set,
                 )
             )
             await session.execute(stmt)

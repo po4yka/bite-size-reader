@@ -106,8 +106,14 @@ class EmbeddingRepositoryPort(Protocol):
         model_version: str,
         dimensions: int,
         language: str | None = None,
+        content_hash: str | None = None,
     ) -> None:
-        """Upsert a summary embedding."""
+        """Upsert a summary embedding.
+
+        When ``content_hash`` is supplied, the adapter is expected to also stamp
+        ``last_indexed_at`` and ``index_status='indexed'`` so the reconciler
+        can detect drift between Postgres summaries and the embeddings table.
+        """
 
     async def async_get_summary_embedding(self, summary_id: int) -> dict[str, Any] | None:
         """Return summary embedding by summary ID."""

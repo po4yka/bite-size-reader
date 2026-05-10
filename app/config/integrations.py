@@ -478,6 +478,60 @@ class QdrantConfig(BaseModel):
         return cleaned.lower()
 
 
+class VectorReconcileConfig(BaseModel):
+    """Steady-state vector-index reconciler configuration.
+
+    Acts as a fallback for the CocoIndex live updater: when CocoIndex is
+    disabled or misbehaves, this Taskiq job periodically scans
+    ``summary_embeddings`` for rows whose ``last_indexed_at`` lags
+    ``summaries.updated_at`` and requeues per-summary embedding work.
+    """
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    enabled: bool = Field(
+        default=True,
+        validation_alias="VECTOR_RECONCILE_ENABLED",
+        description="Enable the periodic vector-index reconciler",
+    )
+    cron: str = Field(
+        default="*/30 * * * *",
+        validation_alias="VECTOR_RECONCILE_CRON",
+        description="Cron expression governing reconciler runs (UTC)",
+    )
+    batch_size: int = Field(
+        default=100,
+        validation_alias="VECTOR_RECONCILE_BATCH_SIZE",
+        description="Maximum number of stale summaries to re-embed per run",
+    )
+
+    @field_validator("cron", mode="before")
+    @classmethod
+    def _validate_cron(cls, value: Any) -> str:
+        if value in (None, ""):
+            return "*/30 * * * *"
+        cron = str(value).strip()
+        if len(cron.split()) != 5:
+            msg = "Vector reconcile cron must be a 5-field expression"
+            raise ValueError(msg)
+        return cron
+
+    @field_validator("batch_size", mode="before")
+    @classmethod
+    def _validate_batch_size(cls, value: Any) -> int:
+        if value in (None, ""):
+            return 100
+        try:
+            parsed = int(str(value))
+        except ValueError as exc:
+            msg = "Vector reconcile batch size must be a valid integer"
+            raise ValueError(msg) from exc
+        if parsed < 1 or parsed > 10_000:
+            msg = "Vector reconcile batch size must be between 1 and 10000"
+            raise ValueError(msg)
+        return parsed
+
+
 class CocoIndexConfig(BaseModel):
     """CocoIndex incremental ETL configuration."""
 

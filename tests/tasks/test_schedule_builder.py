@@ -34,6 +34,7 @@ def _stub_taskiq(monkeypatch):
             monkeypatch.setitem(sys.modules, mod_name, types.ModuleType(mod_name))
 
     taskiq_mod = sys.modules["taskiq"]
+    taskiq_mod.AsyncBroker = object
     taskiq_mod.TaskiqDepends = lambda fn, **_kw: None
     taskiq_mod.TaskiqMiddleware = object
     taskiq_mod.InMemoryBroker = MagicMock
@@ -134,3 +135,41 @@ def test_rss_poll_schedule_added_when_enabled(monkeypatch):
     assert len(tasks) == 1
     assert tasks[0].cron == "*/30 * * * *"
     assert tasks[0].task_name == "ratatoskr.rss.poll"
+
+
+def test_vector_reconcile_schedule_added_when_enabled(monkeypatch):
+    mod = _load_scheduler_module(monkeypatch)
+
+    cfg = MagicMock()
+    cfg.digest.enabled = False
+    cfg.rss.enabled = False
+    cfg.signal_ingestion.any_enabled = False
+    cfg.github.sync_enabled = False
+    cfg.vector_reconcile.enabled = True
+    cfg.vector_reconcile.cron = "*/30 * * * *"
+
+    monkeypatch.setattr(mod, "load_config", lambda: cfg)
+    source = mod._AppConfigScheduleSource()
+    tasks = source._build_tasks()
+
+    reconcile_tasks = [t for t in tasks if t.task_name == "ratatoskr.vector.reconcile"]
+    assert len(reconcile_tasks) == 1
+    assert reconcile_tasks[0].cron == "*/30 * * * *"
+    assert reconcile_tasks[0].labels == {"job": "vector_reconcile"}
+
+
+def test_vector_reconcile_schedule_skipped_when_disabled(monkeypatch):
+    mod = _load_scheduler_module(monkeypatch)
+
+    cfg = MagicMock()
+    cfg.digest.enabled = False
+    cfg.rss.enabled = False
+    cfg.signal_ingestion.any_enabled = False
+    cfg.github.sync_enabled = False
+    cfg.vector_reconcile.enabled = False
+
+    monkeypatch.setattr(mod, "load_config", lambda: cfg)
+    source = mod._AppConfigScheduleSource()
+    tasks = source._build_tasks()
+
+    assert not any(t.task_name == "ratatoskr.vector.reconcile" for t in tasks)

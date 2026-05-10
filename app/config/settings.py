@@ -22,12 +22,14 @@ from .content import ContentLimitsConfig
 from .database import DatabaseConfig
 from .digest import ChannelDigestConfig
 from .firecrawl import FirecrawlConfig  # noqa: TC001
+from .github import GitHubConfig
 from .integrations import (
     BatchAnalysisConfig,
     CocoIndexConfig,
     EmbeddingConfig,
     McpConfig,
     QdrantConfig,
+    VectorReconcileConfig,
     WebSearchConfig,
 )
 from .llm import AnthropicConfig, ModelRoutingConfig, OllamaConfig, OpenAIConfig, OpenRouterConfig
@@ -41,7 +43,6 @@ from .scraper import ScraperConfig
 from .signal_ingestion import SignalIngestionConfig
 from .telegram import TelegramConfig, TelegramLimitsConfig
 from .tts import ElevenLabsConfig
-from .github import GitHubConfig
 from .twitter import TwitterConfig
 
 logger = get_logger(__name__)
@@ -189,6 +190,7 @@ class AppConfig:
     sentry: SentryConfig = field(default_factory=SentryConfig)
     github: GitHubConfig = field(default_factory=GitHubConfig)
     cocoindex: CocoIndexConfig = field(default_factory=CocoIndexConfig)
+    vector_reconcile: VectorReconcileConfig = field(default_factory=VectorReconcileConfig)
 
 
 class Settings(BaseSettings):
@@ -243,6 +245,7 @@ class Settings(BaseSettings):
     sentry: SentryConfig = Field(default_factory=SentryConfig)
     github: GitHubConfig = Field(default_factory=GitHubConfig)
     cocoindex: CocoIndexConfig = Field(default_factory=CocoIndexConfig)
+    vector_reconcile: VectorReconcileConfig = Field(default_factory=VectorReconcileConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -381,6 +384,7 @@ class Settings(BaseSettings):
             sentry=self.sentry,
             github=self.github,
             cocoindex=self.cocoindex,
+            vector_reconcile=self.vector_reconcile,
         )
 
 

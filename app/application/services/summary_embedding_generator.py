@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING, Any
 
 from app.core.embedding_text import prepare_text_for_embedding
@@ -50,35 +51,40 @@ class SummaryEmbeddingGenerator:
     ) -> bool:
         """Generate and store an embedding for a specific summary."""
         model_name = self._embedding_service.get_model_name(language)
+        metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+        text = prepare_text_for_embedding(
+            title=metadata.get("title") or payload.get("title"),
+            summary_1000=payload.get("summary_1000"),
+            summary_250=payload.get("summary_250"),
+            tldr=payload.get("tldr"),
+            key_ideas=payload.get("key_ideas"),
+            topic_tags=payload.get("topic_tags"),
+            semantic_boosters=payload.get("semantic_boosters"),
+            query_expansion_keywords=payload.get("query_expansion_keywords"),
+            semantic_chunks=payload.get("semantic_chunks"),
+            max_length=self._max_token_length,
+        )
+        if not text.strip():
+            logger.warning("empty_text_for_embedding", extra={"summary_id": summary_id})
+            return False
+
+        content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
         if not force:
             existing = await self.embedding_repo.async_get_summary_embedding(summary_id)
             if existing and existing.get("model_name") == model_name:
-                logger.debug(
-                    "embedding_already_exists",
-                    extra={"summary_id": summary_id, "model": model_name, "language": language},
-                )
-                return False
+                if existing.get("content_hash") == content_hash:
+                    logger.debug(
+                        "embedding_already_indexed",
+                        extra={
+                            "summary_id": summary_id,
+                            "model": model_name,
+                            "language": language,
+                        },
+                    )
+                    return False
+                # Same model but stale text — fall through to re-embed.
 
-        metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
         try:
-            text = prepare_text_for_embedding(
-                title=metadata.get("title") or payload.get("title"),
-                summary_1000=payload.get("summary_1000"),
-                summary_250=payload.get("summary_250"),
-                tldr=payload.get("tldr"),
-                key_ideas=payload.get("key_ideas"),
-                topic_tags=payload.get("topic_tags"),
-                semantic_boosters=payload.get("semantic_boosters"),
-                query_expansion_keywords=payload.get("query_expansion_keywords"),
-                semantic_chunks=payload.get("semantic_chunks"),
-                max_length=self._max_token_length,
-            )
-            if not text.strip():
-                logger.warning("empty_text_for_embedding", extra={"summary_id": summary_id})
-                return False
-
-            # TODO(cocoindex): populate content_hash + last_indexed_at on SummaryEmbedding
-            # when EmbeddingRepositoryAdapter supports those fields (migration 0007).
             embedding = await self._embedding_service.generate_embedding(
                 text,
                 language=language,
@@ -91,6 +97,7 @@ class SummaryEmbeddingGenerator:
                 model_version=self._model_version,
                 dimensions=len(embedding),
                 language=language,
+                content_hash=content_hash,
             )
             logger.info(
                 "embedding_generated",
