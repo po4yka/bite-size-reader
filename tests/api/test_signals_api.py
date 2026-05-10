@@ -16,8 +16,8 @@ def _headers(user_id: int) -> dict[str, str]:
 
 
 def test_signal_feed_feedback_and_source_health(client: TestClient, db):
-    user = User.create(telegram_user_id=777001, username="signals-user", is_owner=False)
-    source = Source.create(
+    user = User.create(telegram_user_id=777001, username="signals-user", is_owner=False)  # type: ignore[attr-defined]
+    source = Source.create(  # type: ignore[attr-defined]
         kind="rss",
         external_id="https://example.com/feed.xml",
         url="https://example.com/feed.xml",
@@ -25,14 +25,14 @@ def test_signal_feed_feedback_and_source_health(client: TestClient, db):
         fetch_error_count=1,
         last_error="timeout",
     )
-    Subscription.create(user=user, source=source, is_active=True)
-    item = FeedItem.create(
+    Subscription.create(user=user, source=source, is_active=True)  # type: ignore[attr-defined]
+    item = FeedItem.create(  # type: ignore[attr-defined]
         source=source,
         external_id="guid-1",
         canonical_url="https://example.com/post",
         title="Signal item",
     )
-    signal = UserSignal.create(
+    signal = UserSignal.create(  # type: ignore[attr-defined]
         user=user,
         feed_item=item,
         status="candidate",
@@ -63,14 +63,14 @@ def test_signal_feed_feedback_and_source_health(client: TestClient, db):
     assert health_rows[0]["fetch_error_count"] == 1
     assert health_rows[0]["last_error"] == "timeout"
     assert source_active_response.status_code == 200
-    assert Source.get_by_id(source.id).is_active is False
+    assert Source.get_by_id(source.id).is_active is False  # type: ignore[attr-defined]
     assert feedback_response.status_code == 200
-    signal = UserSignal.get_by_id(signal.id)
+    signal = UserSignal.get_by_id(signal.id)  # type: ignore[attr-defined]
     assert signal.status == "liked"
 
 
 def test_signal_health_reports_vector_readiness(client: TestClient, db):
-    user = User.create(telegram_user_id=777002, username="signals-health", is_owner=False)
+    user = User.create(telegram_user_id=777002, username="signals-health", is_owner=False)  # type: ignore[attr-defined]
     headers = _headers(user.telegram_user_id)
 
     with patch("app.api.routers.auth.dependencies.Config.get_allowed_user_ids", return_value=[]):

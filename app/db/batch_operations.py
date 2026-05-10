@@ -46,7 +46,7 @@ class BatchOperations:
                 result = await session.execute(
                     update(Request).where(Request.id == request_id).values(status=status)
                 )
-                updated += int(result.rowcount or 0)
+                updated += int(result.rowcount or 0)  # type: ignore[attr-defined]
 
         logger.info("request_statuses_batch_updated", extra={"count": updated})
         return updated
@@ -60,7 +60,7 @@ class BatchOperations:
             result = await session.execute(
                 update(Summary).where(Summary.id.in_(summary_ids)).values(is_read=True)
             )
-            rows = int(result.rowcount or 0)
+            rows = int(result.rowcount or 0)  # type: ignore[attr-defined]
 
         logger.info("summaries_batch_marked_read", extra={"count": rows})
         return rows
@@ -72,7 +72,7 @@ class BatchOperations:
 
         async with self.database.transaction() as session:
             result = await session.execute(delete(Request).where(Request.id.in_(request_ids)))
-            rows = int(result.rowcount or 0)
+            rows = int(result.rowcount or 0)  # type: ignore[attr-defined]
 
         logger.info("requests_batch_deleted", extra={"count": rows})
         return rows

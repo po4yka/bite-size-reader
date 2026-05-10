@@ -154,7 +154,7 @@ async def trigger_digest(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Trigger an on-demand digest generation. Result delivered to Telegram chat."""
-    await AuthService.require_owner(user)
+    await AuthService.require_owner(user)  # type: ignore[arg-type]
     data = await asyncio.to_thread(digest_facade.trigger_digest, user["user_id"])
     return success_response(data)
 
@@ -166,7 +166,7 @@ async def trigger_channel_digest(
     digest_facade: DigestFacade = Depends(get_digest_facade),
 ) -> dict[str, Any]:
     """Trigger digest for a single channel (equivalent to /cdigest bot command)."""
-    await AuthService.require_owner(user)
+    await AuthService.require_owner(user)  # type: ignore[arg-type]
     data = await asyncio.to_thread(
         digest_facade.trigger_channel_digest,
         user["user_id"],

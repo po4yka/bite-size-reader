@@ -171,7 +171,7 @@ def create_rss_delivery_service(cfg: AppConfig, db: Database) -> Any:
             lang, include_examples=True, num_examples=2
         ),
         rss_repository=RSSFeedRepositoryAdapter(db),
-        scraper_chain=scraper_chain,
+        scraper_chain=scraper_chain,  # type: ignore[arg-type]
     )
 
 

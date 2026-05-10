@@ -150,7 +150,7 @@ async def test_run_digest_task_executes_digest_service_and_closes_resources(
     assert channel_result is generated_channel_digest
     digest_service_instance.generate_digest.assert_awaited_once()
     digest_service_instance.generate_channel_digest.assert_awaited_once()
-    assert Channel.get(Channel.username == "examplechan").title == "examplechan"
+    assert Channel.get(Channel.username == "examplechan").title == "examplechan"  # type: ignore[attr-defined]
     userbot_instance.start.assert_awaited()
     userbot_instance.stop.assert_awaited()
     llm_client_instance.aclose.assert_awaited()

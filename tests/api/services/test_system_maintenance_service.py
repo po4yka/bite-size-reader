@@ -58,7 +58,7 @@ async def test_get_db_info_returns_allowlisted_counts() -> None:
         ),
         async_database_size_mb=AsyncMock(return_value=12.3),
     )
-    service = SystemMaintenanceService(database=SimpleNamespace(inspection=inspection))
+    service = SystemMaintenanceService(database=SimpleNamespace(inspection=inspection))  # type: ignore[arg-type]
 
     info = await service.get_db_info()
     file_size_mb = cast("float", info["file_size_mb"])
@@ -75,7 +75,7 @@ async def test_get_db_info_handles_database_failures() -> None:
         async_get_database_overview=AsyncMock(side_effect=RuntimeError("boom")),
         async_database_size_mb=AsyncMock(return_value=0.0),
     )
-    service = SystemMaintenanceService(database=SimpleNamespace(inspection=inspection))
+    service = SystemMaintenanceService(database=SimpleNamespace(inspection=inspection))  # type: ignore[arg-type]
 
     info = await service.get_db_info()
 

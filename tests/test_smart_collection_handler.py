@@ -42,7 +42,7 @@ class TestSmartCollectionHandler:
 
     @pytest.fixture
     def handler(self) -> SmartCollectionHandler:
-        return SmartCollectionHandler()
+        return SmartCollectionHandler(database=MagicMock())
 
     @pytest.mark.asyncio
     async def test_skips_when_no_user_id(self, handler: SmartCollectionHandler) -> None:

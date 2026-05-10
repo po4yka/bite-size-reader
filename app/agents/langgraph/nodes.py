@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 
 # ── web search ────────────────────────────────────────────────────────────────
 
-def make_web_search_node(web_search_agent: WebSearchAgent):  # type: ignore[type-arg]
+def make_web_search_node(web_search_agent: WebSearchAgent):
     """Return a node that runs web search enrichment before summarization."""
 
     async def web_search_node(state: SummarizationGraphState) -> dict[str, Any]:
@@ -47,7 +47,7 @@ def make_web_search_node(web_search_agent: WebSearchAgent):  # type: ignore[type
 
 # ── summarize ─────────────────────────────────────────────────────────────────
 
-def make_summarize_node(pure_summary_service: PureSummaryService):  # type: ignore[type-arg]
+def make_summarize_node(pure_summary_service: PureSummaryService):
     """Return a node that calls the LLM and tracks duplicate responses."""
 
     async def summarize_node(state: SummarizationGraphState) -> dict[str, Any]:
@@ -121,7 +121,7 @@ def make_summarize_node(pure_summary_service: PureSummaryService):  # type: igno
 
 # ── validate ──────────────────────────────────────────────────────────────────
 
-def make_validate_node(validation_agent: ValidationAgent):  # type: ignore[type-arg]
+def make_validate_node(validation_agent: ValidationAgent):
     """Return a node that validates the current summary_json against contract."""
 
     async def validate_node(state: SummarizationGraphState) -> dict[str, Any]:

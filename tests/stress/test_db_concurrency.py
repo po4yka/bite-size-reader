@@ -38,7 +38,7 @@ class TestDatabaseConcurrency:
 
         Verifies no data corruption or deadlocks occur under concurrent write load.
         """
-        from app.db.session import DatabaseSessionManager
+        from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
 
         # Initialize database
         db = DatabaseSessionManager(temp_db_path)
@@ -90,7 +90,7 @@ class TestDatabaseConcurrency:
 
         Simulates realistic workload with mixed read/write operations.
         """
-        from app.db.session import DatabaseSessionManager
+        from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
 
         db = DatabaseSessionManager(temp_db_path)
 
@@ -167,7 +167,7 @@ class TestDatabaseConcurrency:
 
         Verifies the system handles connection contention gracefully.
         """
-        from app.db.session import DatabaseSessionManager
+        from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
 
         db = DatabaseSessionManager(temp_db_path)
 
@@ -226,7 +226,7 @@ class TestDatabaseConcurrency:
 
         Verifies the system remains responsive when some operations are slow.
         """
-        from app.db.session import DatabaseSessionManager
+        from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
 
         db = DatabaseSessionManager(temp_db_path)
 

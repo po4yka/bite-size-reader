@@ -66,7 +66,7 @@ _ACCESS_TOKEN = "gho_fake_oauth_access_token_device"
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def _env(monkeypatch: pytest.MonkeyPatch) -> None:
+async def _env(monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[misc]
     """Set required env vars and reset caches for every test in this module."""
     monkeypatch.setenv("ALLOWED_USER_IDS", f"{_USER_ID},{_OTHER_USER_ID}")
     monkeypatch.setenv("ALLOWED_CLIENT_IDS", "")

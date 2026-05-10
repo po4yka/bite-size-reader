@@ -7,6 +7,7 @@ Does not require a running CocoIndex instance.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Generator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -55,7 +56,7 @@ def _reset_bridge_globals() -> None:
 
 
 @pytest.fixture(autouse=True)
-def reset_bridge() -> None:  # type: ignore[return]
+def reset_bridge() -> Generator[None, None, None]:
     _reset_bridge_globals()
     yield
     _reset_bridge_globals()

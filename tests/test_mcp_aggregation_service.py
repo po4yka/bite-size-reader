@@ -40,8 +40,8 @@ def _fake_api_runtime(db) -> SimpleNamespace:
 async def test_list_aggregation_bundles_is_scoped_to_user(mcp_test_db) -> None:
     user_id = 1001
     other_user_id = 1002
-    User.create(telegram_user_id=user_id, username="mcp-user", is_owner=False)
-    User.create(telegram_user_id=other_user_id, username="other-user", is_owner=False)
+    User.create(telegram_user_id=user_id, username="mcp-user", is_owner=False)  # type: ignore[attr-defined]
+    User.create(telegram_user_id=other_user_id, username="other-user", is_owner=False)  # type: ignore[attr-defined]
 
     repo = build_aggregation_session_repository(mcp_test_db)
     visible_session_id = await repo.async_create_aggregation_session(
@@ -71,8 +71,8 @@ async def test_list_aggregation_bundles_is_scoped_to_user(mcp_test_db) -> None:
 async def test_get_aggregation_bundle_rejects_foreign_session(mcp_test_db) -> None:
     user_id = 2001
     other_user_id = 2002
-    User.create(telegram_user_id=user_id, username="mcp-user", is_owner=False)
-    User.create(telegram_user_id=other_user_id, username="other-user", is_owner=False)
+    User.create(telegram_user_id=user_id, username="mcp-user", is_owner=False)  # type: ignore[attr-defined]
+    User.create(telegram_user_id=other_user_id, username="other-user", is_owner=False)  # type: ignore[attr-defined]
 
     repo = build_aggregation_session_repository(mcp_test_db)
     foreign_session_id = await repo.async_create_aggregation_session(
@@ -94,7 +94,7 @@ async def test_get_aggregation_bundle_rejects_foreign_session(mcp_test_db) -> No
 @pytest.mark.asyncio
 async def test_create_aggregation_bundle_returns_workflow_payload(mcp_test_db) -> None:
     user_id = 3001
-    User.create(telegram_user_id=user_id, username="mcp-user", is_owner=False)
+    User.create(telegram_user_id=user_id, username="mcp-user", is_owner=False)  # type: ignore[attr-defined]
 
     fake_result = MultiSourceAggregationRunResult(
         extraction=MultiSourceExtractionOutput(
@@ -162,7 +162,7 @@ async def test_create_aggregation_bundle_uses_request_scoped_identity_and_client
     mcp_test_db,
 ) -> None:
     user_id = 3101
-    User.create(telegram_user_id=user_id, username="mcp-user", is_owner=False)
+    User.create(telegram_user_id=user_id, username="mcp-user", is_owner=False)  # type: ignore[attr-defined]
 
     fake_result = MultiSourceAggregationRunResult(
         extraction=MultiSourceExtractionOutput(

@@ -55,7 +55,7 @@ def _build_app_and_client(monkeypatch: pytest.MonkeyPatch, owner_id: int = _OWNE
     import anyio
     from sse_starlette.sse import AppStatus, EventSourceResponse as _ESR
 
-    async def _wait_forever(self, send):  # type: ignore[override]
+    async def _wait_forever(self, send):
         await anyio.sleep_forever()
 
     monkeypatch.setattr(_ESR, "_ping", _wait_forever)
@@ -69,7 +69,7 @@ def _build_app_and_client(monkeypatch: pytest.MonkeyPatch, owner_id: int = _OWNE
     try:
         from fastapi.testclient import TestClient
     except ImportError:
-        from starlette.testclient import TestClient  # type: ignore[no-redef]
+        from starlette.testclient import TestClient
 
     import app.api.main as _main_mod
 
@@ -226,7 +226,7 @@ def test_stream_delivers_events_in_order(monkeypatch: pytest.MonkeyPatch) -> Non
     from app.api.routers.auth.tokens import create_access_token
 
     request_id = 22222
-    phase_ev = StreamEvent.now("phase", PhasePayload(phase="summarizing"), "cid")  # type: ignore[arg-type]
+    phase_ev = StreamEvent.now("phase", PhasePayload(phase="summarizing"), "cid")
     section_ev = StreamEvent.now(
         "section",
         SectionPayload(section="tldr", content="Quick summary"),
@@ -295,7 +295,7 @@ def test_disconnect_mid_stream_does_not_raise(
     from app.api.routers.auth.tokens import create_access_token
 
     request_id = 33333
-    phase_ev = StreamEvent.now("phase", PhasePayload(phase="summarizing"), "c")  # type: ignore[arg-type]
+    phase_ev = StreamEvent.now("phase", PhasePayload(phase="summarizing"), "c")
     done_ev = StreamEvent.now(
         "done", DonePayload(summary_id=None, request_id=str(request_id)), "c"
     )

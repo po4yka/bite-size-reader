@@ -604,13 +604,13 @@ class TestJsonYamlSync:
         import json as _json
 
         with open(SPEC_PATH) as f:
-            return yaml.safe_load(f)  # type: ignore[no-any-return]
+            return yaml.safe_load(f)
 
     def _load_json(self) -> dict[str, Any]:
         import json as _json
 
         with open(JSON_SPEC_PATH) as f:
-            return _json.load(f)  # type: ignore[no-any-return]
+            return _json.load(f)
 
     def test_json_spec_exists(self) -> None:
         assert JSON_SPEC_PATH.exists(), (

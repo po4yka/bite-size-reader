@@ -7,6 +7,7 @@ skipped automatically when that env-var is absent.
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncGenerator
 
 import pytest
 from sqlalchemy import select
@@ -23,13 +24,11 @@ def _test_dsn() -> str:
 
 
 def _tables() -> list:
-    from sqlalchemy import cast
-
-    return [cast("Table", model.__table__) for model in reversed(ALL_MODELS)]
+    return [model.__table__ for model in reversed(ALL_MODELS)]
 
 
 @pytest.fixture
-async def db_with_schema() -> Database:  # type: ignore[return]
+async def db_with_schema() -> AsyncGenerator[Database, None]:
     """Spin up a fresh schema for each test and tear it down after."""
     dsn = _test_dsn()
     if not dsn:

@@ -23,7 +23,7 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("API_HASH", "test_api_hash_placeholder_value___")
     monkeypatch.setenv("FIRECRAWL_API_KEY", "dummy-firecrawl-key")
     monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
-    secret_auth._cfg = None  # type: ignore[attr-defined]
+    secret_auth._cfg = None
 
 
 def _fake_auth_hash(bot_token: str, payload: dict) -> str:
@@ -101,7 +101,7 @@ async def test_link_uses_constant_time_nonce_compare(
     calls: list[tuple[str, str]] = []
     real_compare = endpoints_telegram.hmac.compare_digest
 
-    def spy_compare(a, b):  # type: ignore[no-untyped-def]
+    def spy_compare(a, b):  # noqa: ANN001
         calls.append((a, b))
         return real_compare(a, b)
 

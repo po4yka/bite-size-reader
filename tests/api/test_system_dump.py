@@ -11,7 +11,7 @@ from app.db.models import User
 
 def test_db_dump_head_and_get(client: TestClient, db):
     # Setup auth - Create user in DB with owner permissions (required for db-dump)
-    user = User.create(telegram_user_id=123456789, username="test_dump_user", is_owner=True)
+    user = User.create(telegram_user_id=123456789, username="test_dump_user", is_owner=True)  # type: ignore[attr-defined]
 
     token = create_access_token(user.telegram_user_id, client_id="test_client")
     headers = {"Authorization": f"Bearer {token}"}
@@ -45,9 +45,9 @@ def test_db_dump_head_and_get(client: TestClient, db):
 def test_db_dump_regeneration_logic(client: TestClient, db):
     # Setup auth - Create user in DB with owner permissions (use different ID to avoid conflict)
     try:
-        user = User.get(telegram_user_id=987654321)
+        user = User.get(telegram_user_id=987654321)  # type: ignore[attr-defined]
     except Exception:
-        user = User.create(telegram_user_id=987654321, username="test_dump_user_2", is_owner=True)
+        user = User.create(telegram_user_id=987654321, username="test_dump_user_2", is_owner=True)  # type: ignore[attr-defined]
 
     token = create_access_token(user.telegram_user_id, client_id="test")
     headers = {"Authorization": f"Bearer {token}"}
@@ -79,8 +79,8 @@ def test_db_dump_regeneration_logic(client: TestClient, db):
 
 
 def test_db_info_requires_owner(client: TestClient, db):
-    owner = User.create(telegram_user_id=111111111, username="owner_user", is_owner=True)
-    non_owner = User.create(telegram_user_id=222222222, username="normal_user", is_owner=False)
+    owner = User.create(telegram_user_id=111111111, username="owner_user", is_owner=True)  # type: ignore[attr-defined]
+    non_owner = User.create(telegram_user_id=222222222, username="normal_user", is_owner=False)  # type: ignore[attr-defined]
 
     owner_token = create_access_token(owner.telegram_user_id, client_id="test")
     non_owner_token = create_access_token(non_owner.telegram_user_id, client_id="test")
@@ -100,7 +100,7 @@ def test_db_info_requires_owner(client: TestClient, db):
 
 
 def test_db_info_skips_unallowlisted_tables(client: TestClient, db):
-    owner = User.create(telegram_user_id=555555555, username="owner_user3", is_owner=True)
+    owner = User.create(telegram_user_id=555555555, username="owner_user3", is_owner=True)  # type: ignore[attr-defined]
     owner_token = create_access_token(owner.telegram_user_id, client_id="test")
     owner_headers = {"Authorization": f"Bearer {owner_token}"}
 
@@ -117,8 +117,8 @@ def test_db_info_skips_unallowlisted_tables(client: TestClient, db):
 
 
 def test_clear_cache_requires_owner(client: TestClient, db):
-    owner = User.create(telegram_user_id=333333333, username="owner_user2", is_owner=True)
-    non_owner = User.create(telegram_user_id=444444444, username="normal_user2", is_owner=False)
+    owner = User.create(telegram_user_id=333333333, username="owner_user2", is_owner=True)  # type: ignore[attr-defined]
+    non_owner = User.create(telegram_user_id=444444444, username="normal_user2", is_owner=False)  # type: ignore[attr-defined]
 
     owner_token = create_access_token(owner.telegram_user_id, client_id="test")
     non_owner_token = create_access_token(non_owner.telegram_user_id, client_id="test")

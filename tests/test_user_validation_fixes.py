@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -134,8 +134,8 @@ def test_telegram_message_parsing_with_enum_objects() -> None:
             self.date = None
             self.text = "Test message"
             self.caption = None
-            self.entities = []
-            self.caption_entities = []
+            self.entities: list[Any] = []
+            self.caption_entities: list[Any] = []
             self.photo = None
             self.video = None
             self.audio = None

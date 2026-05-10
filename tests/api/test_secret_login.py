@@ -45,7 +45,7 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BOT_TOKEN", "1000000000:TESTTOKENPLACEHOLDER1234567890ABC")
     monkeypatch.setenv("FIRECRAWL_API_KEY", "dummy-firecrawl-key")
     monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
-    secret_auth._cfg = None  # type: ignore[attr-defined]
+    secret_auth._cfg = None
 
 
 async def _create_owner(db: Database, telegram_user_id: int = 123456789) -> User:
@@ -281,7 +281,7 @@ async def test_secret_key_creation_does_not_promote_target_to_owner(
 ) -> None:
     _configure_env(monkeypatch)
     monkeypatch.setenv("ALLOWED_USER_IDS", "123456789,222222222")
-    secret_auth._cfg = None  # type: ignore[attr-defined]
+    secret_auth._cfg = None
 
     owner = await _create_owner(db)
     owner_context = {
@@ -315,7 +315,7 @@ async def test_secret_key_creation_does_not_promote_target_to_owner(
 def test_get_secret_pepper_returns_configured_value(monkeypatch: pytest.MonkeyPatch) -> None:
     """Happy path: SECRET_LOGIN_PEPPER returns through, no JWT fallback consulted."""
     _configure_env(monkeypatch)
-    pepper = secret_auth._get_secret_pepper()  # type: ignore[attr-defined]
+    pepper = secret_auth._get_secret_pepper()
     assert pepper == (
         "test-pepper-32chars-minimum-for-secret-login-fixtures-do-not-reuse"
     )
@@ -327,10 +327,10 @@ def test_get_secret_pepper_raises_when_unset(monkeypatch: pytest.MonkeyPatch) ->
     JWT_SECRET_KEY would otherwise invalidate every stored ClientSecret hash."""
     _configure_env(monkeypatch)
     monkeypatch.delenv("SECRET_LOGIN_PEPPER", raising=False)
-    secret_auth._cfg = None  # type: ignore[attr-defined]
+    secret_auth._cfg = None
 
     with pytest.raises(RuntimeError, match="SECRET_LOGIN_PEPPER is unset"):
-        secret_auth._get_secret_pepper()  # type: ignore[attr-defined]
+        secret_auth._get_secret_pepper()
 
 
 def test_pepper_validator_rejects_short_value() -> None:

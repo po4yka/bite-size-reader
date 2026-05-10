@@ -15,12 +15,12 @@ async def test_require_owner_allows_owner_and_rejects_non_owner(db, user_factory
     owner = user_factory(username="owner-service", telegram_user_id=1001, is_owner=True)
     regular = user_factory(username="regular-service", telegram_user_id=1002, is_owner=False)
 
-    owner_record = await AuthService.require_owner({"user_id": owner.telegram_user_id})
+    owner_record = await AuthService.require_owner({"user_id": owner.telegram_user_id})  # type: ignore[typeddict-item]
 
     assert owner_record["telegram_user_id"] == owner.telegram_user_id
 
     with pytest.raises(AuthorizationError):
-        await AuthService.require_owner({"user_id": regular.telegram_user_id})
+        await AuthService.require_owner({"user_id": regular.telegram_user_id})  # type: ignore[typeddict-item]
 
 
 @pytest.mark.asyncio
@@ -28,7 +28,7 @@ async def test_get_target_user_creates_new_user_and_ensure_user_fetches_existing
     target = await AuthService.get_or_create_target_user(2001, username="new-user")
 
     assert target["telegram_user_id"] == 2001
-    assert User.get(User.telegram_user_id == 2001).username == "new-user"
+    assert User.get(User.telegram_user_id == 2001).username == "new-user"  # type: ignore[attr-defined]
 
     ensured = await AuthService.ensure_user(2001)
     assert ensured["telegram_user_id"] == 2001
@@ -44,13 +44,13 @@ async def test_set_and_clear_link_nonce_round_trips_to_database(db, user_factory
 
     await AuthService.set_link_nonce(user.telegram_user_id, "nonce-123", expires_at)
 
-    refreshed = User.get(User.telegram_user_id == user.telegram_user_id)
+    refreshed = User.get(User.telegram_user_id == user.telegram_user_id)  # type: ignore[attr-defined]
     assert refreshed.link_nonce == "nonce-123"
     assert refreshed.link_nonce_expires_at.tzinfo is None
 
     await AuthService.clear_link_nonce(user.telegram_user_id)
 
-    cleared = User.get(User.telegram_user_id == user.telegram_user_id)
+    cleared = User.get(User.telegram_user_id == user.telegram_user_id)  # type: ignore[attr-defined]
     assert cleared.link_nonce is None
     assert cleared.link_nonce_expires_at is None
 
@@ -91,16 +91,16 @@ async def test_complete_unlink_and_delete_user_update_persisted_state(db, user_f
         last_name="Account",
     )
 
-    linked = User.get(User.telegram_user_id == user.telegram_user_id)
+    linked = User.get(User.telegram_user_id == user.telegram_user_id)  # type: ignore[attr-defined]
     assert linked.linked_telegram_user_id == 5555
     assert linked.linked_telegram_username == "linked-account"
 
     await AuthService.unlink_telegram(user.telegram_user_id)
 
-    unlinked = User.get(User.telegram_user_id == user.telegram_user_id)
+    unlinked = User.get(User.telegram_user_id == user.telegram_user_id)  # type: ignore[attr-defined]
     assert unlinked.linked_telegram_user_id is None
     assert unlinked.linked_at is None
 
     await AuthService.delete_user(user.telegram_user_id)
 
-    assert User.get_or_none(User.telegram_user_id == user.telegram_user_id) is None
+    assert User.get_or_none(User.telegram_user_id == user.telegram_user_id) is None  # type: ignore[attr-defined]

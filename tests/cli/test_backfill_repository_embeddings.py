@@ -158,7 +158,7 @@ class StubEmbeddingGenerator:
 async def test_dry_run_no_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     """--dry-run: 3 repos missing embeddings → no regenerate calls, would_create=3."""
     repos = [_make_repo(i) for i in range(1, 4)]
-    rows = [(r, None) for r in repos]
+    rows: list[tuple[MagicMock, MagicMock | None]] = [(r, None) for r in repos]
 
     gen = StubEmbeddingGenerator()
     db = _make_db_with_rows([rows, []])  # second batch empty → stop
@@ -178,7 +178,7 @@ async def test_dry_run_no_writes(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_creates_missing_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
     """3 repos with no embeddings → 3 regenerate calls, embeddings_created=3."""
     repos = [_make_repo(i) for i in range(1, 4)]
-    rows = [(r, None) for r in repos]
+    rows: list[tuple[MagicMock, MagicMock | None]] = [(r, None) for r in repos]
 
     gen = StubEmbeddingGenerator()
     db = _make_db_with_rows([rows, []])
@@ -242,7 +242,7 @@ async def test_refreshes_when_model_version_target_mismatches(
 async def test_user_id_filter(monkeypatch: pytest.MonkeyPatch) -> None:
     """Only repos for user_id=2 are returned (WHERE clause enforced by DB mock)."""
     user_b_repos = [_make_repo(i, user_id=2) for i in range(10, 13)]
-    rows = [(r, None) for r in user_b_repos]
+    rows: list[tuple[MagicMock, MagicMock | None]] = [(r, None) for r in user_b_repos]
 
     gen = StubEmbeddingGenerator()
     db = _make_db_with_rows([rows, []])
@@ -276,7 +276,7 @@ async def test_idempotent_second_run(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_error_in_one_row_does_not_abort(monkeypatch: pytest.MonkeyPatch) -> None:
     """Generator raises on repo 2 → rows 1 and 3 still processed; errors=1."""
     repos = [_make_repo(i) for i in [1, 2, 3]]
-    rows = [(r, None) for r in repos]
+    rows: list[tuple[MagicMock, MagicMock | None]] = [(r, None) for r in repos]
 
     gen = StubEmbeddingGenerator(raise_on_id=2)
     db = _make_db_with_rows([rows, []])

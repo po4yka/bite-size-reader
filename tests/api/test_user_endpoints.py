@@ -99,13 +99,13 @@ async def _create_summary(
 
 
 def test_safe_isoformat_with_none() -> None:
-    from app.api.routers.user import safe_isoformat
+    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
 
     assert safe_isoformat(None) is None
 
 
 def test_safe_isoformat_with_datetime() -> None:
-    from app.api.routers.user import safe_isoformat
+    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
 
     dt = datetime(2023, 1, 15, 10, 30, 0)
     result = safe_isoformat(dt)
@@ -114,7 +114,7 @@ def test_safe_isoformat_with_datetime() -> None:
 
 
 def test_safe_isoformat_with_iso_string() -> None:
-    from app.api.routers.user import safe_isoformat
+    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
 
     result = safe_isoformat("2023-01-15T10:30:00Z")
     assert result is not None
@@ -122,7 +122,7 @@ def test_safe_isoformat_with_iso_string() -> None:
 
 
 def test_safe_isoformat_with_iso_string_plus_timezone() -> None:
-    from app.api.routers.user import safe_isoformat
+    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
 
     result = safe_isoformat("2023-01-15T10:30:00+00:00")
     assert result is not None
@@ -130,20 +130,20 @@ def test_safe_isoformat_with_iso_string_plus_timezone() -> None:
 
 
 def test_safe_isoformat_with_invalid_string() -> None:
-    from app.api.routers.user import safe_isoformat
+    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
 
     result = safe_isoformat("not-a-date")
     assert result == "not-a-date" or result is None
 
 
 def test_safe_isoformat_with_empty_string() -> None:
-    from app.api.routers.user import safe_isoformat
+    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
 
     assert safe_isoformat("") is None
 
 
 def test_safe_isoformat_with_integer() -> None:
-    from app.api.routers.user import safe_isoformat
+    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
 
     assert safe_isoformat(12345) is None
 
@@ -159,7 +159,7 @@ async def test_get_preferences_default_for_new_user(
     _configure_env(monkeypatch)
     await _create_user(db, telegram_user_id=123456789, username="testuser")
 
-    from app.api.routers.user import get_user_preferences
+    from app.api.routers.user import get_user_preferences  # type: ignore[attr-defined]
 
     response = await get_user_preferences(
         user={"user_id": 123456789, "username": "testuser"}
@@ -190,7 +190,7 @@ async def test_get_preferences_with_stored_preferences(
         },
     )
 
-    from app.api.routers.user import get_user_preferences
+    from app.api.routers.user import get_user_preferences  # type: ignore[attr-defined]
 
     response = await get_user_preferences(
         user={"user_id": 123456789, "username": "testuser"}
@@ -206,7 +206,7 @@ async def test_get_preferences_user_not_found(
 ) -> None:
     _configure_env(monkeypatch)
 
-    from app.api.routers.user import get_user_preferences
+    from app.api.routers.user import get_user_preferences  # type: ignore[attr-defined]
 
     response = await get_user_preferences(user={"user_id": 999999, "username": "ghost"})
     assert response["success"] is True
@@ -235,7 +235,7 @@ async def test_update_preferences_lang_preference(
     _configure_env(monkeypatch)
 
     from app.api.models.requests import UpdatePreferencesRequest
-    from app.api.routers.user import update_user_preferences
+    from app.api.routers.user import update_user_preferences  # type: ignore[attr-defined]
 
     response = await update_user_preferences(
         preferences=UpdatePreferencesRequest(lang_preference="ru"),
@@ -245,7 +245,7 @@ async def test_update_preferences_lang_preference(
     assert "lang_preference" in response["data"]["updatedFields"]
 
     user = await _read_user(db, 123456789)
-    assert user.preferences_json["lang_preference"] == "ru"
+    assert user.preferences_json["lang_preference"] == "ru"  # type: ignore[index, call-overload]
 
 
 async def test_update_preferences_notification_settings(
@@ -254,7 +254,7 @@ async def test_update_preferences_notification_settings(
     _configure_env(monkeypatch)
 
     from app.api.models.requests import UpdatePreferencesRequest
-    from app.api.routers.user import update_user_preferences
+    from app.api.routers.user import update_user_preferences  # type: ignore[attr-defined]
 
     response = await update_user_preferences(
         preferences=UpdatePreferencesRequest(
@@ -267,8 +267,8 @@ async def test_update_preferences_notification_settings(
     assert "notification_settings.frequency" in fields
 
     user = await _read_user(db, 123456789)
-    assert user.preferences_json["notification_settings"]["enabled"] is False
-    assert user.preferences_json["notification_settings"]["frequency"] == "weekly"
+    assert user.preferences_json["notification_settings"]["enabled"] is False  # type: ignore[index, call-overload]
+    assert user.preferences_json["notification_settings"]["frequency"] == "weekly"  # type: ignore[index, call-overload]
 
 
 async def test_update_preferences_app_settings(
@@ -277,7 +277,7 @@ async def test_update_preferences_app_settings(
     _configure_env(monkeypatch)
 
     from app.api.models.requests import UpdatePreferencesRequest
-    from app.api.routers.user import update_user_preferences
+    from app.api.routers.user import update_user_preferences  # type: ignore[attr-defined]
 
     response = await update_user_preferences(
         preferences=UpdatePreferencesRequest(
@@ -290,8 +290,8 @@ async def test_update_preferences_app_settings(
     assert "app_settings.font_size" in fields
 
     user = await _read_user(db, 123456789)
-    assert user.preferences_json["app_settings"]["theme"] == "light"
-    assert user.preferences_json["app_settings"]["font_size"] == "large"
+    assert user.preferences_json["app_settings"]["theme"] == "light"  # type: ignore[index, call-overload]
+    assert user.preferences_json["app_settings"]["font_size"] == "large"  # type: ignore[index, call-overload]
 
 
 async def test_update_preferences_all_fields(
@@ -300,7 +300,7 @@ async def test_update_preferences_all_fields(
     _configure_env(monkeypatch)
 
     from app.api.models.requests import UpdatePreferencesRequest
-    from app.api.routers.user import update_user_preferences
+    from app.api.routers.user import update_user_preferences  # type: ignore[attr-defined]
 
     response = await update_user_preferences(
         preferences=UpdatePreferencesRequest(
@@ -332,7 +332,7 @@ async def test_update_preferences_merge_existing(
     )
 
     from app.api.models.requests import UpdatePreferencesRequest
-    from app.api.routers.user import update_user_preferences
+    from app.api.routers.user import update_user_preferences  # type: ignore[attr-defined]
 
     await update_user_preferences(
         preferences=UpdatePreferencesRequest(notification_settings={"enabled": False}),
@@ -340,10 +340,10 @@ async def test_update_preferences_merge_existing(
     )
 
     user = await _read_user(db, 123456789)
-    assert user.preferences_json["lang_preference"] == "en"
-    assert user.preferences_json["notification_settings"]["enabled"] is False
-    assert user.preferences_json["notification_settings"]["frequency"] == "daily"
-    assert user.preferences_json["app_settings"]["theme"] == "dark"
+    assert user.preferences_json["lang_preference"] == "en"  # type: ignore[index, call-overload]
+    assert user.preferences_json["notification_settings"]["enabled"] is False  # type: ignore[index, call-overload]
+    assert user.preferences_json["notification_settings"]["frequency"] == "daily"  # type: ignore[index, call-overload]
+    assert user.preferences_json["app_settings"]["theme"] == "dark"  # type: ignore[index, call-overload]
 
 
 async def test_update_preferences_empty_request(
@@ -352,7 +352,7 @@ async def test_update_preferences_empty_request(
     _configure_env(monkeypatch)
 
     from app.api.models.requests import UpdatePreferencesRequest
-    from app.api.routers.user import update_user_preferences
+    from app.api.routers.user import update_user_preferences  # type: ignore[attr-defined]
 
     response = await update_user_preferences(
         preferences=UpdatePreferencesRequest(),
@@ -376,7 +376,7 @@ async def test_update_preferences_app_settings_no_existing(
     )
 
     from app.api.models.requests import UpdatePreferencesRequest
-    from app.api.routers.user import update_user_preferences
+    from app.api.routers.user import update_user_preferences  # type: ignore[attr-defined]
 
     response = await update_user_preferences(
         preferences=UpdatePreferencesRequest(app_settings={"theme": "dark"}),
@@ -385,7 +385,7 @@ async def test_update_preferences_app_settings_no_existing(
     assert "app_settings.theme" in response["data"]["updatedFields"]
 
     user = await _read_user(db, 123456789)
-    assert user.preferences_json["app_settings"]["theme"] == "dark"
+    assert user.preferences_json["app_settings"]["theme"] == "dark"  # type: ignore[index, call-overload]
 
 
 # =============================================================================
@@ -399,7 +399,7 @@ async def test_get_stats_no_summaries(
     _configure_env(monkeypatch)
     await _create_user(db, telegram_user_id=123456789, username="testuser")
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     response = await get_user_stats(user={"user_id": 123456789})
     data = response["data"]
@@ -434,7 +434,7 @@ async def test_get_stats_with_summaries(
             },
         )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     data = (await get_user_stats(user={"user_id": 123456789}))["data"]
     assert data["totalSummaries"] == 3
@@ -465,7 +465,7 @@ async def test_get_stats_language_distribution(
             },
         )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     data = (await get_user_stats(user={"user_id": 123456789}))["data"]
     assert data["languageDistribution"]["en"] == 2
@@ -491,7 +491,7 @@ async def test_get_stats_topic_counter(
             },
         )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     data = (await get_user_stats(user={"user_id": 123456789}))["data"]
     topics = {t["topic"]: t["count"] for t in data["favoriteTopics"]}
@@ -528,7 +528,7 @@ async def test_get_stats_domain_extraction(
         },
     )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     data = (await get_user_stats(user={"user_id": 123456789}))["data"]
     domains = {d["domain"]: d["count"] for d in data["favoriteDomains"]}
@@ -553,7 +553,7 @@ async def test_get_stats_invalid_topic_tags_type(
         },
     )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     data = (await get_user_stats(user={"user_id": 123456789}))["data"]
     assert data["favoriteTopics"] == []
@@ -566,7 +566,7 @@ async def test_get_stats_none_json_payload(
     await _create_user(db, telegram_user_id=123456789, username="testuser")
     await _create_summary(db, user_id=123456789, url="http://test.com", json_payload=None)
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     data = (await get_user_stats(user={"user_id": 123456789}))["data"]
     assert data["totalSummaries"] == 1
@@ -590,7 +590,7 @@ async def test_get_stats_url_parse_error(
         },
     )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     response = await get_user_stats(user={"user_id": 123456789})
     assert response["success"] is True
@@ -612,7 +612,7 @@ async def test_get_stats_last_summary_timestamp(
         },
     )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     data = (await get_user_stats(user={"user_id": 123456789}))["data"]
     assert "lastSummaryAt" in data
@@ -626,7 +626,7 @@ async def test_get_stats_joined_at_timestamp(
     _configure_env(monkeypatch)
     await _create_user(db, telegram_user_id=123456789, username="testuser")
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     data = (await get_user_stats(user={"user_id": 123456789}))["data"]
     assert "joinedAt" in data
@@ -651,7 +651,7 @@ async def test_get_stats_topic_tags_with_none_values(
         },
     )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     data = (await get_user_stats(user={"user_id": 123456789}))["data"]
     topics = {t["topic"] for t in data["favoriteTopics"]}
@@ -678,7 +678,7 @@ async def test_get_stats_language_other_than_en_ru(
         },
     )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     data = (await get_user_stats(user={"user_id": 123456789}))["data"]
     assert data["languageDistribution"]["en"] == 0
@@ -703,7 +703,7 @@ async def test_get_stats_domain_extraction_from_request(
         },
     )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     data = (await get_user_stats(user={"user_id": 123456789}))["data"]
     assert "favoriteDomains" in data

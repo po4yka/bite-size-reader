@@ -38,7 +38,7 @@ def _make_router(database: Database):
     router = MessageRouter(
         cfg=cfg,
         db=database,
-        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),
+        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),  # type: ignore[arg-type]
         command_processor=command_processor,
         url_handler=url_handler,
         forward_processor=forward_processor,

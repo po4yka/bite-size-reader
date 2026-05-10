@@ -110,7 +110,7 @@ async def test_late_subscriber_gets_buffered_backlog() -> None:
         queue_events.append(ev)
         if len(queue_events) == 2:
             break
-    await gen.aclose()
+    await gen.aclose()  # type: ignore[attr-defined]
 
     assert len(queue_events) == 2
     assert queue_events[0].payload["phase"] == "extracting"

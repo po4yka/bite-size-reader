@@ -132,7 +132,7 @@ async def test_collection_service_updates_moves_and_soft_deletes(
     assert moved["position"] == 1
 
     await CollectionService.delete_collection(child["id"], owner.telegram_user_id)
-    assert Collection.get_by_id(child["id"]).is_deleted is True
+    assert Collection.get_by_id(child["id"]).is_deleted is True  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
@@ -200,7 +200,7 @@ async def test_collection_service_item_operations_cover_add_list_reorder_move_an
     )
     assert moved == [summary_a.id]
     assert (
-        CollectionItem.select()
+        CollectionItem.select()  # type: ignore[attr-defined]
         .where(
             (CollectionItem.collection_id == target["id"])
             & (CollectionItem.summary_id == summary_a.id)
@@ -210,7 +210,7 @@ async def test_collection_service_item_operations_cover_add_list_reorder_move_an
 
     await CollectionService.remove_item(target["id"], summary_a.id, owner.telegram_user_id)
     assert (
-        not CollectionItem.select()
+        not CollectionItem.select()  # type: ignore[attr-defined]
         .where(
             (CollectionItem.collection_id == target["id"])
             & (CollectionItem.summary_id == summary_a.id)
@@ -245,7 +245,7 @@ async def test_collection_service_collaborators_acl_and_invites(
     roles = {entry["role"] for entry in acl}
     assert roles == {"owner", "editor"}
     assert (
-        CollectionCollaborator.select()
+        CollectionCollaborator.select()  # type: ignore[attr-defined]
         .where(
             (CollectionCollaborator.collection_id == collection["id"])
             & (CollectionCollaborator.user_id == collaborator.telegram_user_id)
@@ -259,7 +259,7 @@ async def test_collection_service_collaborators_acl_and_invites(
         collaborator.telegram_user_id,
     )
     assert (
-        not CollectionCollaborator.select()
+        not CollectionCollaborator.select()  # type: ignore[attr-defined]
         .where(
             (CollectionCollaborator.collection_id == collection["id"])
             & (CollectionCollaborator.user_id == collaborator.telegram_user_id)

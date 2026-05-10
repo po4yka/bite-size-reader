@@ -52,7 +52,7 @@ async def download_database(
 
     Requires owner permissions.
     """
-    await AuthService.require_owner(user)
+    await AuthService.require_owner(user)  # type: ignore[arg-type]
     user_id = _extract_user_id(user)
 
     dump_file = service.build_db_dump_file(
@@ -77,7 +77,7 @@ async def head_database(
     service: SystemMaintenanceService = Depends(get_system_maintenance_service),
 ):
     """HEAD variant for clients that only need headers before downloading."""
-    await AuthService.require_owner(user)
+    await AuthService.require_owner(user)  # type: ignore[arg-type]
     user_id = _extract_user_id(user)
 
     dump_file = service.build_db_dump_file(
@@ -102,7 +102,7 @@ async def get_db_info(
     service: SystemMaintenanceService = Depends(get_system_maintenance_service),
 ):
     """Get database information: table row counts and file size."""
-    await AuthService.require_owner(user)
+    await AuthService.require_owner(user)  # type: ignore[arg-type]
     user_id = _extract_user_id(user)
     audit = build_async_audit_sink(_resolve_db(request))
     audit("INFO", "admin.db_info", {"user_id": user_id})
@@ -116,7 +116,7 @@ async def clear_cache(
     service: SystemMaintenanceService = Depends(get_system_maintenance_service),
 ):
     """Clear Redis URL cache."""
-    await AuthService.require_owner(user)
+    await AuthService.require_owner(user)  # type: ignore[arg-type]
     user_id = _extract_user_id(user)
     cleared = await service.clear_url_cache()
     audit = build_async_audit_sink(_resolve_db(request))

@@ -77,8 +77,8 @@ class FakeForwardMessage(FakeMessage):
                 self.id = cid
                 self.title = title
 
-        self.chat = _Chat(chat_id)
-        self.from_user = _User()
+        self.chat = _Chat(chat_id)  # type: ignore[assignment]
+        self.from_user = _User()  # type: ignore[assignment]
         self.forward_from_chat = _FwdChat(fwd_chat_id, title)
         self.forward_from_message_id = fwd_msg_id
         self.text = text
@@ -102,7 +102,7 @@ class FakeOpenRouter:
         self.calls += 1
         content = json.dumps({"summary_250": "ok", "summary_1000": "ok", "tldr": "ok"})
         return LLMCallResult(
-            status="ok",
+            status="ok",  # type: ignore[arg-type]
             model="m",
             response_text=content,
             response_json={"choices": [{"message": {"content": content}}]},

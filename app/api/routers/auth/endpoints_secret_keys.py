@@ -191,7 +191,7 @@ async def create_secret_key(
     ensure_secret_login_enabled()
     validate_client_id(payload.client_id)
     acting_user = await AuthService.require_secret_key_manager(
-        user,
+        user,  # type: ignore[arg-type]
         target_user_id=payload.user_id,
         client_id=payload.client_id,
     )
@@ -242,7 +242,7 @@ async def rotate_secret_key(
     client_id = record.get("client_id", "")
     validate_client_id(client_id)
     acting_user = await AuthService.require_secret_key_manager(
-        user,
+        user,  # type: ignore[arg-type]
         target_user_id=record_user_id or 0,
         client_id=client_id,
     )
@@ -310,7 +310,7 @@ async def revoke_secret_key(
     client_id = record.get("client_id", "")
     validate_client_id(client_id)
     acting_user = await AuthService.require_secret_key_manager(
-        user,
+        user,  # type: ignore[arg-type]
         target_user_id=record_user_id or 0,
         client_id=client_id,
     )
@@ -363,7 +363,7 @@ async def list_secret_keys(
             raise AuthorizationError("You can only list your own client secrets")
         if client_id is not None:
             await AuthService.require_secret_key_manager(
-                user,
+                user,  # type: ignore[arg-type]
                 target_user_id=current_user["telegram_user_id"],
                 client_id=client_id,
             )

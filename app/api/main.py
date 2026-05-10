@@ -143,7 +143,7 @@ async def lifespan(app: FastAPI):
 
                 coco_runtime = CocoIndexRuntime(
                     cfg=_cfg,
-                    collection_name=runtime.vector_store.collection_name,
+                    collection_name=runtime.vector_store.collection_name,  # type: ignore[attr-defined]
                 )
                 await coco_runtime.start()
             except ImportError:
@@ -334,7 +334,7 @@ async def metrics(user: dict = Depends(get_current_user)):
     from app.api.services.auth_service import AuthService
     from app.observability.metrics import get_metrics, get_metrics_content_type
 
-    await AuthService.require_owner(user)
+    await AuthService.require_owner(user)  # type: ignore[arg-type]
     return Response(
         content=get_metrics(),
         media_type=get_metrics_content_type(),

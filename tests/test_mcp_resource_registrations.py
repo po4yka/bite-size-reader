@@ -104,7 +104,7 @@ async def test_aggregation_detail_resource_returns_session_payload() -> None:
 
 def test_hosted_mcp_resource_uses_request_scoped_identity(mcp_test_db, monkeypatch) -> None:
     user_id = 4101
-    User.create(telegram_user_id=user_id, username="resource-user", is_owner=False)
+    User.create(telegram_user_id=user_id, username="resource-user", is_owner=False)  # type: ignore[attr-defined]
 
     repo = build_aggregation_session_repository(mcp_test_db)
     session_id = asyncio.run(

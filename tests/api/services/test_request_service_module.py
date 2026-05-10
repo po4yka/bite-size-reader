@@ -37,7 +37,7 @@ def _create_request(
     created_at: datetime | None = None,
 ) -> Request:
     url = f"https://{correlation_id}.example.com"
-    return Request.create(
+    return Request.create(  # type: ignore[attr-defined]
         user_id=user_id,
         input_url=url,
         normalized_url=url,
@@ -59,7 +59,7 @@ async def test_create_url_request_and_duplicate_detection(db, user_factory) -> N
         "example.com/articles/123",
         lang_preference="en",
     )
-    Summary.create(
+    Summary.create(  # type: ignore[attr-defined]
         request=created.id,
         lang="en",
         json_payload={"tldr": "TLDR", "summary_250": "Summary text", "key_ideas": ["idea"]},
@@ -92,9 +92,9 @@ async def test_create_forward_request_and_get_request_by_id_with_related_records
         lang_preference="ru",
     )
 
-    CrawlResult.create(request=request.id, status="ok", source_url="https://example.com/post")
-    LLMCall.create(request=request.id, status="ok", response_text="LLM output")
-    Summary.create(
+    CrawlResult.create(request=request.id, status="ok", source_url="https://example.com/post")  # type: ignore[attr-defined]
+    LLMCall.create(request=request.id, status="ok", response_text="LLM output")  # type: ignore[attr-defined]
+    Summary.create(  # type: ignore[attr-defined]
         request=request.id,
         lang="ru",
         json_payload={"tldr": "TLDR", "summary_250": "Summary", "key_ideas": ["idea"]},
@@ -119,7 +119,7 @@ async def test_retry_failed_request_requires_error_status_and_copies_fields(
 ) -> None:
     user = user_factory(username="retry-user", telegram_user_id=5003)
     service = build_request_service(db)
-    failed = Request.create(
+    failed = Request.create(  # type: ignore[attr-defined]
         user_id=user.telegram_user_id,
         input_url="https://retry.example.com",
         normalized_url="https://retry.example.com",
@@ -139,7 +139,7 @@ async def test_retry_failed_request_requires_error_status_and_copies_fields(
     assert retried.input_url == failed.input_url
     assert retried.correlation_id == "cid-1-retry-1"
 
-    pending = Request.create(
+    pending = Request.create(  # type: ignore[attr-defined]
         user_id=user.telegram_user_id,
         input_url="https://pending.example.com",
         normalized_url="https://pending.example.com",
@@ -172,7 +172,7 @@ async def test_get_request_status_covers_processing_queue_complete_cancelled_and
         correlation_id="cid-processing",
         created_at=now + timedelta(seconds=1),
     )
-    CrawlResult.create(
+    CrawlResult.create(  # type: ignore[attr-defined]
         request=processing.id, status="ok", source_url="https://example.com/processing"
     )
     almost_done = _create_request(
@@ -181,11 +181,11 @@ async def test_get_request_status_covers_processing_queue_complete_cancelled_and
         correlation_id="cid-almost-done",
         created_at=now + timedelta(seconds=2),
     )
-    CrawlResult.create(
+    CrawlResult.create(  # type: ignore[attr-defined]
         request=almost_done.id, status="ok", source_url="https://example.com/almost-done"
     )
-    LLMCall.create(request=almost_done.id, status="ok", response_text="Generated summary")
-    Summary.create(
+    LLMCall.create(request=almost_done.id, status="ok", response_text="Generated summary")  # type: ignore[attr-defined]
+    Summary.create(  # type: ignore[attr-defined]
         request=almost_done.id,
         lang="en",
         json_payload={"tldr": "TLDR", "summary_250": "Summary", "key_ideas": ["idea"]},
@@ -309,7 +309,7 @@ async def test_retry_creates_new_row_not_mutates_original(db, user_factory) -> N
     """retry_failed_request must insert a fresh row, not overwrite the failed one."""
     user = user_factory(username="retry-new-row", telegram_user_id=7001)
     service = build_request_service(db)
-    failed = Request.create(
+    failed = Request.create(  # type: ignore[attr-defined]
         user_id=user.telegram_user_id,
         input_url="https://new-row.example.com",
         normalized_url="https://new-row.example.com",
@@ -318,14 +318,14 @@ async def test_retry_creates_new_row_not_mutates_original(db, user_factory) -> N
         correlation_id="cid-new-row",
         type="url",
     )
-    count_before = Request.select().count()
+    count_before = Request.select().count()  # type: ignore[attr-defined]
 
     await service.retry_failed_request(user.telegram_user_id, failed.id)
 
-    assert Request.select().count() == count_before + 1
-    original = Request.get_by_id(failed.id)
+    assert Request.select().count() == count_before + 1  # type: ignore[attr-defined]
+    original = Request.get_by_id(failed.id)  # type: ignore[attr-defined]
     assert original.status == "error", "original row must stay in error state"
-    retry_row = Request.select().where(Request.correlation_id == "cid-new-row-retry-1").first()
+    retry_row = Request.select().where(Request.correlation_id == "cid-new-row-retry-1").first()  # type: ignore[attr-defined]
     assert retry_row is not None
     assert retry_row.id != failed.id
     assert retry_row.status == "pending"
@@ -336,7 +336,7 @@ async def test_retry_does_not_carry_dedupe_hash(db, user_factory) -> None:
     """Cloned retry row must have dedupe_hash=None so it never collides with the original."""
     user = user_factory(username="retry-no-hash", telegram_user_id=7002)
     service = build_request_service(db)
-    failed = Request.create(
+    failed = Request.create(  # type: ignore[attr-defined]
         user_id=user.telegram_user_id,
         input_url="https://no-hash.example.com",
         normalized_url="https://no-hash.example.com",
@@ -348,6 +348,6 @@ async def test_retry_does_not_carry_dedupe_hash(db, user_factory) -> None:
 
     await service.retry_failed_request(user.telegram_user_id, failed.id)
 
-    retry_row = Request.select().where(Request.correlation_id == "cid-no-hash-retry-1").first()
+    retry_row = Request.select().where(Request.correlation_id == "cid-no-hash-retry-1").first()  # type: ignore[attr-defined]
     assert retry_row is not None
     assert retry_row.dedupe_hash is None

@@ -84,7 +84,7 @@ def _login_request(**overrides) -> CredentialsLoginRequest:
         "client_id": "web-v1",
     }
     payload.update(overrides)
-    return CredentialsLoginRequest(**payload)
+    return CredentialsLoginRequest(**payload)  # type: ignore[arg-type]
 
 
 # ----------------- Identifier canonicalization -----------------

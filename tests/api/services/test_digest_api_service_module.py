@@ -33,12 +33,12 @@ def _create_subscription(
     category: ChannelCategory | None = None,
     is_active: bool = True,
 ) -> ChannelSubscription:
-    channel = Channel.create(
+    channel = Channel.create(  # type: ignore[attr-defined]
         username=username,
         title=title or username.title(),
         is_active=True,
     )
-    return ChannelSubscription.create(
+    return ChannelSubscription.create(  # type: ignore[attr-defined]
         user=user_id,
         channel=channel,
         category=category,
@@ -54,14 +54,14 @@ async def test_resolve_channel_updates_channel_metadata_and_subscription_state(
     monkeypatch,
 ) -> None:
     user = user_factory(username="digest-resolve", telegram_user_id=8001)
-    channel = Channel.create(
+    channel = Channel.create(  # type: ignore[attr-defined]
         username="resolvedchan",
         title="Old Title",
         description="Old description",
         member_count=10,
         is_active=True,
     )
-    ChannelSubscription.create(user=user.telegram_user_id, channel=channel, is_active=True)
+    ChannelSubscription.create(user=user.telegram_user_id, channel=channel, is_active=True)  # type: ignore[attr-defined]
 
     userbot = SimpleNamespace(
         start=AsyncMock(),
@@ -83,7 +83,7 @@ async def test_resolve_channel_updates_channel_metadata_and_subscription_state(
 
     resolved = await digest_service.resolve_channel(user.telegram_user_id, "@ResolvedChan")
 
-    refreshed = Channel.get(Channel.username == "resolvedchan")
+    refreshed = Channel.get(Channel.username == "resolvedchan")  # type: ignore[attr-defined]
     assert resolved.username == "resolvedchan"
     assert resolved.title == "New Title"
     assert resolved.description == "Fresh description"
@@ -103,7 +103,7 @@ def test_list_channel_posts_returns_paginated_posts_with_analysis(
 ) -> None:
     user = user_factory(username="digest-posts", telegram_user_id=8002)
     subscription = _create_subscription(user_id=user.telegram_user_id, username="postchan")
-    newest = ChannelPost.create(
+    newest = ChannelPost.create(  # type: ignore[attr-defined]
         channel=subscription.channel,
         message_id=101,
         text="A" * 700,
@@ -113,14 +113,14 @@ def test_list_channel_posts_returns_paginated_posts_with_analysis(
         media_type="photo",
         url="https://t.me/postchan/101",
     )
-    ChannelPostAnalysis.create(
+    ChannelPostAnalysis.create(  # type: ignore[attr-defined]
         post=newest,
         real_topic="Digest Topic",
         tldr="Concise summary",
         relevance_score=0.85,
         content_type="news",
     )
-    ChannelPost.create(
+    ChannelPost.create(  # type: ignore[attr-defined]
         channel=subscription.channel,
         message_id=100,
         text="Older post",
@@ -153,7 +153,7 @@ def test_list_channel_posts_validates_input_and_subscription(
 ) -> None:
     user = user_factory(username="digest-post-errors", telegram_user_id=8003)
     _create_subscription(user_id=user.telegram_user_id, username="allowedchan")
-    Channel.create(username="orphaned", title="Orphaned", is_active=True)
+    Channel.create(username="orphaned", title="Orphaned", is_active=True)  # type: ignore[attr-defined]
 
     with pytest.raises(ValidationError, match="Invalid"):
         digest_service.list_channel_posts(user.telegram_user_id, "x")
@@ -171,7 +171,7 @@ def test_update_preferences_updates_existing_records_and_validates_time_formats(
     digest_service: DigestAPIService,
 ) -> None:
     user = user_factory(username="digest-prefs", telegram_user_id=8004)
-    pref = UserDigestPreference.create(
+    pref = UserDigestPreference.create(  # type: ignore[attr-defined]
         user=user.telegram_user_id,
         delivery_time="09:00",
         timezone=None,
@@ -188,7 +188,7 @@ def test_update_preferences_updates_existing_records_and_validates_time_formats(
         min_relevance_score=0.75,
     )
 
-    refreshed = UserDigestPreference.get(UserDigestPreference.user == user.telegram_user_id)
+    refreshed = UserDigestPreference.get(UserDigestPreference.user == user.telegram_user_id)  # type: ignore[attr-defined]
     assert updated.delivery_time == "11:30"
     assert updated.delivery_time_source == "user"
     assert updated.timezone == "UTC"
@@ -214,7 +214,7 @@ def test_category_crud_and_assignment_flows(
     subscription = _create_subscription(
         user_id=user.telegram_user_id,
         username="catchan",
-        category=ChannelCategory.get_by_id(first.id),
+        category=ChannelCategory.get_by_id(first.id),  # type: ignore[attr-defined]
     )
 
     listed = digest_service.list_categories(user.telegram_user_id)
@@ -265,8 +265,8 @@ def test_bulk_digest_operations_report_mixed_results(
     user = user_factory(username="digest-bulk", telegram_user_id=8006)
     sub_one = _create_subscription(user_id=user.telegram_user_id, username="bulkone")
     sub_two = _create_subscription(user_id=user.telegram_user_id, username="bulktwo")
-    Channel.create(username="orphanbulk", title="Orphan", is_active=True)
-    category = ChannelCategory.create(user=user.telegram_user_id, name="Bulk", position=1)
+    Channel.create(username="orphanbulk", title="Orphan", is_active=True)  # type: ignore[attr-defined]
+    category = ChannelCategory.create(user=user.telegram_user_id, name="Bulk", position=1)  # type: ignore[attr-defined]
 
     unsubscribe_result = digest_service.bulk_unsubscribe(
         user.telegram_user_id,

@@ -76,7 +76,7 @@ async def test_user_stats_with_valid_json_payload(
         },
     )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     response = await get_user_stats(user={"user_id": 123456789})
 
@@ -99,7 +99,7 @@ async def test_user_stats_with_none_json_payload(
         json_payload=None,
     )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     response = await get_user_stats(user={"user_id": 123456790})
 
@@ -139,7 +139,7 @@ async def test_user_stats_with_string_json_payload(
             {"sid": summary_id},
         )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     response = await get_user_stats(user={"user_id": 123456791})
 
@@ -165,7 +165,7 @@ async def test_user_stats_with_invalid_topic_tags(
         },
     )
 
-    from app.api.routers.user import get_user_stats
+    from app.api.routers.user import get_user_stats  # type: ignore[attr-defined]
 
     response = await get_user_stats(user={"user_id": 123456792})
 

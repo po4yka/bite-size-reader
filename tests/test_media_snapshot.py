@@ -180,7 +180,7 @@ async def test_entities_merge(database: Database, session: AsyncSession) -> None
         select(TelegramMessage).where(TelegramMessage.request_id == req_id)
     )
     assert row is not None
-    types = {e.get("type") for e in (row.entities_json or [])}
+    types = {e.get("type") for e in (row.entities_json or [])}  # type: ignore[union-attr]
     assert types == {"bold", "url"}
 
 

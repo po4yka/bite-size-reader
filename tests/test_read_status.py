@@ -59,7 +59,7 @@ class ReadStatusBot(TelegramBot):
         self.seen_urls: list[str] = []
 
         if hasattr(self, "url_processor"):
-            self.url_processor.handle_url_flow = self._fake_url_flow  # type: ignore[method-assign]
+            self.url_processor.handle_url_flow = self._fake_url_flow
 
     async def _handle_url_flow(
         self, message: Any, url_text: str, **_: object
@@ -588,7 +588,7 @@ async def test_unread_command_with_unread(
             route_version=1,
         )
         await insert_summary(
-            session, request_id=rid, lang="en", json_payload=payload, is_read=False
+            session, request_id=rid, lang="en", json_payload=payload, is_read=False  # type: ignore[arg-type]
         )
     await session.commit()
 

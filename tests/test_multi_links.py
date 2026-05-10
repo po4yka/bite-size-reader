@@ -48,7 +48,7 @@ class SpyBot(TelegramBot):
                 self.seen_urls.append(url_text)
                 await self._safe_reply(message, f"OK {url_text}")
 
-            self.url_processor.handle_url_flow = mock_handle_url_flow  # type: ignore[method-assign]
+            self.url_processor.handle_url_flow = mock_handle_url_flow
 
     async def _handle_url_flow(
         self, message: Any, url_text: str, **_: object

@@ -263,7 +263,7 @@ class TestExtractHappyPath:
 
     async def test_readme_404_results_in_empty_excerpt(self) -> None:
         repo_dto = _make_repo_dto()
-        languages = {}
+        languages: dict[str, int] = {}
         ig = _make_integration()
         db = _make_db(integration=ig, repository_id=55)
         analyze_uc = _make_analyze_use_case()

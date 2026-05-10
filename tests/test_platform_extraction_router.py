@@ -17,7 +17,7 @@ if TYPE_CHECKING:
         ResponseFormatterFacade as ResponseFormatter,
     )
     from app.config import AppConfig
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
 
 
 @asynccontextmanager
@@ -206,7 +206,7 @@ async def test_extract_content_pure_passes_request_id_to_generic_scraper() -> No
     assert content_text
     assert content_source == "markdown"
     assert metadata["request_id"] == 777
-    extractor.scraper.scrape_markdown.assert_awaited_once_with(
+    extractor.scraper.scrape_markdown.assert_awaited_once_with(  # type: ignore[attr-defined]
         "https://example.com/article",
         request_id=777,
     )
@@ -287,7 +287,7 @@ async def test_extract_content_pure_skips_meta_router_when_feature_flag_disabled
 @pytest.mark.asyncio
 async def test_extract_content_pure_disables_article_media_when_flag_off() -> None:
     extractor = _make_extractor_with_cfg(aggregation_article_media_enabled=False)
-    extractor.firecrawl.scrape_markdown = AsyncMock(
+    extractor.firecrawl.scrape_markdown = AsyncMock(  # type: ignore[method-assign]
         return_value=SimpleNamespace(
             status="ok",
             content_markdown=(
@@ -355,7 +355,7 @@ async def test_extract_and_process_content_routes_platform_urls_before_generic_s
         title="Title",
         images=[],
     )
-    extractor.firecrawl.scrape_markdown.assert_not_awaited()
+    extractor.firecrawl.scrape_markdown.assert_not_awaited()  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio

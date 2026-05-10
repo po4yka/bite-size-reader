@@ -67,20 +67,16 @@ async def test_url_flow_publishes_phase_events_when_streaming_enabled(
     # Exercise the publish call sites directly as url_processor.py does.
     up_mod.get_stream_hub().publish(
         req_id,
-        StreamEvent.now("phase", PhasePayload(phase="summarizing"), corr),  # type: ignore[arg-type]
-    )
+        StreamEvent.now("phase", PhasePayload(phase="summarizing"), corr),    )
     up_mod.get_stream_hub().publish(
         req_id,
-        StreamEvent.now("phase", PhasePayload(phase="validating"), corr),  # type: ignore[arg-type]
-    )
+        StreamEvent.now("phase", PhasePayload(phase="validating"), corr),    )
     up_mod.get_stream_hub().publish(
         req_id,
-        StreamEvent.now("phase", PhasePayload(phase="persisting"), corr),  # type: ignore[arg-type]
-    )
+        StreamEvent.now("phase", PhasePayload(phase="persisting"), corr),    )
     up_mod.get_stream_hub().publish(
         req_id,
-        StreamEvent.now("phase", PhasePayload(phase="done"), corr),  # type: ignore[arg-type]
-    )
+        StreamEvent.now("phase", PhasePayload(phase="done"), corr),    )
 
     phases = recording.phases_for(req_id)
     assert phases == ["summarizing", "validating", "persisting", "done"]
@@ -157,20 +153,16 @@ async def test_url_processor_publishes_phases_via_get_stream_hub(
     if streaming_enabled:
         up_mod.get_stream_hub().publish(
             req_id,
-            StreamEvent.now("phase", PhasePayload(phase="summarizing"), corr),  # type: ignore[arg-type]
-        )
+            StreamEvent.now("phase", PhasePayload(phase="summarizing"), corr),        )
         up_mod.get_stream_hub().publish(
             req_id,
-            StreamEvent.now("phase", PhasePayload(phase="validating"), corr),  # type: ignore[arg-type]
-        )
+            StreamEvent.now("phase", PhasePayload(phase="validating"), corr),        )
         up_mod.get_stream_hub().publish(
             req_id,
-            StreamEvent.now("phase", PhasePayload(phase="persisting"), corr),  # type: ignore[arg-type]
-        )
+            StreamEvent.now("phase", PhasePayload(phase="persisting"), corr),        )
         up_mod.get_stream_hub().publish(
             req_id,
-            StreamEvent.now("phase", PhasePayload(phase="done"), corr),  # type: ignore[arg-type]
-        )
+            StreamEvent.now("phase", PhasePayload(phase="done"), corr),        )
 
     phases = recording.phases_for(req_id)
     assert phases == ["summarizing", "validating", "persisting", "done"]

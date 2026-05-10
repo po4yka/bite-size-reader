@@ -44,7 +44,7 @@ _GH_USER_PAYLOAD = {
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def _env(monkeypatch: pytest.MonkeyPatch) -> None:
+async def _env(monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[misc]
     """Set required env vars and reset caches for every test in this module."""
     monkeypatch.setenv("ALLOWED_USER_IDS", str(_USER_ID))
     monkeypatch.setenv("ALLOWED_CLIENT_IDS", "")

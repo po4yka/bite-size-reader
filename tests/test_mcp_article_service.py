@@ -104,7 +104,7 @@ async def test_list_articles_tag_filter_paginates_correctly() -> None:
     other = _summary(2, 102, "Other", ["#other"])
     new_ai = _summary(3, 103, "New AI", ["#ai"])
     session = _Session(scalars_results=[[new_ai, other, old_ai], [new_ai, other, old_ai]])
-    service = ArticleReadService(_context(session, user_id=1))
+    service = ArticleReadService(_context(session, user_id=1))  # type: ignore[arg-type]
 
     page1 = await service.list_articles(limit=1, offset=0, tag="ai")
     page2 = await service.list_articles(limit=1, offset=1, tag="ai")
@@ -127,8 +127,8 @@ async def test_search_articles_preserves_fts_order() -> None:
         scalars_results=[[old_hit, new_hit]],
     )
 
-    payload = await ArticleReadService(_context(session, user_id=1)).search_articles(
+    payload = await ArticleReadService(_context(session, user_id=1)).search_articles(  # type: ignore[arg-type]
         "topic", limit=10
     )
 
-    assert [row["summary_id"] for row in payload["results"]] == [2, 1]
+    assert [row["summary_id"] for row in payload["results"]] == [2, 1]  # type: ignore[typeddict-item]

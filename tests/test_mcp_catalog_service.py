@@ -77,7 +77,7 @@ async def test_list_videos_uses_runtime_database_session() -> None:
     )
     session = _Session(scalar_results=[1], scalars_results=[[video]])
 
-    payload = await CatalogReadService(_context(session)).list_videos(status="completed")
+    payload = await CatalogReadService(_context(session)).list_videos(status="completed")  # type: ignore[arg-type]
 
     assert payload["total"] == 1
     assert payload["results"][0] == {
@@ -113,7 +113,7 @@ async def test_get_video_transcript_returns_text_payload() -> None:
     )
     session = _Session(scalar_results=[video])
 
-    payload = await CatalogReadService(_context(session)).get_video_transcript("demo")
+    payload = await CatalogReadService(_context(session)).get_video_transcript("demo")  # type: ignore[arg-type]
 
     assert payload == {
         "video_id": "demo",

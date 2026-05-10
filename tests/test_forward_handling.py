@@ -577,7 +577,7 @@ async def test_forward_caption_only_routes_to_forward_flow(database: Database) -
     router = MessageRouter(
         cfg=cfg,
         db=database,
-        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),
+        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),  # type: ignore[arg-type]
         command_processor=MagicMock(),
         url_handler=url_handler,
         forward_processor=forward_processor,
@@ -632,7 +632,7 @@ async def test_channel_forward_missing_msg_id_falls_to_user_path(database: Datab
     router = MessageRouter(
         cfg=cfg,
         db=database,
-        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),
+        access_controller=SimpleNamespace(check_access=AsyncMock(return_value=True)),  # type: ignore[arg-type]
         command_processor=MagicMock(),
         url_handler=url_handler,
         forward_processor=forward_processor,

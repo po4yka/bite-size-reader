@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from app.adapters.external.formatting.protocols import (
         ResponseFormatterFacade as ResponseFormatter,
     )
-    from app.db.session import DatabaseSessionManager
+    from app.db.session import DatabaseSessionManager  # type: ignore[attr-defined]
 else:  # pragma: no cover - runtime fallback for typing-only imports
     URLProcessor = ResponseFormatter = DatabaseSessionManager = Any  # type: ignore[assignment]
 

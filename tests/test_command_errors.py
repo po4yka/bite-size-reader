@@ -51,7 +51,7 @@ async def test_error_during_summarize_reports_to_user(database: Database) -> Non
     async def boom_url_flow(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("boom")
 
-    bot.url_processor.handle_url_flow = boom_url_flow  # type: ignore[method-assign]
+    bot.url_processor.handle_url_flow = boom_url_flow
 
     await bot._on_message(msg)
     assert any("error" in r.lower() for r in msg._replies)

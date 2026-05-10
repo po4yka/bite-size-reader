@@ -200,7 +200,7 @@ def test_hosted_mcp_tool_uses_request_scoped_identity_and_client_id(
     )
 
     user_id = 4201
-    User.create(telegram_user_id=user_id, username="tool-user", is_owner=False)
+    User.create(telegram_user_id=user_id, username="tool-user", is_owner=False)  # type: ignore[attr-defined]
 
     fake_result = MultiSourceAggregationRunResult(
         extraction=MultiSourceExtractionOutput(

@@ -99,7 +99,7 @@ class _FakeRepo:
         self.updated_at = datetime.now(UTC)
 
 
-def _make_repository(**kwargs) -> _FakeRepo:  # type: ignore[return]
+def _make_repository(**kwargs) -> _FakeRepo:
     return _FakeRepo(**kwargs)
 
 
@@ -179,7 +179,7 @@ async def test_unchanged_content_skips_llm() -> None:
         readme_excerpt=None,
     )
     # Pre-compute the exact hash the use case will compute
-    computed_hash = _compute_content_hash(repo)
+    computed_hash = _compute_content_hash(repo)  # type: ignore[arg-type]
     repo.content_hash = computed_hash
     repo.analysis_json = _make_analysis().model_dump()
 
@@ -206,7 +206,7 @@ async def test_force_re_analysis_runs_llm_even_if_unchanged() -> None:
         topics_json=["testing"],
         readme_excerpt=None,
     )
-    computed_hash = _compute_content_hash(repo)
+    computed_hash = _compute_content_hash(repo)  # type: ignore[arg-type]
     repo.content_hash = computed_hash
     repo.analysis_json = _make_analysis().model_dump()
 

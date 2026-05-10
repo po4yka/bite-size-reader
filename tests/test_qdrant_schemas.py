@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
-from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
+from qdrant_client.models import Filter, MatchAny, MatchValue
 
 from app.infrastructure.vector.qdrant_schemas import QdrantQueryFilters
 
 
-def _must(f: Filter) -> list[FieldCondition]:
+def _must(f: Filter) -> list[Any]:
     return list(f.must or [])
 
 

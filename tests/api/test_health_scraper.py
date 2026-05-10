@@ -8,9 +8,9 @@ from app.db.models import User
 
 def _auth_headers() -> dict[str, str]:
     # Use an ID from the default test ALLOWED_USER_IDS set in tests/conftest.py
-    user = User.get_or_none(User.telegram_user_id == 123456789)
+    user = User.get_or_none(User.telegram_user_id == 123456789)  # type: ignore[attr-defined]
     if user is None:
-        user = User.create(telegram_user_id=123456789, username="health_test_user")
+        user = User.create(telegram_user_id=123456789, username="health_test_user")  # type: ignore[attr-defined]
     token = create_access_token(
         user_id=user.telegram_user_id, username=user.username, client_id="test"
     )

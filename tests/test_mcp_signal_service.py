@@ -56,7 +56,7 @@ async def test_list_sources_uses_runtime_database_session() -> None:
         last_error=None,
     )
 
-    payload = await SignalMcpService(_context([source])).list_sources()
+    payload = await SignalMcpService(_context([source])).list_sources()  # type: ignore[arg-type]
 
     assert payload == {
         "sources": [
@@ -88,7 +88,7 @@ async def test_list_signals_uses_runtime_database_session() -> None:
         topic=SimpleNamespace(name="AI"),
     )
 
-    payload = await SignalMcpService(_context([signal], user_id=42)).list_signals(
+    payload = await SignalMcpService(_context([signal], user_id=42)).list_signals(  # type: ignore[arg-type]
         status="candidate"
     )
 
