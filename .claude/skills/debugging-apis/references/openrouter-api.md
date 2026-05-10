@@ -36,12 +36,13 @@
 ## Debugging Failed LLM Calls
 
 ```bash
-sqlite3 /data/ratatoskr.db << EOF
-.mode json
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr <<'EOF'
 SELECT
   id,
   model,
   status,
+  attempt_index,
+  attempt_trigger,
   tokens_prompt,
   tokens_completion,
   cost_usd,
@@ -49,8 +50,8 @@ SELECT
   error_text,
   created_at
 FROM llm_calls
-WHERE request_id = '<correlation_id>'
-ORDER BY created_at;
+WHERE request_id = (SELECT id FROM requests WHERE correlation_id = '<correlation_id>')
+ORDER BY attempt_index;
 EOF
 ```
 
@@ -58,7 +59,7 @@ EOF
 
 ```bash
 # Get request messages
-sqlite3 /data/ratatoskr.db "
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr "
   SELECT request_messages_json
   FROM llm_calls
   WHERE request_id = '<correlation_id>'
@@ -66,7 +67,7 @@ sqlite3 /data/ratatoskr.db "
 " | python -m json.tool
 
 # Get response
-sqlite3 /data/ratatoskr.db "
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr "
   SELECT response_json
   FROM llm_calls
   WHERE request_id = '<correlation_id>'

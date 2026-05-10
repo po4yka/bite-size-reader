@@ -7,7 +7,7 @@ Ratatoskr is a personal knowledge base of web article summaries. It ingests URLs
 ## Capabilities
 
 - **Search articles** by keyword, topic tag, or entity name (full-text search)
-- **Semantic search** by natural-language description using ChromaDB vector embeddings
+- **Semantic search** by natural-language description using Qdrant vector embeddings
 - **Retrieve article details** including key ideas, entities, readability scores, and topic tags
 - **Browse recent articles** with optional filtering by language, favorites, or tag
 - **Read full article content** (original extracted markdown/text)
@@ -22,7 +22,7 @@ Ratatoskr is a personal knowledge base of web article summaries. It ingests URLs
 
 ### search_articles
 
-Search stored article summaries by keyword, topic, or entity. Performs full-text search (FTS5) across titles, summaries, tags, and entities.
+Search stored article summaries by keyword, topic, or entity. Performs full-text search via the Postgres `topic_search_index.body_tsv` (TSVECTOR + GIN) across titles, summaries, tags, and entities.
 
 **Parameters:**
 
@@ -31,7 +31,7 @@ Search stored article summaries by keyword, topic, or entity. Performs full-text
 
 ### semantic_search
 
-Search articles by meaning using ChromaDB vector similarity. Finds articles whose content is semantically similar to your description, even when exact keywords don't match. Falls back to keyword search if ChromaDB is unavailable.
+Search articles by meaning using Qdrant vector similarity. Finds articles whose content is semantically similar to your description, even when exact keywords don't match. Falls back to keyword search if Qdrant is unavailable.
 
 **Parameters:**
 
@@ -194,16 +194,16 @@ python -m app.cli.mcp_server --transport sse --port 8200
 
 Then configure the MCP client to connect to `http://localhost:8200/sse`.
 
-### Semantic search (requires ChromaDB)
+### Semantic search (requires Qdrant)
 
-For `semantic_search` to work, ChromaDB must be running and configured:
+For `semantic_search` to work, Qdrant must be running and configured:
 
 ```bash
-# Environment variables for ChromaDB
-CHROMA_HOST=http://localhost:8000
-CHROMA_AUTH_TOKEN=your-chroma-token  # optional
-CHROMA_ENVIRONMENT=production
-CHROMA_USER_SCOPE=public
+# Environment variables for Qdrant
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=your-qdrant-token  # optional, for secured deployments
+QDRANT_ENV=production              # collection-namespace label
+QDRANT_USER_SCOPE=public           # tenant scope label
 ```
 
-If ChromaDB is not available, `semantic_search` automatically falls back to keyword search.
+If Qdrant is not available, `semantic_search` automatically falls back to keyword search.

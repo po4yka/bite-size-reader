@@ -25,7 +25,7 @@ docker logs ratatoskr
 docker ps | grep ratatoskr
 
 # Inspect database
-docker exec ratatoskr sqlite3 /data/ratatoskr.db ".tables"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "\dt"
 ```
 
 ## E2E Tests (Gated)

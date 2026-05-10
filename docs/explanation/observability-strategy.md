@@ -45,11 +45,12 @@ Logs (correlation_id = "req_abc123")
 ```bash
 # User reports error: "Error ID: req_abc123"
 
-# Trace full request lifecycle
-sqlite3 data/ratatoskr.db "SELECT * FROM requests WHERE id = 'req_abc123';"
-sqlite3 data/ratatoskr.db "SELECT * FROM crawl_results WHERE request_id = 'req_abc123';"
-sqlite3 data/ratatoskr.db "SELECT * FROM llm_calls WHERE request_id = 'req_abc123';"
-sqlite3 data/ratatoskr.db "SELECT * FROM summaries WHERE request_id = 'req_abc123';"
+# Trace full request lifecycle (Postgres via the deployment container)
+PSQL="docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c"
+$PSQL "SELECT * FROM requests        WHERE correlation_id = 'req_abc123';"
+$PSQL "SELECT * FROM crawl_results   WHERE request_id = (SELECT id FROM requests WHERE correlation_id = 'req_abc123');"
+$PSQL "SELECT * FROM llm_calls       WHERE request_id = (SELECT id FROM requests WHERE correlation_id = 'req_abc123') ORDER BY attempt_index;"
+$PSQL "SELECT * FROM summaries       WHERE request_id = (SELECT id FROM requests WHERE correlation_id = 'req_abc123');"
 
 # Search logs
 grep "req_abc123" logs/bot.log
@@ -269,7 +270,7 @@ LIMIT 10;
 -- Analyze token usage
 SELECT AVG(tokens_used), MAX(tokens_used)
 FROM crawl_results
-WHERE created_at > datetime('now', '-7 days');
+WHERE created_at > now() - interval '7 days';
 ```
 
 ---
@@ -303,7 +304,7 @@ SELECT
   SUM(total_tokens) as total_tokens,
   AVG(total_tokens) as avg_tokens_per_call
 FROM llm_calls
-WHERE created_at > datetime('now', '-30 days')
+WHERE created_at > now() - interval '30 days'
 GROUP BY model
 ORDER BY total_tokens DESC;
 ```
@@ -348,7 +349,7 @@ WHERE tm.message_id = 12345;
 -- Average processing time per request
 SELECT ROUND(AVG(total_processing_time_sec), 2) as avg_sec
 FROM requests
-WHERE created_at > datetime('now', '-7 days');
+WHERE created_at > now() - interval '7 days';
 
 -- Slow requests (>15 seconds)
 SELECT url, total_processing_time_sec, created_at
@@ -387,7 +388,7 @@ SELECT
   SUM(completion_tokens) as total_completion_tokens,
   SUM(total_tokens) as total_tokens
 FROM llm_calls
-WHERE created_at > datetime('now', '-30 days')
+WHERE created_at > now() - interval '30 days'
 GROUP BY model
 ORDER BY total_tokens DESC;
 ```
@@ -519,7 +520,7 @@ SELECT
   SUM(total_tokens) as total_tokens,
   ROUND(AVG(total_tokens), 2) as avg_tokens
 FROM llm_calls
-WHERE created_at > datetime('now', '-30 days')
+WHERE created_at > now() - interval '30 days'
 GROUP BY model
 ORDER BY total_tokens DESC;
 ```
@@ -558,7 +559,7 @@ SELECT
   JSON_EXTRACT(summary_json, '$.quality_scores.coherence') as coherence,
   JSON_EXTRACT(summary_json, '$.hallucination_risk.level') as hallucination_risk
 FROM summaries
-WHERE created_at > datetime('now', '-7 days')
+WHERE created_at > now() - interval '7 days'
 ORDER BY accuracy ASC
 LIMIT 10;
 ```
@@ -629,7 +630,7 @@ SELECT
   SUM(CASE WHEN error_message IS NULL THEN 1 ELSE 0 END) as successful_calls,
   ROUND(100.0 * SUM(CASE WHEN error_message IS NULL THEN 1 ELSE 0 END) / COUNT(*), 2) as success_rate_pct
 FROM llm_calls
-WHERE created_at > datetime('now', '-7 days')
+WHERE created_at > now() - interval '7 days'
 GROUP BY model
 ORDER BY total_calls DESC;
 ```
@@ -750,10 +751,13 @@ services:
 #!/bin/bash
 # /usr/local/bin/check-ratatoskr-health.sh
 
-ERROR_RATE=$(sqlite3 /data/ratatoskr.db "
-  SELECT ROUND(100.0 * SUM(CASE WHEN error_message IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*), 2)
-  FROM requests
-  WHERE created_at > datetime('now', '-1 hour');
+ERROR_RATE=$(docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -At -c "
+  SELECT round(
+           100.0 * count(*) FILTER (WHERE status = 'error') / nullif(count(*), 0),
+           2
+         )
+    FROM requests
+   WHERE created_at > now() - interval '1 hour';
 ")
 
 if (( $(echo "$ERROR_RATE > 10" | bc -l) )); then

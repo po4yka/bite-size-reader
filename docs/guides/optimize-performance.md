@@ -226,8 +226,8 @@ TOKEN_COUNTING_MODE=fast  # len(text)//4 approximation
 YOUTUBE_CLEANUP_AFTER_DAYS=3  # Delete after 3 days
 YOUTUBE_MAX_STORAGE_GB=5     # Max 5 GB
 
-# Database vacuum (reclaim space)
-sqlite3 data/ratatoskr.db "VACUUM;"
+# Database vacuum (reclaim space and update planner stats)
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "VACUUM (ANALYZE);"
 ```
 
 ---
@@ -250,22 +250,22 @@ time python -m app.cli.summary --url https://example.com/article
 
 ```bash
 # Database query performance
-sqlite3 data/ratatoskr.db "
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "
   SELECT
-    ROUND(AVG(total_processing_time_sec), 2) as avg_time_sec,
-    MIN(total_processing_time_sec) as min_time_sec,
-    MAX(total_processing_time_sec) as max_time_sec
+    round(avg(total_processing_time_sec)::numeric, 2) AS avg_time_sec,
+    min(total_processing_time_sec) AS min_time_sec,
+    max(total_processing_time_sec) AS max_time_sec
   FROM requests
-  WHERE created_at > datetime('now', '-7 days');
+  WHERE created_at > now() - interval '7 days';
 "
 
 # API costs
-sqlite3 data/ratatoskr.db "
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "
   SELECT
-    COUNT(*) as total_calls,
-    SUM(tokens_used) as total_tokens
+    count(*) AS total_calls,
+    sum(tokens_prompt + tokens_completion) AS total_tokens
   FROM llm_calls
-  WHERE created_at > datetime('now', '-30 days');
+  WHERE created_at > now() - interval '30 days';
 "
 ```
 
@@ -320,15 +320,15 @@ EMBEDDING_MODEL=all-mpnet-base-v2
 
 ```bash
 # Average processing time (last 7 days)
-sqlite3 data/ratatoskr.db "
-  SELECT ROUND(AVG(total_processing_time_sec), 2) as avg_sec
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "
+  SELECT round(avg(total_processing_time_sec)::numeric, 2) AS avg_sec
   FROM requests
-  WHERE created_at > datetime('now', '-7 days');
+  WHERE created_at > now() - interval '7 days';
 "
 
 # Slow requests (>15s)
-sqlite3 data/ratatoskr.db "
-  SELECT url, total_processing_time_sec
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "
+  SELECT input_url AS url, total_processing_time_sec
   FROM requests
   WHERE total_processing_time_sec > 15
   ORDER BY total_processing_time_sec DESC
@@ -340,13 +340,13 @@ sqlite3 data/ratatoskr.db "
 
 ```bash
 # Token usage (last 30 days)
-sqlite3 data/ratatoskr.db "
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "
   SELECT
-    SUM(prompt_tokens) as total_prompt,
-    SUM(completion_tokens) as total_completion,
-    SUM(total_tokens) as total
+    sum(tokens_prompt) AS total_prompt,
+    sum(tokens_completion) AS total_completion,
+    sum(tokens_prompt + tokens_completion) AS total
   FROM llm_calls
-  WHERE created_at > datetime('now', '-30 days');
+  WHERE created_at > now() - interval '30 days';
 "
 
 # Estimated cost (DeepSeek: $0.14/1M prompt, $0.28/1M completion)
@@ -404,11 +404,11 @@ htop  # or top
 
 ```bash
 # Check token usage per model
-sqlite3 data/ratatoskr.db "
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "
   SELECT
     model,
-    COUNT(*) as calls,
-    SUM(total_tokens) as tokens
+    count(*) AS calls,
+    sum(tokens_prompt + tokens_completion) AS tokens
   FROM llm_calls
   GROUP BY model
   ORDER BY tokens DESC;

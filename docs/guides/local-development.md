@@ -167,10 +167,10 @@ python -m app.cli.migrate_db
 
 # Verify database created
 ls -lh data/
-# Should see: app.db (~10KB)
+# Should see Compose-managed Postgres volume (`postgres_data/`) in `docker volume inspect`
 
-# Check database schema
-sqlite3 data/ratatoskr.db ".schema" | head -20
+# Check database schema (lists tables and indexes)
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "\dt"
 ```
 
 ---
@@ -438,11 +438,12 @@ export DEBUG_PAYLOADS=1
 # Run CLI with verbose output
 python -m app.cli.summary --url https://example.com --log-level DEBUG
 
-# Inspect database
-sqlite3 data/ratatoskr.db
+# Inspect database (interactive psql shell)
+docker exec -it ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr
 
 # Check specific request by correlation ID
-sqlite3 data/ratatoskr.db "SELECT * FROM requests WHERE id = '<correlation_id>';"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT * FROM requests WHERE correlation_id = '<correlation_id>';"
 ```
 
 ---
@@ -467,14 +468,14 @@ git commit -m "deps: add new-package"
 ### Running Database Migrations
 
 ```bash
-# Apply migrations
+# Apply migrations (Alembic upgrade head)
 python -m app.cli.migrate_db
 
-# Rebuild indexes
-python -m app.cli.rebuild_indexes
+# Inspect current Alembic revision
+python -m app.cli.migrate_db --status
 
-# Check database integrity
-sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
+# Verify database connectivity
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "SELECT 1;"
 ```
 
 ### Testing Mobile API

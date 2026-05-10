@@ -317,11 +317,13 @@ See: [Scraper chain explainer](scraper-chain.md)
 
 ```python
 class SummaryRepository:
-    def save(self, summary: Summary) -> None:
-        # Peewee ORM logic here
+    async def save(self, summary: Summary) -> None:
+        # SQLAlchemy 2.0 async session logic here
+        ...
 
-    def find_by_id(self, summary_id: str) -> Optional[Summary]:
+    async def find_by_id(self, summary_id: int) -> Optional[Summary]:
         # Query logic here
+        ...
 ```
 
 **Benefits:** Swap SQLite for PostgreSQL by changing one class, no domain code changes.

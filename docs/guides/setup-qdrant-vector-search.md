@@ -277,7 +277,8 @@ curl http://localhost:6333/collections/summaries
 # pointsCount should be > 0
 
 # Check database has summaries
-sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summaries;"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT count(*) FROM summaries;"
 
 # If count mismatch, backfill again
 python -m app.cli.backfill_vector_store
@@ -423,12 +424,16 @@ python -m app.cli.backfill_vector_store --batch-size 25
 # Get collection info (includes point count and config)
 curl http://localhost:6333/collections/summaries
 
-# Check collection metadata
-sqlite3 data/ratatoskr.db "
+# Check collection metadata (Postgres-side embedding coverage)
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "
   SELECT
-    COUNT(*) as total_summaries,
-    COUNT(CASE WHEN embedding IS NOT NULL THEN 1 END) as with_embeddings,
-    ROUND(AVG(CASE WHEN embedding IS NOT NULL THEN 1.0 ELSE 0.0 END) * 100, 2) as coverage_pct
+    count(*) AS total_summaries,
+    count(*) FILTER (WHERE embedding_blob IS NOT NULL) AS with_embeddings,
+    round(
+      100.0 * count(*) FILTER (WHERE embedding_blob IS NOT NULL)
+        / nullif(count(*), 0),
+      2
+    ) AS coverage_pct
   FROM summary_embeddings;
 "
 ```
@@ -496,7 +501,7 @@ python -m app.cli.migrate_vector_store \
 
 # After migration, verify count matches
 curl http://localhost:6333/collections/summaries
-sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summary_embeddings;"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "SELECT COUNT(*) FROM summary_embeddings;"
 ```
 
 ---

@@ -313,7 +313,9 @@ docker restart ratatoskr
 echo "DEBUG_PAYLOADS=1" >> .env
 
 # Check database for Firecrawl response
-sqlite3 data/ratatoskr.db "SELECT * FROM crawl_results WHERE request_id = '<correlation_id>';"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT * FROM crawl_results
+     WHERE request_id = (SELECT id FROM requests WHERE correlation_id = '<correlation_id>');"
 
 # If Firecrawl failed, enable fallback
 echo "CONTENT_EXTRACTION_FALLBACK=true" >> .env
@@ -451,7 +453,10 @@ echo "OPENROUTER_MODEL=qwen/qwen3-max" >> .env  # Qwen is excellent at JSON
 echo "OPENROUTER_ENABLE_STRUCTURED_OUTPUTS=true" >> .env
 
 # Check actual LLM response in database
-sqlite3 data/ratatoskr.db "SELECT response FROM llm_calls WHERE request_id = '<correlation_id>';"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT response_json FROM llm_calls
+     WHERE request_id = (SELECT id FROM requests WHERE correlation_id = '<correlation_id>')
+     ORDER BY attempt_index;"
 ```
 
 ---
@@ -556,36 +561,36 @@ docker restart ratatoskr
 **Solution**:
 
 ```bash
-# Increase timeout
-echo "DB_OPERATION_TIMEOUT=30" >> .env  # Default: 5 seconds
+# Increase the asyncpg statement timeout (default 30 s)
+echo "DB_STATEMENT_TIMEOUT_SEC=60" >> .env
 
-# Or use WAL mode (Write-Ahead Logging)
-sqlite3 data/ratatoskr.db "PRAGMA journal_mode=WAL;"
-
-# Verify
-sqlite3 data/ratatoskr.db "PRAGMA journal_mode;"
-# Should return: wal
+# Inspect long-running queries
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT pid, age(now(), query_start) AS age, state, left(query, 80) AS query
+     FROM pg_stat_activity
+    WHERE datname = 'ratatoskr' AND state = 'active'
+    ORDER BY age DESC;"
 ```
 
 ### Corruption
 
-**Symptom**: "Database disk image is malformed" or "database corruption".
+**Symptom**: Postgres reports `data corruption` or `invalid page header`, or pg\_dump fails on a relation.
 
-**Cause**: Unclean shutdown, disk full, or hardware failure.
+**Cause**: Disk failure, ungraceful shutdown of the `ratatoskr-postgres` container, or filesystem damage on the `postgres_data` volume.
 
 **Solution**:
 
 ```bash
-# Check integrity
-sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
+# Inspect Postgres server logs
+docker logs ratatoskr-postgres --tail 200
 
-# If corrupted, restore from backup
-cp data/ratatoskr.db data/ratatoskr.db.corrupted
-cp data/backups/app.db.backup data/ratatoskr.db
-
-# If no backup, try to recover
-sqlite3 data/ratatoskr.db ".recover" | sqlite3 data/ratatoskr.db.recovered
-mv data/ratatoskr.db.recovered data/ratatoskr.db
+# If the database is unreachable, follow the standard PostgreSQL recovery
+# sequence (verify the volume, REINDEX as needed) and then restore the most
+# recent pg_dump:
+docker exec -i ratatoskr-postgres \
+  pg_restore --no-owner --no-privileges --clean --if-exists \
+             -U ratatoskr_app -d ratatoskr \
+  < backups/<timestamp>/ratatoskr.dump
 ```
 
 **Prevention**: Enable automatic backups:
@@ -608,11 +613,15 @@ echo "DB_BACKUP_INTERVAL_HOURS=24" >> .env
 python -m app.cli.migrate_db
 
 # Or force recreate (WARNING: deletes all data)
-rm data/ratatoskr.db
+docker exec -i ratatoskr-postgres psql -U postgres -c "DROP DATABASE IF EXISTS ratatoskr;"
+docker exec -i ratatoskr-postgres psql -U postgres -c "CREATE DATABASE ratatoskr OWNER ratatoskr_app;"
 python -m app.cli.migrate_db
 
 # Restore data from backup if needed
-sqlite3 data/ratatoskr.db < data/backups/app.db.backup.sql
+docker exec -i ratatoskr-postgres \
+  pg_restore --no-owner --no-privileges --clean --if-exists \
+             -U ratatoskr_app -d ratatoskr \
+  < backups/<timestamp>/ratatoskr.dump
 ```
 
 ### Performance Issues
@@ -624,14 +633,14 @@ sqlite3 data/ratatoskr.db < data/backups/app.db.backup.sql
 **Solution**:
 
 ```bash
-# Rebuild indexes
-python -m app.cli.rebuild_indexes
-
-# Vacuum database (reclaim space, rebuild indexes)
-sqlite3 data/ratatoskr.db "VACUUM;"
+# Vacuum database (reclaim space, refresh planner stats)
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "VACUUM (ANALYZE);"
 
 # Analyze query performance
-sqlite3 data/ratatoskr.db "EXPLAIN QUERY PLAN SELECT * FROM summaries WHERE url = 'example.com';"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "EXPLAIN ANALYZE
+     SELECT * FROM summaries
+      WHERE request_id = (SELECT id FROM requests WHERE input_url = 'https://example.com');"
 ```
 
 ---
@@ -1257,7 +1266,8 @@ python -m app.cli.summary --url https://example.com/article
 python -m app.cli.search --query "python tutorial"
 
 # Test database
-sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summaries;"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT count(*) FROM summaries;"
 
 # Test Qdrant
 python -m app.cli.backfill_vector_store --dry-run
@@ -1268,13 +1278,13 @@ python -m app.cli.backfill_vector_store --dry-run
 Use correlation IDs to trace requests:
 
 ```bash
-sqlite3 data/ratatoskr.db
+docker exec -it ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr
 
 -- Find failed requests
-SELECT id, url, status, error FROM requests WHERE status = 'failed' LIMIT 10;
+SELECT id, input_url AS url, status, last_error FROM requests WHERE status = 'error' LIMIT 10;
 
 -- See Firecrawl responses
-SELECT request_id, status_code, success FROM crawl_results WHERE success = 0;
+SELECT request_id, http_status, firecrawl_success FROM crawl_results WHERE firecrawl_success = false;
 
 -- See LLM failures
 SELECT request_id, model, error FROM llm_calls WHERE error IS NOT NULL;

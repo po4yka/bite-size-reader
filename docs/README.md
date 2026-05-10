@@ -224,7 +224,7 @@ Technical facts, API specs, and complete references.
 | [API Error Codes](reference/api-error-codes.md) | API error code catalog | Developers, Integrators |
 | [CLI Commands](reference/cli-commands.md) | CLI command reference | Developers, Operators |
 | [Optional YAML Config](reference/config-file.md) | Optional YAML configuration reference | Operators |
-| [Data Model](reference/data-model.md) | SQLite schema and Peewee model reference | Developers |
+| [Data Model](reference/data-model.md) | PostgreSQL schema and SQLAlchemy 2.0 model reference | Developers |
 | [Digest Subsystem Ops](reference/digest-subsystem-ops.md) | Channel digest operations reference | Operators |
 | [Visual Regression](reference/visual-regression.md) | Visual regression testing reference | Developers |
 

@@ -21,8 +21,11 @@ Upgrade Ratatoskr to a new version safely.
 **CRITICAL**: Always backup your data before upgrading:
 
 ```bash
-# Backup database
-cp data/ratatoskr.db data/ratatoskr.db.backup.$(date +%Y%m%d)
+# Backup PostgreSQL database
+docker exec -t ratatoskr-postgres \
+  pg_dump --format=custom --no-owner --no-privileges \
+          -U ratatoskr_app -d ratatoskr \
+  > "data/ratatoskr.dump.$(date +%Y%m%d)"
 
 # Backup environment file
 cp .env .env.backup
@@ -31,7 +34,7 @@ cp .env .env.backup
 tar -czf youtube_backup_$(date +%Y%m%d).tar.gz data/videos/
 
 # Verify backups
-ls -lh data/*.backup* youtube_backup*
+ls -lh data/ratatoskr.dump.* .env.backup youtube_backup* 2>/dev/null
 ```
 
 ### Check Release Notes
@@ -130,8 +133,9 @@ docker logs ratatoskr | head -20
 # Check logs for errors
 docker logs ratatoskr | grep -i error
 
-# Verify database integrity
-docker exec ratatoskr sqlite3 /data/ratatoskr.db "PRAGMA integrity_check;"
+# Verify database connectivity / migration head
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "SELECT 1;"
+docker exec -i ratatoskr python -m app.cli.migrate_db --status
 ```
 
 ---
@@ -258,8 +262,15 @@ If upgrade fails or causes issues:
 docker stop ratatoskr
 docker rm ratatoskr
 
-# Restore database backup
-cp data/ratatoskr.db.backup.YYYYMMDD data/ratatoskr.db
+# Restore PostgreSQL backup
+docker exec -i ratatoskr-postgres \
+  psql -U postgres -c "DROP DATABASE IF EXISTS ratatoskr;"
+docker exec -i ratatoskr-postgres \
+  psql -U postgres -c "CREATE DATABASE ratatoskr OWNER ratatoskr_app;"
+docker exec -i ratatoskr-postgres \
+  pg_restore --no-owner --no-privileges --clean --if-exists \
+             -U ratatoskr_app -d ratatoskr \
+  < data/ratatoskr.dump.YYYYMMDD
 
 # Run previous version
 docker run -d \
@@ -276,8 +287,11 @@ docker logs ratatoskr
 ### Local Rollback
 
 ```bash
-# Restore database
-cp data/ratatoskr.db.backup.YYYYMMDD data/ratatoskr.db
+# Restore PostgreSQL backup
+docker exec -i ratatoskr-postgres \
+  pg_restore --no-owner --no-privileges --clean --if-exists \
+             -U ratatoskr_app -d ratatoskr \
+  < data/ratatoskr.dump.YYYYMMDD
 
 # Checkout previous version
 git checkout v1.1.0
@@ -296,7 +310,7 @@ python bot.py
 Use this checklist for all upgrades:
 
 - [ ] **Read release notes and CHANGELOG.md**
-- [ ] **Backup database** (`cp data/ratatoskr.db data/ratatoskr.db.backup.$(date +%Y%m%d)`)
+- [ ] **Backup database** (`docker exec -t ratatoskr-postgres pg_dump -F c -U ratatoskr_app -d ratatoskr > data/ratatoskr.dump.$(date +%Y%m%d)`)
 - [ ] **Backup .env file** (`cp .env .env.backup`)
 - [ ] **Backup YouTube videos** (if enabled)
 - [ ] **Pull new version** (Docker: `docker pull`, Local: `git pull`)
@@ -306,7 +320,7 @@ Use this checklist for all upgrades:
 - [ ] **Restart bot** (Docker: `docker restart`, Local: restart process)
 - [ ] **Test functionality** (send test URL to bot)
 - [ ] **Check logs** (verify no errors)
-- [ ] **Verify database integrity** (`PRAGMA integrity_check`)
+- [ ] **Verify database connectivity** (`docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "SELECT 1;"`)
 - [ ] **Monitor for 24 hours** (watch for issues)
 - [ ] **Delete old backups** (after 7 days if stable)
 
@@ -321,11 +335,17 @@ Use this checklist for all upgrades:
 **Solution:**
 
 ```bash
-# Check database integrity
-sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
+# Check database connectivity
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "SELECT 1;"
 
-# If corrupted, restore from backup
-cp data/ratatoskr.db.backup.YYYYMMDD data/ratatoskr.db
+# Inspect Alembic migration head
+python -m app.cli.migrate_db --status
+
+# If state is unrecoverable, restore from backup
+docker exec -i ratatoskr-postgres \
+  pg_restore --no-owner --no-privileges --clean --if-exists \
+             -U ratatoskr_app -d ratatoskr \
+  < data/ratatoskr.dump.YYYYMMDD
 
 # Retry migration
 python -m app.cli.migrate_db
@@ -367,7 +387,7 @@ python -m app.cli.rebuild_indexes
 python -m app.cli.backfill_vector_store
 
 # Verify
-sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summaries;"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "SELECT count(*) FROM summaries;"
 ```
 
 ---

@@ -240,23 +240,26 @@ Or use per-request override (future feature):
 
 ```bash
 # Check how often web search triggers
-sqlite3 data/ratatoskr.db "
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "
   SELECT
-    COUNT(*) as total_summaries,
-    SUM(CASE WHEN web_search_triggered = 1 THEN 1 ELSE 0 END) as with_search,
-    ROUND(AVG(CASE WHEN web_search_triggered = 1 THEN 1.0 ELSE 0.0 END) * 100, 2) as trigger_rate_pct
+    count(*) AS total_summaries,
+    count(*) FILTER (WHERE web_search_triggered) AS with_search,
+    round(
+      100.0 * count(*) FILTER (WHERE web_search_triggered) / nullif(count(*), 0),
+      2
+    ) AS trigger_rate_pct
   FROM summaries
-  WHERE created_at > datetime('now', '-30 days');
+  WHERE created_at > now() - interval '30 days';
 "
 
 # Check search query costs
-sqlite3 data/ratatoskr.db "
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "
   SELECT
-    url,
+    request_id,
     web_search_queries,
     web_search_results_count
   FROM summaries
-  WHERE web_search_triggered = 1
+  WHERE web_search_triggered
   ORDER BY created_at DESC
   LIMIT 10;
 "

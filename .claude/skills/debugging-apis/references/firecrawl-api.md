@@ -32,8 +32,7 @@
 ## Debugging Failed Crawls
 
 ```bash
-sqlite3 /data/ratatoskr.db << EOF
-.mode json
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr <<'EOF'
 SELECT
   request_id,
   source_url,
@@ -44,7 +43,7 @@ SELECT
   http_status,
   latency_ms
 FROM crawl_results
-WHERE request_id = '<correlation_id>';
+WHERE request_id = (SELECT id FROM requests WHERE correlation_id = '<correlation_id>');
 EOF
 ```
 

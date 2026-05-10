@@ -264,7 +264,7 @@ removed.
 
 **Command:** `python -m app.cli.search`
 
-**Purpose:** Test search functionality (FTS5, vector, hybrid).
+**Purpose:** Test search functionality (Postgres TSVECTOR full-text, vector, hybrid).
 
 ### Basic Usage
 
@@ -333,8 +333,8 @@ python -m app.cli.search "машинное обучение" --lang ru
 
 **FTS (Full-Text Search):**
 
-- SQLite FTS5 index on `topic_search_index` table
-- Fastest (1-5ms)
+- Postgres TSVECTOR + GIN index on `topic_search_index.body_tsv`
+- Fastest (1-5 ms in-cluster)
 - Best for exact keyword matches
 
 **Vector:**
@@ -640,7 +640,8 @@ python -m app.cli.migrate_vector_store \
 
 # Verify counts after migration
 curl http://localhost:6333/collections/summaries
-sqlite3 data/ratatoskr.db "SELECT COUNT(*) FROM summary_embeddings;"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT count(*) FROM summary_embeddings;"
 ```
 
 ---
@@ -898,10 +899,14 @@ python -m app.cli.summary \
   --log-level DEBUG
 
 # 2. Check database for errors
-sqlite3 data/ratatoskr.db "SELECT * FROM requests WHERE url = '<URL>';"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT * FROM requests WHERE input_url = '<URL>';"
 
 # 3. Check LLM calls
-sqlite3 data/ratatoskr.db "SELECT error_message FROM llm_calls WHERE request_id = '<correlation_id>';"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT error_text FROM llm_calls
+     WHERE request_id = (SELECT id FROM requests WHERE correlation_id = '<correlation_id>')
+     ORDER BY attempt_index;"
 ```
 
 ### Testing Search Performance

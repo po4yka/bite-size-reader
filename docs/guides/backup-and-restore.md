@@ -1,7 +1,7 @@
 # Back Up and Restore
 
-Protect a Ratatoskr instance by backing up the durable host paths used by the
-current Docker Compose deployment.
+Protect a Ratatoskr instance by backing up the durable host paths and the
+PostgreSQL database used by the current Docker Compose deployment.
 
 **Audience:** Operators
 **Difficulty:** Intermediate
@@ -16,14 +16,14 @@ from the repository root.
 
 Durable data is split across these locations:
 
-| Data | Default path | Source |
-| ---- | ------------ | ------ |
-| SQLite database | `data/ratatoskr.db` on the host, `/data/ratatoskr.db` in containers | `DB_PATH=/data/ratatoskr.db` |
-| Automatic SQLite snapshots | `data/backups/` unless `DB_BACKUP_DIR` is set | bot backup loop |
+| Data | Location | Source |
+| ---- | -------- | ------ |
+| PostgreSQL database | `ratatoskr-postgres` Compose service (`postgres_data` volume) | `DATABASE_URL` |
 | Qdrant vector store | `qdrant_data/` on the host, `/qdrant/storage` in the Qdrant container | Qdrant volume mount |
 | YouTube downloads | `data/videos/` | `YOUTUBE_STORAGE_PATH` default `/data/videos` |
 | Attachments and non-YouTube media | `data/attachments/`, `data/video-sources/` | attachment defaults |
 | TTS audio cache | `data/audio/` | `ELEVENLABS_AUDIO_PATH` default `/data/audio` |
+| Telethon session files | `data/sessions/` | digest userbot session, plus a `.legacy.bak.session` after the Phase 6 cutover |
 | Config and secrets | `.env`, `ratatoskr.yaml`, `config/ratatoskr.yaml`, `config/models.yaml` when present | config search order |
 | Redis | no durable backup expected in default Compose | `redis-server --save "" --appendonly no` |
 
@@ -50,48 +50,48 @@ Check the effective Compose services:
 docker compose -f ops/docker/docker-compose.yml ps
 ```
 
-For the most consistent backup, stop services that can write to SQLite or
+For the most consistent backup, stop services that can write to Postgres or
 Qdrant:
 
 ```bash
 docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write qdrant
 ```
 
-If you need a low-downtime SQLite-only backup, use the `.backup` command in the
-next section while services keep running, then archive Qdrant/media during a
-maintenance window.
+`pg_dump` is online-safe (it takes a transactionally consistent snapshot
+without blocking writers), so the Postgres container can keep running for
+the database section below; only stop everything together if you also need
+to capture Qdrant + media at the same logical point in time.
 
 ---
 
 ## Backup
 
-### SQLite
+### PostgreSQL
 
-Preferred SQLite backup, safe while readers/writers exist:
-
-```bash
-sqlite3 data/ratatoskr.db ".backup '$BACKUP_DIR/ratatoskr.db'"
-sqlite3 "$BACKUP_DIR/ratatoskr.db" "PRAGMA integrity_check;"
-```
-
-Expected output:
-
-```text
-ok
-```
-
-If the application is fully stopped, a plain copy is also acceptable:
+Run `pg_dump` inside the `ratatoskr-postgres` container and stream the dump
+out to the host:
 
 ```bash
-cp data/ratatoskr.db "$BACKUP_DIR/ratatoskr.db"
-sqlite3 "$BACKUP_DIR/ratatoskr.db" "PRAGMA integrity_check;"
+docker exec -t ratatoskr-postgres \
+  pg_dump --format=custom --no-owner --no-privileges \
+          -U ratatoskr_app -d ratatoskr \
+  > "$BACKUP_DIR/ratatoskr.dump"
 ```
 
-Ratatoskr also creates automatic SQLite snapshots from the bot process when
-`DB_BACKUP_ENABLED=true` (default). The default interval is
-`DB_BACKUP_INTERVAL_MINUTES=360`, and `DB_BACKUP_RETENTION=14` keeps the newest
-14 snapshot files, not 14 days. Without `DB_BACKUP_DIR`, snapshots land in
-`data/backups/`.
+Verify the dump is well-formed:
+
+```bash
+docker run --rm -i --entrypoint pg_restore postgres:16 \
+  --list < "$BACKUP_DIR/ratatoskr.dump" | head
+```
+
+For a plain-text dump (larger but human-readable):
+
+```bash
+docker exec -t ratatoskr-postgres \
+  pg_dumpall -U ratatoskr_app --no-owner --no-privileges \
+  > "$BACKUP_DIR/ratatoskr.sql"
+```
 
 ### Qdrant
 
@@ -109,7 +109,7 @@ curl -X POST http://localhost:6333/collections/summaries/snapshots
 # Download the snapshot file from /collections/summaries/snapshots/{snapshot_name}
 ```
 
-Qdrant data is rebuildable from SQLite for summaries that have enough stored
+Qdrant data is rebuildable from Postgres for summaries that have enough stored
 text and embedding inputs:
 
 ```bash
@@ -140,8 +140,8 @@ the default Ratatoskr Compose contract.
 
 ### Media Files
 
-Back up media directories that exist. The SQLite `video_downloads` table stores
-paths to downloaded YouTube videos, subtitles, and thumbnails, so restoring the
+Back up media directories that exist. The `video_downloads` table stores paths
+to downloaded YouTube videos, subtitles, and thumbnails, so restoring the
 files keeps cached video results usable.
 
 ```bash
@@ -188,7 +188,8 @@ Store the passphrase outside the host. Do not commit backup archives or copied
 
 ```bash
 find "$BACKUP_DIR" -maxdepth 1 -type f -print -exec ls -lh {} \;
-sqlite3 "$BACKUP_DIR/ratatoskr.db" "PRAGMA quick_check;"
+docker run --rm -i --entrypoint pg_restore postgres:16 --list \
+  < "$BACKUP_DIR/ratatoskr.dump" >/dev/null
 [ ! -f "$BACKUP_DIR/qdrant_data.tar.gz" ] || tar -tzf "$BACKUP_DIR/qdrant_data.tar.gz" >/dev/null
 [ ! -f "$BACKUP_DIR/config.tar.gz" ] || tar -tzf "$BACKUP_DIR/config.tar.gz" >/dev/null
 ```
@@ -215,15 +216,26 @@ Keep a pre-restore copy of the current state:
 
 ```bash
 mkdir -p "restore-safety/$BACKUP_TS"
-[ -f data/ratatoskr.db ] && cp data/ratatoskr.db "restore-safety/$BACKUP_TS/ratatoskr.db.before-restore"
+docker exec -t ratatoskr-postgres \
+  pg_dump --format=custom --no-owner --no-privileges \
+          -U ratatoskr_app -d ratatoskr \
+  > "restore-safety/$BACKUP_TS/ratatoskr.before-restore.dump"
 [ -d qdrant_data ] && tar -C . -czf "restore-safety/$BACKUP_TS/qdrant_data.before-restore.tar.gz" qdrant_data
 ```
 
-Restore SQLite:
+Restore PostgreSQL — drop and recreate the database, then load the dump:
 
 ```bash
-cp "$BACKUP_DIR/ratatoskr.db" data/ratatoskr.db
-sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
+docker exec -i ratatoskr-postgres \
+  psql -U postgres -c "DROP DATABASE IF EXISTS ratatoskr;"
+docker exec -i ratatoskr-postgres \
+  psql -U postgres -c "CREATE DATABASE ratatoskr OWNER ratatoskr_app;"
+docker exec -i ratatoskr-postgres \
+  pg_restore --no-owner --no-privileges --clean --if-exists \
+             -U ratatoskr_app -d ratatoskr \
+  < "$BACKUP_DIR/ratatoskr.dump"
+docker exec -i ratatoskr-postgres \
+  psql -U ratatoskr_app -d ratatoskr -c "SELECT count(*) FROM requests;"
 ```
 
 Restore Qdrant if you backed it up:
@@ -257,11 +269,11 @@ docker compose -f ops/docker/docker-compose.yml up -d
 docker compose -f ops/docker/docker-compose.yml ps
 ```
 
-Run migrations for the restored image if needed:
+Run migrations for the restored image if needed (Alembic upgrades are idempotent):
 
 ```bash
 python -m app.cli.migrate_db --status
-python -m app.cli.migrate_db data/ratatoskr.db
+python -m app.cli.migrate_db
 ```
 
 If Qdrant was not restored, rebuild it after Qdrant is healthy:
@@ -278,17 +290,27 @@ On the new host:
 git clone <repo-url> ratatoskr
 cd ratatoskr
 mkdir -p data config backups
+cp <source>/.env .env  # or restore from config.tar.gz below
+docker compose -f ops/docker/docker-compose.yml up -d ratatoskr-postgres qdrant
 ```
 
-Copy the backup directory or encrypted archive to `backups/`, then restore the
-same files:
+Copy the backup directory or encrypted archive to `backups/`, then load the
+database and unpack the rest:
 
 ```bash
 export BACKUP_TS=YYYYMMDDTHHMMSSZ
 export BACKUP_DIR="backups/$BACKUP_TS"
 
-cp "$BACKUP_DIR/ratatoskr.db" data/ratatoskr.db
-[ -f "$BACKUP_DIR/config.tar.gz" ] && tar -C . -xzf "$BACKUP_DIR/config.tar.gz"
+# Database
+docker exec -i ratatoskr-postgres \
+  psql -U postgres -c "CREATE DATABASE ratatoskr OWNER ratatoskr_app;" || true
+docker exec -i ratatoskr-postgres \
+  pg_restore --no-owner --no-privileges --clean --if-exists \
+             -U ratatoskr_app -d ratatoskr \
+  < "$BACKUP_DIR/ratatoskr.dump"
+
+# Config + Qdrant + media
+[ -f "$BACKUP_DIR/config.tar.gz" ]      && tar -C . -xzf "$BACKUP_DIR/config.tar.gz"
 [ -f "$BACKUP_DIR/qdrant_data.tar.gz" ] && tar -C . -xzf "$BACKUP_DIR/qdrant_data.tar.gz"
 
 for archive in "$BACKUP_DIR"/data_*.tar.gz; do
@@ -300,14 +322,14 @@ done
 Validate and start:
 
 ```bash
-sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "SELECT 1;"
 docker compose -f ops/docker/docker-compose.yml config
 docker compose -f ops/docker/docker-compose.yml up -d
 python -m app.cli.migrate_db --status
 ```
 
 If the new host uses different paths, update `.env` or `ratatoskr.yaml` for
-`DB_PATH`, `YOUTUBE_STORAGE_PATH`, `ATTACHMENT_STORAGE_PATH`,
+`DATABASE_URL`, `YOUTUBE_STORAGE_PATH`, `ATTACHMENT_STORAGE_PATH`,
 `ATTACHMENT_VIDEO_STORAGE_PATH`, and `ELEVENLABS_AUDIO_PATH` before starting.
 
 ---
@@ -316,13 +338,13 @@ If the new host uses different paths, update `.env` or `ratatoskr.yaml` for
 
 Run this on a staging host or disposable VM before a release:
 
-1. Create a full backup with SQLite, Qdrant, media, and config.
-2. Restore it into an empty checkout.
-3. Run `sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"`.
+1. Create a full backup with the `pg_dump`, Qdrant, media, and config sections.
+2. Restore it into an empty checkout following the "Restore To A New Host" flow.
+3. Run `docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "SELECT 1;"`.
 4. Run `docker compose -f ops/docker/docker-compose.yml config`.
 5. Start the stack with `docker compose -f ops/docker/docker-compose.yml up -d`.
-6. Confirm `ratatoskr`, `mobile-api`, `redis`, and `qdrant` are healthy or
-   intentionally disabled by profile/config.
+6. Confirm `ratatoskr`, `mobile-api`, `redis`, `ratatoskr-postgres`, and `qdrant`
+   are healthy or intentionally disabled by profile/config.
 7. Open the web/API and verify existing summaries are visible.
 8. Run a semantic search. If Qdrant was rebuilt instead of restored, run
    `python -m app.cli.backfill_vector_store --rebuild` first.
@@ -335,27 +357,36 @@ Run this on a staging host or disposable VM before a release:
 
 ## Maintenance Commands
 
-Vacuum SQLite during a maintenance window:
+Reclaim space and update planner statistics:
 
 ```bash
-docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write
-sqlite3 data/ratatoskr.db "VACUUM;"
-sqlite3 data/ratatoskr.db "PRAGMA integrity_check;"
-docker compose -f ops/docker/docker-compose.yml up -d
+docker exec -i ratatoskr-postgres \
+  psql -U ratatoskr_app -d ratatoskr -c "VACUUM (ANALYZE);"
 ```
 
-Recover a damaged SQLite database into a new file:
+For a full rebuild that also reclaims indexed space (briefly locks each table):
 
 ```bash
-docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write
-sqlite3 data/ratatoskr.db ".recover" | sqlite3 data/ratatoskr.recovered.db
-sqlite3 data/ratatoskr.recovered.db "PRAGMA integrity_check;"
-mv data/ratatoskr.db data/ratatoskr.corrupted.db
-mv data/ratatoskr.recovered.db data/ratatoskr.db
-docker compose -f ops/docker/docker-compose.yml up -d
+docker exec -i ratatoskr-postgres \
+  psql -U ratatoskr_app -d ratatoskr -c "VACUUM (FULL, ANALYZE);"
 ```
 
-If recovery fails, restore the newest backup that passes `PRAGMA integrity_check`.
+Check database size and table bloat:
+
+```bash
+docker exec -i ratatoskr-postgres \
+  psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT relname, pg_size_pretty(pg_total_relation_size(relid)) AS size
+     FROM pg_catalog.pg_statio_user_tables
+    ORDER BY pg_total_relation_size(relid) DESC
+    LIMIT 20;"
+```
+
+If a database is unreachable or corrupted, follow the standard PostgreSQL
+recovery sequence: confirm the volume is intact, run
+`docker logs ratatoskr-postgres` for the underlying error, and restore the
+newest verified `pg_dump` archive using the steps in
+[Restore On The Same Host](#restore-on-the-same-host).
 
 ---
 
@@ -365,4 +396,3 @@ If recovery fails, restore the newest backup that passes `PRAGMA integrity_check
 - [How to Migrate Versions](migrate-versions.md)
 - [Qdrant Vector Search](setup-qdrant-vector-search.md)
 - [YouTube Downloads](configure-youtube-download.md)
-- [Config File Reference](../reference/config-file.md)

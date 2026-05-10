@@ -6,7 +6,7 @@ Check:
 
 ```bash
 # View raw response
-sqlite3 /data/ratatoskr.db "
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr "
   SELECT raw_response_json
   FROM crawl_results
   WHERE request_id = '<correlation_id>';
@@ -28,26 +28,23 @@ Check `app/core/json_utils.py`:
 
 ```bash
 # Count recent API calls
-sqlite3 /data/ratatoskr.db "
-  SELECT COUNT(*) as calls_last_hour
-  FROM llm_calls
-  WHERE created_at > datetime('now', '-1 hour');
-"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT count(*) AS calls_last_hour
+     FROM llm_calls
+    WHERE created_at > now() - interval '1 hour';"
 ```
 
 ## 4. "High API costs"
 
 ```bash
 # Analyze token usage and costs
-sqlite3 /data/ratatoskr.db << EOF
-.mode column
-.headers on
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr <<'EOF'
 SELECT
   model,
-  COUNT(*) as calls,
-  AVG(tokens_prompt) as avg_prompt,
-  AVG(tokens_completion) as avg_completion,
-  SUM(cost_usd) as total_cost
+  count(*) AS calls,
+  avg(tokens_prompt) AS avg_prompt,
+  avg(tokens_completion) AS avg_completion,
+  sum(cost_usd) AS total_cost
 FROM llm_calls
 WHERE status = 'ok'
 GROUP BY model

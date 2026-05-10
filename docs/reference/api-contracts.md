@@ -290,7 +290,7 @@ async def complete_with_fallback(messages, model=None):
 **Cost Tracking:**
 
 ```python
-# app/db/models.py (llm_calls table)
+# app/db/models/core.py (llm_calls table)
 cost_usd = (prompt_tokens * pricing["prompt"] + completion_tokens * pricing["completion"]) / 1_000_000
 
 # Example pricing (per 1M tokens):

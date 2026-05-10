@@ -1,24 +1,37 @@
 ---
 name: inspecting-database
-description: Query and inspect SQLite database for debugging requests, summaries, crawl results, and LLM calls. Trigger keywords -- correlation IDs, request status, API costs, crawl results, missing summaries, database query, SQLite, debug request.
-version: 2.0.0
+description: Query and inspect the Ratatoskr Postgres database for debugging requests, summaries, crawl results, and LLM calls. Trigger keywords -- correlation IDs, request status, API costs, crawl results, missing summaries, database query, Postgres, debug request.
+version: 3.0.0
 allowed-tools: Bash, Read
 ---
 
 # Database Inspection Skill
 
-Helps query and inspect the Ratatoskr SQLite database for debugging and analysis.
+Helps query and inspect the Ratatoskr Postgres database for debugging and analysis.
 
-## Database Location
+## Connecting
 
-- **Default path**: `/data/ratatoskr.db`
-- **Check env**: `DB_PATH` environment variable
-- **Local dev**: Usually `./data/ratatoskr.db` in project root
+Ratatoskr uses **PostgreSQL 16 via SQLAlchemy 2.0 + asyncpg**. The default
+deployment runs Postgres in the `ratatoskr-postgres` Docker container; the
+runtime DSN is read from the `DATABASE_URL` environment variable.
+
+Use `psql` either through the container or via a local client:
+
+```bash
+# Through the deployment container (no client install required)
+docker exec -it ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr
+
+# Or against any DSN
+psql "$DATABASE_URL"
+```
+
+For one-shot queries, append `-c '<sql>'` and pass `--csv` or `--json`
+formatting flags as needed.
 
 ## Dynamic Context
 
 ```bash
-!sqlite3 data/ratatoskr.db "SELECT COUNT(*) as total, SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) as errors FROM requests"
+!docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -t -c "SELECT count(*) AS total, count(*) FILTER (WHERE status = 'error') AS errors FROM requests"
 ```
 
 ## Common Query Patterns
@@ -26,128 +39,161 @@ Helps query and inspect the Ratatoskr SQLite database for debugging and analysis
 ### Find Request by Correlation ID
 
 ```bash
-sqlite3 /data/ratatoskr.db "SELECT * FROM requests WHERE id = '<correlation_id>';"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT * FROM requests WHERE correlation_id = '<correlation_id>';"
 ```
 
-### Check Recent Requests
+### Recent Requests
 
 ```bash
-sqlite3 /data/ratatoskr.db "SELECT id, type, status, input_url, created_at FROM requests ORDER BY created_at DESC LIMIT 10;"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT id, type, status, input_url, created_at
+     FROM requests
+    ORDER BY created_at DESC
+    LIMIT 10;"
 ```
 
-### Find Failed Requests
+### Failed Requests
 
 ```bash
-sqlite3 /data/ratatoskr.db "SELECT id, type, status, input_url, created_at FROM requests WHERE status = 'error' ORDER BY created_at DESC LIMIT 20;"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT id, type, status, input_url, created_at
+     FROM requests
+    WHERE status = 'error'
+    ORDER BY created_at DESC
+    LIMIT 20;"
 ```
 
-### Check Crawl Results for URL
+### Crawl Results for a Request
 
 ```bash
-sqlite3 /data/ratatoskr.db "SELECT request_id, source_url, status, firecrawl_success, firecrawl_error_message, http_status FROM crawl_results WHERE request_id = '<correlation_id>';"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT request_id, source_url, status, firecrawl_success,
+          firecrawl_error_message, http_status
+     FROM crawl_results
+    WHERE request_id = (
+            SELECT id FROM requests WHERE correlation_id = '<correlation_id>'
+          );"
 ```
 
-### View LLM Calls for Request
+### LLM Calls for a Request
 
 ```bash
-sqlite3 /data/ratatoskr.db "SELECT id, model, status, tokens_prompt, tokens_completion, cost_usd, error_text FROM llm_calls WHERE request_id = '<correlation_id>';"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT id, model, status, attempt_index, attempt_trigger,
+          tokens_prompt, tokens_completion, cost_usd, error_text
+     FROM llm_calls
+    WHERE request_id = (
+            SELECT id FROM requests WHERE correlation_id = '<correlation_id>'
+          )
+    ORDER BY attempt_index;"
 ```
 
-### Check Summary Output
+### Summary Output
 
 ```bash
-sqlite3 /data/ratatoskr.db "SELECT request_id, lang, json_payload, version FROM summaries WHERE request_id = '<correlation_id>';"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT request_id, lang, json_payload, version
+     FROM summaries
+    WHERE request_id = (
+            SELECT id FROM requests WHERE correlation_id = '<correlation_id>'
+          );"
 ```
 
-### View Telegram Message Snapshot
+### Telegram Message Snapshot
 
 ```bash
-sqlite3 /data/ratatoskr.db "SELECT message_id, chat_id, text_full, forward_from_chat_title FROM telegram_messages WHERE request_id = '<correlation_id>';"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT message_id, chat_id, text_full, forward_from_chat_title
+     FROM telegram_messages
+    WHERE request_id = (
+            SELECT id FROM requests WHERE correlation_id = '<correlation_id>'
+          );"
 ```
 
-### List All Tables
+### List Tables / Show Schema
 
 ```bash
-sqlite3 /data/ratatoskr.db ".tables"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "\dt"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "\d requests"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "\d crawl_results"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "\d llm_calls"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "\d summaries"
 ```
 
-### Show Table Schema
+### Counts and Distributions
 
 ```bash
-sqlite3 /data/ratatoskr.db ".schema requests"
-sqlite3 /data/ratatoskr.db ".schema crawl_results"
-sqlite3 /data/ratatoskr.db ".schema llm_calls"
-sqlite3 /data/ratatoskr.db ".schema summaries"
-```
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT type, count(*) FROM requests GROUP BY type ORDER BY count DESC;"
 
-### Count Records by Type
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT status, count(*) FROM requests GROUP BY status ORDER BY count DESC;"
 
-```bash
-sqlite3 /data/ratatoskr.db "SELECT type, COUNT(*) as count FROM requests GROUP BY type;"
-```
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT avg(tokens_prompt) AS avg_prompt,
+          avg(tokens_completion) AS avg_completion
+     FROM llm_calls
+    WHERE status = 'ok';"
 
-### Success Rate Statistics
-
-```bash
-sqlite3 /data/ratatoskr.db "SELECT status, COUNT(*) as count FROM requests GROUP BY status;"
-```
-
-### Average Token Usage
-
-```bash
-sqlite3 /data/ratatoskr.db "SELECT AVG(tokens_prompt) as avg_prompt, AVG(tokens_completion) as avg_completion FROM llm_calls WHERE status = 'ok';"
-```
-
-### Total API Costs
-
-```bash
-sqlite3 /data/ratatoskr.db "SELECT SUM(cost_usd) as total_cost FROM llm_calls WHERE cost_usd IS NOT NULL;"
+docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+  "SELECT sum(cost_usd) AS total_cost
+     FROM llm_calls
+    WHERE cost_usd IS NOT NULL;"
 ```
 
 ## Usage Tips
 
-1. **Format output nicely**:
+1. **Pretty-print JSON columns:**
 
    ```bash
-   sqlite3 /data/ratatoskr.db << EOF
-   .mode column
-   .headers on
-   SELECT * FROM requests LIMIT 5;
-   EOF
+   docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -At -c \
+     "SELECT json_payload FROM summaries
+       WHERE request_id = (SELECT id FROM requests WHERE correlation_id = '<correlation_id>');" \
+     | python -m json.tool
    ```
 
-2. **Export to JSON**:
+2. **Search by URL pattern:**
 
    ```bash
-   sqlite3 /data/ratatoskr.db << EOF
-   .mode json
-   SELECT * FROM requests WHERE id = '<correlation_id>';
-   EOF
+   docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
+     "SELECT id, input_url, status
+        FROM requests
+       WHERE input_url ILIKE '%example.com%';"
    ```
 
-3. **Pretty print JSON payloads**:
-
-   ```bash
-   sqlite3 /data/ratatoskr.db "SELECT json_payload FROM summaries WHERE request_id = '<correlation_id>';" | python -m json.tool
-   ```
-
-4. **Search by URL pattern**:
-
-   ```bash
-   sqlite3 /data/ratatoskr.db "SELECT id, input_url, status FROM requests WHERE input_url LIKE '%example.com%';"
-   ```
+3. **Run multi-line scripts:** pipe a heredoc through `psql` or save to a
+   file and pass `-f script.sql`.
 
 ## Important Notes
 
-- Always use correlation IDs for tracing end-to-end flow
-- Check both `status` fields and error columns
-- LLM calls table stores ALL attempts (including failures)
-- Firecrawl responses are in `crawl_results.content_markdown`
-- Full Telegram snapshots are in `telegram_raw_json` field
-- Authorization headers are redacted before storage
+- `requests.id` is an integer surrogate; `requests.correlation_id` is the
+  human-readable trace identifier returned in errors and Telegram replies.
+- The `llm_calls` table stores ALL attempts (including failures);
+  `attempt_index` and `attempt_trigger` are useful for distinguishing
+  retries, repair loops, and stream fallbacks.
+- Authorization headers are redacted before persistence.
+- Full-text search runs on a Postgres `TSVECTOR` + GIN column (table:
+  `topic_search_index`); the historical SQLite FTS5 surface no longer exists.
 
 ## Schema Reference
 
-**Key tables**: requests, telegram_messages, crawl_results, llm_calls, summaries
+**Key tables**: `requests`, `telegram_messages`, `crawl_results`, `llm_calls`, `summaries`, `summary_embeddings`
 
-See `app/db/models.py` for complete Peewee ORM models.
+See `app/db/models/` for the SQLAlchemy 2.0 typed declarative models, grouped by area:
+
+| Module | Models |
+| ------ | ------ |
+| `core.py` | `User`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `SummaryEmbedding`, `VideoDownload`, `AudioGeneration`, ... |
+| `aggregation.py` | `AggregationSession`, `AggregationSessionItem` |
+| `batch.py` | `BatchSession`, `BatchSessionItem` |
+| `collections.py` | `Collection`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite` |
+| `digest.py` | `Channel`, `ChannelSubscription`, `ChannelPost`, `ChannelPostAnalysis`, ... |
+| `repository.py` | `Repository`, `RepositoryEmbedding`, `UserGitHubIntegration` |
+| `rss.py` | `RSSFeed`, `RSSFeedSubscription`, `RSSFeedItem`, `RSSItemDelivery` |
+| `rules.py` | `WebhookSubscription`, `AutomationRule`, `RuleExecutionLog`, ... |
+| `signal.py` | `Source`, `Subscription`, `FeedItem`, `Topic`, `UserSignal` |
+| `topic_search.py` | `TopicSearchIndex` (Postgres TSVECTOR + GIN) |
+
+Migrations live in `app/db/alembic/versions/` and are applied with
+`python -m app.cli.migrate_db`.

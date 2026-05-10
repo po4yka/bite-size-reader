@@ -6,7 +6,7 @@ This document provides project context for AI coding agents (Codex, Copilot, etc
 
 Async Telegram bot that summarizes web articles, YouTube videos, and forwarded channel posts. Returns structured JSON summaries with a strict contract. Single Docker container, owner-only access.
 
-**Stack:** Python 3.13+, Telethon, Scrapling/Firecrawl/Playwright (scraper chain), OpenRouter (LLM), SQLite (Peewee ORM), FastAPI, React 18 + TypeScript + Vite (Frost web frontend).
+**Stack:** Python 3.13+, Telethon, Scrapling/Firecrawl/Playwright (scraper chain), OpenRouter (LLM), PostgreSQL 16 via SQLAlchemy 2.0 + asyncpg (Alembic migrations), Qdrant (vector store), Taskiq (Redis-backed worker), FastAPI, React 18 + TypeScript + Vite (Frost web frontend).
 
 ## Architecture
 
@@ -29,7 +29,7 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 | Infrastructure | `app/infrastructure/` | Concrete persistence, vector search, cache, and messaging adapters |
 | DI | `app/di/` | Runtime composition only |
 | Core | `app/core/` | URL normalization, JSON parsing, summary contract, logging |
-| Database | `app/db/` | Peewee ORM models (48 classes), `DatabaseSessionManager` (`session.py`) is sole DB entry point |
+| Database | `app/db/` | SQLAlchemy 2.0 typed declarative models in `models/` (split by area), `Database` (`session.py`) is sole DB entry point, Alembic migrations in `alembic/versions/` |
 | API | `app/api/` | FastAPI REST API with JWT auth |
 | Search | `app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/` | Search workflows, vector search, and embedding services |
 | MCP | `app/mcp/` | Model Context Protocol server |
@@ -40,8 +40,8 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 - `app/adapters/content/url_processor.py` -- URL processing orchestration
 - `app/core/summary_contract.py` -- Summary validation (strict contract)
 - `app/core/url_utils.py` -- URL normalization and deduplication
-- `app/db/models.py` -- Database schema (ORM models)
-- `app/db/session.py` -- `DatabaseSessionManager` (sole DB entry point)
+- `app/db/models/` -- Database schema (SQLAlchemy 2.0 typed declarative models, grouped by area)
+- `app/db/session.py` -- `Database` async-session facade (sole DB entry point)
 - `app/config/settings.py` -- Configuration loading
 - `app/config/scraper.py` -- Scraper chain configuration
 - `bot.py` -- Entrypoint
@@ -91,7 +91,7 @@ bash tools/scripts/build-and-deploy-pi.sh --help
 
 ## Database
 
-48 Peewee model classes in `app/db/models.py`. `DatabaseSessionManager` (`app/db/session.py`) handles connection management, migrations, FTS5 indexing, and async operations via `AsyncRWLock`. No other DB entry point exists.
+PostgreSQL via SQLAlchemy 2.0 + asyncpg. Typed declarative models live under `app/db/models/` (split by area: `core.py`, `aggregation.py`, `batch.py`, `collections.py`, `digest.py`, `repository.py`, `rss.py`, `rules.py`, `signal.py`, `topic_search.py`, `user_content.py`) and are aggregated through `app/db/models/__init__.py::ALL_MODELS`. `Database` (`app/db/session.py`) is the sole DB entry point and exposes async sessions/transactions; full-text search runs on a Postgres `TSVECTOR` + GIN column instead of the legacy SQLite FTS5 surface. Schema migrations are managed by Alembic (`app/db/alembic/versions/`) and applied with `python -m app.cli.migrate_db`.
 
 ## Summary JSON Contract
 

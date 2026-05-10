@@ -807,8 +807,8 @@ The database may be corrupted. Please restore from backup.
 **Resolution:**
 
 - Stop bot immediately
-- Attempt recovery: `sqlite3 data/ratatoskr.db ".recover" | sqlite3 data/ratatoskr.db.recovered`
-- Restore from backup if recovery fails
+- Inspect Postgres logs: `docker logs ratatoskr-postgres`
+- Restore from the most recent `pg_dump` backup if state is unrecoverable
 
 See: [Backup and Restore](../guides/backup-and-restore.md)
 
@@ -832,7 +832,8 @@ Error: table "collections" already exists
 **Resolution:**
 
 - Check migration script for errors
-- Verify database state: `sqlite3 data/ratatoskr.db ".tables"`
+- Verify database state: `docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "\dt"`
+- Inspect the current Alembic revision: `python -m app.cli.migrate_db --status`
 - Manually fix schema or restore from backup
 
 ---

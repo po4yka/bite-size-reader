@@ -785,26 +785,42 @@ CREATE INDEX idx_summaries_created_at ON summaries(created_at);
 
 ### topic_search_index
 
-**Purpose:** SQLite FTS5 full-text search index.
+**Purpose:** Postgres TSVECTOR + GIN full-text search index over the indexable surface of each request (title, body, tags). Replaces the historical SQLite FTS5 virtual table.
 
 **Schema:**
 
 ```sql
-CREATE VIRTUAL TABLE topic_search_index USING fts5(
-    summary_id UNINDEXED,
-    content,
-    tokenize = 'porter ascii'
+CREATE TABLE topic_search_index (
+    request_id    INTEGER PRIMARY KEY REFERENCES requests(id) ON DELETE CASCADE,
+    url           TEXT,
+    title         TEXT,
+    snippet       TEXT,
+    source        TEXT,
+    published_at  TEXT,
+    body          TEXT,
+    tags          TEXT,
+    body_tsv      TSVECTOR GENERATED ALWAYS AS (
+                      to_tsvector(
+                          'simple',
+                          coalesce(title, '') || ' ' ||
+                          coalesce(body,  '') || ' ' ||
+                          coalesce(tags,  '')
+                      )
+                  ) STORED
 );
+CREATE INDEX ix_topic_search_body_tsv ON topic_search_index USING GIN (body_tsv);
 ```
 
 **Fields:**
 
-- `summary_id` (str) - Foreign key to `summaries.id` (not indexed)
-- `content` (str) - Searchable content (key_ideas + topic_tags + entities)
+- `request_id` (int) — foreign key to `requests.id` (primary key)
+- `url`, `title`, `snippet`, `source`, `published_at` — denormalised metadata copied from the source request
+- `body`, `tags` — text fed into the tsvector
+- `body_tsv` — generated `tsvector('simple', title || body || tags)` column with a GIN index
 
 **Relationships:**
 
-- Many-to-one with `summaries` (via `summary_id`)
+- One-to-one with `requests` (via `request_id`)
 
 ---
 
@@ -1285,7 +1301,7 @@ SELECT
     AVG(total_tokens) as avg_tokens,
     SUM(cost_usd) as total_cost_usd
 FROM llm_calls
-WHERE created_at > datetime('now', '-30 days')
+WHERE created_at > now() - interval '30 days'
 GROUP BY model
 ORDER BY total_tokens DESC;
 ```

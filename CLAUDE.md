@@ -297,7 +297,7 @@ Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch
 
 ### Additional Subsystems
 
-- **Collections** -- User-created collections with items, collaborators, and invite links (`app/db/models.py`: Collection, CollectionItem, CollectionCollaborator, CollectionInvite)
+- **Collections** -- User-created collections with items, collaborators, and invite links (`app/db/models/collections.py`: Collection, CollectionItem, CollectionCollaborator, CollectionInvite)
 - **Device Sync** -- Multi-device sync with full/delta modes and conflict resolution (`app/api/routers/sync.py`, UserDevice model)
 - **Event Bus** -- Internal event publishing/subscribing (`app/infrastructure/messaging/`)
 - **Qdrant Vector Store** -- Semantic search via Qdrant embeddings (`app/infrastructure/vector/qdrant_store.py`, `app/cli/backfill_vector_store.py`). Embedding provider switchable via `EmbeddingConfig` (local sentence-transformers or Gemini API); see `app/infrastructure/embedding/embedding_factory.py`
@@ -360,7 +360,7 @@ When making changes, these are the most critical files to understand:
 - **`app/core/summary_contract.py`** -- Summary validation (strict contract)
 - **`app/core/summary_schema.py`** -- Summary Pydantic model (full schema)
 - **`app/core/url_utils.py`** -- URL normalization and deduplication
-- **`app/db/models.py`** -- Database schema (ORM models)
+- **`app/db/models/`** -- Database schema (SQLAlchemy 2.0 typed declarative models, grouped by area)
 - **`app/db/session.py`** -- `DatabaseSessionManager` (sole DB entry point)
 - **`app/config/settings.py`** -- Configuration loading
 - **`app/config/scraper.py`** -- Scraper chain configuration (`ScraperConfig`)

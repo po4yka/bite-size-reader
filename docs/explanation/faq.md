@@ -167,7 +167,7 @@ FIRECRAWL_API_KEY=...   # Only needed for cloud Firecrawl or web search (Scrapli
 ```bash
 OPENROUTER_MODEL=deepseek/deepseek-v4-flash
 OPENROUTER_FALLBACK_MODELS=qwen/qwen3-max,moonshotai/kimi-k2.5
-DB_PATH=/data/ratatoskr.db
+DATABASE_URL=postgresql+asyncpg://ratatoskr_app:password@ratatoskr-postgres:5432/ratatoskr
 LOG_LEVEL=INFO
 ```
 
@@ -248,10 +248,12 @@ Yes. Supports **English and Russian** out of the box:
 
 Yes. Three search modes:
 
-1. **Full-Text Search** (FTS5): Fast keyword search
+1. **Full-Text Search** (Postgres TSVECTOR + GIN): Fast keyword search
 
    ```sql
-   SELECT * FROM topic_search_index WHERE topic_search_index MATCH 'python tutorial';
+   SELECT request_id, title, url
+     FROM topic_search_index
+    WHERE body_tsv @@ plainto_tsquery('simple', 'python tutorial');
    ```
 
 2. **Semantic Search** (Qdrant): Natural language queries
@@ -286,7 +288,7 @@ Yes. Multiple export formats:
 - **JSON**: Via mobile API (`GET /v1/summaries`)
 - **PDF**: Via `weasyprint` (roadmap: not yet implemented)
 - **Markdown**: Via CLI export (roadmap: not yet implemented)
-- **SQLite**: Direct database access (`data/ratatoskr.db`)
+- **PostgreSQL**: Direct database access via `psql` against `DATABASE_URL`
 
 ### Can I combine multiple links or forwarded posts into one result?
 
@@ -503,7 +505,7 @@ Yes, if self-hosted:
 
 - **No data leaves your server** (except API calls to Firecrawl/OpenRouter)
 - **API calls redacted**: Authorization headers never logged
-- **SQLite database**: Stored locally (`data/ratatoskr.db`)
+- **PostgreSQL database**: Runs in the `ratatoskr-postgres` Compose service; data is persisted to a local Docker volume
 - **No telemetry**: No usage analytics sent anywhere
 
 **Privacy considerations**:
