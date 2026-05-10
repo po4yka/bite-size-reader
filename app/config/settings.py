@@ -24,6 +24,7 @@ from .digest import ChannelDigestConfig
 from .firecrawl import FirecrawlConfig  # noqa: TC001
 from .integrations import (
     BatchAnalysisConfig,
+    CocoIndexConfig,
     EmbeddingConfig,
     McpConfig,
     QdrantConfig,
@@ -187,6 +188,7 @@ class AppConfig:
     otel: OtelConfig = field(default_factory=OtelConfig)
     sentry: SentryConfig = field(default_factory=SentryConfig)
     github: GitHubConfig = field(default_factory=GitHubConfig)
+    cocoindex: CocoIndexConfig = field(default_factory=CocoIndexConfig)
 
 
 class Settings(BaseSettings):
@@ -240,6 +242,7 @@ class Settings(BaseSettings):
     otel: OtelConfig = Field(default_factory=OtelConfig)
     sentry: SentryConfig = Field(default_factory=SentryConfig)
     github: GitHubConfig = Field(default_factory=GitHubConfig)
+    cocoindex: CocoIndexConfig = Field(default_factory=CocoIndexConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -377,6 +380,7 @@ class Settings(BaseSettings):
             otel=self.otel,
             sentry=self.sentry,
             github=self.github,
+            cocoindex=self.cocoindex,
         )
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from typing import Any
 
 from app.core.logging_utils import get_logger
@@ -80,6 +81,20 @@ class GeminiEmbeddingService(EmbeddingSerializationMixin):
 
         values: list[float] = result.embeddings[0].values
         return values
+
+    async def generate_embeddings_batch(
+        self,
+        texts: Sequence[str],
+        *,
+        language: str | None = None,
+        task_type: str | None = None,
+    ) -> list[Any]:
+        """Batch embedding via parallel Gemini calls (no batch REST endpoint)."""
+        return list(
+            await asyncio.gather(
+                *(self.generate_embedding(t, language=language, task_type=task_type) for t in texts)
+            )
+        )
 
     # -- Metadata --------------------------------------------------------------
 

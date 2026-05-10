@@ -80,6 +80,7 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     runtime = None
     broker = None
+    coco_runtime = None
     try:
         from app.config import load_config as _load_config
         from app.observability.otel import init_tracing
@@ -135,8 +136,26 @@ async def lifespan(app: FastAPI):
         except ImportError:
             pass
 
+        # Start CocoIndex live reconciler when enabled (opt-in, failure-isolated)
+        if _cfg.cocoindex.enabled:
+            try:
+                from app.infrastructure.cocoindex.runtime import CocoIndexRuntime
+
+                coco_runtime = CocoIndexRuntime(
+                    cfg=_cfg,
+                    collection_name=runtime.vector_store.collection_name,
+                )
+                await coco_runtime.start()
+            except ImportError:
+                logger.warning("cocoindex_not_installed")
+            except Exception:
+                logger.exception("cocoindex_startup_failed")
+                coco_runtime = None
+
         yield
     finally:
+        if coco_runtime is not None:
+            await coco_runtime.stop(timeout=10.0)
         if broker is not None and not broker.is_worker_process:
             await broker.shutdown()
         await close_redis()

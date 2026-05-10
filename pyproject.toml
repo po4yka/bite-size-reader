@@ -259,6 +259,12 @@ langgraph = [
   "psycopg[binary]>=3.0",
 ]
 
+# CocoIndex incremental ETL: live sync from Postgres summaries to Qdrant
+cocoindex = [
+  "cocoindex>=1.0.3,<1.1",
+  "psycopg[binary]>=3.0",
+]
+
 # OpenTelemetry distributed tracing (Tempo backend)
 otel = [
   "opentelemetry-api>=1.41,<2",

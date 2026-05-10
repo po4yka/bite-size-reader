@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
@@ -85,6 +86,24 @@ class EmbeddingService(EmbeddingSerializationMixin):
         return await asyncio.to_thread(
             model.encode, text, convert_to_numpy=True, show_progress_bar=False
         )
+
+    async def generate_embeddings_batch(
+        self,
+        texts: Sequence[str],
+        *,
+        language: str | None = None,
+        task_type: str | None = None,
+    ) -> list[Any]:
+        """Generate embeddings for multiple texts using native batched encode."""
+        model_name = self._get_model_name_for_language(language)
+        model = self._ensure_model(model_name)
+        results = await asyncio.to_thread(
+            model.encode,
+            list(texts),
+            convert_to_numpy=True,
+            show_progress_bar=False,
+        )
+        return list(results)
 
     def get_model_name(self, language: str | None = None) -> str:
         """Get model name for a specific language."""

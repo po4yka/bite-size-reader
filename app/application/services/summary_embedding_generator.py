@@ -77,6 +77,8 @@ class SummaryEmbeddingGenerator:
                 logger.warning("empty_text_for_embedding", extra={"summary_id": summary_id})
                 return False
 
+            # TODO(cocoindex): populate content_hash + last_indexed_at on SummaryEmbedding
+            # when EmbeddingRepositoryAdapter supports those fields (migration 0007).
             embedding = await self._embedding_service.generate_embedding(
                 text,
                 language=language,

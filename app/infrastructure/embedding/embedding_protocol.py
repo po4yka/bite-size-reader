@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import struct
+from collections.abc import Sequence
 from typing import Any, Protocol, runtime_checkable
 
 
@@ -45,6 +47,23 @@ class EmbeddingSerializationMixin:
     def deserialize_embedding(self, blob: bytes) -> list[float]:
         return unpack_embedding(blob)
 
+    async def generate_embeddings_batch(
+        self,
+        texts: Sequence[str],
+        *,
+        language: str | None = None,
+        task_type: str | None = None,
+    ) -> list[Any]:
+        """Generate embeddings for multiple texts. Default: parallel single calls."""
+        return list(
+            await asyncio.gather(
+                *(
+                    self.generate_embedding(t, language=language, task_type=task_type)  # type: ignore[attr-defined]
+                    for t in texts
+                )
+            )
+        )
+
 
 @runtime_checkable
 class EmbeddingServiceProtocol(Protocol):
@@ -53,6 +72,14 @@ class EmbeddingServiceProtocol(Protocol):
     async def generate_embedding(
         self, text: str, *, language: str | None = None, task_type: str | None = None
     ) -> Any: ...
+
+    async def generate_embeddings_batch(
+        self,
+        texts: Sequence[str],
+        *,
+        language: str | None = None,
+        task_type: str | None = None,
+    ) -> list[Any]: ...
 
     def serialize_embedding(self, embedding: Any) -> bytes: ...
 
