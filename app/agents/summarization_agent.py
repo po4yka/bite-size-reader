@@ -14,6 +14,7 @@ from app.prompts.manager import get_prompt_manager
 
 if TYPE_CHECKING:
     from app.adapters.content.pure_summary_service import PureSummaryService
+    from app.agents.langgraph.graph import SummarizationGraph
 
 logger = get_logger(__name__)
 
@@ -55,14 +56,21 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
         pure_summary_service: PureSummaryService,
         validator_agent: Any,  # Will be ValidationAgent
         correlation_id: str | None = None,
+        graph: SummarizationGraph | None = None,
     ):
         super().__init__(name="SummarizationAgent", correlation_id=correlation_id)
         self.pure_summary_service = pure_summary_service
         self.validator_agent = validator_agent
+        self._graph = graph
 
     async def execute(self, input_data: SummarizationInput) -> AgentResult[SummarizationOutput]:
         """Generate a summary with self-correction feedback loop."""
         self.correlation_id = input_data.correlation_id
+
+        if self._graph is not None:
+            self.log_info("Delegating to LangGraph summarization pipeline")
+            return await self._graph.run(input_data)
+
         self.log_info(
             f"Starting summarization - {len(input_data.content)} chars, lang={input_data.language}"
         )

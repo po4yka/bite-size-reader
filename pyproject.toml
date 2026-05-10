@@ -252,6 +252,13 @@ mcp = [
   "mcp>=1.26,<2",
 ]
 
+# LangGraph agent orchestration with Postgres checkpointing
+langgraph = [
+  "langgraph>=1.1.0",
+  "langgraph-checkpoint-postgres>=3.0.0",
+  "psycopg[binary]>=3.0",
+]
+
 # OpenTelemetry distributed tracing (Tempo backend)
 otel = [
   "opentelemetry-api>=1.41,<2",
