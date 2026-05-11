@@ -4347,6 +4347,7 @@ inference-core = [
     { name = "sentence-transformers" },
 ]
 langgraph = [
+    { name = "langchain" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-postgres" },
     { name = "psycopg", extra = ["binary"] },
@@ -4426,6 +4427,7 @@ requires-dist = [
     { name = "httpx", extras = ["http2"], specifier = ">=0.28.1" },
     { name = "instructor", specifier = ">=1.5.0" },
     { name = "json-repair", specifier = ">=0.55.1" },
+    { name = "langchain", marker = "extra == 'langgraph'", specifier = ">=1.0,<2" },
     { name = "langgraph", marker = "extra == 'langgraph'", specifier = ">=1.1.0" },
     { name = "langgraph-checkpoint-postgres", marker = "extra == 'langgraph'", specifier = ">=3.0.0" },
     { name = "loguru", specifier = ">=0.7.3" },

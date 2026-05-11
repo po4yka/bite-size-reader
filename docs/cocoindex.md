@@ -1,10 +1,10 @@
 # Vector-Index Sync: CocoIndex + Reconciler
 
 Ratatoskr keeps the Qdrant vector store in sync with Postgres `summaries`
-through three cooperating paths. The fast path is best-effort. The
-CocoIndex live updater (opt-in) reconciles within ~30s. The Taskiq
-reconciler (`ratatoskr.vector.reconcile`) runs every 30 minutes as a
-steady-state fallback for when CocoIndex is disabled or misbehaves.
+and analyzed GitHub `repositories`. Summary vectors still have three
+cooperating paths. Repository vectors are written immediately by the GitHub
+analysis fast path and reconciled by CocoIndex when the live updater is
+enabled.
 
 ## Quick start
 
@@ -26,7 +26,13 @@ Three paths write summary vectors to Qdrant:
 | **CocoIndex flow** (`FlowLiveUpdater`, opt-in) | ≤30s | authoritative when enabled |
 | **Taskiq reconciler** (`ratatoskr.vector.reconcile`) | 30 min | steady-state fallback |
 
-All paths produce the same Qdrant point UUID (`uuid5(NAMESPACE_OID, f"{request_id}:{summary_id}")`), so writes are idempotent. The fast path can silently lose a write; CocoIndex reconciles within one poll interval, and the Taskiq reconciler closes the gap when CocoIndex is disabled.
+All summary paths produce the same Qdrant point UUID (`uuid5(NAMESPACE_OID, f"{request_id}:{summary_id}")`), so writes are idempotent. The fast path can silently lose a write; CocoIndex reconciles within one poll interval, and the Taskiq reconciler closes the gap when CocoIndex is disabled.
+
+Repository vectors use a separate deterministic UUID:
+`uuid5(NAMESPACE_OID, f"{environment}:{user_scope}:repository:{repository_id}")`.
+The repository CocoIndex flow only exports rows that already have
+`analysis_json`; LLM analysis, budget caps, and pending-analysis flags remain
+owned by the GitHub ingestion workflow.
 
 ### Drift detection via `content_hash`
 
@@ -70,7 +76,7 @@ CocoIndex and LangGraph checkpointing are both enabled:
 |------|--------|-------------|
 | SQLAlchemy (application) | asyncpg | `DB_POOL_SIZE` (default 5) |
 | LangGraph checkpointer | psycopg3 | min=1, max=10 |
-| CocoIndex flow | psycopg3 | max=4 + 1 (LISTEN/NOTIFY) |
+| CocoIndex flows | psycopg3 | max=4 + 1 (LISTEN/NOTIFY) |
 
 Total worst-case: ~20 connections. Budget `max_connections` in Postgres
 accordingly (default 100 is fine; set `RATATOSKR_COCOINDEX_POOL_MAX=2`
@@ -102,15 +108,15 @@ python -m app.cli.backfill_vector_store --limit=100 --dry-run
 
 ## v1 limitations
 
-- **One point per summary** — CocoIndex v1 emits a single Qdrant point per
-  summary, unlike the legacy backfill which emits chunked window points.
+- **One point per entity** — CocoIndex v1 emits a single Qdrant point per
+  summary or repository, unlike the legacy summary backfill which emits chunked window points.
   This is a deliberate simplification; retrieval quality is measured before
   adding chunked points in a follow-up.
 - **Alpha stability** — CocoIndex is pinned to `>=1.0.3,<1.1`. Pin review
   when 1.1 releases.
 - **Trigger creation** — Requires the `ratatoskr` Postgres role to have
-  `TRIGGER` privilege on `summaries`. Migration 0007 grants this; verify
-  the role name matches your deployment.
+  `TRIGGER` privilege on `summaries` and `repositories`. Migrations 0007 and
+  0008 grant this; verify the role name matches your deployment.
 
 ## CocoIndex bookkeeping schema
 

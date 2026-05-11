@@ -7,6 +7,7 @@ import unittest
 from typing import Any
 from unittest.mock import patch
 
+from app.adapter_models.llm.llm_models import StructuredLLMResult
 from app.agents.repo_analysis_agent import RepoAnalysisAgent
 from app.core.repo_analysis_schema import RepoAnalysis, RepoAnalysisInput
 
@@ -68,12 +69,86 @@ class _StubLLMRepo:
         return len(self.calls)
 
 
+class _StructuredStubLLM:
+    """Stub structured LLM that records requested response models."""
+
+    def __init__(self, parsed: RepoAnalysis | None = None, exc: Exception | None = None) -> None:
+        self.parsed = parsed or RepoAnalysis.model_validate(_VALID_PAYLOAD)
+        self.exc = exc
+        self.calls: list[dict[str, Any]] = []
+
+    async def chat_structured(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        response_model: type[Any],
+        max_retries: int = 3,
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+        request_id: int | None = None,
+        model_override: str | None = None,
+        fallback_models_override: tuple[str, ...] | list[str] | None = None,
+    ) -> StructuredLLMResult[RepoAnalysis]:
+        self.calls.append(
+            {
+                "messages": messages,
+                "response_model": response_model,
+                "max_retries": max_retries,
+                "temperature": temperature,
+            }
+        )
+        if self.exc is not None:
+            raise self.exc
+        return StructuredLLMResult(
+            parsed=self.parsed,
+            retry_count=1,
+            model_used="openai/gpt-test",
+            tokens_prompt=10,
+            tokens_completion=20,
+            cost_usd=0.001,
+            latency_ms=123,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
 
 class TestRepoAnalysisAgent(unittest.IsolatedAsyncioTestCase):
+    async def test_structured_output_path_succeeds(self) -> None:
+        """Structured LLM clients use chat_structured instead of the legacy raw parser."""
+        repo = _StubLLMRepo()
+        llm = _StructuredStubLLM()
+        agent = RepoAnalysisAgent(llm_service=llm, llm_repo=repo)
+
+        result = await agent.analyze(_make_input(), correlation_id="cid-structured")
+
+        self.assertIsInstance(result, RepoAnalysis)
+        self.assertEqual(len(llm.calls), 1)
+        self.assertIs(llm.calls[0]["response_model"], RepoAnalysis)
+        self.assertEqual(llm.calls[0]["max_retries"], 3)
+        self.assertEqual(len(repo.calls), 1)
+        self.assertEqual(repo.calls[0]["attempt_trigger"], "structured")
+        self.assertEqual(repo.calls[0]["attempt_index"], 2)
+        self.assertEqual(repo.calls[0]["model"], "openai/gpt-test")
+        self.assertEqual(repo.calls[0]["tokens_prompt"], 10)
+
+    async def test_structured_output_path_returns_none_on_failure(self) -> None:
+        """Structured LLM failures are persisted and surfaced as a clean None result."""
+        repo = _StubLLMRepo()
+        agent = RepoAnalysisAgent(
+            llm_service=_StructuredStubLLM(exc=RuntimeError("invalid")),
+            llm_repo=repo,
+        )
+
+        result = await agent.analyze(_make_input(), correlation_id="cid-structured-fail")
+
+        self.assertIsNone(result)
+        self.assertEqual(len(repo.calls), 1)
+        self.assertEqual(repo.calls[0]["status"], "error")
+        self.assertIn("invalid", repo.calls[0]["error_text"])
+
     async def test_first_attempt_succeeds(self) -> None:
         """Stub LLM returns valid JSON -> agent returns RepoAnalysis, 1 LLMCall persisted."""
         repo = _StubLLMRepo()

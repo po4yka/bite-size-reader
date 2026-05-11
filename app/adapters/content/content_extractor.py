@@ -206,38 +206,12 @@ class ContentExtractor(
         from app.infrastructure.embedding.embedding_factory import create_embedding_service
         from app.infrastructure.embedding.repository_embedding import RepositoryEmbeddingGenerator
 
-        # Thin adapter: RepoAnalysisAgent expects LLMServiceProtocol.call(*, system_prompt,
-        # user_prompt, correlation_id) -> str, while ContentExtractor holds an LLMClientProtocol
-        # that exposes chat().  Bridge them here to avoid touching either side.
         llm_client = self._quality_llm_client
         if llm_client is None:
             raise RuntimeError(
                 "GitHubPlatformExtractor requires an LLM client "
                 "(quality_llm_client was not provided to ContentExtractor)"
             )
-
-        class _LLMClientAdapter:
-            """Bridges LLMClientProtocol.chat() to LLMServiceProtocol.call()."""
-
-            def __init__(self, client: Any) -> None:
-                self._client = client
-
-            async def call(
-                self,
-                *,
-                system_prompt: str,
-                user_prompt: str,
-                correlation_id: str,
-            ) -> str:
-                from app.adapter_models.llm.llm_models import LLMCallResult
-
-                result: LLMCallResult = await self._client.chat(
-                    [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ]
-                )
-                return result.response_text or ""
 
         embedding_service = create_embedding_service(self.cfg.embedding)
 
@@ -268,7 +242,7 @@ class ContentExtractor(
             environment=self.cfg.vector_store.environment,
             user_scope=self.cfg.vector_store.user_scope,
         )
-        agent = RepoAnalysisAgent(llm_service=_LLMClientAdapter(llm_client))
+        agent = RepoAnalysisAgent(llm_service=llm_client)
         analyze_use_case = AnalyzeRepositoryUseCase(
             db=self.db,
             agent=agent,

@@ -31,10 +31,12 @@ class CocoIndexRuntime:
         self._collection_name = collection_name
         self._updater: Any | None = None
         self._flow: Any | None = None
+        self._updaters: list[Any] = []
+        self._flows: list[Any] = []
 
     async def start(self) -> None:
         """Initialise CocoIndex and start the FlowLiveUpdater."""
-        import cocoindex  # noqa: PLC0415
+        import cocoindex
 
         coco_cfg: CocoIndexConfig = self._cfg.cocoindex
         db_cfg = self._cfg.database
@@ -52,40 +54,60 @@ class CocoIndexRuntime:
 
         qdrant_cfg = self._cfg.vector_store
 
-        from app.infrastructure.cocoindex.flow import build_summaries_flow
+        from app.infrastructure.cocoindex.flow import build_repositories_flow, build_summaries_flow
 
-        self._flow = build_summaries_flow(
-            collection_name=self._collection_name,
-            qdrant_url=qdrant_cfg.url,
-            qdrant_api_key=qdrant_cfg.api_key,
-            user_scope=qdrant_cfg.user_scope,
-            environment=qdrant_cfg.environment,
-            listen_channel=coco_cfg.listen_notify_channel,
-        )
+        self._flows = [
+            build_summaries_flow(
+                collection_name=self._collection_name,
+                qdrant_url=qdrant_cfg.url,
+                qdrant_api_key=qdrant_cfg.api_key,
+                user_scope=qdrant_cfg.user_scope,
+                environment=qdrant_cfg.environment,
+                listen_channel=coco_cfg.listen_notify_channel,
+            ),
+            build_repositories_flow(
+                collection_name=self._collection_name,
+                qdrant_url=qdrant_cfg.url,
+                qdrant_api_key=qdrant_cfg.api_key,
+                user_scope=qdrant_cfg.user_scope,
+                environment=qdrant_cfg.environment,
+            ),
+        ]
+        self._flow = self._flows[0]
 
         # setup() is idempotent -- creates CocoIndex metadata tables on first run
-        await asyncio.to_thread(self._flow.setup)
-        logger.info("cocoindex_flow_ready", extra={"collection": self._collection_name})
-
-        # Start live updater in background
-        live_updater_cls = cocoindex.FlowLiveUpdater
-        self._updater = live_updater_cls(
-            self._flow,
-            cocoindex.FlowLiveUpdaterOptions(live_mode=True),
+        for flow in self._flows:
+            await asyncio.to_thread(flow.setup)
+        logger.info(
+            "cocoindex_flows_ready",
+            extra={"collection": self._collection_name, "flows": len(self._flows)},
         )
-        await asyncio.to_thread(self._updater.__enter__)
-        logger.info("cocoindex_live_updater_started")
+
+        # Start live updaters in background
+        live_updater_cls = cocoindex.FlowLiveUpdater
+        self._updaters = []
+        for flow in self._flows:
+            updater = live_updater_cls(
+                flow,
+                cocoindex.FlowLiveUpdaterOptions(live_mode=True),
+            )
+            await asyncio.to_thread(updater.__enter__)
+            self._updaters.append(updater)
+        self._updater = self._updaters[0] if self._updaters else None
+        logger.info("cocoindex_live_updaters_started", extra={"count": len(self._updaters)})
 
     async def stop(self, timeout: float = 10.0) -> None:
         """Stop the live updater with a bounded timeout."""
-        if self._updater is None:
+        if not self._updaters and self._updater is None:
             return
         try:
-            await asyncio.wait_for(
-                asyncio.to_thread(self._updater.__exit__, None, None, None),
-                timeout=timeout,
-            )
-            logger.info("cocoindex_live_updater_stopped")
+            updaters = list(self._updaters or ([self._updater] if self._updater else []))
+            for updater in reversed(updaters):
+                await asyncio.wait_for(
+                    asyncio.to_thread(updater.__exit__, None, None, None),
+                    timeout=timeout,
+                )
+            logger.info("cocoindex_live_updaters_stopped", extra={"count": len(updaters)})
         except TimeoutError:
             logger.warning(
                 "cocoindex_live_updater_stop_timeout",
@@ -95,10 +117,16 @@ class CocoIndexRuntime:
             logger.exception("cocoindex_live_updater_stop_error")
         finally:
             self._updater = None
+            self._updaters = []
 
     async def run_one_shot(self) -> None:
         """Run a single full-scan update (for CLI backfill delegation)."""
-        if self._flow is None:
+        if not self._flows and self._flow is None:
             raise RuntimeError("CocoIndexRuntime.start() must be called before run_one_shot()")
-        await asyncio.to_thread(self._flow.update)
-        logger.info("cocoindex_one_shot_complete", extra={"collection": self._collection_name})
+        flows = self._flows or [self._flow]
+        for flow in flows:
+            await asyncio.to_thread(flow.update)
+        logger.info(
+            "cocoindex_one_shot_complete",
+            extra={"collection": self._collection_name, "flows": len(flows)},
+        )

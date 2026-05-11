@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import uuid
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.logging_utils import get_logger
 from app.db.models.repository import Repository, RepositoryEmbedding
+from app.infrastructure.vector.point_ids import repository_point_id
 
 if TYPE_CHECKING:
     from app.core.repo_analysis_schema import RepoAnalysis
@@ -18,13 +18,6 @@ if TYPE_CHECKING:
     from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 
 logger = get_logger(__name__)
-
-_UUID_NAMESPACE = uuid.NAMESPACE_OID
-
-
-def _str_to_uuid(s: str) -> str:
-    """Hash an arbitrary string to a deterministic UUID string."""
-    return str(uuid.uuid5(_UUID_NAMESPACE, s))
 
 
 class RepositoryEmbeddingGenerator:
@@ -264,8 +257,11 @@ class RepositoryEmbeddingGenerator:
             )
             return
 
-        point_key = f"{self._environment}:{self._user_scope}:repository:{repository.id}"
-        point_id = _str_to_uuid(point_key)
+        point_id = repository_point_id(
+            self._environment,
+            self._user_scope,
+            repository.id,
+        )
 
         created_at_iso = (
             repository.created_at.isoformat() if repository.created_at is not None else None
@@ -280,6 +276,9 @@ class RepositoryEmbeddingGenerator:
             "primary_language": repository.primary_language,
             "topics": topics,
             "is_starred": repository.is_starred,
+            "source": repository.source.value
+            if hasattr(repository.source, "value")
+            else repository.source,
             "created_at": created_at_iso,
             "environment": self._environment,
             "user_scope": self._user_scope,

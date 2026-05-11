@@ -157,6 +157,12 @@ repos use the `RepoAnalysis` contract, not the 35-field `Summary` contract.
 Unique constraint: `(user_id, github_id)`.
 Indexes: `(user_id, is_starred)`, `(user_id, primary_language)`, `(user_id, pushed_at DESC)`, `(github_id)`.
 
+When CocoIndex is enabled, analyzed repository rows (`analysis_json IS NOT NULL`)
+are also exported to Qdrant using the deterministic point UUID
+`uuid5(NAMESPACE_OID, f"{environment}:{user_scope}:repository:{repository_id}")`.
+Migration `0008_cocoindex_repository_trigger_grant.py` grants the deployment
+role trigger access required for live repository change tracking.
+
 ### `repository_embeddings`
 
 | Column | Type | Null | Purpose |

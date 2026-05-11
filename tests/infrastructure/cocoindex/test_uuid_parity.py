@@ -55,3 +55,25 @@ def test_point_id_is_deterministic() -> None:
     first = summary_id_to_point_id(42, 100)
     second = summary_id_to_point_id(42, 100)
     assert first == second, "Point ID must be deterministic (same input → same output)"
+
+
+@pytest.mark.parametrize(
+    ("environment", "user_scope", "repository_id"),
+    [
+        ("dev", "public", 1),
+        ("prod", "user-42", 100),
+        ("local", "tenant", 999),
+    ],
+)
+def test_repository_point_id_matches_repository_embedding_generator(
+    environment: str,
+    user_scope: str,
+    repository_id: int,
+) -> None:
+    from app.infrastructure.cocoindex.embedding_bridge import repository_id_to_point_id
+    from app.infrastructure.vector.qdrant_store import _str_to_uuid
+
+    expected = _str_to_uuid(f"{environment}:{user_scope}:repository:{repository_id}")
+    actual = repository_id_to_point_id(environment, user_scope, repository_id)
+
+    assert actual == expected

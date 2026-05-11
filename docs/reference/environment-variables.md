@@ -381,8 +381,8 @@ Controls which embedding backend generates vectors for semantic search.
 
 ## Vector-Index Sync (CocoIndex + Reconciler)
 
-See [`docs/cocoindex.md`](../cocoindex.md) for architecture, drift-detection
-semantics, and rollback procedure.
+See [`docs/cocoindex.md`](../cocoindex.md) for architecture, summary/repository
+indexing semantics, drift detection, and rollback procedure.
 
 ### CocoIndex live updater (opt-in)
 

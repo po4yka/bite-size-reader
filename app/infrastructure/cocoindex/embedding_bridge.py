@@ -13,10 +13,9 @@ from __future__ import annotations
 
 import asyncio
 import threading
-import uuid
 from typing import Any
 
-_UUID_NAMESPACE = uuid.NAMESPACE_OID
+from app.infrastructure.vector.point_ids import repository_point_id, summary_point_id
 
 _lock = threading.Lock()
 _loop: asyncio.AbstractEventLoop | None = None
@@ -50,7 +49,8 @@ def embed_text_sync(text: str, language: str | None = None) -> list[float]:
     Thread-safe; initialises the daemon loop on first call.
     """
     _ensure_runtime()
-    assert _loop is not None and _service is not None  # guaranteed by _ensure_runtime
+    assert _loop is not None  # guaranteed by _ensure_runtime
+    assert _service is not None  # guaranteed by _ensure_runtime
     fut = asyncio.run_coroutine_threadsafe(
         _service.generate_embedding(text, language=language, task_type="document"),
         _loop,
@@ -65,4 +65,9 @@ def summary_id_to_point_id(request_id: int, summary_id: int) -> str:
     Key format must exactly match: f"{request_id}:{summary_id}"
     Namespace must exactly match: uuid.NAMESPACE_OID
     """
-    return str(uuid.uuid5(_UUID_NAMESPACE, f"{request_id}:{summary_id}"))
+    return summary_point_id(request_id, summary_id)
+
+
+def repository_id_to_point_id(environment: str, user_scope: str, repository_id: int) -> str:
+    """Compute the Qdrant point UUID used for repository semantic-search points."""
+    return repository_point_id(environment, user_scope, repository_id)

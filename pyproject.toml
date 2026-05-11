@@ -252,8 +252,9 @@ mcp = [
   "mcp>=1.26,<2",
 ]
 
-# LangGraph agent orchestration with Postgres checkpointing
+# LangChain/LangGraph agent orchestration with Postgres checkpointing
 langgraph = [
+  "langchain>=1.0,<2",
   "langgraph>=1.1.0",
   "langgraph-checkpoint-postgres>=3.0.0",
   "psycopg[binary]>=3.0",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast, runtime_checkable
 
 from pydantic import ValidationError
 
@@ -12,6 +12,9 @@ from app.core.logging_utils import get_logger
 from app.core.repo_analysis_contract import parse_and_validate_repo_analysis
 
 if TYPE_CHECKING:
+    from pydantic import BaseModel
+
+    from app.adapter_models.llm.llm_models import StructuredLLMResult
     from app.core.repo_analysis_schema import RepoAnalysis, RepoAnalysisInput
 
 logger = get_logger(__name__)
@@ -49,6 +52,26 @@ class LLMServiceProtocol(Protocol):
 
 
 @runtime_checkable
+class StructuredLLMServiceProtocol(Protocol):
+    """Structured-output LLM interface preferred by RepoAnalysisAgent."""
+
+    async def chat_structured(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        response_model: type[BaseModel],
+        max_retries: int = 3,
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+        request_id: int | None = None,
+        model_override: str | None = None,
+        fallback_models_override: tuple[str, ...] | list[str] | None = None,
+    ) -> StructuredLLMResult[Any]:
+        """Return a Pydantic-validated structured LLM response."""
+        ...
+
+
+@runtime_checkable
 class LLMRepoProtocol(Protocol):
     """Minimal persistence interface for LLMCall rows."""
 
@@ -58,20 +81,20 @@ class LLMRepoProtocol(Protocol):
 
 
 class RepoAnalysisAgent:
-    """Analyse a GitHub repository via LLM with a validation retry loop.
+    """Analyse a GitHub repository via LLM with structured-output validation.
 
     The agent:
     - Loads the correct system prompt for the chosen language.
     - Serialises ``RepoAnalysisInput`` as JSON and sends it to the LLM.
-    - Validates the response with ``parse_and_validate_repo_analysis``.
-    - On failure, prepends the error as a correction preamble and retries.
+    - Prefers provider-backed ``chat_structured`` validation against ``RepoAnalysis``.
+    - Falls back to the legacy raw-text repair loop for older test doubles/adapters.
     - Persists one ``LLMCall``-shaped record per attempt via ``llm_repo``
       (optional; skipped when not provided).
     """
 
     def __init__(
         self,
-        llm_service: LLMServiceProtocol,
+        llm_service: LLMServiceProtocol | StructuredLLMServiceProtocol,
         llm_repo: LLMRepoProtocol | None = None,
         request_id: int | None = None,
         model_name: str | None = None,
@@ -98,6 +121,111 @@ class RepoAnalysisAgent:
         Returns a ``RepoAnalysis`` on success, or ``None`` after
         ``max_attempts`` consecutive failures.
         """
+        if isinstance(self._llm, StructuredLLMServiceProtocol):
+            return await self._analyze_structured(
+                input,
+                chosen_lang=chosen_lang,
+                correlation_id=correlation_id,
+                max_attempts=max_attempts,
+            )
+        return await self._analyze_legacy(
+            input,
+            chosen_lang=chosen_lang,
+            correlation_id=correlation_id,
+            max_attempts=max_attempts,
+        )
+
+    async def _analyze_structured(
+        self,
+        input: RepoAnalysisInput,
+        *,
+        chosen_lang: Literal["en", "ru"],
+        correlation_id: str,
+        max_attempts: int,
+    ) -> RepoAnalysis | None:
+        """Run repository analysis through provider-native structured output."""
+        from app.core.repo_analysis_schema import RepoAnalysis
+
+        system_prompt = self._load_system_prompt(chosen_lang)
+        user_prompt = self._build_user_prompt(input)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        logger.info(
+            "repo_analysis_structured_attempt",
+            extra={
+                "event": "repo_analysis_structured_attempt",
+                "correlation_id": correlation_id,
+                "full_name": input.full_name,
+                "max_attempts": max_attempts,
+            },
+        )
+
+        try:
+            structured_llm = cast("StructuredLLMServiceProtocol", self._llm)
+            result = await structured_llm.chat_structured(
+                messages,
+                response_model=RepoAnalysis,
+                max_retries=max_attempts,
+                temperature=0.1,
+            )
+        except Exception as exc:
+            logger.warning(
+                "repo_analysis_structured_failed",
+                extra={
+                    "event": "repo_analysis_structured_failed",
+                    "correlation_id": correlation_id,
+                    "full_name": input.full_name,
+                    "error": str(exc),
+                },
+            )
+            await self._persist(
+                correlation_id=correlation_id,
+                attempt_index=1,
+                attempt_trigger="structured",
+                response_text="",
+                status="error",
+                error_text=str(exc),
+            )
+            return None
+
+        parsed = result.parsed
+        await self._persist(
+            correlation_id=correlation_id,
+            attempt_index=max(1, result.retry_count + 1),
+            attempt_trigger="structured",
+            response_text=parsed.model_dump_json(),
+            status="ok",
+            error_text=None,
+            model_name=result.model_used,
+            tokens_prompt=result.tokens_prompt,
+            tokens_completion=result.tokens_completion,
+            cost_usd=result.cost_usd,
+            latency_ms=result.latency_ms,
+        )
+        logger.info(
+            "repo_analysis_structured_success",
+            extra={
+                "event": "repo_analysis_structured_success",
+                "correlation_id": correlation_id,
+                "full_name": input.full_name,
+                "attempt_index": max(1, result.retry_count + 1),
+                "confidence": parsed.confidence,
+            },
+        )
+        return parsed
+
+    async def _analyze_legacy(
+        self,
+        input: RepoAnalysisInput,
+        *,
+        chosen_lang: Literal["en", "ru"],
+        correlation_id: str,
+        max_attempts: int,
+    ) -> RepoAnalysis | None:
+        """Run the legacy raw-text repair loop for non-structured clients."""
         system_prompt = self._load_system_prompt(chosen_lang)
         user_prompt = self._build_user_prompt(input)
         previous_error: str | None = None
@@ -123,7 +251,8 @@ class RepoAnalysisAgent:
 
             raw_response: str = ""
             try:
-                raw_response = await self._llm.call(
+                legacy_llm = cast("LLMServiceProtocol", self._llm)
+                raw_response = await legacy_llm.call(
                     system_prompt=system_prompt,
                     user_prompt=effective_prompt,
                     correlation_id=correlation_id,
@@ -243,19 +372,28 @@ class RepoAnalysisAgent:
         response_text: str,
         status: str,
         error_text: str | None,
+        model_name: str | None = None,
+        tokens_prompt: int | None = None,
+        tokens_completion: int | None = None,
+        cost_usd: float | None = None,
+        latency_ms: int | None = None,
     ) -> None:
         if self._llm_repo is None:
             return
         payload: dict[str, Any] = {
             "request_id": self._request_id,
-            "provider": _provider_from_model(self._model_name),
-            "model": self._model_name,
+            "provider": _provider_from_model(model_name or self._model_name),
+            "model": model_name or self._model_name,
             "response_text": response_text,
             "status": status,
             "error_text": error_text,
             "attempt_index": attempt_index,
             "attempt_trigger": attempt_trigger,
             "correlation_id": correlation_id,
+            "tokens_prompt": tokens_prompt,
+            "tokens_completion": tokens_completion,
+            "cost_usd": cost_usd,
+            "latency_ms": latency_ms,
         }
         try:
             await self._llm_repo.async_insert_llm_call(payload)
