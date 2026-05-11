@@ -826,17 +826,24 @@ CREATE INDEX ix_topic_search_body_tsv ON topic_search_index USING GIN (body_tsv)
 
 ### summary_embeddings
 
-**Purpose:** Vector embeddings for semantic search.
+**Purpose:** Postgres-side summary embedding metadata and drift tracking for
+semantic search. Qdrant stores the searchable vector point; the DB row records
+the model, content hash, index status, and last successful write.
 
 **Schema:**
 
 ```sql
 CREATE TABLE summary_embeddings (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    summary_id        TEXT UNIQUE REFERENCES summaries(id),
-    embedding_model   TEXT NOT NULL,  -- 'all-MiniLM-L6-v2', etc.
-    embedding_vector  BLOB,  -- Serialized numpy array
-    embedding_dim     INTEGER,  -- Vector dimensions (e.g., 384)
+    summary_id        INTEGER UNIQUE REFERENCES summaries(id) ON DELETE CASCADE,
+    model_name        TEXT NOT NULL,  -- 'all-MiniLM-L6-v2', etc.
+    model_version     TEXT NOT NULL,
+    embedding_blob    BLOB NOT NULL,  -- Serialized float32 array
+    dimensions        INTEGER NOT NULL,  -- Vector dimensions (e.g., 384)
+    language          TEXT,
+    content_hash      TEXT,
+    last_indexed_at   TIMESTAMP,
+    index_status      TEXT NOT NULL DEFAULT 'pending',
     created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -844,10 +851,15 @@ CREATE TABLE summary_embeddings (
 **Fields:**
 
 - `id` (int, PK, autoincrement) - Internal ID
-- `summary_id` (str, FK, unique) - Foreign key to `summaries`
-- `embedding_model` (str) - Model name used for embedding
-- `embedding_vector` (blob) - Serialized embedding vector
-- `embedding_dim` (int) - Vector dimensions
+- `summary_id` (int, FK, unique) - Foreign key to `summaries`
+- `model_name` (str) - Model name used for embedding
+- `model_version` (str) - Version tag for stale-vector detection
+- `embedding_blob` (blob) - Serialized embedding vector
+- `dimensions` (int) - Vector dimensions
+- `language` (str, nullable) - Language hint for the embedded text
+- `content_hash` (str, nullable) - SHA256 of the text fed to the embedding model
+- `last_indexed_at` (datetime, nullable) - Last successful Qdrant write
+- `index_status` (str, nullable) - Current index state (`indexed`, stale/error variants)
 - `created_at` (datetime) - Record creation timestamp
 
 **Indexes:**
@@ -1411,46 +1423,63 @@ Three tables added in the GitHub repository ingestion feature. SQLAlchemy models
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | UUID PK | |
-| `user_id` | int FK -> users | Owner of the integration |
-| `github_repo_id` | int | GitHub's numeric repo ID (unique per user) |
+| `id` | integer PK | Surrogate key |
+| `github_id` | bigint | GitHub's numeric repo ID (unique per user) |
+| `owner` | text | Repository owner |
+| `name` | text | Repository name |
 | `full_name` | text | `owner/repo` |
+| `url` | text | `https://github.com/owner/repo` |
+| `homepage_url` | text, nullable | Project homepage |
 | `description` | text, nullable | GitHub description |
-| `html_url` | text | `https://github.com/owner/repo` |
-| `language` | text, nullable | Primary language |
-| `topics` | JSON array | GitHub topic tags |
-| `stargazers_count` | int | Stars at last sync |
-| `is_starred` | bool | Whether in the user's starred list |
-| `source` | text | `manual` or `stars_sync` |
-| `content_hash` | text, nullable | Hash of readme + description; change triggers reanalysis |
-| `analysis` | JSON, nullable | LLM output: `summary`, `key_topics`, `use_cases`, `technical_highlights`, `target_audience`, `complexity_level` |
+| `primary_language` | text, nullable | Primary language |
+| `languages_json` | JSON object | GitHub language byte counts |
+| `topics_json` | JSON array | GitHub topic tags |
+| `stars` | int | Stars at last sync |
+| `forks` | int | Fork count |
+| `watchers` | int | Watcher count |
+| `default_branch` | text, nullable | Default branch name |
+| `license_spdx` | text, nullable | SPDX license identifier |
+| `is_archived` | bool | GitHub archived flag |
+| `is_fork` | bool | GitHub fork flag |
+| `is_template` | bool | GitHub template flag |
+| `pushed_at` | timestamp, nullable | Last GitHub push time |
+| `created_at_github` | timestamp, nullable | GitHub repo creation time |
+| `readme_excerpt` | text, nullable | Truncated README text used for analysis |
+| `readme_etag` | text, nullable | README ETag |
+| `analysis_json` | JSON, nullable | `RepoAnalysis` structured output |
 | `analysis_model` | text, nullable | Model used for analysis |
-| `analysis_generated_at` | timestamp, nullable | |
+| `analysis_at` | timestamp, nullable | When analysis was generated |
+| `content_hash` | text, nullable | Hash of readme + description; change triggers reanalysis |
+| `source` | text | `manual` or `starred` |
+| `is_starred` | bool | Whether in the user's starred list |
+| `user_id` | bigint FK -> users | Owner of the integration |
 | `last_synced_at` | timestamp, nullable | Last GitHub API fetch |
-| `ingested_at` | timestamp | Row creation |
+| `pending_analysis` | bool | LLM analysis deferred by budget cap |
+| `created_at` | timestamp | Row creation |
 | `updated_at` | timestamp | |
 
-Unique constraint: `(user_id, github_repo_id)`.
+Unique constraint: `(user_id, github_id)`.
 
-Indexes: `(user_id, is_starred)`, `(user_id, language)`, `(user_id, source)`, `ingested_at`.
+Indexes: `(user_id, is_starred)`, `(user_id, primary_language)`, `(user_id, pushed_at DESC)`, `(github_id)`.
 
 ### repository_embeddings
 
 **Purpose:** Vector embeddings for `repositories` rows, used by `GET /v1/search/repositories`.
+Qdrant writes use deterministic repository point IDs shared by the fast path and
+CocoIndex (`app/infrastructure/vector/point_ids.py`).
 
 **Key columns:**
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | UUID PK | |
-| `repository_id` | UUID FK -> repositories | One-to-one |
-| `user_id` | int FK -> users | Denormalized for fast per-user vector scans |
-| `embedding_model` | text | Model identifier |
+| `id` | integer PK | Surrogate key |
+| `repository_id` | integer FK -> repositories | One-to-one, ON DELETE CASCADE |
+| `model_name` | text | Model identifier |
 | `model_version` | text | Version tag; stale rows are targets for `backfill_repository_embeddings` |
-| `embedding_vector` | binary | Serialized float32 array |
-| `embedding_dim` | int | Vector dimensions |
+| `embedding_blob` | binary | Serialized float32 array |
+| `dimensions` | int | Vector dimensions |
+| `language` | text, nullable | Language hint for the embedded text |
 | `created_at` | timestamp | |
-| `updated_at` | timestamp | |
 
 Unique constraint: `(repository_id)`.
 
@@ -1462,17 +1491,19 @@ Unique constraint: `(repository_id)`.
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | UUID PK | |
-| `user_id` | int FK -> users | Unique per user |
-| `github_user_id` | int | GitHub numeric user ID |
-| `login` | text | GitHub username |
-| `auth_method` | text | `pat` or `device_flow` |
-| `encrypted_token` | text | Fernet-encrypted access token |
-| `status` | text | `connected`, `needs_reauth`, `revoked` |
-| `token_scopes` | JSON array, nullable | OAuth scopes granted |
-| `repo_count` | int | Cached count from last sync |
-| `last_sync_at` | timestamp, nullable | |
-| `connected_at` | timestamp | |
+| `id` | integer PK | Surrogate key |
+| `user_id` | bigint FK -> users | Unique per user |
+| `auth_method` | text | `pat` or `oauth_device` |
+| `encrypted_token` | binary | Fernet-encrypted access token |
+| `token_scopes` | text, nullable | OAuth scopes granted |
+| `github_login` | text, nullable | GitHub username |
+| `github_user_id` | bigint, nullable | GitHub numeric user ID |
+| `status` | text | `active`, `needs_reauth`, `revoked` |
+| `last_synced_at` | timestamp, nullable | Most recent sync completion |
+| `last_sync_cursor` | text, nullable | Reserved pagination cursor |
+| `last_full_sync_at` | timestamp, nullable | Most recent full-pagination sync |
+| `notified_needs_reauth_at` | timestamp, nullable | Last reauth notification time |
+| `created_at` | timestamp | |
 | `updated_at` | timestamp | |
 
 Unique constraint: `(user_id)`.

@@ -113,7 +113,7 @@ Qdrant data is rebuildable from Postgres for summaries that have enough stored
 text and embedding inputs:
 
 ```bash
-python -m app.cli.backfill_vector_store --rebuild
+python -m app.cli.backfill_vector_store --force
 ```
 
 Backing up `qdrant_data/` is still faster and preserves the exact current vector
@@ -279,7 +279,7 @@ python -m app.cli.migrate_db
 If Qdrant was not restored, rebuild it after Qdrant is healthy:
 
 ```bash
-python -m app.cli.backfill_vector_store --rebuild
+python -m app.cli.backfill_vector_store --force
 ```
 
 ### Restore To A New Host
@@ -347,7 +347,9 @@ Run this on a staging host or disposable VM before a release:
    are healthy or intentionally disabled by profile/config.
 7. Open the web/API and verify existing summaries are visible.
 8. Run a semantic search. If Qdrant was rebuilt instead of restored, run
-   `python -m app.cli.backfill_vector_store --rebuild` first.
+   `python -m app.cli.backfill_vector_store --force` first, or
+   `python -m app.cli.backfill_vector_store --use-cocoindex` when the
+   CocoIndex extra is installed.
 9. Open a restored YouTube summary with a `video_file_path` and confirm the
    file path exists under `data/videos/`, or accept that the media cache was not
    restored.

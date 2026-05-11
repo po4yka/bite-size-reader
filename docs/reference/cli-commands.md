@@ -502,7 +502,11 @@ python -m app.cli.backfill_embeddings --limit 10
 
 **Command:** `python -m app.cli.backfill_vector_store`
 
-**Purpose:** Populate Qdrant vector store with embeddings.
+**Purpose:** Populate or refresh Qdrant vector points for searchable content.
+The default path scans summary embeddings from Postgres and writes summary
+points to Qdrant. `--use-cocoindex` delegates to the CocoIndex one-shot flow,
+which exports both summaries and analyzed GitHub repositories with the same
+deterministic point IDs used by the live updater.
 
 ### Basic Usage
 
@@ -510,17 +514,19 @@ python -m app.cli.backfill_embeddings --limit 10
 # Backfill all embeddings to Qdrant
 python -m app.cli.backfill_vector_store
 
-# Rebuild Qdrant collection (delete and recreate)
-python -m app.cli.backfill_vector_store --rebuild
+# Force re-upsert even when Postgres embedding rows already exist
+python -m app.cli.backfill_vector_store --force
+
+# Run the CocoIndex one-shot export instead of the legacy summary-only path
+python -m app.cli.backfill_vector_store --use-cocoindex
 ```
 
 ### Options
 
 | Option | Type | Default | Description |
 | -------- | ------ | --------- | ------------- |
-| `--rebuild` | flag | false | Delete and rebuild Qdrant collection |
-| `--batch-size` | int | 100 | Documents per batch |
-| `--collection` | string | summaries | Qdrant collection name |
+| `--dsn` | string | `DATABASE_URL` | Override Postgres DSN |
+| `--batch-size` | int | 50 | Vectors per Qdrant upsert batch |
 | `--qdrant-url` | string | config/env | Override Qdrant URL |
 | `--qdrant-api-key` | string | config/env | Override Qdrant API key (prefer env var in automation) |
 | `--qdrant-env` | string | config/env | Override environment namespace |
@@ -528,6 +534,8 @@ python -m app.cli.backfill_vector_store --rebuild
 | `--qdrant-version` | string | config/env | Override collection version suffix |
 | `--limit` | int | - | Limit to N summaries (for testing) |
 | `--force` | flag | false | Recompute/re-upsert even when embeddings already exist |
+| `--dry-run` | flag | false | Simulate without writing to Qdrant |
+| `--use-cocoindex` | flag | false | Delegate to CocoIndex one-shot flow (`ratatoskr[cocoindex]`) |
 
 ### Examples
 
@@ -540,30 +548,27 @@ python -m app.cli.backfill_vector_store
 # Connecting to Qdrant at http://localhost:6333...
 # Collection 'summaries' has 0 points
 # Found 1234 summaries with embeddings
-# Upserting batch 1/13: 100 documents (1.2s)
-# Upserting batch 2/13: 100 documents (1.1s)
+# Upserting batch 1/25: 50 vectors (1.2s)
+# Upserting batch 2/25: 50 vectors (1.1s)
 # ...
 # Done! Upserted 1234 documents in 18.4s
 ```
 
-**Rebuild Collection:**
+**CocoIndex One-shot Export:**
 
 ```bash
-python -m app.cli.backfill_vector_store --rebuild
+python -m app.cli.backfill_vector_store --use-cocoindex
 
 # Output:
-# WARNING: This will DELETE all points in 'summaries' collection!
-# Continue? [y/N] y
-# Deleting collection...
-# Creating new collection...
-# Upserting 1234 documents...
-# Done!
+# INFO: Starting CocoIndex runtime
+# INFO: Running summary and repository flows
+# INFO: CocoIndex one-shot run complete
 ```
 
 **Test Connection:**
 
 ```bash
-python -m app.cli.backfill_vector_store --limit 1
+python -m app.cli.backfill_vector_store --limit=1
 
 # Output:
 # Connecting to Qdrant at http://localhost:6333...
@@ -574,6 +579,11 @@ python -m app.cli.backfill_vector_store --limit 1
 ```
 
 **Security note:** Some credential-bearing options (such as `--qdrant-api-key`) are intentionally minimized in inline CLI help text. They remain supported, but prefer environment variables/secrets managers in CI and production shells.
+
+**Rebuild note:** this CLI no longer deletes collections. To rebuild from
+scratch, delete or recreate the Qdrant collection with Qdrant tooling, then run
+`python -m app.cli.backfill_vector_store --force` or
+`python -m app.cli.backfill_vector_store --use-cocoindex`.
 
 ### Prerequisites
 
@@ -851,7 +861,12 @@ python -m app.cli.sync_github_stars --dry-run
 
 **Command:** `python -m app.cli.backfill_repository_embeddings`
 
-**Purpose:** Generate or refresh vector embeddings for repository records that are missing them or have a stale `model_version` (stored in `repository_embeddings`). Run after changing the embedding model or after bulk imports.
+**Purpose:** Generate or refresh Postgres-side vector embeddings for repository
+records that are missing them or have a stale `model_version` (stored in
+`repository_embeddings`). The analyzer fast path writes Qdrant immediately for
+new analysis results; run this command after changing the embedding model or
+after bulk imports, then run `backfill_vector_store --use-cocoindex` to export
+analyzed repositories to Qdrant in the same way as the live CocoIndex flow.
 
 **Prerequisites:** `GITHUB_TOKEN_ENCRYPTION_KEY` set; embedding provider configured (`EMBEDDING_PROVIDER`).
 

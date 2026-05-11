@@ -6,12 +6,12 @@ This document provides project context for AI coding agents (Codex, Copilot, etc
 
 Async Telegram bot that summarizes web articles, YouTube videos, and forwarded channel posts. Returns structured JSON summaries with a strict contract. Single Docker container, owner-only access.
 
-**Stack:** Python 3.13+, Telethon, Scrapling/Firecrawl/Playwright (scraper chain), OpenRouter (LLM), PostgreSQL 16 via SQLAlchemy 2.0 + asyncpg (Alembic migrations), Qdrant (vector store), Taskiq (Redis-backed worker), FastAPI, React 18 + TypeScript + Vite (Frost web frontend).
+**Stack:** Python 3.13+, Telethon, Scrapling/Firecrawl/Playwright (scraper chain), OpenRouter (LLM), LangChain/LangGraph (structured output + retry graph), PostgreSQL 16 via SQLAlchemy 2.0 + asyncpg (Alembic migrations), Qdrant (vector store), CocoIndex (optional live vector sync), Taskiq (Redis-backed worker), FastAPI, React 18 + TypeScript + Vite (Frost web frontend).
 
 ## Architecture
 
 ```
-Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> Summary JSON -> SQLite
+Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LangGraph/LLM -> Summary JSON -> PostgreSQL + Qdrant
 ```
 
 ### Key Layers
@@ -22,8 +22,9 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 | Content | `app/adapters/content/` | Scraper chain (Scrapling -> Defuddle -> Firecrawl -> Playwright -> Crawlee -> direct HTTP) |
 | YouTube | `app/adapters/youtube/` | yt-dlp download, transcript extraction |
 | Twitter/X | `app/adapters/twitter/` | Firecrawl + Playwright extraction |
-| GitHub | `app/adapters/github/`, `app/tasks/github_sync.py`, `app/api/routers/repositories.py`, `app/api/routers/auth/github.py` | GitHub repo ingestion, daily stars sync (cron `0 2 * * *` UTC), LLM analysis, semantic search via `repository_embeddings`. Tokens encrypted at rest with Fernet (`cryptography`). See `docs/explanation/github-repository-ingestion.md`. |
+| GitHub | `app/adapters/github/`, `app/tasks/github_sync.py`, `app/api/routers/repositories.py`, `app/api/routers/auth/github.py` | GitHub repo ingestion, daily stars sync (cron `0 2 * * *` UTC), LangChain structured-output repo analysis, semantic search via `repository_embeddings` + Qdrant. Tokens encrypted at rest with Fernet (`cryptography`). See `docs/explanation/github-repository-ingestion.md`. |
 | LLM | `app/adapters/llm/`, `app/adapters/openrouter/` | Provider-agnostic LLM interface |
+| Agents | `app/agents/`, `app/agents/langgraph/` | Classic agent wrappers plus LangGraph summarize/validate retry graph and checkpointing |
 | Domain | `app/domain/` | Business models and domain services |
 | Application | `app/application/` | DTOs, ports, use cases, and application services |
 | Infrastructure | `app/infrastructure/` | Concrete persistence, vector search, cache, and messaging adapters |
@@ -31,7 +32,7 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 | Core | `app/core/` | URL normalization, JSON parsing, summary contract, logging |
 | Database | `app/db/` | SQLAlchemy 2.0 typed declarative models in `models/` (split by area), `Database` (`session.py`) is sole DB entry point, Alembic migrations in `alembic/versions/` |
 | API | `app/api/` | FastAPI REST API with JWT auth |
-| Search | `app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/` | Search workflows, vector search, and embedding services |
+| Search | `app/application/services/`, `app/infrastructure/search/`, `app/infrastructure/embedding/`, `app/infrastructure/cocoindex/` | Search workflows, vector search, embedding services, and optional CocoIndex live sync |
 | MCP | `app/mcp/` | Model Context Protocol server |
 
 ## Critical Files
@@ -40,6 +41,9 @@ Telegram/API -> MessageRouter -> URL/Forward Handler -> ScraperChain -> LLM -> S
 - `app/adapters/content/url_processor.py` -- URL processing orchestration
 - `app/core/summary_contract.py` -- Summary validation (strict contract)
 - `app/core/url_utils.py` -- URL normalization and deduplication
+- `app/agents/langgraph/graph.py` -- LangGraph summarize/validate retry graph
+- `app/infrastructure/cocoindex/flow.py` -- CocoIndex summary + repository Qdrant flows
+- `app/infrastructure/vector/point_ids.py` -- Shared deterministic Qdrant point IDs
 - `app/db/models/` -- Database schema (SQLAlchemy 2.0 typed declarative models, grouped by area)
 - `app/db/session.py` -- `Database` async-session facade (sole DB entry point)
 - `app/config/settings.py` -- Configuration loading

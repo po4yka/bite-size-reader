@@ -31,7 +31,7 @@ themselves, integrators planning how to attach.
 **Non-Goals:**
 
 - Multi-tenant access control.
-- Long-term vector search, RAG, or analytics dashboards (future work).
+- Full RAG answer generation or analytics dashboards.
 - Multi-tenant streaming or cross-user event fan-out.
 
 ---
@@ -207,11 +207,11 @@ Each subsystem has a canonical doc; this page is the entry point.
 | URL pipeline (Scrapling, Crawl4AI, Firecrawl self-hosted, Defuddle, Playwright, Crawlee, direct HTML, ScrapeGraphAI) | Extract clean article content from arbitrary URLs with an 8-provider fallback chain. Order overridable via `SCRAPER_PROVIDER_ORDER`. Cloud Firecrawl not used. | [`docs/explanation/scraper-chain.md`](scraper-chain.md) · [`docs/SPEC.md`](../SPEC.md) |
 | YouTube extractor | Download video (1080p), pull transcripts, store metadata. | [`docs/guides/configure-youtube-download.md`](../guides/configure-youtube-download.md) |
 | Twitter / X extractor | Two-tier extraction: self-hosted Firecrawl scrape by default; opt-in authenticated Playwright for protected accounts, threads, and X Articles. | [`docs/guides/configure-twitter-extraction.md`](../guides/configure-twitter-extraction.md) |
-| LLM summarization (multi-agent) | Extraction → summarization → validation → optional web search, with self-correction. | [`docs/explanation/multi-agent-architecture.md`](multi-agent-architecture.md) |
+| LLM summarization (multi-agent) | Extraction → summarization → validation → optional web search, with self-correction. Classic agents provide the interface; LangGraph backs the summarize/validate retry graph. | [`docs/explanation/multi-agent-architecture.md`](multi-agent-architecture.md) |
 | Web search enrichment | Inject up-to-date context via self-hosted Firecrawl search (`FIRECRAWL_SELF_HOSTED_ENABLED=true`) before final summary. | [`docs/guides/enable-web-search.md`](../guides/enable-web-search.md) |
 | Channel digest | Userbot reads subscribed channels; scheduled digests via `/digest`. | [`docs/SPEC.md`](../SPEC.md) (`Channel digest` section) |
 | Mixed-source aggregation | Bundle one or more links + forwards / attachments into a single synthesised result. | [`docs/SPEC.md`](../SPEC.md) (`Mixed-source aggregation` section) |
-| Search (Postgres tsvector + vector) | PostgreSQL `TSVECTOR` + `GIN` full-text plus optional Qdrant semantic / hybrid search. | [`docs/guides/setup-qdrant-vector-search.md`](../guides/setup-qdrant-vector-search.md) |
+| Search (Postgres tsvector + vector) | PostgreSQL `TSVECTOR` + `GIN` full-text plus optional Qdrant semantic / hybrid search. CocoIndex can reconcile summary and repository vectors into Qdrant. | [`docs/guides/setup-qdrant-vector-search.md`](../guides/setup-qdrant-vector-search.md) · [`docs/cocoindex.md`](../cocoindex.md) |
 | Streaming (SSE) | Real-time summary-progress events via `GET /v1/requests/{request_id}/stream`. Publishes four event kinds: `phase`, `section`, `done`, `error`. Consumed by the Telegram URL flow (draft updates) and the web frontend SubmitPage. Implementation: `app/adapters/content/streaming/` (hub, events, assembler) + `app/api/routers/streams.py`. | `app/adapters/content/streaming/` |
 | Mobile API | FastAPI + JWT, sync v2, ratelimit, summary CRUD, aggregations. | [`docs/reference/mobile-api.md`](../reference/mobile-api.md) |
 | Web frontend | React SPA served on `/web/*`; library, search, submit, collections, digest, preferences, admin. Uses a project-owned design shim under `ratatoskr-web/src/design/` (separate repo). | [`docs/reference/frontend-web.md`](../reference/frontend-web.md) |
@@ -219,7 +219,7 @@ Each subsystem has a canonical doc; this page is the entry point.
 | Observability | Prometheus metrics, structured logs, correlation-ID tracing, Loki / Promtail / Grafana stack. | [`docs/explanation/observability-strategy.md`](observability-strategy.md) |
 | Redis (optional) | Response cache, rate-limit store, sync session locks, distributed background-task locks. | [`docs/guides/setup-redis-caching.md`](../guides/setup-redis-caching.md) |
 | ElevenLabs TTS (optional) | Generate audio from a stored summary on demand. | `app/adapters/elevenlabs/` (no standalone doc yet) |
-| GitHub repository ingestion | Index GitHub repos as a first-class content source: manual URL ingest, daily starred-repo sync, LLM analysis, Qdrant embedding, and semantic search. | [`docs/explanation/github-repository-ingestion.md`](github-repository-ingestion.md) |
+| GitHub repository ingestion | Index GitHub repos as a first-class content source: manual URL ingest, daily starred-repo sync, LangChain structured-output analysis, Qdrant embedding, CocoIndex reconciliation, and semantic search. | [`docs/explanation/github-repository-ingestion.md`](github-repository-ingestion.md) |
 
 ---
 

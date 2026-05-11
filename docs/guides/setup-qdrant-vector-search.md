@@ -1,6 +1,9 @@
 # Set Up Qdrant Vector Search
 
-Enable semantic search with Qdrant and configurable embedding providers (local sentence-transformers or Google Gemini API).
+Enable semantic search with Qdrant and configurable embedding providers (local
+sentence-transformers or Google Gemini API). Qdrant stores summary vectors and,
+when GitHub ingestion is enabled, repository vectors in the same collection with
+an `entity_type` discriminator.
 
 **Audience:** Operators
 **Difficulty:** Intermediate
@@ -10,14 +13,16 @@ Enable semantic search with Qdrant and configurable embedding providers (local s
 
 ## What Qdrant Provides
 
-Qdrant enables **semantic search** over your summaries:
+Qdrant enables **semantic search** over summaries and analyzed GitHub
+repositories:
 
 - **Natural language queries**: "machine learning tutorials" finds relevant articles even if they use different terms
 - **Vector embeddings**: Converts text to vectors using sentence-transformers (384-dim, local) or Gemini Embedding 2 API (768-dim, remote)
 - **Similarity search**: Finds semantically similar summaries (not just keyword matches)
 - **Hybrid search**: Combines semantic search with full-text search and reranking
 
-**Use case**: Search past summaries by meaning, not just keywords.
+**Use case**: Search past summaries and indexed repositories by meaning, not
+just keywords.
 
 Qdrant is lighter than ChromaDB, ships a first-class arm64 Docker image, and has no `onnxruntime` dependency — making it suitable for Raspberry Pi and Apple Silicon hosts.
 
@@ -103,11 +108,15 @@ print('Model downloaded successfully')
 
 ---
 
-### 4. Backfill Existing Summaries
+### 4. Backfill Existing Content
 
 ```bash
-# Backfill embeddings for existing summaries
+# Backfill existing summaries with the legacy summary path
 python -m app.cli.backfill_vector_store
+
+# Or export summaries + analyzed GitHub repositories with CocoIndex
+pip install -e ".[cocoindex]"
+python -m app.cli.backfill_vector_store --use-cocoindex
 
 # Expected output:
 # INFO: Found 150 summaries to backfill
@@ -122,7 +131,7 @@ curl http://localhost:6333/collections
 
 # Check count
 curl http://localhost:6333/collections/summaries
-# Should show pointsCount matching summary count in database
+# Should show pointsCount matching indexed summaries plus analyzed repositories
 ```
 
 ---
@@ -225,7 +234,7 @@ grep QDRANT_URL .env
    # Use smaller model (default, 90 MB)
    EMBEDDING_PROVIDER=local
    # Or reduce batch size in backfill
-   python -m app.cli.backfill_vector_store --batch-size 10
+   python -m app.cli.backfill_vector_store --batch-size=10
    ```
 
 **Gemini provider causes & solutions:**
@@ -405,13 +414,13 @@ RERANKING_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
 
 ```bash
 # Batch size for backfill upsert operations
-python -m app.cli.backfill_vector_store --batch-size 100  # Default
+python -m app.cli.backfill_vector_store --batch-size=50  # Default
 
 # Increase for faster backfill (requires more RAM)
-python -m app.cli.backfill_vector_store --batch-size 200
+python -m app.cli.backfill_vector_store --batch-size=200
 
 # Decrease if running out of memory
-python -m app.cli.backfill_vector_store --batch-size 25
+python -m app.cli.backfill_vector_store --batch-size=25
 ```
 
 ---
@@ -454,8 +463,11 @@ time python -m app.cli.search --query "machine learning"
 ### Re-index Summaries
 
 ```bash
-# Rebuild all embeddings (if model changed or collection corrupted)
-python -m app.cli.backfill_vector_store --rebuild
+# Re-upsert all points (if model changed or collection was recreated)
+python -m app.cli.backfill_vector_store --force
+
+# Or use the CocoIndex one-shot path for summaries + analyzed repositories
+python -m app.cli.backfill_vector_store --use-cocoindex
 
 # Incremental update (only new summaries)
 python -m app.cli.backfill_vector_store
@@ -515,7 +527,7 @@ QDRANT_REQUIRED=false
 # Restart bot
 docker restart ratatoskr
 
-# Bot falls back to full-text search only (SQLite FTS5)
+# Bot falls back to Postgres full-text search only
 ```
 
 ---

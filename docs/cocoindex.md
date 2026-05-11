@@ -18,7 +18,7 @@ RATATOSKR_COCOINDEX_ENABLED=1
 
 ## How it works
 
-Three paths write summary vectors to Qdrant:
+Summary vectors have three writers:
 
 | Path | Latency | Owner |
 |------|---------|-------|
@@ -28,7 +28,10 @@ Three paths write summary vectors to Qdrant:
 
 All summary paths produce the same Qdrant point UUID (`uuid5(NAMESPACE_OID, f"{request_id}:{summary_id}")`), so writes are idempotent. The fast path can silently lose a write; CocoIndex reconciles within one poll interval, and the Taskiq reconciler closes the gap when CocoIndex is disabled.
 
-Repository vectors use a separate deterministic UUID:
+Repository vectors have two writers: the GitHub analysis fast path
+(`RepositoryEmbeddingGenerator`) for immediate search freshness, and the
+CocoIndex repository flow for live or one-shot reconciliation of analyzed rows.
+They use a separate deterministic UUID:
 `uuid5(NAMESPACE_OID, f"{environment}:{user_scope}:repository:{repository_id}")`.
 The repository CocoIndex flow only exports rows that already have
 `analysis_json`; LLM analysis, budget caps, and pending-analysis flags remain
@@ -99,7 +102,7 @@ the fast path continues as the sole writer to Qdrant.
 ## CLI backfill with CocoIndex
 
 ```bash
-# Use CocoIndex for a one-shot full-scan (instead of legacy backfill)
+# Use CocoIndex for a one-shot full-scan of summaries and analyzed repositories
 python -m app.cli.backfill_vector_store --use-cocoindex
 
 # Legacy backfill (still works, default when --use-cocoindex is absent)

@@ -1,6 +1,11 @@
 # Multi-Agent Architecture
 
-Agents wrap extraction, summarization, and validation with structured results, retries, and observability.
+Agents wrap extraction, summarization, validation, and repository analysis with
+structured results, retries, and observability. Classic `BaseAgent` wrappers
+remain the stable interface for content flows; LangGraph now owns the
+summarize/validate retry graph where checkpointing and graph-level state are
+useful, and LangChain structured output is preferred for repository analysis
+when the selected LLM adapter supports it.
 
 ## Roles
 
@@ -10,6 +15,8 @@ Agents wrap extraction, summarization, and validation with structured results, r
 - **WebSearchAgent** — Analyzes content for knowledge gaps; executes targeted web searches to enrich context.
 - **AgentOrchestrator** — Coordinates extract → summarize → validate and returns final JSON.
 - **SingleAgentOrchestrator** — Lightweight wrapper for executing a single agent with standardized logging and error handling.
+- **LangGraph summary graph** — Executes the summarize/validate retry loop with explicit graph state and optional Postgres checkpointing.
+- **RepoAnalysisAgent** — Produces `RepoAnalysis` through structured LLM output for GitHub repository ingestion, with legacy JSON fallback.
 - All inherit `BaseAgent[TInput, TOutput]` with `success`, `output`, `error`, `metadata`.
 
 ```mermaid
@@ -62,6 +69,8 @@ result = await orchestrator.execute(OrchestratorInput(url="https://example.com",
 
 - Used in `app/application/use_cases/summarize_url.py` and by the API background processor.
 - Wraps `ContentExtractor`/`LLMSummarizer`, adds retries, validation, and correlation-aware logging.
+- LangGraph implementation lives in `app/agents/langgraph/`; Postgres checkpointing uses psycopg3 and is separate from the SQLAlchemy application pool.
+- Repository analysis lives in `app/agents/repo_analysis_agent.py` and stores the structured result in `repositories.analysis_json`.
 - Signal scoring v0 keeps deterministic source ingestion, MinHash dedupe, Qdrant similarity, source diversity, and the 10% LLM cap outside the agent layer in `app/application/services/signal_scoring.py` and `app/application/services/signal_ingestion_worker.py`.
 - The LLM-as-judge step is intentionally a bounded service (`app/application/services/signal_judge.py`), not a replacement orchestration agent. It reuses the project LLM client contract, validates structured output, records cost/evidence, and only runs for candidates admitted by the cheap filter cap.
 - Existing extraction/summarization/validation agents remain available for one-off URL and aggregation flows. They are not deleted or put in front of every feed item, which keeps Phase 3 ingestion from becoming an all-agent/all-LLM pipeline.

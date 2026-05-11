@@ -559,7 +559,7 @@ List ingested repositories with optional filters.
 | `is_starred` | bool | Filter to GitHub-starred repos only |
 | `language` | string | Primary language filter (e.g. `python`) |
 | `topic` | string | GitHub topic tag filter |
-| `source` | string | Ingest source: `manual` or `stars_sync` |
+| `source` | string | Ingest source: `manual` or `starred` |
 | `pending_analysis` | bool | Filter to repos awaiting LLM analysis |
 | `sort` | string | `stars`, `ingested_at`, `name` (default: `ingested_at`) |
 | `limit` | int | Page size (default: 20, max: 100) |

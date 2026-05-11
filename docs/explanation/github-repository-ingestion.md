@@ -23,12 +23,18 @@ PostgreSQL and Qdrant for search. Two ingestion paths exist. The first is manual
 the user pastes a `https://github.com/<owner>/<repo>` URL into Telegram, the web
 UI, or the CLI, and the `GitHubPlatformExtractor` fetches metadata and README in
 the same request, runs `RepoAnalysisAgent` inline, and embeds the output
-immediately. The second is automated: a Taskiq cron job (`ratatoskr.github.sync_stars`,
+immediately. The agent prefers LangChain structured output through
+`LLMClient.chat_structured(RepoAnalysis)` and falls back to the legacy raw JSON
+path for adapters that do not support it. The second path is automated: a Taskiq
+cron job (`ratatoskr.github.sync_stars`,
 default `0 2 * * *`) paginates the authenticated user's `/user/starred` endpoint,
 upserts `Repository` rows, and runs analysis on any row whose content-hash has
 changed, subject to a configurable LLM budget cap. Both paths converge on the same
-storage schema and the same Qdrant collection, so search results span manually
-ingested and auto-synced repos without distinction.
+storage schema and the same Qdrant collection. The repository embedding fast
+path writes search results immediately; the CocoIndex repository flow reconciles
+analyzed rows with the same deterministic Qdrant point IDs used by the live
+updater, so search results span manually ingested and auto-synced repos without
+distinction.
 
 ---
 
@@ -54,7 +60,8 @@ analyze_repository use case (app/application/use_cases/analyze_repository.py)
   v
 RepoAnalysisAgent (app/agents/repo_analysis_agent.py)
   |-- compose user prompt from (description, topics, languages, readme_excerpt)
-  |-- call LLM via LLMService (app/adapters/llm/)
+  |-- call LLM via chat_structured(RepoAnalysis) when supported
+  |-- fall back to raw JSON LLM call for legacy adapters/tests
   |-- validate RepoAnalysis schema (app/core/repo_analysis_contract.py)
   |-- retry up to 3x with error feedback on schema failure
   |-- persist LLMCall row (attempt_index, attempt_trigger)
@@ -67,6 +74,10 @@ RepositoryEmbeddingGenerator (app/infrastructure/embedding/repository_embedding.
   v
 Qdrant upsert  (entity_type="repository", user_id=<id>)
 RepositoryEmbedding row upserted (app/db/models/repository.py)
+  |
+  v
+CocoIndex repository flow reconciles analyzed rows with same point IDs
+  (app/infrastructure/cocoindex/flow.py, app/infrastructure/vector/point_ids.py)
 ```
 
 ### Stars sync path (Taskiq cron)
@@ -393,7 +404,11 @@ immediately after connecting a large GitHub account.
 ## Search Semantics
 
 Repository embeddings share the Qdrant collection with summary embeddings, using
-an `entity_type="repository"` payload discriminator. The `RepositorySearchService`
+an `entity_type="repository"` payload discriminator. Immediate writes and
+CocoIndex reconciliation both use
+`repository_point_id(environment, user_scope, repository_id)` from
+`app/infrastructure/vector/point_ids.py`, so repeated exports are idempotent.
+The `RepositorySearchService`
 (`app/infrastructure/search/repository_search_service.py`) injects this filter on
 every query automatically so repository searches never return summary results and
 vice versa.

@@ -6,14 +6,13 @@ Welcome to the Ratatoskr documentation. This guide helps you find the right docu
 
 ## Documentation freshness
 
-- Last documentation refresh: **2026-04-28**
+- Last documentation refresh: **2026-05-11**
 - This refresh aligns docs with:
-  - Root namespace reorganization: `clients/`, `integrations/`, `ops/`, and `tools/`
-  - web interface architecture in the **ratatoskr-web** repo (routing, auth modes, deploy/static namespaces)
-  - Web static check workflow (`npm run check:static`) and CI jobs (`web-build`, `web-test`, `web-static-check`)
-  - Docker and compose assets relocated under `ops/docker/`
-  - FastAPI SPA serving contract (`/web`, `/web/*`) alongside Telegram Mini App static assets
-  - Mixed-source aggregation across Telegram and FastAPI, including rollout flags and bundle observability
+  - LangChain structured-output repository analysis and LangGraph summarize/validate retry flow
+  - CocoIndex summary + repository vector reconciliation, including one-shot CLI usage
+  - Qdrant setup and backup commands that match the current `backfill_vector_store` CLI
+  - GitHub repository ingestion schema, API source values, and repository embedding behavior
+  - AI-agent instructions in `AGENTS.md` and `CLAUDE.md`
 
 ## Documentation by Audience
 
@@ -69,6 +68,7 @@ You want to deploy, monitor, and maintain Ratatoskr in production.
 
 - [How to setup Redis caching](guides/setup-redis-caching.md)
 - [How to setup Qdrant](guides/setup-qdrant-vector-search.md)
+- [CocoIndex vector sync](cocoindex.md)
 - [How to backup and restore](guides/backup-and-restore.md)
 - [How to optimize performance](guides/optimize-performance.md)
 

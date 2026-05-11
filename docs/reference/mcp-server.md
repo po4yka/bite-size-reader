@@ -271,8 +271,8 @@ Example mcporter config:
 | `update_signal_feedback(signal_id, action)` | Write feedback for a signal candidate (`like`, `dislike`, `skip`, `queue`, `hide_source`, `boost_topic`) |
 | `set_signal_source_active(source_id, is_active)` | Enable or disable a subscribed signal source for the scoped MCP user |
 | `vector_health()` | Check Qdrant availability and fallback readiness |
-| `vector_index_stats(scan_limit)` | Index coverage stats between SQLite summaries and Qdrant |
-| `vector_sync_gap(max_scan, sample_size)` | Report sync gaps between SQLite summaries and Qdrant index |
+| `vector_index_stats(scan_limit)` | Index coverage stats between Postgres summaries and Qdrant |
+| `vector_sync_gap(max_scan, sample_size)` | Report sync gaps between Postgres summaries and Qdrant index |
 
 ## Resources (17)
 
@@ -292,7 +292,7 @@ Example mcporter config:
 | `ratatoskr://processing/stats` | LLM call counts, token usage, model breakdown, video stats |
 | `ratatoskr://vector/health` | Qdrant health and fallback status |
 | `ratatoskr://vector/index-stats` | Qdrant index coverage statistics |
-| `ratatoskr://vector/sync-gap` | Sync gap report between SQLite and Qdrant |
+| `ratatoskr://vector/sync-gap` | Sync gap report between Postgres and Qdrant |
 | `ratatoskr://signals/recent` | Recent scored signal candidates for the scoped MCP user |
 | `ratatoskr://sources` | Signal source catalog |
 
@@ -306,6 +306,6 @@ Example mcporter config:
 
 Source: `app/mcp/server.py`
 
-The server uses [FastMCP](https://github.com/modelcontextprotocol/python-sdk) and connects to the same SQLite database as the main bot. Read tools use the existing read-scoped MCP runtime; aggregation tools lazily initialize the normal API runtime so they can reuse the standard extraction and synthesis workflow.
+The server uses [FastMCP](https://github.com/modelcontextprotocol/python-sdk) and connects to the same Postgres database as the main bot. Read tools use the existing read-scoped MCP runtime; aggregation tools lazily initialize the normal API runtime so they can reuse the standard extraction and synthesis workflow.
 
 For hosted auth, the repo wraps the FastMCP SSE ASGI app with repo-owned HTTP auth middleware instead of relying on process-wide scope. That middleware validates Ratatoskr JWT access tokens, stores `mcp_identity` on the Starlette request, and `McpServerContext` resolves the effective user from the active low-level MCP request context before falling back to local startup scope.

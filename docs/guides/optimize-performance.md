@@ -213,7 +213,7 @@ REDIS_MAX_CONNECTIONS=5  # Default: 10
 EMBEDDING_PROVIDER=local  # sentence-transformers runs on CPU by default
 
 # Reduce embedding batch size (in backfill CLI)
-# python -m app.cli.backfill_vector_store --batch-size 10  # Default: 100
+# python -m app.cli.backfill_vector_store --batch-size=10  # Default: 50
 
 # Disable token counting (use approximation)
 TOKEN_COUNTING_MODE=fast  # len(text)//4 approximation
