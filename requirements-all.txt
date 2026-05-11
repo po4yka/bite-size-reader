@@ -108,7 +108,7 @@ courlan==1.3.2
     # via trafilatura
 crawlee==1.6.3
     # via ratatoskr
-cryptography==47.0.0
+cryptography==48.0.0
     # via pyjwt
 cssselect==1.4.0
     # via scrapling
