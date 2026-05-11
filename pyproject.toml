@@ -142,20 +142,20 @@ requires-python = ">=3.13"
 dependencies = [
   "httpx[http2]>=0.28.1",
   "telethon>=1.42.0",
-  "pydantic>=2.12.5",
-  "pydantic-settings>=2.12.0",
+  "pydantic>=2.13.4",
+  "pydantic-settings>=2.14.1",
   "pyyaml>=6.0.3",
-  "scrapling>=0.4.7",
+  "scrapling>=0.4.8",
   "browserforge>=1.2.4",
   "curl_cffi>=0.15.0",
   "trafilatura>=2.0.0",
   "spacy>=3.8.11,<4",
-  "json-repair>=0.55.1",
+  "json-repair>=0.59.7",
   "tenacity>=8.2.0",
-  "openai>=1.40.0",
+  "openai>=2.36.0",
   "instructor>=1.5.0",
   "loguru>=0.7.3",
-  "orjson>=3.11.6",
+  "orjson>=3.11.9",
   "uvloop>=0.22.1",
   "redis>=7.1.0",
   "alembic>=1.13.0",
@@ -198,7 +198,7 @@ api = [
   "starlette>=0.50.0",
   "pyjwt>=2.12.0",
   "cryptography>=42.0.0",
-  "python-multipart>=0.0.26",
+  "python-multipart>=0.0.28",
   "defusedxml>=0.7.1",
   "argon2-cffi>=23.1.0",
 ]
@@ -207,7 +207,7 @@ api = [
 ml = [
   "ratatoskr[inference_core]",
   "torch>=2.10.0",
-  "transformers>=5.0.0",
+  "transformers>=5.8.0",
   "scikit-learn>=1.8.0",
 ]
 
@@ -227,7 +227,7 @@ export = [
 
 # Background task scheduling
 scheduler = [
-  "taskiq>=0.12.0,<0.13.0",
+  "taskiq>=0.12.4,<0.13.0",
   "taskiq-redis>=1.0.0,<2.0.0",
 ]
 
@@ -249,7 +249,7 @@ monitoring = [
 
 # MCP (Model Context Protocol) server for AI agent integrations
 mcp = [
-  "mcp>=1.26,<2",
+  "mcp>=1.27.1,<2",
 ]
 
 # LangGraph agent orchestration with Postgres checkpointing
@@ -285,7 +285,7 @@ otel = [
 dev = [
     "bandit>=1.7.9",
     "fakeredis>=2.33.0",
-    "hypothesis>=6.0.0",
+    "hypothesis>=6.152.5",
     "isort>=7.0.0",
     "mypy>=1.19.1",
     "openapi-spec-validator>=0.7.2",
@@ -301,7 +301,7 @@ dev = [
     # pins into dev so unit/integration tests under tests/tasks/, tests/observability/,
     # and tests/integration/test_channel_digest_scheduler.py collect on a
     # fresh `uv sync` without needing `--extra scheduler`.
-    "taskiq>=0.12.0,<0.13.0",
+    "taskiq>=0.12.4,<0.13.0",
     "taskiq-redis>=1.0.0,<2.0.0",
 ]
 
