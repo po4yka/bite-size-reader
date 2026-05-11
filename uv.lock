@@ -4421,7 +4421,7 @@ requires-dist = [
     { name = "curl-cffi", specifier = ">=0.15.0" },
     { name = "defusedxml", marker = "extra == 'api'", specifier = ">=0.7.1" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.128.0" },
-    { name = "firebase-admin", marker = "extra == 'push'", specifier = ">=6.0.0" },
+    { name = "firebase-admin", marker = "extra == 'push'", specifier = ">=7.4.0" },
     { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.0.0" },
     { name = "greenlet", specifier = ">=3.0" },
     { name = "httpx", extras = ["http2"], specifier = ">=0.28.1" },
