@@ -52,11 +52,12 @@ class StreamHub:
     async def subscribe(self, request_id: str) -> AsyncIterator[StreamEvent]:
         queue: asyncio.Queue[StreamEvent] = asyncio.Queue(maxsize=_QUEUE_MAXSIZE)
 
-        # Snapshot backlog before registering — single-threaded asyncio guarantees
-        # no publish can interleave between the snapshot and the queue attach.
-        backlog = list(self._buffers.get(request_id, []))
-
         async with self._lock:
+            # Snapshot AND register under the same lock.  publish() is synchronous
+            # and cannot run between these two lines while the lock is held because
+            # async-lock acquisition is the only yield point here — there is no
+            # await between the snapshot and the append.
+            backlog = list(self._buffers.get(request_id, []))
             self._subscribers.setdefault(request_id, []).append(queue)
 
         logger.bind(request_id=request_id).debug(

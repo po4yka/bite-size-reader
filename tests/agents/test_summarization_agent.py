@@ -134,11 +134,13 @@ class TestSummarizationAgent(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result.success)
         self.assertIn("LLM repeatedly returned identical response", result.error)
-        self.assertEqual(result.metadata["attempts"], 3)
-        self.assertEqual(len(result.metadata["corrections_attempted"]), 4)
+        # The duplicate-response guard aborts after the second identical hash
+        # (threshold >= 2, append-before-check), so we stop at attempt 2.
+        self.assertEqual(result.metadata["attempts"], 2)
+        self.assertEqual(len(result.metadata["corrections_attempted"]), 2)
 
-        # Verify LLM was called max_retries times
-        self.assertEqual(self.mock_pure_summary_service.summarize.call_count, 3)
+        # Verify LLM was called only twice before the guard triggered
+        self.assertEqual(self.mock_pure_summary_service.summarize.call_count, 2)
 
     async def test_error_feedback_included_in_retry_prompts(self):
         """Test that error feedback is included in retry prompts."""

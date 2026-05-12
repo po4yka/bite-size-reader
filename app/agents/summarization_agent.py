@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from typing import TYPE_CHECKING, Any
@@ -11,6 +12,18 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.agents.base_agent import AgentResult, BaseAgent
 from app.core.logging_utils import get_logger
 from app.prompts.manager import get_prompt_manager
+
+# Programming-error exceptions that must NOT be retried.  These bubble up
+# immediately so bugs surface rather than being silently retried up to
+# max_retries times and reported as "Summarization failed".
+_NON_RETRYABLE = (
+    TypeError,
+    AttributeError,
+    KeyError,
+    NameError,
+    ImportError,
+    AssertionError,
+)
 
 if TYPE_CHECKING:
     from app.adapters.content.pure_summary_service import PureSummaryService
@@ -96,7 +109,11 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                     continue
 
                 response_hash = self._calculate_response_hash(summary_result)
-                if response_hash in response_hashes:
+                # Append BEFORE the count check so the threshold is reachable
+                # within max_retries (previously appending after made >= 3
+                # unreachable for the default max_retries=3).
+                response_hashes.append(response_hash)
+                if response_hash in response_hashes[:-1]:
                     self.log_warning(
                         f"Attempt {attempt}: LLM returned identical response to previous attempt. "
                         f"Feedback may be ignored. Hash: {response_hash[:16]}"
@@ -104,8 +121,7 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                     corrections_applied.append(
                         f"Attempt {attempt}: Duplicate response detected - LLM ignored feedback"
                     )
-                response_hashes.append(response_hash)
-                if response_hashes.count(response_hash) >= 3:
+                if response_hashes.count(response_hash) >= 2:
                     error_msg = (
                         f"LLM repeatedly returned identical response ({response_hashes.count(response_hash)} times). "
                         "Aborting as feedback is being ignored."
@@ -140,6 +156,10 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
                 corrections_applied.append(f"Attempt {attempt}: {error_msg}")
                 last_error = error_msg
 
+            except asyncio.CancelledError:
+                raise
+            except _NON_RETRYABLE:
+                raise
             except Exception as e:
                 self.log_error(f"Summarization attempt {attempt} failed: {e}")
                 last_error = str(e)

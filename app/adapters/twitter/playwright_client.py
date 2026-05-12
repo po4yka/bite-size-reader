@@ -25,6 +25,26 @@ from app.adapters.twitter.graphql_parser import (
 
 logger = get_logger(__name__)
 
+# Limit concurrent Chromium processes to avoid OOM on memory-constrained hosts
+# (e.g. Raspberry Pi).  Configured via TWITTER_MAX_CONCURRENT_BROWSERS; default 1.
+_playwright_sem: asyncio.Semaphore | None = None
+
+
+def _get_playwright_sem() -> asyncio.Semaphore:
+    """Return the module-level semaphore, creating it on first use."""
+    global _playwright_sem
+    if _playwright_sem is None:
+        from app.config.twitter import TwitterConfig
+
+        try:
+            cfg = TwitterConfig()
+            limit = cfg.max_concurrent_browsers
+        except Exception:
+            limit = 1
+        _playwright_sem = asyncio.Semaphore(limit)
+    return _playwright_sem
+
+
 _USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -391,14 +411,15 @@ async def extract_tweet(
     expected_tweet_id: str | None = None,
 ) -> ExtractionResult:
     """Async wrapper around sync Playwright tweet extraction."""
-    return await asyncio.to_thread(
-        _extract_tweet_sync,
-        url,
-        cookies_path=cookies_path,
-        headless=headless,
-        timeout_ms=timeout_ms,
-        expected_tweet_id=expected_tweet_id,
-    )
+    async with _get_playwright_sem():
+        return await asyncio.to_thread(
+            _extract_tweet_sync,
+            url,
+            cookies_path=cookies_path,
+            headless=headless,
+            timeout_ms=timeout_ms,
+            expected_tweet_id=expected_tweet_id,
+        )
 
 
 async def scrape_article(
@@ -408,13 +429,14 @@ async def scrape_article(
     timeout_ms: int = 30000,
 ) -> dict[str, Any]:
     """Async wrapper around sync Playwright article extraction."""
-    return await asyncio.to_thread(
-        _scrape_article_sync,
-        url,
-        cookies_path=cookies_path,
-        headless=headless,
-        timeout_ms=timeout_ms,
-    )
+    async with _get_playwright_sem():
+        return await asyncio.to_thread(
+            _scrape_article_sync,
+            url,
+            cookies_path=cookies_path,
+            headless=headless,
+            timeout_ms=timeout_ms,
+        )
 
 
 def _response_matches_requested_tweet(

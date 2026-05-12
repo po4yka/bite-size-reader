@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.cached_summary_responder import CachedSummaryResponder
@@ -404,6 +405,8 @@ class URLProcessor:
                     from app.domain.models.request import RequestStatus
 
                     await self.request_repo.async_update_request_status(req_id, RequestStatus.ERROR)
+                except asyncio.CancelledError:
+                    raise
                 except Exception:
                     logger.warning(
                         "failed_to_update_request_status_on_error",

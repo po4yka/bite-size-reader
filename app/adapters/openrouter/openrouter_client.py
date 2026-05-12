@@ -251,6 +251,7 @@ class OpenRouterClient:
         self._closed = False
         self._oai_client: Any = None
         self._instructor_async_client: Any = None
+        self._instructor_init_lock: Any = None  # asyncio.Lock, created lazily
         self._max_response_size_bytes = int(max_response_size_mb) * 1024 * 1024
         self._enable_prompt_caching = enable_prompt_caching
         self._prompt_cache_ttl = prompt_cache_ttl
@@ -587,18 +588,26 @@ class OpenRouterClient:
             msg = "Messages cannot be empty"
             raise ValueError(msg)
 
-        # Lazy-init the Instructor-wrapped AsyncOpenAI client.
-        if getattr(self, "_instructor_async_client", None) is None:
-            timeout_sec = float(self._timeout.read or 120)
-            self._oai_client = AsyncOpenAI(
-                base_url=self._base_url,
-                api_key=self._api_key,
-                timeout=timeout_sec,
-            )
-            self._instructor_async_client = instructor.from_openai(
-                self._oai_client,
-                mode=instructor.Mode.JSON,
-            )
+        # Lazy-init the Instructor-wrapped AsyncOpenAI client.  Use a per-instance
+        # asyncio.Lock (created lazily to avoid binding to a loop at __init__ time)
+        # so that concurrent first-callers don't each construct a client and leak
+        # the losers.
+        if self._instructor_init_lock is None:
+            import asyncio as _asyncio
+
+            self._instructor_init_lock = _asyncio.Lock()
+        async with self._instructor_init_lock:
+            if self._instructor_async_client is None:
+                timeout_sec = float(self._timeout.read or 120)
+                self._oai_client = AsyncOpenAI(
+                    base_url=self._base_url,
+                    api_key=self._api_key,
+                    timeout=timeout_sec,
+                )
+                self._instructor_async_client = instructor.from_openai(
+                    self._oai_client,
+                    mode=instructor.Mode.JSON,
+                )
 
         primary_model = model_override or self._model
         models_to_try = (
