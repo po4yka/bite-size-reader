@@ -741,7 +741,19 @@ services:
   redis:
     image: redis:7-alpine
     container_name: ratatoskr-redis
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # AOF persistence so Taskiq queue state and distributed-lock keys survive
+    # a Redis restart. `appendfsync everysec` is the standard durability/perf
+    # trade-off: at most ~1s of writes lost on a hard crash.
+    command:
+      [
+        "redis-server",
+        "--save",
+        "",
+        "--appendonly",
+        "yes",
+        "--appendfsync",
+        "everysec",
+      ]
     volumes:
       - redis_data:/data
     # No host port binding: Redis is internal-only, accessed by other containers
