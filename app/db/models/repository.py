@@ -53,7 +53,12 @@ class Repository(Base):
         UniqueConstraint("user_id", "github_id", name="uq_repositories_user_github"),
         Index("ix_repositories_user_starred", "user_id", "is_starred"),
         Index("ix_repositories_user_language", "user_id", "primary_language"),
-        Index("ix_repositories_user_pushed_desc", "user_id", text("pushed_at DESC")),
+        Index(
+            "ix_repositories_user_pushed_desc",
+            "user_id",
+            text("pushed_at DESC NULLS LAST"),
+            postgresql_where=text("pushed_at IS NOT NULL"),
+        ),
         Index("ix_repositories_github_id", "github_id"),
     )
 
