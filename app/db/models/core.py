@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -412,8 +413,14 @@ class CrawlResult(Base):
 class LLMCall(Base):
     __tablename__ = "llm_calls"
     __table_args__ = (
-        # Cheap retrieval of "all attempts for a request, ordered".
-        Index("ix_llm_calls_request_id_attempt_index", "request_id", "attempt_index"),
+        # Unique constraint enforces the monotonic-per-request attempt_index
+        # invariant documented in CLAUDE.md and prevents concurrent retry races.
+        # Migration 0009 replaced the old non-unique index with this constraint.
+        UniqueConstraint(
+            "request_id",
+            "attempt_index",
+            name="uq_llm_calls_request_id_attempt_index",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -476,6 +483,13 @@ class Summary(Base):
         Index("ix_summaries_is_read", "is_read"),
         Index("ix_summaries_lang", "lang"),
         Index("ix_summaries_created_at", "created_at"),
+        # Partial index for the reconciler's ORDER BY updated_at scan over
+        # non-deleted rows. Added in migration 0010.
+        Index(
+            "ix_summaries_updated_at_where_not_deleted",
+            "updated_at",
+            postgresql_where="is_deleted = false",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -582,6 +596,9 @@ class SummaryEmbedding(Base):
     __tablename__ = "summary_embeddings"
     __table_args__ = (
         Index("ix_summary_embeddings_model_name_model_version", "model_name", "model_version"),
+        # Covering composite index for the reconciler join probe on
+        # (summary_id, last_indexed_at). Added in migration 0010.
+        Index("ix_summary_embeddings_summary_id_last_indexed", "summary_id", "last_indexed_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
