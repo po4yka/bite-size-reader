@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.base_agent import AgentResult, BaseAgent
 from app.core.summary_contract import validate_and_shape_summary
+from app.core.summary_contract_impl.common import is_numeric
 
 
 class ValidationInput(BaseModel):
@@ -181,7 +182,7 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 errors.append(f"key_stats[{idx}] missing 'label' field")
             if "value" not in stat:
                 errors.append(f"key_stats[{idx}] missing 'value' field")
-            elif not isinstance(stat["value"], int | float):
+            elif not is_numeric(stat["value"]):
                 errors.append(
                     f"key_stats[{idx}].value must be numeric, got {type(stat['value']).__name__}. "
                     "value must be a number (42, 3.14), not a string like 'N/A'"
@@ -315,8 +316,10 @@ class ValidationAgent(BaseAgent[ValidationInput, ValidationOutput]):
                 "between summary_1000 and tldr. tldr should use different phrasing."
             )
 
-        # Check that tldr is longer than summary_1000
-        if len(tldr) <= len(summary_1000):
+        # Check that tldr is longer than summary_1000.
+        # Skip when tldr was shaper-backfilled from summary_1000 or summary_250
+        # (those cases are intentional and not a contract violation).
+        if len(tldr) <= len(summary_1000) and tldr not in (summary_1000, summary_250):
             warnings.append(
                 f"tldr ({len(tldr)} chars) should be longer than "
                 f"summary_1000 ({len(summary_1000)} chars)."

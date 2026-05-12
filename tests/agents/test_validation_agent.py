@@ -304,6 +304,89 @@ class TestValidationAgent(unittest.IsolatedAsyncioTestCase):
         self.assertIn("2. Error 2", formatted)
         self.assertIn("3. Error 3", formatted)
 
+    async def test_key_stats_numeric_string_value_passes(self):
+        """Numeric-coercible string (e.g. '42') should pass key_stats validation.
+
+        The shaper accepts such values via is_numeric(); the validator must agree
+        so a shaped summary is not rejected on re-validation.
+        """
+        summary = self.valid_summary.copy()
+        summary["key_stats"] = [{"label": "Count", "value": "42"}]
+        input_data = ValidationInput(summary_json=summary)
+
+        with patch("app.agents.validation_agent.validate_and_shape_summary") as mock_validate:
+            mock_validate.return_value = summary
+            result = await self.agent.execute(input_data)
+
+        self.assertTrue(result.success, msg=result.error)
+
+    async def test_key_stats_non_numeric_string_value_fails(self):
+        """Non-numeric string (e.g. 'abc') must still be rejected."""
+        summary = self.valid_summary.copy()
+        summary["key_stats"] = [{"label": "Rating", "value": "abc"}]
+        input_data = ValidationInput(summary_json=summary)
+
+        result = await self.agent.execute(input_data)
+
+        self.assertFalse(result.success)
+        self.assertIn("key_stats[0].value must be numeric", result.error)
+
+    async def test_tldr_equal_to_summary_250_no_length_warning(self):
+        """When tldr == summary_250 (shaper backfill from summary_250), no length warning fires.
+
+        The shaper sets tldr = summary_1000 or summary_250 when tldr is absent.
+        If summary_1000 was also empty, tldr ends up equal to summary_250 (shorter
+        than a populated summary_1000 injected later). The validator must not emit
+        a spurious length warning in that case.
+        """
+        # Use sufficiently distinct texts so similarity checks don't fire
+        text_250 = (
+            "Alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima. "
+            "This is the short summary used as tldr backfill."
+        )
+        text_1000 = (
+            "Zulu yankee xray whiskey victor uniform tango sierra romeo quebec papa oscar "
+            "november mike lima kilo juliet india hotel golf foxtrot echo delta charlie "
+            "bravo alpha. This longer summary covers many additional details not present "
+            "in the shorter version. It contains enough unique content to stay well below "
+            "the similarity threshold compared to the short summary above."
+        )
+        summary = self.valid_summary.copy()
+        summary["summary_250"] = text_250
+        summary["summary_1000"] = text_1000
+        summary["tldr"] = text_250  # shaper-backfilled from summary_250
+        input_data = ValidationInput(summary_json=summary)
+
+        with patch("app.agents.validation_agent.validate_and_shape_summary") as mock_validate:
+            mock_validate.return_value = summary
+            result = await self.agent.execute(input_data)
+
+        self.assertTrue(result.success, msg=result.error)
+        tldr_len_warnings = [
+            w for w in result.output.validation_warnings if "tldr" in w and "chars" in w
+        ]
+        self.assertEqual(tldr_len_warnings, [], msg="Spurious tldr-length warning was emitted")
+
+    async def test_tldr_shorter_than_summary_1000_different_text_warns(self):
+        """A genuinely short tldr with different text should still produce a warning."""
+        summary = self.valid_summary.copy()
+        summary["summary_1000"] = "B" * 400
+        summary["tldr"] = "C" * 50  # shorter AND different text
+        input_data = ValidationInput(summary_json=summary)
+
+        with patch("app.agents.validation_agent.validate_and_shape_summary") as mock_validate:
+            mock_validate.return_value = summary
+            result = await self.agent.execute(input_data)
+
+        # May succeed or fail depending on other checks; what matters is the warning
+        all_warnings = result.output.validation_warnings if result.output else []
+        tldr_len_warnings = [w for w in all_warnings if "tldr" in w and "chars" in w]
+        self.assertGreater(
+            len(tldr_len_warnings),
+            0,
+            msg="Expected a tldr-length warning for genuinely short, distinct tldr",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
