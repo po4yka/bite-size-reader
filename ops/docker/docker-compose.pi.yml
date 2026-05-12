@@ -80,3 +80,12 @@ services:
 networks:
   firecrawl_internal:
     external: true
+  # Pin the default network to a stable name so the bot, mobile-api, postgres,
+  # redis, and qdrant all attach to the same bridge regardless of compose
+  # project name. Without this, recreating the bot via `compose -p docker up`
+  # could land it on a fresh `_default` network where DNS for `postgres` /
+  # `redis` doesn't resolve. Letting compose own lifecycle (no `external: true`)
+  # keeps fresh-Pi deploys working — compose creates `docker_default` on first
+  # run, reuses it thereafter.
+  default:
+    name: docker_default
