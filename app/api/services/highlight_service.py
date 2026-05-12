@@ -8,13 +8,13 @@ from app.api.dependencies.database import get_session_manager
 from app.api.exceptions import ResourceNotFoundError
 from app.api.models.responses import HighlightResponse
 from app.api.search_helpers import isotime
+from app.db.session import Database  # noqa: TC001  # used at runtime in __init__ signature
 from app.infrastructure.persistence.repositories.user_content_repository import (
     UserContentRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
     from app.api.models.requests import CreateHighlightRequest, UpdateHighlightRequest
-    from app.db.session import Database
 
 
 class SummaryHighlightService:

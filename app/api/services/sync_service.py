@@ -24,21 +24,26 @@ from app.api.services.sync import (
 )
 from app.infrastructure.redis import get_redis
 
+from app.application.ports.requests import (  # noqa: TC001  # used at runtime in __init__ signature
+    CrawlResultRepositoryPort,
+    LLMRepositoryPort,
+    RequestRepositoryPort,
+)
+from app.application.ports.summaries import (  # noqa: TC001  # used at runtime in __init__ signature
+    SummaryRepositoryPort,
+)
+from app.application.ports.users import (  # noqa: TC001  # used at runtime in __init__ signature
+    UserRepositoryPort,
+)
+from app.config import AppConfig  # noqa: TC001  # used at runtime in __init__ signature
+from app.db.session import Database  # noqa: TC001  # used at runtime in __init__ signature
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from app.api.models.requests import SyncApplyItem
     from app.api.services.sync.collector import SyncAuxReadPort
     from app.api.services.sync.session_store import SyncSessionStorePort
-    from app.application.ports.requests import (
-        CrawlResultRepositoryPort,
-        LLMRepositoryPort,
-        RequestRepositoryPort,
-    )
-    from app.application.ports.summaries import SummaryRepositoryPort
-    from app.application.ports.users import UserRepositoryPort
-    from app.config import AppConfig
-    from app.db.session import Database
 
 else:
 

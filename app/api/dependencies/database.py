@@ -21,6 +21,15 @@ if TYPE_CHECKING:
     from app.application.ports.users import UserRepositoryPort
     from app.db.session import Database
 
+    # Type-checker view: real Database class. Runtime view: Any.
+    # FastAPI inspects these dep-callable signatures via `get_type_hints` and
+    # would try to build a Pydantic JSON schema for `Database` (a non-Pydantic
+    # class), which fails. Erasing the type at runtime makes FastAPI treat the
+    # param as opaque while preserving type-checker fidelity for callers.
+    DatabaseDep = Database
+else:
+    DatabaseDep = Any
+
 logger = get_logger(__name__)
 
 
@@ -58,7 +67,7 @@ def clear_session_manager() -> None:
 
 
 def resolve_repository_session(
-    session_manager: Database | Any | None = None,
+    session_manager: DatabaseDep | Any | None = None,
     request: Any = None,
 ) -> Database | Any:
     """Resolve the DB handle repositories should bind to."""
@@ -74,7 +83,7 @@ def resolve_repository_session(
 
 
 def get_request_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> RequestRepositoryPort:
     """Build a request repository bound to the shared session manager."""
@@ -86,7 +95,7 @@ def get_request_repository(
 
 
 def get_summary_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> SummaryRepositoryPort:
     """Build a summary repository bound to the shared session manager."""
@@ -98,7 +107,7 @@ def get_summary_repository(
 
 
 def get_crawl_result_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> CrawlResultRepositoryPort:
     """Build a crawl-result repository bound to the shared session manager."""
@@ -110,7 +119,7 @@ def get_crawl_result_repository(
 
 
 def get_llm_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> LLMRepositoryPort:
     """Build an LLM repository bound to the shared session manager."""
@@ -122,7 +131,7 @@ def get_llm_repository(
 
 
 def get_user_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> UserRepositoryPort:
     """Build a user repository bound to the shared session manager."""
@@ -135,7 +144,7 @@ def get_user_repository(
 
 def get_auth_repository(
     token_cache: Any | None = None,
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> Any:
     """Build an auth repository bound to the shared session manager."""
@@ -150,7 +159,7 @@ def get_auth_repository(
 
 
 def get_user_credential_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> Any:
     """Build a user-credentials repository bound to the shared session manager."""
@@ -162,7 +171,7 @@ def get_user_credential_repository(
 
 
 def get_collection_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> Any:
     """Build a collection repository bound to the shared session manager."""
@@ -174,7 +183,7 @@ def get_collection_repository(
 
 
 def get_device_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> Any:
     """Build a device repository bound to the shared session manager."""
@@ -186,7 +195,7 @@ def get_device_repository(
 
 
 def get_backup_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> Any:
     """Build a backup repository bound to the shared session manager."""
@@ -198,7 +207,7 @@ def get_backup_repository(
 
 
 def get_rule_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> Any:
     """Build a rule repository bound to the shared session manager."""
@@ -210,7 +219,7 @@ def get_rule_repository(
 
 
 def get_webhook_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> Any:
     """Build a webhook repository bound to the shared session manager."""
@@ -222,7 +231,7 @@ def get_webhook_repository(
 
 
 def get_import_job_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> Any:
     """Build an import-job repository bound to the shared session manager."""
@@ -234,7 +243,7 @@ def get_import_job_repository(
 
 
 def get_bookmark_import_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> Any:
     """Build a bookmark-import repository bound to the shared session manager."""
@@ -246,7 +255,7 @@ def get_bookmark_import_repository(
 
 
 def get_audio_generation_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> Any:
     """Build an audio-generation repository bound to the shared session manager."""
@@ -258,7 +267,7 @@ def get_audio_generation_repository(
 
 
 def get_topic_search_repository(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> TopicSearchRepositoryPort:
     """Build a topic-search repository bound to the shared session manager."""
@@ -270,7 +279,7 @@ def get_topic_search_repository(
 
 
 def get_summary_read_model_use_case(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> SummaryReadModelUseCase:
     """Resolve the shared summary read-model use case from API runtime."""
@@ -296,7 +305,7 @@ def get_summary_read_model_use_case(
 
 
 def get_search_read_model_use_case(
-    session_manager: Database | None = None,
+    session_manager: DatabaseDep | None = None,
     request: Any = None,
 ) -> SearchReadModelUseCase:
     """Resolve the shared search read-model use case from API runtime."""

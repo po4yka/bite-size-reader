@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
 from app.api.background_tasks import process_url_request
 from app.api.exceptions import ValidationError
-
-if TYPE_CHECKING:
-    from app.api.models.requests import QuickSaveRequest
+from app.api.models.requests import (  # noqa: TC001  # used at runtime in route body annotation
+    QuickSaveRequest,
+)
 from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
 from app.application.services.request_service import RequestService

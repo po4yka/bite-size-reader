@@ -6,14 +6,13 @@ from typing import TYPE_CHECKING, Any
 
 from app.api.dependencies.database import get_session_manager
 from app.api.services.system_maintenance_service import SystemMaintenanceService
+from app.db.session import Database  # noqa: TC001  # used at runtime in __init__ signature
 from app.infrastructure.persistence.repositories.admin_read_repository import (
     AdminReadRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
     import datetime as _dt
-
-    from app.db.session import Database
 
 
 class AdminReadService:

@@ -2769,6 +2769,9 @@
           },
           "404": {
             "description": "Request id does not exist."
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -10215,6 +10218,697 @@
           }
         }
       }
+    },
+    "/v1/auth/github": {
+      "delete": {
+        "tags": [
+          "auth-github"
+        ],
+        "summary": "Revoke GitHub Integration",
+        "description": "Revoke (delete) the GitHub integration for the authenticated user.",
+        "operationId": "revoke_v1_auth_github_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Integration revoked (no content)."
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/auth/github/status": {
+      "get": {
+        "tags": [
+          "auth-github"
+        ],
+        "summary": "Get GitHub Integration Status",
+        "description": "Return the current GitHub integration status for the authenticated user.",
+        "operationId": "get_status_v1_auth_github_status_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current integration status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitHubStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/auth/github/pat": {
+      "post": {
+        "tags": [
+          "auth-github"
+        ],
+        "summary": "Submit GitHub Personal Access Token",
+        "description": "Store and validate a GitHub Personal Access Token (PAT) for the\nauthenticated user. Validates the token against the GitHub API and,\non success, persists it Fernet-encrypted in the user_github_integrations\ntable.\n",
+        "operationId": "submit_pat_v1_auth_github_pat_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PATSubmitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token accepted and integration created/updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PATSubmitResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/auth/github/device/start": {
+      "post": {
+        "tags": [
+          "auth-github"
+        ],
+        "summary": "Start GitHub OAuth Device Flow",
+        "description": "Initiate the GitHub OAuth Device Flow. POSTs to GitHub to get a\ndevice_code and user_code, stores the device_code in Redis bound to\nthe authenticated user_id, and returns the values needed by the client\nto display the user_code and verification_uri.\n\nRequires `GITHUB_OAUTH_APP_CLIENT_ID` to be configured and Redis to be\navailable; returns 503 otherwise.\n",
+        "operationId": "device_flow_start_v1_auth_github_device_start_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device flow initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceFlowStartResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "503": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/auth/github/device/poll": {
+      "post": {
+        "tags": [
+          "auth-github"
+        ],
+        "summary": "Poll GitHub OAuth Device Flow",
+        "description": "Poll GitHub for the Device Flow access token using the device_code\npreviously returned by /v1/auth/github/device/start. Returns one of\n`pending`, `slow_down`, `expired`, `ok`, or `denied`. On `ok`, the\naccess token is persisted and a working GitHub integration record is\ncreated for the authenticated user.\n",
+        "operationId": "device_flow_poll_v1_auth_github_device_poll_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceFlowPollRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Poll result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceFlowPollResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/repositories": {
+      "get": {
+        "tags": [
+          "repositories"
+        ],
+        "summary": "List Repositories",
+        "description": "List GitHub repositories for the authenticated user with optional filters and sort.",
+        "operationId": "list_repositories_v1_repositories_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "is_starred",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Starred"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          },
+          {
+            "name": "topic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Topic"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "manual",
+                    "starred"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "name": "pending_analysis",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pending Analysis"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RepositoryListSort"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Repositories matching the filters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "repositories"
+        ],
+        "summary": "Ingest Repository",
+        "description": "Ingest a GitHub repository by URL. Validates the URL is a github.com\nrepository URL, fetches metadata via the GitHub adapter, persists the\nRepository row, and (asynchronously) triggers analysis. Returns\nimmediately with a repository id and a status of either `ready` (if\nthe repository was processed inline) or `pending`.\n",
+        "operationId": "ingest_repository_v1_repositories_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestRepositoryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Ingestion accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestRepositoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequestError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "502": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/repositories/{repository_id}": {
+      "get": {
+        "tags": [
+          "repositories"
+        ],
+        "summary": "Get Repository",
+        "description": "Return full detail for a single repository owned by the authenticated user.",
+        "operationId": "get_repository_v1_repositories_repository_id_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "repository_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Repository detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "repositories"
+        ],
+        "summary": "Delete Repository",
+        "description": "Delete a repository and its Qdrant embedding point. Idempotent for missing rows (returns 404).",
+        "operationId": "delete_repository_v1_repositories_repository_id_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "repository_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Repository deleted (no content)."
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/repositories/{repository_id}/reanalyze": {
+      "post": {
+        "tags": [
+          "repositories"
+        ],
+        "summary": "Reanalyze Repository",
+        "description": "Force re-analysis of a repository. Re-runs the analysis agent and updates the stored analysis_json + analysis_at columns.",
+        "operationId": "reanalyze_repository_v1_repositories_repository_id_reanalyze_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "repository_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Re-analysis completed and updated detail returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/v1/search/repositories": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search Repositories",
+        "description": "Semantic search over GitHub repositories using Qdrant embeddings, filtered by optional language/topic/source/starred flags.",
+        "operationId": "search_repositories_v1_search_repositories_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 200,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "min_similarity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "default": 0.2,
+              "title": "Min Similarity"
+            }
+          },
+          {
+            "name": "languages",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Languages"
+            }
+          },
+          {
+            "name": "topics",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Topics"
+            }
+          },
+          {
+            "name": "is_starred",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Starred"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "manual",
+                    "starred"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Repository search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositorySearchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -14554,6 +15248,19 @@
               "$ref": "#/components/schemas/SyncApplyItem"
             },
             "type": "array"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional client-generated key (UUID is fine) for safe retries.\nWhen set, a duplicate apply with the same (session_id,\nidempotency_key) within ~5 minutes returns the original response\nwithout re-applying any changes. Lets a client retry after a\nnetwork failure without risking double-apply.\n"
           }
         },
         "type": "object",
@@ -14967,6 +15674,666 @@
             }
           }
         ]
+      },
+      "IngestRepositoryRequest": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500,
+            "description": "github.com repository URL (any of the forms accepted by app.adapters.github.url_patterns.is_github_repo_url)."
+          }
+        },
+        "title": "IngestRepositoryRequest",
+        "description": "Request body for ingesting a GitHub repository by URL."
+      },
+      "RepositoryListSort": {
+        "type": "string",
+        "enum": [
+          "stars_desc",
+          "pushed_desc",
+          "created_desc",
+          "full_name_asc"
+        ],
+        "title": "RepositoryListSort",
+        "description": "Sort order for repository list."
+      },
+      "RepositoryAnalysis": {
+        "type": "object",
+        "required": [
+          "purpose",
+          "tech_stack",
+          "architecture_summary",
+          "key_concepts",
+          "code_patterns",
+          "use_cases",
+          "target_audience",
+          "maturity",
+          "key_dependencies",
+          "hallucination_risk",
+          "confidence"
+        ],
+        "properties": {
+          "purpose": {
+            "type": "string"
+          },
+          "tech_stack": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "architecture_summary": {
+            "type": "string"
+          },
+          "key_concepts": {
+            "type": "array",
+            "description": "List of \"{term, explanation}\" objects.",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "code_patterns": {
+            "type": "array",
+            "description": "List of \"{name, description}\" objects.",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "use_cases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "target_audience": {
+            "type": "string"
+          },
+          "maturity": {
+            "type": "string"
+          },
+          "key_dependencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hallucination_risk": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          }
+        },
+        "title": "RepositoryAnalysis",
+        "description": "Mirror of RepoAnalysis schema for API serialization."
+      },
+      "RepositoryCompact": {
+        "type": "object",
+        "required": [
+          "id",
+          "github_id",
+          "full_name",
+          "owner",
+          "name",
+          "description",
+          "primary_language",
+          "stars",
+          "forks",
+          "is_starred",
+          "is_archived",
+          "pushed_at",
+          "last_synced_at",
+          "pending_analysis",
+          "has_analysis",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "github_id": {
+            "type": "integer"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "primary_language": {
+            "type": "string",
+            "nullable": true
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "stars": {
+            "type": "integer"
+          },
+          "forks": {
+            "type": "integer"
+          },
+          "is_starred": {
+            "type": "boolean"
+          },
+          "is_archived": {
+            "type": "boolean"
+          },
+          "pushed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "last_synced_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pending_analysis": {
+            "type": "boolean"
+          },
+          "has_analysis": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "description": "One of \"manual\" or \"starred\"."
+          }
+        },
+        "title": "RepositoryCompact"
+      },
+      "RepositoryDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "github_id",
+          "full_name",
+          "owner",
+          "name",
+          "description",
+          "primary_language",
+          "stars",
+          "forks",
+          "is_starred",
+          "is_archived",
+          "pushed_at",
+          "last_synced_at",
+          "pending_analysis",
+          "has_analysis",
+          "source",
+          "homepage_url",
+          "license_spdx",
+          "is_fork",
+          "is_template",
+          "readme_excerpt",
+          "analysis",
+          "analysis_model",
+          "analysis_at",
+          "content_hash",
+          "created_at_github",
+          "watchers"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "github_id": {
+            "type": "integer"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "primary_language": {
+            "type": "string",
+            "nullable": true
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "stars": {
+            "type": "integer"
+          },
+          "forks": {
+            "type": "integer"
+          },
+          "is_starred": {
+            "type": "boolean"
+          },
+          "is_archived": {
+            "type": "boolean"
+          },
+          "pushed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "last_synced_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pending_analysis": {
+            "type": "boolean"
+          },
+          "has_analysis": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "description": "One of \"manual\" or \"starred\"."
+          },
+          "homepage_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "license_spdx": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_fork": {
+            "type": "boolean"
+          },
+          "is_template": {
+            "type": "boolean"
+          },
+          "languages": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {}
+          },
+          "readme_excerpt": {
+            "type": "string",
+            "nullable": true
+          },
+          "analysis": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RepositoryAnalysis"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "nullable": true
+          },
+          "analysis_model": {
+            "type": "string",
+            "nullable": true
+          },
+          "analysis_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "content_hash": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at_github": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "watchers": {
+            "type": "integer"
+          }
+        },
+        "title": "RepositoryDetail"
+      },
+      "RepositoryListResponse": {
+        "type": "object",
+        "required": [
+          "repositories",
+          "pagination"
+        ],
+        "properties": {
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RepositoryCompact"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "title": "RepositoryListResponse"
+      },
+      "IngestRepositoryResponse": {
+        "type": "object",
+        "required": [
+          "repository_id",
+          "status",
+          "full_name"
+        ],
+        "properties": {
+          "repository_id": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "ready"
+            ]
+          },
+          "full_name": {
+            "type": "string"
+          }
+        },
+        "title": "IngestRepositoryResponse"
+      },
+      "RepositorySearchHit": {
+        "type": "object",
+        "required": [
+          "id",
+          "github_id",
+          "full_name",
+          "owner",
+          "name",
+          "description",
+          "primary_language",
+          "stars",
+          "forks",
+          "is_starred",
+          "is_archived",
+          "pushed_at",
+          "last_synced_at",
+          "pending_analysis",
+          "has_analysis",
+          "source",
+          "distance"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "github_id": {
+            "type": "integer"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "primary_language": {
+            "type": "string",
+            "nullable": true
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "stars": {
+            "type": "integer"
+          },
+          "forks": {
+            "type": "integer"
+          },
+          "is_starred": {
+            "type": "boolean"
+          },
+          "is_archived": {
+            "type": "boolean"
+          },
+          "pushed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "last_synced_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pending_analysis": {
+            "type": "boolean"
+          },
+          "has_analysis": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          },
+          "distance": {
+            "type": "number",
+            "description": "Cosine similarity distance from the query embedding."
+          }
+        },
+        "title": "RepositorySearchHit"
+      },
+      "RepositorySearchResponse": {
+        "type": "object",
+        "required": [
+          "results",
+          "pagination",
+          "query"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RepositorySearchHit"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "query": {
+            "type": "string"
+          }
+        },
+        "title": "RepositorySearchResponse"
+      },
+      "PATSubmitRequest": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 200,
+            "description": "GitHub Personal Access Token (classic or fine-grained)."
+          }
+        },
+        "title": "PATSubmitRequest"
+      },
+      "PATSubmitResponse": {
+        "type": "object",
+        "required": [
+          "login",
+          "github_user_id",
+          "auth_method",
+          "status"
+        ],
+        "properties": {
+          "login": {
+            "type": "string"
+          },
+          "github_user_id": {
+            "type": "integer"
+          },
+          "auth_method": {
+            "type": "string",
+            "description": "Always \"pat\" for this endpoint."
+          },
+          "status": {
+            "type": "string",
+            "description": "Integration status (e.g. \"active\")."
+          }
+        },
+        "title": "PATSubmitResponse"
+      },
+      "GitHubStatusResponse": {
+        "type": "object",
+        "required": [
+          "is_connected",
+          "auth_method",
+          "github_login",
+          "github_user_id",
+          "status",
+          "last_synced_at",
+          "repo_count"
+        ],
+        "properties": {
+          "is_connected": {
+            "type": "boolean"
+          },
+          "auth_method": {
+            "type": "string",
+            "nullable": true,
+            "description": "One of \"pat\" or \"oauth_device\" when connected."
+          },
+          "github_login": {
+            "type": "string",
+            "nullable": true
+          },
+          "github_user_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true,
+            "description": "Integration status (e.g. \"active\", \"needs_reauth\", \"revoked\")."
+          },
+          "last_synced_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "repo_count": {
+            "type": "integer"
+          }
+        },
+        "title": "GitHubStatusResponse"
+      },
+      "DeviceFlowStartResponse": {
+        "type": "object",
+        "required": [
+          "user_code",
+          "verification_uri",
+          "device_code",
+          "interval",
+          "expires_in"
+        ],
+        "properties": {
+          "user_code": {
+            "type": "string",
+            "description": "Short user-visible code to enter at verification_uri."
+          },
+          "verification_uri": {
+            "type": "string",
+            "description": "URL where the user enters the user_code."
+          },
+          "device_code": {
+            "type": "string",
+            "description": "Long device code; pass back to /v1/auth/github/device/poll."
+          },
+          "interval": {
+            "type": "integer",
+            "description": "Minimum interval (seconds) between polls."
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Seconds until the device_code expires."
+          }
+        },
+        "title": "DeviceFlowStartResponse"
+      },
+      "DeviceFlowPollRequest": {
+        "type": "object",
+        "required": [
+          "device_code"
+        ],
+        "properties": {
+          "device_code": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 200
+          }
+        },
+        "title": "DeviceFlowPollRequest"
+      },
+      "DeviceFlowPollResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "slow_down",
+              "expired",
+              "ok",
+              "denied"
+            ]
+          },
+          "login": {
+            "type": "string",
+            "nullable": true
+          },
+          "github_user_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "auth_method": {
+            "type": "string",
+            "nullable": true,
+            "description": "Always \"oauth_device\" on success."
+          },
+          "integration_status": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "title": "DeviceFlowPollResponse"
       }
     }
   }

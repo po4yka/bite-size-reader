@@ -12,7 +12,6 @@ Run with:
 
 from __future__ import annotations
 
-import warnings
 from pathlib import Path
 from typing import Any
 
@@ -199,17 +198,15 @@ class TestRouteCoverage:
             )
 
     def test_no_orphan_spec_routes(self, app_instance: Any, spec: dict[str, Any]) -> None:
-        """Warn (do not fail) if the spec has routes absent from the app."""
+        """Fail if the YAML spec declares routes the app does not implement."""
         app_routes = _extract_app_routes(app_instance)
         spec_routes = _extract_spec_routes(spec)
-
         orphans = spec_routes - app_routes
         if orphans:
             formatted = "\n".join(f"  {m} {p}" for m, p in sorted(orphans))
-            warnings.warn(
-                f"Spec routes with no matching app route:\n{formatted}\n"
-                "These may be deprecated aliases or planned endpoints.",
-                stacklevel=1,
+            pytest.fail(
+                f"The following OpenAPI spec routes are NOT registered on the app:\n{formatted}\n\n"
+                "Remove them from docs/openapi/mobile_api.yaml or add a matching router endpoint."
             )
 
 

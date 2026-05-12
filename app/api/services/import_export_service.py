@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from app.api.dependencies.database import (
     get_bookmark_import_repository,
@@ -14,12 +14,10 @@ from app.api.models.responses import ImportJobResponse
 from app.api.search_helpers import isotime
 from app.application.dto.import_bookmarks import ImportBookmarksCommand
 from app.application.use_cases.import_pipeline import ImportBookmarksUseCase
+from app.db.session import Database  # noqa: TC001  # used at runtime in __init__ signature
 from app.infrastructure.persistence.repositories.user_content_repository import (
     UserContentRepositoryAdapter,
 )
-
-if TYPE_CHECKING:
-    from app.db.session import Database
 
 
 class ImportExportService:

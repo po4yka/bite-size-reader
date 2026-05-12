@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies.database import get_rule_repository, get_summary_repository
 from app.api.exceptions import APIException, ErrorCode, ResourceNotFoundError, ValidationError
-
-if TYPE_CHECKING:
-    from app.api.models.requests import CreateRuleRequest, TestRuleRequest, UpdateRuleRequest
+from app.api.models.requests import (  # noqa: TC001  # used at runtime in route body annotations
+    CreateRuleRequest,
+    TestRuleRequest,
+    UpdateRuleRequest,
+)
 from app.api.models.responses import (
     PaginationInfo,
     RuleLogResponse,

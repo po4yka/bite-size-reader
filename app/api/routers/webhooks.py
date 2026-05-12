@@ -3,22 +3,23 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies.database import get_webhook_repository
 from app.api.exceptions import APIException, ErrorCode, ResourceNotFoundError
+from app.api.models.requests import (  # noqa: TC001  # used at runtime in route body annotations
+    CreateWebhookRequest,
+    UpdateWebhookRequest,
+)
 from app.api.models.responses import (
     PaginationInfo,
     WebhookDeliveryResponse,
     WebhookSubscriptionResponse,
     success_response,
 )
-
-if TYPE_CHECKING:
-    from app.api.models.requests import CreateWebhookRequest, UpdateWebhookRequest
 from app.api.routers.auth import get_current_user
 from app.api.search_helpers import isotime
 from app.core.logging_utils import get_logger

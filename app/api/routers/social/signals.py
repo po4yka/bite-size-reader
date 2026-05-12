@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -14,11 +14,11 @@ from app.api.models.signals import (  # noqa: TC001
     TopicPreferenceRequest,
 )
 from app.api.routers.auth import get_current_user
+from app.application.ports.signal_sources import (  # noqa: TC001  # used at runtime in route signatures
+    SignalSourceRepositoryPort,
+)
 from app.application.services.signal_personalization import SignalPersonalizationService
 from app.di.api import resolve_api_runtime
-
-if TYPE_CHECKING:
-    from app.application.ports.signal_sources import SignalSourceRepositoryPort
 
 router = APIRouter()
 

@@ -10,13 +10,13 @@ from app.api.dependencies.database import get_session_manager, get_summary_repos
 from app.api.exceptions import ResourceNotFoundError
 from app.api.models.responses import GoalProgressResponse, GoalResponse
 from app.core.time_utils import UTC
+from app.db.session import Database  # noqa: TC001  # used at runtime in __init__ signature
 from app.infrastructure.persistence.repositories.user_content_repository import (
     UserContentRepositoryAdapter,
 )
 
 if TYPE_CHECKING:
     from app.api.models.requests import CreateGoalRequest
-    from app.db.session import Database
 
 
 def _safe_isoformat(dt_value: Any) -> str | None:

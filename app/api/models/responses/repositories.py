@@ -3,14 +3,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from datetime import datetime  # noqa: TC003  # used at runtime by Pydantic schema generation
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.models.responses.common import PaginationInfo
-
-if TYPE_CHECKING:
-    from datetime import datetime
 
 
 class RepositoryCompact(BaseModel):
