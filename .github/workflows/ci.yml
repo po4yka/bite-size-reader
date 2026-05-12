@@ -30,10 +30,10 @@ jobs:
       lock_drift: ${{ steps.lockcheck.outputs.drift }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -86,7 +86,7 @@ jobs:
           fi
 
       - name: Upload compiled requirements
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: compiled-requirements
           path: |
@@ -102,7 +102,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Lint Markdown files
         uses: DavidAnson/markdownlint-cli2-action@v23
@@ -118,7 +118,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check links in Markdown files
         uses: lycheeverse/lychee-action@v2
@@ -144,16 +144,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download compiled requirements
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: compiled-requirements
           path: .
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -230,16 +230,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download compiled requirements
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: compiled-requirements
           path: .
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -288,16 +288,16 @@ jobs:
         python-version: ["3.13"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download compiled requirements
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: compiled-requirements
           path: .
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -367,7 +367,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.python-version }}
           path: |
@@ -383,7 +383,7 @@ jobs:
           paths: "junit-*.xml"
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           file: ./coverage.xml
           flags: unittests
@@ -413,10 +413,10 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
@@ -446,16 +446,16 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download compiled requirements
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: compiled-requirements
           path: .
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
@@ -498,16 +498,16 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download compiled requirements
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: compiled-requirements
           path: .
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
@@ -550,7 +550,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # paths-filter scopes the actual build to commits that touched Docker
       # inputs. PRs always build; pushes to main only build when Dockerfile,
@@ -558,7 +558,7 @@ jobs:
       # dependency-pin regressions before release.yml does.
       - name: Detect Docker-relevant changes
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             docker:
@@ -594,7 +594,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout (full history)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -654,16 +654,16 @@ jobs:
     if: github.event_name == 'push' || github.event.pull_request.draft == false
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download compiled requirements
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: compiled-requirements
           path: .
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -775,16 +775,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download compiled requirements
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: compiled-requirements
           path: .
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
