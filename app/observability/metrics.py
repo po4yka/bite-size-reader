@@ -238,6 +238,28 @@ if PROMETHEUS_AVAILABLE:
         registry=REGISTRY,
     )
 
+    OPENROUTER_PER_MODEL_TIMEOUT = Counter(
+        "openrouter_per_model_timeout_total",
+        "Per-model timeouts in the OpenRouter fallback chain.",
+        ["model"],
+        registry=REGISTRY,
+    )
+
+    OPENROUTER_PER_MODEL_LATENCY = Histogram(
+        "openrouter_per_model_latency_seconds",
+        "Per-model latency in the OpenRouter fallback chain.",
+        ["model", "outcome"],
+        buckets=[0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600],
+        registry=REGISTRY,
+    )
+
+    OPENROUTER_CIRCUIT_BREAKER_STATE = Gauge(
+        "openrouter_circuit_breaker_state",
+        "Per-model circuit breaker state (0=closed, 1=half_open, 2=open).",
+        ["model", "state"],
+        registry=REGISTRY,
+    )
+
 else:
     # Create dummy metrics when prometheus_client is not available
     REGISTRY = None
@@ -267,6 +289,9 @@ else:
     AGGREGATION_COST_USD = None
     SCHEDULER_JOB_CHRONIC_FAILURES = None
     OPENROUTER_STREAM_FALLBACK = None
+    OPENROUTER_PER_MODEL_TIMEOUT = None
+    OPENROUTER_PER_MODEL_LATENCY = None
+    OPENROUTER_CIRCUIT_BREAKER_STATE = None
 
 
 def get_metrics() -> bytes:
@@ -560,6 +585,50 @@ def record_aggregation_bundle(
             status=status,
             bundle_profile=bundle_profile,
         ).observe(latency_seconds)
+
+
+def record_per_model_timeout(model: str) -> None:
+    """Increment the per-model timeout counter for *model*.
+
+    Args:
+        model: The model name that timed out (e.g. ``deepseek/deepseek-v3.2``).
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+    OPENROUTER_PER_MODEL_TIMEOUT.labels(model=model).inc()
+
+
+def record_per_model_latency(model: str, outcome: str, seconds: float) -> None:
+    """Observe per-model latency for the OpenRouter fallback chain.
+
+    Args:
+        model: Model name used in the attempt.
+        outcome: One of ``success``, ``timeout``, ``error``,
+            ``skipped_unsupported_structured``, ``circuit_open``.
+        seconds: Wall-clock duration of the per-model attempt in seconds.
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+    OPENROUTER_PER_MODEL_LATENCY.labels(model=model, outcome=outcome).observe(seconds)
+
+
+def record_per_model_circuit_breaker_state(model: str, state: str) -> None:
+    """Update the per-model circuit breaker state gauge.
+
+    Uses a label-per-state pattern: each ``(model, state)`` combination
+    is set to 1.0 when active and 0.0 when inactive, so dashboards can
+    filter on ``state`` label values directly.
+
+    Args:
+        model: Model name whose breaker changed state.
+        state: One of ``closed``, ``open``, ``half_open``.
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+    for s in ("closed", "open", "half_open"):
+        OPENROUTER_CIRCUIT_BREAKER_STATE.labels(model=model, state=s).set(
+            1.0 if s == state else 0.0
+        )
 
 
 def record_openrouter_stream_fallback(model: str, reason: str) -> None:

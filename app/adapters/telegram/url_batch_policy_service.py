@@ -26,11 +26,16 @@ class URLBatchPolicyService:
         max_retries: int = 2,
         initial_timeout_sec: float = 900.0,
         max_timeout_sec: float = 1800.0,
+        floor_sec: float | None = None,
     ) -> None:
         self.max_concurrent = max(1, max_concurrent)
         self.max_retries = max(0, max_retries)
         self.initial_timeout_sec = max(1.0, initial_timeout_sec)
         self.max_timeout_sec = max(self.initial_timeout_sec, max_timeout_sec)
+        # Minimum wall-clock budget for the LLM cascade plus scraping overhead.
+        # When the adaptive estimate is smaller than this floor the outer timeout
+        # would fire before the inner LLM fallback chain has a chance to finish.
+        self._floor_sec: float | None = floor_sec if floor_sec and floor_sec > 0 else None
 
     async def compute_timeout(
         self,
@@ -63,6 +68,18 @@ class URLBatchPolicyService:
                     "adaptive_timeout_error_using_default",
                     extra={"url": url, "error": str(exc)},
                 )
+
+        if self._floor_sec is not None and base_timeout < self._floor_sec:
+            logger.debug(
+                "adaptive_timeout_floor_applied",
+                extra={
+                    "url": url,
+                    "estimate_sec": base_timeout,
+                    "floor_sec": self._floor_sec,
+                    "applied_sec": self._floor_sec,
+                },
+            )
+            base_timeout = self._floor_sec
 
         current_timeout = float(base_timeout) * (1.5**attempt)
         return min(current_timeout, self.max_timeout_sec)

@@ -24,7 +24,7 @@ class OpenRouterChatClient(Protocol):
     _max_response_size_bytes: int
     _price_input_per_1k: float | None
     _price_output_per_1k: float | None
-    _circuit_breaker: Any | None
+    _circuit_breaker: Any | None  # PerModelCircuitBreaker | None
     request_builder: RequestBuilder
     response_processor: ResponseProcessor
     model_capabilities: ModelCapabilities

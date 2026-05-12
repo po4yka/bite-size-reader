@@ -206,3 +206,61 @@ class CircuitBreaker:
         except Exception:
             self.record_failure()
             raise
+
+
+class PerModelCircuitBreaker:
+    """Per-model circuit breaker registry.
+
+    Maintains an independent CircuitBreaker instance for each model name,
+    lazy-created on first use.  This prevents a misbehaving model from
+    tripping the breaker and blocking healthy fallback models.
+
+    The ``failure_threshold``, ``timeout``, and ``success_threshold``
+    constructor arguments are forwarded verbatim to each per-model
+    CircuitBreaker instance.
+    """
+
+    def __init__(
+        self,
+        failure_threshold: int,
+        timeout: float = 60.0,
+        success_threshold: int = 3,
+    ) -> None:
+        self.failure_threshold = failure_threshold
+        self.timeout = timeout
+        self.success_threshold = success_threshold
+        self._breakers: dict[str, CircuitBreaker] = {}
+
+    def _get(self, model: str) -> CircuitBreaker:
+        """Return (or lazily create) the CircuitBreaker for *model*."""
+        if model not in self._breakers:
+            self._breakers[model] = CircuitBreaker(
+                failure_threshold=self.failure_threshold,
+                timeout=self.timeout,
+                success_threshold=self.success_threshold,
+            )
+        return self._breakers[model]
+
+    def can_proceed(self, model: str) -> bool:
+        """Return True if *model*'s breaker allows a new request."""
+        return self._get(model).can_proceed()
+
+    def record_success(self, model: str) -> None:
+        """Record a successful outcome for *model*."""
+        self._get(model).record_success()
+
+    def record_failure(self, model: str) -> None:
+        """Record a failed outcome for *model*."""
+        self._get(model).record_failure()
+
+    def state(self, model: str) -> CircuitState:
+        """Return the current CircuitState for *model*."""
+        return self._get(model).state
+
+    def get_stats(self, model: str) -> dict[str, Any]:
+        """Return circuit breaker stats for *model*."""
+        return self._get(model).get_stats()
+
+    def all_stats(self) -> dict[str, dict[str, Any]]:
+        """Return stats for every tracked model."""
+        return {model: cb.get_stats() for model, cb in self._breakers.items()}

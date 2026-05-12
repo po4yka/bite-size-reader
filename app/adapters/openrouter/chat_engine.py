@@ -17,6 +17,11 @@ from app.adapters.openrouter.chat_transport import ChatTransport
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
+from app.observability.metrics import (
+    record_per_model_circuit_breaker_state,
+    record_per_model_latency,
+    record_per_model_timeout,
+)
 
 logger = get_logger(__name__)
 
@@ -104,12 +109,11 @@ class OpenRouterChatEngine:
         per_model_timeout_sec: float | None = None,
         per_model_timeout_overrides: Mapping[str, float] | None = None,
     ) -> LLMCallResult:
+        import time as _time
+
         if self._client._closed:
             msg = "Client has been closed"
             raise RuntimeError(msg)
-
-        if self._client._circuit_breaker and not self._client._circuit_breaker.can_proceed():
-            return self._circuit_breaker_open_result(request_id)
 
         context = self._context_builder.prepare(
             messages,
@@ -134,9 +138,44 @@ class OpenRouterChatEngine:
         images_stripped = False
         models_attempted: list[tuple[str, str]] = []
 
+        # Per-model circuit breaker: detect PerModelCircuitBreaker vs legacy global.
+        from app.utils.circuit_breaker import PerModelCircuitBreaker as _PerModelCB
+
+        per_model_cb = (
+            self._client._circuit_breaker
+            if isinstance(self._client._circuit_breaker, _PerModelCB)
+            else None
+        )
+        # Legacy global breaker (kept for backward-compat when caller passes CircuitBreaker).
+        global_cb = (
+            self._client._circuit_breaker
+            if self._client._circuit_breaker is not None and per_model_cb is None
+            else None
+        )
+
         try:
             async with self._client._request_context() as http_client:
                 for model_index, model in enumerate(context.models_to_try):
+                    # --- Per-model circuit breaker check (Improvement A) ---
+                    if per_model_cb is not None and not per_model_cb.can_proceed(model):
+                        cb_state_str = per_model_cb.state(model).value
+                        record_per_model_circuit_breaker_state(model=model, state=cb_state_str)
+                        logger.warning(
+                            "per_model_circuit_breaker_open",
+                            extra={
+                                "model": model,
+                                "request_id": request_id,
+                                "circuit_state": cb_state_str,
+                            },
+                        )
+                        models_attempted.append((model, "circuit_open"))
+                        # Only skip if there are other models whose breakers are closed.
+                        remaining = context.models_to_try[model_index + 1 :]
+                        if any(per_model_cb.can_proceed(m) for m in remaining):
+                            continue
+                        # All remaining breakers are also open — fall through to exhausted.
+                        break
+
                     try:
                         # Resolve per-model timeout: explicit override wins, then base floor.
                         effective_timeout: float | None = per_model_timeout_sec
@@ -149,6 +188,7 @@ class OpenRouterChatEngine:
                             if effective_timeout is not None
                             else _noop_timeout()
                         )
+                        model_start = _time.monotonic()
                         async with model_timeout_cm:
                             (
                                 skip_model,
@@ -161,7 +201,16 @@ class OpenRouterChatEngine:
                                 structured_output_state=structured_output_state,
                             )
                             if skip_model:
+                                elapsed = _time.monotonic() - model_start
                                 models_attempted.append((model, "skipped_unsupported_structured"))
+                                record_per_model_latency(
+                                    model=model,
+                                    outcome="skipped_unsupported_structured",
+                                    seconds=elapsed,
+                                )
+                                if per_model_cb is not None:
+                                    # Structural skip — neither success nor failure.
+                                    pass
                                 continue
 
                             model_state = await self._attempt_runner.run_attempts_for_model(
@@ -177,12 +226,13 @@ class OpenRouterChatEngine:
                                 response_format_initial=context.response_format_initial,
                                 structured_output_state=structured_output_state,
                                 on_stream_delta=on_stream_delta,
+                                per_model_timeout_sec=effective_timeout,
                             )
                     except TimeoutError:
+                        elapsed = _time.monotonic() - model_start
                         last_model_reported = model
                         last_error_text = (
-                            f"All AI models exceeded the per-model time budget "
-                            f"({effective_timeout}s) on this content.\n"
+                            f"Model {model} timed out after {effective_timeout}s.\n"
                             f"Likely cause: OpenRouter latency or model congestion.\n"
                             f"Try resending in a few minutes; if it persists, "
                             f"the content may exceed model context windows."
@@ -195,6 +245,13 @@ class OpenRouterChatEngine:
                             "timeout_sec": effective_timeout,
                         }
                         models_attempted.append((model, "timeout"))
+                        record_per_model_timeout(model=model)
+                        record_per_model_latency(model=model, outcome="timeout", seconds=elapsed)
+                        if per_model_cb is not None:
+                            per_model_cb.record_failure(model)
+                            record_per_model_circuit_breaker_state(
+                                model=model, state=per_model_cb.state(model).value
+                            )
                         logger.warning(
                             "per_model_timeout",
                             extra={
@@ -228,17 +285,34 @@ class OpenRouterChatEngine:
                             else "error"
                         )
                         models_attempted.append((model, outcome))
-                        if self._client._circuit_breaker:
+                        elapsed = _time.monotonic() - model_start
+                        record_per_model_latency(model=model, outcome=outcome, seconds=elapsed)
+                        if per_model_cb is not None:
                             if outcome == "success":
-                                self._client._circuit_breaker.record_success()
+                                per_model_cb.record_success(model)
                             else:
-                                self._client._circuit_breaker.record_failure()
+                                per_model_cb.record_failure(model)
+                            record_per_model_circuit_breaker_state(
+                                model=model, state=per_model_cb.state(model).value
+                            )
+                        elif global_cb is not None:
+                            if outcome == "success":
+                                global_cb.record_success()
+                            else:
+                                global_cb.record_failure()
                         return model_state.terminal_result.model_copy(
                             update={"models_attempted": list(models_attempted)}
                         )
 
                     # Non-terminal: model failed, will try next in ladder.
+                    elapsed = _time.monotonic() - model_start
                     models_attempted.append((model, "error"))
+                    record_per_model_latency(model=model, outcome="error", seconds=elapsed)
+                    if per_model_cb is not None:
+                        per_model_cb.record_failure(model)
+                        record_per_model_circuit_breaker_state(
+                            model=model, state=per_model_cb.state(model).value
+                        )
 
                     if not images_stripped and _has_image_fetch_error(
                         last_error_text, last_error_context
@@ -292,8 +366,8 @@ class OpenRouterChatEngine:
             last_error_text,
             request_id,
         )
-        if self._client._circuit_breaker:
-            self._client._circuit_breaker.record_failure()
+        if global_cb is not None:
+            global_cb.record_failure()
         return self._attempt_runner.build_exhausted_chat_result(
             last_model_reported=last_model_reported,
             last_response_text=last_response_text,

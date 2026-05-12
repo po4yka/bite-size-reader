@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from typing import Self
 
     from app.adapter_models.llm.llm_models import LLMCallResult
-    from app.utils.circuit_breaker import CircuitBreaker
+    from app.utils.circuit_breaker import CircuitBreaker, PerModelCircuitBreaker
 
 import httpx
 
@@ -118,7 +118,7 @@ class OpenRouterClient:
         x_title: str | None = None,
         provider_order: list[str] | tuple[str, ...] | None = None,
         audit: Callable[[str, str, dict[str, Any]], None] | None = None,
-        circuit_breaker: CircuitBreaker | None = None,
+        circuit_breaker: CircuitBreaker | PerModelCircuitBreaker | None = None,
     ) -> None:
         cfg = config or OpenRouterClientConfig()
         self._validate_init_params(
@@ -358,15 +358,19 @@ class OpenRouterClient:
             ) from e
 
     @property
-    def circuit_breaker(self) -> CircuitBreaker | None:
+    def circuit_breaker(self) -> CircuitBreaker | PerModelCircuitBreaker | None:
         """Return the circuit breaker instance if configured."""
         return self._circuit_breaker
 
     def get_circuit_breaker_stats(self) -> dict[str, Any]:
         """Get circuit breaker statistics."""
-        if self._circuit_breaker:
-            return self._circuit_breaker.get_stats()
-        return {"state": "disabled"}
+        if self._circuit_breaker is None:
+            return {"state": "disabled"}
+        from app.utils.circuit_breaker import PerModelCircuitBreaker as _PerModel
+
+        if isinstance(self._circuit_breaker, _PerModel):
+            return self._circuit_breaker.all_stats()
+        return self._circuit_breaker.get_stats()
 
     @property
     def provider_name(self) -> str:

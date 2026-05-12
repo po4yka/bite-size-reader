@@ -402,7 +402,11 @@ BOT_TOKEN=...                       # Telegram bot token
 ALLOWED_USER_IDS=123456789          # Comma-separated owner IDs
 OPENROUTER_API_KEY=...              # OpenRouter API key
 OPENROUTER_MODEL=deepseek/deepseek-v4-flash  # Default model
-OPENROUTER_FALLBACK_MODELS=qwen/qwen3.6-plus-04-02,google/gemini-3.1-flash-lite-preview,moonshotai/kimi-k2.5
+OPENROUTER_FALLBACK_MODELS=qwen/qwen3.6-flash,qwen/qwen3.6-plus-04-02,moonshotai/kimi-k2-0905,minimax/minimax-m2  # fastest-first; flash runs first to beat outer per-URL timeout
+LLM_CALL_TIMEOUT_SEC=420            # outer LLM cascade budget (was 300); default 420s = 4 models x 90s + buffer
+LLM_PER_MODEL_TIMEOUT_MIN_SEC=90    # per-model floor (was 120); lower floor keeps cascade snappy
+LLM_PER_MODEL_TIMEOUT_OVERRIDES=deepseek/deepseek-v3.2=180,deepseek/deepseek-v4-pro=150  # model=seconds,... overrides; give headroom to models that consistently hit the floor rather than burning cascade wall-clock on inevitable timeouts. Parsed by app/config/runtime.py:llm_per_model_timeout_overrides
+RUNTIME_DEDUPE_RETRY_GRACE_SEC=60   # skip re-queuing URLs that failed within this window (seconds)
 
 # Scraper chain (all optional -- defaults enable full fallback chain)
 # Default order: scrapling -> crawl4ai -> firecrawl -> defuddle -> playwright -> crawlee -> direct_html -> scrapegraph_ai

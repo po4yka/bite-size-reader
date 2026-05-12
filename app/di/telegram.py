@@ -15,6 +15,7 @@ from app.adapters.telegram.multi_source_aggregation_handler import (
 )
 from app.adapters.telegram.task_manager import UserTaskManager
 from app.adapters.telegram.telegram_client import TelegramClient
+from app.adapters.telegram.url_batch_policy_service import URLBatchPolicyService
 from app.adapters.telegram.url_handler import URLHandler
 from app.application.services.adaptive_timeout import AdaptiveTimeoutService
 from app.application.services.aggregation_rollout import AggregationRolloutGate
@@ -383,6 +384,9 @@ def _build_telegram_interface_stack(
         user_repo=repositories.user_repository,
         request_repo=repositories.request_repository,
         file_validator=SecureFileValidator(max_file_size=10 * 1024 * 1024),
+        batch_policy=URLBatchPolicyService(
+            floor_sec=_compute_llm_cascade_floor(cfg),
+        ),
     )
     aggregation_handler = MultiSourceAggregationHandler(
         response_formatter=core.response_formatter,
@@ -529,6 +533,34 @@ def _configure_forum_topics(
     response_formatter.set_topic_manager(topic_manager)
     telegram_client.topic_manager = topic_manager
     logger.info("forum_topic_manager_initialized")
+
+
+def _compute_llm_cascade_floor(cfg: AppConfig) -> float:
+    """Compute the minimum outer per-URL timeout that covers the full LLM cascade.
+
+    The inner LLM cascade in _invoke_llm can run for up to
+    ``num_models * per_model_min`` seconds when every model in the fallback
+    chain hits its per-model floor timeout.  If the adaptive estimate is
+    smaller than this value the outer asyncio timeout fires prematurely,
+    producing "Timed out after Xs" even though a fallback model might have
+    succeeded within the full cascade window.
+
+    An additional 60 s is added for scraping and non-LLM handler overhead.
+    """
+    per_model_min = float(getattr(cfg.runtime, "llm_per_model_timeout_min_sec", 120.0))
+    num_models = 1 + len(getattr(cfg.openrouter, "fallback_models", ()) or ())
+    scraping_overhead_sec = 60.0
+    floor = num_models * per_model_min + scraping_overhead_sec
+    logger.debug(
+        "llm_cascade_floor_computed",
+        extra={
+            "num_models": num_models,
+            "per_model_min_sec": per_model_min,
+            "scraping_overhead_sec": scraping_overhead_sec,
+            "floor_sec": floor,
+        },
+    )
+    return floor
 
 
 def _create_adaptive_timeout_service(

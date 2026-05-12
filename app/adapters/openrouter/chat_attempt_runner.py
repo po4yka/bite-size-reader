@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -108,10 +109,12 @@ class ChatAttemptRunner:
         response_format_initial: dict[str, Any] | None,
         structured_output_state: StructuredOutputState,
         on_stream_delta: Any | None = None,
+        per_model_timeout_sec: float | None = None,
     ) -> ModelRunState:
         rf_mode_current = initial_rf_mode
         response_format_current = response_format_initial
         truncation_count = 0
+        model_started = time.monotonic()
         state = ModelRunState(
             request=request,
             structured_output_state=structured_output_state,
@@ -180,6 +183,25 @@ class ChatAttemptRunner:
                 response_format_current = outcome.retry.response_format
 
                 if outcome.retry.truncation_recovery is not None:
+                    # Budget-tight guard (Improvement C): skip truncation retry
+                    # when more than 60% of the per-model time budget is consumed,
+                    # as the next attempt is unlikely to finish in time.
+                    if per_model_timeout_sec is not None:
+                        elapsed = time.monotonic() - model_started
+                        if elapsed / per_model_timeout_sec > 0.6:
+                            logger.warning(
+                                "truncation_recovery_skipped_budget_tight",
+                                extra={
+                                    "model": model,
+                                    "elapsed": elapsed,
+                                    "per_model_timeout_sec": per_model_timeout_sec,
+                                    "request_id": request_id,
+                                },
+                            )
+                            state.last_error_text = "truncation_recovery_skipped_budget_tight"
+                            state.last_error_context = {"reason": "budget_tight"}
+                            break
+
                     truncation_count += 1
                     if truncation_count >= 2:
                         logger.warning(
