@@ -31,6 +31,8 @@ from app.observability.metrics_repositories import (
     GITHUB_SYNC_RUNS_TOTAL,
 )
 from app.security.token_crypto import decrypt_token
+from app.infrastructure.locks.redis_lock import RedisDistributedLock
+from app.infrastructure.redis import get_redis
 from app.tasks.broker import broker
 from app.tasks.deps import get_app_config, get_db
 
@@ -50,13 +52,35 @@ class SyncSummary:
     errors_per_user: dict[int, str] = field(default_factory=dict)
 
 
+_GITHUB_SYNC_LOCK_KEY = "task_lock:github_sync_stars"
+# TTL covers the maximum expected run: 100-repo budget * ~18 s/LLM call ≈ 30 min.
+_GITHUB_SYNC_LOCK_TTL = 1800
+
+
 @broker.task(task_name="ratatoskr.github.sync_stars")
 async def sync_all_active_integrations(
     cfg: AppConfig = TaskiqDepends(get_app_config),
     db: Database = TaskiqDepends(get_db),
 ) -> SyncSummary:
     """Poll GitHub starred repos for all active integrations and upsert into DB."""
-    return await _sync_body(cfg, db, bot=None)
+    redis_client = await get_redis(cfg)
+    async with RedisDistributedLock(
+        redis_client, _GITHUB_SYNC_LOCK_KEY, _GITHUB_SYNC_LOCK_TTL
+    ) as acquired:
+        if not acquired:
+            logger.info(
+                "github_sync_skipped_lock_held",
+                extra={"key": _GITHUB_SYNC_LOCK_KEY},
+            )
+            return SyncSummary(
+                users_processed=0,
+                repos_imported=0,
+                repos_updated=0,
+                repos_unstarred=0,
+                llm_calls_made=0,
+                llm_calls_deferred=0,
+            )
+        return await _sync_body(cfg, db, bot=None)
 
 
 async def _sync_body(

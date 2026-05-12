@@ -30,6 +30,8 @@ from app.infrastructure.persistence.repositories.request_repository import (
 from app.infrastructure.persistence.repositories.summary_repository import (
     SummaryRepositoryAdapter,
 )
+from app.infrastructure.locks.redis_lock import RedisDistributedLock
+from app.infrastructure.redis import get_redis
 from app.tasks.broker import broker
 from app.tasks.deps import get_app_config, get_db
 
@@ -46,13 +48,28 @@ class ReconcileSummary:
     failed: int
 
 
+_VECTOR_RECONCILE_LOCK_KEY = "task_lock:vector_reconcile"
+# TTL covers the maximum expected run: 100-row batch * ~3 s/embedding ≈ 5 min.
+_VECTOR_RECONCILE_LOCK_TTL = 300
+
+
 @broker.task(task_name="ratatoskr.vector.reconcile")
 async def reconcile_vector_index(
     cfg: AppConfig = TaskiqDepends(get_app_config),
     db: Database = TaskiqDepends(get_db),
 ) -> ReconcileSummary:
     """Re-embed summaries whose embedding row is stale relative to the source."""
-    return await _reconcile_body(cfg, db)
+    redis_client = await get_redis(cfg)
+    async with RedisDistributedLock(
+        redis_client, _VECTOR_RECONCILE_LOCK_KEY, _VECTOR_RECONCILE_LOCK_TTL
+    ) as acquired:
+        if not acquired:
+            logger.info(
+                "vector_reconcile_skipped_lock_held",
+                extra={"key": _VECTOR_RECONCILE_LOCK_KEY},
+            )
+            return ReconcileSummary(scanned=0, requeued=0, skipped=0, failed=0)
+        return await _reconcile_body(cfg, db)
 
 
 async def _reconcile_body(cfg: AppConfig, db: Database) -> ReconcileSummary:
