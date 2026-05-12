@@ -13,12 +13,18 @@
 # Environment overrides:
 #   RASPI_HOST          SSH host alias                   (default: raspi)
 #   RASPI_REMOTE_PATH   Repo path on the Pi              (default: ~/ratatoskr)
-#   COMPOSE_PROJECT     Compose project name on the Pi   (default: ratatoskr)
+#   COMPOSE_PROJECT     Compose project name on the Pi   (default: docker)
+#   COMPOSE_ENV_FILE    Env file passed to compose       (default: .env)
 #
-# Compose tags built images as `<project>-<service>` (e.g. ratatoskr-ratatoskr).
+# Compose tags built images as `<project>-<service>` (e.g. docker-ratatoskr).
+# Default project is `docker` to match the running Pi stack (postgres/redis are
+# started from inside ops/docker/, so their project name is the directory name).
 # This script tags the local build with that exact name and pins the project on
 # the Pi with `-p ${COMPOSE_PROJECT}`, so `compose up` reuses the shipped image
 # instead of rebuilding it.
+#
+# The restart uses `--no-deps --force-recreate ${SERVICE}` so we never disturb
+# postgres/redis/qdrant which are managed independently.
 
 set -euo pipefail
 
@@ -28,7 +34,8 @@ cd "$REPO_ROOT"
 
 RASPI_HOST=${RASPI_HOST:-raspi}
 RASPI_REMOTE_PATH=${RASPI_REMOTE_PATH:-'~/ratatoskr'}
-COMPOSE_PROJECT=${COMPOSE_PROJECT:-ratatoskr}
+COMPOSE_PROJECT=${COMPOSE_PROJECT:-docker}
+COMPOSE_ENV_FILE=${COMPOSE_ENV_FILE:-.env}
 PLATFORM=linux/arm64
 
 SERVICE=ratatoskr
@@ -88,23 +95,43 @@ if [[ $NO_CACHE -eq 1 ]]; then
 fi
 DOCKER_BUILDKIT=1 docker buildx build "${BUILD_FLAGS[@]}" .
 
+LOCAL_SHA=$(docker image inspect "$IMAGE_TAG" --format '{{.Id}}')
 echo "==> Streaming ${IMAGE_TAG} to ${RASPI_HOST} (gzip in transit)"
+echo "    local image SHA: $LOCAL_SHA"
+# `ssh 'gunzip | docker load'` occasionally exits 255 after the remote `docker
+# load` completes (SSH disconnects before flushing the channel). Treat exit
+# code as advisory: verify success by inspecting the image SHA on the Pi.
+set +e
 docker save "$IMAGE_TAG" | gzip | ssh "$RASPI_HOST" 'gunzip | docker load'
+STREAM_EXIT=$?
+set -e
+REMOTE_SHA=$(ssh "$RASPI_HOST" "docker image inspect ${IMAGE_TAG} --format '{{.Id}}'" 2>/dev/null || true)
+if [[ -z "$REMOTE_SHA" || "$LOCAL_SHA" != "$REMOTE_SHA" ]]; then
+  echo "ERROR: image stream verification failed" >&2
+  echo "  local SHA:  $LOCAL_SHA" >&2
+  echo "  remote SHA: ${REMOTE_SHA:-<not found>}" >&2
+  echo "  ssh exit:   $STREAM_EXIT" >&2
+  exit 1
+fi
+if [[ $STREAM_EXIT -ne 0 ]]; then
+  echo "    (ssh exited $STREAM_EXIT but image SHA matches — proceeding)"
+fi
+
+COMPOSE_RUN=(
+  docker compose
+  --env-file "${COMPOSE_ENV_FILE}"
+  -p "${COMPOSE_PROJECT}"
+  -f ops/docker/docker-compose.yml
+  -f ops/docker/docker-compose.pi.yml
+)
+COMPOSE_CMD="${COMPOSE_RUN[*]} up -d --no-deps --force-recreate ${SERVICE}"
 
 if [[ $RESTART -eq 1 ]]; then
   echo "==> Restarting ${SERVICE} on ${RASPI_HOST} (project: ${COMPOSE_PROJECT})"
-  ssh "$RASPI_HOST" "cd ${RASPI_REMOTE_PATH} && \
-    docker compose -p ${COMPOSE_PROJECT} \
-      -f ops/docker/docker-compose.yml \
-      -f ops/docker/docker-compose.pi.yml \
-      up -d ${SERVICE}"
+  ssh "$RASPI_HOST" "cd ${RASPI_REMOTE_PATH} && ${COMPOSE_CMD}"
 else
   echo "==> Skipping restart (--no-restart). To start manually on the Pi:"
-  echo "    ssh ${RASPI_HOST} 'cd ${RASPI_REMOTE_PATH} && \\"
-  echo "      docker compose -p ${COMPOSE_PROJECT} \\"
-  echo "        -f ops/docker/docker-compose.yml \\"
-  echo "        -f ops/docker/docker-compose.pi.yml \\"
-  echo "        up -d ${SERVICE}'"
+  echo "    ssh ${RASPI_HOST} 'cd ${RASPI_REMOTE_PATH} && ${COMPOSE_CMD}'"
 fi
 
 echo "==> Done."
