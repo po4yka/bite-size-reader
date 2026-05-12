@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from taskiq import TaskiqDepends
 
 from app.adapters.github.exceptions import GitHubAuthError, GitHubRateLimitError
@@ -242,13 +242,28 @@ async def _sync_one_integration(
 
     is_first_sync = integration.last_synced_at is None
 
+    batch_size = cfg.github.sync_batch_size
+    # Buffer for the current batch: list of (row, needs_analysis) tuples built
+    # without holding a DB connection. Flushed every `batch_size` items.
+    pending_batch: list[tuple[Repository, bool]] = []
+
+    async def _flush_batch(batch: list[tuple[Repository, bool]]) -> None:
+        """Write a batch of new/updated Repository rows in a single transaction."""
+        if not batch or dry_run:
+            return
+        async with db.transaction() as session:
+            for row, _needs in batch:
+                session.add(row)
+            await session.flush()
+
     async with GitHubAPIClient(token) as client:
         starred_iter = await client.list_starred(since=integration.last_synced_at)
         async for item in starred_iter:
             repo_dto = item.repo
             seen_github_ids.add(repo_dto.id)
 
-            async with db.transaction() as session:
+            # Look up the existing row outside any long-held transaction.
+            async with db.session() as session:
                 result = await session.execute(
                     select(Repository).where(
                         Repository.github_id == repo_dto.id,
@@ -257,94 +272,116 @@ async def _sync_one_integration(
                 )
                 existing = result.scalar_one_or_none()
 
-                if existing is None:
-                    row = Repository(
-                        github_id=repo_dto.id,
-                        owner=repo_dto.owner.login,
-                        name=repo_dto.name,
-                        full_name=repo_dto.full_name,
-                        url=repo_dto.html_url,
-                        homepage_url=repo_dto.homepage,
-                        description=repo_dto.description,
-                        primary_language=repo_dto.language,
-                        topics_json=list(repo_dto.topics),
-                        stars=repo_dto.stargazers_count,
-                        forks=repo_dto.forks_count,
-                        watchers=repo_dto.watchers_count,
-                        default_branch=repo_dto.default_branch,
-                        license_spdx=repo_dto.license.spdx_id if repo_dto.license else None,
-                        is_archived=repo_dto.archived,
-                        is_fork=repo_dto.fork,
-                        is_template=repo_dto.is_template,
-                        pushed_at=repo_dto.pushed_at,
-                        created_at_github=repo_dto.created_at,
-                        source=RepoSource.STARRED,
-                        is_starred=True,
-                        user_id=integration.user_id,
-                        pending_analysis=False,
-                    )
-                    if not dry_run:
-                        session.add(row)
-                        await session.flush()
-                    repos_imported += 1
-                    needs_analysis = True
-                    row_for_analysis = row
-                else:
-                    # Update mutable metadata; preserve analysis_json, content_hash,
-                    # pending_analysis unless we detect content drift below.
-                    existing.owner = repo_dto.owner.login
-                    existing.name = repo_dto.name
-                    existing.full_name = repo_dto.full_name
-                    existing.url = repo_dto.html_url
-                    existing.homepage_url = repo_dto.homepage
-                    existing.description = repo_dto.description
-                    existing.primary_language = repo_dto.language
-                    existing.topics_json = list(repo_dto.topics)
-                    existing.stars = repo_dto.stargazers_count
-                    existing.forks = repo_dto.forks_count
-                    existing.watchers = repo_dto.watchers_count
-                    existing.default_branch = repo_dto.default_branch
-                    existing.license_spdx = repo_dto.license.spdx_id if repo_dto.license else None
-                    existing.is_archived = repo_dto.archived
-                    existing.is_fork = repo_dto.fork
-                    existing.is_template = repo_dto.is_template
-                    existing.pushed_at = repo_dto.pushed_at
-                    existing.created_at_github = repo_dto.created_at
-                    existing.source = RepoSource.STARRED
-                    existing.is_starred = True
-                    repos_updated += 1
+            if existing is None:
+                row = Repository(
+                    github_id=repo_dto.id,
+                    owner=repo_dto.owner.login,
+                    name=repo_dto.name,
+                    full_name=repo_dto.full_name,
+                    url=repo_dto.html_url,
+                    homepage_url=repo_dto.homepage,
+                    description=repo_dto.description,
+                    primary_language=repo_dto.language,
+                    topics_json=list(repo_dto.topics),
+                    stars=repo_dto.stargazers_count,
+                    forks=repo_dto.forks_count,
+                    watchers=repo_dto.watchers_count,
+                    default_branch=repo_dto.default_branch,
+                    license_spdx=repo_dto.license.spdx_id if repo_dto.license else None,
+                    is_archived=repo_dto.archived,
+                    is_fork=repo_dto.fork,
+                    is_template=repo_dto.is_template,
+                    pushed_at=repo_dto.pushed_at,
+                    created_at_github=repo_dto.created_at,
+                    source=RepoSource.STARRED,
+                    is_starred=True,
+                    user_id=integration.user_id,
+                    # Mark pending so a crash before analysis completes is
+                    # resumable: the next sync will re-enqueue this repo.
+                    # _persist_analysis() clears this to False on success.
+                    pending_analysis=True,
+                )
+                repos_imported += 1
+                needs_analysis = True
+                row_for_analysis = row
+            else:
+                # Update mutable metadata; preserve analysis_json, content_hash,
+                # pending_analysis unless we detect content drift below.
+                existing.owner = repo_dto.owner.login
+                existing.name = repo_dto.name
+                existing.full_name = repo_dto.full_name
+                existing.url = repo_dto.html_url
+                existing.homepage_url = repo_dto.homepage
+                existing.description = repo_dto.description
+                existing.primary_language = repo_dto.language
+                existing.topics_json = list(repo_dto.topics)
+                existing.stars = repo_dto.stargazers_count
+                existing.forks = repo_dto.forks_count
+                existing.watchers = repo_dto.watchers_count
+                existing.default_branch = repo_dto.default_branch
+                existing.license_spdx = repo_dto.license.spdx_id if repo_dto.license else None
+                existing.is_archived = repo_dto.archived
+                existing.is_fork = repo_dto.fork
+                existing.is_template = repo_dto.is_template
+                existing.pushed_at = repo_dto.pushed_at
+                existing.created_at_github = repo_dto.created_at
+                existing.source = RepoSource.STARRED
+                existing.is_starred = True
+                repos_updated += 1
 
-                    new_hash = _compute_content_hash(existing)
-                    needs_analysis = (
-                        existing.content_hash != new_hash
-                        or existing.content_hash is None
-                        or existing.pending_analysis
-                    )
-                    row_for_analysis = existing
+                new_hash = _compute_content_hash(existing)
+                needs_analysis = (
+                    existing.content_hash != new_hash
+                    or existing.content_hash is None
+                    or existing.pending_analysis
+                )
+                row_for_analysis = existing
 
-            if needs_analysis:
-                repos_to_analyze.append(row_for_analysis)
+            pending_batch.append((row_for_analysis, needs_analysis))
 
-    # Flip is_starred=False for repos no longer returned by the API
+            # Flush completed batches to DB without holding connections across
+            # slow GitHub API pages (avoids pool exhaustion on large star lists).
+            if len(pending_batch) >= batch_size:
+                await _flush_batch(pending_batch)
+                for row, needs in pending_batch:
+                    if needs:
+                        repos_to_analyze.append(row)
+                pending_batch.clear()
+
+    # Flush any remaining items that didn't fill a full batch.
+    await _flush_batch(pending_batch)
+    for row, needs in pending_batch:
+        if needs:
+            repos_to_analyze.append(row)
+    pending_batch.clear()
+
+    # Bulk-flip is_starred=False for repos no longer returned by the API.
+    # A single UPDATE avoids N per-row transactions and N connection acquisitions.
     repos_unstarred = 0
-    if seen_github_ids:
+    if seen_github_ids and not dry_run:
+        async with db.transaction() as session:
+            result = await session.execute(
+                update(Repository)
+                .where(
+                    Repository.user_id == integration.user_id,
+                    Repository.github_id.not_in(seen_github_ids),
+                    Repository.is_starred == True,  # noqa: E712
+                )
+                .values(is_starred=False, updated_at=func.now())
+                .returning(Repository.id)
+            )
+            repos_unstarred = len(result.fetchall())
+    elif seen_github_ids and dry_run:
+        # Count what would be unstarred without writing.
         async with db.session() as session:
             result = await session.execute(
-                select(Repository).where(
+                select(func.count()).where(
                     Repository.user_id == integration.user_id,
+                    Repository.github_id.not_in(seen_github_ids),
                     Repository.is_starred == True,  # noqa: E712
                 )
             )
-            previously_starred = list(result.scalars().all())
-
-        to_unstar = [r for r in previously_starred if r.github_id not in seen_github_ids]
-        for repo in to_unstar:
-            if not dry_run:
-                async with db.transaction() as session:
-                    row = await session.get(Repository, repo.id)
-                    if row is not None:
-                        row.is_starred = False
-            repos_unstarred += 1
+            repos_unstarred = result.scalar_one() or 0  # type: ignore[assignment]
 
     # Update integration timestamps
     now = datetime.now(UTC)
@@ -454,7 +491,7 @@ def _build_analyze_use_case(db: Database, settings: AppConfig) -> Any:
         environment=settings.vector_store.environment,
         user_scope=settings.vector_store.user_scope,
     )
-    agent = RepoAnalysisAgent(llm_service=llm_client)  # type: ignore[arg-type]
+    agent = RepoAnalysisAgent(llm_service=llm_client)
     return AnalyzeRepositoryUseCase(db=db, agent=agent, embedding_gen=embedding_gen)
 
 

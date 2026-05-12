@@ -77,3 +77,10 @@ class GitHubConfig(BaseModel):
         validation_alias="GITHUB_SYNC_LLM_DAILY_BUDGET",
         description="Maximum LLM calls per day for GitHub operations",
     )
+    sync_batch_size: int = Field(
+        default=50,
+        ge=1,
+        le=500,
+        validation_alias="GITHUB_SYNC_BATCH_SIZE",
+        description="Number of repo upserts to batch in a single transaction during stars sync",
+    )

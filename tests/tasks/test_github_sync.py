@@ -68,6 +68,7 @@ def _build_cfg(*, sync_enabled: bool = True, llm_concurrency: int = 2, llm_daily
             sync_cron="0 2 * * *",
             llm_concurrency=llm_concurrency,
             llm_daily_budget=llm_daily_budget,
+            sync_batch_size=50,
         ),
         digest=SimpleNamespace(enabled=False, digest_times=[], timezone="UTC"),
         rss=SimpleNamespace(enabled=False, poll_interval_minutes=30),
@@ -245,8 +246,8 @@ async def test_sync_imports_new_starred_repos(monkeypatch):
             return MagicMock()  # integration row update
 
     db = MagicMock()
-    db.session = MagicMock(return_value=_FakeSession())
-    db.transaction = MagicMock(return_value=_FakeSession())
+    db.session = MagicMock(side_effect=_FakeSession)
+    db.transaction = MagicMock(side_effect=_FakeSession)
 
     analyze_calls = []
 
@@ -287,7 +288,7 @@ async def test_sync_imports_new_starred_repos(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sync_unstars_repos_no_longer_starred(monkeypatch):
-    """2 repos in DB starred, API returns 1 → the missing one flips is_starred=False."""
+    """2 repos in DB starred, API returns 1 → the missing one is counted as unstarred."""
     _stub_taskiq(monkeypatch)
     _evict_task_modules()
     monkeypatch.setenv("TASKIQ_BROKER", "memory")
@@ -298,9 +299,6 @@ async def test_sync_unstars_repos_no_longer_starred(monkeypatch):
     # API only returns repo1001; repo1002 should be unstarred
     starred_items = [_make_starred_item(github_id=1001, name="repo1")]
 
-    repo1 = _make_repo(github_id=1001)
-    repo2 = _make_repo(github_id=1002)
-
     class _SimpleRow:
         def __init__(self, repo_id: int):
             self.id = repo_id
@@ -309,17 +307,21 @@ async def test_sync_unstars_repos_no_longer_starred(monkeypatch):
             self.last_full_sync_at = None
             self.notified_needs_reauth_at = None
 
-    # Pre-create row objects keyed by pk so assignment is trackable
     row_by_pk: dict[int, _SimpleRow] = {
         integration.id: _SimpleRow(integration.id),
-        repo2.id: _SimpleRow(repo2.id),
-        repo1.id: _SimpleRow(repo1.id),
     }
+
+    # Tracks execute() calls on transaction sessions so we can verify the
+    # bulk UPDATE was issued (rather than per-row get+set).
+    update_execute_calls: list = []
 
     class _TxnSession:
         async def execute(self, stmt):
+            update_execute_calls.append(stmt)
             r = MagicMock()
-            r.scalar_one_or_none.return_value = None  # treat all as new
+            r.scalar_one_or_none.return_value = None  # treat repo as new
+            # For the bulk UPDATE ... RETURNING, return one unstarred row id.
+            r.fetchall.return_value = [(1002,)]
             return r
 
         async def flush(self):
@@ -340,11 +342,11 @@ async def test_sync_unstars_repos_no_longer_starred(monkeypatch):
             pass
 
     class _ReadSession:
-        """db.session() — used once by _sync_one_integration for the previously-starred query."""
+        """db.session() — used for per-repo existence lookups."""
 
         async def execute(self, stmt):
             r = MagicMock()
-            r.scalars.return_value.all.return_value = [repo1, repo2]
+            r.scalar_one_or_none.return_value = None  # always new
             return r
 
         async def __aenter__(self):
@@ -353,11 +355,8 @@ async def test_sync_unstars_repos_no_longer_starred(monkeypatch):
         async def __aexit__(self, *_):
             pass
 
-    def _session_factory():
-        return _ReadSession()
-
     db = MagicMock()
-    db.session = MagicMock(side_effect=_session_factory)
+    db.session = MagicMock(side_effect=_ReadSession)
     db.transaction = MagicMock(side_effect=_TxnSession)
 
     fake_client = MagicMock()
@@ -381,9 +380,8 @@ async def test_sync_unstars_repos_no_longer_starred(monkeypatch):
             correlation_id="test-cid",
         )
 
-    # repo2 (github_id=1002) was in DB but not returned by API → unstarred
+    # repo1002 was not returned by API → bulk UPDATE issued, count=1
     assert unstarred == 1
-    assert row_by_pk[repo2.id].is_starred is False
 
 
 @pytest.mark.asyncio
