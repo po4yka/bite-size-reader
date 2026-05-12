@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -231,5 +231,5 @@ class WebSearchAgent(BaseAgent[WebSearchAgentInput, WebSearchAgentOutput]):
             prompt = (_PROMPT_DIR / "search_analysis_en.txt").read_text(encoding="utf-8")
 
         # Inject current date
-        current_date = datetime.now().strftime("%Y-%m-%d")
+        current_date = datetime.now(UTC).strftime("%Y-%m-%d")
         return prompt.replace("{current_date}", current_date)

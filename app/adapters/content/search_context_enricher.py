@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import TYPE_CHECKING, Any
 
 from app.core.async_utils import raise_if_cancelled
@@ -85,7 +85,7 @@ class SearchContextEnricher:
                         "context_chars": len(context),
                     },
                 )
-                current_date = datetime.now().strftime("%Y-%m-%d")
+                current_date = datetime.now(UTC).strftime("%Y-%m-%d")
                 return f"ADDITIONAL WEB CONTEXT (retrieved {current_date}):\n{context}"
 
             return ""

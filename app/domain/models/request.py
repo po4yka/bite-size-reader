@@ -5,7 +5,7 @@ to process content (URL, forward, etc.).
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import StrEnum
 
 
@@ -52,7 +52,7 @@ class Request:
     content_text: str | None = None
     route_version: int = 1
     id: int | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def mark_as_crawling(self) -> None:
         """Mark request as currently crawling.

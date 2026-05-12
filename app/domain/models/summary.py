@@ -5,7 +5,7 @@ content summary with its metadata and insights.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any
 
 from app.core.time_utils import coerce_datetime
@@ -30,7 +30,7 @@ class Summary:
     is_read: bool = False
     insights: dict[str, Any] | None = None
     id: int | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def mark_as_read(self) -> None:
         """Mark this summary as read.

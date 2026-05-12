@@ -6,7 +6,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any
 
 from app.application.services.topic_search_utils import ensure_mapping
@@ -90,7 +90,9 @@ def freshness_score(created_at: Any) -> float:
             return 0.0
     else:
         created = created_at
-    now = datetime.now(created.tzinfo) if getattr(created, "tzinfo", None) else datetime.utcnow()
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    now = datetime.now(UTC)
     age_days = max(0.0, (now - created).total_seconds() / 86400.0)
     return max(0.0, min(1.0, math.exp(-age_days / 45.0)))
 

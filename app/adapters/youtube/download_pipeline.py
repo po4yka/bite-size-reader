@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -90,7 +90,7 @@ class YouTubeDownloadPipeline:
                 video_id=video_id,
             )
 
-            output_dir = self._session_service.storage_path / datetime.now().strftime("%Y%m%d")
+            output_dir = self._session_service.storage_path / datetime.now(UTC).strftime("%Y%m%d")
             output_dir.mkdir(parents=True, exist_ok=True)
             ydl_opts = self._get_ydl_opts(video_id, output_dir)
             async with asyncio.timeout(600.0):
@@ -235,7 +235,7 @@ class YouTubeDownloadPipeline:
             raise
         finally:
             if output_dir is None and not download_succeeded:
-                candidate = self._session_service.storage_path / datetime.now().strftime("%Y%m%d")
+                candidate = self._session_service.storage_path / datetime.now(UTC).strftime("%Y%m%d")
                 if candidate.exists():
                     output_dir = candidate
             if not download_succeeded and output_dir is not None:

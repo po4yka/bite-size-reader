@@ -6,7 +6,7 @@ Enables real-time progress updates during batch URL processing.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
@@ -119,7 +119,7 @@ class BatchProgressCache:
             "percent": round(percent, 1),
             "successful_count": successful_count,
             "failed_count": failed_count,
-            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
 
         if current_url:
@@ -174,7 +174,7 @@ class BatchProgressCache:
         message = {
             "event": event,
             "data": data or {},
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
 
         try:
