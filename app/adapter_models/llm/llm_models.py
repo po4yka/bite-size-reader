@@ -15,7 +15,9 @@ class LLMCallResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: CallStatus = Field(description="High-level result status.")
-    model: str | None = Field(default=None, description="Model that produced the response.")
+    model: str | None = Field(
+        default=None, description="Model that produced the response."
+    )
     response_text: str | None = Field(
         default=None, description="Primary text response returned by the provider."
     )
@@ -34,11 +36,16 @@ class LLMCallResult(BaseModel):
     tokens_completion: int | None = Field(
         default=None, description="Completion tokens produced by the request."
     )
-    cost_usd: float | None = Field(default=None, description="Estimated USD cost for the request.")
-    latency_ms: int | None = Field(
-        default=None, description="Observed latency for the LLM request in milliseconds."
+    cost_usd: float | None = Field(
+        default=None, description="Estimated USD cost for the request."
     )
-    error_text: str | None = Field(default=None, description="Error message when the call fails.")
+    latency_ms: int | None = Field(
+        default=None,
+        description="Observed latency for the LLM request in milliseconds.",
+    )
+    error_text: str | None = Field(
+        default=None, description="Error message when the call fails."
+    )
     request_headers: dict[str, Any] | None = Field(
         default=None, description="HTTP headers sent with the request."
     )
@@ -73,6 +80,16 @@ class LLMCallResult(BaseModel):
             "Ordered list of (model_name, outcome) pairs from the fallback ladder. "
             "Outcomes: 'success', 'timeout', 'error', 'skipped_unsupported_structured', "
             "'non_content_response'."
+        ),
+    )
+    per_model_attempts: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Ordered cascade of per-model attempts that did NOT produce the terminal "
+            "result (timeouts, skipped models, and errors that triggered fallback). "
+            "Each entry: {model, status, latency_ms, error_text, error_context, "
+            "per_model_timeout_sec}. The terminal attempt is conveyed by the top-level "
+            "fields and is not duplicated here."
         ),
     )
 

@@ -69,7 +69,8 @@ class LLMWorkflowExecutionMixin:
                 await asyncio.gather(*tasks, return_exceptions=True)
         except TimeoutError:
             logger.warning(
-                "llm_workflow_shutdown_timeout", extra={"pending": len(self._background_tasks)}
+                "llm_workflow_shutdown_timeout",
+                extra={"pending": len(self._background_tasks)},
             )
         except Exception as e:
             raise_if_cancelled(e)
@@ -89,7 +90,11 @@ class LLMWorkflowExecutionMixin:
         ensure_summary: Callable[[dict[str, Any]], Any] | None = None,
         on_attempt: Callable[[Any], Any] | None = None,
         on_success: Callable[[dict[str, Any], Any], Any] | None = None,
-        required_summary_fields: Sequence[str] = ("tldr", "summary_250", "summary_1000"),
+        required_summary_fields: Sequence[str] = (
+            "tldr",
+            "summary_250",
+            "summary_1000",
+        ),
         defer_persistence: bool = False,
     ) -> dict[str, Any] | None:
         """Run the shared summary processing workflow for a sequence of attempts."""
@@ -198,7 +203,9 @@ class LLMWorkflowExecutionMixin:
         )
         return None
 
-    def build_structured_response_format(self, mode: str | None = None) -> dict[str, Any]:
+    def build_structured_response_format(
+        self, mode: str | None = None
+    ) -> dict[str, Any]:
         """Build response format configuration for structured outputs."""
         try:
             from app.core.summary_contract import get_summary_json_schema
@@ -226,7 +233,9 @@ class LLMWorkflowExecutionMixin:
         attempt_trigger: str | None = None,
     ) -> None:
         """Public helper to persist an LLM call."""
-        await self._persist_llm_call(llm, req_id, correlation_id, attempt_trigger=attempt_trigger)
+        await self._persist_llm_call(
+            llm, req_id, correlation_id, attempt_trigger=attempt_trigger
+        )
 
     async def _resolve_llm_timeout(self, model: str | None) -> tuple[float, str]:
         """Determine the LLM call timeout, preferring the adaptive service."""
@@ -245,24 +254,39 @@ class LLMWorkflowExecutionMixin:
 
         return fixed_timeout, "fixed"
 
-    async def _invoke_llm(self, request: Any, req_id: int, on_retry: Any | None = None) -> Any:
+    async def _invoke_llm(
+        self, request: Any, req_id: int, on_retry: Any | None = None
+    ) -> Any:
         from app.adapters.content.llm_response_workflow import ConcurrencyTimeoutError
 
         sem_timeout = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
-        llm_timeout, timeout_source = await self._resolve_llm_timeout(request.model_override)
+        llm_timeout, timeout_source = await self._resolve_llm_timeout(
+            request.model_override
+        )
 
         # Compute per-model timeout: divide total budget among models in fallback chain,
         # then enforce a minimum floor so slow models in long ladders are not starved.
-        # The floor (LLM_PER_MODEL_TIMEOUT_MIN_SEC, default 120s) can push the worst-case
+        # The floor (LLM_PER_MODEL_TIMEOUT_MIN_SEC, default 90s) can push the worst-case
         # total runtime past llm_timeout when every model fails — that is the intended
         # trade-off: a coherent answer from one slow model beats a guaranteed-fast
         # cascade of timeouts.
+        #
+        # effective_llm_timeout expands the outer asyncio.timeout() wrapper to at least
+        # fit the full cascade (num_models * per_model_timeout + 15s inter-model buffer).
+        # The 15s buffer covers semaphore/network overhead when fallback fires.
+        # No buffer when num_models == 1 (single-shot call, full testability).
         fallback_models = request.fallback_models_override or getattr(
             self.openrouter, "_fallback_models", ()
         )
         num_models = 1 + len(fallback_models or ())
-        per_model_min = float(getattr(self.cfg.runtime, "llm_per_model_timeout_min_sec", 120.0))
+        per_model_min = float(
+            getattr(self.cfg.runtime, "llm_per_model_timeout_min_sec", 90.0)
+        )
         per_model_timeout = max(per_model_min, llm_timeout / max(num_models, 1))
+        between_model_buffer = 15.0 if num_models > 1 else 0.0
+        effective_llm_timeout = max(
+            llm_timeout, num_models * per_model_timeout + between_model_buffer
+        )
 
         per_model_overrides: dict[str, float] = dict(
             getattr(self.cfg.runtime, "llm_per_model_timeout_overrides", {}) or {}
@@ -274,6 +298,7 @@ class LLMWorkflowExecutionMixin:
                 "req_id": req_id,
                 "model": request.model_override,
                 "llm_timeout_sec": llm_timeout,
+                "effective_llm_timeout_sec": effective_llm_timeout,
                 "per_model_timeout_sec": per_model_timeout,
                 "per_model_min_sec": per_model_min,
                 "num_models": num_models,
@@ -299,7 +324,7 @@ class LLMWorkflowExecutionMixin:
                 "llm_semaphore_acquired",
                 extra={"req_id": req_id, "model": request.model_override},
             )
-            async with asyncio.timeout(llm_timeout):
+            async with asyncio.timeout(effective_llm_timeout):
                 return await self.openrouter.chat(
                     request.messages,
                     temperature=request.temperature,
@@ -320,6 +345,7 @@ class LLMWorkflowExecutionMixin:
                 extra={
                     "req_id": req_id,
                     "llm_timeout_sec": llm_timeout,
+                    "effective_llm_timeout_sec": effective_llm_timeout,
                     "per_model_timeout_sec": per_model_timeout,
                     "timeout_source": timeout_source,
                     "model": request.model_override,

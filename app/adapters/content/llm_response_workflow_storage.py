@@ -61,6 +61,41 @@ class LLMWorkflowStorageMixin:
                 extra={"error": str(exc), "count": len(calls)},
             )
 
+    def _build_cascade_attempt_payload(
+        self,
+        llm: Any,
+        req_id: int,
+        attempt: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build a persistence payload for one non-terminal cascade attempt."""
+        model = (
+            attempt.get("model")
+            or getattr(llm, "model", None)
+            or getattr(self.cfg, "openrouter", None)
+            and self.cfg.openrouter.model
+            or "unknown"
+        )
+        return {
+            "request_id": req_id,
+            "provider": "openrouter",
+            "model": model,
+            "endpoint": getattr(llm, "endpoint", "/api/v1/chat/completions"),
+            "request_headers_json": {},
+            "request_messages_json": [],
+            "response_text": None,
+            "response_json": {},
+            "tokens_prompt": None,
+            "tokens_completion": None,
+            "cost_usd": None,
+            "latency_ms": attempt.get("latency_ms"),
+            "status": "error",
+            "error_text": attempt.get("error_text"),
+            "structured_output_used": None,
+            "structured_output_mode": None,
+            "error_context_json": attempt.get("error_context") or None,
+            "attempt_trigger": "auto_backfill",
+        }
+
     async def _persist_llm_call(
         self,
         llm: Any,
@@ -68,9 +103,29 @@ class LLMWorkflowStorageMixin:
         correlation_id: str | None,
         attempt_trigger: str | None = None,
     ) -> None:
-        payload = self._build_llm_call_payload(llm, req_id, attempt_trigger=attempt_trigger)
+        cascade_attempts = list(getattr(llm, "per_model_attempts", []) or [])
+        payload = self._build_llm_call_payload(
+            llm, req_id, attempt_trigger=attempt_trigger
+        )
 
         if self._db_write_queue is not None:
+            for cascade_attempt in cascade_attempts:
+                try:
+                    cascade_payload = self._build_cascade_attempt_payload(
+                        llm, req_id, cascade_attempt
+                    )
+                    await self._db_write_queue.enqueue_batch(
+                        cascade_payload,
+                        batch_key=f"persist_llm_call:{id(self.llm_repo)}",
+                        execute_batch=self._persist_llm_calls_batch,
+                        operation_name="persist_llm_call_cascade",
+                        correlation_id=correlation_id or "",
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "persist_llm_cascade_error",
+                        extra={"error": str(exc), "cid": correlation_id},
+                    )
             await self._db_write_queue.enqueue_batch(
                 payload,
                 batch_key=f"persist_llm_call:{id(self.llm_repo)}",
@@ -79,6 +134,18 @@ class LLMWorkflowStorageMixin:
                 correlation_id=correlation_id or "",
             )
             return
+
+        for cascade_attempt in cascade_attempts:
+            try:
+                cascade_payload = self._build_cascade_attempt_payload(
+                    llm, req_id, cascade_attempt
+                )
+                await self.llm_repo.async_insert_llm_call(cascade_payload)
+            except Exception as exc:
+                logger.warning(
+                    "persist_llm_cascade_error",
+                    extra={"error": str(exc), "cid": correlation_id},
+                )
 
         try:
             await self.llm_repo.async_insert_llm_call(payload)

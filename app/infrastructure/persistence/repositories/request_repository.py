@@ -10,7 +10,11 @@ from sqlalchemy.dialects.postgresql import insert
 from app.db.json_utils import prepare_json_payload
 from app.db.models import CrawlResult, Request, Summary, TelegramMessage, model_to_dict
 from app.db.types import _utcnow
-from app.domain.models.request import Request as DomainRequest, RequestStatus, RequestType
+from app.domain.models.request import (
+    Request as DomainRequest,
+    RequestStatus,
+    RequestType,
+)
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -26,28 +30,56 @@ class RequestRepositoryAdapter:
 
     async def async_get_request_by_id(self, request_id: int) -> dict[str, Any] | None:
         async with self._database.session() as session:
-            request = await session.scalar(select(Request).where(Request.id == request_id))
+            request = await session.scalar(
+                select(Request).where(Request.id == request_id)
+            )
             return model_to_dict(request)
 
     async def async_get_request_context(self, request_id: int) -> dict[str, Any] | None:
         async with self._database.session() as session:
-            request = await session.scalar(select(Request).where(Request.id == request_id))
+            request = await session.scalar(
+                select(Request).where(Request.id == request_id)
+            )
             if request is None:
                 return None
             crawl_result = await session.scalar(
                 select(CrawlResult).where(CrawlResult.request_id == request_id)
             )
-            summary = await session.scalar(select(Summary).where(Summary.request_id == request_id))
+            summary = await session.scalar(
+                select(Summary).where(Summary.request_id == request_id)
+            )
             return {
                 "request": model_to_dict(request),
                 "crawl_result": model_to_dict(crawl_result),
                 "summary": model_to_dict(summary),
             }
 
-    async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
+    async def async_get_request_by_dedupe_hash(
+        self, dedupe_hash: str
+    ) -> dict[str, Any] | None:
         async with self._database.session() as session:
             request = await session.scalar(
                 select(Request).where(Request.dedupe_hash == dedupe_hash)
+            )
+            return model_to_dict(request)
+
+    async def async_find_recent_request_by_dedupe(
+        self, dedupe_hash: str, *, max_age_sec: int = 300
+    ) -> dict[str, Any] | None:
+        """Return newest processing, pending, or recently-failed request for this dedupe_hash."""
+        from datetime import timedelta
+
+        cutoff = _utcnow() - timedelta(seconds=max_age_sec)
+        async with self._database.session() as session:
+            request = await session.scalar(
+                select(Request)
+                .where(
+                    Request.dedupe_hash == dedupe_hash,
+                    Request.status.in_(["processing", "pending", "error"]),
+                    Request.updated_at >= cutoff,
+                )
+                .order_by(Request.updated_at.desc())
+                .limit(1)
             )
             return model_to_dict(request)
 
@@ -87,7 +119,9 @@ class RequestRepositoryAdapter:
             )
             return model_to_dict(request)
 
-    async def async_get_request_error_context(self, request_id: int) -> dict[str, Any] | None:
+    async def async_get_request_error_context(
+        self, request_id: int
+    ) -> dict[str, Any] | None:
         async with self._database.session() as session:
             value = await session.scalar(
                 select(Request.error_context_json).where(Request.id == request_id)
@@ -108,7 +142,9 @@ class RequestRepositoryAdapter:
     async def async_get_max_server_version(self, user_id: int) -> int | None:
         async with self._database.session() as session:
             value = await session.scalar(
-                select(func.max(Request.server_version)).where(Request.user_id == user_id)
+                select(func.max(Request.server_version)).where(
+                    Request.user_id == user_id
+                )
             )
             return int(value) if value is not None else None
 
@@ -116,12 +152,16 @@ class RequestRepositoryAdapter:
         async with self._database.session() as session:
             rows = (
                 await session.execute(
-                    select(Request).where(Request.user_id == user_id).order_by(Request.id)
+                    select(Request)
+                    .where(Request.user_id == user_id)
+                    .order_by(Request.id)
                 )
             ).scalars()
             return [model_to_dict(row) or {} for row in rows]
 
-    async def async_get_request_id_by_url_with_summary(self, user_id: int, url: str) -> int | None:
+    async def async_get_request_id_by_url_with_summary(
+        self, user_id: int, url: str
+    ) -> int | None:
         async with self._database.session() as session:
             return await session.scalar(
                 select(Request.id)
@@ -200,7 +240,9 @@ class RequestRepositoryAdapter:
             if inserted_id is not None:
                 return int(inserted_id)
             existing_id = await session.scalar(
-                select(TelegramMessage.id).where(TelegramMessage.request_id == request_id)
+                select(TelegramMessage.id).where(
+                    TelegramMessage.request_id == request_id
+                )
             )
             if existing_id is None:
                 msg = f"telegram message conflict for request_id={request_id} but no row exists"
@@ -210,7 +252,9 @@ class RequestRepositoryAdapter:
     async def async_update_bot_reply_message_id(
         self, request_id: int, bot_reply_message_id: int
     ) -> None:
-        await self._update_request(request_id, bot_reply_message_id=bot_reply_message_id)
+        await self._update_request(
+            request_id, bot_reply_message_id=bot_reply_message_id
+        )
 
     async def async_create_request(
         self,
@@ -253,7 +297,11 @@ class RequestRepositoryAdapter:
             if dedupe_hash:
                 stmt = stmt.on_conflict_do_update(
                     index_elements=[Request.dedupe_hash],
-                    set_={key: value for key, value in payload.items() if key != "dedupe_hash"},
+                    set_={
+                        key: value
+                        for key, value in payload.items()
+                        if key != "dedupe_hash"
+                    },
                 )
             returning_stmt = stmt.returning(Request.id)
             inserted_id = await session.scalar(returning_stmt)
@@ -316,10 +364,14 @@ class RequestRepositoryAdapter:
     ) -> None:
         await self._update_request(request_id, correlation_id=correlation_id)
 
-    async def async_update_request_content_text(self, request_id: int, content_text: str) -> None:
+    async def async_update_request_content_text(
+        self, request_id: int, content_text: str
+    ) -> None:
         await self._update_request(request_id, content_text=content_text)
 
-    async def async_update_request_lang_detected(self, request_id: int, lang: str) -> None:
+    async def async_update_request_lang_detected(
+        self, request_id: int, lang: str
+    ) -> None:
         await self._update_request(request_id, lang_detected=lang)
 
     async def async_update_request_error(
@@ -339,12 +391,16 @@ class RequestRepositoryAdapter:
         if processing_time_ms is not None:
             values["processing_time_ms"] = processing_time_ms
         if error_context_json is not None:
-            values["error_context_json"] = prepare_json_payload(error_context_json, default={})
+            values["error_context_json"] = prepare_json_payload(
+                error_context_json, default={}
+            )
         await self._update_request(request_id, **values)
 
     async def _update_request(self, request_id: int, **values: Any) -> None:
         async with self._database.transaction() as session:
-            await session.execute(update(Request).where(Request.id == request_id).values(**values))
+            await session.execute(
+                update(Request).where(Request.id == request_id).values(**values)
+            )
 
     def to_domain_model(self, db_request: dict[str, Any]) -> DomainRequest:
         request_type_str = db_request.get("type", "unknown")

@@ -4,7 +4,12 @@ import time
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from app.adapter_models.llm.llm_models import ChatRequest, LLMCallResult
 from app.adapters.openrouter.chat_models import (
@@ -166,14 +171,20 @@ class ChatAttemptRunner:
                             "request_id": request_id,
                         },
                     )
-                    from app.observability.metrics import record_openrouter_stream_fallback
+                    from app.observability.metrics import (
+                        record_openrouter_stream_fallback,
+                    )
 
                     _fallback_reason = (
                         "stream_request_failed"
-                        if (outcome.error_text or "").startswith("stream_request_failed")
+                        if (outcome.error_text or "").startswith(
+                            "stream_request_failed"
+                        )
                         else "non_streaming_chunk_path"
                     )
-                    record_openrouter_stream_fallback(model=model, reason=_fallback_reason)
+                    record_openrouter_stream_fallback(
+                        model=model, reason=_fallback_reason
+                    )
                     state.request = self._copy_request_with_stream(state.request, False)
                     rf_mode_current = outcome.retry.rf_mode
                     response_format_current = outcome.retry.response_format
@@ -198,7 +209,9 @@ class ChatAttemptRunner:
                                     "request_id": request_id,
                                 },
                             )
-                            state.last_error_text = "truncation_recovery_skipped_budget_tight"
+                            state.last_error_text = (
+                                "truncation_recovery_skipped_budget_tight"
+                            )
                             state.last_error_context = {"reason": "budget_tight"}
                             break
 
@@ -220,9 +233,12 @@ class ChatAttemptRunner:
                         }
                         break
 
-                    new_max_tokens = outcome.retry.truncation_recovery.suggested_max_tokens
+                    new_max_tokens = (
+                        outcome.retry.truncation_recovery.suggested_max_tokens
+                    )
                     if new_max_tokens and (
-                        not state.request.max_tokens or new_max_tokens > state.request.max_tokens
+                        not state.request.max_tokens
+                        or new_max_tokens > state.request.max_tokens
                     ):
                         logger.info(
                             "truncation_recovery_increasing_max_tokens",
@@ -269,6 +285,7 @@ class ChatAttemptRunner:
         sanitized_messages: list[dict[str, Any]],
         structured_output_state: StructuredOutputState,
         models_attempted: list[tuple[str, str]] | None = None,
+        per_model_attempts: list[dict[str, Any]] | None = None,
     ) -> LLMCallResult:
         redacted_headers = self._client.request_builder.get_redacted_headers(
             {"Authorization": "REDACTED", "Content-Type": "application/json"}
@@ -296,9 +313,12 @@ class ChatAttemptRunner:
             structured_output_mode=structured_output_state.mode,
             error_context=last_error_context,
             models_attempted=models_attempted or [],
+            per_model_attempts=per_model_attempts or [],
         )
 
-    def _copy_request_with_max_tokens(self, request: ChatRequest, max_tokens: int) -> ChatRequest:
+    def _copy_request_with_max_tokens(
+        self, request: ChatRequest, max_tokens: int
+    ) -> ChatRequest:
         return ChatRequest(
             messages=request.messages,
             temperature=request.temperature,
@@ -310,7 +330,9 @@ class ChatAttemptRunner:
             model_override=request.model_override,
         )
 
-    def _copy_request_with_stream(self, request: ChatRequest, stream: bool) -> ChatRequest:
+    def _copy_request_with_stream(
+        self, request: ChatRequest, stream: bool
+    ) -> ChatRequest:
         return ChatRequest(
             messages=request.messages,
             temperature=request.temperature,
