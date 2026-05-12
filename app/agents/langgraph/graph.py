@@ -152,7 +152,7 @@ class SummarizationGraph:
             extra={"correlation_id": input_data.correlation_id},
         )
         return AgentResult.error_result(
-            error,
+            f"{error} (Error ID: {input_data.correlation_id})",
             attempts=attempts,
             corrections_attempted=corrections,
             feedback_ignored=final_state.get("feedback_ignored", False),

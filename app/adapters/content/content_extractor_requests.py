@@ -84,7 +84,6 @@ class ContentExtractorRequestsMixin:
         except Exception as e:
             raise_if_cancelled(e)
             raise  # let _log_err callback see the exception for logging and metrics
-            logger.error("persist_crawl_error", extra={"error": str(e), "cid": correlation_id})
 
     async def _handle_request_dedupe_or_create(
         self, message: Any, url_text: str, norm: str, dedupe: str, correlation_id: str | None

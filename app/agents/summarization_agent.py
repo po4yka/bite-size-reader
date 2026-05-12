@@ -171,7 +171,8 @@ class SummarizationAgent(BaseAgent[SummarizationInput, SummarizationOutput]):
         )
 
         return AgentResult.error_result(
-            f"Summarization failed after {input_data.max_retries} attempts: {last_error}",
+            f"Summarization failed after {input_data.max_retries} attempts: {last_error}"
+            f" (Error ID: {input_data.correlation_id})",
             attempts=input_data.max_retries,
             corrections_attempted=corrections_applied,
         )

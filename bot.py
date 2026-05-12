@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from app.adapters.telegram.telegram_bot import TelegramBot
 from app.config import ConfigHolder, ConfigReloader, load_config
@@ -66,13 +67,17 @@ async def main() -> None:
 
     # Start the taskiq broker in producer mode (not worker mode — the worker
     # process runs separately via `taskiq worker app.tasks.broker:broker`).
+    broker: Any = None
+    broker_started = False
     try:
-        from app.tasks.broker import broker
+        from app.tasks.broker import broker as _broker
 
+        broker = _broker
         if not broker.is_worker_process:
             await broker.startup()
+            broker_started = True
     except ImportError:
-        broker = None  # type: ignore[assignment]
+        broker = None
 
     config_reloader.start()
     try:
@@ -80,7 +85,7 @@ async def main() -> None:
     finally:
         await config_reloader.stop()
         await db_write_queue.stop()
-        if broker is not None and not broker.is_worker_process:
+        if broker_started and broker is not None and not broker.is_worker_process:
             await broker.shutdown()
 
 

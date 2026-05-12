@@ -104,7 +104,10 @@ def _validate_url_input_basics(url: str) -> None:
     if "\x00" in url:
         msg = "URL contains null bytes"
         raise ValueError(msg)
-    if any(ord(char) < 32 and char not in ("\t", "\n", "\r") for char in url):
+    if any(char in ("\t", "\n", "\r") for char in url):
+        msg = "URL contains invalid whitespace characters"
+        raise ValueError(msg)
+    if any(ord(char) < 32 for char in url):
         msg = "URL contains control characters"
         raise ValueError(msg)
 
