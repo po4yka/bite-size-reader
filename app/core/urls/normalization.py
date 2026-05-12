@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
 from app.core.logging_utils import get_logger
@@ -71,13 +72,23 @@ def normalize_url(url: str) -> str:
         path = parsed.path or "/"
 
         try:
-            decoded_path = unquote(path)
-            path = quote(decoded_path, safe="/@:")
+            # Fixed-point unquote: iterate until stable (cap at 5 to prevent pathological inputs)
+            prev = None
+            for _ in range(5):
+                decoded_path = unquote(path)
+                if decoded_path == prev:
+                    break
+                prev = decoded_path
+                path = decoded_path
+            path = quote(path, safe="/@:")
         except Exception as exc:
             logger.warning(
                 "path_encoding_normalization_failed",
                 extra={"path": path[:100], "error": str(exc)},
             )
+
+        # Collapse consecutive slashes (e.g. /a//b/ -> /a/b)
+        path = re.sub(r"/{2,}", "/", path)
 
         if path.endswith("/") and path != "/":
             path = path.rstrip("/")
