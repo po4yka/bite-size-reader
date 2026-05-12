@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from urllib.parse import urljoin
 
 import httpx
 
@@ -11,6 +12,7 @@ from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
 from app.core.html_utils import html_to_text
 from app.core.logging_utils import get_logger
+from app.security.ssrf import is_url_safe
 
 logger = get_logger(__name__)
 
@@ -103,38 +105,53 @@ class DirectHTMLProvider:
         )
 
     async def _fetch_html(self, url: str) -> str | None:
-        """Fetch raw HTML with streaming and size limits."""
+        """Fetch raw HTML with streaming, size limits, and SSRF-safe redirect handling."""
         overall_timeout = self._timeout_sec + 5
         async with asyncio.timeout(overall_timeout):
-            async with (
-                httpx.AsyncClient(follow_redirects=True, timeout=self._timeout_sec) as client,
-                client.stream("GET", url, headers=_HEADERS) as resp,
-            ):
-                ctype = resp.headers.get("content-type", "").lower()
-                if resp.status_code != 200 or "text/html" not in ctype:
-                    return None
+            async with httpx.AsyncClient(
+                follow_redirects=False, timeout=self._timeout_sec
+            ) as client:
+                current_url = url
+                for _ in range(5):
+                    safe, reason = is_url_safe(current_url)
+                    if not safe:
+                        raise ValueError(f"SSRF blocked redirect target: {reason}")
+                    async with client.stream("GET", current_url, headers=_HEADERS) as resp:
+                        if resp.status_code in {301, 302, 303, 307, 308}:
+                            location = resp.headers.get("location")
+                            await resp.aclose()
+                            if not location:
+                                return None
+                            current_url = urljoin(current_url, location)
+                            continue
 
-                content_length = resp.headers.get("content-length")
-                if content_length:
-                    try:
-                        if int(content_length) > self._max_response_bytes:
+                        ctype = resp.headers.get("content-type", "").lower()
+                        if resp.status_code != 200 or "text/html" not in ctype:
                             return None
-                    except ValueError:
-                        logger.debug(
-                            "direct_html_invalid_content_length_header",
-                            extra={"url": url, "content_length": content_length},
-                        )
 
-                chunks: list[bytes] = []
-                total = 0
-                async for chunk in resp.aiter_bytes():
-                    total += len(chunk)
-                    if total > self._max_response_bytes:
-                        return None
-                    chunks.append(chunk)
+                        content_length = resp.headers.get("content-length")
+                        if content_length:
+                            try:
+                                if int(content_length) > self._max_response_bytes:
+                                    return None
+                            except ValueError:
+                                logger.debug(
+                                    "direct_html_invalid_content_length_header",
+                                    extra={"url": current_url, "content_length": content_length},
+                                )
 
-                encoding = resp.encoding or "utf-8"
-                return b"".join(chunks).decode(encoding, errors="replace")
+                        chunks: list[bytes] = []
+                        total = 0
+                        async for chunk in resp.aiter_bytes():
+                            total += len(chunk)
+                            if total > self._max_response_bytes:
+                                return None
+                            chunks.append(chunk)
+
+                        encoding = resp.encoding or "utf-8"
+                        return b"".join(chunks).decode(encoding, errors="replace")
+                # Exhausted redirect hops
+                raise ValueError("Too many redirects")
 
     async def aclose(self) -> None:
         pass

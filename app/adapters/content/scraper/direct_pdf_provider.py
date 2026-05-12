@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import io
 import time
+from urllib.parse import urljoin
 
 import httpx
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
+from app.security.ssrf import is_url_safe
 
 logger = get_logger(__name__)
 
@@ -167,44 +169,62 @@ class DirectPDFProvider:
         )
 
     async def _fetch_pdf(self, url: str) -> bytes | None:
-        """Stream-download with size and magic-byte guards. Returns None if not a PDF."""
+        """Stream-download with size, magic-byte guards, and SSRF-safe redirect handling.
+
+        Returns None if the response is not a valid PDF.
+        """
         overall_timeout = self._timeout_sec + 5
         async with asyncio.timeout(overall_timeout):
-            async with (
-                httpx.AsyncClient(follow_redirects=True, timeout=self._timeout_sec) as client,
-                client.stream("GET", url, headers=_HEADERS) as resp,
-            ):
-                if resp.status_code != 200:
-                    return None
+            async with httpx.AsyncClient(
+                follow_redirects=False, timeout=self._timeout_sec
+            ) as client:
+                current_url = url
+                for _ in range(5):
+                    safe, reason = is_url_safe(current_url)
+                    if not safe:
+                        raise ValueError(f"SSRF blocked redirect target: {reason}")
+                    async with client.stream("GET", current_url, headers=_HEADERS) as resp:
+                        if resp.status_code in {301, 302, 303, 307, 308}:
+                            location = resp.headers.get("location")
+                            await resp.aclose()
+                            if not location:
+                                return None
+                            current_url = urljoin(current_url, location)
+                            continue
 
-                ctype = resp.headers.get("content-type", "").lower()
-                ctype_is_pdf = "application/pdf" in ctype
-
-                cl = resp.headers.get("content-length")
-                if cl:
-                    try:
-                        if int(cl) > self._max_pdf_bytes:
-                            return None
-                    except ValueError:
-                        pass
-
-                chunks: list[bytes] = []
-                total = 0
-                magic_ok: bool | None = None  # None = not checked yet
-
-                async for chunk in resp.aiter_bytes(chunk_size=65536):
-                    total += len(chunk)
-                    if total > self._max_pdf_bytes:
-                        return None
-                    chunks.append(chunk)
-
-                    if magic_ok is None and total >= 5:
-                        head = b"".join(chunks)[:5]
-                        magic_ok = head.startswith(_PDF_MAGIC)
-                        if not magic_ok and not ctype_is_pdf:
+                        if resp.status_code != 200:
                             return None
 
-                return b"".join(chunks)
+                        ctype = resp.headers.get("content-type", "").lower()
+                        ctype_is_pdf = "application/pdf" in ctype
+
+                        cl = resp.headers.get("content-length")
+                        if cl:
+                            try:
+                                if int(cl) > self._max_pdf_bytes:
+                                    return None
+                            except ValueError:
+                                pass
+
+                        chunks: list[bytes] = []
+                        total = 0
+                        magic_ok: bool | None = None  # None = not checked yet
+
+                        async for chunk in resp.aiter_bytes(chunk_size=65536):
+                            total += len(chunk)
+                            if total > self._max_pdf_bytes:
+                                return None
+                            chunks.append(chunk)
+
+                            if magic_ok is None and total >= 5:
+                                head = b"".join(chunks)[:5]
+                                magic_ok = head.startswith(_PDF_MAGIC)
+                                if not magic_ok and not ctype_is_pdf:
+                                    return None
+
+                        return b"".join(chunks)
+                # Exhausted redirect hops
+                raise ValueError("Too many redirects")
 
     async def aclose(self) -> None:
         pass

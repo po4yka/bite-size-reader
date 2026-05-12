@@ -34,6 +34,10 @@ BLOCKED_NETWORKS = [
     ip_network("::1/128"),  # IPv6 loopback
     ip_network("fc00::/7"),  # IPv6 private
     ip_network("fe80::/10"),  # IPv6 link-local
+    ip_network("::ffff:0:0/96"),  # IPv4-mapped IPv6 catch-all
+    ip_network("::/128"),  # IPv6 unspecified
+    ip_network("64:ff9b::/96"),  # NAT64 well-known prefix
+    ip_network("2002::/16"),  # 6to4 (wraps RFC1918 and other reserved ranges)
 ]
 
 
@@ -48,12 +52,19 @@ def resolve_host_ips(hostname: str) -> list[str]:
 
 
 def is_ip_blocked(ip_str: str) -> bool:
-    """Return ``True`` if *ip_str* falls within any :data:`BLOCKED_NETWORKS`."""
+    """Return ``True`` if *ip_str* falls within any :data:`BLOCKED_NETWORKS`.
+
+    IPv4-mapped IPv6 addresses (e.g. ``::ffff:127.0.0.1``) are unwrapped to
+    their IPv4 form before the check so they cannot bypass IPv4 blocked ranges.
+    """
     try:
         ip_obj = ip_address(ip_str)
     except ValueError:
         # Unparseable address -- treat as blocked for safety.
         return True
+    # Unwrap IPv4-mapped IPv6 (::ffff:a.b.c.d) so IPv4 blocked ranges apply.
+    if ip_obj.version == 6 and ip_obj.ipv4_mapped is not None:
+        ip_obj = ip_obj.ipv4_mapped
     return any(ip_obj in network for network in BLOCKED_NETWORKS)
 
 
@@ -63,6 +74,8 @@ def is_url_safe(url: str) -> tuple[bool, str | None]:
     Returns ``(True, None)`` when safe, or ``(False, reason)`` when blocked.
     Performs DNS resolution and checks all resolved addresses against
     :data:`BLOCKED_NETWORKS`.
+
+    # DNS-rebind TOCTOU is not mitigated: httpx re-resolves at connect time. Owner-only access model accepts this residual risk; the redirect chain re-checks Location per hop.
     """
     try:
         hostname = urlparse(url).hostname

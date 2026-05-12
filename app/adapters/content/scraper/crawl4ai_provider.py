@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import time
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urljoin
 
 import httpx
 
@@ -23,6 +24,7 @@ from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
+from app.security.ssrf import is_url_safe
 
 logger = get_logger(__name__)
 
@@ -66,7 +68,7 @@ class Crawl4AIProvider:
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
-                follow_redirects=True,
+                follow_redirects=False,
                 timeout=self._timeout_sec,
             )
         return self._client
@@ -115,14 +117,29 @@ class Crawl4AIProvider:
 
         try:
             client = self._get_client()
-            resp = await client.post(
-                crawl_endpoint,
-                json=payload,
-                headers=self._build_headers(),
-                timeout=effective_timeout,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+            current_endpoint = crawl_endpoint
+            data: dict[str, Any] | None = None
+            for _ in range(5):
+                safe, reason = is_url_safe(current_endpoint)
+                if not safe:
+                    raise ValueError(f"SSRF blocked redirect target: {reason}")
+                resp = await client.post(
+                    current_endpoint,
+                    json=payload,
+                    headers=self._build_headers(),
+                    timeout=effective_timeout,
+                )
+                if resp.status_code in {301, 302, 303, 307, 308}:
+                    location = resp.headers.get("location")
+                    if not location:
+                        resp.raise_for_status()
+                    current_endpoint = urljoin(current_endpoint, location)
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                break
+            else:
+                raise ValueError("Too many redirects")
         except (TimeoutError, httpx.TimeoutException):
             latency = int((time.perf_counter() - started) * 1000)
             logger.warning(

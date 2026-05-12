@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import time
+from urllib.parse import urljoin
 
 import httpx
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
+from app.security.ssrf import is_url_safe
 
 logger = get_logger(__name__)
 
@@ -165,12 +167,24 @@ class DefuddleProvider:
         overall_timeout = self._timeout_sec + 5
         async with asyncio.timeout(overall_timeout):
             async with httpx.AsyncClient(
-                follow_redirects=True,
+                follow_redirects=False,
                 timeout=self._timeout_sec,
             ) as client:
-                resp = await client.get(defuddle_url, headers=headers)
-                resp.raise_for_status()
-                return resp.text
+                current_url = defuddle_url
+                for _ in range(5):
+                    safe, reason = is_url_safe(current_url)
+                    if not safe:
+                        raise ValueError(f"SSRF blocked redirect target: {reason}")
+                    resp = await client.get(current_url, headers=headers)
+                    if resp.status_code in {301, 302, 303, 307, 308}:
+                        location = resp.headers.get("location")
+                        if not location:
+                            resp.raise_for_status()
+                        current_url = urljoin(current_url, location)
+                        continue
+                    resp.raise_for_status()
+                    return resp.text
+                raise ValueError("Too many redirects")
 
     async def aclose(self) -> None:
         pass  # No persistent resources
