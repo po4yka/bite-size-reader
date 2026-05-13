@@ -255,8 +255,15 @@ class ScraperConfig(BaseModel):
     )
 
     scrapegraph_enabled: bool = Field(
-        default=True,
+        default=False,
         validation_alias="SCRAPER_SCRAPEGRAPH_ENABLED",
+        description=(
+            "Enable the ScrapeGraph-AI last-resort provider. Default is off "
+            "because the underlying `scrapegraphai` package lives in the "
+            "opt-in `scraper_ai` extra; with default-on, installs that did "
+            "not opt in emit a 'scrapegraph_ai_import_failed' warning on "
+            "every URL the chain has to fall through to."
+        ),
     )
     scrapegraph_timeout_sec: int = Field(
         default=90,
