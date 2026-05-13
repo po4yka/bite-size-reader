@@ -173,8 +173,13 @@ attachment = [
 ]
 
 # Browser-based scraper fallback providers (Playwright + Crawlee)
+# patchright is Scrapling's stealth Playwright backend (DynamicFetcher /
+# StealthyFetcher); Scrapling lazy-imports it, so without this dep the
+# stealth path fails with `ModuleNotFoundError: No module named 'patchright'`
+# and the chain loses its anti-bot fallback on JS-heavy / Cloudflare sites.
 browser_scraper = [
   "playwright>=1.40",
+  "patchright>=1.40",
   "crawlee[beautifulsoup,playwright]>=1.4.0",
 ]
 
