@@ -53,6 +53,7 @@ not to touch) rather than re-stating the architecture.
 ```
 app/
 +-- adapters/           # External service integrations
+|   +-- academic/       # Scholarly-paper handler (arXiv, SSRN, NBER, OSF, ResearchGate, RePEc)
 |   +-- attachment/     # Attachment handling and processing
 |   +-- content/        # URL processing pipeline
 |   |   +-- scraper/    # Multi-provider scraper chain (protocol, chain, factory, providers)
@@ -306,6 +307,7 @@ Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch
 - **Background Scheduling** -- APScheduler-based background task processing with Redis distributed locks
 - **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Telethon userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow. Ops reference: `docs/reference/digest-subsystem-ops.md`.
 - **GitHub Repository Ingestion** -- Indexes GitHub repositories as a first-class content source alongside articles and videos. Two paths: manual URL paste (any `github.com/<owner>/<repo>` URL) and a Taskiq daily cron job that syncs the authenticated user's starred repos. Repo analysis prefers `LLMClient.chat_structured(RepoAnalysis)` with the legacy raw JSON fallback retained for adapters that cannot do structured output. Fernet-encrypted PAT or OAuth Device Flow tokens live in `user_github_integrations`. Semantic search uses the shared Qdrant collection with an `entity_type="repository"` discriminator, written by the repository embedding fast path and reconciled by CocoIndex. Key files: `app/agents/repo_analysis_agent.py`, `app/application/use_cases/analyze_repository.py`, `app/adapters/github/`, `app/tasks/github_sync.py`, `app/api/routers/repositories.py`, `app/api/routers/auth/github.py`. Architecture doc: `docs/explanation/github-repository-ingestion.md`.
+- **Academic Paper Handling** -- Recognizes scholarly-paper URLs (arXiv, SSRN, NBER, OSF preprints, ResearchGate, RePEc) and routes them through a dedicated platform extractor that fetches the landing HTML via the scraper chain (patchright stealth bypasses Cloudflare gates on SSRN/ResearchGate), harvests title + abstract, downloads the canonical PDF (deterministic URL rewrite for arXiv/SSRN/NBER/OSF; anchor discovery for the rest), and extracts body text via pymupdf. Composes the LLM input as `# Title / ## Abstract / ## Body`; falls back to abstract-only with an explicit `[PDF unavailable: <reason>]` note when the PDF leg fails (paywall, 404, network), never to a hard extraction error. Dedupes across URL shapes (/abs/X vs /pdf/X.pdf, v1 vs v2, papers.cfm vs Delivery.cfm) via the new `requests.paper_canonical_id` column carrying a host-namespaced id (`arxiv:2301.00001`, `ssrn:6531478`). Key files: `app/adapters/academic/{url_patterns,resolvers,platform_extractor}.py`, `SourceKind.ACADEMIC_PAPER`, Alembic 0012.
 
 ### Safety Hooks
 
@@ -370,6 +372,7 @@ When making changes, these are the most critical files to understand:
 - **`bot.py`** -- Entrypoint (wires everything together)
 - **`docs/SPEC.md`** -- Full technical specification (canonical reference)
 - **`app/adapters/github/`** -- GitHub API client, URL pattern matcher, platform extractor, and exception types for repository ingestion
+- **`app/adapters/academic/`** -- Scholarly-paper handler: `url_patterns.py` (host detection + canonical id parser for arXiv / SSRN / NBER / OSF / ResearchGate / RePEc), `resolvers.py` (per-host PDF URL rewriters), `platform_extractor.py` (landing-HTML + PDF orchestrator with graceful paywall fallback)
 - **`app/db/models/repository.py`** -- `Repository`, `RepositoryEmbedding`, `UserGitHubIntegration` ORM models and their Postgres enum types
 - **`app/tasks/github_sync.py`** -- Taskiq task `ratatoskr.github.sync_stars`; daily per-user starred-repo sync with budget cap and reauth handling
 - **`app/security/token_crypto.py`** -- Fernet encrypt/decrypt for at-rest GitHub tokens; key loaded lazily from `GITHUB_TOKEN_ENCRYPTION_KEY`

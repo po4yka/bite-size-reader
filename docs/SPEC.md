@@ -61,6 +61,21 @@ Eight-provider ordered fallback chain (Scrapling → Crawl4AI → Firecrawl self
 
 ---
 
+## Academic-Paper Handling
+
+Scholarly-paper URLs (arXiv, SSRN, NBER, OSF preprints, ResearchGate, RePEc) are routed through a dedicated platform extractor (`app/adapters/academic/`) instead of the generic scraper chain. The flow:
+
+1. **URL detection** — `parse_academic_paper_url(url)` recognizes host + canonical paper id (e.g. `arxiv:2301.00001`, `ssrn:6531478`).
+2. **Landing HTML** — fetched via the scraper chain so patchright stealth handles Cloudflare-gated hosts (SSRN, ResearchGate). Title + abstract are extracted from the resulting markdown.
+3. **PDF resolution** — per-host URL rewriters yield the canonical PDF URL without a network round-trip (`pdf_url_for(ref)`); ResearchGate and RePEc fall back to anchor discovery in the landing markdown.
+4. **PDF extraction** — downloaded via httpx (60 s timeout, redirects followed), text extracted via pymupdf on a background thread (no Pillow / image rendering — academic flow feeds a text LLM).
+5. **LLM input** — composed as `# Title / ## Abstract / ## Body`; abstract is always first so the chunker can preserve the author-authored TL;DR even when the body is truncated. Prompt sections (EN + RU) instruct the model to set `source_type='research'` and structure `key_ideas` around claims, evidence, methods, and limitations.
+6. **Paywall fallback** — paywall / 403 / 404 / network failure on the PDF leg degrades to abstract-only with an explicit `[PDF unavailable: <reason>]` marker in `content_text`. Never a hard `Content Extraction Failed`.
+
+**Dedupe** — `requests.paper_canonical_id` (added in Alembic 0012) stores the canonical id; URL shapes pointing at the same paper (`/abs/X` vs `/pdf/X.pdf`, `v1` vs `v2`, `papers.cfm` vs `Delivery.cfm`) collapse to one `requests` row. `SourceKind.ACADEMIC_PAPER` is the system-level discriminator surfaced to the mobile API.
+
+---
+
 ## Multi-Agent Architecture
 
 Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch) coordinated by AgentOrchestrator; self-correction feedback loop; signal-scoring v0 integration; usage examples and test hints.
