@@ -12,8 +12,8 @@ coexist without a partial index. The unique constraint enforces
 single-paper dedupe for non-NULL values, mirroring the existing
 ``dedupe_hash`` column.
 
-Revision ID: 0012
-Revises: 0011
+Revision ID: 0013
+Revises: 0012
 Create Date: 2026-05-13
 """
 
@@ -22,8 +22,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0012"
-down_revision: str = "0011"
+revision: str = "0013"
+down_revision: str = "0012"
 branch_labels: tuple[str, ...] | None = None
 depends_on: tuple[str, ...] | None = None
 
