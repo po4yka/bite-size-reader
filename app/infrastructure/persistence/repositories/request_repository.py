@@ -63,6 +63,21 @@ class RequestRepositoryAdapter:
             )
             return model_to_dict(request)
 
+    async def async_get_request_by_paper_canonical_id(
+        self, paper_canonical_id: str
+    ) -> dict[str, Any] | None:
+        """Look up an academic-paper request by its canonical id.
+
+        ``paper_canonical_id`` is host-namespaced (``arxiv:2301.00001``,
+        ``ssrn:6531478``). Used by the academic-paper extractor to
+        collapse different URL shapes pointing at the same paper.
+        """
+        async with self._database.session() as session:
+            request = await session.scalar(
+                select(Request).where(Request.paper_canonical_id == paper_canonical_id)
+            )
+            return model_to_dict(request)
+
     async def async_find_recent_request_by_dedupe(
         self, dedupe_hash: str, *, max_age_sec: int = 300
     ) -> dict[str, Any] | None:
@@ -267,6 +282,7 @@ class RequestRepositoryAdapter:
         input_url: str | None = None,
         normalized_url: str | None = None,
         dedupe_hash: str | None = None,
+        paper_canonical_id: str | None = None,
         input_message_id: int | None = None,
         fwd_from_chat_id: int | None = None,
         fwd_from_msg_id: int | None = None,
@@ -285,6 +301,7 @@ class RequestRepositoryAdapter:
             "fwd_from_chat_id": fwd_from_chat_id,
             "fwd_from_msg_id": fwd_from_msg_id,
             "dedupe_hash": dedupe_hash,
+            "paper_canonical_id": paper_canonical_id,
             "correlation_id": correlation_id,
             "type": type_,
             "status": _status_value(status),
@@ -292,15 +309,28 @@ class RequestRepositoryAdapter:
             "route_version": route_version,
             "initial_attempt_trigger": initial_attempt_trigger,
         }
+        # Dedupe key precedence: paper_canonical_id (academic papers) takes
+        # priority because it survives URL-shape variations (/abs vs /pdf,
+        # v1 vs v2); dedupe_hash is the URL-level fallback for everything
+        # else. We can only declare one ON CONFLICT target per statement,
+        # so the academic path uses paper_canonical_id and the rest use
+        # dedupe_hash.
+        conflict_target: str | None
+        if paper_canonical_id:
+            conflict_target = "paper_canonical_id"
+        elif dedupe_hash:
+            conflict_target = "dedupe_hash"
+        else:
+            conflict_target = None
         async with self._database.transaction() as session:
             stmt = insert(Request).values(**payload)
-            if dedupe_hash:
+            if conflict_target:
                 stmt = stmt.on_conflict_do_update(
-                    index_elements=[Request.dedupe_hash],
+                    index_elements=[getattr(Request, conflict_target)],
                     set_={
                         key: value
                         for key, value in payload.items()
-                        if key != "dedupe_hash"
+                        if key != conflict_target
                     },
                 )
             returning_stmt = stmt.returning(Request.id)

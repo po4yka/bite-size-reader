@@ -121,10 +121,11 @@ class AcademicPlatformExtractor(PlatformExtractor):
 
         canonical_landing = landing_url_for(ref) or request.normalized_url
 
-        # 1. Dedupe / create the request row. We use the canonical
-        # landing URL's hash so that /abs/X and /pdf/X.pdf collapse
-        # via the existing dedupe_hash path even before slice 4's
-        # paper_canonical_id column lands.
+        # 1. Dedupe / create the request row. paper_canonical_id is the
+        # authoritative dedupe key (collapses /abs/X and /pdf/X.pdf,
+        # v1 and v2, into one row); dedupe_hash on the canonical
+        # landing URL is kept as a secondary key for symmetry with
+        # non-academic flows.
         dedupe_hash = compute_dedupe_hash(canonical_landing)
         request_id = request.request_id_override
         if request.mode == "interactive":
@@ -132,6 +133,7 @@ class AcademicPlatformExtractor(PlatformExtractor):
             request_id = await self._lifecycle.handle_request_dedupe_or_create(
                 request,
                 dedupe_hash=dedupe_hash,
+                paper_canonical_id=ref.canonical_id,
             )
 
         # 2. Fetch landing HTML via the scraper chain (uses patchright

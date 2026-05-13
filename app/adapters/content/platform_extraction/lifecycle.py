@@ -51,6 +51,7 @@ class PlatformRequestLifecycle:
         request: Any,
         *,
         dedupe_hash: str,
+        paper_canonical_id: str | None = None,
     ) -> int:
         if request.mode != "interactive" or request.message is None:
             msg = "Interactive request lifecycle requires a Telegram message"
@@ -61,6 +62,7 @@ class PlatformRequestLifecycle:
             req_id = await self.create_request(
                 request=request,
                 dedupe_hash=dedupe_hash,
+                paper_canonical_id=paper_canonical_id,
             )
             self._audit(
                 "INFO",
@@ -68,17 +70,28 @@ class PlatformRequestLifecycle:
                 {
                     "request_id": req_id,
                     "hash": dedupe_hash,
+                    "paper_canonical_id": paper_canonical_id,
                     "url": request.url_text,
                     "cid": request.correlation_id,
                 },
             )
             return req_id
         except Exception as create_error:
-            existing_req = (
-                await self._message_persistence.request_repo.async_get_request_by_dedupe_hash(
-                    dedupe_hash
+            # Look up by paper_canonical_id first if it's set — the academic
+            # path uses it as the authoritative dedupe key. Fall back to
+            # dedupe_hash for non-academic / no-paper-id cases.
+            existing_req = None
+            if paper_canonical_id:
+                existing_req = (
+                    await self._message_persistence.request_repo
+                    .async_get_request_by_paper_canonical_id(paper_canonical_id)
                 )
-            )
+            if existing_req is None:
+                existing_req = (
+                    await self._message_persistence.request_repo.async_get_request_by_dedupe_hash(
+                        dedupe_hash
+                    )
+                )
             if existing_req:
                 req_id = int(existing_req["id"])
                 if request.correlation_id:
@@ -100,6 +113,7 @@ class PlatformRequestLifecycle:
         *,
         request: Any,
         dedupe_hash: str,
+        paper_canonical_id: str | None = None,
     ) -> int:
         req_id = await self._message_persistence.request_repo.async_create_request(
             type_="url",
@@ -110,6 +124,7 @@ class PlatformRequestLifecycle:
             input_url=request.url_text,
             normalized_url=request.normalized_url,
             dedupe_hash=dedupe_hash,
+            paper_canonical_id=paper_canonical_id,
             input_message_id=request.message_id,
             content_text=request.url_text,
             route_version=self._route_version,

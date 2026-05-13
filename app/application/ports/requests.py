@@ -61,6 +61,11 @@ class RequestRepositoryPort(Protocol):
     async def async_get_request_by_dedupe_hash(self, dedupe_hash: str) -> dict[str, Any] | None:
         """Return request by dedupe hash."""
 
+    async def async_get_request_by_paper_canonical_id(
+        self, paper_canonical_id: str
+    ) -> dict[str, Any] | None:
+        """Return request by canonical academic-paper id (e.g. ``arxiv:2301.00001``)."""
+
     async def async_get_latest_request_by_correlation_id(
         self, correlation_id: str
     ) -> dict[str, Any] | None:
@@ -82,6 +87,7 @@ class RequestRepositoryPort(Protocol):
         input_url: str | None = None,
         normalized_url: str | None = None,
         dedupe_hash: str | None = None,
+        paper_canonical_id: str | None = None,
         input_message_id: int | None = None,
         fwd_from_chat_id: int | None = None,
         fwd_from_msg_id: int | None = None,

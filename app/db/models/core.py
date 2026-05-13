@@ -297,6 +297,13 @@ class Request(Base):
     input_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     normalized_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     dedupe_hash: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)
+    # Canonical paper identifier (e.g. "arxiv:2301.00001", "ssrn:6531478",
+    # "doi:10.xxxx/...") for academic-paper requests. Lets two different URLs
+    # pointing at the same paper (/abs/X and /pdf/X.pdf, v1 and v2) dedupe to
+    # one request. Nullable for every non-academic request. Postgres treats
+    # NULLs as distinct under a UNIQUE constraint, so multiple NULL rows are
+    # fine without a partial index.
+    paper_canonical_id: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)
     input_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bot_reply_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fwd_from_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
